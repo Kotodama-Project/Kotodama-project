@@ -63,6 +63,8 @@ python tools\build_company_pack_review_bundle.py work\my-company
 
 出力はmanifest、9 Blocks、3 MOCs、9 Recordsのpath、SHA-256、byte sizeと、binding全体のdigestを持ちます。同じbytesなら同じbundleになり、1 byteでも変わればdigestが変わります。これはreview対象を固定するだけで、Human approval、authority、Promotion、Current Truth、runtime readiness、Public Beta GOを作りません。詳しくは[Company Pack Review Bundle](REVIEW-BUNDLE.md)を参照してください。
 
+bundleを保存して別reviewerへ渡す場合は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)に従います。`verify_company_pack_review_bundle.py`の`MATCH`はsaved metadata/digestと現在bytesの一致であり、reviewerの判断そのものではありません。
+
 ## 5. flow contractとMOC順にBlockを読む
 
 `manifest.json`の`flow`は、外部から入る`entry_inputs`、Block IDの`sequence`、読み順を示す`moc_ref`を宣言します。[`company-operations.json`](../examples/company-starter/mocs/company-operations.json)は、同じ順序を示すnavigation projectionです。

@@ -41,3 +41,5 @@ python tools/check_company_pack_customization.py work/my-company
 initializerは生成した22文書を`draft`にします。続くcheckerは通常19件の組織固有placeholderを返し、owner/role reviewとHuman evidenceを別categoryに保ちます。詳しい編集手順は[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)を参照してください。
 
 19件を置き換えてcheckerが`READY_FOR_GOVERNED_REVIEW`になった後は、`python tools/build_company_pack_review_bundle.py work/my-company`でreview対象の22ファイルをexact bytesへ固定できます。詳細は[Company Pack Review Bundle](../../docs/REVIEW-BUNDLE.md)を参照してください。
+
+保存したbundleと候補bytesの独立再照合は[Candidate-bound Review Workflow](../../docs/REVIEW-WORKFLOW.md)を参照してください。

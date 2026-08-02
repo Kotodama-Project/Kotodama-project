@@ -55,3 +55,5 @@ bundleが示すのは、次の限定された事実です。
 このCLIはローカルfilesystemを前後2回checkしてdriftを拒否しますが、敵対的なOS/processに対する署名付きsnapshotやatomic filesystem snapshotではありません。重要な採用ではbundle JSON自体を保存し、対象revision、reviewer、観測時刻、署名または保護されたreceiptを別Recordへ束縛してください。
 
 機械可読schemaは[`company-pack-review-bundle.schema.json`](../schemas/company-pack-review-bundle.schema.json)です。
+
+保存したbundleを後から同じPack bytesへ照合する手順は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)を参照してください。verifierの`MATCH`も、bytes同一性だけを示します。

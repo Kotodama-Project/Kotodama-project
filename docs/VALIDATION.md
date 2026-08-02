@@ -39,6 +39,14 @@ python tools/build_company_pack_review_bundle.py work/my-company
 
 builderはmanifestと全参照JSONをSHA-256 / byte sizeへ束縛し、前後再checkでdriftを検出した場合はbindingなしで拒否します。詳しくは[Company Pack Review Bundle](REVIEW-BUNDLE.md)を参照してください。
 
+保存したbundleを現在のPackへ再照合するには次を使います。
+
+```powershell
+python tools/verify_company_pack_review_bundle.py work/my-company-review-bundle.json work/my-company
+```
+
+verifierはbundle構造・metadata・digestを信頼せず再検査し、Packからfresh bundleを再構築して比較します。`MATCH`はbytes同一性だけで、reviewer identity、Human Decision、Promotionを証明しません。運用手順は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)を参照してください。
+
 ## What it validates
 
 - `manifest.json`と必須governance fields

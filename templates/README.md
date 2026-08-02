@@ -42,4 +42,4 @@ MOCの入口例:
 
 3つともnavigation-onlyです。別のSSOT、実行権限、公開GOを作りません。
 
-最短の導入手順は[Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)にあります。`tools/create_company_pack.py`を使うと、元exampleと既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして検証できます。続く[`check_company_pack_customization.py`](../tools/check_company_pack_customization.py)は、placeholder置換、governed review、別途必要なevidenceを混同せず列挙します。placeholderを閉じた候補は[`build_company_pack_review_bundle.py`](../tools/build_company_pack_review_bundle.py)でexact SHA-256 / byte sizeへ固定できますが、bundle自体はapprovalではありません。
+最短の導入手順は[Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)にあります。`tools/create_company_pack.py`を使うと、元exampleと既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして検証できます。続く[`check_company_pack_customization.py`](../tools/check_company_pack_customization.py)は、placeholder置換、governed review、別途必要なevidenceを混同せず列挙します。placeholderを閉じた候補は[`build_company_pack_review_bundle.py`](../tools/build_company_pack_review_bundle.py)でexact SHA-256 / byte sizeへ固定し、[`verify_company_pack_review_bundle.py`](../tools/verify_company_pack_review_bundle.py)で再照合できますが、MATCH自体はapprovalではありません。

@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-bundle-verification.schema.json",
+  "title": "Kotodama Company Pack Review Bundle Verification",
+  "$comment": "MATCH proves only that the saved bindings equal the current review-ready pack bytes. It is not approval, authority, signature, Promotion, Current Truth, runtime readiness, Final Human GO, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "reason",
+    "pack_id",
+    "saved_bundle",
+    "actual_bundle_digest",
+    "binding_count",
+    "matched_bindings",
+    "mismatched_paths",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_review_bundle_verification"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["MATCH", "MISMATCH"]},
+    "reason": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "enum": [
+            "BUNDLE_READ_FAILED",
+            "INVALID_BUNDLE_FORMAT",
+            "INVALID_BUNDLE_DIGEST",
+            "BUNDLE_METADATA_MISMATCH",
+            "PACK_NOT_REVIEW_READY",
+            "PACK_ID_MISMATCH",
+            "BINDINGS_MISMATCH"
+          ]
+        }
+      ]
+    },
+    "pack_id": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"},
+        {"type": "null"}
+      ]
+    },
+    "saved_bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "bytes", "bundle_digest"],
+      "properties": {
+        "sha256": {
+          "oneOf": [
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            {"type": "null"}
+          ]
+        },
+        "bytes": {"type": "integer", "minimum": 0},
+        "bundle_digest": {
+          "oneOf": [
+            {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "actual_bundle_digest": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "binding_count": {"type": "integer", "minimum": 0},
+    "matched_bindings": {"type": "integer", "minimum": 0},
+    "mismatched_paths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Za-z0-9._/-]+\\.json$"}
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_intent_authenticated",
+        "human_approval_verified",
+        "authority_assignment_verified",
+        "retention_policy_verified",
+        "candidate_bound_human_decision_verified",
+        "promotion_verified",
+        "current_truth_changed",
+        "runtime_ready",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "human_intent_authenticated": {"const": false},
+        "human_approval_verified": {"const": false},
+        "authority_assignment_verified": {"const": false},
+        "retention_policy_verified": {"const": false},
+        "candidate_bound_human_decision_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "runtime_ready": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "MATCH"}}},
+      "then": {
+        "properties": {
+          "reason": {"type": "null"},
+          "pack_id": {"type": "string"},
+          "actual_bundle_digest": {"type": "string"},
+          "binding_count": {"minimum": 1},
+          "matched_bindings": {"minimum": 1},
+          "mismatched_paths": {"maxItems": 0}
+        }
+      },
+      "else": {"properties": {"reason": {"type": "string"}}}
+    }
+  ]
+}
