@@ -36,7 +36,7 @@ python tools/validate_template_pack.py examples/company-starter
 python -m unittest discover -s tests -v
 ```
 
-starterには、Source Intake、Intent Candidate、Human Decision、Work Order、Verification Receipt、Promotion Gateの6 Blockが順番付きで含まれます。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
+starterには、Source Intake、Intent Candidate、Human Decision、Work Order、Verification Receipt、Promotion Gateの6 Blockが含まれます。manifestのflow contractにより、外部入力、Block順序、入出力の接続、MOCの読み順をvalidatorで検査できます。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
 
 ## Public Beta まで
 

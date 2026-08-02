@@ -13,6 +13,8 @@
 
 読み順は[`mocs/company-operations.json`](mocs/company-operations.json)にも機械可読で記録されています。
 
+`manifest.json`の`flow`は、外部入力、6 Block IDの実行順、対象MOCを束縛します。validatorはBlock入力が前段出力へ接続されていることまで検査します。
+
 ```powershell
 python tools/validate_template_pack.py examples/company-starter
 ```

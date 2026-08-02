@@ -32,9 +32,9 @@ cp -R examples/company-starter work/my-company
 
 `id`を変更したら、`mocs/company-operations.json`の先頭refも同じIDへ変更します。MOCの参照先が存在しなければvalidatorはfail closedします。
 
-## 3. MOC順にBlockを読む
+## 3. flow contractとMOC順にBlockを読む
 
-[`company-operations.json`](../examples/company-starter/mocs/company-operations.json)は、次の順序だけを示すnavigation projectionです。
+`manifest.json`の`flow`は、外部から入る`entry_inputs`、Block IDの`sequence`、読み順を示す`moc_ref`を宣言します。[`company-operations.json`](../examples/company-starter/mocs/company-operations.json)は、同じ順序を示すnavigation projectionです。
 
 ```mermaid
 flowchart LR
@@ -47,6 +47,8 @@ flowchart LR
 ```
 
 MOCはDecision、Promotion、Current Truthを変更しません。
+
+validatorは、sequenceがmanifest内の全Blockをちょうど1回含むこと、各Blockの入力がentry inputまたは前段Blockの出力に存在すること、指定MOCが同じ順序を持つことを確認します。
 
 ## 4. Blockを自分の運用へ合わせる
 
@@ -94,6 +96,9 @@ PASSが示すのは、pack構造、参照、限定authority、secretらしい値
 |---|---|
 | `unsafe relative path` | pack外参照、空白、絶対pathを使っていないか |
 | `references unknown id` | MOCのIDと各JSONの`id`が一致しているか |
+| `has unavailable input` | `flow.sequence`の前段出力または`entry_inputs`が不足していないか |
+| `must contain every manifest block` | sequenceからBlockが欠落・重複していないか |
+| `refs must equal manifest id followed by flow sequence` | MOCとflowの順序が一致しているか |
 | `forbidden allowed action` | Blockが公開safe allowlistを越えていないか |
 | `secret-bearing key is forbidden` | secret値ではなく安全な参照名へ置換したか |
 | `public_beta must remain NO_GO_UNPUBLISHED` | template自身にGOを宣言させていないか |

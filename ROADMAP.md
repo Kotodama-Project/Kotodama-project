@@ -8,6 +8,7 @@
 - [x] Minimal Company manifest / Block / MOC schemas
 - [x] Dependency-free validator and negative tests
 - [x] Source-to-Promotion-Candidate governance starter and walkthrough
+- [x] Machine-verified flow inputs, Block sequence, dataflow, and MOC binding
 
 ## Required before opening access
 

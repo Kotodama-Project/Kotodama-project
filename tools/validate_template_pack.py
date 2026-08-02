@@ -52,6 +52,8 @@ REQUIRED_MANIFEST_FIELDS = {
     "denied_actions",
     "public_beta",
 }
+ALLOWED_MANIFEST_FIELDS = REQUIRED_MANIFEST_FIELDS | {"flow"}
+REQUIRED_FLOW_FIELDS = {"entry_inputs", "sequence", "moc_ref"}
 MANDATORY_DENIALS = {
     "unbound_external_write",
     "credential_permission_change",
@@ -211,7 +213,7 @@ def find_secret_keys(value: object, location: str = "$") -> list[str]:
 
 def validate_manifest(manifest: dict[str, Any], errors: list[str]) -> dict[str, list[str]]:
     require_fields(manifest, REQUIRED_MANIFEST_FIELDS, errors, "manifest")
-    reject_unknown_fields(manifest, REQUIRED_MANIFEST_FIELDS, errors, "manifest")
+    reject_unknown_fields(manifest, ALLOWED_MANIFEST_FIELDS, errors, "manifest")
     collections = {
         "profiles": require_string_list(
             manifest, "profiles", errors, "manifest", minimum=1, unique=True
@@ -225,7 +227,37 @@ def validate_manifest(manifest: dict[str, Any], errors: list[str]) -> dict[str, 
         "denied_actions": require_string_list(
             manifest, "denied_actions", errors, "manifest", unique=True
         ),
+        "flow_entry_inputs": [],
+        "flow_sequence": [],
+        "flow_moc_ref": [],
     }
+    if "flow" in manifest:
+        flow = require_object(manifest, "flow", errors, "manifest")
+        require_fields(flow, REQUIRED_FLOW_FIELDS, errors, "manifest flow")
+        reject_unknown_fields(flow, REQUIRED_FLOW_FIELDS, errors, "manifest flow")
+        collections["flow_entry_inputs"] = require_string_list(
+            flow,
+            "entry_inputs",
+            errors,
+            "manifest flow",
+            minimum=1,
+            unique=True,
+        )
+        collections["flow_sequence"] = require_string_list(
+            flow, "sequence", errors, "manifest flow", minimum=1, unique=True
+        )
+        for block_id in collections["flow_sequence"]:
+            if not has_valid_id_format(block_id):
+                errors.append(
+                    f"manifest flow.sequence item has invalid id format: {block_id}"
+                )
+        moc_ref = flow.get("moc_ref")
+        if not is_non_empty_string(moc_ref):
+            errors.append("manifest flow.moc_ref must be a non-empty string")
+        else:
+            collections["flow_moc_ref"] = [moc_ref]
+            if not has_valid_id_format(moc_ref):
+                errors.append(f"manifest flow.moc_ref has invalid id format: {moc_ref}")
     if not is_non_empty_string(manifest.get("id")):
         errors.append("manifest field id must be a non-empty string")
     elif not has_valid_id_format(manifest.get("id")):
@@ -353,6 +385,62 @@ def validate_moc(
             errors.append(f"{relative} references unknown id: {reference}")
 
 
+def validate_flow_dataflow(
+    manifest_id: object,
+    collections: dict[str, list[str]],
+    documents: list[tuple[str, dict[str, Any]]],
+    errors: list[str],
+) -> None:
+    sequence = collections["flow_sequence"]
+    if not sequence:
+        return
+    blocks_by_id = {
+        document["id"]: document
+        for relative, document in documents
+        if relative in collections["blocks"] and has_valid_id_format(document.get("id"))
+    }
+    if len(sequence) != len(blocks_by_id) or set(sequence) != set(blocks_by_id):
+        errors.append(
+            "manifest flow sequence must contain every manifest block exactly once"
+        )
+    available = set(collections["flow_entry_inputs"])
+    for block_id in sequence:
+        block = blocks_by_id.get(block_id)
+        if block is None:
+            errors.append(f"manifest flow references unknown block: {block_id}")
+            continue
+        inputs = block.get("inputs")
+        if isinstance(inputs, list):
+            for input_name in inputs:
+                if is_non_empty_string(input_name) and input_name not in available:
+                    errors.append(
+                        f"manifest flow block {block_id} has unavailable input: {input_name}"
+                    )
+        outputs = block.get("outputs")
+        if isinstance(outputs, list):
+            available.update(
+                output for output in outputs if is_non_empty_string(output)
+            )
+    moc_ref = collections["flow_moc_ref"]
+    if not moc_ref:
+        return
+    mocs_by_id = {
+        document["id"]: document
+        for relative, document in documents
+        if relative in collections["mocs"] and has_valid_id_format(document.get("id"))
+    }
+    moc_id = moc_ref[0]
+    moc = mocs_by_id.get(moc_id)
+    if moc is None:
+        errors.append(f"manifest flow references unknown MOC: {moc_id}")
+        return
+    expected_refs = [manifest_id, *sequence]
+    if moc.get("refs") != expected_refs:
+        errors.append(
+            f"manifest flow MOC {moc_id} refs must equal manifest id followed by flow sequence"
+        )
+
+
 def validate_pack(pack_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
     manifest_path = pack_dir / "manifest.json"
@@ -415,6 +503,7 @@ def validate_pack(pack_dir: Path) -> dict[str, Any]:
             validate_block(relative, document, errors)
         if relative in collections["mocs"]:
             validate_moc(relative, document, known_ids, errors)
+    validate_flow_dataflow(manifest.get("id"), collections, documents, errors)
 
     return {
         "status": "PASS" if not errors else "FAIL",

@@ -21,7 +21,7 @@ Updated: 2026-08-03
 
 ## Latest public template result
 
-公開Company starterは、Source IntakeからPromotion Candidateまでの6 Block、Company Operations MOC、manifestを含みます。標準ライブラリvalidatorで構造・権限境界・参照整合を検査できますが、Human approval、runtime deployment、Promotion、Current Truthを作るものではありません。
+公開Company starterは、Source IntakeからPromotion Candidateまでの6 Block、Company Operations MOC、manifestを含みます。標準ライブラリvalidatorで構造・権限境界・参照整合に加え、flowの全Block coverage、前段出力、MOC順序を検査できますが、Human approval、runtime deployment、Promotion、Current Truthを作るものではありません。
 
 ## Current boundary
 

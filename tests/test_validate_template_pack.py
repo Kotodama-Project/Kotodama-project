@@ -82,6 +82,135 @@ class TemplatePackCliTests(unittest.TestCase):
             ],
         )
 
+    def test_shipped_starter_declares_its_flow_contract(self) -> None:
+        manifest = json.loads(
+            (EXAMPLES / "company-starter" / "manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertEqual(
+            manifest["flow"],
+            {
+                "entry_inputs": [
+                    "source_locator",
+                    "access_or_consent_ref",
+                    "retention_rule",
+                    "human_decision_evidence",
+                    "candidate_revision",
+                ],
+                "sequence": [
+                    "source-intake-starter",
+                    "intent-candidate-starter",
+                    "human-decision-starter",
+                    "work-order-starter",
+                    "verification-receipt-starter",
+                    "promotion-gate-starter",
+                ],
+                "moc_ref": "company-operations-starter",
+            },
+        )
+
+    def test_flow_rejects_a_block_before_its_required_input_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["flow"]["sequence"] = [
+                "source-intake-starter",
+                "intent-candidate-starter",
+                "work-order-starter",
+                "human-decision-starter",
+                "verification-receipt-starter",
+                "promotion-gate-starter",
+            ]
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "manifest flow block work-order-starter has unavailable input: decision_record",
+            summary["errors"],
+        )
+
+    def test_flow_requires_its_moc_to_match_the_declared_sequence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            moc_path = pack / "mocs" / "company-operations.json"
+            moc = json.loads(moc_path.read_text(encoding="utf-8"))
+            moc["refs"] = [moc["refs"][0], *reversed(moc["refs"][1:])]
+            moc_path.write_text(json.dumps(moc), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "manifest flow MOC company-operations-starter refs must equal manifest id followed by flow sequence",
+            summary["errors"],
+        )
+
+    def test_flow_sequence_must_cover_every_manifest_block(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["flow"]["sequence"] = manifest["flow"]["sequence"][:-1]
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            moc_path = pack / "mocs" / "company-operations.json"
+            moc = json.loads(moc_path.read_text(encoding="utf-8"))
+            moc["refs"] = moc["refs"][:-1]
+            moc_path.write_text(json.dumps(moc), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "manifest flow sequence must contain every manifest block exactly once",
+            summary["errors"],
+        )
+
+    def test_flow_references_must_use_schema_valid_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["flow"]["sequence"][0] = "Invalid Block"
+            manifest["flow"]["moc_ref"] = "Invalid MOC"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "manifest flow.sequence item has invalid id format: Invalid Block",
+            summary["errors"],
+        )
+        self.assertIn(
+            "manifest flow.moc_ref has invalid id format: Invalid MOC",
+            summary["errors"],
+        )
+
+    def test_malformed_flow_shape_returns_a_structured_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["flow"] = "not-an-object"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["status"], "FAIL")
+        self.assertIn("manifest field flow must be an object", summary["errors"])
+
     def test_parent_directory_reference_is_rejected(self) -> None:
         result = self.run_validator("invalid-traversal")
 

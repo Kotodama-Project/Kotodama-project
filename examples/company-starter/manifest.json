@@ -25,6 +25,24 @@
     "blocks/promotion-gate.json"
   ],
   "mocs": ["mocs/company-operations.json"],
+  "flow": {
+    "entry_inputs": [
+      "source_locator",
+      "access_or_consent_ref",
+      "retention_rule",
+      "human_decision_evidence",
+      "candidate_revision"
+    ],
+    "sequence": [
+      "source-intake-starter",
+      "intent-candidate-starter",
+      "human-decision-starter",
+      "work-order-starter",
+      "verification-receipt-starter",
+      "promotion-gate-starter"
+    ],
+    "moc_ref": "company-operations-starter"
+  },
   "denied_actions": [
     "unbound_external_write",
     "credential_permission_change",

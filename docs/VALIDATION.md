@@ -28,10 +28,11 @@ python3 tools/validate_template_pack.py examples/company-starter
 - Blockのnested authority、限定allowed actions、有効期限、verification、receipt、rollback、stop contract
 - MOCの必須field、string refs、`navigation_only` authority
 - ID型・重複と、MOCから未知IDへの参照拒否
+- `flow`宣言時のentry inputs、全Blockの一度ずつのcoverage、前段出力、MOC完全一致
 
 JSON Schemaは`schemas/`にあります。stdlib validatorは、portable schemaだけでは表現しにくいcross-file参照と公開安全境界も検査します。
 
-validatorは汎用packの構造と安全境界を検査するため、すべてのpackへ同じBlock構成や順序を強制しません。公開Company starter固有の6 Block構成とMOC順序は、repository test `test_shipped_starter_exposes_the_minimal_governance_chain`で別に固定しています。
+validatorは汎用packの構造と安全境界を検査するため、`flow`を持たないpackへ同じBlock構成や順序を強制しません。`flow`を宣言したpackでは、そのpack自身が列挙したentry inputs、sequence、MOC bindingを検査します。公開Company starter固有の6 Block IDと順序は、repository testでも固定しています。
 
 ## Tests
 
@@ -39,7 +40,7 @@ validatorは汎用packの構造と安全境界を検査するため、すべて�
 python -m unittest discover -s tests -v
 ```
 
-正常packに加え、path traversal、secret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative fixtureで検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
+正常packに加え、path traversal、secret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・MOC drift、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
 
 ## Boundary
 
