@@ -27,11 +27,12 @@
 - [x] Saved resolved-candidate validator with password-independent digest and tamper refusal
 - [x] Read-only local image availability preflight with anonymized host and exact candidate binding
 - [x] Saved availability-snapshot verifier limited to historical self-digest/candidate binding, with authenticity/freshness/atomicity/current-state claims denied
+- [x] Unattested clean-install/migration evidence-candidate schema and saved verifier with role-separated hash bindings and complete reported DB checks
 
 ## Runtime profiles still requiring live evidence
 
 - [x] Executable Compose data-plane candidate manifest (not a live receipt)
-- [ ] Digest-pinned image staging and clean-install/migration receipt
+- [ ] Protected, authenticated, fresh digest-pinned image staging and clean-install/migration receipt
 - [ ] Exact Proxmox guest/service candidate and segmented deployment receipt
 - [ ] Candidate-bound restart, rollback, and isolated restore receipts
 - [ ] PostgreSQL Company DB and Evidence Store setup/restore E2E

@@ -82,6 +82,14 @@ python tools\verify_compose_image_availability_preflight.py work\compose-image-a
 
 preflightだけが観測時刻と匿名化daemonに限定してavailabilityをtrueにできます。saved verifierの`HISTORICAL_BINDING_ONLY`はsnapshotの自己digestとcandidate bindingだけを確認します。自己digestは署名・attestationではなく、saved verifierはauthenticity、freshness、複数Docker queryのatomicity、current daemon/image stateをすべてfalseにします。どちらもpull、container、migration、health、Public Beta GOを証明しません。
 
+外部runnerがreportedしたclean-install/migration evidence candidateを保存後に再束縛する場合は次を使います。
+
+```powershell
+python tools\verify_compose_clean_install_migration_evidence_candidate.py work\private-evidence-candidate.json work\resolved-compose-candidate.json work\compose-image-availability.json
+```
+
+`UNATTESTED_EVIDENCE_BINDING_ONLY`はcandidate/preflight/file digests、Work Order/target/before-stateのhash、異なるexecutor/reviewer hash、2 serviceのmigration binding、reported positive/negative check completenessだけを示します。自己digestもidentity hashの相違もattestationではありません。verifierはDocker/DBへ接続せず、authenticity、freshness、current state、clean install、migrationをtrueにしません。
+
 ## What it validates
 
 - `manifest.json`と必須governance fields
@@ -126,7 +134,7 @@ validatorは汎用packの構造と安全境界を検査するため、`flow`や`
 python -m unittest discover -s tests -v
 ```
 
-正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。installation lifecycleではphase reorder、Work Order/rollback binding欠落、profile evidence欠落、unknown field、duplicate key、non-finite number、secret/private value、live claimを検査します。Compose skeletonではbyte drift、unbound file、hardcoded password、host port、mutable image、共有network/volume、LOGIN role化、core table欠落を検査します。resolved candidateではpassword非開示、password非依存digest、同一password、mutable image、unsafe project name、tamper、unknown field、live claimを検査します。image availabilityではread-only command境界、private identity非開示、candidate/snapshot drift、自己再計算digestがauthenticity/freshness/atomicityを付与しないことを検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
+正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。installation lifecycleではphase reorder、Work Order/rollback binding欠落、profile evidence欠落、unknown field、duplicate key、non-finite number、secret/private value、live claimを検査します。Compose skeletonではbyte drift、unbound file、hardcoded password、host port、mutable image、共有network/volume、LOGIN role化、core table欠落を検査します。resolved candidateではpassword非開示、password非依存digest、同一password、mutable image、unsafe project name、tamper、unknown field、live claimを検査します。image availabilityではread-only command境界、private identity非開示、candidate/snapshot drift、自己再計算digestがauthenticity/freshness/atomicityを付与しないことを検査します。clean-install/migration evidence candidateではcandidate/preflight/migration drift、同一actor、service evidence再利用、reported check欠落、危険なeffect、live claim、unknown/duplicate/self-digest tamper、古い時刻がfreshnessを得ないことを検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
 
 ## Boundary
 

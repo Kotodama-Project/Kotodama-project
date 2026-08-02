@@ -73,6 +73,8 @@ python tools\verify_compose_image_availability_preflight.py <private-image-prefl
 
 `<...>`は説明用placeholderです。値をこの公開repositoryへcommitしません。
 
+外部runnerがclean installとmigrationを実行したと報告する場合、raw outputやprivate locatorを公開せず、[Clean Install / Migration Evidence Candidate](CLEAN-INSTALL-MIGRATION-EVIDENCE-CANDIDATE.md)へhash bindingだけをまとめます。saved verifierはその構造を確認しますが、実行・attestation・freshness・current stateを証明しません。
+
 ## 3. Apply（exact Work Order必須）
 
 Work Orderにはtarget locator、candidate revision/digest、project namespace、想定作用、rollback revision、実行window、stop conditionsを固定します。照合できない場合は実行しません。
