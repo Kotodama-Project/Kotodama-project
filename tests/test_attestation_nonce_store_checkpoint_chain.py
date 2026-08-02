@@ -139,6 +139,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             bundle = temporary / "chain-bundle.json"
             created = self.create_bundle(case, bundle)
             self.assertEqual(created.returncode, 0, created.stdout + created.stderr)
+            bundle_sha256 = hashlib.sha256(bundle.read_bytes()).hexdigest()
             # Verification is bound to the self-contained bundle, not a later
             # pathname re-open of the source directory.
             shutil.rmtree(Path(case["chain"]))
@@ -147,9 +148,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         creation = json.loads(created.stdout)
         self.assertEqual(creation["status"], "CHAIN_BUNDLE_CREATED")
         self.assertEqual(creation["checkpoint_count"], 3)
-        self.assertEqual(
-            creation["bundle_file_sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest()
-        )
+        self.assertEqual(creation["bundle_file_sha256"], bundle_sha256)
         self.assertNotIn("manifest_file_sha256", creation)
         self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
         self.assertEqual(verified.stderr, "")
@@ -161,7 +160,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         self.assertEqual(report["counts"]["parent_links_verified"], 2)
         self.assertEqual(
             report["input_bindings"]["bundle_file_sha256"],
-            hashlib.sha256(bundle.read_bytes()).hexdigest(),
+            bundle_sha256,
         )
         self.assertNotIn("bundle_manifest_sha256", report["input_bindings"])
         for claim in (
