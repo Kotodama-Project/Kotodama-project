@@ -137,7 +137,12 @@ def validate_chain_bundle(bundle: object) -> list[str]:
         if entry is None:
             continue
         expected_checkpoint = f"checkpoint-{index:06d}.json"
-        if entry.get("sequence") != index:
+        sequence = entry.get("sequence")
+        if (
+            isinstance(sequence, bool)
+            or not isinstance(sequence, int)
+            or sequence != index
+        ):
             errors.append(f"entry {index} sequence mismatch")
         if entry.get("checkpoint_locator") != expected_checkpoint:
             errors.append(f"entry {index} checkpoint locator mismatch")

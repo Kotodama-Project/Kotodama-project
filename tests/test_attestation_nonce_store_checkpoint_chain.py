@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import test_attestation_nonce_store_checkpoint as r19_helpers  # noqa: E402
 sys.path.insert(0, str(ROOT / "tools"))
 import verify_protected_compose_evidence_attestation as protected_helpers  # noqa: E402
+import create_attestation_nonce_store_checkpoint_chain_bundle as chain_tool  # noqa: E402
 
 
 class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
@@ -227,6 +228,27 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         report = json.loads(verified.stdout)
         self.assertEqual(report["status"], "INVALID")
         self.assertIn("bundle signer policy does not match checkpoint chain", report["errors"])
+        self.assertTrue(all(not value for value in report["claims"].values()))
+
+    def test_boolean_sequence_cannot_alias_integer_zero_after_digest_rebinding(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            case = self.make_chain(temporary)
+            bundle = temporary / "chain-bundle.json"
+            self.assertEqual(self.create_bundle(case, bundle).returncode, 0)
+            value = json.loads(bundle.read_text(encoding="utf-8"))
+            value["entries"][0]["sequence"] = False
+            value["ordered_chain_sha256"] = chain_tool.ordered_chain_sha256(
+                value["entries"]
+            )
+            rebound = temporary / "boolean-sequence-bundle.json"
+            rebound.write_text(json.dumps(value), encoding="utf-8")
+            verified = self.verify_bundle(case, rebound)
+
+        self.assertEqual(verified.returncode, 1)
+        report = json.loads(verified.stdout)
+        self.assertEqual(report["status"], "INVALID")
+        self.assertIn("entry 0 sequence mismatch", report["errors"])
         self.assertTrue(all(not value for value in report["claims"].values()))
 
     def test_rollback_and_same_count_replacement_do_not_match_current_checkpoint(self) -> None:
