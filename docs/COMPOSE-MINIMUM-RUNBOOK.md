@@ -41,11 +41,14 @@ privateな作業領域で次を記録します。
 
 ## 2. Stage candidate（local / reversible）
 
-公開data-plane skeletonを出発点にし、実行前にexact bytes、正規化した設定、image digestを保存します。
+公開data-plane skeletonを出発点にし、実行前にexact bytes、正規化した設定、image digestを資格情報非開示candidateへ保存します。
 
 ```powershell
-docker compose --project-name <bounded-project-name> --file runtime\compose-minimum\compose.yaml config > <private-candidate-output>
+python tools\resolve_compose_candidate.py <bounded-project-name> > <private-candidate-output>
+python tools\validate_resolved_compose_candidate.py <private-candidate-output>
 ```
+
+`docker compose config`の生JSONには解決済みpasswordとhost絶対pathが含まれるため、fileやreceiptへ保存しません。resolverがprocess内で生JSONを検査し、安全なprojectionだけを出力します。
 
 候補には少なくとも次を束縛します。
 
@@ -56,6 +59,8 @@ docker compose --project-name <bounded-project-name> --file runtime\compose-mini
 - network / port / volume inventory
 - schema、lint、offline test結果
 - last-known-good revisionとrollback手順
+
+出力仕様とfailure boundaryは[Resolved Compose Candidate](RESOLVED-COMPOSE-CANDIDATE.md)を参照してください。
 
 `<...>`は説明用placeholderです。値をこの公開repositoryへcommitしません。
 

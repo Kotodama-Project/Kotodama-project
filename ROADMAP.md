@@ -23,6 +23,8 @@
 - [x] Public runbooks separating planning contracts from live installation receipts
 - [x] Secret-free Compose minimum Company DB / Evidence metadata Store skeleton
 - [x] Exact-byte skeleton validator with host-port, password, image, isolation, and SQL negative tests
+- [x] Credential-free resolved Compose candidate with project, image, network, volume, migration, and digest binding
+- [x] Saved resolved-candidate validator with password-independent digest and tamper refusal
 
 ## Runtime profiles still requiring live evidence
 

@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/resolved-compose-candidate.schema.json",
+  "title": "Kotodama Resolved Compose Candidate",
+  "$comment": "A credential-free configuration-resolution candidate. It is not image availability, daemon, pull, start, migration, health, restart, backup, restore, Promotion, Current Truth, or Public Beta GO evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "project_name",
+    "source",
+    "resolved",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "resolved_compose_candidate"},
+    "version": {"const": "1.0"},
+    "status": {"const": "CANDIDATE_READY_FOR_RUNTIME_PREFLIGHT"},
+    "project_name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,62}$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "skeleton_id",
+        "skeleton_spec_version",
+        "skeleton_manifest_sha256",
+        "bindings"
+      ],
+      "properties": {
+        "skeleton_id": {"const": "kotodama-compose-data-plane"},
+        "skeleton_spec_version": {"const": "0.1"},
+        "skeleton_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "bindings": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {"$ref": "#/$defs/readmeBinding"},
+            {"$ref": "#/$defs/companyMigrationBinding"},
+            {"$ref": "#/$defs/composeBinding"},
+            {"$ref": "#/$defs/evidenceMigrationBinding"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "resolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "credential_contract",
+        "networks",
+        "services",
+        "resolved_contract_sha256"
+      ],
+      "properties": {
+        "credential_contract": {"$ref": "#/$defs/credentialContract"},
+        "networks": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {"$ref": "#/$defs/companyNetwork"},
+            {"$ref": "#/$defs/evidenceNetwork"}
+          ],
+          "items": false
+        },
+        "services": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {"$ref": "#/$defs/companyService"},
+            {"$ref": "#/$defs/evidenceService"}
+          ],
+          "items": false
+        },
+        "resolved_contract_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clean_install_verified",
+        "services_started",
+        "migrations_applied",
+        "health_verified",
+        "restart_verified",
+        "backup_verified",
+        "restore_verified",
+        "application_least_privilege_verified",
+        "promotion_verified",
+        "current_truth_changed",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "clean_install_verified": {"const": false},
+        "services_started": {"const": false},
+        "migrations_applied": {"const": false},
+        "health_verified": {"const": false},
+        "restart_verified": {"const": false},
+        "backup_verified": {"const": false},
+        "restore_verified": {"const": false},
+        "application_least_privilege_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "bindingBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": {"type": "string"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "readmeBinding": {
+      "allOf": [
+        {"$ref": "#/$defs/bindingBase"},
+        {"properties": {"path": {"const": "README.md"}}}
+      ]
+    },
+    "companyMigrationBinding": {
+      "allOf": [
+        {"$ref": "#/$defs/bindingBase"},
+        {"properties": {"path": {"const": "company-db/001-company-core.sql"}}}
+      ]
+    },
+    "composeBinding": {
+      "allOf": [
+        {"$ref": "#/$defs/bindingBase"},
+        {"properties": {"path": {"const": "compose.yaml"}}}
+      ]
+    },
+    "evidenceMigrationBinding": {
+      "allOf": [
+        {"$ref": "#/$defs/bindingBase"},
+        {"properties": {"path": {"const": "evidence-store/001-evidence-core.sql"}}}
+      ]
+    },
+    "credentialContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "both_present_observed",
+        "distinct_values_observed",
+        "values_emitted",
+        "password_derived_digest"
+      ],
+      "properties": {
+        "source": {"const": "process_environment"},
+        "both_present_observed": {"const": true},
+        "distinct_values_observed": {"const": true},
+        "values_emitted": {"const": false},
+        "password_derived_digest": {"const": false}
+      }
+    },
+    "companyNetwork": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "internal"],
+      "properties": {
+        "id": {"const": "company-data"},
+        "internal": {"const": true}
+      }
+    },
+    "evidenceNetwork": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "internal"],
+      "properties": {
+        "id": {"const": "evidence-data"},
+        "internal": {"const": true}
+      }
+    },
+    "serviceBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "role",
+        "image_digest",
+        "network",
+        "volume",
+        "migration",
+        "migration_sha256",
+        "healthcheck_sha256"
+      ],
+      "properties": {
+        "id": {"type": "string"},
+        "role": {"type": "string"},
+        "image_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "network": {"type": "string"},
+        "volume": {"type": "string"},
+        "migration": {"type": "string"},
+        "migration_sha256": {"$ref": "#/$defs/sha256"},
+        "healthcheck_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "companyService": {
+      "allOf": [
+        {"$ref": "#/$defs/serviceBase"},
+        {
+          "properties": {
+            "id": {"const": "company-db"},
+            "role": {"const": "company_db"},
+            "network": {"const": "company-data"},
+            "volume": {"const": "company-db-data"},
+            "migration": {"const": "company-db/001-company-core.sql"}
+          }
+        }
+      ]
+    },
+    "evidenceService": {
+      "allOf": [
+        {"$ref": "#/$defs/serviceBase"},
+        {
+          "properties": {
+            "id": {"const": "evidence-store"},
+            "role": {"const": "evidence_metadata_store"},
+            "network": {"const": "evidence-data"},
+            "volume": {"const": "evidence-store-data"},
+            "migration": {"const": "evidence-store/001-evidence-core.sql"}
+          }
+        }
+      ]
+    }
+  }
+}

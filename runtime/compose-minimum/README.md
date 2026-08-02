@@ -48,11 +48,14 @@ Validator PASSは、公開skeletonのexact bytesと安全契約だけを示し�
 
 ## Offline configuration check
 
-値をprocess environmentへ設定した後、外部作用なしでComposeの解決結果を検査します。
+値をprocess environmentへ設定した後、外部作用なしでComposeの解決結果を検査し、資格情報非開示のcandidateを作ります。
 
 ```powershell
-docker compose --project-name <bounded-project-name> --file runtime\compose-minimum\compose.yaml config --quiet
+python tools\resolve_compose_candidate.py <bounded-project-name> > work\resolved-compose-candidate.json
+python tools\validate_resolved_compose_candidate.py work\resolved-compose-candidate.json
 ```
+
+`docker compose config`の生出力には解決済みpasswordとhost絶対pathが入るため、保存やreceiptへの添付をしません。resolverは生出力をprocess内だけで検査し、credentialとpathを除外したprojectionを出力します。詳しくは[Resolved Compose Candidate](../../docs/RESOLVED-COMPOSE-CANDIDATE.md)を参照してください。
 
 `pull_policy: never`のため、起動前にdigest-pinned imageを別のbounded手順で取得・照合する必要があります。実行順は[Compose Minimum Runbook](../../docs/COMPOSE-MINIMUM-RUNBOOK.md)に従います。
 

@@ -64,6 +64,15 @@ python tools\validate_compose_minimum_skeleton.py runtime\compose-minimum
 
 このvalidatorはmanifestの4 file binding、追加file、path containment、2 service/network/volume分離、host port、digest-required image、private password environment、internal network、NOLOGIN roles、Company/Evidence core tables、destructive SQL、全live claimを検査します。stdlib validator自体はcontainerを起動しません。Compose構文はprocess-only synthetic値による`docker compose config --quiet` testを別に持ち、daemon、pull、起動を必要としません。
 
+private environmentから解決したCompose設定を、credential非開示candidateへ固定する場合は次を使います。
+
+```powershell
+python tools\resolve_compose_candidate.py <bounded-project-name> > work\resolved-compose-candidate.json
+python tools\validate_resolved_compose_candidate.py work\resolved-compose-candidate.json
+```
+
+resolverは生のCompose JSONを保存せず、passwordとhost絶対pathを除外したrole-bound projectionだけを出力します。passwordを別値へ変えてもcandidateとdigestが同一であることをnegative testで固定しています。validator PASSは設定解決済みcandidateのcurrent shipped revisionへのbindingであり、daemon、image availability、pull、起動、migration、healthの証明ではありません。
+
 ## What it validates
 
 - `manifest.json`と必須governance fields
@@ -108,7 +117,7 @@ validatorは汎用packの構造と安全境界を検査するため、`flow`や`
 python -m unittest discover -s tests -v
 ```
 
-正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。installation lifecycleではphase reorder、Work Order/rollback binding欠落、profile evidence欠落、unknown field、duplicate key、non-finite number、secret/private value、live claimを検査します。Compose skeletonではbyte drift、unbound file、hardcoded password、host port、mutable image、共有network/volume、LOGIN role化、core table欠落を検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
+正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。installation lifecycleではphase reorder、Work Order/rollback binding欠落、profile evidence欠落、unknown field、duplicate key、non-finite number、secret/private value、live claimを検査します。Compose skeletonではbyte drift、unbound file、hardcoded password、host port、mutable image、共有network/volume、LOGIN role化、core table欠落を検査します。resolved candidateではpassword非開示、password非依存digest、同一password、mutable image、unsafe project name、tamper、unknown field、live claimを検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
 
 ## Boundary
 

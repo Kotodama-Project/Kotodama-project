@@ -9,6 +9,7 @@ Updated: 2026-08-03
 | Company governance starter | Published and locally validated |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
 | Compose minimum data-plane skeleton | Published candidate; offline config only |
+| Resolved Compose candidate | Published credential-free configuration candidate |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -28,7 +29,7 @@ Updated: 2026-08-03
 
 Compose minimum / Proxmox segmentedには、preflight、candidate作成、Work Order付きapply、positive/negative verification、rollback、隔離restore演習の6フェーズ契約、schema、標準ライブラリvalidator、公開runbookを追加しています。実環境識別子やsecretを含まないplanning/evidence contractであり、実installer、deploy、restart、restore、provider E2Eのreceiptではありません。
 
-Compose minimumにはさらに、Company DBとEvidence metadata Storeを別service、別internal network、別volumeに置くdata-plane skeletonを追加しています。host port、hardcoded password、mutable image、共有network/volume、unbound file、SQL role/table driftをvalidatorが拒否し、Compose configのoffline解決まで確認します。Docker daemonでのimage取得・container起動・migration・health・restart・backup/restoreは未実行です。
+Compose minimumにはさらに、Company DBとEvidence metadata Storeを別service、別internal network、別volumeに置くdata-plane skeletonを追加しています。host port、hardcoded password、mutable image、共有network/volume、unbound file、SQL role/table driftをvalidatorが拒否します。credential非開示resolverはCompose configの生JSONを保存せず、password、image repository、host絶対pathを除いたproject namespace、image digest、network、volume、migration、healthcheckのcandidateを作り、保存後validatorがcurrent shipped revisionとdigestを再照合します。Docker daemonでのimage取得・container起動・migration・health・restart・backup/restoreは未実行です。
 
 ## Current boundary
 
