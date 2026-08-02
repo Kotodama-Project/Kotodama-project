@@ -15,6 +15,7 @@ Updated: 2026-08-03
 | Protected one-use attestation evaluation | Published local candidate; atomic only within one bound SQLite store |
 | Signed nonce-store checkpoint | Published protected-local tool; point-in-time and immediate-parent only |
 | Recursive nonce-store checkpoint chain | Published protected-local candidate; supplied path/store equivalence only |
+| Checkpoint-head anchor / restore-drill evidence | Published protected-local contract; signed reported binding only |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -45,6 +46,8 @@ protected attestation verifierはOpenSSH署名、allowed signer、signed window�
 nonce-store checkpointはreservation rowのdigest集合、store ID、exact schema contractを署名可能なprivate checkpointへ固定します。successor検証ではcurrent store exact match、immediate-parent digest/signature、parent集合のsubsetを確認するため、1リンク内の巻き戻しと同件数差替えを拒否できます。ただし外部pinの権威、trusted clock、branch不存在、全履歴continuity、backup/restoreは未証明です。
 
 recursive checkpoint-chain verifierは、最大1,024 checkpointをself-contained private bundleへ固定し、全embedded digest、独立pinと一致する`ssh-keygen` exact bytesでの全OpenSSH signature、直前parent link、同一store ID、append-only reservation集合を検査します。supplied SQLite storeは最初のopened-object copyと通常SQLite snapshotを相互照合してからcurrent checkpointとのlogical equivalenceを確認します。これはbundleに含まれる提示された1 pathの検証であり、pinned binaryのvendor authority、external anchorの権威、authoritative complete history、parallel branch不存在、actual store continuity、backup作成、restore実行、key rotationは未証明です。
+
+checkpoint-head anchor verifierは、独立pinされたanchor/bundle bytes、bundle内のhead/store/count、短時間window、reviewer policy、OpenSSH署名を束縛します。restore-drill verifierは、成功shapeを持つanchor/source/restored report、distinctなreport/receipt digest、同一checkpoint state、全reported check、runner/reviewer identity hashの不一致を一つの署名済みcandidateへ束縛します。これらはunsigned reportやopaque receipt本文の真正性を再実行せず、external anchorのcanonical authority、trusted clock、complete history、branch不存在、actual backup/restore、physical lineage、protected runner、人物分離、Promotion、Current Truth、Public Beta GOは未証明です。
 
 ## Current boundary
 

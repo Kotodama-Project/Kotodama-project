@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-restore-drill-evidence-verification.schema.json",
+  "title": "Attestation Nonce Store Restore Drill Evidence Verification Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "errors", "evaluated_at", "clock_source", "input_bindings", "counts", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_restore_drill_evidence_verification"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["SIGNED_RESTORE_DRILL_REPORT_BINDING", "INVALID"]},
+    "errors": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "evaluated_at": {"oneOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]},
+    "clock_source": {"const": "supplied_evaluation_time_untrusted"},
+    "input_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+        "anchor_report_file_sha256": {"$ref": "#/$defs/sha256"},
+        "backup_artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "backup_receipt_file_sha256": {"$ref": "#/$defs/sha256"},
+        "bundle_file_sha256": {"$ref": "#/$defs/sha256"},
+        "current_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "drill_id_sha256": {"$ref": "#/$defs/sha256"},
+        "evidence_file_sha256": {"$ref": "#/$defs/sha256"},
+        "evidence_signature_file_sha256": {"$ref": "#/$defs/sha256"},
+        "identity_file_sha256": {"$ref": "#/$defs/sha256"},
+        "restore_receipt_file_sha256": {"$ref": "#/$defs/sha256"},
+        "restored_report_file_sha256": {"$ref": "#/$defs/sha256"},
+        "runner_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "source_report_file_sha256": {"$ref": "#/$defs/sha256"},
+        "ssh_keygen_executable_sha256": {"$ref": "#/$defs/sha256"},
+        "store_id_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoints_bound", "reservations_bound", "reported_checks_bound"],
+      "properties": {
+        "checkpoints_bound": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "reservations_bound": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "reported_checks_bound": {"type": "integer", "minimum": 0, "maximum": 7}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_file_digest_match_verified", "anchor_verification_report_shape_verified", "source_chain_verification_report_shape_verified", "restored_chain_verification_report_shape_verified", "same_checkpoint_state_verified", "distinct_report_files_verified", "operation_receipt_digests_verified", "reported_check_completeness_verified", "runner_reviewer_hash_distinct_verified", "evidence_signature_verified", "allowed_signer_verified", "signer_identity_binding_verified", "signer_role_policy_verified", "signed_evaluation_window_verified", "ssh_keygen_binary_binding_verified", "anchor_report_authenticity_verified", "chain_report_authenticity_verified", "external_anchor_authority_verified", "trusted_clock_source_verified", "authoritative_complete_history_verified", "parallel_branch_absence_verified", "backup_artifact_verified", "backup_execution_verified", "restore_execution_verified", "physical_store_lineage_verified", "protected_runner_execution_verified", "runner_reviewer_person_separation_verified", "store_continuity_verified", "promotion_verified", "current_truth_changed", "final_human_go", "public_beta_go", "ssh_keygen_vendor_authority_verified"],
+      "properties": {
+        "evidence_file_digest_match_verified": {"type": "boolean"},
+        "anchor_verification_report_shape_verified": {"type": "boolean"},
+        "source_chain_verification_report_shape_verified": {"type": "boolean"},
+        "restored_chain_verification_report_shape_verified": {"type": "boolean"},
+        "same_checkpoint_state_verified": {"type": "boolean"},
+        "distinct_report_files_verified": {"type": "boolean"},
+        "operation_receipt_digests_verified": {"type": "boolean"},
+        "reported_check_completeness_verified": {"type": "boolean"},
+        "runner_reviewer_hash_distinct_verified": {"type": "boolean"},
+        "evidence_signature_verified": {"type": "boolean"},
+        "allowed_signer_verified": {"type": "boolean"},
+        "signer_identity_binding_verified": {"type": "boolean"},
+        "signer_role_policy_verified": {"type": "boolean"},
+        "signed_evaluation_window_verified": {"type": "boolean"},
+        "ssh_keygen_binary_binding_verified": {"type": "boolean"},
+        "anchor_report_authenticity_verified": {"const": false},
+        "chain_report_authenticity_verified": {"const": false},
+        "external_anchor_authority_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "authoritative_complete_history_verified": {"const": false},
+        "parallel_branch_absence_verified": {"const": false},
+        "backup_artifact_verified": {"const": false},
+        "backup_execution_verified": {"const": false},
+        "restore_execution_verified": {"const": false},
+        "physical_store_lineage_verified": {"const": false},
+        "protected_runner_execution_verified": {"const": false},
+        "runner_reviewer_person_separation_verified": {"const": false},
+        "store_continuity_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false},
+        "ssh_keygen_vendor_authority_verified": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "SIGNED_RESTORE_DRILL_REPORT_BINDING"}}},
+      "then": {
+        "properties": {
+          "errors": {"maxItems": 0},
+          "evaluated_at": {"type": "string", "format": "date-time"},
+          "input_bindings": {"required": ["allowed_signers_file_sha256", "anchor_report_file_sha256", "backup_artifact_sha256", "backup_receipt_file_sha256", "bundle_file_sha256", "current_checkpoint_sha256", "drill_id_sha256", "evidence_file_sha256", "evidence_signature_file_sha256", "identity_file_sha256", "restore_receipt_file_sha256", "restored_report_file_sha256", "runner_identity_sha256", "source_report_file_sha256", "ssh_keygen_executable_sha256", "store_id_sha256"]},
+          "counts": {"properties": {"checkpoints_bound": {"minimum": 1}, "reported_checks_bound": {"const": 7}}},
+          "claims": {"$ref": "#/$defs/success_claims"}
+        }
+      },
+      "else": {
+        "properties": {
+          "errors": {"minItems": 1},
+          "counts": {"properties": {"checkpoints_bound": {"const": 0}, "reservations_bound": {"const": 0}, "reported_checks_bound": {"const": 0}}},
+          "claims": {"$ref": "#/$defs/invalid_claims"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "success_claims": {"properties": {
+      "evidence_file_digest_match_verified": {"const": true},
+      "anchor_verification_report_shape_verified": {"const": true},
+      "source_chain_verification_report_shape_verified": {"const": true},
+      "restored_chain_verification_report_shape_verified": {"const": true},
+      "same_checkpoint_state_verified": {"const": true},
+      "distinct_report_files_verified": {"const": true},
+      "operation_receipt_digests_verified": {"const": true},
+      "reported_check_completeness_verified": {"const": true},
+      "runner_reviewer_hash_distinct_verified": {"const": true},
+      "evidence_signature_verified": {"const": true},
+      "allowed_signer_verified": {"const": true},
+      "signer_identity_binding_verified": {"const": true},
+      "signer_role_policy_verified": {"const": true},
+      "signed_evaluation_window_verified": {"const": true},
+      "ssh_keygen_binary_binding_verified": {"const": true}
+    }},
+    "invalid_claims": {"properties": {
+      "evidence_file_digest_match_verified": {"const": false},
+      "anchor_verification_report_shape_verified": {"const": false},
+      "source_chain_verification_report_shape_verified": {"const": false},
+      "restored_chain_verification_report_shape_verified": {"const": false},
+      "same_checkpoint_state_verified": {"const": false},
+      "distinct_report_files_verified": {"const": false},
+      "operation_receipt_digests_verified": {"const": false},
+      "reported_check_completeness_verified": {"const": false},
+      "runner_reviewer_hash_distinct_verified": {"const": false},
+      "evidence_signature_verified": {"const": false},
+      "allowed_signer_verified": {"const": false},
+      "signer_identity_binding_verified": {"const": false},
+      "signer_role_policy_verified": {"const": false},
+      "signed_evaluation_window_verified": {"const": false},
+      "ssh_keygen_binary_binding_verified": {"const": false}
+    }}
+  }
+}

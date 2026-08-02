@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-checkpoint-head-anchor.schema.json",
+  "title": "Attestation Nonce Store Checkpoint Head Anchor",
+  "$comment": "Populated anchors and signature-policy values belong inside the protected boundary.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "namespace", "anchor_id_sha256", "issued_at", "expires_at", "bundle_binding", "signature_policy_binding", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_checkpoint_head_anchor"},
+    "version": {"const": "1.0"},
+    "status": {"const": "CHECKPOINT_HEAD_ANCHOR_CANDIDATE"},
+    "namespace": {"const": "kotodama-nonce-store-checkpoint-head"},
+    "anchor_id_sha256": {"$ref": "#/$defs/sha256"},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "bundle_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle_file_sha256", "current_checkpoint_sha256", "store_id_sha256", "checkpoint_count"],
+      "properties": {
+        "bundle_file_sha256": {"$ref": "#/$defs/sha256"},
+        "current_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "store_id_sha256": {"$ref": "#/$defs/sha256"},
+        "checkpoint_count": {"type": "integer", "minimum": 1, "maximum": 1024}
+      }
+    },
+    "signature_policy_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed_signers_file_sha256", "signer_identity_file_sha256", "signer_role"],
+      "properties": {
+        "allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+        "signer_identity_file_sha256": {"$ref": "#/$defs/sha256"},
+        "signer_role": {"const": "independent_anchor_reviewer"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_anchor_authority_verified", "trusted_clock_source_verified", "authoritative_complete_history_verified", "parallel_branch_absence_verified", "store_continuity_verified", "backup_execution_verified", "restore_execution_verified", "protected_runner_execution_verified", "signer_person_independence_verified", "promotion_verified", "current_truth_changed", "final_human_go", "public_beta_go", "ssh_keygen_vendor_authority_verified"],
+      "properties": {
+        "external_anchor_authority_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "authoritative_complete_history_verified": {"const": false},
+        "parallel_branch_absence_verified": {"const": false},
+        "store_continuity_verified": {"const": false},
+        "backup_execution_verified": {"const": false},
+        "restore_execution_verified": {"const": false},
+        "protected_runner_execution_verified": {"const": false},
+        "signer_person_independence_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false},
+        "ssh_keygen_vendor_authority_verified": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

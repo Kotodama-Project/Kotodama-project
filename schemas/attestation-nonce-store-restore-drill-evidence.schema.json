@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-restore-drill-evidence.schema.json",
+  "title": "Attestation Nonce Store Restore Drill Evidence Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "namespace", "drill_id_sha256", "reported_started_at", "reported_completed_at", "issued_at", "expires_at", "anchor_binding", "source_verification_binding", "restored_verification_binding", "operation_receipts", "reported_checks", "signature_policy_binding", "runner_identity_sha256", "identities_distinct", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_restore_drill_evidence"},
+    "version": {"const": "1.0"},
+    "status": {"const": "RESTORE_DRILL_EVIDENCE_CANDIDATE"},
+    "namespace": {"const": "kotodama-nonce-store-restore-drill"},
+    "drill_id_sha256": {"$ref": "#/$defs/sha256"},
+    "reported_started_at": {"type": "string", "format": "date-time"},
+    "reported_completed_at": {"type": "string", "format": "date-time"},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "anchor_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["report_file_sha256", "anchor_id_sha256", "anchor_file_sha256", "bundle_file_sha256", "current_checkpoint_sha256", "store_id_sha256", "checkpoint_count"],
+      "properties": {
+        "report_file_sha256": {"$ref": "#/$defs/sha256"},
+        "anchor_id_sha256": {"$ref": "#/$defs/sha256"},
+        "anchor_file_sha256": {"$ref": "#/$defs/sha256"},
+        "bundle_file_sha256": {"$ref": "#/$defs/sha256"},
+        "current_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "store_id_sha256": {"$ref": "#/$defs/sha256"},
+        "checkpoint_count": {"type": "integer", "minimum": 1, "maximum": 1024}
+      }
+    },
+    "source_verification_binding": {"$ref": "#/$defs/chain_binding"},
+    "restored_verification_binding": {"$ref": "#/$defs/chain_binding"},
+    "operation_receipts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backup_receipt_file_sha256", "restore_receipt_file_sha256", "backup_artifact_sha256"],
+      "properties": {
+        "backup_receipt_file_sha256": {"$ref": "#/$defs/sha256"},
+        "restore_receipt_file_sha256": {"$ref": "#/$defs/sha256"},
+        "backup_artifact_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "reported_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backup_command_completed_reported", "backup_artifact_digest_match_reported", "restore_command_completed_reported", "restored_store_opened_reported", "restored_store_chain_equivalence_reported", "source_store_remained_unmodified_reported", "private_data_not_published_reported"],
+      "properties": {
+        "backup_command_completed_reported": {"const": true},
+        "backup_artifact_digest_match_reported": {"const": true},
+        "restore_command_completed_reported": {"const": true},
+        "restored_store_opened_reported": {"const": true},
+        "restored_store_chain_equivalence_reported": {"const": true},
+        "source_store_remained_unmodified_reported": {"const": true},
+        "private_data_not_published_reported": {"const": true}
+      }
+    },
+    "signature_policy_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed_signers_file_sha256", "signer_identity_file_sha256", "signer_role"],
+      "properties": {
+        "allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+        "signer_identity_file_sha256": {"$ref": "#/$defs/sha256"},
+        "signer_role": {"const": "independent_restore_reviewer"}
+      }
+    },
+    "runner_identity_sha256": {"$ref": "#/$defs/sha256"},
+    "identities_distinct": {"const": true},
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["anchor_report_authenticity_verified", "chain_report_authenticity_verified", "external_anchor_authority_verified", "trusted_clock_source_verified", "authoritative_complete_history_verified", "parallel_branch_absence_verified", "backup_artifact_verified", "backup_execution_verified", "restore_execution_verified", "physical_store_lineage_verified", "protected_runner_execution_verified", "runner_reviewer_person_separation_verified", "store_continuity_verified", "promotion_verified", "current_truth_changed", "final_human_go", "public_beta_go", "ssh_keygen_vendor_authority_verified"],
+      "properties": {
+        "anchor_report_authenticity_verified": {"const": false},
+        "chain_report_authenticity_verified": {"const": false},
+        "external_anchor_authority_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "authoritative_complete_history_verified": {"const": false},
+        "parallel_branch_absence_verified": {"const": false},
+        "backup_artifact_verified": {"const": false},
+        "backup_execution_verified": {"const": false},
+        "restore_execution_verified": {"const": false},
+        "physical_store_lineage_verified": {"const": false},
+        "protected_runner_execution_verified": {"const": false},
+        "runner_reviewer_person_separation_verified": {"const": false},
+        "store_continuity_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false},
+        "ssh_keygen_vendor_authority_verified": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "chain_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["report_file_sha256", "bundle_file_sha256", "current_checkpoint_sha256", "store_id_sha256", "checkpoints_verified", "reservations_at_current"],
+      "properties": {
+        "report_file_sha256": {"$ref": "#/$defs/sha256"},
+        "bundle_file_sha256": {"$ref": "#/$defs/sha256"},
+        "current_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "store_id_sha256": {"$ref": "#/$defs/sha256"},
+        "checkpoints_verified": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "reservations_at_current": {"type": "integer", "minimum": 0, "maximum": 10000}
+      }
+    }
+  }
+}
