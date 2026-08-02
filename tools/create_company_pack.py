@@ -31,6 +31,7 @@ def failure(pack_id: str, target: Path, message: str) -> dict[str, Any]:
         "target": str(target),
         "validated_files": 0,
         "rebound_mocs": 0,
+        "draft_documents": 0,
         "errors": [message],
     }
 
@@ -71,17 +72,23 @@ def create_company_pack(pack_id: str, target: Path) -> dict[str, Any]:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         source_id = manifest["id"]
         manifest["id"] = pack_id
+        manifest["status"] = "draft"
         write_json(manifest_path, manifest)
 
         rebound_mocs = 0
-        for relative in manifest["mocs"]:
-            moc_path = destination / relative
-            moc = json.loads(moc_path.read_text(encoding="utf-8"))
-            refs = moc.get("refs")
-            if isinstance(refs, list) and refs and refs[0] == source_id:
-                refs[0] = pack_id
-                write_json(moc_path, moc)
-                rebound_mocs += 1
+        draft_documents = 1
+        for collection in ("blocks", "mocs", "records"):
+            for relative in manifest[collection]:
+                document_path = destination / relative
+                document = json.loads(document_path.read_text(encoding="utf-8"))
+                document["status"] = "draft"
+                if collection == "mocs":
+                    refs = document.get("refs")
+                    if isinstance(refs, list) and refs and refs[0] == source_id:
+                        refs[0] = pack_id
+                        rebound_mocs += 1
+                write_json(document_path, document)
+                draft_documents += 1
 
         validation = validate_pack(destination)
         if validation["status"] != "PASS":
@@ -95,6 +102,7 @@ def create_company_pack(pack_id: str, target: Path) -> dict[str, Any]:
             "target": str(target),
             "validated_files": validation["validated_files"],
             "rebound_mocs": rebound_mocs,
+            "draft_documents": draft_documents,
             "errors": [],
         }
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:

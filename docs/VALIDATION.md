@@ -23,6 +23,14 @@ python tools/create_company_pack.py my-company work/my-company
 
 initializerはshipped starterをpreflightし、既存targetを拒否し、manifest IDと全該当MOCを再束縛し、生成後にこのvalidatorを実行します。任意の既存packを更新・migrationするツールではありません。
 
+生成したpackのexample placeholderとgoverned review項目は別のcheckerで確認します。
+
+```powershell
+python tools/check_company_pack_customization.py work/my-company
+```
+
+このcheckerは構造validatorを先に実行し、構造PASS後だけcustomizationを評価します。`READY_FOR_GOVERNED_REVIEW`でもHuman Intent、authority、retention、Promotion、Current Truthを証明しません。詳しくは[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)を参照してください。
+
 ## What it validates
 
 - `manifest.json`と必須governance fields
@@ -73,4 +81,4 @@ python -m unittest discover -s tests -v
 
 PASSはtemplate packの構造と限定された公開安全条件だけを示します。`human_intent_ref`は非空文字列であることだけを検査し、locator形式、参照先の存在・真正性・承認状態は証明しません。実際のgoverned recordとは別途reconciliationが必要です。runtime deployment、provider E2E、実データ安全性、Human approval、Promotion、Current Truth、Public Beta GOの証明でもありません。
 
-initializerのPASSも同じ境界です。copy、ID再束縛、構造検証を示すだけで、組織固有のHuman Intent、owner、保持方針、実行権限を確定しません。
+initializerのPASSも同じ境界です。copy、ID/MOC再束縛、`draft`化、構造検証を示すだけで、組織固有のHuman Intent、owner、保持方針、実行権限を確定しません。

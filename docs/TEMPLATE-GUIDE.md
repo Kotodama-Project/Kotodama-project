@@ -124,6 +124,7 @@ flowchart LR
 - このテンプレート利用ガイド
 - Source Intake、Intent Candidate、Human Decision、Work Order、Capability Grant、Change Execution、Verification Receipt、Promotion Gate、Promotion Decisionを含むCompany starter
 - Company Operations、Public Release Review、Incident / Recoveryの3つのnavigation-only MOC
+- sourceを保ったまま22文書を`draft`化するinitializerと、置換・review・evidenceを分離するcustomization checker
 - Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
 
 これらは構造検証できるstarterです。まだclean installできるCompany OS一式ではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)を参照してください。
@@ -153,12 +154,12 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 ## 現時点での使い方
 
 1. [テンプレートカタログ](../templates/README.md)から目的に近いstarterを選ぶ。
-2. [Company starter](../examples/company-starter/README.md)を作業用directoryへcopyする。
-3. placeholderを自分の組織用の参照名へ置き換える。tokenや個人情報の値は書かない。
-4. Blockごとにowner、authority、denied actions、verification、rollbackを埋める。
-5. 最初は`draft`または`candidate_only`として使う。
+2. initializerで[Company starter](../examples/company-starter/README.md)の`draft`作業copyを作る。
+3. [customization checker](CUSTOMIZATION-CHECKLIST.md)で、置換19件、review 46件、別evidence 5件を分けて確認する。
+4. placeholderを自分の組織用の参照名へ置き換える。tokenや個人情報の値は書かない。
+5. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
 6. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
-7. validatorを通し、実行後にsource revisionと結果を照合する。
+7. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
 8. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
 
 ## Statusの読み方

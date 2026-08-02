@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/customization-report.schema.json",
+  "title": "Kotodama Company Pack Customization Report",
+  "$comment": "READY_FOR_GOVERNED_REVIEW proves only that static example placeholders were replaced. It does not prove Human approval, authority, Promotion, Current Truth, runtime readiness, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "pack_id",
+    "structural_validation",
+    "counts",
+    "items",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_customization_report"},
+    "version": {"const": "1.0"},
+    "status": {
+      "enum": [
+        "INVALID_PACK",
+        "CUSTOMIZATION_REQUIRED",
+        "READY_FOR_GOVERNED_REVIEW"
+      ]
+    },
+    "pack_id": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "null"}
+      ]
+    },
+    "structural_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "pack_id", "validated_files", "errors"],
+      "properties": {
+        "status": {"enum": ["PASS", "FAIL"]},
+        "pack_id": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        },
+        "validated_files": {"type": "integer", "minimum": 0},
+        "errors": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replacement_required",
+        "review_required",
+        "evidence_required"
+      ],
+      "properties": {
+        "replacement_required": {"type": "integer", "minimum": 0},
+        "review_required": {"type": "integer", "minimum": 0},
+        "evidence_required": {"type": "integer", "minimum": 0}
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "path", "reason"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "category": {
+            "enum": [
+              "replacement_required",
+              "review_required",
+              "evidence_required"
+            ]
+          },
+          "path": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_intent_authenticated",
+        "human_approval_verified",
+        "authority_assignment_verified",
+        "retention_policy_verified",
+        "promotion_verified",
+        "current_truth_changed"
+      ],
+      "properties": {
+        "human_intent_authenticated": {"const": false},
+        "human_approval_verified": {"const": false},
+        "authority_assignment_verified": {"const": false},
+        "retention_policy_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  }
+}

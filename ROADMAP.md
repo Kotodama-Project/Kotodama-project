@@ -14,6 +14,7 @@
 - [x] Navigation-only Company, Public Release Review, and Incident / Recovery MOCs
 - [x] Machine-verified secondary MOC ordered-subsequence contract
 - [x] Dependency-free starter initializer with ID/MOC rebinding and overwrite refusal
+- [x] Machine-readable customization checklist with review/evidence separation
 
 ## Required before opening access
 

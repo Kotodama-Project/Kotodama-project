@@ -20,6 +20,7 @@ initializerはPython標準ライブラリだけで動き、次を一度に行い
 
 - 元のexampleを変更せず、新しいtargetへcopyする
 - manifestのpack IDと、manifest内MOCの先頭refを同じIDへ再束縛する
+- manifest、9 Blocks、3 MOCs、9 Recordsを安全な作業状態`draft`へ変更する
 - 生成packをvalidatorで検証する
 - targetが既に存在する場合は上書きせず停止する
 - 生成途中で失敗した場合は、この実行が新規作成したtargetだけを除去する
@@ -42,7 +43,17 @@ initializerが`id`を設定した後、`work/my-company/manifest.json`で最初�
 
 後から`id`を変更する場合は、manifest内に列挙された全MOCの先頭refも同じIDへ変更します。MOCの参照先が存在しなければvalidatorはfail closedします。initializerを再実行して既存targetを上書きすることはできません。
 
-## 3. flow contractとMOC順にBlockを読む
+## 3. customization checklistを実行する
+
+```powershell
+python tools\check_company_pack_customization.py work\my-company
+```
+
+作成直後は`CUSTOMIZATION_REQUIRED`で終了し、通常は19件を返します。これは失敗ではなく、組織固有のHuman Intent locator 1件、Block expiry 9件、Record retention policy 9件がまだexampleであることを示します。
+
+`review_required`のowner・profile・roleは、文字列を変更すれば承認済みになるものではありません。`evidence_required`も静的CLIでは閉じません。詳細は[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)を参照してください。
+
+## 4. flow contractとMOC順にBlockを読む
 
 `manifest.json`の`flow`は、外部から入る`entry_inputs`、Block IDの`sequence`、読み順を示す`moc_ref`を宣言します。[`company-operations.json`](../examples/company-starter/mocs/company-operations.json)は、同じ順序を示すnavigation projectionです。
 
@@ -65,7 +76,7 @@ MOCはDecision、Promotion、Current Truthを変更しません。
 
 validatorは、sequenceがmanifest内の全Blockをちょうど1回含むこと、各Blockの入力がentry inputまたは前段Blockの出力に存在すること、primary MOCが同じ完全順序を持つこと、`projection: flow_subsequence`を明示したsecondary MOCがmanifest IDから始まる同順序の部分列であることを確認します。
 
-## 4. Block出力とRecord契約を合わせる
+## 5. Block出力とRecord契約を合わせる
 
 `manifest.json`の`records`は、各Blockの`outputs`を受け取るGoverned Recordテンプレートを列挙します。Recordの`artifact`は全Block出力を重複なく一度ずつ覆う必要があります。
 
@@ -77,7 +88,7 @@ validatorは、sequenceがmanifest内の全Blockをちょうど1回含むこと�
 
 このstarterのRecordはデータ入力フォームではなく契約例です。実データ、secret、個人情報を公開packへ直接書かないでください。
 
-## 5. Blockを自分の運用へ合わせる
+## 6. Blockを自分の運用へ合わせる
 
 各Blockで必ず確認します。
 
@@ -89,7 +100,7 @@ validatorは、sequenceがmanifest内の全Blockをちょうど1回含むこと�
 
 例の`2099-01-01`は書式を示すplaceholderです。実運用では短い作業windowに置き換えます。
 
-## 6. validatorを実行する
+## 7. validatorを実行する
 
 ```powershell
 python tools\validate_template_pack.py work\my-company
@@ -105,7 +116,7 @@ python3 tools/validate_template_pack.py work/my-company
 {"errors": [], "pack_id": "my-company", "status": "PASS", "validated_files": 22}
 ```
 
-## 7. PASSの意味を狭く保つ
+## 8. PASSの意味を狭く保つ
 
 PASSが示すのは、pack構造、参照、限定authority、secretらしい値、必須denialなどの検査結果です。次は証明しません。
 

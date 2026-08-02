@@ -35,6 +35,7 @@ python tools/validate_template_pack.py examples/company-starter
 ```powershell
 New-Item -ItemType Directory -Force work | Out-Null
 python tools/create_company_pack.py my-company work/my-company
+python tools/check_company_pack_customization.py work/my-company
 ```
 
-詳しい編集手順は[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)を参照してください。
+initializerは生成した22文書を`draft`にします。続くcheckerは通常19件の組織固有placeholderを返し、owner/role reviewとHuman evidenceを別categoryに保ちます。詳しい編集手順は[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)を参照してください。

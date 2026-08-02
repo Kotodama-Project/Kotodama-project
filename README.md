@@ -23,6 +23,7 @@ Kotodama は、Discord をはじめとする会話や音声を入力として、
 - [公開までのロードマップ](ROADMAP.md)
 - [Company Template / Blocks / MOCs の使い方](docs/TEMPLATE-GUIDE.md)
 - [3分で試すCompany starter](docs/STARTER-WALKTHROUGH.md)
+- [Company pack customization checklist](docs/CUSTOMIZATION-CHECKLIST.md)
 - [テンプレートカタログ](templates/README.md)
 - [Governed Record カタログ](templates/records/README.md)
 - [動くCompany starter example](examples/company-starter/README.md)
@@ -35,11 +36,12 @@ Python以外の追加dependencyは不要です。
 ```powershell
 New-Item -ItemType Directory -Force work | Out-Null
 python tools/create_company_pack.py my-company work/my-company
+python tools/check_company_pack_customization.py work/my-company
 python tools/validate_template_pack.py examples/company-starter
 python -m unittest discover -s tests -v
 ```
 
-initializerは元exampleや既存targetを上書きせず、pack IDと3 MOCをまとめて再束縛してからvalidatorを通します。starterには、Source IntakeからPromotion Decision Recordまでの9 Block、その出力を受け取る9種のGoverned Recordテンプレート、3つのnavigation-only MOCが含まれます。Capability GrantなしのChange、Human evidenceなしのPromotion Decisionをflow contractが拒否し、Block順序、入出力、MOCの完全順序・目的別部分列、Block出力とRecordの一対一対応をvalidatorで検査できます。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
+initializerは元exampleや既存targetを上書きせず、pack IDと3 MOCを再束縛し、22文書を`draft`にしてからvalidatorを通します。customization checkerは残る19の組織固有placeholderと46のreview項目、静的には証明できない5のevidence項目を分離します。starterには、Source IntakeからPromotion Decision Recordまでの9 Block、その出力を受け取る9種のGoverned Recordテンプレート、3つのnavigation-only MOCが含まれます。Capability GrantなしのChange、Human evidenceなしのPromotion Decisionをflow contractが拒否し、Block順序、入出力、MOCの完全順序・目的別部分列、Block出力とRecordの一対一対応をvalidatorで検査できます。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
 
 ## Public Beta まで
 

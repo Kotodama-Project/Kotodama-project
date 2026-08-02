@@ -42,14 +42,21 @@ class CreateCompanyPackCliTests(unittest.TestCase):
             self.assertEqual(summary["pack_id"], "my-company")
             self.assertEqual(summary["validated_files"], 22)
             self.assertEqual(summary["rebound_mocs"], 3)
+            self.assertEqual(summary["draft_documents"], 22)
 
             manifest = json.loads(
                 (target / "manifest.json").read_text(encoding="utf-8")
             )
             self.assertEqual(manifest["id"], "my-company")
-            for relative in manifest["mocs"]:
-                moc = json.loads((target / relative).read_text(encoding="utf-8"))
-                self.assertEqual(moc["refs"][0], "my-company")
+            self.assertEqual(manifest["status"], "draft")
+            for collection in ("blocks", "mocs", "records"):
+                for relative in manifest[collection]:
+                    document = json.loads(
+                        (target / relative).read_text(encoding="utf-8")
+                    )
+                    self.assertEqual(document["status"], "draft")
+                    if collection == "mocs":
+                        self.assertEqual(document["refs"][0], "my-company")
 
             validation = subprocess.run(
                 [sys.executable, str(VALIDATOR), str(target)],
