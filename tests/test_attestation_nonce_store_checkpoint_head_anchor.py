@@ -316,6 +316,25 @@ class AttestationNonceStoreCheckpointHeadAnchorCliTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertIn("usage:", result.stderr)
 
+    def test_deep_json_is_a_structured_refusal_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            case = self.make_r20_case(temporary)
+            anchor = temporary / "deep-anchor.json"
+            anchor.write_bytes(
+                (b'{"nested":' * 5000) + b"0" + (b"}" * 5000)
+            )
+            signature = temporary / "placeholder.sig"
+            signature.write_bytes(b"not-a-private-signature-body")
+            result = self.verify_anchor(case, anchor, signature)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
+        report = json.loads(result.stdout)
+        self.assertEqual(report["status"], "INVALID")
+        self.assertEqual(report["errors"], ["input is invalid"])
+        self.assertTrue(all(not value for value in report["claims"].values()))
+
 
 if __name__ == "__main__":
     unittest.main()

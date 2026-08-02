@@ -518,6 +518,22 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
         )
         self.assertTrue(all(not value for value in report["claims"].values()))
 
+    def test_deep_json_is_a_structured_refusal_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            material = self.make_case(Path(directory))
+            evidence = Path(material["evidence"])
+            evidence.write_bytes(
+                (b'{"nested":' * 5000) + b"0" + (b"}" * 5000)
+            )
+            result = self.verify(material)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
+        report = json.loads(result.stdout)
+        self.assertEqual(report["status"], "INVALID")
+        self.assertEqual(report["errors"], ["input is invalid"])
+        self.assertTrue(all(not value for value in report["claims"].values()))
+
 
 if __name__ == "__main__":
     unittest.main()

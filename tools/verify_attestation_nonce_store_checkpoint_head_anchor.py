@@ -347,7 +347,14 @@ def main(argv: list[str]) -> int:
             raise ValueError
         anchor = load_strict_json_bytes(anchor_bytes)
         bundle = load_strict_json_bytes(bundle_bytes)
-    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        TypeError,
+        ValueError,
+    ):
         print(json.dumps(report("INVALID", ["input is invalid"]), sort_keys=True))
         return 1
     chain, chain_errors = chain_from_bundle(bundle)

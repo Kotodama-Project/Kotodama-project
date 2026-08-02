@@ -652,7 +652,14 @@ def main(argv: list[str]) -> int:
         anchor_report = load_strict_json_bytes(anchor_report_bytes)
         source_report = load_strict_json_bytes(source_report_bytes)
         restored_report = load_strict_json_bytes(restored_report_bytes)
-    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        TypeError,
+        ValueError,
+    ):
         print(json.dumps(make_report("INVALID", ["input is invalid"]), sort_keys=True))
         return 1
 
