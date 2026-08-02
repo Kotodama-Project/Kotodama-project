@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -236,12 +238,54 @@ def report(
 
 
 def safe_read(path: Path, *, maximum: int | None = None) -> bytes:
-    if path.is_symlink() or not path.is_file():
-        raise OSError("unsafe input")
-    value = path.read_bytes()
-    if maximum is not None and (not value or len(value) > maximum):
-        raise OSError("unsafe input")
-    return value
+    """Read one stable regular file without following path-component links."""
+    absolute = Path(os.path.abspath(path))
+    current = Path(absolute.anchor)
+    try:
+        for component in absolute.parts[1:]:
+            current /= component
+            component_stat = os.stat(current, follow_symlinks=False)
+            if stat.S_ISLNK(component_stat.st_mode) or (
+                hasattr(current, "is_junction") and current.is_junction()
+            ):
+                raise OSError("unsafe input")
+        before = os.stat(absolute, follow_symlinks=False)
+        if not stat.S_ISREG(before.st_mode):
+            raise OSError("unsafe input")
+        if maximum is not None and (before.st_size <= 0 or before.st_size > maximum):
+            raise OSError("unsafe input")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(absolute, flags)
+    except (OSError, ValueError):
+        raise OSError("unsafe input") from None
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or (
+            opened.st_dev,
+            opened.st_ino,
+        ) != (before.st_dev, before.st_ino):
+            raise OSError("unsafe input")
+        limit = maximum + 1 if maximum is not None else None
+        with os.fdopen(descriptor, "rb", closefd=False) as source:
+            value = source.read() if limit is None else source.read(limit)
+        after_open = os.fstat(descriptor)
+        after_path = os.stat(absolute, follow_symlinks=False)
+        # Windows reports creation/change time differently for path-stat and
+        # descriptor fstat, so bind only fields with cross-interface semantics.
+        stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns")
+        if any(
+            getattr(before, field) != getattr(after_open, field)
+            or getattr(before, field) != getattr(after_path, field)
+            for field in stable_fields
+        ):
+            raise OSError("unsafe input")
+        if not value or (maximum is not None and len(value) > maximum):
+            raise OSError("unsafe input")
+        return value
+    except OSError:
+        raise OSError("unsafe input") from None
+    finally:
+        os.close(descriptor)
 
 
 def main(argv: list[str]) -> int:

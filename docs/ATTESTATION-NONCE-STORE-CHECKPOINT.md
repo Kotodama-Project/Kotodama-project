@@ -120,7 +120,7 @@ machine-readable contractは次の3件です。
 - [`attestation-nonce-store-checkpoint-creation.schema.json`](../schemas/attestation-nonce-store-checkpoint-creation.schema.json)
 - [`attestation-nonce-store-checkpoint-verification.schema.json`](../schemas/attestation-nonce-store-checkpoint-verification.schema.json)
 
-checkpointは最大10,000 reservationです。上限到達後の安全なsegmentation / rotationは未実装です。stdoutはprivate path、identity、reservation list、public key、signature bodyを出さず、safe digest bindingだけを返します。
+checkpointは最大10,000 reservation、supplied nonce storeは最大64 MiBで、store queryには30秒のdeadlineがあります。上限到達後の安全なsegmentation / rotationは未実装です。stdoutはprivate path、identity、reservation list、public key、signature bodyを出さず、safe digest bindingだけを返します。
 
 ## まだ証明しないこと
 

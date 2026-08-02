@@ -8,7 +8,9 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import sys
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +25,8 @@ from verify_protected_compose_evidence_attestation import parse_time, safe_read,
 NAMESPACE = "kotodama-nonce-store-checkpoint"
 MAX_CHECKPOINT_BYTES = 2 * 1024 * 1024
 MAX_RESERVATIONS = 10_000
+MAX_NONCE_STORE_BYTES = 64 * 1024 * 1024
+MAX_STORE_QUERY_SECONDS = 30
 SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 CHECKPOINT_FIELDS = {
     "kind",
@@ -115,7 +119,7 @@ def _snapshot_from_connection(
 ) -> tuple[dict[str, Any] | None, list[str]]:
     metadata = connection.execute(
         "SELECT store_id_sha256 FROM store_metadata WHERE singleton=1"
-    ).fetchall()
+    ).fetchmany(2)
     if len(metadata) != 1 or not is_sha256(metadata[0][0]):
         return None, ["nonce store identity is invalid"]
     store_id = metadata[0][0]
@@ -124,7 +128,7 @@ def _snapshot_from_connection(
         "SELECT nonce_sha256, attestation_sha256, policy_sha256, evidence_sha256, "
         "signature_sha256, allowed_signers_sha256, identity_file_sha256, "
         "evaluated_at, reservation_sha256 FROM nonce_reservations"
-    ).fetchall()
+    ).fetchmany(MAX_RESERVATIONS + 1)
     if len(rows) > MAX_RESERVATIONS:
         errors.append("nonce store exceeds checkpoint reservation limit")
     reservations: list[str] = []
@@ -164,22 +168,62 @@ def _snapshot_from_connection(
 @contextmanager
 def hold_store_snapshot(path: Path):
     """Hold a DELETE-journal read transaction until the caller emits its verdict."""
-    if path.is_symlink() or not path.is_file():
+    absolute = Path(os.path.abspath(path))
+    current = Path(absolute.anchor)
+    try:
+        for component in absolute.parts[1:]:
+            current /= component
+            component_stat = os.stat(current, follow_symlinks=False)
+            if stat.S_ISLNK(component_stat.st_mode) or (
+                hasattr(current, "is_junction") and current.is_junction()
+            ):
+                raise OSError
+        before = os.stat(absolute, follow_symlinks=False)
+    except OSError:
+        before = None
+    if (
+        before is None
+        or path.is_symlink()
+        or not path.is_file()
+        or not stat.S_ISREG(before.st_mode)
+        or before.st_size <= 0
+        or before.st_size > MAX_NONCE_STORE_BYTES
+    ):
         yield None, ["nonce store input is invalid"]
         return
     connection: sqlite3.Connection | None = None
+    guard_descriptor: int | None = None
     try:
+        guard_descriptor = os.open(
+            absolute,
+            os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
+        guarded = os.fstat(guard_descriptor)
+        if (guarded.st_dev, guarded.st_ino) != (before.st_dev, before.st_ino):
+            raise OSError
         connection = sqlite3.connect(
-            path.resolve().as_uri() + "?mode=ro",
+            absolute.as_uri() + "?mode=ro",
             timeout=30,
             isolation_level=None,
             uri=True,
         )
         connection.execute("PRAGMA busy_timeout=30000")
         connection.execute("PRAGMA query_only=ON")
+        query_deadline = time.monotonic() + MAX_STORE_QUERY_SECONDS
+        connection.set_progress_handler(
+            lambda: 1 if time.monotonic() > query_deadline else 0,
+            1000,
+        )
         connection.execute("BEGIN")
         snapshot = _snapshot_from_connection(connection)
-    except sqlite3.Error:
+        after = os.stat(absolute, follow_symlinks=False)
+        stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns")
+        if any(
+            getattr(after, field) != getattr(before, field)
+            for field in stable_fields
+        ):
+            snapshot = (None, ["nonce store input changed during open"])
+    except (OSError, sqlite3.Error):
         snapshot = (None, ["nonce store snapshot failed"])
     try:
         yield snapshot
@@ -191,6 +235,8 @@ def hold_store_snapshot(path: Path):
                 except sqlite3.Error:
                     pass
             connection.close()
+        if guard_descriptor is not None:
+            os.close(guard_descriptor)
 
 
 def read_store_snapshot(path: Path) -> tuple[dict[str, Any] | None, list[str]]:

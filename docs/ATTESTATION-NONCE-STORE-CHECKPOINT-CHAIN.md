@@ -41,6 +41,7 @@ material verificationの前に、少なくとも次をWork Orderへ固定しま�
 - private chain directoryとsupplied storeの対象
 - manifest SHA-256の独立protected pin
 - allowed-signers file SHA-256とsigner identity file SHA-256
+- 実行を許可する`ssh-keygen` executable bytesのSHA-256
 - expected effect、rollback、expiry、stop conditions
 - verifier revisionとmachine-readable reportの保存先
 
@@ -55,7 +56,8 @@ python tools\verify_attestation_nonce_store_checkpoint_chain.py `
   <private-chain-directory> `
   <supplied-store.sqlite3> `
   <private-allowed-signers> `
-  <private-signer-identity-file>
+  <private-signer-identity-file> `
+  <expected-ssh-keygen-sha256>
 ```
 
 verifierは次をすべて満たした場合だけ`SIGNED_RECURSIVE_CHAIN_AND_STORE_EQUIVALENCE`を返します。
@@ -63,13 +65,16 @@ verifierは次をすべて満たした場合だけ`SIGNED_RECURSIVE_CHAIN_AND_ST
 - supplied manifestのexact SHA-256とclosed structureが一致する
 - directoryの全checkpoint/signature digestがmanifestと一致する
 - 全checkpointのOpenSSH signatureが同じexact policy bytesで有効である
+- PATHで解決した`ssh-keygen`のexact bytesが独立pinと一致し、そのcopyだけを実行する
 - 先頭がGenesisで、以後の全linkが直前file/chain digestへ一致する
 - 全checkpointが同じstore IDを持ち、reservation集合がappend-onlyである
 - supplied storeのlogical snapshotがcurrent checkpointとexact matchする
 
 supplied storeはrestore後に作られたcopyでも構いません。ただしlogical equivalenceが示すのはそのcopyの内容だけです。backupが作られたこと、restore手順が実行されたこと、元storeと同じ物理fileであることは示しません。
 
-verifierはstore snapshotを一貫させるため、成功または失敗reportを確定するまでSQLiteのDELETE-journal read transactionを保持します。最大1,024 signature、全体120秒、1 signature 30秒の上限があります。長いchainはwriterを待たせ得るため、protected maintenance windowで実行してください。
+verifierは入力fileをdescriptorへ固定し、読込前にsizeを検査し、読込中のidentity/size/mtime driftを拒否します。nonce storeは最大64 MiB、10,000 reservationで、queryには30秒のdeadlineがあります。store snapshotを一貫させるため、成功または失敗reportを確定するまでSQLiteのDELETE-journal read transactionを保持します。最大1,024 signature、全体120秒、1 signature 30秒の上限があります。長いchainはwriterを待たせ得るため、protected maintenance windowで実行してください。
+
+`EXPECTED_SSH_KEYGEN_SHA256`もmanifest pinと同じく、検証対象host上でその場計算した値ではなく独立protected pinから渡します。一致は実行bytesを固定しますが、そのbinaryのvendor provenance、supply-chain authority、脆弱性不存在までは証明しません。
 
 ## Exit codesとschema
 
@@ -87,6 +92,7 @@ machine-readable contractは次の3件です。
 ## まだ証明しないこと
 
 - external protected pinを管理するsystem/personの権威・不可変性
+- pinned `ssh-keygen` binaryのvendor provenance / supply-chain authority
 - trusted clock、freshness、timestamp attestation
 - 提示されなかったcheckpoint、削除された履歴、parallel branchの不存在
 - authoritative complete history、actual store continuity、anti-rollback anchor

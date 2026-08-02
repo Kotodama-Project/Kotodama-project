@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import stat
 import sys
 from pathlib import Path
 from typing import Any
@@ -79,8 +81,10 @@ def ordered_chain_sha256(entries: list[dict[str, Any]]) -> str:
     return canonical_sha256(entries)
 
 
-def validate_chain_bundle(bundle: dict[str, Any]) -> list[str]:
+def validate_chain_bundle(bundle: object) -> list[str]:
     errors: list[str] = []
+    if not isinstance(bundle, dict):
+        return ["bundle must be an object"]
     require_exact_fields(bundle, BUNDLE_FIELDS, "bundle", errors)
     if bundle.get("kind") != "attestation_nonce_store_checkpoint_chain_bundle":
         errors.append("bundle kind is invalid")
@@ -118,12 +122,12 @@ def validate_chain_bundle(bundle: dict[str, Any]) -> list[str]:
         if not is_sha256(entry.get("signature_file_sha256")):
             errors.append(f"entry {index} signature digest is invalid")
         validated_entries.append(entry)
-    if entries:
-        if bundle.get("genesis_checkpoint_sha256") != entries[0].get(
+    if entries and len(validated_entries) == len(entries):
+        if bundle.get("genesis_checkpoint_sha256") != validated_entries[0].get(
             "checkpoint_file_sha256"
         ):
             errors.append("genesis checkpoint digest mismatch")
-        if bundle.get("current_checkpoint_sha256") != entries[-1].get(
+        if bundle.get("current_checkpoint_sha256") != validated_entries[-1].get(
             "checkpoint_file_sha256"
         ):
             errors.append("current checkpoint digest mismatch")
@@ -167,7 +171,12 @@ def validate_chain_bundle(bundle: dict[str, Any]) -> list[str]:
 def read_chain_directory(
     root: Path,
 ) -> tuple[list[dict[str, Any]] | None, list[str]]:
-    if root.is_symlink() or not root.is_dir():
+    try:
+        root_resolved = root.resolve(strict=True)
+        root_before = os.stat(root_resolved, follow_symlinks=False)
+    except OSError:
+        return None, ["chain directory is invalid"]
+    if root.is_symlink() or not stat.S_ISDIR(root_before.st_mode):
         return None, ["chain directory is invalid"]
     children: list[Path] = []
     declared_total_bytes = 0
@@ -176,8 +185,8 @@ def read_chain_directory(
             children.append(child)
             if len(children) > MAX_CHAIN_CHECKPOINTS * 2:
                 return None, ["chain directory exceeds entry limit"]
-            stat = child.stat(follow_symlinks=False)
-            declared_total_bytes += stat.st_size
+            child_stat = child.stat(follow_symlinks=False)
+            declared_total_bytes += child_stat.st_size
             if declared_total_bytes > MAX_CHAIN_TOTAL_BYTES:
                 return None, ["chain directory exceeds aggregate byte limit"]
     except OSError:
@@ -185,7 +194,15 @@ def read_chain_directory(
     checkpoint_sequences: set[int] = set()
     signature_sequences: set[int] = set()
     for child in children:
-        if child.is_symlink() or not child.is_file():
+        try:
+            child_resolved = child.resolve(strict=True)
+        except OSError:
+            return None, ["chain directory contains an invalid entry"]
+        if (
+            child.is_symlink()
+            or not child.is_file()
+            or child_resolved.parent != root_resolved
+        ):
             return None, ["chain directory contains an invalid entry"]
         match = CHECKPOINT_NAME.fullmatch(child.name)
         if match is not None:
@@ -224,6 +241,9 @@ def read_chain_directory(
         except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
             errors.append(f"checkpoint {sequence} input is invalid")
             continue
+        if not isinstance(checkpoint, dict):
+            errors.append(f"checkpoint {sequence} structure is invalid")
+            continue
         checkpoint_errors = validate_checkpoint(checkpoint)
         if checkpoint_errors:
             errors.append(f"checkpoint {sequence} structure is invalid")
@@ -241,6 +261,17 @@ def read_chain_directory(
         )
     if errors or len(chain) != len(checkpoint_sequences):
         return None, sorted(set(errors or ["checkpoint chain could not be read"]))
+
+    try:
+        root_after = os.stat(root_resolved, follow_symlinks=False)
+    except OSError:
+        return None, ["chain directory changed during read"]
+    stable_fields = ("st_dev", "st_ino", "st_mtime_ns", "st_ctime_ns")
+    if any(
+        getattr(root_before, field) != getattr(root_after, field)
+        for field in stable_fields
+    ):
+        return None, ["chain directory changed during read"]
 
     first = chain[0]["checkpoint"]
     if first.get("parent_binding", {}).get("mode") != "GENESIS":

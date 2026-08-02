@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,6 +43,7 @@ SUCCESS_FIELDS = {
     "append_only_reservation_path_verified",
     "single_store_identity_verified",
     "supplied_store_logical_equivalence_verified",
+    "ssh_keygen_binary_binding_verified",
 }
 ALWAYS_FALSE_FIELDS = {
     "external_anchor_authority_verified",
@@ -55,9 +58,11 @@ ALWAYS_FALSE_FIELDS = {
     "current_truth_changed",
     "final_human_go",
     "public_beta_go",
+    "ssh_keygen_vendor_authority_verified",
 }
 MAX_CHAIN_SIGNATURE_SECONDS = 120
 MAX_SINGLE_SIGNATURE_SECONDS = 30
+MAX_SSH_KEYGEN_BYTES = 16 * 1024 * 1024
 
 
 def report(
@@ -92,11 +97,12 @@ def report(
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 7:
+    if len(argv) != 8:
         print(
             "usage: verify_attestation_nonce_store_checkpoint_chain.py "
             "PRIVATE_CHAIN_MANIFEST_JSON EXPECTED_MANIFEST_SHA256 CHAIN_DIRECTORY "
-            "SUPPLIED_STORE_DB ALLOWED_SIGNERS_FILE SIGNER_IDENTITY_FILE",
+            "SUPPLIED_STORE_DB ALLOWED_SIGNERS_FILE SIGNER_IDENTITY_FILE "
+            "EXPECTED_SSH_KEYGEN_SHA256",
             file=sys.stderr,
         )
         return 2
@@ -107,6 +113,7 @@ def main(argv: list[str]) -> int:
         store_path = Path(argv[4])
         allowed_path = Path(argv[5])
         identity_path = Path(argv[6])
+        expected_ssh_keygen = argv[7]
         manifest_bytes = safe_read(manifest_path, maximum=MAX_BUNDLE_BYTES)
         allowed_bytes = safe_read(allowed_path, maximum=MAX_CHECKPOINT_BYTES)
         identity_bytes = safe_read(identity_path, maximum=4096)
@@ -132,13 +139,14 @@ def main(argv: list[str]) -> int:
             "store_id_sha256": store_binding["store_id_sha256"],
         }
         errors = validate_chain_bundle(manifest)
+        manifest_object = manifest if isinstance(manifest, dict) else {}
         if (
             SHA256_HEX.fullmatch(expected_manifest) is None
             or expected_manifest != sha256_bytes(manifest_bytes)
         ):
             errors.append("supplied bundle digest mismatch")
         entries = public_entries(chain)
-        if manifest.get("entries") != entries:
+        if manifest_object.get("entries") != entries:
             errors.append("bundle entries do not match chain directory")
         if entries:
             bindings["genesis_checkpoint_sha256"] = entries[0][
@@ -147,7 +155,10 @@ def main(argv: list[str]) -> int:
             bindings["current_checkpoint_sha256"] = entries[-1][
                 "checkpoint_file_sha256"
             ]
-        signature_policy = manifest.get("signature_policy_binding", {})
+        signature_policy_value = manifest_object.get("signature_policy_binding", {})
+        signature_policy = (
+            signature_policy_value if isinstance(signature_policy_value, dict) else {}
+        )
         if signature_policy != chain[0]["checkpoint"].get(
             "signature_policy_binding"
         ):
@@ -162,21 +173,52 @@ def main(argv: list[str]) -> int:
         if ssh_keygen is None:
             errors.append("ssh-keygen is unavailable")
         else:
-            signature_deadline = time.monotonic() + MAX_CHAIN_SIGNATURE_SECONDS
-            for sequence, item in enumerate(chain):
-                remaining = signature_deadline - time.monotonic()
-                if remaining <= 0:
-                    errors.append("checkpoint chain signature verification timed out")
-                    break
-                if not verify_signature(
-                    ssh_keygen,
-                    allowed_bytes,
-                    identity,
-                    item["signature_bytes"],
-                    item["checkpoint_bytes"],
-                    timeout_seconds=min(MAX_SINGLE_SIGNATURE_SECONDS, remaining),
-                ):
-                    errors.append(f"checkpoint {sequence} signature verification failed")
+            try:
+                ssh_keygen_bytes = safe_read(
+                    Path(ssh_keygen), maximum=MAX_SSH_KEYGEN_BYTES
+                )
+            except OSError:
+                ssh_keygen_bytes = b""
+                errors.append("ssh-keygen executable is invalid")
+            ssh_keygen_sha256 = (
+                sha256_bytes(ssh_keygen_bytes) if ssh_keygen_bytes else ""
+            )
+            if (
+                SHA256_HEX.fullmatch(expected_ssh_keygen) is None
+                or expected_ssh_keygen != ssh_keygen_sha256
+            ):
+                errors.append("ssh-keygen executable binding mismatch")
+            else:
+                bindings["ssh_keygen_executable_sha256"] = ssh_keygen_sha256
+                with tempfile.TemporaryDirectory(
+                    prefix="kotodama-pinned-ssh-keygen-"
+                ) as directory:
+                    executable = Path(directory) / (
+                        "ssh-keygen.exe" if os.name == "nt" else "ssh-keygen"
+                    )
+                    executable.write_bytes(ssh_keygen_bytes)
+                    executable.chmod(0o700)
+                    signature_deadline = (
+                        time.monotonic() + MAX_CHAIN_SIGNATURE_SECONDS
+                    )
+                    for sequence, item in enumerate(chain):
+                        remaining = signature_deadline - time.monotonic()
+                        if remaining <= 0:
+                            errors.append(
+                                "checkpoint chain signature verification timed out"
+                            )
+                            break
+                        if not verify_signature(
+                            str(executable),
+                            allowed_bytes,
+                            identity,
+                            item["signature_bytes"],
+                            item["checkpoint_bytes"],
+                            timeout_seconds=min(MAX_SINGLE_SIGNATURE_SECONDS, remaining),
+                        ):
+                            errors.append(
+                                f"checkpoint {sequence} signature verification failed"
+                            )
         current_checkpoint = chain[-1]["checkpoint"]
         if current_checkpoint.get("store_binding") != store_binding:
             errors.append("supplied store does not match current checkpoint")

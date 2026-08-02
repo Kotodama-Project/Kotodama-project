@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -7,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +19,8 @@ CREATION_SCHEMA = ROOT / "schemas" / "attestation-nonce-store-checkpoint-chain-b
 VERIFICATION_SCHEMA = ROOT / "schemas" / "attestation-nonce-store-checkpoint-chain-verification.schema.json"
 sys.path.insert(0, str(ROOT / "tests"))
 import test_attestation_nonce_store_checkpoint as r19_helpers  # noqa: E402
+sys.path.insert(0, str(ROOT / "tools"))
+import verify_protected_compose_evidence_attestation as protected_helpers  # noqa: E402
 
 
 class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
@@ -103,6 +107,8 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         store: Path | None = None,
         allowed_signers: Path | None = None,
         identity_file: Path | None = None,
+        expected_ssh_keygen_sha256: str | None = None,
+        environment: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         inputs = case["inputs"]
         assert isinstance(inputs, dict)
@@ -117,11 +123,14 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
                 str(store or case["restored_store"]),
                 str(allowed_signers or inputs["allowed_signers"]),
                 str(identity_file or inputs["identity_file"]),
+                expected_ssh_keygen_sha256
+                or hashlib.sha256(Path(self.ssh_keygen).read_bytes()).hexdigest(),
             ],
             cwd=ROOT,
             text=True,
             capture_output=True,
             check=False,
+            env=environment,
         )
 
     def test_three_checkpoint_chain_and_supplied_store_are_logically_equivalent(self) -> None:
@@ -157,6 +166,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             "append_only_reservation_path_verified",
             "single_store_identity_verified",
             "supplied_store_logical_equivalence_verified",
+            "ssh_keygen_binary_binding_verified",
         ):
             self.assertTrue(report["claims"][claim])
         for claim in (
@@ -172,6 +182,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             "current_truth_changed",
             "final_human_go",
             "public_beta_go",
+            "ssh_keygen_vendor_authority_verified",
         ):
             self.assertFalse(report["claims"][claim])
         self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
@@ -341,6 +352,13 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             overclaim = temporary / "overclaim.json"
             overclaim.write_text(json.dumps(overclaim_value), encoding="utf-8")
             results.append((self.verify_bundle(case, overclaim), None))
+            malformed_entry_value = json.loads(original)
+            malformed_entry_value["entries"][0] = "not-an-object"
+            malformed_entry = temporary / "malformed-entry.json"
+            malformed_entry.write_text(
+                json.dumps(malformed_entry_value), encoding="utf-8"
+            )
+            results.append((self.verify_bundle(case, malformed_entry), None))
 
             signatures = case["signatures"]
             assert isinstance(signatures, list)
@@ -364,6 +382,49 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
                 self.assertIn(expected, report["errors"])
             self.assertTrue(all(not value for value in report["claims"].values()))
             self.assertNotIn(private_marker, result.stdout + result.stderr)
+
+    def test_ssh_keygen_executable_is_pinned_and_manifest_type_errors_are_safe(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            case = self.make_chain(temporary)
+            bundle = temporary / "chain-bundle.json"
+            self.assertEqual(self.create_bundle(case, bundle).returncode, 0)
+
+            wrong_pin = self.verify_bundle(
+                case, bundle, expected_ssh_keygen_sha256="0" * 64
+            )
+
+            stub_directory = temporary / "stub-bin"
+            stub_directory.mkdir()
+            if os.name == "nt":
+                stub = stub_directory / "ssh-keygen.cmd"
+                stub.write_text("@exit /b 0\n", encoding="utf-8")
+            else:
+                stub = stub_directory / "ssh-keygen"
+                stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                stub.chmod(0o700)
+            environment = os.environ.copy()
+            environment["PATH"] = str(stub_directory) + os.pathsep + environment["PATH"]
+            path_stub = self.verify_bundle(case, bundle, environment=environment)
+
+            malformed_value = json.loads(bundle.read_text(encoding="utf-8"))
+            malformed_value["signature_policy_binding"] = "not-an-object"
+            malformed = temporary / "malformed-manifest.json"
+            malformed.write_text(json.dumps(malformed_value), encoding="utf-8")
+            malformed_result = self.verify_bundle(case, malformed)
+
+        for result in (wrong_pin, path_stub):
+            self.assertEqual(result.returncode, 1)
+            report = json.loads(result.stdout)
+            self.assertIn("ssh-keygen executable binding mismatch", report["errors"])
+            self.assertTrue(all(not value for value in report["claims"].values()))
+        self.assertEqual(malformed_result.returncode, 1)
+        self.assertEqual(malformed_result.stderr, "")
+        malformed_report = json.loads(malformed_result.stdout)
+        self.assertEqual(malformed_report["status"], "INVALID")
+        self.assertTrue(
+            all(not value for value in malformed_report["claims"].values())
+        )
 
     def test_individually_valid_but_wrong_parent_link_is_refused_by_bundle_builder(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -414,6 +475,29 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["status"], "INVALID")
         self.assertFalse(output.exists())
 
+    def test_file_and_store_limits_apply_before_open_or_sqlite_query(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            oversized_input = temporary / "oversized-input"
+            oversized_input.write_bytes(b"x" * 33)
+            with mock.patch.object(protected_helpers.os, "open") as open_mock:
+                with self.assertRaises(OSError):
+                    protected_helpers.safe_read(oversized_input, maximum=32)
+                open_mock.assert_not_called()
+
+            oversized_store = temporary / "oversized-store.sqlite3"
+            with oversized_store.open("wb") as output:
+                output.truncate(r19_helpers.checkpoint_tool.MAX_NONCE_STORE_BYTES + 1)
+            with mock.patch.object(
+                r19_helpers.checkpoint_tool.sqlite3, "connect"
+            ) as connect_mock:
+                with r19_helpers.checkpoint_tool.hold_store_snapshot(
+                    oversized_store
+                ) as (snapshot, errors):
+                    self.assertIsNone(snapshot)
+                    self.assertTrue(errors)
+                connect_mock.assert_not_called()
+
     def test_r20_schemas_are_closed_bounded_and_keep_authority_claims_false(self) -> None:
         bundle = json.loads(BUNDLE_SCHEMA.read_text(encoding="utf-8"))
         creation = json.loads(CREATION_SCHEMA.read_text(encoding="utf-8"))
@@ -461,6 +545,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             "current_truth_changed",
             "final_human_go",
             "public_beta_go",
+            "ssh_keygen_vendor_authority_verified",
         ):
             self.assertIs(
                 verification["properties"]["claims"]["properties"][name]["const"],

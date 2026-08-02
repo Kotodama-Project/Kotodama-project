@@ -44,7 +44,7 @@ protected attestation verifierはOpenSSH署名、allowed signer、signed window�
 
 nonce-store checkpointはreservation rowのdigest集合、store ID、exact schema contractを署名可能なprivate checkpointへ固定します。successor検証ではcurrent store exact match、immediate-parent digest/signature、parent集合のsubsetを確認するため、1リンク内の巻き戻しと同件数差替えを拒否できます。ただし外部pinの権威、trusted clock、branch不存在、全履歴continuity、backup/restoreは未証明です。
 
-recursive checkpoint-chain verifierは、最大1,024 checkpointの提示されたGenesis-to-current pathについて全digest、全OpenSSH signature、直前parent link、同一store ID、append-only reservation集合を検査し、supplied SQLite storeがcurrent checkpointとlogical-equivalentであることを確認します。これは提示された1 pathの検証であり、external anchorの権威、authoritative complete history、parallel branch不存在、actual store continuity、backup作成、restore実行、key rotationは未証明です。
+recursive checkpoint-chain verifierは、最大1,024 checkpointの提示されたGenesis-to-current pathについて全digest、独立pinと一致する`ssh-keygen` exact bytesでの全OpenSSH signature、直前parent link、同一store ID、append-only reservation集合を検査し、supplied SQLite storeがcurrent checkpointとlogical-equivalentであることを確認します。これは提示された1 pathの検証であり、pinned binaryのvendor authority、external anchorの権威、authoritative complete history、parallel branch不存在、actual store continuity、backup作成、restore実行、key rotationは未証明です。
 
 ## Current boundary
 
