@@ -50,7 +50,19 @@ MOCはDecision、Promotion、Current Truthを変更しません。
 
 validatorは、sequenceがmanifest内の全Blockをちょうど1回含むこと、各Blockの入力がentry inputまたは前段Blockの出力に存在すること、指定MOCが同じ順序を持つことを確認します。
 
-## 4. Blockを自分の運用へ合わせる
+## 4. Block出力とRecord契約を合わせる
+
+`manifest.json`の`records`は、各Blockの`outputs`を受け取るGoverned Recordテンプレートを列挙します。Recordの`artifact`は全Block出力を重複なく一度ずつ覆う必要があります。
+
+- `required_fields`: 実Recordを作るときに必ず保持する項目
+- `canonical_owner`: そのfact familyの正本を持つ場所または役割
+- `authority`: 作成役、検証役、Current Truthに必要な別Promotion
+- `retention.policy_ref`: 値そのものではなく組織の保持方針への参照
+- `denied_claims`: 自己承認、自己Promotion、PromotionなしのCurrent Truth化を禁止
+
+このstarterのRecordはデータ入力フォームではなく契約例です。実データ、secret、個人情報を公開packへ直接書かないでください。
+
+## 5. Blockを自分の運用へ合わせる
 
 各Blockで必ず確認します。
 
@@ -62,7 +74,7 @@ validatorは、sequenceがmanifest内の全Blockをちょうど1回含むこと�
 
 例の`2099-01-01`は書式を示すplaceholderです。実運用では短い作業windowに置き換えます。
 
-## 5. validatorを実行する
+## 6. validatorを実行する
 
 ```powershell
 python tools\validate_template_pack.py work\my-company
@@ -75,10 +87,10 @@ python3 tools/validate_template_pack.py work/my-company
 成功例:
 
 ```json
-{"errors": [], "pack_id": "my-company", "status": "PASS", "validated_files": 8}
+{"errors": [], "pack_id": "my-company", "status": "PASS", "validated_files": 15}
 ```
 
-## 6. PASSの意味を狭く保つ
+## 7. PASSの意味を狭く保つ
 
 PASSが示すのは、pack構造、参照、限定authority、secretらしい値、必須denialなどの検査結果です。次は証明しません。
 

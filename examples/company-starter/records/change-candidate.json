@@ -1,0 +1,27 @@
+{
+  "kind": "record_template",
+  "spec_version": "0.1",
+  "id": "change-candidate-template",
+  "status": "example",
+  "artifact": "change_candidate",
+  "purpose": "Describe the exact output produced under a bounded Work Order without claiming verification or promotion.",
+  "canonical_owner": "evidence-store",
+  "required_fields": [
+    "change_id",
+    "work_order_ref",
+    "source_revision",
+    "artifact_refs",
+    "diff_digest",
+    "generated_at"
+  ],
+  "authority": {
+    "creator_role": "execution-lane",
+    "verifier_role": "independent-verifier",
+    "promotion_required_for_current_truth": true
+  },
+  "retention": {
+    "mode": "policy_ref",
+    "policy_ref": "retention-policy:replace-with-governed-reference"
+  },
+  "denied_claims": ["self_approval", "self_promotion", "current_truth_without_promotion"]
+}

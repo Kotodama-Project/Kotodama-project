@@ -4,13 +4,14 @@ Kotodama のテンプレートは、AIに会社を丸ごと任せるための完
 
 この文書では、会話で使われていた「Mox」を **MOCs（Maps of Content、モックス）** と解釈しています。MOCは複数の文書やBlockへ案内する地図であり、データの正本ではありません。
 
-## 3つのテンプレート層
+## 4つのテンプレート層
 
 | 層 | 役割 | たとえるなら |
 |---|---|---|
 | Company Template | 会社・チーム全体の運営構造を複製する | 建物全体の設計図 |
 | Block | 入力・出力・権限・検証を持つ小さな再利用部品 | 部屋や設備 |
 | MOC | 関係する文書とBlockを目的別に案内する | 館内案内図 |
+| Governed Record | Block出力の必須field、owner、検証・保持境界を定義する | 監査可能な伝票 |
 
 ```mermaid
 flowchart TD
@@ -83,6 +84,8 @@ Source Evidence
 
 会話、Discord投稿、音声、Notion、Obsidianは入口や表示面として使えますが、それだけでDecisionやCurrent Truthにはなりません。
 
+各Blockの`outputs`は、manifestの`records`にあるGoverned Recordの`artifact`へ一対一で接続します。公開starterでは7種を用意していますが、これは本番データではなく記録契約です。詳細は[Governed Record Catalog](../templates/records/README.md)を参照してください。
+
 ### 5. 検証できる状態で配布する
 
 完成したテンプレートは、READMEだけではなく、schema、validator、test、runbook、サンプル、rollback手順を一緒に配布します。秘密情報は値ではなく参照名やplaceholderに置き換えます。
@@ -110,7 +113,7 @@ flowchart LR
 - プロジェクトの目的、現在状態、ロードマップ
 - このテンプレート利用ガイド
 - Source Intake、Intent Candidate、Human Decision、Work Order、Verification Receipt、Promotion Gateを含むCompany starter
-- Company manifest、Block、MOCのschema、validator、negative tests
+- Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
 
 これらは構造検証できるstarterです。まだclean installできるCompany OS一式ではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)を参照してください。
 

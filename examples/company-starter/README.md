@@ -15,6 +15,8 @@
 
 `manifest.json`の`flow`は、外部入力、6 Block IDの実行順、対象MOCを束縛します。validatorはBlock入力が前段出力へ接続されていることまで検査します。
 
+`records/`は7つのBlock出力を受け取るGoverned Record契約です。manifestの`records`と各Recordの`artifact`は一対一で検査されます。これらは実際のSource、Decision、Receiptではなく、実Recordが持つべきfieldとauthority/retention境界の例です。
+
 ```powershell
 python tools/validate_template_pack.py examples/company-starter
 ```

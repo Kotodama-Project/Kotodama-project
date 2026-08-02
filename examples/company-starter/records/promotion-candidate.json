@@ -1,0 +1,28 @@
+{
+  "kind": "record_template",
+  "spec_version": "0.1",
+  "id": "promotion-candidate-template",
+  "status": "example",
+  "artifact": "promotion_candidate",
+  "purpose": "Collect verified evidence for promotion review without performing promotion or changing Current Truth.",
+  "canonical_owner": "governed-git",
+  "required_fields": [
+    "promotion_candidate_id",
+    "decision_ref",
+    "verification_receipt_refs",
+    "candidate_digest",
+    "independence_check",
+    "proposed_at",
+    "unresolved_gates"
+  ],
+  "authority": {
+    "creator_role": "promotion-reviewer",
+    "verifier_role": "promotion-authority",
+    "promotion_required_for_current_truth": true
+  },
+  "retention": {
+    "mode": "policy_ref",
+    "policy_ref": "retention-policy:replace-with-governed-reference"
+  },
+  "denied_claims": ["self_approval", "self_promotion", "current_truth_without_promotion"]
+}

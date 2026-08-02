@@ -1,0 +1,28 @@
+{
+  "kind": "record_template",
+  "spec_version": "0.1",
+  "id": "decision-record-template",
+  "status": "example",
+  "artifact": "decision_record",
+  "purpose": "Bind an explicit human decision to the intent candidate and evidence it evaluated.",
+  "canonical_owner": "governed-git",
+  "required_fields": [
+    "decision_id",
+    "intent_candidate_ref",
+    "decision",
+    "approver_role",
+    "evidence_ref",
+    "decided_at",
+    "review_condition"
+  ],
+  "authority": {
+    "creator_role": "decision-recorder",
+    "verifier_role": "human-intent-owner",
+    "promotion_required_for_current_truth": true
+  },
+  "retention": {
+    "mode": "policy_ref",
+    "policy_ref": "retention-policy:replace-with-governed-reference"
+  },
+  "denied_claims": ["self_approval", "self_promotion", "current_truth_without_promotion"]
+}

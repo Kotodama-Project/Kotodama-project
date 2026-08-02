@@ -9,6 +9,7 @@
 - [x] Dependency-free validator and negative tests
 - [x] Source-to-Promotion-Candidate governance starter and walkthrough
 - [x] Machine-verified flow inputs, Block sequence, dataflow, and MOC binding
+- [x] Seven governed record contracts with exact Block-output coverage
 
 ## Required before opening access
 

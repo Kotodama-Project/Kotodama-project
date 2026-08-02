@@ -21,7 +21,7 @@ python3 tools/validate_template_pack.py examples/company-starter
 - 参照されたBlockとMOCの存在とJSON形式
 - pack外へ出る絶対pathまたは`..`参照の拒否
 - 解決後pathのpack-root containment（symlink escapeを含む）
-- secret値を持つ可能性が高いkey表記揺れと代表的token/private-key値の拒否
+- manifest、参照JSON、未参照JSONを含むpack内全JSONのsecretらしいkey表記揺れと代表的token/private-key値の拒否
 - templateによる`promoted`やPublic GOの自己申告拒否
 - Human IntentからCurrent Truthまでのcanonical ownerとmandatory denied actions
 - 対応profile（`compose_minimum` / `proxmox_segmented`）の非空allowlist
@@ -29,10 +29,15 @@ python3 tools/validate_template_pack.py examples/company-starter
 - MOCの必須field、string refs、`navigation_only` authority
 - ID型・重複と、MOCから未知IDへの参照拒否
 - `flow`宣言時のentry inputs、全Blockの一度ずつのcoverage、前段出力、MOC完全一致
+- Governed Recordのschema相当契約、authority、retention参照、mandatory denied claims
+- Governed Recordのcreator roleとverifier roleの分離
+- 全Block出力とmanifest内Record artifactの一対一coverage
 
 JSON Schemaは`schemas/`にあります。stdlib validatorは、portable schemaだけでは表現しにくいcross-file参照と公開安全境界も検査します。
 
-validatorは汎用packの構造と安全境界を検査するため、`flow`を持たないpackへ同じBlock構成や順序を強制しません。`flow`を宣言したpackでは、そのpack自身が列挙したentry inputs、sequence、MOC bindingを検査します。公開Company starter固有の6 Block IDと順序は、repository testでも固定しています。
+JSON Schema単体のPASSはpackの検証完了を意味しません。作成roleと検証roleの分離、Block出力とRecordの一対一対応、pack全体のsecret scanなどのcross-field/cross-file境界を含め、公開前は必ずこのCLI validatorを実行してください。
+
+validatorは汎用packの構造と安全境界を検査するため、`flow`や`records`を持たない既存packへ同じBlock構成や順序を強制しません。`flow`を宣言したpackでは、そのpack自身が列挙したentry inputs、sequence、MOC bindingを検査します。`records`を宣言したpackでは、全Block出力との一対一対応を検査します。公開Company starter固有の6 Block ID、7 Record artifact、順序はrepository testでも固定しています。
 
 ## Tests
 
@@ -40,7 +45,7 @@ validatorは汎用packの構造と安全境界を検査するため、`flow`を�
 python -m unittest discover -s tests -v
 ```
 
-正常packに加え、path traversal、secret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・MOC drift、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
+正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・MOC drift、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
 
 ## Boundary
 

@@ -1,0 +1,30 @@
+{
+  "kind": "record_template",
+  "spec_version": "0.1",
+  "id": "work-order-candidate-template",
+  "status": "example",
+  "artifact": "work_order_candidate",
+  "purpose": "Parameterize an approved action before execution, including effects, rollback, expiry, and stop conditions.",
+  "canonical_owner": "governed-git",
+  "required_fields": [
+    "work_order_id",
+    "decision_ref",
+    "target",
+    "action",
+    "candidate_revision",
+    "effects",
+    "rollback",
+    "expires_at",
+    "stop_conditions"
+  ],
+  "authority": {
+    "creator_role": "work-order-author",
+    "verifier_role": "execution-authority",
+    "promotion_required_for_current_truth": true
+  },
+  "retention": {
+    "mode": "policy_ref",
+    "policy_ref": "retention-policy:replace-with-governed-reference"
+  },
+  "denied_claims": ["self_approval", "self_promotion", "current_truth_without_promotion"]
+}

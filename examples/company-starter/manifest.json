@@ -25,6 +25,15 @@
     "blocks/promotion-gate.json"
   ],
   "mocs": ["mocs/company-operations.json"],
+  "records": [
+    "records/source-record.json",
+    "records/intent-candidate.json",
+    "records/decision-record.json",
+    "records/work-order-candidate.json",
+    "records/change-candidate.json",
+    "records/verification-receipt.json",
+    "records/promotion-candidate.json"
+  ],
   "flow": {
     "entry_inputs": [
       "source_locator",

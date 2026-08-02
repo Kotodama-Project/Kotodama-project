@@ -1,0 +1,30 @@
+{
+  "kind": "record_template",
+  "spec_version": "0.1",
+  "id": "verification-receipt-template",
+  "status": "example",
+  "artifact": "verification_receipt",
+  "purpose": "Record scope-matched checks and effects against an exact Change Candidate.",
+  "canonical_owner": "governed-git",
+  "required_fields": [
+    "receipt_id",
+    "work_order_ref",
+    "change_candidate_ref",
+    "observed_at",
+    "checks",
+    "negative_tests",
+    "effects",
+    "result",
+    "artifact_digests"
+  ],
+  "authority": {
+    "creator_role": "verification-recorder",
+    "verifier_role": "independent-verifier",
+    "promotion_required_for_current_truth": true
+  },
+  "retention": {
+    "mode": "policy_ref",
+    "policy_ref": "retention-policy:replace-with-governed-reference"
+  },
+  "denied_claims": ["self_approval", "self_promotion", "current_truth_without_promotion"]
+}

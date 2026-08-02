@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -49,7 +50,181 @@ class TemplatePackCliTests(unittest.TestCase):
         summary = json.loads(result.stdout)
         self.assertEqual(summary["status"], "PASS")
         self.assertEqual(summary["pack_id"], "kotodama-company-starter")
-        self.assertEqual(summary["validated_files"], 8)
+        self.assertEqual(summary["validated_files"], 15)
+
+    def test_shipped_starter_validates_source_record_template(self) -> None:
+        pack = EXAMPLES / "company-starter"
+        manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
+        source_record = json.loads(
+            (pack / "records" / "source-record.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            manifest["records"],
+            [
+                "records/source-record.json",
+                "records/intent-candidate.json",
+                "records/decision-record.json",
+                "records/work-order-candidate.json",
+                "records/change-candidate.json",
+                "records/verification-receipt.json",
+                "records/promotion-candidate.json",
+            ],
+        )
+        self.assertEqual(source_record["kind"], "record_template")
+        self.assertEqual(source_record["artifact"], "source_record")
+        self.assertTrue(
+            source_record["authority"]["promotion_required_for_current_truth"]
+        )
+        self.assertEqual(
+            source_record["retention"]["mode"],
+            "policy_ref",
+        )
+        self.assertIn("self_promotion", source_record["denied_claims"])
+
+    def test_record_schema_required_fields_match_shipped_record_shape(self) -> None:
+        schema = json.loads(
+            (ROOT / "schemas" / "record.schema.json").read_text(encoding="utf-8")
+        )
+        record = json.loads(
+            (
+                EXAMPLES
+                / "company-starter"
+                / "records"
+                / "source-record.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(set(schema["required"]), set(record))
+        self.assertEqual(
+            set(schema["properties"]["authority"]["required"]),
+            set(record["authority"]),
+        )
+        self.assertEqual(
+            set(schema["properties"]["retention"]["required"]),
+            set(record["retention"]),
+        )
+
+    def test_shipped_starter_maps_every_block_output_to_one_record(self) -> None:
+        pack = EXAMPLES / "company-starter"
+        manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
+        block_outputs = []
+        for relative in manifest["blocks"]:
+            block = json.loads((pack / relative).read_text(encoding="utf-8"))
+            block_outputs.extend(block["outputs"])
+        record_artifacts = []
+        for relative in manifest["records"]:
+            record = json.loads((pack / relative).read_text(encoding="utf-8"))
+            record_artifacts.append(record["artifact"])
+
+        self.assertEqual(sorted(record_artifacts), sorted(block_outputs))
+        self.assertEqual(len(record_artifacts), len(set(record_artifacts)))
+
+    def test_manifest_records_must_cover_every_block_output_exactly_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["records"] = manifest["records"][:-1]
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "manifest records must cover every Block output exactly once",
+            summary["errors"],
+        )
+
+    def test_declared_empty_record_catalog_cannot_disable_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["records"] = []
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "manifest records must cover every Block output exactly once",
+            summary["errors"],
+        )
+
+    def test_record_template_cannot_omit_mandatory_denied_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            record_path = pack / "records" / "source-record.json"
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            record["denied_claims"].remove("self_promotion")
+            record_path.write_text(json.dumps(record), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "records/source-record.json missing mandatory denied claim: self_promotion",
+            summary["errors"],
+        )
+
+    def test_record_creator_and_verifier_roles_must_be_distinct(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            record_path = pack / "records" / "source-record.json"
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            record["authority"]["verifier_role"] = record["authority"][
+                "creator_role"
+            ]
+            record_path.write_text(json.dumps(record), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "records/source-record.json authority creator_role and verifier_role must differ",
+            summary["errors"],
+        )
+
+    def test_record_artifacts_must_be_unique(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            record_path = pack / "records" / "promotion-candidate.json"
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            record["artifact"] = "source_record"
+            record_path.write_text(json.dumps(record), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn("duplicate record artifact: source_record", summary["errors"])
+        self.assertIn(
+            "manifest records must cover every Block output exactly once",
+            summary["errors"],
+        )
+
+    def test_malformed_record_shape_returns_a_structured_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            record_path = pack / "records" / "source-record.json"
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            record["authority"] = "not-an-object"
+            record_path.write_text(json.dumps(record), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "records/source-record.json field authority must be an object",
+            summary["errors"],
+        )
 
     def test_shipped_starter_exposes_the_minimal_governance_chain(self) -> None:
         pack = EXAMPLES / "company-starter"
@@ -455,6 +630,39 @@ class TemplatePackCliTests(unittest.TestCase):
         summary = json.loads(result.stdout)
         self.assertIn("secret-bearing key is forbidden: $.client_secret", summary["errors"])
         self.assertIn("secret-bearing key is forbidden: $.nested.apiKey", summary["errors"])
+
+    def test_unreferenced_json_is_included_in_secret_scan(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(FIXTURES / "valid-pack", pack)
+            (pack / "unlisted.json").write_text(
+                json.dumps({"api_token": "placeholder"}), encoding="utf-8"
+            )
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "secret-bearing key is forbidden: $unlisted.json.api_token",
+            summary["errors"],
+        )
+
+    def test_manifest_path_schema_rejects_unsafe_relative_paths(self) -> None:
+        schema = json.loads(
+            (ROOT / "schemas" / "company-manifest.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        for collection in ("blocks", "mocs", "records"):
+            pattern = re.compile(schema["properties"][collection]["items"]["pattern"])
+            self.assertIsNotNone(pattern.fullmatch(f"{collection}/item.json"))
+            for unsafe in (
+                "../outside.json",
+                "/absolute.json",
+                f"{collection}/../outside.json",
+                f"{collection}//item.json",
+            ):
+                self.assertIsNone(pattern.fullmatch(unsafe), (collection, unsafe))
 
 
 if __name__ == "__main__":

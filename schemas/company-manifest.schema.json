@@ -48,12 +48,17 @@
     "blocks": {
       "type": "array",
       "uniqueItems": true,
-      "items": {"type": "string", "pattern": "^[A-Za-z0-9._/-]+\\.json$"}
+      "items": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*\\.json$"}
     },
     "mocs": {
       "type": "array",
       "uniqueItems": true,
-      "items": {"type": "string", "pattern": "^[A-Za-z0-9._/-]+\\.json$"}
+      "items": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*\\.json$"}
+    },
+    "records": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*\\.json$"}
     },
     "flow": {
       "type": "object",

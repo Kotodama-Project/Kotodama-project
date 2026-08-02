@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/record.schema.json",
+  "$comment": "This portable schema is not a standalone safety verdict. Run tools/validate_template_pack.py to enforce cross-field role separation and pack-wide invariants.",
+  "title": "Kotodama Governed Record Template",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "spec_version",
+    "id",
+    "status",
+    "artifact",
+    "purpose",
+    "canonical_owner",
+    "required_fields",
+    "authority",
+    "retention",
+    "denied_claims"
+  ],
+  "properties": {
+    "kind": {"const": "record_template"},
+    "spec_version": {"const": "0.1"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"},
+    "status": {"enum": ["example", "draft", "candidate_only", "locally_verified"]},
+    "artifact": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,62}$"},
+    "purpose": {"type": "string", "minLength": 1},
+    "canonical_owner": {"type": "string", "minLength": 1},
+    "required_fields": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,62}$"}
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "creator_role",
+        "verifier_role",
+        "promotion_required_for_current_truth"
+      ],
+      "properties": {
+        "creator_role": {"type": "string", "minLength": 1},
+        "verifier_role": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Must differ from creator_role; enforced by the cross-field CLI validator."
+        },
+        "promotion_required_for_current_truth": {"const": true}
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "policy_ref"],
+      "properties": {
+        "mode": {"const": "policy_ref"},
+        "policy_ref": {"type": "string", "minLength": 1}
+      }
+    },
+    "denied_claims": {
+      "type": "array",
+      "uniqueItems": true,
+      "allOf": [
+        {"contains": {"const": "self_approval"}},
+        {"contains": {"const": "self_promotion"}},
+        {"contains": {"const": "current_truth_without_promotion"}}
+      ],
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

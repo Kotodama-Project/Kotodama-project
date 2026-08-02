@@ -1,0 +1,30 @@
+{
+  "kind": "record_template",
+  "spec_version": "0.1",
+  "id": "intent-candidate-template",
+  "status": "example",
+  "artifact": "intent_candidate",
+  "purpose": "Express a source-backed interpretation of human intent without treating it as an approved decision.",
+  "canonical_owner": "human-intent-owner",
+  "required_fields": [
+    "intent_id",
+    "source_refs",
+    "purpose",
+    "beneficiary",
+    "constraints",
+    "success_conditions",
+    "stop_conditions",
+    "unresolved_items",
+    "revision"
+  ],
+  "authority": {
+    "creator_role": "intent-steward",
+    "verifier_role": "human-intent-owner",
+    "promotion_required_for_current_truth": true
+  },
+  "retention": {
+    "mode": "policy_ref",
+    "policy_ref": "retention-policy:replace-with-governed-reference"
+  },
+  "denied_claims": ["self_approval", "self_promotion", "current_truth_without_promotion"]
+}

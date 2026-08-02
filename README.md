@@ -24,6 +24,7 @@ Kotodama は、Discord をはじめとする会話や音声を入力として、
 - [Company Template / Blocks / MOCs の使い方](docs/TEMPLATE-GUIDE.md)
 - [3分で試すCompany starter](docs/STARTER-WALKTHROUGH.md)
 - [テンプレートカタログ](templates/README.md)
+- [Governed Record カタログ](templates/records/README.md)
 - [動くCompany starter example](examples/company-starter/README.md)
 - [テンプレート検証方法](docs/VALIDATION.md)
 
@@ -36,7 +37,7 @@ python tools/validate_template_pack.py examples/company-starter
 python -m unittest discover -s tests -v
 ```
 
-starterには、Source Intake、Intent Candidate、Human Decision、Work Order、Verification Receipt、Promotion Gateの6 Blockが含まれます。manifestのflow contractにより、外部入力、Block順序、入出力の接続、MOCの読み順をvalidatorで検査できます。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
+starterには、Source Intake、Intent Candidate、Human Decision、Work Order、Verification Receipt、Promotion Gateの6 Blockと、その出力を受け取る7種のGoverned Recordテンプレートが含まれます。manifestのflow contractにより、外部入力、Block順序、入出力の接続、MOCの読み順、Block出力とRecordの一対一対応をvalidatorで検査できます。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
 
 ## Public Beta まで
 

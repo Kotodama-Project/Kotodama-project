@@ -52,7 +52,7 @@ REQUIRED_MANIFEST_FIELDS = {
     "denied_actions",
     "public_beta",
 }
-ALLOWED_MANIFEST_FIELDS = REQUIRED_MANIFEST_FIELDS | {"flow"}
+ALLOWED_MANIFEST_FIELDS = REQUIRED_MANIFEST_FIELDS | {"flow", "records"}
 REQUIRED_FLOW_FIELDS = {"entry_inputs", "sequence", "moc_ref"}
 MANDATORY_DENIALS = {
     "unbound_external_write",
@@ -103,6 +103,31 @@ REQUIRED_MOC_FIELDS = {
     "title",
     "refs",
 }
+REQUIRED_RECORD_FIELDS = {
+    "kind",
+    "spec_version",
+    "id",
+    "status",
+    "artifact",
+    "purpose",
+    "canonical_owner",
+    "required_fields",
+    "authority",
+    "retention",
+    "denied_claims",
+}
+REQUIRED_RECORD_AUTHORITY_FIELDS = {
+    "creator_role",
+    "verifier_role",
+    "promotion_required_for_current_truth",
+}
+REQUIRED_RECORD_RETENTION_FIELDS = {"mode", "policy_ref"}
+MANDATORY_RECORD_DENIED_CLAIMS = {
+    "self_approval",
+    "self_promotion",
+    "current_truth_without_promotion",
+}
+ARTIFACT_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,62}$")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -224,6 +249,11 @@ def validate_manifest(manifest: dict[str, Any], errors: list[str]) -> dict[str, 
         "mocs": require_string_list(
             manifest, "mocs", errors, "manifest", unique=True
         ),
+        "records": require_string_list(
+            manifest, "records", errors, "manifest", unique=True
+        )
+        if "records" in manifest
+        else [],
         "denied_actions": require_string_list(
             manifest, "denied_actions", errors, "manifest", unique=True
         ),
@@ -385,6 +415,78 @@ def validate_moc(
             errors.append(f"{relative} references unknown id: {reference}")
 
 
+def validate_record(relative: str, document: dict[str, Any], errors: list[str]) -> None:
+    require_fields(document, REQUIRED_RECORD_FIELDS, errors, relative)
+    reject_unknown_fields(document, REQUIRED_RECORD_FIELDS, errors, relative)
+    if document.get("kind") != "record_template":
+        errors.append(f"{relative} kind must be record_template")
+    if document.get("spec_version") != "0.1":
+        errors.append(f"{relative} spec_version must be 0.1")
+    if not is_non_empty_string(document.get("id")):
+        errors.append(f"{relative} field id must be a non-empty string")
+    elif not has_valid_id_format(document.get("id")):
+        errors.append(f"{relative} field id has an invalid format: {document.get('id')}")
+    if document.get("status") not in ALLOWED_TEMPLATE_STATUSES:
+        errors.append(f"{relative} status is not allowed: {document.get('status')}")
+    artifact = document.get("artifact")
+    if not is_non_empty_string(artifact) or ARTIFACT_PATTERN.fullmatch(artifact) is None:
+        errors.append(f"{relative} field artifact must use snake_case")
+    for field in ("purpose", "canonical_owner"):
+        if not is_non_empty_string(document.get(field)):
+            errors.append(f"{relative} field {field} must be a non-empty string")
+    required_fields = require_string_list(
+        document, "required_fields", errors, relative, minimum=1, unique=True
+    )
+    for field in required_fields:
+        if ARTIFACT_PATTERN.fullmatch(field) is None:
+            errors.append(f"{relative} required field must use snake_case: {field}")
+
+    authority = require_object(document, "authority", errors, relative)
+    authority_location = f"{relative} authority"
+    require_fields(
+        authority, REQUIRED_RECORD_AUTHORITY_FIELDS, errors, authority_location
+    )
+    reject_unknown_fields(
+        authority, REQUIRED_RECORD_AUTHORITY_FIELDS, errors, authority_location
+    )
+    for field in ("creator_role", "verifier_role"):
+        if not is_non_empty_string(authority.get(field)):
+            errors.append(f"{authority_location}.{field} must be a non-empty string")
+    if (
+        is_non_empty_string(authority.get("creator_role"))
+        and is_non_empty_string(authority.get("verifier_role"))
+        and authority["creator_role"] == authority["verifier_role"]
+    ):
+        errors.append(
+            f"{authority_location} creator_role and verifier_role must differ"
+        )
+    if authority.get("promotion_required_for_current_truth") is not True:
+        errors.append(
+            f"{authority_location}.promotion_required_for_current_truth must be true"
+        )
+
+    retention = require_object(document, "retention", errors, relative)
+    retention_location = f"{relative} retention"
+    require_fields(
+        retention, REQUIRED_RECORD_RETENTION_FIELDS, errors, retention_location
+    )
+    reject_unknown_fields(
+        retention, REQUIRED_RECORD_RETENTION_FIELDS, errors, retention_location
+    )
+    if retention.get("mode") != "policy_ref":
+        errors.append(f"{retention_location}.mode must be policy_ref")
+    if not is_non_empty_string(retention.get("policy_ref")):
+        errors.append(f"{retention_location}.policy_ref must be a non-empty string")
+
+    denied_claims = set(
+        require_string_list(
+            document, "denied_claims", errors, relative, minimum=1, unique=True
+        )
+    )
+    for claim in sorted(MANDATORY_RECORD_DENIED_CLAIMS - denied_claims):
+        errors.append(f"{relative} missing mandatory denied claim: {claim}")
+
+
 def validate_flow_dataflow(
     manifest_id: object,
     collections: dict[str, list[str]],
@@ -441,6 +543,65 @@ def validate_flow_dataflow(
         )
 
 
+def validate_record_coverage(
+    records_declared: bool,
+    collections: dict[str, list[str]],
+    documents: list[tuple[str, dict[str, Any]]],
+    errors: list[str],
+) -> None:
+    if not records_declared:
+        return
+    block_outputs: list[str] = []
+    record_artifacts: list[str] = []
+    for relative, document in documents:
+        if relative in collections["blocks"] and isinstance(
+            document.get("outputs"), list
+        ):
+            block_outputs.extend(
+                output
+                for output in document["outputs"]
+                if is_non_empty_string(output)
+            )
+        if relative in collections["records"] and is_non_empty_string(
+            document.get("artifact")
+        ):
+            record_artifacts.append(document["artifact"])
+    for artifact in sorted(
+        artifact
+        for artifact in set(record_artifacts)
+        if record_artifacts.count(artifact) > 1
+    ):
+        errors.append(f"duplicate record artifact: {artifact}")
+    if sorted(record_artifacts) != sorted(block_outputs) or len(record_artifacts) != len(
+        set(record_artifacts)
+    ):
+        errors.append("manifest records must cover every Block output exactly once")
+
+
+def scan_unreferenced_json_secrets(
+    pack_dir: Path,
+    pack_root: Path,
+    already_scanned: set[str],
+    errors: list[str],
+) -> None:
+    for path in sorted(pack_dir.rglob("*.json")):
+        relative = path.relative_to(pack_dir).as_posix()
+        if relative in already_scanned:
+            continue
+        try:
+            resolved_path = path.resolve(strict=True)
+            try:
+                resolved_path.relative_to(pack_root)
+            except ValueError:
+                errors.append(f"unreferenced JSON path escapes pack root: {relative}")
+                continue
+            with resolved_path.open("r", encoding="utf-8") as handle:
+                value = json.load(handle)
+            errors.extend(find_secret_keys(value, f"${relative}"))
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"{relative}: {exc}")
+
+
 def validate_pack(pack_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
     manifest_path = pack_dir / "manifest.json"
@@ -463,7 +624,11 @@ def validate_pack(pack_dir: Path) -> dict[str, Any]:
         }
 
     collections = validate_manifest(manifest, errors)
-    referenced_paths = [*collections["blocks"], *collections["mocs"]]
+    referenced_paths = [
+        *collections["blocks"],
+        *collections["mocs"],
+        *collections["records"],
+    ]
     errors.extend(find_secret_keys(manifest))
     validated_files = 1
     documents: list[tuple[str, dict[str, Any]]] = []
@@ -490,6 +655,13 @@ def validate_pack(pack_dir: Path) -> dict[str, Any]:
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             errors.append(f"{relative}: {exc}")
 
+    scan_unreferenced_json_secrets(
+        pack_dir,
+        pack_root,
+        {"manifest.json", *referenced_paths},
+        errors,
+    )
+
     all_ids = [manifest.get("id"), *(document.get("id") for _, document in documents)]
     known_ids: set[str] = set()
     for document_id in all_ids:
@@ -503,7 +675,10 @@ def validate_pack(pack_dir: Path) -> dict[str, Any]:
             validate_block(relative, document, errors)
         if relative in collections["mocs"]:
             validate_moc(relative, document, known_ids, errors)
+        if relative in collections["records"]:
+            validate_record(relative, document, errors)
     validate_flow_dataflow(manifest.get("id"), collections, documents, errors)
+    validate_record_coverage("records" in manifest, collections, documents, errors)
 
     return {
         "status": "PASS" if not errors else "FAIL",
