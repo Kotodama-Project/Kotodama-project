@@ -1,0 +1,104 @@
+{
+  "kind": "installation_lifecycle_profile",
+  "spec_version": "0.1",
+  "id": "proxmox-segmented-lifecycle",
+  "status": "example",
+  "profile": "proxmox_segmented",
+  "purpose": "Define a sanitized segmented Proxmox installation, verification, rollback, and isolated restore evidence contract.",
+  "scope": {
+    "mode": "planning_and_evidence_contract",
+    "live_mutation_allowed": false,
+    "runtime_values": "locator_only"
+  },
+  "privacy": {
+    "secret_values": "forbidden",
+    "private_infrastructure_identifiers": "locator_only",
+    "public_examples": "sanitized"
+  },
+  "governance": {
+    "material_phases_require_work_order": ["apply", "rollback", "restore_rehearsal"],
+    "candidate_digest_required": true,
+    "receipt_required": true,
+    "promotion_is_separate": true
+  },
+  "profile_evidence": [
+    "role_map_locator",
+    "guest_revision_digests",
+    "segmentation_matrix",
+    "firewall_rule_digest",
+    "service_identity_matrix",
+    "storage_inventory",
+    "service_health",
+    "negative_test_results",
+    "backup_digest",
+    "isolated_restore_result"
+  ],
+  "phases": [
+    {
+      "id": "preflight",
+      "effect": "read_only",
+      "requires_work_order": false,
+      "required_evidence": ["target_inventory", "host_capabilities", "current_revision", "privacy_scan"],
+      "stop_conditions": ["role inventory cannot be bounded", "segmentation evidence is unavailable", "private identifiers would enter public evidence"],
+      "receipt_required": true,
+      "rollback_ref": null
+    },
+    {
+      "id": "stage_candidate",
+      "effect": "local_reversible",
+      "requires_work_order": false,
+      "required_evidence": ["candidate_revision", "configuration_digest", "offline_validation"],
+      "stop_conditions": ["role map is not locator-only", "candidate contains a secret-like value", "network policy is incomplete"],
+      "receipt_required": true,
+      "rollback_ref": null
+    },
+    {
+      "id": "apply",
+      "effect": "external_mutation",
+      "requires_work_order": true,
+      "required_evidence": ["bounded_work_order", "before_state_receipt", "change_journal"],
+      "stop_conditions": ["target differs from the Work Order", "rollback target is unavailable", "candidate digest differs"],
+      "receipt_required": true,
+      "rollback_ref": "phase:rollback"
+    },
+    {
+      "id": "verify",
+      "effect": "read_only",
+      "requires_work_order": false,
+      "required_evidence": ["candidate_digest", "service_health", "negative_test_results", "network_boundary_checks"],
+      "stop_conditions": ["service health fails", "cross-segment deny test fails", "observed digest differs"],
+      "receipt_required": true,
+      "rollback_ref": null
+    },
+    {
+      "id": "rollback",
+      "effect": "external_mutation",
+      "requires_work_order": true,
+      "required_evidence": ["rollback_work_order", "last_known_good_revision", "rollback_verification"],
+      "stop_conditions": ["last-known-good revision is not digest-bound", "rollback verification fails"],
+      "receipt_required": true,
+      "rollback_ref": null
+    },
+    {
+      "id": "restore_rehearsal",
+      "effect": "isolated_mutation",
+      "requires_work_order": true,
+      "required_evidence": ["restore_work_order", "backup_digest", "isolated_restore_result", "recovery_verification"],
+      "stop_conditions": ["restore target is not isolated", "backup digest differs", "recovery verification fails"],
+      "receipt_required": true,
+      "rollback_ref": null
+    }
+  ],
+  "claims": {
+    "live_installation_verified": false,
+    "deployment_verified": false,
+    "restart_verified": false,
+    "restore_verified": false,
+    "provider_e2e_verified": false,
+    "promotion_verified": false,
+    "current_truth_changed": false,
+    "final_human_go": false,
+    "public_beta_go": false
+  },
+  "public_beta": "NO_GO_UNPUBLISHED"
+}

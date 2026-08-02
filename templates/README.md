@@ -8,6 +8,7 @@
 | [Blocks](blocks/README.md) | 小さな実行・判断・検証部品 | Markdown design example |
 | [MOCs](mocs/company-operations-moc.md) | 目的別の入口と読み順 | Company / Public Release / Incident & Recovery examples |
 | [Records](records/README.md) | Block出力を証拠鎖へ残す記録契約 | 9種のJSON schema-backed starter available |
+| [Runtime profiles](company/README.md#runtime-profile-contracts) | Compose minimum / Proxmox segmentedの導入・検証・復旧境界 | sanitized lifecycle contracts and runbooks available |
 
 ## Planned catalog
 

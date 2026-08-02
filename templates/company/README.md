@@ -35,4 +35,13 @@ company/
 
 ## Current status
 
-これは構成を説明するdesign starterです。上記package全体はまだこの公開リポジトリへ実装されていません。
+Company governanceのJSON starterと、runtime profileのplanning/evidence contractを公開しています。上記package全体、実service installer、live deployment receiptはまだ実装・公開されていません。
+
+## Runtime profile contracts
+
+| Profile | 選ぶ目安 | Contract / runbook |
+|---|---|---|
+| Compose minimum | 1台の管理対象hostで小さく試す | [Profile](profiles/compose-minimum/README.md) |
+| Proxmox segmented | service、network、identity、storageをrole別に分離する | [Profile](profiles/proxmox-segmented/README.md) |
+
+どちらも`preflight -> stage_candidate -> apply -> verify -> rollback -> restore_rehearsal`の6フェーズを使います。公開例にsecretや実環境識別子を書かず、material phaseはexact Work Order、結果はcandidate-bound receiptへ分けます。schema/validator PASSはlive install、restart、restore、Promotion、Public Beta GOではありません。

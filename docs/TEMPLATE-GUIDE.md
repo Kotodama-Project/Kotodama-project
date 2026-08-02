@@ -126,8 +126,9 @@ flowchart LR
 - Company Operations、Public Release Review、Incident / Recoveryの3つのnavigation-only MOC
 - sourceを保ったまま22文書を`draft`化するinitializer、置換・review・evidenceを分離するcustomization checker、review対象bytesを固定して再照合するbundle builder/verifier
 - Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
+- Compose minimum / Proxmox segmentedの6フェーズinstallation lifecycle契約、validator、公開runbook
 
-これらは構造検証できるstarterです。まだclean installできるCompany OS一式ではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)を参照してください。
+これらは構造検証できるstarterです。runtime profileは何を証拠として集めるかを定義しましたが、まだclean installできるCompany OS一式やlive receiptではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)、runtime境界は[Installation Lifecycle Profiles](INSTALLATION-LIFECYCLE.md)を参照してください。
 
 ### ローカルで実装・検証しているもの
 
@@ -142,8 +143,8 @@ flowchart LR
 ### まだ公開テンプレートになっていないもの
 
 - secret-freeなHuman IntentからPromotionまでの全テンプレートpack
-- Docker Compose minimum profile
-- Proxmox segmented profileのclean install / restart / restore
+- executableなDocker Compose service manifestとclean-install receipt
+- exact Proxmox candidateのclean install / restart / restore receipt
 - PostgreSQL Company DBとEvidence Storeの再現可能な導入
 - Discord、Voice、n8nの実provider E2E
 - Human Intent、Decision、Capability Grant、Verification Receipt、Promotionなどplanned catalog全体のschema・validator・test
@@ -155,14 +156,15 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 
 1. [テンプレートカタログ](../templates/README.md)から目的に近いstarterを選ぶ。
 2. initializerで[Company starter](../examples/company-starter/README.md)の`draft`作業copyを作る。
-3. [customization checker](CUSTOMIZATION-CHECKLIST.md)で、置換19件、review 46件、別evidence 5件を分けて確認する。
-4. placeholderを自分の組織用の参照名へ置き換える。tokenや個人情報の値は書かない。
-5. [review bundle](REVIEW-BUNDLE.md)を作り、manifest、Blocks、MOCs、Recordsのexact bytesを固定する。
-6. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、Decisionを別Recordへ束縛する。
-7. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
-8. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
-9. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
-10. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
+3. `compose_minimum`または`proxmox_segmented`を選び、[installation lifecycle](INSTALLATION-LIFECYCLE.md)の契約例を検証する。
+4. [customization checker](CUSTOMIZATION-CHECKLIST.md)で、置換19件、review 46件、別evidence 5件を分けて確認する。
+5. placeholderを自分の組織用の参照名へ置き換える。tokenや個人情報の値は書かない。
+6. [review bundle](REVIEW-BUNDLE.md)を作り、manifest、Blocks、MOCs、Recordsのexact bytesを固定する。
+7. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、Decisionを別Recordへ束縛する。
+8. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
+9. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
+10. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
+11. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
 
 ## Statusの読み方
 

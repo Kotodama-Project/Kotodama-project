@@ -47,6 +47,15 @@ python tools/verify_company_pack_review_bundle.py work/my-company-review-bundle.
 
 verifierはbundle構造・metadata・digestを信頼せず再検査し、Packからfresh bundleを再構築して比較します。`MATCH`はbytes同一性だけで、reviewer identity、Human Decision、Promotionを証明しません。運用手順は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)を参照してください。
 
+Compose / Proxmoxのinstallation lifecycle契約は、別のstdlib validatorで確認します。
+
+```powershell
+python tools\validate_installation_lifecycle.py examples\installation-lifecycle\compose-minimum.json
+python tools\validate_installation_lifecycle.py examples\installation-lifecycle\proxmox-segmented.json
+```
+
+このvalidatorは6フェーズ順序、material phaseのWork Order、apply-to-rollback binding、profile固有evidence、秘密値・private infrastructure literal、live claim拒否を検査します。詳細は[Installation Lifecycle Profiles](INSTALLATION-LIFECYCLE.md)を参照してください。PASSはlive install / deploy / restart / restore receiptではありません。
+
 ## What it validates
 
 - `manifest.json`と必須governance fields
@@ -91,7 +100,7 @@ validatorは汎用packの構造と安全境界を検査するため、`flow`や`
 python -m unittest discover -s tests -v
 ```
 
-正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
+正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。installation lifecycleではphase reorder、Work Order/rollback binding欠落、profile evidence欠落、unknown field、duplicate key、non-finite number、secret/private value、live claimをnegative caseで検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
 
 ## Boundary
 

@@ -18,6 +18,16 @@
 - [x] Candidate-bound review bundle with exact SHA-256 and byte-size bindings
 - [x] Saved-bundle verifier with metadata, digest, and byte-drift detection
 - [x] Candidate-bound review workflow with separate Human Decision and Promotion
+- [x] Sanitized Compose minimum and Proxmox segmented lifecycle contracts
+- [x] Machine-checked preflight/apply/verify/rollback/isolated-restore evidence requirements
+- [x] Public runbooks separating planning contracts from live installation receipts
+
+## Runtime profiles still requiring live evidence
+
+- [ ] Executable Compose service manifest and clean-install receipt
+- [ ] Exact Proxmox guest/service candidate and segmented deployment receipt
+- [ ] Candidate-bound restart, rollback, and isolated restore receipts
+- [ ] PostgreSQL Company DB and Evidence Store setup/restore E2E
 
 ## Required before opening access
 
