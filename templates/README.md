@@ -6,7 +6,7 @@
 |---|---|---|
 | [Company](company/README.md) | 会社・チーム全体の構造と導入順 | validated JSON governance starter available |
 | [Blocks](blocks/README.md) | 小さな実行・判断・検証部品 | Markdown design example |
-| [MOCs](mocs/company-operations-moc.md) | 目的別の入口と読み順 | Markdown navigation example |
+| [MOCs](mocs/company-operations-moc.md) | 目的別の入口と読み順 | Company / Public Release / Incident & Recovery examples |
 | [Records](records/README.md) | Block出力を証拠鎖へ残す記録契約 | 9種のJSON schema-backed starter available |
 
 ## Planned catalog
@@ -33,5 +33,13 @@ templates/
 詳しい考え方は[テンプレート利用ガイド](../docs/TEMPLATE-GUIDE.md)を参照してください。
 
 実際にvalidatorへ通せるJSON packは[Company starter example](../examples/company-starter/README.md)にあります。上記Markdown例そのものをvalidator済みと読み替えないでください。
+
+MOCの入口例:
+
+- [Company Operations](mocs/company-operations-moc.md): governance chain全体
+- [Public Release Review](mocs/public-release-moc.md): 公開候補のDecisionからPromotion Decisionまで
+- [Incident / Recovery](mocs/incident-recovery-moc.md): bounded recovery candidateとreceipt
+
+3つともnavigation-onlyです。別のSSOT、実行権限、公開GOを作りません。
 
 最短の導入手順は[Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)にあります。

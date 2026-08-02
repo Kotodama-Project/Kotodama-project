@@ -28,7 +28,8 @@ python3 tools/validate_template_pack.py examples/company-starter
 - Blockのnested authority、限定allowed actions、有効期限、verification、receipt、rollback、stop contract
 - MOCの必須field、string refs、`navigation_only` authority
 - ID型・重複と、MOCから未知IDへの参照拒否
-- `flow`宣言時のentry inputs、全Blockの一度ずつのcoverage、前段出力、MOC完全一致
+- `flow`宣言時のentry inputs、全Blockの一度ずつのcoverage、前段出力、primary MOC完全一致
+- `projection: flow_subsequence`を明示したsecondary MOCがmanifest IDから始まり、canonical flowと同順序の非空部分列であること
 - Block出力名を外部entry inputとして再注入するdependency shadowingの拒否
 - Governed Recordのschema相当契約、authority、retention参照、mandatory denied claims
 - Governed Recordのcreator roleとverifier roleの分離
@@ -41,13 +42,23 @@ JSON Schema単体のPASSはpackの検証完了を意味しません。作成role
 
 validatorは汎用packの構造と安全境界を検査するため、`flow`や`records`を持たない既存packへ同じBlock構成や順序を強制しません。`flow`を宣言したpackでは、そのpack自身が列挙したentry inputs、sequence、MOC bindingを検査します。`records`を宣言したpackでは、全Block出力との一対一対応を検査します。公開Company starter固有の9 Block ID、9 Record artifact、Capability-before-Change、Human-evidence-before-Promotion-Decisionの順序はrepository testでも固定しています。
 
+### Secondary MOC migration note
+
+`flow`を宣言するpackでは、`projection: flow_subsequence`を明示したMOCだけをsecondary flow projectionとして扱います。各secondary flow projectionはmanifest IDから始まり、`flow.sequence`と同じ順序のBlockを1つ以上参照する必要があります。projectionを明示しない既存0.1 MOCにはこの追加制約を遡及適用しません。
+
+- 実行・判断の目的別入口は、`projection: flow_subsequence`を付けて同順序のBlock部分列へ移行する。
+- Recordや一般文書の横断リンクはMarkdownのnavigation documentへ分ける。
+- そもそもcanonical execution orderを宣言しない汎用packでは、`flow`を省略する。
+
+これは既存データを自動変換する処理ではありません。一般navigation MOCをflow projectionへ移行する場合だけ、作業copyで差分を確認し、validatorのPASS後に採用してください。
+
 ## Tests
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
 
-正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・MOC drift、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
+正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
 
 ## Boundary
 

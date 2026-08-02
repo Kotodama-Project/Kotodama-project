@@ -1,0 +1,16 @@
+{
+  "kind": "moc",
+  "spec_version": "0.1",
+  "id": "incident-recovery-starter",
+  "status": "example",
+  "authority": "navigation_only",
+  "projection": "flow_subsequence",
+  "title": "Incident and Recovery Starter",
+  "refs": [
+    "kotodama-company-starter",
+    "work-order-starter",
+    "capability-grant-starter",
+    "change-execution-starter",
+    "verification-receipt-starter"
+  ]
+}

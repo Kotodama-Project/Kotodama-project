@@ -1,0 +1,19 @@
+{
+  "kind": "moc",
+  "spec_version": "0.1",
+  "id": "public-release-starter",
+  "status": "example",
+  "authority": "navigation_only",
+  "projection": "flow_subsequence",
+  "title": "Public Release Review Starter",
+  "refs": [
+    "kotodama-company-starter",
+    "human-decision-starter",
+    "work-order-starter",
+    "capability-grant-starter",
+    "change-execution-starter",
+    "verification-receipt-starter",
+    "promotion-gate-starter",
+    "promotion-decision-starter"
+  ]
+}

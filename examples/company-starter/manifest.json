@@ -27,7 +27,11 @@
     "blocks/promotion-gate.json",
     "blocks/promotion-decision.json"
   ],
-  "mocs": ["mocs/company-operations.json"],
+  "mocs": [
+    "mocs/company-operations.json",
+    "mocs/public-release.json",
+    "mocs/incident-recovery.json"
+  ],
   "records": [
     "records/source-record.json",
     "records/intent-candidate.json",

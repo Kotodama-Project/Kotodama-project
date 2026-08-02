@@ -69,6 +69,16 @@ MOCは「この仕事を始めるとき、何をどの順番で読むか」を�
 
 MOCからDecisionやCurrent Truthを直接変更しません。MOCはリンクと現在地を示すProjectionです。
 
+公開starterでは、同じcanonical Block鎖に対して3つの入口を用意しています。
+
+| MOC | 使う場面 | 現在の範囲 |
+|---|---|---|
+| Company Operations | 全体の流れを最初から読む | 9 Blockの完全な読み順 |
+| Public Release Review | 公開候補をDecisionから検証する | Human DecisionからPromotion Decisionまでの部分列 |
+| Incident / Recovery | boundedな停止・復旧候補を辿る | Work OrderからVerification Receiptまでの部分列 |
+
+目的別MOCは新しい記録や正本を持ちません。公開例は`projection: flow_subsequence`を明示し、manifest IDから始まり、canonical flowと同じ順序のBlockだけを参照することをvalidatorが確認します。
+
 ### 4. すべてを同じ証拠鎖に通す
 
 ```text
@@ -113,6 +123,7 @@ flowchart LR
 - プロジェクトの目的、現在状態、ロードマップ
 - このテンプレート利用ガイド
 - Source Intake、Intent Candidate、Human Decision、Work Order、Capability Grant、Change Execution、Verification Receipt、Promotion Gate、Promotion Decisionを含むCompany starter
+- Company Operations、Public Release Review、Incident / Recoveryの3つのnavigation-only MOC
 - Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
 
 これらは構造検証できるstarterです。まだclean installできるCompany OS一式ではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)を参照してください。
@@ -146,7 +157,7 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 3. placeholderを自分の組織用の参照名へ置き換える。tokenや個人情報の値は書かない。
 4. Blockごとにowner、authority、denied actions、verification、rollbackを埋める。
 5. 最初は`draft`または`candidate_only`として使う。
-6. MOCから必要なBlockとreceiptへリンクする。
+6. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
 7. validatorを通し、実行後にsource revisionと結果を照合する。
 8. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
 

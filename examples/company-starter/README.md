@@ -14,7 +14,9 @@
 8. `promotion-gate.json`: 自己昇格せずPromotion Candidateまで評価
 9. `promotion-decision.json`: 人間の判断証拠をPromotion Decision Recordへ束縛（Promotionは実行しない）
 
-読み順は[`mocs/company-operations.json`](mocs/company-operations.json)にも機械可読で記録されています。
+読み順は[`mocs/company-operations.json`](mocs/company-operations.json)にも機械可読で記録されています。目的別の入口として、[`mocs/public-release.json`](mocs/public-release.json)と[`mocs/incident-recovery.json`](mocs/incident-recovery.json)もあります。
+
+後者2つは同じ9 Block鎖の順序を保った部分列です。Public Release MOCは公開を承認せず、Incident / Recovery MOCはmonitorや復旧runtimeを実装しません。どちらもnavigation-onlyで、別のSSOTを持ちません。
 
 `manifest.json`の`flow`は、外部入力、9 Block IDの実行順、対象MOCを束縛します。validatorはCapability GrantなしのChangeやHuman evidenceなしのPromotion Decisionを含め、Block入力が前段出力または明示entry inputへ接続されていることを検査します。
 
@@ -26,6 +28,6 @@ python tools/validate_template_pack.py examples/company-starter
 
 成功時はJSONで`"status": "PASS"`を返し、終了codeは`0`です。
 
-これはsyntheticな構造例です。provider接続、runtime deployment、権限付与、Promotion、Public Beta GOは行いません。
+これはsyntheticな構造例です。provider接続、runtime deployment、incident monitoring、recovery execution、権限付与、Promotion、Public Beta GOは行いません。
 
 copyして編集する手順は[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)を参照してください。

@@ -111,6 +111,7 @@ REQUIRED_MOC_FIELDS = {
     "title",
     "refs",
 }
+ALLOWED_MOC_FIELDS = REQUIRED_MOC_FIELDS | {"projection"}
 REQUIRED_RECORD_FIELDS = {
     "kind",
     "spec_version",
@@ -406,7 +407,7 @@ def validate_moc(
     errors: list[str],
 ) -> None:
     require_fields(document, REQUIRED_MOC_FIELDS, errors, relative)
-    reject_unknown_fields(document, REQUIRED_MOC_FIELDS, errors, relative)
+    reject_unknown_fields(document, ALLOWED_MOC_FIELDS, errors, relative)
     if document.get("kind") != "moc":
         errors.append(f"{relative} kind must be moc")
     if document.get("spec_version") != "0.1":
@@ -419,6 +420,8 @@ def validate_moc(
         errors.append(f"{relative} status is not allowed: {document.get('status')}")
     if document.get("authority") != "navigation_only":
         errors.append(f"{relative} authority must be navigation_only")
+    if "projection" in document and document.get("projection") != "flow_subsequence":
+        errors.append(f"{relative} projection must be flow_subsequence")
     if not is_non_empty_string(document.get("title")):
         errors.append(f"{relative} field title must be a non-empty string")
     for reference in require_string_list(
@@ -568,6 +571,49 @@ def validate_flow_dataflow(
         )
 
 
+def validate_secondary_moc_projections(
+    manifest_id: object,
+    collections: dict[str, list[str]],
+    documents: list[tuple[str, dict[str, Any]]],
+    errors: list[str],
+) -> None:
+    sequence = collections["flow_sequence"]
+    if not sequence:
+        return
+    primary_moc_ids = set(collections["flow_moc_ref"])
+    sequence_positions = {block_id: index for index, block_id in enumerate(sequence)}
+    for relative, document in documents:
+        if relative not in collections["mocs"]:
+            continue
+        moc_id = document.get("id")
+        if not has_valid_id_format(moc_id) or moc_id in primary_moc_ids:
+            continue
+        if document.get("projection") != "flow_subsequence":
+            continue
+        refs = document.get("refs")
+        if not isinstance(refs, list) or not all(
+            is_non_empty_string(reference) for reference in refs
+        ):
+            continue
+        tail = refs[1:]
+        positions = [
+            sequence_positions[reference]
+            for reference in tail
+            if reference in sequence_positions
+        ]
+        is_ordered_projection = (
+            bool(tail)
+            and refs[0] == manifest_id
+            and len(positions) == len(tail)
+            and positions == sorted(positions)
+            and len(positions) == len(set(positions))
+        )
+        if not is_ordered_projection:
+            errors.append(
+                f"manifest secondary MOC {moc_id} refs must be manifest id followed by an ordered subsequence of flow sequence"
+            )
+
+
 def validate_record_coverage(
     records_declared: bool,
     collections: dict[str, list[str]],
@@ -703,6 +749,9 @@ def validate_pack(pack_dir: Path) -> dict[str, Any]:
         if relative in collections["records"]:
             validate_record(relative, document, errors)
     validate_flow_dataflow(manifest.get("id"), collections, documents, errors)
+    validate_secondary_moc_projections(
+        manifest.get("id"), collections, documents, errors
+    )
     validate_record_coverage("records" in manifest, collections, documents, errors)
 
     return {

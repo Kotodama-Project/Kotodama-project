@@ -30,7 +30,7 @@ cp -R examples/company-starter work/my-company
 
 `human_intent_ref`はlocatorのplaceholderです。このvalidatorは参照先の存在、真正性、承認を確認しません。
 
-`id`を変更したら、`mocs/company-operations.json`の先頭refも同じIDへ変更します。MOCの参照先が存在しなければvalidatorはfail closedします。
+`id`を変更したら、`mocs/`にある3つのJSONの先頭refも同じIDへ変更します。MOCの参照先が存在しなければvalidatorはfail closedします。
 
 ## 3. flow contractとMOC順にBlockを読む
 
@@ -51,7 +51,9 @@ flowchart LR
 
 MOCはDecision、Promotion、Current Truthを変更しません。
 
-validatorは、sequenceがmanifest内の全Blockをちょうど1回含むこと、各Blockの入力がentry inputまたは前段Blockの出力に存在すること、指定MOCが同じ順序を持つことを確認します。
+目的別の入口として、[`public-release.json`](../examples/company-starter/mocs/public-release.json)と[`incident-recovery.json`](../examples/company-starter/mocs/incident-recovery.json)もあります。これらは新しい実行フローではなく、同じBlock鎖から必要箇所だけを辿るnavigation projectionです。
+
+validatorは、sequenceがmanifest内の全Blockをちょうど1回含むこと、各Blockの入力がentry inputまたは前段Blockの出力に存在すること、primary MOCが同じ完全順序を持つこと、`projection: flow_subsequence`を明示したsecondary MOCがmanifest IDから始まる同順序の部分列であることを確認します。
 
 ## 4. Block出力とRecord契約を合わせる
 
@@ -90,7 +92,7 @@ python3 tools/validate_template_pack.py work/my-company
 成功例:
 
 ```json
-{"errors": [], "pack_id": "my-company", "status": "PASS", "validated_files": 20}
+{"errors": [], "pack_id": "my-company", "status": "PASS", "validated_files": 22}
 ```
 
 ## 7. PASSの意味を狭く保つ
@@ -114,6 +116,7 @@ PASSが示すのは、pack構造、参照、限定authority、secretらしい値
 | `has unavailable input` | `flow.sequence`の前段出力または`entry_inputs`が不足していないか |
 | `must contain every manifest block` | sequenceからBlockが欠落・重複していないか |
 | `refs must equal manifest id followed by flow sequence` | MOCとflowの順序が一致しているか |
+| `secondary MOC ... ordered subsequence` | 目的別MOCがpack IDから始まり、同じBlock順序だけを参照しているか |
 | `forbidden allowed action` | Blockが公開safe allowlistを越えていないか |
 | `secret-bearing key is forbidden` | secret値ではなく安全な参照名へ置換したか |
 | `public_beta must remain NO_GO_UNPUBLISHED` | template自身にGOを宣言させていないか |

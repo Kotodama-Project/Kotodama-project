@@ -13,6 +13,7 @@
       "enum": ["example", "draft", "candidate_only", "locally_verified"]
     },
     "authority": {"const": "navigation_only"},
+    "projection": {"const": "flow_subsequence"},
     "title": {"type": "string", "minLength": 1},
     "refs": {
       "type": "array",

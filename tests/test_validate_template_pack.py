@@ -50,7 +50,7 @@ class TemplatePackCliTests(unittest.TestCase):
         summary = json.loads(result.stdout)
         self.assertEqual(summary["status"], "PASS")
         self.assertEqual(summary["pack_id"], "kotodama-company-starter")
-        self.assertEqual(summary["validated_files"], 20)
+        self.assertEqual(summary["validated_files"], 22)
 
     def test_shipped_starter_validates_source_record_template(self) -> None:
         pack = EXAMPLES / "company-starter"
@@ -263,6 +263,118 @@ class TemplatePackCliTests(unittest.TestCase):
                 "promotion-gate-starter",
                 "promotion-decision-starter",
             ],
+        )
+
+    def test_shipped_starter_exposes_task_specific_navigation_mocs(self) -> None:
+        pack = EXAMPLES / "company-starter"
+        manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
+        public_release = json.loads(
+            (pack / "mocs" / "public-release.json").read_text(encoding="utf-8")
+        )
+        incident_recovery = json.loads(
+            (pack / "mocs" / "incident-recovery.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            manifest["mocs"],
+            [
+                "mocs/company-operations.json",
+                "mocs/public-release.json",
+                "mocs/incident-recovery.json",
+            ],
+        )
+        self.assertEqual(public_release["authority"], "navigation_only")
+        self.assertEqual(public_release["projection"], "flow_subsequence")
+        self.assertEqual(
+            public_release["refs"],
+            [
+                "kotodama-company-starter",
+                "human-decision-starter",
+                "work-order-starter",
+                "capability-grant-starter",
+                "change-execution-starter",
+                "verification-receipt-starter",
+                "promotion-gate-starter",
+                "promotion-decision-starter",
+            ],
+        )
+        self.assertEqual(incident_recovery["authority"], "navigation_only")
+        self.assertEqual(incident_recovery["projection"], "flow_subsequence")
+        self.assertEqual(
+            incident_recovery["refs"],
+            [
+                "kotodama-company-starter",
+                "work-order-starter",
+                "capability-grant-starter",
+                "change-execution-starter",
+                "verification-receipt-starter",
+            ],
+        )
+
+    def test_secondary_moc_must_preserve_canonical_flow_order(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            moc_path = pack / "mocs" / "public-release.json"
+            moc = json.loads(moc_path.read_text(encoding="utf-8"))
+            moc["refs"][1], moc["refs"][2] = moc["refs"][2], moc["refs"][1]
+            moc_path.write_text(json.dumps(moc), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "manifest secondary MOC public-release-starter refs must be manifest id followed by an ordered subsequence of flow sequence",
+            summary["errors"],
+        )
+
+    def test_secondary_moc_cannot_mix_record_ids_into_flow_projection(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            moc_path = pack / "mocs" / "incident-recovery.json"
+            moc = json.loads(moc_path.read_text(encoding="utf-8"))
+            moc["refs"].append("verification-receipt-template")
+            moc_path.write_text(json.dumps(moc), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "manifest secondary MOC incident-recovery-starter refs must be manifest id followed by an ordered subsequence of flow sequence",
+            summary["errors"],
+        )
+
+    def test_secondary_flow_projection_contract_is_opt_in_for_legacy_mocs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            moc_path = pack / "mocs" / "incident-recovery.json"
+            moc = json.loads(moc_path.read_text(encoding="utf-8"))
+            moc.pop("projection", None)
+            moc["refs"].append("verification-receipt-template")
+            moc_path.write_text(json.dumps(moc), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 0)
+        summary = json.loads(result.stdout)
+        self.assertEqual(summary["status"], "PASS")
+
+    def test_moc_rejects_unknown_projection_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            moc_path = pack / "mocs" / "public-release.json"
+            moc = json.loads(moc_path.read_text(encoding="utf-8"))
+            moc["projection"] = "freeform_navigation"
+            moc_path.write_text(json.dumps(moc), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "mocs/public-release.json projection must be flow_subsequence",
+            summary["errors"],
         )
 
     def test_starter_requires_capability_before_change_and_human_promotion_decision(self) -> None:
