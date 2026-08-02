@@ -12,6 +12,7 @@ R19は、R18のprivate SQLite nonce storeを、署名可能なpoint-in-time chec
 - exact checkpoint bytesのOpenSSH署名を固定namespaceで検証した
 - checkpointがallowed-signers fileとsigner identity fileをSHA-256で束縛していた
 - checkpointのself-chain digest、store ID、schema contract、reservation digest集合が有効だった
+- 最初に開いたstore descriptorのstable immutable copyとSQLite logical snapshotが一致した
 - 成功reportを出すまで同じDELETE-journal SQLite read transactionを保持し、観測中のwriter commitを遮断した
 - supplied storeのlogical snapshotがcheckpointと完全一致した
 - checkpointが明示的なGenesisだった
@@ -120,7 +121,7 @@ machine-readable contractは次の3件です。
 - [`attestation-nonce-store-checkpoint-creation.schema.json`](../schemas/attestation-nonce-store-checkpoint-creation.schema.json)
 - [`attestation-nonce-store-checkpoint-verification.schema.json`](../schemas/attestation-nonce-store-checkpoint-verification.schema.json)
 
-checkpointは最大10,000 reservation、supplied nonce storeは最大64 MiBで、store queryには30秒のdeadlineがあります。上限到達後の安全なsegmentation / rotationは未実装です。stdoutはprivate path、identity、reservation list、public key、signature bodyを出さず、safe digest bindingだけを返します。
+checkpointは最大10,000 reservation、supplied nonce storeは最大64 MiBで、store queryには30秒のdeadlineがあります。store pathnameとは別に最初のopened objectを2回読んだexact copyを照合するため、途中のpathname差替えだけでは別storeのsnapshotを成功扱いにできません。上限到達後の安全なsegmentation / rotationは未実装です。stdoutはprivate path、identity、reservation list、public key、signature bodyを出さず、safe digest bindingだけを返します。
 
 ## まだ証明しないこと
 

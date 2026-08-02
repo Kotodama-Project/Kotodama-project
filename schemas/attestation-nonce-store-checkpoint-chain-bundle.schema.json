@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/kotodama/attestation-nonce-store-checkpoint-chain-bundle.schema.json",
   "title": "Private Attestation Nonce Store Checkpoint Chain Bundle",
-  "$comment": "This manifest and all populated checkpoint/signature files belong inside the protected boundary.",
+  "$comment": "This self-contained bundle and its embedded checkpoint/signature bytes belong inside the protected boundary.",
   "type": "object",
   "additionalProperties": false,
   "required": ["kind", "version", "status", "checkpoint_count", "genesis_checkpoint_sha256", "current_checkpoint_sha256", "ordered_chain_sha256", "signature_policy_binding", "entries", "claims", "public_beta"],

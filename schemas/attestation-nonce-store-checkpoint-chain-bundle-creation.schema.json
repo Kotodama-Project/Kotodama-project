@@ -4,13 +4,13 @@
   "title": "Attestation Nonce Store Checkpoint Chain Bundle Creation Report",
   "type": "object",
   "additionalProperties": false,
-  "required": ["kind", "version", "status", "errors", "manifest_file_sha256", "checkpoint_count", "claims", "public_beta"],
+  "required": ["kind", "version", "status", "errors", "bundle_file_sha256", "checkpoint_count", "claims", "public_beta"],
   "properties": {
     "kind": {"const": "attestation_nonce_store_checkpoint_chain_bundle_creation"},
     "version": {"const": "1.0"},
     "status": {"enum": ["CHAIN_BUNDLE_CREATED", "INVALID"]},
     "errors": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
-    "manifest_file_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "bundle_file_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
     "checkpoint_count": {"oneOf": [{"type": "integer", "minimum": 1, "maximum": 1024}, {"type": "null"}]},
     "claims": {
       "type": "object",
@@ -35,8 +35,8 @@
   "allOf": [
     {
       "if": {"properties": {"status": {"const": "CHAIN_BUNDLE_CREATED"}}},
-      "then": {"properties": {"errors": {"maxItems": 0}, "manifest_file_sha256": {"$ref": "#/$defs/sha256"}, "checkpoint_count": {"type": "integer", "minimum": 1, "maximum": 1024}, "claims": {"properties": {"private_bundle_candidate_created": {"const": true}}}}},
-      "else": {"properties": {"errors": {"minItems": 1}, "manifest_file_sha256": {"type": "null"}, "checkpoint_count": {"type": "null"}, "claims": {"properties": {"private_bundle_candidate_created": {"const": false}}}}}
+      "then": {"properties": {"errors": {"maxItems": 0}, "bundle_file_sha256": {"$ref": "#/$defs/sha256"}, "checkpoint_count": {"type": "integer", "minimum": 1, "maximum": 1024}, "claims": {"properties": {"private_bundle_candidate_created": {"const": true}}}}},
+      "else": {"properties": {"errors": {"minItems": 1}, "bundle_file_sha256": {"type": "null"}, "checkpoint_count": {"type": "null"}, "claims": {"properties": {"private_bundle_candidate_created": {"const": false}}}}}
     }
   ],
   "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}

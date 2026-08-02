@@ -139,11 +139,18 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             bundle = temporary / "chain-bundle.json"
             created = self.create_bundle(case, bundle)
             self.assertEqual(created.returncode, 0, created.stdout + created.stderr)
+            # Verification is bound to the self-contained bundle, not a later
+            # pathname re-open of the source directory.
+            shutil.rmtree(Path(case["chain"]))
             verified = self.verify_bundle(case, bundle)
 
         creation = json.loads(created.stdout)
         self.assertEqual(creation["status"], "CHAIN_BUNDLE_CREATED")
         self.assertEqual(creation["checkpoint_count"], 3)
+        self.assertEqual(
+            creation["bundle_file_sha256"], hashlib.sha256(bundle.read_bytes()).hexdigest()
+        )
+        self.assertNotIn("manifest_file_sha256", creation)
         self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
         self.assertEqual(verified.stderr, "")
         report = json.loads(verified.stdout)
@@ -152,6 +159,11 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         )
         self.assertEqual(report["counts"]["checkpoints_verified"], 3)
         self.assertEqual(report["counts"]["parent_links_verified"], 2)
+        self.assertEqual(
+            report["input_bindings"]["bundle_file_sha256"],
+            hashlib.sha256(bundle.read_bytes()).hexdigest(),
+        )
+        self.assertNotIn("bundle_manifest_sha256", report["input_bindings"])
         for claim in (
             "supplied_bundle_digest_match_verified",
             "bundle_structure_verified",
@@ -316,8 +328,8 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         self.assertEqual(usage.stdout, "")
         self.assertIn("usage:", usage.stderr)
 
-    def test_manifest_digest_strict_json_and_signature_tamper_fail_closed(self) -> None:
-        private_marker = "private-manifest-marker-must-not-leak"
+    def test_bundle_digest_strict_json_and_signature_tamper_fail_closed(self) -> None:
+        private_marker = "private-bundle-marker-must-not-leak"
         results: list[tuple[subprocess.CompletedProcess[str], str | None]] = []
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
@@ -382,7 +394,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             self.assertTrue(all(not value for value in report["claims"].values()))
             self.assertNotIn(private_marker, result.stdout + result.stderr)
 
-    def test_ssh_keygen_executable_is_pinned_and_manifest_type_errors_are_safe(self) -> None:
+    def test_ssh_keygen_executable_is_pinned_and_bundle_type_errors_are_safe(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
             case = self.make_chain(temporary)
@@ -408,7 +420,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
 
             malformed_value = json.loads(bundle.read_text(encoding="utf-8"))
             malformed_value["signature_policy_binding"] = "not-an-object"
-            malformed = temporary / "malformed-manifest.json"
+            malformed = temporary / "malformed-bundle.json"
             malformed.write_text(json.dumps(malformed_value), encoding="utf-8")
             malformed_result = self.verify_bundle(case, malformed)
 
@@ -496,6 +508,43 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
                     self.assertIsNone(snapshot)
                     self.assertTrue(errors)
                 connect_mock.assert_not_called()
+
+    def test_store_path_reopen_cannot_replace_the_opened_object_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            case = self.make_chain(temporary)
+            snapshots = case["store_snapshots"]
+            assert isinstance(snapshots, list)
+            opened_store = snapshots[0]
+            substituted_store = case["restored_store"]
+            real_connect = sqlite3.connect
+            calls = 0
+
+            def connect_with_first_path_substituted(
+                database: object, *args: object, **kwargs: object
+            ) -> sqlite3.Connection:
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    return real_connect(
+                        Path(substituted_store).as_uri() + "?mode=ro",
+                        *args,
+                        **kwargs,
+                    )
+                return real_connect(database, *args, **kwargs)
+
+            with mock.patch.object(
+                r19_helpers.checkpoint_tool.sqlite3,
+                "connect",
+                side_effect=connect_with_first_path_substituted,
+            ):
+                with r19_helpers.checkpoint_tool.hold_store_snapshot(
+                    opened_store
+                ) as (snapshot, errors):
+                    self.assertIsNone(snapshot)
+                    self.assertIn(
+                        "nonce store opened-object snapshot mismatch", errors
+                    )
 
     def test_r20_schemas_are_closed_bounded_and_keep_authority_claims_false(self) -> None:
         bundle = json.loads(BUNDLE_SCHEMA.read_text(encoding="utf-8"))

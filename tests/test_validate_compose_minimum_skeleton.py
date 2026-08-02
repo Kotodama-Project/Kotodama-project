@@ -12,9 +12,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKELETON = ROOT / "runtime" / "compose-minimum"
 VALIDATOR = ROOT / "tools" / "validate_compose_minimum_skeleton.py"
+GIT_ATTRIBUTES = ROOT / ".gitattributes"
 
 
 class ComposeMinimumSkeletonValidatorCliTests(unittest.TestCase):
+    def test_exact_byte_bound_runtime_files_are_forced_to_lf_on_checkout(self) -> None:
+        rules = {
+            line.strip()
+            for line in GIT_ATTRIBUTES.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        self.assertEqual(
+            rules,
+            {
+                "runtime/compose-minimum/README.md text eol=lf",
+                "runtime/compose-minimum/compose.yaml text eol=lf",
+                "runtime/compose-minimum/company-db/001-company-core.sql text eol=lf",
+                "runtime/compose-minimum/evidence-store/001-evidence-core.sql text eol=lf",
+            },
+        )
+
     def run_validator(self, directory: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(VALIDATOR), str(directory)],

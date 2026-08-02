@@ -17,7 +17,7 @@
       "additionalProperties": false,
       "properties": {
         "allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
-        "bundle_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "bundle_file_sha256": {"$ref": "#/$defs/sha256"},
         "identity_file_sha256": {"$ref": "#/$defs/sha256"},
         "store_id_sha256": {"$ref": "#/$defs/sha256"},
         "genesis_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
@@ -76,7 +76,7 @@
       "then": {
         "properties": {
           "errors": {"maxItems": 0},
-          "input_bindings": {"required": ["allowed_signers_file_sha256", "bundle_manifest_sha256", "identity_file_sha256", "store_id_sha256", "genesis_checkpoint_sha256", "current_checkpoint_sha256", "ssh_keygen_executable_sha256"]},
+          "input_bindings": {"required": ["allowed_signers_file_sha256", "bundle_file_sha256", "identity_file_sha256", "store_id_sha256", "genesis_checkpoint_sha256", "current_checkpoint_sha256", "ssh_keygen_executable_sha256"]},
           "counts": {"properties": {"checkpoints_verified": {"minimum": 1}}},
           "claims": {"$ref": "#/$defs/success_claims"}
         }

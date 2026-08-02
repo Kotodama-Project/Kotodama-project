@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a deterministic private manifest for an ordered checkpoint chain."""
+"""Create a deterministic self-contained private checkpoint-chain bundle."""
 
 from __future__ import annotations
 
@@ -449,7 +449,7 @@ def creation_report(
     status: str,
     errors: list[str],
     *,
-    manifest_bytes: bytes | None = None,
+    bundle_bytes: bytes | None = None,
     checkpoint_count: int | None = None,
 ) -> dict[str, Any]:
     return {
@@ -457,8 +457,8 @@ def creation_report(
         "version": "1.0",
         "status": status,
         "errors": errors,
-        "manifest_file_sha256": (
-            sha256_bytes(manifest_bytes) if manifest_bytes is not None else None
+        "bundle_file_sha256": (
+            sha256_bytes(bundle_bytes) if bundle_bytes is not None else None
         ),
         "checkpoint_count": checkpoint_count,
         "claims": {
@@ -516,12 +516,12 @@ def main(argv: list[str]) -> int:
         }
         if validate_chain_bundle(bundle):
             raise ValueError
-        manifest_bytes = (
+        bundle_bytes = (
             json.dumps(bundle, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         ).encode("utf-8")
-        if len(manifest_bytes) > MAX_BUNDLE_BYTES:
+        if len(bundle_bytes) > MAX_BUNDLE_BYTES:
             raise ValueError
-        write_new_file(output, manifest_bytes)
+        write_new_file(output, bundle_bytes)
     except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
         print(
             json.dumps(
@@ -535,7 +535,7 @@ def main(argv: list[str]) -> int:
             creation_report(
                 "CHAIN_BUNDLE_CREATED",
                 [],
-                manifest_bytes=manifest_bytes,
+                bundle_bytes=bundle_bytes,
                 checkpoint_count=len(entries),
             ),
             sort_keys=True,

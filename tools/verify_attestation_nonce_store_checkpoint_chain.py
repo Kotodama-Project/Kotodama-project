@@ -105,23 +105,23 @@ def main(argv: list[str]) -> int:
         )
         return 2
     try:
-        manifest_path = Path(argv[1])
-        expected_manifest = argv[2]
+        bundle_path = Path(argv[1])
+        expected_bundle = argv[2]
         store_path = Path(argv[3])
         allowed_path = Path(argv[4])
         identity_path = Path(argv[5])
         expected_ssh_keygen = argv[6]
-        manifest_bytes = safe_read(manifest_path, maximum=MAX_BUNDLE_BYTES)
+        bundle_bytes = safe_read(bundle_path, maximum=MAX_BUNDLE_BYTES)
         allowed_bytes = safe_read(allowed_path, maximum=MAX_CHECKPOINT_BYTES)
         identity_bytes = safe_read(identity_path, maximum=4096)
         identity = identity_bytes.decode("utf-8")
         if re.fullmatch(r"[A-Za-z0-9._@+-]{1,256}", identity) is None:
             raise ValueError
-        manifest = load_strict_json_bytes(manifest_bytes)
+        bundle = load_strict_json_bytes(bundle_bytes)
     except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
         print(json.dumps(report("INVALID", ["input is invalid"]), sort_keys=True))
         return 1
-    chain, chain_errors = chain_from_bundle(manifest)
+    chain, chain_errors = chain_from_bundle(bundle)
     if chain_errors or chain is None:
         print(json.dumps(report("INVALID", chain_errors), sort_keys=True))
         return 1
@@ -132,18 +132,18 @@ def main(argv: list[str]) -> int:
             return 1
         bindings = {
             "allowed_signers_file_sha256": sha256_bytes(allowed_bytes),
-            "bundle_manifest_sha256": sha256_bytes(manifest_bytes),
+            "bundle_file_sha256": sha256_bytes(bundle_bytes),
             "identity_file_sha256": sha256_bytes(identity_bytes),
             "store_id_sha256": store_binding["store_id_sha256"],
         }
         errors: list[str] = []
-        manifest_object = manifest if isinstance(manifest, dict) else {}
+        bundle_object = bundle if isinstance(bundle, dict) else {}
         if (
-            SHA256_HEX.fullmatch(expected_manifest) is None
-            or expected_manifest != sha256_bytes(manifest_bytes)
+            SHA256_HEX.fullmatch(expected_bundle) is None
+            or expected_bundle != sha256_bytes(bundle_bytes)
         ):
             errors.append("supplied bundle digest mismatch")
-        entries = manifest_object.get("entries")
+        entries = bundle_object.get("entries")
         if not isinstance(entries, list):
             errors.append("bundle entries are invalid")
             entries = []
@@ -154,7 +154,7 @@ def main(argv: list[str]) -> int:
             bindings["current_checkpoint_sha256"] = entries[-1][
                 "checkpoint_file_sha256"
             ]
-        signature_policy_value = manifest_object.get("signature_policy_binding", {})
+        signature_policy_value = bundle_object.get("signature_policy_binding", {})
         signature_policy = (
             signature_policy_value if isinstance(signature_policy_value, dict) else {}
         )
