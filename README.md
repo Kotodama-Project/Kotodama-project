@@ -21,6 +21,8 @@ Kotodama は、Discord をはじめとする会話や音声を入力として、
 
 - [現在の状態](STATUS.md)
 - [公開までのロードマップ](ROADMAP.md)
+- [Company Template / Blocks / MOCs の使い方](docs/TEMPLATE-GUIDE.md)
+- [テンプレートカタログ](templates/README.md)
 
 ## Public Beta まで
 
