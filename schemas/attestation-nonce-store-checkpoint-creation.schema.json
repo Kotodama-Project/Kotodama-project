@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-checkpoint-creation.schema.json",
+  "title": "Attestation Nonce Store Checkpoint Creation Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "errors", "checkpoint_file_sha256", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_checkpoint_creation"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["CHECKPOINT_CREATED", "INVALID"]},
+    "errors": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "checkpoint_file_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["private_checkpoint_candidate_created", "checkpoint_signature_verified", "external_anchor_authority_verified", "trusted_clock_source_verified", "store_continuity_verified", "restore_execution_verified", "public_beta_go"],
+      "properties": {
+        "private_checkpoint_candidate_created": {"type": "boolean"},
+        "checkpoint_signature_verified": {"const": false},
+        "external_anchor_authority_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "store_continuity_verified": {"const": false},
+        "restore_execution_verified": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "CHECKPOINT_CREATED"}}},
+      "then": {"properties": {"errors": {"maxItems": 0}, "checkpoint_file_sha256": {"$ref": "#/$defs/sha256"}, "claims": {"properties": {"private_checkpoint_candidate_created": {"const": true}}}}},
+      "else": {"properties": {"errors": {"minItems": 1}, "checkpoint_file_sha256": {"type": "null"}, "claims": {"properties": {"private_checkpoint_candidate_created": {"const": false}}}}}
+    }
+  ],
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

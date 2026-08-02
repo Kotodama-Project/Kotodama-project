@@ -40,7 +40,7 @@ python tools\initialize_attestation_nonce_store.py <private-nonce-store.sqlite3>
 
 initializerはOSのexclusive createを使い、既存file、同時作成、symlink parent、不正IDを拒否します。成功時だけschema version 1、exact table SQL、一意nonce keyを作ります。既存fileを上書きしません。
 
-storeを削除して同じIDで作り直すと過去nonceが失われます。CLIは外部anchor、backup chain、rollback protectionを持たないため、`nonce_store_continuity_verified`は常にfalseです。運用ではcanonical pathへの書込み権限を絞り、store自体の世代管理・restore test・外部digest checkpointを別途行ってください。
+storeを削除して同じIDで作り直すと過去nonceが失われます。CLIは外部anchor、backup chain、rollback protectionを持たないため、`nonce_store_continuity_verified`は常にfalseです。運用ではcanonical pathへの書込み権限を絞り、store自体の世代管理・restore testを別途行ってください。R19の[Attestation Nonce Store Checkpoint](ATTESTATION-NONCE-STORE-CHECKPOINT.md)は署名済みpoint-in-time snapshotと直前checkpointへの1リンクを追加しますが、全履歴continuityやrestoreを証明しません。
 
 commit後にprocessがstdoutを返す前に停止した場合も、store rowが一回限り状態の基準です。同じ入力を再実行すると`REPLAY_REFUSED`になるため、成功を推測で再生成せず、private storeとrunner logをreconcileしてください。
 

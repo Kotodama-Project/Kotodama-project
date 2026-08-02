@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-checkpoint-verification.schema.json",
+  "title": "Attestation Nonce Store Checkpoint Verification Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "errors", "verified_at", "clock_source", "input_bindings", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_checkpoint_verification"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["SIGNED_GENESIS_CHECKPOINT_STORE_MATCH", "SIGNED_SUCCESSOR_CHECKPOINT_STORE_MATCH", "INVALID"]},
+    "errors": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "verified_at": {"type": "string", "format": "date-time"},
+    "clock_source": {"const": "local_system_utc_untrusted"},
+    "input_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+        "checkpoint_file_sha256": {"$ref": "#/$defs/sha256"},
+        "identity_file_sha256": {"$ref": "#/$defs/sha256"},
+        "signature_file_sha256": {"$ref": "#/$defs/sha256"},
+        "store_id_sha256": {"$ref": "#/$defs/sha256"},
+        "parent_checkpoint_file_sha256": {"$ref": "#/$defs/sha256"},
+        "parent_signature_file_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supplied_current_checkpoint_digest_match_verified", "current_checkpoint_signature_verified", "allowed_signer_verified", "signer_identity_binding_verified", "checkpoint_chain_self_digest_verified", "store_matches_checkpoint_verified", "genesis_parent_binding_verified", "supplied_parent_checkpoint_digest_match_verified", "immediate_parent_signature_verified", "one_link_append_only_extension_verified", "external_anchor_authority_verified", "trusted_clock_source_verified", "store_continuity_verified", "restore_execution_verified", "promotion_verified", "current_truth_changed", "final_human_go", "public_beta_go"],
+      "properties": {
+        "supplied_current_checkpoint_digest_match_verified": {"type": "boolean"},
+        "current_checkpoint_signature_verified": {"type": "boolean"},
+        "allowed_signer_verified": {"type": "boolean"},
+        "signer_identity_binding_verified": {"type": "boolean"},
+        "checkpoint_chain_self_digest_verified": {"type": "boolean"},
+        "store_matches_checkpoint_verified": {"type": "boolean"},
+        "genesis_parent_binding_verified": {"type": "boolean"},
+        "supplied_parent_checkpoint_digest_match_verified": {"type": "boolean"},
+        "immediate_parent_signature_verified": {"type": "boolean"},
+        "one_link_append_only_extension_verified": {"type": "boolean"},
+        "external_anchor_authority_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "store_continuity_verified": {"const": false},
+        "restore_execution_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "SIGNED_GENESIS_CHECKPOINT_STORE_MATCH"}}},
+      "then": {
+        "properties": {
+          "errors": {"maxItems": 0},
+          "input_bindings": {"required": ["allowed_signers_file_sha256", "checkpoint_file_sha256", "identity_file_sha256", "signature_file_sha256", "store_id_sha256"]},
+          "claims": {"$ref": "#/$defs/genesis_claims"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "SIGNED_SUCCESSOR_CHECKPOINT_STORE_MATCH"}}},
+      "then": {
+        "properties": {
+          "errors": {"maxItems": 0},
+          "input_bindings": {"required": ["allowed_signers_file_sha256", "checkpoint_file_sha256", "identity_file_sha256", "signature_file_sha256", "store_id_sha256", "parent_checkpoint_file_sha256", "parent_signature_file_sha256"]},
+          "claims": {"$ref": "#/$defs/successor_claims"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "INVALID"}}},
+      "then": {"properties": {"errors": {"minItems": 1}, "claims": {"$ref": "#/$defs/invalid_claims"}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "genesis_claims": {"properties": {"supplied_current_checkpoint_digest_match_verified": {"const": true}, "current_checkpoint_signature_verified": {"const": true}, "allowed_signer_verified": {"const": true}, "signer_identity_binding_verified": {"const": true}, "checkpoint_chain_self_digest_verified": {"const": true}, "store_matches_checkpoint_verified": {"const": true}, "genesis_parent_binding_verified": {"const": true}, "supplied_parent_checkpoint_digest_match_verified": {"const": false}, "immediate_parent_signature_verified": {"const": false}, "one_link_append_only_extension_verified": {"const": false}}},
+    "successor_claims": {"properties": {"supplied_current_checkpoint_digest_match_verified": {"const": true}, "current_checkpoint_signature_verified": {"const": true}, "allowed_signer_verified": {"const": true}, "signer_identity_binding_verified": {"const": true}, "checkpoint_chain_self_digest_verified": {"const": true}, "store_matches_checkpoint_verified": {"const": true}, "genesis_parent_binding_verified": {"const": false}, "supplied_parent_checkpoint_digest_match_verified": {"const": true}, "immediate_parent_signature_verified": {"const": true}, "one_link_append_only_extension_verified": {"const": true}}},
+    "invalid_claims": {"properties": {"supplied_current_checkpoint_digest_match_verified": {"const": false}, "current_checkpoint_signature_verified": {"const": false}, "allowed_signer_verified": {"const": false}, "signer_identity_binding_verified": {"const": false}, "checkpoint_chain_self_digest_verified": {"const": false}, "store_matches_checkpoint_verified": {"const": false}, "genesis_parent_binding_verified": {"const": false}, "supplied_parent_checkpoint_digest_match_verified": {"const": false}, "immediate_parent_signature_verified": {"const": false}, "one_link_append_only_extension_verified": {"const": false}}}
+  }
+}
