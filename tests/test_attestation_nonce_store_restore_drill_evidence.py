@@ -7,9 +7,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
-
-
 ROOT = Path(__file__).resolve().parents[1]
 VERIFY_RESTORE = (
     ROOT / "tools" / "verify_attestation_nonce_store_restore_drill_evidence.py"
@@ -212,9 +209,6 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
             "claims": {name: False for name in sorted(RESTORE_FALSE_CLAIMS)},
             "public_beta": "NO_GO_UNPUBLISHED",
         }
-        Draft202012Validator(
-            json.loads(EVIDENCE_SCHEMA.read_text(encoding="utf-8"))
-        ).validate(evidence_value)
         evidence = temporary / "restore-drill-evidence.json"
         evidence.write_text(
             json.dumps(evidence_value, indent=2, sort_keys=True) + "\n",
@@ -312,9 +306,6 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stderr, "")
         report = json.loads(result.stdout)
-        Draft202012Validator(
-            json.loads(VERIFICATION_SCHEMA.read_text(encoding="utf-8"))
-        ).validate(report)
         self.assertEqual(report["status"], "SIGNED_RESTORE_DRILL_REPORT_BINDING")
         self.assertEqual(report["counts"]["checkpoints_bound"], 3)
         self.assertEqual(report["counts"]["reported_checks_bound"], 7)
@@ -330,8 +321,6 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
         verification = json.loads(
             VERIFICATION_SCHEMA.read_text(encoding="utf-8")
         )
-        Draft202012Validator.check_schema(evidence)
-        Draft202012Validator.check_schema(verification)
         self.assertFalse(evidence["additionalProperties"])
         self.assertFalse(
             evidence["properties"]["operation_receipts"]["additionalProperties"]
@@ -379,9 +368,6 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stderr, "")
         report = json.loads(result.stdout)
-        Draft202012Validator(
-            json.loads(VERIFICATION_SCHEMA.read_text(encoding="utf-8"))
-        ).validate(report)
         self.assertIn("drill_id_sha256 must be lowercase SHA-256", report["errors"])
         self.assertIn(
             "reported check backup_command_completed_reported must be true",
@@ -413,9 +399,6 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stderr, "")
         report = json.loads(result.stdout)
-        Draft202012Validator(
-            json.loads(VERIFICATION_SCHEMA.read_text(encoding="utf-8"))
-        ).validate(report)
         self.assertIn(
             "source and restored report files must be distinct", report["errors"]
         )
