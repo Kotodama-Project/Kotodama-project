@@ -1,0 +1,13 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "duplicate-company",
+  "status": "example",
+  "purpose": "Duplicate ID negative fixture.",
+  "inputs": ["source_ref"],
+  "outputs": ["candidate"],
+  "authority": {},
+  "verification": {},
+  "rollback": {},
+  "stop_conditions": ["duplicate id"]
+}

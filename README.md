@@ -17,12 +17,23 @@ Kotodama は、Discord をはじめとする会話や音声を入力として、
 
 ## 現在の公開範囲
 
-現在公開しているのは、プロジェクトの方向性、状態、ロードマップのみです。実音声、文字起こし corpus、認証情報、Discord の非公開識別子は含みません。
+現在公開しているのは、プロジェクトの方向性、状態、ロードマップ、テンプレート設計、最小Company starter、schema、validator、テストです。実音声、文字起こし corpus、認証情報、Discord の非公開識別子は含みません。
 
 - [現在の状態](STATUS.md)
 - [公開までのロードマップ](ROADMAP.md)
 - [Company Template / Blocks / MOCs の使い方](docs/TEMPLATE-GUIDE.md)
 - [テンプレートカタログ](templates/README.md)
+- [動くCompany starter example](examples/company-starter/README.md)
+- [テンプレート検証方法](docs/VALIDATION.md)
+
+## Try the starter
+
+Python以外の追加dependencyは不要です。
+
+```powershell
+python tools/validate_template_pack.py examples/company-starter
+python -m unittest discover -s tests -v
+```
 
 ## Public Beta まで
 

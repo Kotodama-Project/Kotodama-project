@@ -5,6 +5,8 @@
 - [x] Public repository and project direction
 - [x] Explicit incomplete-preview status
 - [x] Privacy and publication boundary
+- [x] Minimal Company manifest / Block / MOC schemas
+- [x] Dependency-free validator and negative tests
 
 ## Required before opening access
 

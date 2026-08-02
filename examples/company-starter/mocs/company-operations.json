@@ -1,0 +1,9 @@
+{
+  "kind": "moc",
+  "spec_version": "0.1",
+  "id": "company-operations-starter",
+  "status": "example",
+  "authority": "navigation_only",
+  "title": "Company Operations Starter",
+  "refs": ["kotodama-company-starter", "work-order-starter"]
+}

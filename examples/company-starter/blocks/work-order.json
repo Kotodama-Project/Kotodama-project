@@ -1,0 +1,25 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "work-order-starter",
+  "status": "example",
+  "purpose": "Turn an approved decision into a bounded local change candidate.",
+  "inputs": ["source_ref", "decision_ref", "candidate_revision"],
+  "outputs": ["change_candidate", "verification_receipt"],
+  "authority": {
+    "owner_role": "human-intent-owner",
+    "allowed_actions": ["local_preview", "synthetic_validation"],
+    "denied_actions": ["external_write", "credential_change", "self_promotion"],
+    "expires_at": "2099-01-01T00:00:00Z"
+  },
+  "verification": {
+    "success_conditions": ["candidate revision and output digest are recorded"],
+    "negative_tests": ["missing decision or drifted revision is rejected"],
+    "receipt_required": true
+  },
+  "rollback": {
+    "action": "discard the unpromoted local candidate",
+    "verify": "Current Truth remains unchanged"
+  },
+  "stop_conditions": ["source drift", "authority expiry", "unexpected external effect"]
+}

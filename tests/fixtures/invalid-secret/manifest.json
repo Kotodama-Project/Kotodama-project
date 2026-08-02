@@ -1,0 +1,9 @@
+{
+  "kind": "company_template",
+  "spec_version": "0.1",
+  "id": "invalid-secret",
+  "status": "example",
+  "blocks": [],
+  "mocs": [],
+  "api_token": "must-not-be-published"
+}

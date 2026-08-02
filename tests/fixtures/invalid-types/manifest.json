@@ -1,0 +1,15 @@
+{
+  "kind": "company_template",
+  "spec_version": "0.1",
+  "id": "invalid-types",
+  "status": "example",
+  "human_intent_ref": "human-intent:example-v1",
+  "canonical_owners": {
+    "human_intent": "human-owner"
+  },
+  "profiles": ["compose_minimum"],
+  "blocks": "blocks/work-order.json",
+  "mocs": [],
+  "denied_actions": "none",
+  "public_beta": "NO_GO_UNPUBLISHED"
+}

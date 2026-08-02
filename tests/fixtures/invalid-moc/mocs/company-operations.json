@@ -1,0 +1,9 @@
+{
+  "kind": "moc",
+  "spec_version": "0.1",
+  "id": "company-operations",
+  "status": "example",
+  "authority": "may_promote",
+  "title": "Company Operations",
+  "refs": ["invalid-moc-company", "missing-block"]
+}

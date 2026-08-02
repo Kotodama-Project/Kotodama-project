@@ -1,0 +1,22 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "invalid-expiry",
+  "status": "example",
+  "purpose": "Negative expiry fixture.",
+  "inputs": ["source_ref"],
+  "outputs": ["candidate"],
+  "authority": {
+    "owner_role": "human-owner",
+    "allowed_actions": ["local_preview"],
+    "denied_actions": ["external_write"],
+    "expires_at": "not-a-date"
+  },
+  "verification": {
+    "success_conditions": ["candidate exists"],
+    "negative_tests": ["invalid expiry rejected"],
+    "receipt_required": true
+  },
+  "rollback": {"action": "discard candidate", "verify": "not promoted"},
+  "stop_conditions": ["invalid expiry"]
+}

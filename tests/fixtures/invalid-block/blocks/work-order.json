@@ -1,0 +1,21 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "work-order-without-rollback",
+  "status": "example",
+  "purpose": "Invalid block used by a negative test.",
+  "inputs": ["source_ref"],
+  "outputs": ["candidate"],
+  "authority": {
+    "owner_role": "human-owner",
+    "allowed_actions": ["local_preview"],
+    "denied_actions": ["external_write"],
+    "expires_at": "2099-01-01T00:00:00Z"
+  },
+  "verification": {
+    "success_conditions": ["candidate exists"],
+    "negative_tests": ["missing source rejected"],
+    "receipt_required": true
+  },
+  "stop_conditions": ["source drift"]
+}

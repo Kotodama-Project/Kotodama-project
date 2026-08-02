@@ -130,8 +130,10 @@ flowchart LR
 - Proxmox segmented profileのclean install / restart / restore
 - PostgreSQL Company DBとEvidence Storeの再現可能な導入
 - Discord、Voice、n8nの実provider E2E
-- template catalog用validatorと一括test
+- Human Intent、Decision、Capability Grant、Verification Receipt、Promotionなどplanned catalog全体のschema・validator・test
 - 実音声の15分rotation、投稿、保持、削除の公開可能な証明
+
+Company manifest、Block、MOCに限定した最小validatorとnegative testは現在公開済みです。これはplanned catalog全体の完成を意味しません。
 
 ## 現時点での使い方
 

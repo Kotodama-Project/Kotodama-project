@@ -1,0 +1,18 @@
+{
+  "kind": "company_template",
+  "spec_version": "0.1",
+  "id": "invalid-kind-company",
+  "status": "example",
+  "human_intent_ref": "human-intent:example-v1",
+  "canonical_owners": {"human_intent": "human-owner"},
+  "profiles": ["compose_minimum"],
+  "blocks": ["blocks/work-order.json"],
+  "mocs": [],
+  "denied_actions": [
+    "unbound_external_write",
+    "credential_permission_change",
+    "self_promotion",
+    "destructive_delete_without_rollback"
+  ],
+  "public_beta": "NO_GO_UNPUBLISHED"
+}
