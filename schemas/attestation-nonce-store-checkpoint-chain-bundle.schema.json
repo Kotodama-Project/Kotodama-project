@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-checkpoint-chain-bundle.schema.json",
+  "title": "Private Attestation Nonce Store Checkpoint Chain Bundle",
+  "$comment": "This manifest and all populated checkpoint/signature files belong inside the protected boundary.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "checkpoint_count", "genesis_checkpoint_sha256", "current_checkpoint_sha256", "ordered_chain_sha256", "signature_policy_binding", "entries", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_checkpoint_chain_bundle"},
+    "version": {"const": "1.0"},
+    "status": {"const": "CHAIN_BUNDLE_CANDIDATE"},
+    "checkpoint_count": {"type": "integer", "minimum": 1, "maximum": 1024},
+    "genesis_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+    "current_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+    "ordered_chain_sha256": {"$ref": "#/$defs/sha256"},
+    "signature_policy_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace", "allowed_signers_file_sha256", "signer_identity_sha256", "signer_role"],
+      "properties": {
+        "namespace": {"const": "kotodama-nonce-store-checkpoint"},
+        "allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+        "signer_identity_sha256": {"$ref": "#/$defs/sha256"},
+        "signer_role": {"const": "independent_reviewer"}
+      }
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "checkpoint_locator", "signature_locator", "checkpoint_file_sha256", "signature_file_sha256"],
+        "properties": {
+          "sequence": {"type": "integer", "minimum": 0, "maximum": 1023},
+          "checkpoint_locator": {"type": "string", "pattern": "^checkpoint-[0-9]{6}\\.json$"},
+          "signature_locator": {"type": "string", "pattern": "^checkpoint-[0-9]{6}\\.json\\.sig$"},
+          "checkpoint_file_sha256": {"$ref": "#/$defs/sha256"},
+          "signature_file_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoint_signatures_verified", "external_anchor_authority_verified", "trusted_clock_source_verified", "authoritative_complete_history_verified", "parallel_branch_absence_verified", "key_rotation_verified", "store_continuity_verified", "backup_creation_verified", "restore_execution_verified", "promotion_verified", "current_truth_changed", "final_human_go", "public_beta_go"],
+      "properties": {
+        "checkpoint_signatures_verified": {"const": false},
+        "external_anchor_authority_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "authoritative_complete_history_verified": {"const": false},
+        "parallel_branch_absence_verified": {"const": false},
+        "key_rotation_verified": {"const": false},
+        "store_continuity_verified": {"const": false},
+        "backup_creation_verified": {"const": false},
+        "restore_execution_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

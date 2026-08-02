@@ -54,37 +54,39 @@ def verify_signature(
     identity: str,
     signature_bytes: bytes,
     checkpoint_bytes: bytes,
+    timeout_seconds: float = 30,
 ) -> bool:
-    with tempfile.TemporaryDirectory(prefix="kotodama-checkpoint-verify-") as directory:
-        root = Path(directory)
-        allowed_signers = root / "allowed-signers"
-        signature = root / "checkpoint.sig"
-        allowed_signers.write_bytes(allowed_signers_bytes)
-        signature.write_bytes(signature_bytes)
-        try:
+    try:
+        with tempfile.TemporaryDirectory(prefix="kotodama-checkpoint-verify-") as directory:
+            root = Path(directory)
+            allowed_signers = root / "allowed-signers"
+            signature = root / "checkpoint.sig"
+            allowed_signers.write_bytes(allowed_signers_bytes)
+            signature.write_bytes(signature_bytes)
             allowed_signers.chmod(0o600)
             signature.chmod(0o600)
-        except OSError:
-            return False
-        result = subprocess.run(
-            [
-                ssh_keygen,
-                "-Y",
-                "verify",
-                "-f",
-                str(allowed_signers),
-                "-I",
-                identity,
-                "-n",
-                NAMESPACE,
-                "-s",
-                str(signature),
-            ],
-            input=checkpoint_bytes,
-            capture_output=True,
-            check=False,
-        )
-        return result.returncode == 0
+            result = subprocess.run(
+                [
+                    ssh_keygen,
+                    "-Y",
+                    "verify",
+                    "-f",
+                    str(allowed_signers),
+                    "-I",
+                    identity,
+                    "-n",
+                    NAMESPACE,
+                    "-s",
+                    str(signature),
+                ],
+                input=checkpoint_bytes,
+                capture_output=True,
+                check=False,
+                timeout=timeout_seconds,
+            )
+            return result.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 def report(

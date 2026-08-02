@@ -30,6 +30,7 @@
 - [x] Unattested clean-install/migration evidence-candidate schema and saved verifier with role-separated hash bindings and complete reported DB checks
 - [x] OpenSSH protected-attestation verifier and SQLite-backed one-use nonce reservation candidate with fail-closed trust/clock/continuity boundaries
 - [x] Signed private nonce-store checkpoint with exact logical snapshot and immediate-parent append-only verification
+- [x] Recursive private checkpoint-path verification with all signatures and supplied-store logical equivalence
 
 ## Runtime profiles still requiring live evidence
 
@@ -37,7 +38,7 @@
 - [ ] Protected, authenticated, fresh digest-pinned image staging and clean-install/migration receipt
 - [ ] Exact Proxmox guest/service candidate and segmented deployment receipt
 - [ ] Candidate-bound restart, rollback, and isolated restore receipts
-- [ ] Externally anchored nonce-store checkpoint chain, key rotation, segmentation, and tested restore continuity
+- [ ] External checkpoint-head anchor authority, key rotation, segmentation, and tested restore execution/continuity
 - [ ] PostgreSQL Company DB and Evidence Store setup/restore E2E
 
 ## Required before opening access

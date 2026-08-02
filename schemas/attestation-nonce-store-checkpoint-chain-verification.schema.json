@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-checkpoint-chain-verification.schema.json",
+  "title": "Attestation Nonce Store Checkpoint Chain Verification Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "errors", "verified_at", "clock_source", "input_bindings", "counts", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_checkpoint_chain_verification"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["SIGNED_RECURSIVE_CHAIN_AND_STORE_EQUIVALENCE", "INVALID"]},
+    "errors": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "verified_at": {"type": "string", "format": "date-time"},
+    "clock_source": {"const": "local_system_utc_untrusted"},
+    "input_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+        "bundle_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "identity_file_sha256": {"$ref": "#/$defs/sha256"},
+        "store_id_sha256": {"$ref": "#/$defs/sha256"},
+        "genesis_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "current_checkpoint_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoints_verified", "parent_links_verified", "reservations_at_current"],
+      "properties": {
+        "checkpoints_verified": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "parent_links_verified": {"type": "integer", "minimum": 0, "maximum": 1023},
+        "reservations_at_current": {"type": "integer", "minimum": 0, "maximum": 10000}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supplied_bundle_digest_match_verified", "bundle_structure_verified", "all_checkpoint_digests_verified", "all_signature_digests_verified", "all_checkpoint_signatures_verified", "allowed_signer_verified", "signer_identity_binding_verified", "genesis_binding_verified", "recursive_parent_links_verified", "append_only_reservation_path_verified", "single_store_identity_verified", "supplied_store_logical_equivalence_verified", "external_anchor_authority_verified", "trusted_clock_source_verified", "authoritative_complete_history_verified", "parallel_branch_absence_verified", "key_rotation_verified", "store_continuity_verified", "backup_creation_verified", "restore_execution_verified", "promotion_verified", "current_truth_changed", "final_human_go", "public_beta_go"],
+      "properties": {
+        "supplied_bundle_digest_match_verified": {"type": "boolean"},
+        "bundle_structure_verified": {"type": "boolean"},
+        "all_checkpoint_digests_verified": {"type": "boolean"},
+        "all_signature_digests_verified": {"type": "boolean"},
+        "all_checkpoint_signatures_verified": {"type": "boolean"},
+        "allowed_signer_verified": {"type": "boolean"},
+        "signer_identity_binding_verified": {"type": "boolean"},
+        "genesis_binding_verified": {"type": "boolean"},
+        "recursive_parent_links_verified": {"type": "boolean"},
+        "append_only_reservation_path_verified": {"type": "boolean"},
+        "single_store_identity_verified": {"type": "boolean"},
+        "supplied_store_logical_equivalence_verified": {"type": "boolean"},
+        "external_anchor_authority_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "authoritative_complete_history_verified": {"const": false},
+        "parallel_branch_absence_verified": {"const": false},
+        "key_rotation_verified": {"const": false},
+        "store_continuity_verified": {"const": false},
+        "backup_creation_verified": {"const": false},
+        "restore_execution_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "SIGNED_RECURSIVE_CHAIN_AND_STORE_EQUIVALENCE"}}},
+      "then": {
+        "properties": {
+          "errors": {"maxItems": 0},
+          "input_bindings": {"required": ["allowed_signers_file_sha256", "bundle_manifest_sha256", "identity_file_sha256", "store_id_sha256", "genesis_checkpoint_sha256", "current_checkpoint_sha256"]},
+          "counts": {"properties": {"checkpoints_verified": {"minimum": 1}}},
+          "claims": {"$ref": "#/$defs/success_claims"}
+        }
+      },
+      "else": {
+        "properties": {
+          "errors": {"minItems": 1},
+          "counts": {"properties": {"checkpoints_verified": {"const": 0}, "parent_links_verified": {"const": 0}, "reservations_at_current": {"const": 0}}},
+          "claims": {"$ref": "#/$defs/invalid_claims"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "success_claims": {"properties": {"supplied_bundle_digest_match_verified": {"const": true}, "bundle_structure_verified": {"const": true}, "all_checkpoint_digests_verified": {"const": true}, "all_signature_digests_verified": {"const": true}, "all_checkpoint_signatures_verified": {"const": true}, "allowed_signer_verified": {"const": true}, "signer_identity_binding_verified": {"const": true}, "genesis_binding_verified": {"const": true}, "recursive_parent_links_verified": {"const": true}, "append_only_reservation_path_verified": {"const": true}, "single_store_identity_verified": {"const": true}, "supplied_store_logical_equivalence_verified": {"const": true}}},
+    "invalid_claims": {"properties": {"supplied_bundle_digest_match_verified": {"const": false}, "bundle_structure_verified": {"const": false}, "all_checkpoint_digests_verified": {"const": false}, "all_signature_digests_verified": {"const": false}, "all_checkpoint_signatures_verified": {"const": false}, "allowed_signer_verified": {"const": false}, "signer_identity_binding_verified": {"const": false}, "genesis_binding_verified": {"const": false}, "recursive_parent_links_verified": {"const": false}, "append_only_reservation_path_verified": {"const": false}, "single_store_identity_verified": {"const": false}, "supplied_store_logical_equivalence_verified": {"const": false}}}
+  }
+}

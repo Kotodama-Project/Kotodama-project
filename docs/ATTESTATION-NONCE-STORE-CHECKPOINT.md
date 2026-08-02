@@ -104,7 +104,7 @@ python tools\verify_attestation_nonce_store_checkpoint.py `
   <expected-parent-sha256>
 ```
 
-R19はparentとcurrentに同じallowed-signers file / identity bindingを要求します。key rotationは未対応です。chain全体を再帰検証せず、supplied immediate parentだけを検証します。
+R19はparentとcurrentに同じallowed-signers file / identity bindingを要求します。key rotationは未対応です。このCLI単体はchain全体を再帰検証せず、supplied immediate parentだけを検証します。提示されたGenesis-to-current path全体を検証する場合は[Attestation Nonce Store Checkpoint Chain](ATTESTATION-NONCE-STORE-CHECKPOINT-CHAIN.md)を使います。
 
 ## Exit codesとschema
 
@@ -128,9 +128,11 @@ checkpointは最大10,000 reservationです。上限到達後の安全なsegment
 - trusted clock、freshness、timestamp attestation
 - 同じparentから複数successorを作るbranchの不存在
 - checkpoint履歴の削除、再作成、repinの防止
-- chain全体の再帰検証、key rotation、最大件数後のsegmentation
+- このCLI単体でのchain全体の再帰検証、key rotation、最大件数後のsegmentation
 - store fileの物理byte同一性、backup作成、restore実行
 - reported Compose executionの真実性、current daemon/image/runtime
 - Promotion、Current Truth、Final Human GO、Public Beta GO
 
 従ってR19の成功は、supplied external digestと署名に束縛されたprivate storeのpoint-in-time / immediate-parent検証です。store continuity、restore、production runtime、Public Beta公開判定ではありません。
+
+R20のrecursive verifierを併用しても、検証できるのは提示された1 pathです。external anchor、authoritative complete history、parallel branch不存在、actual restore executionは別evidenceのままです。

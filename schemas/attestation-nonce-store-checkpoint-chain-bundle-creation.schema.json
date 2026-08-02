@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-checkpoint-chain-bundle-creation.schema.json",
+  "title": "Attestation Nonce Store Checkpoint Chain Bundle Creation Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "errors", "manifest_file_sha256", "checkpoint_count", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_checkpoint_chain_bundle_creation"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["CHAIN_BUNDLE_CREATED", "INVALID"]},
+    "errors": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "manifest_file_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "checkpoint_count": {"oneOf": [{"type": "integer", "minimum": 1, "maximum": 1024}, {"type": "null"}]},
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["private_bundle_candidate_created", "checkpoint_signatures_verified", "external_anchor_authority_verified", "trusted_clock_source_verified", "authoritative_complete_history_verified", "parallel_branch_absence_verified", "key_rotation_verified", "store_continuity_verified", "backup_creation_verified", "restore_execution_verified", "public_beta_go"],
+      "properties": {
+        "private_bundle_candidate_created": {"type": "boolean"},
+        "checkpoint_signatures_verified": {"const": false},
+        "external_anchor_authority_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "authoritative_complete_history_verified": {"const": false},
+        "parallel_branch_absence_verified": {"const": false},
+        "key_rotation_verified": {"const": false},
+        "store_continuity_verified": {"const": false},
+        "backup_creation_verified": {"const": false},
+        "restore_execution_verified": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "CHAIN_BUNDLE_CREATED"}}},
+      "then": {"properties": {"errors": {"maxItems": 0}, "manifest_file_sha256": {"$ref": "#/$defs/sha256"}, "checkpoint_count": {"type": "integer", "minimum": 1, "maximum": 1024}, "claims": {"properties": {"private_bundle_candidate_created": {"const": true}}}}},
+      "else": {"properties": {"errors": {"minItems": 1}, "manifest_file_sha256": {"type": "null"}, "checkpoint_count": {"type": "null"}, "claims": {"properties": {"private_bundle_candidate_created": {"const": false}}}}}
+    }
+  ],
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

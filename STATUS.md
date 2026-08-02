@@ -14,6 +14,7 @@ Updated: 2026-08-03
 | Clean-install / migration evidence candidate | Published unattested saved-binding contract; no live receipt |
 | Protected one-use attestation evaluation | Published local candidate; atomic only within one bound SQLite store |
 | Signed nonce-store checkpoint | Published protected-local tool; point-in-time and immediate-parent only |
+| Recursive nonce-store checkpoint chain | Published protected-local candidate; supplied path/store equivalence only |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -42,6 +43,8 @@ clean-install/migration evidence candidateは、external runnerのreported effec
 protected attestation verifierはOpenSSH署名、allowed signer、signed window、nonce snapshotをpoint-in-timeで検査します。one-use evaluatorはさらに外部入力policy digest、allowed-signers hash、nonce-store IDを束縛し、同一SQLite transactionで署名評価とnonce一意予約をcommitします。同時二重評価は一件だけ成功します。ただしcanonical policy adoption、trusted clock、store continuity、reported runtime truth、live installは未証明です。
 
 nonce-store checkpointはreservation rowのdigest集合、store ID、exact schema contractを署名可能なprivate checkpointへ固定します。successor検証ではcurrent store exact match、immediate-parent digest/signature、parent集合のsubsetを確認するため、1リンク内の巻き戻しと同件数差替えを拒否できます。ただし外部pinの権威、trusted clock、branch不存在、全履歴continuity、backup/restoreは未証明です。
+
+recursive checkpoint-chain verifierは、最大1,024 checkpointの提示されたGenesis-to-current pathについて全digest、全OpenSSH signature、直前parent link、同一store ID、append-only reservation集合を検査し、supplied SQLite storeがcurrent checkpointとlogical-equivalentであることを確認します。これは提示された1 pathの検証であり、external anchorの権威、authoritative complete history、parallel branch不存在、actual store continuity、backup作成、restore実行、key rotationは未証明です。
 
 ## Current boundary
 
