@@ -68,6 +68,8 @@ nonce snapshotの検査はread-onlyです。成功しても`nonce_absent_in_snap
 
 このrepositoryのCLIはそのstate mutationを行いません。さらに、supplied trust rootがcanonical pinと一致すること、評価時刻がtrusted clock由来であること、nonce snapshotがauthoritative source由来であることも単独では証明しません。対応する3 claimは常にfalseです。したがってpoint-in-time PASSを、完全なreplay preventionやone-use execution approvalとして扱わないでください。
 
+同一private SQLite store内のrace-safeな一回限り予約を行う次段は[One-Use Compose Attestation Evaluation](ONE-USE-COMPOSE-ATTESTATION-EVALUATION.md)です。store continuityやtrusted clockはその段階でも別gateです。
+
 ## 常にfalseの範囲
 
 成功時でも、execution authenticity、observation freshness/atomicity、current daemon/image、clean install、service start、migration、database checks、least privilege、restart、rollback、backup、restore、Promotion、Current Truth、Final Human GO、Public Beta GOはすべてfalseです。

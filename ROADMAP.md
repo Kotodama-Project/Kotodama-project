@@ -28,6 +28,7 @@
 - [x] Read-only local image availability preflight with anonymized host and exact candidate binding
 - [x] Saved availability-snapshot verifier limited to historical self-digest/candidate binding, with authenticity/freshness/atomicity/current-state claims denied
 - [x] Unattested clean-install/migration evidence-candidate schema and saved verifier with role-separated hash bindings and complete reported DB checks
+- [x] OpenSSH protected-attestation verifier and SQLite-backed one-use nonce reservation candidate with fail-closed trust/clock/continuity boundaries
 
 ## Runtime profiles still requiring live evidence
 

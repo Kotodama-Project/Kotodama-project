@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/compose-attestation-one-use-policy.schema.json",
+  "title": "Compose Attestation One-Use Policy Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind", "version", "status", "policy_id", "allowed_signers_file_sha256",
+    "nonce_store_id_sha256", "required_namespace", "required_signer_role",
+    "max_signed_window_seconds", "max_report_to_signature_seconds", "not_before",
+    "expires_at", "clock_source", "claims", "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "compose_attestation_one_use_policy"},
+    "version": {"const": "1.0"},
+    "status": {"const": "POLICY_CANDIDATE"},
+    "policy_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+    "allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+    "nonce_store_id_sha256": {"$ref": "#/$defs/sha256"},
+    "required_namespace": {"const": "kotodama-compose-evidence"},
+    "required_signer_role": {"const": "independent_reviewer"},
+    "max_signed_window_seconds": {"type": "integer", "minimum": 1, "maximum": 900},
+    "max_report_to_signature_seconds": {"type": "integer", "minimum": 0, "maximum": 300},
+    "not_before": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "clock_source": {"const": "local_system_utc_untrusted"},
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_trust_policy_verified", "trusted_clock_source_verified",
+        "nonce_store_continuity_verified", "execution_authenticity_verified",
+        "observation_freshness_verified", "observation_atomicity_verified",
+        "current_daemon_reachable_verified", "current_local_image_available_verified",
+        "clean_install_verified", "services_started_verified", "migrations_verified",
+        "database_positive_checks_verified", "database_negative_checks_verified",
+        "application_least_privilege_verified", "restart_verified", "rollback_verified",
+        "backup_verified", "restore_verified", "promotion_verified", "current_truth_changed",
+        "final_human_go", "public_beta_go"
+      ],
+      "properties": {
+        "canonical_trust_policy_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "nonce_store_continuity_verified": {"const": false},
+        "execution_authenticity_verified": {"const": false},
+        "observation_freshness_verified": {"const": false},
+        "observation_atomicity_verified": {"const": false},
+        "current_daemon_reachable_verified": {"const": false},
+        "current_local_image_available_verified": {"const": false},
+        "clean_install_verified": {"const": false},
+        "services_started_verified": {"const": false},
+        "migrations_verified": {"const": false},
+        "database_positive_checks_verified": {"const": false},
+        "database_negative_checks_verified": {"const": false},
+        "application_least_privilege_verified": {"const": false},
+        "restart_verified": {"const": false},
+        "rollback_verified": {"const": false},
+        "backup_verified": {"const": false},
+        "restore_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

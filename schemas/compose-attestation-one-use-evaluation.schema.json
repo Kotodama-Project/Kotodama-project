@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/compose-attestation-one-use-evaluation.schema.json",
+  "title": "Compose Attestation One-Use Evaluation Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "errors", "evaluated_at", "input_bindings", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "compose_attestation_one_use_evaluation"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["ONE_USE_SIGNATURE_AND_POLICY_MATCH", "REPLAY_REFUSED", "INVALID"]},
+    "errors": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "evaluated_at": {"oneOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]},
+    "input_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+        "attestation_file_sha256": {"$ref": "#/$defs/sha256"},
+        "evidence_file_sha256": {"$ref": "#/$defs/sha256"},
+        "identity_file_sha256": {"$ref": "#/$defs/sha256"},
+        "nonce_store_id_sha256": {"$ref": "#/$defs/sha256"},
+        "policy_file_sha256": {"$ref": "#/$defs/sha256"},
+        "signature_file_sha256": {"$ref": "#/$defs/sha256"},
+        "reservation_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "external_policy_digest_match_verified", "policy_structure_verified",
+        "allowed_signers_file_binding_verified", "nonce_store_identity_binding_verified",
+        "local_system_clock_used", "underlying_evidence_candidate_verified",
+        "attestation_bytes_signature_verified", "allowed_signer_verified",
+        "signer_identity_binding_verified", "signer_role_policy_verified",
+        "signed_evidence_binding_verified", "signed_evaluation_window_verified",
+        "reported_time_proximity_verified", "atomic_nonce_reservation_verified",
+        "one_use_evaluation_recorded", "replay_detected_in_bound_store",
+        "canonical_trust_policy_verified", "trusted_clock_source_verified",
+        "nonce_store_continuity_verified", "execution_authenticity_verified",
+        "observation_freshness_verified", "observation_atomicity_verified",
+        "current_daemon_reachable_verified", "current_local_image_available_verified",
+        "clean_install_verified", "services_started_verified", "migrations_verified",
+        "database_positive_checks_verified", "database_negative_checks_verified",
+        "application_least_privilege_verified", "restart_verified", "rollback_verified",
+        "backup_verified", "restore_verified", "promotion_verified", "current_truth_changed",
+        "final_human_go", "public_beta_go"
+      ],
+      "properties": {
+        "external_policy_digest_match_verified": {"type": "boolean"},
+        "policy_structure_verified": {"type": "boolean"},
+        "allowed_signers_file_binding_verified": {"type": "boolean"},
+        "nonce_store_identity_binding_verified": {"type": "boolean"},
+        "local_system_clock_used": {"type": "boolean"},
+        "underlying_evidence_candidate_verified": {"type": "boolean"},
+        "attestation_bytes_signature_verified": {"type": "boolean"},
+        "allowed_signer_verified": {"type": "boolean"},
+        "signer_identity_binding_verified": {"type": "boolean"},
+        "signer_role_policy_verified": {"type": "boolean"},
+        "signed_evidence_binding_verified": {"type": "boolean"},
+        "signed_evaluation_window_verified": {"type": "boolean"},
+        "reported_time_proximity_verified": {"type": "boolean"},
+        "atomic_nonce_reservation_verified": {"type": "boolean"},
+        "one_use_evaluation_recorded": {"type": "boolean"},
+        "replay_detected_in_bound_store": {"type": "boolean"},
+        "canonical_trust_policy_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "nonce_store_continuity_verified": {"const": false},
+        "execution_authenticity_verified": {"const": false},
+        "observation_freshness_verified": {"const": false},
+        "observation_atomicity_verified": {"const": false},
+        "current_daemon_reachable_verified": {"const": false},
+        "current_local_image_available_verified": {"const": false},
+        "clean_install_verified": {"const": false},
+        "services_started_verified": {"const": false},
+        "migrations_verified": {"const": false},
+        "database_positive_checks_verified": {"const": false},
+        "database_negative_checks_verified": {"const": false},
+        "application_least_privilege_verified": {"const": false},
+        "restart_verified": {"const": false},
+        "rollback_verified": {"const": false},
+        "backup_verified": {"const": false},
+        "restore_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "ONE_USE_SIGNATURE_AND_POLICY_MATCH"}}},
+      "then": {
+        "properties": {
+          "errors": {"maxItems": 0},
+          "evaluated_at": {"type": "string", "format": "date-time"},
+          "input_bindings": {
+            "required": [
+              "allowed_signers_file_sha256", "attestation_file_sha256",
+              "evidence_file_sha256", "identity_file_sha256", "nonce_store_id_sha256",
+              "policy_file_sha256", "signature_file_sha256", "reservation_sha256"
+            ]
+          },
+          "claims": {"$ref": "#/$defs/success_claims"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "REPLAY_REFUSED"}}},
+      "then": {
+        "properties": {
+          "errors": {"minItems": 1},
+          "evaluated_at": {"type": "string", "format": "date-time"},
+          "input_bindings": {
+            "required": [
+              "allowed_signers_file_sha256", "attestation_file_sha256",
+              "evidence_file_sha256", "identity_file_sha256", "nonce_store_id_sha256",
+              "policy_file_sha256", "signature_file_sha256", "reservation_sha256"
+            ]
+          },
+          "claims": {"$ref": "#/$defs/replay_claims"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "INVALID"}}},
+      "then": {
+        "properties": {
+          "errors": {"minItems": 1},
+          "claims": {"$ref": "#/$defs/invalid_claims"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "success_claims": {
+      "properties": {
+        "external_policy_digest_match_verified": {"const": true},
+        "policy_structure_verified": {"const": true},
+        "allowed_signers_file_binding_verified": {"const": true},
+        "nonce_store_identity_binding_verified": {"const": true},
+        "local_system_clock_used": {"const": true},
+        "underlying_evidence_candidate_verified": {"const": true},
+        "attestation_bytes_signature_verified": {"const": true},
+        "allowed_signer_verified": {"const": true},
+        "signer_identity_binding_verified": {"const": true},
+        "signer_role_policy_verified": {"const": true},
+        "signed_evidence_binding_verified": {"const": true},
+        "signed_evaluation_window_verified": {"const": true},
+        "reported_time_proximity_verified": {"const": true},
+        "atomic_nonce_reservation_verified": {"const": true},
+        "one_use_evaluation_recorded": {"const": true},
+        "replay_detected_in_bound_store": {"const": false}
+      }
+    },
+    "replay_claims": {
+      "properties": {
+        "external_policy_digest_match_verified": {"const": false},
+        "policy_structure_verified": {"const": false},
+        "allowed_signers_file_binding_verified": {"const": false},
+        "nonce_store_identity_binding_verified": {"const": false},
+        "local_system_clock_used": {"const": false},
+        "underlying_evidence_candidate_verified": {"const": false},
+        "attestation_bytes_signature_verified": {"const": false},
+        "allowed_signer_verified": {"const": false},
+        "signer_identity_binding_verified": {"const": false},
+        "signer_role_policy_verified": {"const": false},
+        "signed_evidence_binding_verified": {"const": false},
+        "signed_evaluation_window_verified": {"const": false},
+        "reported_time_proximity_verified": {"const": false},
+        "atomic_nonce_reservation_verified": {"const": false},
+        "one_use_evaluation_recorded": {"const": false},
+        "replay_detected_in_bound_store": {"const": true}
+      }
+    },
+    "invalid_claims": {
+      "properties": {
+        "external_policy_digest_match_verified": {"const": false},
+        "policy_structure_verified": {"const": false},
+        "allowed_signers_file_binding_verified": {"const": false},
+        "nonce_store_identity_binding_verified": {"const": false},
+        "local_system_clock_used": {"const": false},
+        "underlying_evidence_candidate_verified": {"const": false},
+        "attestation_bytes_signature_verified": {"const": false},
+        "allowed_signer_verified": {"const": false},
+        "signer_identity_binding_verified": {"const": false},
+        "signer_role_policy_verified": {"const": false},
+        "signed_evidence_binding_verified": {"const": false},
+        "signed_evaluation_window_verified": {"const": false},
+        "reported_time_proximity_verified": {"const": false},
+        "atomic_nonce_reservation_verified": {"const": false},
+        "one_use_evaluation_recorded": {"const": false},
+        "replay_detected_in_bound_store": {"const": false}
+      }
+    }
+  }
+}

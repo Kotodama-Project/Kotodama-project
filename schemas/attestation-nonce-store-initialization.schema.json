@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-initialization.schema.json",
+  "title": "Attestation Nonce Store Initialization Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "errors", "store_id_sha256", "schema_version", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_initialization"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["INITIALIZED", "REFUSED", "INVALID"]},
+    "errors": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "store_id_sha256": {"oneOf": [{"type": "string", "pattern": "^[0-9a-f]{64}$"}, {"type": "null"}]},
+    "schema_version": {"oneOf": [{"const": 1}, {"type": "null"}]},
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["new_file_created", "nonce_store_schema_initialized", "nonce_store_continuity_verified", "canonical_adoption_verified", "public_beta_go"],
+      "properties": {
+        "new_file_created": {"type": "boolean"},
+        "nonce_store_schema_initialized": {"type": "boolean"},
+        "nonce_store_continuity_verified": {"const": false},
+        "canonical_adoption_verified": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "INITIALIZED"}}},
+      "then": {
+        "properties": {
+          "errors": {"maxItems": 0},
+          "store_id_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "schema_version": {"const": 1},
+          "claims": {"properties": {"new_file_created": {"const": true}, "nonce_store_schema_initialized": {"const": true}}}
+        }
+      },
+      "else": {
+        "properties": {
+          "errors": {"minItems": 1},
+          "store_id_sha256": {"type": "null"},
+          "schema_version": {"type": "null"},
+          "claims": {"properties": {"new_file_created": {"const": false}, "nonce_store_schema_initialized": {"const": false}}}
+        }
+      }
+    }
+  ]
+}

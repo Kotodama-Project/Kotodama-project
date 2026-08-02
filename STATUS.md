@@ -12,6 +12,7 @@ Updated: 2026-08-03
 | Resolved Compose candidate | Published credential-free configuration candidate |
 | Local image availability preflight | Published read-only tool; saved verification is historical binding only |
 | Clean-install / migration evidence candidate | Published unattested saved-binding contract; no live receipt |
+| Protected one-use attestation evaluation | Published local candidate; atomic only within one bound SQLite store |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -36,6 +37,8 @@ Compose minimumにはさらに、Company DBとEvidence metadata Storeを別servi
 local image availability preflightは、匿名化したdaemonと候補digestへ、既存imageのlist/inspect結果を時刻付きsnapshotとして束縛します。read-only queryだけで、image pull/tag/removeやcontainer作成・起動へfallbackしません。saved verifierのPASSはhistorical self-digest/candidate bindingだけで、真正性、freshness、複数queryのatomicity、current stateは証明しません。公開repositoryには実hostのavailability snapshotを含めておらず、現行hostでのlive PASSは未証明です。
 
 clean-install/migration evidence candidateは、external runnerのreported effects、Work Order/target/before-state hash、別executor/reviewer hash、2 serviceのmigrationとpositive/negative DB checksをcandidate/preflightへ束縛します。saved verifierはDocker/DBへ接続せず、`UNATTESTED_EVIDENCE_BINDING_ONLY`までしか返しません。真正性、freshness、atomicity、current state、実行済みclean install/migrationは未証明です。
+
+protected attestation verifierはOpenSSH署名、allowed signer、signed window、nonce snapshotをpoint-in-timeで検査します。one-use evaluatorはさらに外部入力policy digest、allowed-signers hash、nonce-store IDを束縛し、同一SQLite transactionで署名評価とnonce一意予約をcommitします。同時二重評価は一件だけ成功します。ただしcanonical policy adoption、trusted clock、store continuity、reported runtime truth、live installは未証明です。
 
 ## Current boundary
 

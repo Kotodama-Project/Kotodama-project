@@ -98,6 +98,15 @@ python tools\verify_protected_compose_evidence_attestation.py <attestation.json>
 
 `SIGNATURE_AND_POLICY_MATCH_POINT_IN_TIME`はexact attestation bytesの署名、supplied trust root内のallowed signer、独立reviewer role、signed evidence hash、最大15分のsigned window、最大60秒のnonce snapshot上の未使用だけを示します。canonical trust-root pin、trusted clock source、authoritative nonce source、原子的nonce予約は証明しないためreplay prevention完了ではなく、reported executionの真実性・current state・Public Beta GOも証明しません。詳細は[Protected Compose Evidence Attestation](PROTECTED-COMPOSE-EVIDENCE-ATTESTATION.md)を参照してください。
 
+同一bound SQLite store内でnonceを一度だけ原子的に予約する場合は、まず新規storeを初期化し、Work Orderからexact policy digestを渡します。
+
+```powershell
+python tools\initialize_attestation_nonce_store.py <nonce-store.sqlite3> <store-id-sha256>
+python tools\evaluate_compose_attestation_once.py <policy.json> <expected-policy-sha256> <attestation.json> <attestation.json.sig> <evidence-candidate.json> <resolved-candidate.json> <image-preflight.json> <allowed-signers> <signer-identity-file> <nonce-store.sqlite3>
+```
+
+`ONE_USE_SIGNATURE_AND_POLICY_MATCH`はsignature/policy/evidence検査とnonce予約が一つのSQLite transactionでcommitされたことを示します。並行する同じnonceは一件だけ成功します。ただしpolicy digestのcanonical adoption、local clockの信頼性、store削除・差替えに対するcontinuity、reported runtime truthは証明しません。詳細は[One-Use Compose Attestation Evaluation](ONE-USE-COMPOSE-ATTESTATION-EVALUATION.md)を参照してください。
+
 ## What it validates
 
 - `manifest.json`と必須governance fields
@@ -142,7 +151,7 @@ validatorは汎用packの構造と安全境界を検査するため、`flow`や`
 python -m unittest discover -s tests -v
 ```
 
-正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。installation lifecycleではphase reorder、Work Order/rollback binding欠落、profile evidence欠落、unknown field、duplicate key、non-finite number、secret/private value、live claimを検査します。Compose skeletonではbyte drift、unbound file、hardcoded password、host port、mutable image、共有network/volume、LOGIN role化、core table欠落を検査します。resolved candidateではpassword非開示、password非依存digest、同一password、mutable image、unsafe project name、tamper、unknown field、live claimを検査します。image availabilityではread-only command境界、private identity非開示、candidate/snapshot drift、自己再計算digestがauthenticity/freshness/atomicityを付与しないことを検査します。clean-install/migration evidence candidateではcandidate/preflight/migration drift、同一actor、service evidence再利用、reported check欠落、危険なeffect、live claim、unknown/duplicate/self-digest tamper、古い時刻がfreshnessを得ないことを検査します。protected attestationではattestation/evidence byte drift、wrong identity/trust root/role、expired/future/過大window、used nonce、stale/future snapshot、duplicate nonce/key、unknown field、秘密marker非漏洩を検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
+正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。installation lifecycleではphase reorder、Work Order/rollback binding欠落、profile evidence欠落、unknown field、duplicate key、non-finite number、secret/private value、live claimを検査します。Compose skeletonではbyte drift、unbound file、hardcoded password、host port、mutable image、共有network/volume、LOGIN role化、core table欠落を検査します。resolved candidateではpassword非開示、password非依存digest、同一password、mutable image、unsafe project name、tamper、unknown field、live claimを検査します。image availabilityではread-only command境界、private identity非開示、candidate/snapshot drift、自己再計算digestがauthenticity/freshness/atomicityを付与しないことを検査します。clean-install/migration evidence candidateではcandidate/preflight/migration drift、同一actor、service evidence再利用、reported check欠落、危険なeffect、live claim、unknown/duplicate/self-digest tamper、古い時刻がfreshnessを得ないことを検査します。protected attestationではattestation/evidence byte drift、wrong identity/trust root/role、expired/future/過大window、used nonce、stale/future snapshot、duplicate nonce/key、unknown field、秘密marker非漏洩を検査します。one-use evaluatorでは同時二重評価、同時初期化、invalid input非消費、policy/trust-root/store drift、local-clock overclaim、policy expiry/limit、store schema/constraint弱体化、missing store非作成を検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
 
 ## Boundary
 
