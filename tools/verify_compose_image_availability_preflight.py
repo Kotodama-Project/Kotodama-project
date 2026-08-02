@@ -207,16 +207,19 @@ def report(errors: list[str]) -> dict[str, Any]:
     report_claims = {claim: False for claim in sorted(FALSE_CLAIMS)}
     report_claims.update(
         {
-            "snapshot_integrity_verified": valid,
+            "snapshot_self_digest_verified": valid,
             "candidate_binding_verified": valid,
+            "snapshot_authenticity_verified": False,
+            "observation_freshness_verified": False,
+            "observation_atomicity_verified": False,
             "current_daemon_reachable_verified": False,
             "current_local_image_available_verified": False,
         }
     )
     return {
         "kind": "compose_image_availability_preflight_validation",
-        "version": "1.0",
-        "status": "VALID_SNAPSHOT_BINDING" if valid else "INVALID",
+        "version": "1.1",
+        "status": "HISTORICAL_BINDING_ONLY" if valid else "INVALID",
         "errors": errors,
         "claims": dict(sorted(report_claims.items())),
         "public_beta": "NO_GO_UNPUBLISHED",

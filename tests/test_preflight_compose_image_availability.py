@@ -149,14 +149,68 @@ class ComposeImageAvailabilityPreflightCliTests(unittest.TestCase):
         self.assertEqual(result.stderr, "")
         report = json.loads(result.stdout)
         self.assertEqual(report["kind"], "compose_image_availability_preflight_validation")
-        self.assertEqual(report["status"], "VALID_SNAPSHOT_BINDING")
+        self.assertEqual(report["version"], "1.1")
+        self.assertEqual(report["status"], "HISTORICAL_BINDING_ONLY")
         self.assertEqual(report["errors"], [])
-        self.assertTrue(report["claims"]["snapshot_integrity_verified"])
+        self.assertTrue(report["claims"]["snapshot_self_digest_verified"])
         self.assertTrue(report["claims"]["candidate_binding_verified"])
+        self.assertFalse(report["claims"]["snapshot_authenticity_verified"])
+        self.assertFalse(report["claims"]["observation_freshness_verified"])
+        self.assertFalse(report["claims"]["observation_atomicity_verified"])
         self.assertFalse(report["claims"]["current_daemon_reachable_verified"])
         self.assertFalse(report["claims"]["current_local_image_available_verified"])
         self.assertFalse(report["claims"]["public_beta_go"])
         self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+
+    def test_rehashed_observation_values_never_gain_authenticity_freshness_or_atomicity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            environment = self.fake_environment(temporary)
+            candidate = self.make_candidate(temporary, environment)
+            preflight = subprocess.run(
+                [sys.executable, str(PREFLIGHT), str(candidate)],
+                cwd=ROOT,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            snapshot_value = json.loads(preflight.stdout)
+            snapshot_value["host_binding"]["daemon_id_sha256"] = "f" * 64
+            snapshot_value["image_observation"]["size_bytes"] += 1
+            digest_input = dict(snapshot_value)
+            digest_input.pop("preflight_sha256")
+            snapshot_value["preflight_sha256"] = hashlib.sha256(
+                json.dumps(
+                    digest_input,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+            snapshot = temporary / "self-rehashed-preflight.json"
+            snapshot.write_text(json.dumps(snapshot_value), encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(VERIFY), str(snapshot), str(candidate)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["status"], "HISTORICAL_BINDING_ONLY")
+        self.assertTrue(report["claims"]["snapshot_self_digest_verified"])
+        self.assertTrue(report["claims"]["candidate_binding_verified"])
+        for claim in (
+            "snapshot_authenticity_verified",
+            "observation_freshness_verified",
+            "observation_atomicity_verified",
+            "current_daemon_reachable_verified",
+            "current_local_image_available_verified",
+        ):
+            self.assertFalse(report["claims"][claim])
 
     def test_snapshot_schema_closes_identity_effect_and_go_boundaries(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))

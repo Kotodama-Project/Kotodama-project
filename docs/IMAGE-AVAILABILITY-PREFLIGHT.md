@@ -61,7 +61,9 @@ imageがない場合は`IMAGE_NOT_AVAILABLE`で停止します。自動pullへfa
 python tools\verify_compose_image_availability_preflight.py work\compose-image-availability.json work\resolved-compose-candidate.json
 ```
 
-`VALID_SNAPSHOT_BINDING`は、snapshotのclosed structure、digest、read-only effects、candidate file hashと各bindingが一致することだけを示します。verifierはDockerへ問い合わせないため、`current_daemon_reachable_verified`と`current_local_image_available_verified`を常に`false`にします。fresh stateが必要ならpreflightを再実行し、新しい時刻・candidate・host bindingへ束縛します。
+saved verifier report v1.1の`HISTORICAL_BINDING_ONLY`は、snapshotのclosed structure、自己計算digest、read-only effects、candidate file hashと各bindingが一致することだけを示します。自己計算digestは署名やattestationではなく、任意のwriterが内容と一緒に再計算できます。そのためsaved verifierは`snapshot_authenticity_verified`、`observation_freshness_verified`、`observation_atomicity_verified`、`current_daemon_reachable_verified`、`current_local_image_available_verified`を常に`false`にします。
+
+preflightのdaemon info、image list、image inspectは別々のqueryです。snapshotは観測時点のbounded observationですが、3 queryの間にdaemonやimageが変化しなかったことまでは証明しません。fresh stateが必要ならpreflightを再実行し、新しい時刻・candidate・host bindingへ束縛してください。clean-installなどのmaterial gateでは、さらにprotected runnerのattestation、明示freshness window、executor/reviewer分離が必要です。
 
 ## 次のWork Order
 
@@ -80,4 +82,4 @@ clean installへ進む前に、少なくとも次をexact Work Orderへ固定し
 
 - [`compose-image-availability-preflight.schema.json`](../schemas/compose-image-availability-preflight.schema.json)
 
-schema PASSもsnapshot integrity PASSも、live clean installやPublic Beta GOではありません。
+schema PASSも`HISTORICAL_BINDING_ONLY`も、真正性、freshness、atomicity、live clean install、Public Beta GOの証明ではありません。

@@ -10,7 +10,7 @@ Updated: 2026-08-03
 | Compose / Proxmox lifecycle contract | Published and locally validated |
 | Compose minimum data-plane skeleton | Published candidate; offline config only |
 | Resolved Compose candidate | Published credential-free configuration candidate |
-| Local image availability preflight | Published read-only tool; no live PASS published |
+| Local image availability preflight | Published read-only tool; saved verification is historical binding only |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -32,7 +32,7 @@ Compose minimum / Proxmox segmentedには、preflight、candidate作成、Work O
 
 Compose minimumにはさらに、Company DBとEvidence metadata Storeを別service、別internal network、別volumeに置くdata-plane skeletonを追加しています。host port、hardcoded password、mutable image、共有network/volume、unbound file、SQL role/table driftをvalidatorが拒否します。credential非開示resolverはCompose configの生JSONを保存せず、password、image repository、host絶対pathを除いたproject namespace、image digest、network、volume、migration、healthcheckのcandidateを作り、保存後validatorがcurrent shipped revisionとdigestを再照合します。Docker daemonでのimage取得・container起動・migration・health・restart・backup/restoreは未実行です。
 
-local image availability preflightは、匿名化したdaemonと候補digestへ、既存imageのlist/inspect結果を時刻付きsnapshotとして束縛します。read-only queryだけで、image pull/tag/removeやcontainer作成・起動へfallbackしません。公開repositoryには実hostのavailability snapshotを含めておらず、現行hostでのlive PASSは未証明です。
+local image availability preflightは、匿名化したdaemonと候補digestへ、既存imageのlist/inspect結果を時刻付きsnapshotとして束縛します。read-only queryだけで、image pull/tag/removeやcontainer作成・起動へfallbackしません。saved verifierのPASSはhistorical self-digest/candidate bindingだけで、真正性、freshness、複数queryのatomicity、current stateは証明しません。公開repositoryには実hostのavailability snapshotを含めておらず、現行hostでのlive PASSは未証明です。
 
 ## Current boundary
 
