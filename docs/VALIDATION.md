@@ -31,6 +31,14 @@ python tools/check_company_pack_customization.py work/my-company
 
 このcheckerは構造validatorを先に実行し、構造PASS後だけcustomizationを評価します。`READY_FOR_GOVERNED_REVIEW`でもHuman Intent、authority、retention、Promotion、Current Truthを証明しません。詳しくは[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)を参照してください。
 
+`replacement_required`が0になった候補は、次のbuilderでexact bytesへ固定できます。
+
+```powershell
+python tools/build_company_pack_review_bundle.py work/my-company
+```
+
+builderはmanifestと全参照JSONをSHA-256 / byte sizeへ束縛し、前後再checkでdriftを検出した場合はbindingなしで拒否します。詳しくは[Company Pack Review Bundle](REVIEW-BUNDLE.md)を参照してください。
+
 ## What it validates
 
 - `manifest.json`と必須governance fields

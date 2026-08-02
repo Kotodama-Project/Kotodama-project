@@ -15,6 +15,7 @@
 - [x] Machine-verified secondary MOC ordered-subsequence contract
 - [x] Dependency-free starter initializer with ID/MOC rebinding and overwrite refusal
 - [x] Machine-readable customization checklist with review/evidence separation
+- [x] Candidate-bound review bundle with exact SHA-256 and byte-size bindings
 
 ## Required before opening access
 

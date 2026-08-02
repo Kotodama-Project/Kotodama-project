@@ -50,9 +50,10 @@ initializerはpack IDを再束縛し、manifest、9 Blocks、3 MOCs、9 Records�
 1. initializerで新しい`draft`作業copyを作る。
 2. `replacement_required`を一件ずつ安全な参照名・bounded windowへ置き換える。
 3. pack validatorとcustomization checkerを再実行する。
-4. `review_required`をauthorityを持つ人と確認し、判断証拠を別Recordへ残す。
-5. `evidence_required`をcandidate-bound evidenceで閉じる。
-6. 別のgoverned processだけがPromotionやCurrent Truth変更を行う。
+4. [review bundle](REVIEW-BUNDLE.md)で、review対象の22ファイルをexact SHA-256へ固定する。
+5. `review_required`をauthorityを持つ人と確認し、bundle digestと判断証拠を別Recordへ残す。
+6. `evidence_required`をcandidate-bound evidenceで閉じる。
+7. 別のgoverned processだけがPromotionやCurrent Truth変更を行う。
 
 ## Current implementation boundary
 
