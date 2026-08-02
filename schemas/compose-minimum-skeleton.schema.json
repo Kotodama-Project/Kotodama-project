@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/compose-minimum-skeleton.schema.json",
+  "title": "Kotodama Compose Minimum Data-Plane Skeleton",
+  "$comment": "Schema validity describes a public candidate contract only. It does not prove image availability, clean install, migrations, health, restart, backup, restore, least-privilege login, Promotion, Current Truth, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "spec_version",
+    "id",
+    "status",
+    "profile",
+    "scope",
+    "security",
+    "services",
+    "bindings",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "compose_minimum_skeleton"},
+    "spec_version": {"const": "0.1"},
+    "id": {"const": "kotodama-compose-data-plane"},
+    "status": {"const": "example"},
+    "profile": {"const": "compose_minimum"},
+    "scope": {"const": "company_db_and_evidence_metadata_only"},
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_ports_forbidden",
+        "networks_internal_and_separate",
+        "volumes_separate",
+        "image_reference",
+        "image_pull",
+        "database_passwords",
+        "application_login_roles",
+        "large_evidence_bytes_backend"
+      ],
+      "properties": {
+        "host_ports_forbidden": {"const": true},
+        "networks_internal_and_separate": {"const": true},
+        "volumes_separate": {"const": true},
+        "image_reference": {"const": "required_digest_environment"},
+        "image_pull": {"const": "never"},
+        "database_passwords": {"const": "required_private_environment"},
+        "application_login_roles": {"const": "not_included"},
+        "large_evidence_bytes_backend": {"const": "not_included"}
+      }
+    },
+    "services": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {"$ref": "#/$defs/companyService"},
+        {"$ref": "#/$defs/evidenceService"}
+      ],
+      "items": false
+    },
+    "bindings": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/binding"}
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clean_install_verified",
+        "services_started",
+        "migrations_applied",
+        "health_verified",
+        "restart_verified",
+        "backup_verified",
+        "restore_verified",
+        "application_least_privilege_verified",
+        "promotion_verified",
+        "current_truth_changed",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "clean_install_verified": {"const": false},
+        "services_started": {"const": false},
+        "migrations_applied": {"const": false},
+        "health_verified": {"const": false},
+        "restart_verified": {"const": false},
+        "backup_verified": {"const": false},
+        "restore_verified": {"const": false},
+        "application_least_privilege_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "serviceBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "role",
+        "network",
+        "volume",
+        "migration",
+        "owner_role",
+        "reader_role",
+        "writer_role",
+        "host_ports",
+        "external_network"
+      ],
+      "properties": {
+        "id": {"type": "string"},
+        "role": {"type": "string"},
+        "network": {"type": "string"},
+        "volume": {"type": "string"},
+        "migration": {"type": "string"},
+        "owner_role": {"type": "string"},
+        "reader_role": {"type": "string"},
+        "writer_role": {"type": "string"},
+        "host_ports": {"const": false},
+        "external_network": {"const": false}
+      }
+    },
+    "companyService": {
+      "allOf": [
+        {"$ref": "#/$defs/serviceBase"},
+        {
+          "properties": {
+            "id": {"const": "company-db"},
+            "role": {"const": "company_db"},
+            "network": {"const": "company-data"},
+            "volume": {"const": "company-db-data"},
+            "migration": {"const": "company-db/001-company-core.sql"},
+            "owner_role": {"const": "kotodama_company_owner"},
+            "reader_role": {"const": "kotodama_company_reader"},
+            "writer_role": {"const": "kotodama_company_writer"}
+          }
+        }
+      ]
+    },
+    "evidenceService": {
+      "allOf": [
+        {"$ref": "#/$defs/serviceBase"},
+        {
+          "properties": {
+            "id": {"const": "evidence-store"},
+            "role": {"const": "evidence_metadata_store"},
+            "network": {"const": "evidence-data"},
+            "volume": {"const": "evidence-store-data"},
+            "migration": {"const": "evidence-store/001-evidence-core.sql"},
+            "owner_role": {"const": "kotodama_evidence_owner"},
+            "reader_role": {"const": "kotodama_evidence_reader"},
+            "writer_role": {"const": "kotodama_evidence_writer"}
+          }
+        }
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes"],
+      "properties": {
+        "path": {
+          "enum": [
+            "README.md",
+            "company-db/001-company-core.sql",
+            "compose.yaml",
+            "evidence-store/001-evidence-core.sql"
+          ]
+        },
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "bytes": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

@@ -21,10 +21,13 @@
 - [x] Sanitized Compose minimum and Proxmox segmented lifecycle contracts
 - [x] Machine-checked preflight/apply/verify/rollback/isolated-restore evidence requirements
 - [x] Public runbooks separating planning contracts from live installation receipts
+- [x] Secret-free Compose minimum Company DB / Evidence metadata Store skeleton
+- [x] Exact-byte skeleton validator with host-port, password, image, isolation, and SQL negative tests
 
 ## Runtime profiles still requiring live evidence
 
-- [ ] Executable Compose service manifest and clean-install receipt
+- [x] Executable Compose data-plane candidate manifest (not a live receipt)
+- [ ] Digest-pinned image staging and clean-install/migration receipt
 - [ ] Exact Proxmox guest/service candidate and segmented deployment receipt
 - [ ] Candidate-bound restart, rollback, and isolated restore receipts
 - [ ] PostgreSQL Company DB and Evidence Store setup/restore E2E

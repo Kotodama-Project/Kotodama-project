@@ -29,6 +29,7 @@ Kotodama は、Discord をはじめとする会話や音声を入力として、
 - [Compose / Proxmox installation lifecycle](docs/INSTALLATION-LIFECYCLE.md)
 - [Compose minimum runbook](docs/COMPOSE-MINIMUM-RUNBOOK.md)
 - [Proxmox segmented runbook](docs/PROXMOX-SEGMENTED-RUNBOOK.md)
+- [Compose minimum data-plane skeleton](runtime/compose-minimum/README.md)
 - [テンプレートカタログ](templates/README.md)
 - [Governed Record カタログ](templates/records/README.md)
 - [動くCompany starter example](examples/company-starter/README.md)
@@ -45,10 +46,11 @@ python tools/check_company_pack_customization.py work/my-company
 python tools/validate_template_pack.py examples/company-starter
 python tools/validate_installation_lifecycle.py examples/installation-lifecycle/compose-minimum.json
 python tools/validate_installation_lifecycle.py examples/installation-lifecycle/proxmox-segmented.json
+python tools/validate_compose_minimum_skeleton.py runtime/compose-minimum
 python -m unittest discover -s tests -v
 ```
 
-initializerは元exampleや既存targetを上書きせず、pack IDと3 MOCを再束縛し、22文書を`draft`にしてからvalidatorを通します。customization checkerは残る19の組織固有placeholderと46のreview項目、静的には証明できない5のevidence項目を分離します。placeholderを閉じた後は`python tools/build_company_pack_review_bundle.py work/my-company`で、manifest・Blocks・MOCs・Recordsの全22ファイルをSHA-256へ固定したreview候補を作れます。保存したbundleは`python tools/verify_company_pack_review_bundle.py BUNDLE_JSON PACK_DIRECTORY`で再照合できます。MATCHも承認やPublic Beta GOではありません。starterには、Source IntakeからPromotion Decision Recordまでの9 Block、その出力を受け取る9種のGoverned Recordテンプレート、3つのnavigation-only MOCが含まれます。Capability GrantなしのChange、Human evidenceなしのPromotion Decisionをflow contractが拒否し、Block順序、入出力、MOCの完全順序・目的別部分列、Block出力とRecordの一対一対応をvalidatorで検査できます。Compose minimum / Proxmox segmentedについては、secret-freeな6フェーズのinstallation lifecycle契約とrunbookを公開しています。これは実installerやlive receiptではありません。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
+initializerは元exampleや既存targetを上書きせず、pack IDと3 MOCを再束縛し、22文書を`draft`にしてからvalidatorを通します。customization checkerは残る19の組織固有placeholderと46のreview項目、静的には証明できない5のevidence項目を分離します。placeholderを閉じた後は`python tools/build_company_pack_review_bundle.py work/my-company`で、manifest・Blocks・MOCs・Recordsの全22ファイルをSHA-256へ固定したreview候補を作れます。保存したbundleは`python tools/verify_company_pack_review_bundle.py BUNDLE_JSON PACK_DIRECTORY`で再照合できます。MATCHも承認やPublic Beta GOではありません。starterには、Source IntakeからPromotion Decision Recordまでの9 Block、その出力を受け取る9種のGoverned Recordテンプレート、3つのnavigation-only MOCが含まれます。Capability GrantなしのChange、Human evidenceなしのPromotion Decisionをflow contractが拒否し、Block順序、入出力、MOCの完全順序・目的別部分列、Block出力とRecordの一対一対応をvalidatorで検査できます。Compose minimum / Proxmox segmentedについては、secret-freeな6フェーズのinstallation lifecycle契約とrunbookを公開しています。ComposeにはCompany DB / Evidence metadata Storeの実行候補skeletonもありますが、image取得・起動・migration・restoreのlive receiptはまだありません。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
 
 ## Public Beta まで
 

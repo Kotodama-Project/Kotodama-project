@@ -1,0 +1,72 @@
+services:
+  company-db:
+    image: "${KOTODAMA_POSTGRES_IMAGE:?set a digest-pinned PostgreSQL image reference}"
+    pull_policy: never
+    restart: "no"
+    environment:
+      POSTGRES_DB: kotodama_company
+      POSTGRES_USER: kotodama_company_owner
+      POSTGRES_PASSWORD: "${KOTODAMA_COMPANY_DB_PASSWORD:?set in private environment}"
+      POSTGRES_INITDB_ARGS: "--data-checksums --encoding=UTF8"
+    volumes:
+      - company-db-data:/var/lib/postgresql/data
+      - ./company-db/001-company-core.sql:/docker-entrypoint-initdb.d/001-company-core.sql:ro
+    networks:
+      - company-data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kotodama_company_owner -d kotodama_company"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  evidence-store:
+    image: "${KOTODAMA_POSTGRES_IMAGE:?set a digest-pinned PostgreSQL image reference}"
+    pull_policy: never
+    restart: "no"
+    environment:
+      POSTGRES_DB: kotodama_evidence
+      POSTGRES_USER: kotodama_evidence_owner
+      POSTGRES_PASSWORD: "${KOTODAMA_EVIDENCE_DB_PASSWORD:?set in private environment}"
+      POSTGRES_INITDB_ARGS: "--data-checksums --encoding=UTF8"
+    volumes:
+      - evidence-store-data:/var/lib/postgresql/data
+      - ./evidence-store/001-evidence-core.sql:/docker-entrypoint-initdb.d/001-evidence-core.sql:ro
+    networks:
+      - evidence-data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kotodama_evidence_owner -d kotodama_evidence"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  company-data:
+    internal: true
+  evidence-data:
+    internal: true
+
+volumes:
+  company-db-data:
+  evidence-store-data:

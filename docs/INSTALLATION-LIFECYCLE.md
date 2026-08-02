@@ -6,7 +6,7 @@ Kotodamaのruntime profileは、構成ファイルだけではなく、**何を�
 
 | Profile | 想定用途 | 公開されているもの | 公開されていないもの |
 |---|---|---|---|
-| `compose_minimum` | 1台の管理対象hostで小さく試す | evidence contract、validator、事前・適用・検証・rollback・restore手順 | 実環境Compose manifest、secret、稼働receipt |
+| `compose_minimum` | 1台の管理対象hostで小さく試す | evidence contract、validator、data-plane skeleton、事前・適用・検証・rollback・restore手順 | secret、image取得、稼働・restart・restore receipt |
 | `proxmox_segmented` | service roleとnetwork境界を分離する | sanitized role/evidence contract、validator、分離・復旧手順 | guest ID、hostname、IP、storage ID、credential、稼働receipt |
 
 JSON例:
@@ -86,6 +86,7 @@ Validatorは次をfail closedで確認します。
 ## 次に読む文書
 
 - Compose: [Compose Minimum Runbook](COMPOSE-MINIMUM-RUNBOOK.md)
+- Compose data plane: [Compose Minimum Skeleton](../runtime/compose-minimum/README.md)
 - Proxmox: [Proxmox Segmented Runbook](PROXMOX-SEGMENTED-RUNBOOK.md)
 - Companyの証拠鎖: [Company Template / Blocks / MOCs](TEMPLATE-GUIDE.md)
 - 構造検証: [Validation](VALIDATION.md)

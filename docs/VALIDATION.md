@@ -56,6 +56,14 @@ python tools\validate_installation_lifecycle.py examples\installation-lifecycle\
 
 このvalidatorは6フェーズ順序、material phaseのWork Order、apply-to-rollback binding、profile固有evidence、秘密値・private infrastructure literal、live claim拒否を検査します。詳細は[Installation Lifecycle Profiles](INSTALLATION-LIFECYCLE.md)を参照してください。PASSはlive install / deploy / restart / restore receiptではありません。
 
+Compose minimum data-plane skeletonのexact bytesと安全契約は次で検査します。
+
+```powershell
+python tools\validate_compose_minimum_skeleton.py runtime\compose-minimum
+```
+
+このvalidatorはmanifestの4 file binding、追加file、path containment、2 service/network/volume分離、host port、digest-required image、private password environment、internal network、NOLOGIN roles、Company/Evidence core tables、destructive SQL、全live claimを検査します。stdlib validator自体はcontainerを起動しません。Compose構文はprocess-only synthetic値による`docker compose config --quiet` testを別に持ち、daemon、pull、起動を必要としません。
+
 ## What it validates
 
 - `manifest.json`と必須governance fields
@@ -100,7 +108,7 @@ validatorは汎用packの構造と安全境界を検査するため、`flow`や`
 python -m unittest discover -s tests -v
 ```
 
-正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。installation lifecycleではphase reorder、Work Order/rollback binding欠落、profile evidence欠落、unknown field、duplicate key、non-finite number、secret/private value、live claimをnegative caseで検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
+正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。installation lifecycleではphase reorder、Work Order/rollback binding欠落、profile evidence欠落、unknown field、duplicate key、non-finite number、secret/private value、live claimを検査します。Compose skeletonではbyte drift、unbound file、hardcoded password、host port、mutable image、共有network/volume、LOGIN role化、core table欠落を検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
 
 ## Boundary
 

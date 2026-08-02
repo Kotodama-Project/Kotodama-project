@@ -127,8 +127,9 @@ flowchart LR
 - sourceを保ったまま22文書を`draft`化するinitializer、置換・review・evidenceを分離するcustomization checker、review対象bytesを固定して再照合するbundle builder/verifier
 - Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
 - Compose minimum / Proxmox segmentedの6フェーズinstallation lifecycle契約、validator、公開runbook
+- Compose minimumのCompany DB / Evidence metadata Store data-plane skeletonとexact-byte validator
 
-これらは構造検証できるstarterです。runtime profileは何を証拠として集めるかを定義しましたが、まだclean installできるCompany OS一式やlive receiptではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)、runtime境界は[Installation Lifecycle Profiles](INSTALLATION-LIFECYCLE.md)を参照してください。
+これらは構造検証できるstarterです。Compose data-planeはofflineで解決できる実行候補まで進みましたが、image取得・起動・migration・restart・restoreのlive receiptやCompany OS一式ではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)、runtime境界は[Installation Lifecycle Profiles](INSTALLATION-LIFECYCLE.md)を参照してください。
 
 ### ローカルで実装・検証しているもの
 
@@ -143,7 +144,7 @@ flowchart LR
 ### まだ公開テンプレートになっていないもの
 
 - secret-freeなHuman IntentからPromotionまでの全テンプレートpack
-- executableなDocker Compose service manifestとclean-install receipt
+- Compose data-planeのdigest-pinned image stagingとclean-install/migration/restart/restore receipt
 - exact Proxmox candidateのclean install / restart / restore receipt
 - PostgreSQL Company DBとEvidence Storeの再現可能な導入
 - Discord、Voice、n8nの実provider E2E

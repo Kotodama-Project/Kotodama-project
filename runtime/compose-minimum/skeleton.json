@@ -1,0 +1,81 @@
+{
+  "kind": "compose_minimum_skeleton",
+  "spec_version": "0.1",
+  "id": "kotodama-compose-data-plane",
+  "status": "example",
+  "profile": "compose_minimum",
+  "scope": "company_db_and_evidence_metadata_only",
+  "security": {
+    "host_ports_forbidden": true,
+    "networks_internal_and_separate": true,
+    "volumes_separate": true,
+    "image_reference": "required_digest_environment",
+    "image_pull": "never",
+    "database_passwords": "required_private_environment",
+    "application_login_roles": "not_included",
+    "large_evidence_bytes_backend": "not_included"
+  },
+  "services": [
+    {
+      "id": "company-db",
+      "role": "company_db",
+      "network": "company-data",
+      "volume": "company-db-data",
+      "migration": "company-db/001-company-core.sql",
+      "owner_role": "kotodama_company_owner",
+      "reader_role": "kotodama_company_reader",
+      "writer_role": "kotodama_company_writer",
+      "host_ports": false,
+      "external_network": false
+    },
+    {
+      "id": "evidence-store",
+      "role": "evidence_metadata_store",
+      "network": "evidence-data",
+      "volume": "evidence-store-data",
+      "migration": "evidence-store/001-evidence-core.sql",
+      "owner_role": "kotodama_evidence_owner",
+      "reader_role": "kotodama_evidence_reader",
+      "writer_role": "kotodama_evidence_writer",
+      "host_ports": false,
+      "external_network": false
+    }
+  ],
+  "bindings": [
+    {
+      "path": "README.md",
+      "sha256": "753f170fe2f7d633d8fe7dbfba356a4a1410c0ce6e0cb6efe271b8767fd7c441",
+      "bytes": 3270
+    },
+    {
+      "path": "company-db/001-company-core.sql",
+      "sha256": "be610d52832aa23d0cae31414a4734360302dd6b0b4ae8f70153985866ee611f",
+      "bytes": 2075
+    },
+    {
+      "path": "compose.yaml",
+      "sha256": "da234d23055a6a37be03bb219b8557bba24fdfbc4b1e4908f4637fcaaf431920",
+      "bytes": 2087
+    },
+    {
+      "path": "evidence-store/001-evidence-core.sql",
+      "sha256": "0131802552db4f02010448c11d3cd3e06f8a47ee4f106751a8261cc3e892d80d",
+      "bytes": 2067
+    }
+  ],
+  "claims": {
+    "clean_install_verified": false,
+    "services_started": false,
+    "migrations_applied": false,
+    "health_verified": false,
+    "restart_verified": false,
+    "backup_verified": false,
+    "restore_verified": false,
+    "application_least_privilege_verified": false,
+    "promotion_verified": false,
+    "current_truth_changed": false,
+    "final_human_go": false,
+    "public_beta_go": false
+  },
+  "public_beta": "NO_GO_UNPUBLISHED"
+}

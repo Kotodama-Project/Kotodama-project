@@ -9,6 +9,7 @@
 | [MOCs](mocs/company-operations-moc.md) | 目的別の入口と読み順 | Company / Public Release / Incident & Recovery examples |
 | [Records](records/README.md) | Block出力を証拠鎖へ残す記録契約 | 9種のJSON schema-backed starter available |
 | [Runtime profiles](company/README.md#runtime-profile-contracts) | Compose minimum / Proxmox segmentedの導入・検証・復旧境界 | sanitized lifecycle contracts and runbooks available |
+| [Runtime candidates](../runtime/README.md) | profileをsecret-freeな実行候補へ接続する | Compose data-plane skeleton available; live receipt absent |
 
 ## Planned catalog
 

@@ -1,6 +1,6 @@
 # Compose Minimum Runbook
 
-このrunbookは、Kotodama Company starterを1台の管理対象host上で試す場合の**導入ライフサイクル候補**です。現在の公開リポジトリには実serviceのCompose manifestやsecretは含まれないため、この文書だけでclean installはできません。
+このrunbookは、Kotodama Company starterを1台の管理対象host上で試す場合の**導入ライフサイクル候補**です。公開repositoryには[Company DB / Evidence metadata Storeのdata-plane skeleton](../runtime/compose-minimum/README.md)がありますが、agent、gateway、n8n、Voice、provider、large evidence byte backend、secret、live receiptは含まれません。この文書だけでCompany OS全体のclean installはできません。
 
 機械可読契約は[`compose-minimum.json`](../examples/installation-lifecycle/compose-minimum.json)です。
 
@@ -17,6 +17,7 @@
 
 ```powershell
 python tools\validate_installation_lifecycle.py examples\installation-lifecycle\compose-minimum.json
+python tools\validate_compose_minimum_skeleton.py runtime\compose-minimum
 ```
 
 ここでの`PASS`は契約構造だけです。
@@ -40,10 +41,10 @@ privateな作業領域で次を記録します。
 
 ## 2. Stage candidate（local / reversible）
 
-実際のCompose manifestが用意された時点で、実行前に正規化した設定とimage digestを保存します。
+公開data-plane skeletonを出発点にし、実行前にexact bytes、正規化した設定、image digestを保存します。
 
 ```powershell
-docker compose --project-name <bounded-project-name> --file <compose-file> config > <private-candidate-output>
+docker compose --project-name <bounded-project-name> --file runtime\compose-minimum\compose.yaml config > <private-candidate-output>
 ```
 
 候補には少なくとも次を束縛します。
@@ -65,7 +66,7 @@ Work Orderにはtarget locator、candidate revision/digest、project namespace�
 実行コマンドはWork Orderへ束縛したmanifestとnamespaceだけを使います。
 
 ```powershell
-docker compose --project-name <bounded-project-name> --file <digest-bound-compose-file> up --detach
+docker compose --project-name <bounded-project-name> --file runtime\compose-minimum\compose.yaml up --detach
 ```
 
 新規image取得、credential変更、public port公開、外部provider接続は、それぞれ作用をWork Orderに明記できない限り停止します。
