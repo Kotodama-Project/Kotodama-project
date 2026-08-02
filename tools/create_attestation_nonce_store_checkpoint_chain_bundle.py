@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import os
 import re
@@ -24,7 +26,7 @@ from verify_protected_compose_evidence_attestation import safe_read, sha256_byte
 
 
 MAX_CHAIN_CHECKPOINTS = 1024
-MAX_BUNDLE_BYTES = 2 * 1024 * 1024
+MAX_BUNDLE_BYTES = 24 * 1024 * 1024
 MAX_CHAIN_TOTAL_BYTES = 16 * 1024 * 1024
 CHECKPOINT_NAME = re.compile(r"^checkpoint-([0-9]{6})\.json$")
 BUNDLE_FIELDS = {
@@ -46,6 +48,8 @@ ENTRY_FIELDS = {
     "signature_locator",
     "checkpoint_file_sha256",
     "signature_file_sha256",
+    "checkpoint_bytes_base64",
+    "signature_bytes_base64",
 }
 BUNDLE_FALSE_FIELDS = {
     "checkpoint_signatures_verified",
@@ -81,6 +85,27 @@ def ordered_chain_sha256(entries: list[dict[str, Any]]) -> str:
     return canonical_sha256(entries)
 
 
+def decode_canonical_base64(
+    value: object, maximum: int, location: str, errors: list[str]
+) -> bytes | None:
+    if not isinstance(value, str) or len(value) > 4 * ((maximum + 2) // 3):
+        errors.append(f"{location} is invalid")
+        return None
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        errors.append(f"{location} is invalid")
+        return None
+    if (
+        not decoded
+        or len(decoded) > maximum
+        or base64.b64encode(decoded).decode("ascii") != value
+    ):
+        errors.append(f"{location} is invalid")
+        return None
+    return decoded
+
+
 def validate_chain_bundle(bundle: object) -> list[str]:
     errors: list[str] = []
     if not isinstance(bundle, dict):
@@ -106,6 +131,7 @@ def validate_chain_bundle(bundle: object) -> list[str]:
     elif count != len(entries):
         errors.append("checkpoint_count mismatch")
     validated_entries: list[dict[str, Any]] = []
+    aggregate_bytes = 0
     for index, value in enumerate(entries):
         entry = require_exact_fields(value, ENTRY_FIELDS, f"entry {index}", errors)
         if entry is None:
@@ -121,7 +147,29 @@ def validate_chain_bundle(bundle: object) -> list[str]:
             errors.append(f"entry {index} checkpoint digest is invalid")
         if not is_sha256(entry.get("signature_file_sha256")):
             errors.append(f"entry {index} signature digest is invalid")
+        checkpoint_bytes = decode_canonical_base64(
+            entry.get("checkpoint_bytes_base64"),
+            MAX_CHECKPOINT_BYTES,
+            f"entry {index} checkpoint bytes",
+            errors,
+        )
+        signature_bytes = decode_canonical_base64(
+            entry.get("signature_bytes_base64"),
+            64 * 1024,
+            f"entry {index} signature bytes",
+            errors,
+        )
+        if checkpoint_bytes is not None:
+            aggregate_bytes += len(checkpoint_bytes)
+            if entry.get("checkpoint_file_sha256") != sha256_bytes(checkpoint_bytes):
+                errors.append(f"entry {index} checkpoint digest mismatch")
+        if signature_bytes is not None:
+            aggregate_bytes += len(signature_bytes)
+            if entry.get("signature_file_sha256") != sha256_bytes(signature_bytes):
+                errors.append(f"entry {index} signature digest mismatch")
         validated_entries.append(entry)
+    if aggregate_bytes > MAX_CHAIN_TOTAL_BYTES:
+        errors.append("bundle exceeds aggregate byte limit")
     if entries and len(validated_entries) == len(entries):
         if bundle.get("genesis_checkpoint_sha256") != validated_entries[0].get(
             "checkpoint_file_sha256"
@@ -273,6 +321,16 @@ def read_chain_directory(
     ):
         return None, ["chain directory changed during read"]
 
+    errors.extend(validate_chain_relationships(chain))
+    if errors:
+        return None, sorted(set(errors))
+    return chain, []
+
+
+def validate_chain_relationships(chain: list[dict[str, Any]]) -> list[str]:
+    errors: list[str] = []
+    if not chain:
+        return ["checkpoint chain is empty"]
     first = chain[0]["checkpoint"]
     if first.get("parent_binding", {}).get("mode") != "GENESIS":
         errors.append("checkpoint 0 must be Genesis")
@@ -306,16 +364,85 @@ def read_chain_directory(
         )
         if not previous_reservations.issubset(current_reservations):
             errors.append(f"checkpoint {sequence} is not an append-only extension")
+    return sorted(set(errors))
+
+
+def bundle_entries(chain: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "sequence": item["sequence"],
+            "checkpoint_locator": item["checkpoint_locator"],
+            "signature_locator": item["signature_locator"],
+            "checkpoint_file_sha256": item["checkpoint_file_sha256"],
+            "signature_file_sha256": item["signature_file_sha256"],
+            "checkpoint_bytes_base64": base64.b64encode(
+                item["checkpoint_bytes"]
+            ).decode("ascii"),
+            "signature_bytes_base64": base64.b64encode(
+                item["signature_bytes"]
+            ).decode("ascii"),
+        }
+        for item in chain
+    ]
+
+
+def chain_from_bundle(
+    bundle: object,
+) -> tuple[list[dict[str, Any]] | None, list[str]]:
+    errors = validate_chain_bundle(bundle)
+    if errors or not isinstance(bundle, dict):
+        return None, sorted(set(errors))
+    entries = bundle.get("entries")
+    if not isinstance(entries, list):
+        return None, ["entries must be an array"]
+    chain: list[dict[str, Any]] = []
+    for sequence, value in enumerate(entries):
+        if not isinstance(value, dict):
+            return None, [f"checkpoint {sequence} structure is invalid"]
+        checkpoint_bytes = decode_canonical_base64(
+            value.get("checkpoint_bytes_base64"),
+            MAX_CHECKPOINT_BYTES,
+            f"entry {sequence} checkpoint bytes",
+            errors,
+        )
+        signature_bytes = decode_canonical_base64(
+            value.get("signature_bytes_base64"),
+            64 * 1024,
+            f"entry {sequence} signature bytes",
+            errors,
+        )
+        if checkpoint_bytes is None or signature_bytes is None:
+            continue
+        try:
+            checkpoint = load_strict_json_bytes(checkpoint_bytes)
+        except (UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+            errors.append(f"checkpoint {sequence} input is invalid")
+            continue
+        if not isinstance(checkpoint, dict) or validate_checkpoint(checkpoint):
+            errors.append(f"checkpoint {sequence} structure is invalid")
+            continue
+        chain.append(
+            {
+                "sequence": sequence,
+                "checkpoint_locator": value["checkpoint_locator"],
+                "signature_locator": value["signature_locator"],
+                "checkpoint_file_sha256": value["checkpoint_file_sha256"],
+                "signature_file_sha256": value["signature_file_sha256"],
+                "checkpoint_bytes": checkpoint_bytes,
+                "signature_bytes": signature_bytes,
+                "checkpoint": checkpoint,
+            }
+        )
+    if errors or len(chain) != len(entries):
+        return None, sorted(set(errors or ["checkpoint bundle is invalid"]))
+    errors.extend(validate_chain_relationships(chain))
+    if bundle.get("signature_policy_binding") != chain[0]["checkpoint"].get(
+        "signature_policy_binding"
+    ):
+        errors.append("bundle signer policy does not match checkpoint chain")
     if errors:
         return None, sorted(set(errors))
     return chain, []
-
-
-def public_entries(chain: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
-        {field: item[field] for field in sorted(ENTRY_FIELDS)}
-        for item in chain
-    ]
 
 
 def creation_report(
@@ -355,7 +482,7 @@ def main(argv: list[str]) -> int:
     if len(argv) != 4 or argv[2] != "--output":
         print(
             "usage: create_attestation_nonce_store_checkpoint_chain_bundle.py "
-            "CHAIN_DIRECTORY --output PRIVATE_CHAIN_MANIFEST_JSON",
+            "CHAIN_DIRECTORY --output PRIVATE_CHAIN_BUNDLE_JSON",
             file=sys.stderr,
         )
         return 2
@@ -371,7 +498,7 @@ def main(argv: list[str]) -> int:
         chain, chain_errors = read_chain_directory(root)
         if chain_errors or chain is None:
             raise ValueError
-        entries = public_entries(chain)
+        entries = bundle_entries(chain)
         bundle = {
             "kind": "attestation_nonce_store_checkpoint_chain_bundle",
             "version": "1.0",

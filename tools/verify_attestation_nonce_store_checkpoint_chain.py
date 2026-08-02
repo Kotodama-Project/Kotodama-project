@@ -21,9 +21,7 @@ from create_attestation_nonce_store_checkpoint import (
 )
 from create_attestation_nonce_store_checkpoint_chain_bundle import (
     MAX_BUNDLE_BYTES,
-    public_entries,
-    read_chain_directory,
-    validate_chain_bundle,
+    chain_from_bundle,
 )
 from validate_resolved_compose_candidate import load_strict_json_bytes
 from verify_attestation_nonce_store_checkpoint import verify_signature
@@ -97,11 +95,11 @@ def report(
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 8:
+    if len(argv) != 7:
         print(
             "usage: verify_attestation_nonce_store_checkpoint_chain.py "
-            "PRIVATE_CHAIN_MANIFEST_JSON EXPECTED_MANIFEST_SHA256 CHAIN_DIRECTORY "
-            "SUPPLIED_STORE_DB ALLOWED_SIGNERS_FILE SIGNER_IDENTITY_FILE "
+            "PRIVATE_CHAIN_BUNDLE_JSON EXPECTED_BUNDLE_SHA256 SUPPLIED_STORE_DB "
+            "ALLOWED_SIGNERS_FILE SIGNER_IDENTITY_FILE "
             "EXPECTED_SSH_KEYGEN_SHA256",
             file=sys.stderr,
         )
@@ -109,11 +107,10 @@ def main(argv: list[str]) -> int:
     try:
         manifest_path = Path(argv[1])
         expected_manifest = argv[2]
-        root = Path(argv[3])
-        store_path = Path(argv[4])
-        allowed_path = Path(argv[5])
-        identity_path = Path(argv[6])
-        expected_ssh_keygen = argv[7]
+        store_path = Path(argv[3])
+        allowed_path = Path(argv[4])
+        identity_path = Path(argv[5])
+        expected_ssh_keygen = argv[6]
         manifest_bytes = safe_read(manifest_path, maximum=MAX_BUNDLE_BYTES)
         allowed_bytes = safe_read(allowed_path, maximum=MAX_CHECKPOINT_BYTES)
         identity_bytes = safe_read(identity_path, maximum=4096)
@@ -121,11 +118,12 @@ def main(argv: list[str]) -> int:
         if re.fullmatch(r"[A-Za-z0-9._@+-]{1,256}", identity) is None:
             raise ValueError
         manifest = load_strict_json_bytes(manifest_bytes)
-        chain, chain_errors = read_chain_directory(root)
-        if chain_errors or chain is None:
-            raise ValueError
     except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
         print(json.dumps(report("INVALID", ["input is invalid"]), sort_keys=True))
+        return 1
+    chain, chain_errors = chain_from_bundle(manifest)
+    if chain_errors or chain is None:
+        print(json.dumps(report("INVALID", chain_errors), sort_keys=True))
         return 1
 
     with hold_store_snapshot(store_path) as (store_binding, store_errors):
@@ -138,16 +136,17 @@ def main(argv: list[str]) -> int:
             "identity_file_sha256": sha256_bytes(identity_bytes),
             "store_id_sha256": store_binding["store_id_sha256"],
         }
-        errors = validate_chain_bundle(manifest)
+        errors: list[str] = []
         manifest_object = manifest if isinstance(manifest, dict) else {}
         if (
             SHA256_HEX.fullmatch(expected_manifest) is None
             or expected_manifest != sha256_bytes(manifest_bytes)
         ):
             errors.append("supplied bundle digest mismatch")
-        entries = public_entries(chain)
-        if manifest_object.get("entries") != entries:
-            errors.append("bundle entries do not match chain directory")
+        entries = manifest_object.get("entries")
+        if not isinstance(entries, list):
+            errors.append("bundle entries are invalid")
+            entries = []
         if entries:
             bindings["genesis_checkpoint_sha256"] = entries[0][
                 "checkpoint_file_sha256"

@@ -10,6 +10,7 @@ import re
 import sqlite3
 import stat
 import sys
+import tempfile
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -165,9 +166,53 @@ def _snapshot_from_connection(
     )
 
 
+def _read_stable_store_bytes(descriptor: int) -> bytes:
+    before = os.fstat(descriptor)
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or before.st_size <= 0
+        or before.st_size > MAX_NONCE_STORE_BYTES
+    ):
+        raise OSError
+
+    def read_once(*, retain: bool) -> tuple[bytes, str]:
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        digest = hashlib.sha256()
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = os.read(descriptor, min(1024 * 1024, MAX_NONCE_STORE_BYTES + 1 - total))
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_NONCE_STORE_BYTES:
+                raise OSError
+            digest.update(chunk)
+            if retain:
+                chunks.append(chunk)
+        if total <= 0:
+            raise OSError
+        return (b"".join(chunks) if retain else b"", digest.hexdigest())
+
+    value, first_digest = read_once(retain=True)
+    _, second_digest = read_once(retain=False)
+    after = os.fstat(descriptor)
+    stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns")
+    if (
+        first_digest != second_digest
+        or len(value) != before.st_size
+        or any(
+            getattr(before, field) != getattr(after, field)
+            for field in stable_fields
+        )
+    ):
+        raise OSError
+    return value
+
+
 @contextmanager
 def hold_store_snapshot(path: Path):
-    """Hold a DELETE-journal read transaction until the caller emits its verdict."""
+    """Cross-check an opened-object copy and hold a SQLite read transaction."""
     absolute = Path(os.path.abspath(path))
     current = Path(absolute.anchor)
     try:
@@ -192,7 +237,9 @@ def hold_store_snapshot(path: Path):
         yield None, ["nonce store input is invalid"]
         return
     connection: sqlite3.Connection | None = None
+    copy_connection: sqlite3.Connection | None = None
     guard_descriptor: int | None = None
+    private_copy_directory: tempfile.TemporaryDirectory[str] | None = None
     try:
         guard_descriptor = os.open(
             absolute,
@@ -201,6 +248,13 @@ def hold_store_snapshot(path: Path):
         guarded = os.fstat(guard_descriptor)
         if (guarded.st_dev, guarded.st_ino) != (before.st_dev, before.st_ino):
             raise OSError
+        stable_store_bytes = _read_stable_store_bytes(guard_descriptor)
+        private_copy_directory = tempfile.TemporaryDirectory(
+            prefix="kotodama-nonce-store-copy-"
+        )
+        copy_path = Path(private_copy_directory.name) / "nonce-store.sqlite3"
+        copy_path.write_bytes(stable_store_bytes)
+        copy_path.chmod(0o600)
         connection = sqlite3.connect(
             absolute.as_uri() + "?mode=ro",
             timeout=30,
@@ -215,7 +269,22 @@ def hold_store_snapshot(path: Path):
             1000,
         )
         connection.execute("BEGIN")
-        snapshot = _snapshot_from_connection(connection)
+        source_snapshot = _snapshot_from_connection(connection)
+        copy_connection = sqlite3.connect(
+            copy_path.as_uri() + "?mode=ro&immutable=1",
+            timeout=30,
+            isolation_level=None,
+            uri=True,
+        )
+        copy_connection.execute("PRAGMA query_only=ON")
+        copy_connection.set_progress_handler(
+            lambda: 1 if time.monotonic() > query_deadline else 0,
+            1000,
+        )
+        copy_snapshot = _snapshot_from_connection(copy_connection)
+        snapshot = source_snapshot
+        if source_snapshot != copy_snapshot:
+            snapshot = (None, ["nonce store opened-object snapshot mismatch"])
         after = os.stat(absolute, follow_symlinks=False)
         stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns")
         if any(
@@ -235,8 +304,12 @@ def hold_store_snapshot(path: Path):
                 except sqlite3.Error:
                     pass
             connection.close()
+        if copy_connection is not None:
+            copy_connection.close()
         if guard_descriptor is not None:
             os.close(guard_descriptor)
+        if private_copy_directory is not None:
+            private_copy_directory.cleanup()
 
 
 def read_store_snapshot(path: Path) -> tuple[dict[str, Any] | None, list[str]]:

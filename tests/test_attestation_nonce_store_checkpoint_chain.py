@@ -119,7 +119,6 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
                 str(bundle),
                 expected_bundle_sha256
                 or hashlib.sha256(bundle.read_bytes()).hexdigest(),
-                str(case["chain"]),
                 str(store or case["restored_store"]),
                 str(allowed_signers or inputs["allowed_signers"]),
                 str(identity_file or inputs["identity_file"]),

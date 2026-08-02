@@ -33,13 +33,15 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["sequence", "checkpoint_locator", "signature_locator", "checkpoint_file_sha256", "signature_file_sha256"],
+        "required": ["sequence", "checkpoint_locator", "signature_locator", "checkpoint_file_sha256", "signature_file_sha256", "checkpoint_bytes_base64", "signature_bytes_base64"],
         "properties": {
           "sequence": {"type": "integer", "minimum": 0, "maximum": 1023},
           "checkpoint_locator": {"type": "string", "pattern": "^checkpoint-[0-9]{6}\\.json$"},
           "signature_locator": {"type": "string", "pattern": "^checkpoint-[0-9]{6}\\.json\\.sig$"},
           "checkpoint_file_sha256": {"$ref": "#/$defs/sha256"},
-          "signature_file_sha256": {"$ref": "#/$defs/sha256"}
+          "signature_file_sha256": {"$ref": "#/$defs/sha256"},
+          "checkpoint_bytes_base64": {"type": "string", "minLength": 4, "maxLength": 2796204, "pattern": "^[A-Za-z0-9+/]+={0,2}$"},
+          "signature_bytes_base64": {"type": "string", "minLength": 4, "maxLength": 87384, "pattern": "^[A-Za-z0-9+/]+={0,2}$"}
         }
       }
     },
