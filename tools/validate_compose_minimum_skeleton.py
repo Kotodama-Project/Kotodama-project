@@ -112,8 +112,8 @@ EXPECTED_BOUND_FILES = {
 }
 CANONICAL_BINDINGS = {
     "README.md": (
-        "a72e7fa0e680375965bfec3ec86113c9db999b500737aa0cf436cac42d8a8f83",
-        3769,
+        "0d05371892f815f6179c55e9f1459c1fc59a0cba916bd1b0f6d75c6030e9d23c",
+        4053,
     ),
     "company-db/001-company-core.sql": (
         "be610d52832aa23d0cae31414a4734360302dd6b0b4ae8f70153985866ee611f",

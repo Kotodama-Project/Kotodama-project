@@ -31,7 +31,7 @@ repository rootから実行します。
 
 ```powershell
 New-Item -ItemType Directory -Force work | Out-Null
-python tools\resolve_compose_candidate.py kotodama-local-r1 > work\resolved-compose-candidate.json
+python tools\resolve_compose_candidate.py kotodama-local-r1 --output work\resolved-compose-candidate.json
 ```
 
 project nameは小文字英数字から始まる2〜63文字の小文字英数字、`_`、`-`だけを受け付けます。
@@ -49,6 +49,8 @@ project nameは小文字英数字から始まる2〜63文字の小文字英数�
 passwordを別の有効な値へ変えても出力とdigestは変わりません。したがってcandidate digestをpassword推測の照合器として利用できません。
 
 失敗時は終了code `1`で、限定されたreason codeだけを出します。Composeのstderr、環境変数名、image reference、credential、絶対pathは転送しません。使い方の誤りは終了code `2`です。
+
+`--output`はUTF-8 JSONを新規作成し、既存fileを上書きしません。stdoutにも同じbyte列を返します。Windows PowerShellの版によってnative stdout redirectがUTF-16化されるため、保存には`>`ではなく`--output`を使います。
 
 ## 3. 保存したcandidateを再検査する
 
@@ -73,6 +75,8 @@ runtime preflightまたはimage stagingへ進む場合は、少なくとも次�
 - credentialをreceiptへ出さないredaction方法
 
 このcandidateだけを根拠に`docker compose up`へ進みません。
+
+次のread-only段階は[Compose Image Availability Preflight](IMAGE-AVAILABILITY-PREFLIGHT.md)です。既にlocalへ存在するimageだけを照合し、自動pullやcontainer startは行いません。
 
 ## 境界
 

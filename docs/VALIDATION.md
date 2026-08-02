@@ -67,11 +67,20 @@ python tools\validate_compose_minimum_skeleton.py runtime\compose-minimum
 private environmentから解決したCompose設定を、credential非開示candidateへ固定する場合は次を使います。
 
 ```powershell
-python tools\resolve_compose_candidate.py <bounded-project-name> > work\resolved-compose-candidate.json
+python tools\resolve_compose_candidate.py <bounded-project-name> --output work\resolved-compose-candidate.json
 python tools\validate_resolved_compose_candidate.py work\resolved-compose-candidate.json
 ```
 
 resolverは生のCompose JSONを保存せず、passwordとhost絶対pathを除外したrole-bound projectionだけを出力します。passwordを別値へ変えてもcandidateとdigestが同一であることをnegative testで固定しています。validator PASSは設定解決済みcandidateのcurrent shipped revisionへのbindingであり、daemon、image availability、pull、起動、migration、healthの証明ではありません。
+
+既にlocalへ存在するimageのavailability snapshotは次で作成・再束縛します。
+
+```powershell
+python tools\preflight_compose_image_availability.py work\resolved-compose-candidate.json --output work\compose-image-availability.json
+python tools\verify_compose_image_availability_preflight.py work\compose-image-availability.json work\resolved-compose-candidate.json
+```
+
+preflightだけが観測時刻と匿名化daemonに限定してavailabilityをtrueにできます。saved verifierはsnapshot/candidate integrityだけを確認し、fresh daemon/image stateをtrueにしません。どちらもpull、container、migration、health、Public Beta GOを証明しません。
 
 ## What it validates
 

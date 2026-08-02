@@ -44,7 +44,7 @@ privateな作業領域で次を記録します。
 公開data-plane skeletonを出発点にし、実行前にexact bytes、正規化した設定、image digestを資格情報非開示candidateへ保存します。
 
 ```powershell
-python tools\resolve_compose_candidate.py <bounded-project-name> > <private-candidate-output>
+python tools\resolve_compose_candidate.py <bounded-project-name> --output <private-candidate-output>
 python tools\validate_resolved_compose_candidate.py <private-candidate-output>
 ```
 
@@ -61,6 +61,15 @@ python tools\validate_resolved_compose_candidate.py <private-candidate-output>
 - last-known-good revisionとrollback手順
 
 出力仕様とfailure boundaryは[Resolved Compose Candidate](RESOLVED-COMPOSE-CANDIDATE.md)を参照してください。
+
+candidateのimageが既にlocalへ存在することは、作用を増やさず別snapshotへ固定できます。
+
+```powershell
+python tools\preflight_compose_image_availability.py <private-candidate-output> --output <private-image-preflight-output>
+python tools\verify_compose_image_availability_preflight.py <private-image-preflight-output> <private-candidate-output>
+```
+
+このpreflightはdaemon info、image list、image inspectだけを使い、pull、tag、remove、container作成・起動を行いません。詳細は[Compose Image Availability Preflight](IMAGE-AVAILABILITY-PREFLIGHT.md)を参照してください。
 
 `<...>`は説明用placeholderです。値をこの公開repositoryへcommitしません。
 

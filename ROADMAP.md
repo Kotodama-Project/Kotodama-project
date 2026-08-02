@@ -25,6 +25,8 @@
 - [x] Exact-byte skeleton validator with host-port, password, image, isolation, and SQL negative tests
 - [x] Credential-free resolved Compose candidate with project, image, network, volume, migration, and digest binding
 - [x] Saved resolved-candidate validator with password-independent digest and tamper refusal
+- [x] Read-only local image availability preflight with anonymized host and exact candidate binding
+- [x] Saved availability-snapshot verifier that never claims fresh daemon or image state
 
 ## Runtime profiles still requiring live evidence
 

@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from safe_json_output import emit_json, output_target_available
 from validate_compose_minimum_skeleton import load_strict_json, validate_manifest
 from validate_resolved_compose_candidate import (
     EXPECTED_SERVICE_BASE,
@@ -173,10 +174,17 @@ def build_candidate(project_name: str, image_digest: str) -> dict[str, Any]:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or PROJECT_PATTERN.fullmatch(argv[1]) is None:
-        print("usage: resolve_compose_candidate.py SAFE_PROJECT_NAME", file=sys.stderr)
+    if (
+        len(argv) not in (2, 4)
+        or PROJECT_PATTERN.fullmatch(argv[1]) is None
+        or (len(argv) == 4 and argv[2] != "--output")
+    ):
+        print("usage: resolve_compose_candidate.py SAFE_PROJECT_NAME [--output NEW_JSON_FILE]", file=sys.stderr)
         return 2
     project_name = argv[1]
+    output_path = Path(argv[3]) if len(argv) == 4 else None
+    if not output_target_available(output_path):
+        return refuse("OUTPUT_REFUSED")
     image_reference = os.environ.get("KOTODAMA_POSTGRES_IMAGE", "")
     company_secret = os.environ.get("KOTODAMA_COMPANY_DB_PASSWORD", "")
     evidence_secret = os.environ.get("KOTODAMA_EVIDENCE_DB_PASSWORD", "")
@@ -236,7 +244,8 @@ def main(argv: list[str]) -> int:
     candidate = build_candidate(project_name, image_match.group(1))
     if validate_candidate(candidate):
         return refuse("CANDIDATE_SELF_VALIDATION_REFUSED")
-    print(json.dumps(candidate, sort_keys=True))
+    if not emit_json(candidate, output_path):
+        return refuse("OUTPUT_REFUSED")
     return 0
 
 

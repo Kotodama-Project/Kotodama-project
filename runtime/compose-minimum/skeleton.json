@@ -44,8 +44,8 @@
   "bindings": [
     {
       "path": "README.md",
-      "sha256": "a72e7fa0e680375965bfec3ec86113c9db999b500737aa0cf436cac42d8a8f83",
-      "bytes": 3769
+      "sha256": "0d05371892f815f6179c55e9f1459c1fc59a0cba916bd1b0f6d75c6030e9d23c",
+      "bytes": 4053
     },
     {
       "path": "company-db/001-company-core.sql",

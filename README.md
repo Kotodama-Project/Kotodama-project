@@ -31,6 +31,7 @@ Kotodama は、Discord をはじめとする会話や音声を入力として、
 - [Proxmox segmented runbook](docs/PROXMOX-SEGMENTED-RUNBOOK.md)
 - [Compose minimum data-plane skeleton](runtime/compose-minimum/README.md)
 - [資格情報非開示のResolved Compose Candidate](docs/RESOLVED-COMPOSE-CANDIDATE.md)
+- [read-only Compose Image Availability Preflight](docs/IMAGE-AVAILABILITY-PREFLIGHT.md)
 - [テンプレートカタログ](templates/README.md)
 - [Governed Record カタログ](templates/records/README.md)
 - [動くCompany starter example](examples/company-starter/README.md)
@@ -53,7 +54,7 @@ python -m unittest discover -s tests -v
 
 initializerは元exampleや既存targetを上書きせず、pack IDと3 MOCを再束縛し、22文書を`draft`にしてからvalidatorを通します。customization checkerは残る19の組織固有placeholderと46のreview項目、静的には証明できない5のevidence項目を分離します。placeholderを閉じた後は`python tools/build_company_pack_review_bundle.py work/my-company`で、manifest・Blocks・MOCs・Recordsの全22ファイルをSHA-256へ固定したreview候補を作れます。保存したbundleは`python tools/verify_company_pack_review_bundle.py BUNDLE_JSON PACK_DIRECTORY`で再照合できます。MATCHも承認やPublic Beta GOではありません。starterには、Source IntakeからPromotion Decision Recordまでの9 Block、その出力を受け取る9種のGoverned Recordテンプレート、3つのnavigation-only MOCが含まれます。Capability GrantなしのChange、Human evidenceなしのPromotion Decisionをflow contractが拒否し、Block順序、入出力、MOCの完全順序・目的別部分列、Block出力とRecordの一対一対応をvalidatorで検査できます。Compose minimum / Proxmox segmentedについては、secret-freeな6フェーズのinstallation lifecycle契約とrunbookを公開しています。ComposeにはCompany DB / Evidence metadata Storeの実行候補skeletonがあります。private process environmentで設定を解決し、password、image repository、host pathを出さずにproject namespace、image digest、network、volume、migrationを候補JSONへ固定するCLIもあります。設定解決済み候補はruntime preflightへの入力であり、image取得・起動・migration・restoreのlive receiptではありません。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
 
-Compose候補の設定解決には、別途Docker CLI / Compose pluginとprivate process environmentが必要です。手順は[Resolved Compose Candidate](docs/RESOLVED-COMPOSE-CANDIDATE.md)を参照してください。
+Compose候補の設定解決には、別途Docker CLI / Compose pluginとprivate process environmentが必要です。手順は[Resolved Compose Candidate](docs/RESOLVED-COMPOSE-CANDIDATE.md)を参照してください。既存local imageのdigest一致だけをread-onlyで確認する場合は[Compose Image Availability Preflight](docs/IMAGE-AVAILABILITY-PREFLIGHT.md)を使えます。imageがなくても自動取得や起動はしません。
 
 ## Public Beta まで
 

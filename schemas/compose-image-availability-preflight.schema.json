@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/compose-image-availability-preflight.schema.json",
+  "title": "Kotodama Compose Image Availability Preflight",
+  "$comment": "A time-bound read-only observation that one candidate manifest digest was present in one fingerprinted local Docker daemon. It is not pull, start, migration, health, restart, restore, Promotion, Current Truth, or Public Beta GO evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "observed_at",
+    "candidate_binding",
+    "host_binding",
+    "image_observation",
+    "effects",
+    "claims",
+    "preflight_sha256",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "compose_image_availability_preflight"},
+    "version": {"const": "1.0"},
+    "status": {"const": "LOCAL_IMAGE_AVAILABLE"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "candidate_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_file_sha256",
+        "project_name",
+        "resolved_contract_sha256",
+        "image_manifest_digest"
+      ],
+      "properties": {
+        "candidate_file_sha256": {"$ref": "#/$defs/sha256"},
+        "project_name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,62}$"},
+        "resolved_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "image_manifest_digest": {"$ref": "#/$defs/imageDigest"}
+      }
+    },
+    "host_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "daemon_id_sha256",
+        "docker_cli_sha256",
+        "server_version",
+        "os_type",
+        "architecture",
+        "raw_identity_emitted"
+      ],
+      "properties": {
+        "daemon_id_sha256": {"$ref": "#/$defs/sha256"},
+        "docker_cli_sha256": {"$ref": "#/$defs/sha256"},
+        "server_version": {"$ref": "#/$defs/safeRuntimeValue"},
+        "os_type": {"$ref": "#/$defs/safeRuntimeValue"},
+        "architecture": {"$ref": "#/$defs/safeRuntimeValue"},
+        "raw_identity_emitted": {"const": false}
+      }
+    },
+    "image_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available_locally",
+        "repo_digest_match_observed",
+        "image_manifest_digest",
+        "local_image_id_digest",
+        "size_bytes",
+        "os_type",
+        "architecture",
+        "rootfs_fingerprint_sha256",
+        "repository_names_emitted",
+        "layer_digests_emitted"
+      ],
+      "properties": {
+        "available_locally": {"const": true},
+        "repo_digest_match_observed": {"const": true},
+        "image_manifest_digest": {"$ref": "#/$defs/imageDigest"},
+        "local_image_id_digest": {"$ref": "#/$defs/imageDigest"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "os_type": {"$ref": "#/$defs/safeRuntimeValue"},
+        "architecture": {"$ref": "#/$defs/safeRuntimeValue"},
+        "rootfs_fingerprint_sha256": {"$ref": "#/$defs/sha256"},
+        "repository_names_emitted": {"const": false},
+        "layer_digests_emitted": {"const": false}
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "daemon_info_query",
+        "image_list_query",
+        "image_inspect_query",
+        "image_pull",
+        "image_tag",
+        "image_remove",
+        "container_create",
+        "container_start",
+        "daemon_configuration_change"
+      ],
+      "properties": {
+        "daemon_info_query": {"const": true},
+        "image_list_query": {"const": true},
+        "image_inspect_query": {"const": true},
+        "image_pull": {"const": false},
+        "image_tag": {"const": false},
+        "image_remove": {"const": false},
+        "container_create": {"const": false},
+        "container_start": {"const": false},
+        "daemon_configuration_change": {"const": false}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "daemon_reachable_verified",
+        "local_image_available_verified",
+        "manifest_digest_match_verified",
+        "image_pulled",
+        "services_started",
+        "migrations_applied",
+        "health_verified",
+        "restart_verified",
+        "backup_verified",
+        "restore_verified",
+        "application_least_privilege_verified",
+        "promotion_verified",
+        "current_truth_changed",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "daemon_reachable_verified": {"const": true},
+        "local_image_available_verified": {"const": true},
+        "manifest_digest_match_verified": {"const": true},
+        "image_pulled": {"const": false},
+        "services_started": {"const": false},
+        "migrations_applied": {"const": false},
+        "health_verified": {"const": false},
+        "restart_verified": {"const": false},
+        "backup_verified": {"const": false},
+        "restore_verified": {"const": false},
+        "application_least_privilege_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "preflight_sha256": {"$ref": "#/$defs/sha256"},
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "imageDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "safeRuntimeValue": {"type": "string", "pattern": "^[A-Za-z0-9._+-]{1,64}$"}
+  }
+}

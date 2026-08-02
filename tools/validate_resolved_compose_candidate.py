@@ -118,15 +118,23 @@ def reject_non_finite(_value: str) -> None:
     raise StrictJsonError("non-finite number")
 
 
-def load_strict_json(path: Path) -> dict[str, Any]:
+def loads_strict_json(text: str) -> dict[str, Any]:
     value = json.loads(
-        path.read_text(encoding="utf-8"),
+        text,
         object_pairs_hook=reject_duplicate_pairs,
         parse_constant=reject_non_finite,
     )
     if not isinstance(value, dict):
         raise StrictJsonError("top-level value must be an object")
     return value
+
+
+def load_strict_json_bytes(content: bytes) -> dict[str, Any]:
+    return loads_strict_json(content.decode("utf-8"))
+
+
+def load_strict_json(path: Path) -> dict[str, Any]:
+    return load_strict_json_bytes(path.read_bytes())
 
 
 def canonical_sha256(value: object) -> str:
