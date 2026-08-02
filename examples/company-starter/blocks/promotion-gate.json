@@ -1,0 +1,25 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "promotion-gate-starter",
+  "status": "example",
+  "purpose": "Evaluate promotion prerequisites and produce a candidate decision without self-promoting.",
+  "inputs": ["decision_record", "work_order_candidate", "change_candidate", "verification_receipt"],
+  "outputs": ["promotion_candidate"],
+  "authority": {
+    "owner_role": "promotion-authority",
+    "allowed_actions": ["read_only", "analyze", "draft"],
+    "denied_actions": ["self_promotion", "current_truth_write", "unbound_external_write"],
+    "expires_at": "2099-01-01T00:00:00Z"
+  },
+  "verification": {
+    "success_conditions": ["all required decisions, receipts, candidate digests, and authority bindings agree"],
+    "negative_tests": ["missing receipt, stale candidate, or same-party independence violation blocks promotion"],
+    "receipt_required": true
+  },
+  "rollback": {
+    "action": "discard the Promotion Candidate and return to the failing predecessor",
+    "verify": "Current Truth remains unchanged"
+  },
+  "stop_conditions": ["binding mismatch", "approval missing", "independence rule not satisfied"]
+}

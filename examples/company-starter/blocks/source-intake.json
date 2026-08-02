@@ -1,0 +1,25 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "source-intake-starter",
+  "status": "example",
+  "purpose": "Normalize an authorized input into a provenance-bound Source Record.",
+  "inputs": ["source_locator", "access_or_consent_ref", "retention_rule"],
+  "outputs": ["source_record"],
+  "authority": {
+    "owner_role": "evidence-steward",
+    "allowed_actions": ["read_only", "analyze"],
+    "denied_actions": ["unconsented_capture", "external_transfer", "retention_extension"],
+    "expires_at": "2099-01-01T00:00:00Z"
+  },
+  "verification": {
+    "success_conditions": ["source locator, observed time, access class, retention rule, and digest are recorded"],
+    "negative_tests": ["missing authority, consent, provenance, or retention rule is rejected"],
+    "receipt_required": true
+  },
+  "rollback": {
+    "action": "discard the unpromoted Source Record candidate",
+    "verify": "no Decision, Work Order, or Current Truth record was created"
+  },
+  "stop_conditions": ["authority missing", "consent scope mismatch", "retention rule unknown"]
+}

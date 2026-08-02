@@ -1,0 +1,25 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "intent-candidate-starter",
+  "status": "example",
+  "purpose": "Extract a reviewable Intent Candidate without treating inference as confirmed intent.",
+  "inputs": ["source_record"],
+  "outputs": ["intent_candidate"],
+  "authority": {
+    "owner_role": "human-intent-owner",
+    "allowed_actions": ["analyze", "draft"],
+    "denied_actions": ["automatic_approval", "external_write", "self_promotion"],
+    "expires_at": "2099-01-01T00:00:00Z"
+  },
+  "verification": {
+    "success_conditions": ["purpose, beneficiary, constraints, success conditions, stop conditions, and source refs are explicit"],
+    "negative_tests": ["unsupported inference or missing source citation remains unresolved"],
+    "receipt_required": true
+  },
+  "rollback": {
+    "action": "discard or revise the Intent Candidate",
+    "verify": "Human Intent and Current Truth remain unchanged"
+  },
+  "stop_conditions": ["source conflict", "authority ambiguity", "material unknown remains"]
+}

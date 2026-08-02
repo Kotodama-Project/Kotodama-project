@@ -16,7 +16,14 @@
     "evidence": "evidence-store"
   },
   "profiles": ["compose_minimum"],
-  "blocks": ["blocks/work-order.json"],
+  "blocks": [
+    "blocks/source-intake.json",
+    "blocks/intent-candidate.json",
+    "blocks/human-decision.json",
+    "blocks/work-order.json",
+    "blocks/verification-receipt.json",
+    "blocks/promotion-gate.json"
+  ],
   "mocs": ["mocs/company-operations.json"],
   "denied_actions": [
     "unbound_external_write",

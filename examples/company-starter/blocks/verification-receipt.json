@@ -1,0 +1,25 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "verification-receipt-starter",
+  "status": "example",
+  "purpose": "Bind observed results and negative checks to the exact Work Order and change candidate.",
+  "inputs": ["work_order_candidate", "change_candidate"],
+  "outputs": ["verification_receipt"],
+  "authority": {
+    "owner_role": "independent-verifier",
+    "allowed_actions": ["read_only", "analyze", "synthetic_validation"],
+    "denied_actions": ["candidate_mutation", "evidence_substitution", "self_approval"],
+    "expires_at": "2099-01-01T00:00:00Z"
+  },
+  "verification": {
+    "success_conditions": ["source revision, observed time, checks, effects, result, and artifact digests are bound"],
+    "negative_tests": ["stale revision, missing negative test, or unverifiable external effect fails closed"],
+    "receipt_required": true
+  },
+  "rollback": {
+    "action": "invalidate the receipt and keep the candidate unpromoted",
+    "verify": "Promotion and Current Truth remain unchanged"
+  },
+  "stop_conditions": ["candidate drift", "observer conflict", "required evidence unavailable"]
+}

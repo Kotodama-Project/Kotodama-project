@@ -109,9 +109,10 @@ flowchart LR
 
 - プロジェクトの目的、現在状態、ロードマップ
 - このテンプレート利用ガイド
-- Company Template、Block、MOCのスターター例
+- Source Intake、Intent Candidate、Human Decision、Work Order、Verification Receipt、Promotion Gateを含むCompany starter
+- Company manifest、Block、MOCのschema、validator、negative tests
 
-これらは設計と手作業用のstarterです。まだclean installできるCompany OS一式ではありません。
+これらは構造検証できるstarterです。まだclean installできるCompany OS一式ではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)を参照してください。
 
 ### ローカルで実装・検証しているもの
 
@@ -138,11 +139,13 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 ## 現時点での使い方
 
 1. [テンプレートカタログ](../templates/README.md)から目的に近いstarterを選ぶ。
-2. placeholderを自分の組織用の参照名へ置き換える。tokenや個人情報の値は書かない。
-3. Blockごとにowner、authority、denied actions、verification、rollbackを埋める。
-4. 最初は`draft`または`candidate_only`として使う。
-5. MOCから必要なBlockとreceiptへリンクする。
-6. 実行後にsource revisionと結果を照合し、独立した承認がある場合だけPromotionする。
+2. [Company starter](../examples/company-starter/README.md)を作業用directoryへcopyする。
+3. placeholderを自分の組織用の参照名へ置き換える。tokenや個人情報の値は書かない。
+4. Blockごとにowner、authority、denied actions、verification、rollbackを埋める。
+5. 最初は`draft`または`candidate_only`として使う。
+6. MOCから必要なBlockとreceiptへリンクする。
+7. validatorを通し、実行後にsource revisionと結果を照合する。
+8. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
 
 ## Statusの読み方
 

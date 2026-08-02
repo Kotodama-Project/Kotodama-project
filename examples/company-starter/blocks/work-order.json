@@ -4,8 +4,8 @@
   "id": "work-order-starter",
   "status": "example",
   "purpose": "Turn an approved decision into a bounded local change candidate.",
-  "inputs": ["source_ref", "decision_ref", "candidate_revision"],
-  "outputs": ["change_candidate", "verification_receipt"],
+  "inputs": ["source_record", "decision_record", "candidate_revision"],
+  "outputs": ["work_order_candidate", "change_candidate"],
   "authority": {
     "owner_role": "human-intent-owner",
     "allowed_actions": ["local_preview", "synthetic_validation"],
@@ -13,8 +13,8 @@
     "expires_at": "2099-01-01T00:00:00Z"
   },
   "verification": {
-    "success_conditions": ["candidate revision and output digest are recorded"],
-    "negative_tests": ["missing decision or drifted revision is rejected"],
+    "success_conditions": ["target, action, revision, expiry, rollback, and stop conditions are bound"],
+    "negative_tests": ["missing decision, unbound target, or drifted revision is rejected"],
     "receipt_required": true
   },
   "rollback": {

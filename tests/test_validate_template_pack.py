@@ -49,7 +49,38 @@ class TemplatePackCliTests(unittest.TestCase):
         summary = json.loads(result.stdout)
         self.assertEqual(summary["status"], "PASS")
         self.assertEqual(summary["pack_id"], "kotodama-company-starter")
-        self.assertEqual(summary["validated_files"], 3)
+        self.assertEqual(summary["validated_files"], 8)
+
+    def test_shipped_starter_exposes_the_minimal_governance_chain(self) -> None:
+        pack = EXAMPLES / "company-starter"
+        manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
+        moc = json.loads(
+            (pack / "mocs" / "company-operations.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            manifest["blocks"],
+            [
+                "blocks/source-intake.json",
+                "blocks/intent-candidate.json",
+                "blocks/human-decision.json",
+                "blocks/work-order.json",
+                "blocks/verification-receipt.json",
+                "blocks/promotion-gate.json",
+            ],
+        )
+        self.assertEqual(
+            moc["refs"],
+            [
+                "kotodama-company-starter",
+                "source-intake-starter",
+                "intent-candidate-starter",
+                "human-decision-starter",
+                "work-order-starter",
+                "verification-receipt-starter",
+                "promotion-gate-starter",
+            ],
+        )
 
     def test_parent_directory_reference_is_rejected(self) -> None:
         result = self.run_validator("invalid-traversal")

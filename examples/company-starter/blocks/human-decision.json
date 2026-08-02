@@ -1,0 +1,25 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "human-decision-starter",
+  "status": "example",
+  "purpose": "Record an authority-bound Human Decision; this Block does not make the decision.",
+  "inputs": ["intent_candidate", "human_decision_evidence"],
+  "outputs": ["decision_record"],
+  "authority": {
+    "owner_role": "human-intent-owner",
+    "allowed_actions": ["read_only", "draft"],
+    "denied_actions": ["ai_only_approval", "delegated_consent", "self_promotion"],
+    "expires_at": "2099-01-01T00:00:00Z"
+  },
+  "verification": {
+    "success_conditions": ["decision, approver role, scope, effective time, evidence ref, and review condition are recorded"],
+    "negative_tests": ["AI-generated selection or mismatched approver authority is rejected"],
+    "receipt_required": true
+  },
+  "rollback": {
+    "action": "invalidate the draft record and return to the Intent Candidate",
+    "verify": "no Work Order or Current Truth change relies on the invalid record"
+  },
+  "stop_conditions": ["approver authority missing", "decision evidence missing", "scope is ambiguous"]
+}

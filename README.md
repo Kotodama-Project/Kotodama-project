@@ -22,6 +22,7 @@ Kotodama は、Discord をはじめとする会話や音声を入力として、
 - [現在の状態](STATUS.md)
 - [公開までのロードマップ](ROADMAP.md)
 - [Company Template / Blocks / MOCs の使い方](docs/TEMPLATE-GUIDE.md)
+- [3分で試すCompany starter](docs/STARTER-WALKTHROUGH.md)
 - [テンプレートカタログ](templates/README.md)
 - [動くCompany starter example](examples/company-starter/README.md)
 - [テンプレート検証方法](docs/VALIDATION.md)
@@ -34,6 +35,8 @@ Python以外の追加dependencyは不要です。
 python tools/validate_template_pack.py examples/company-starter
 python -m unittest discover -s tests -v
 ```
+
+starterには、Source Intake、Intent Candidate、Human Decision、Work Order、Verification Receipt、Promotion Gateの6 Blockが順番付きで含まれます。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
 
 ## Public Beta まで
 

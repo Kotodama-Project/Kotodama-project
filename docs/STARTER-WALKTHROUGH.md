@@ -1,0 +1,101 @@
+# Company Starter Walkthrough
+
+この手順は、公開starterを自分の会社・チーム用の**候補pack**として試すためのものです。約3分、Python標準ライブラリだけで構造検証できます。
+
+## 1. starterをcopyする
+
+repository rootから実行します。
+
+```powershell
+New-Item -ItemType Directory -Force work | Out-Null
+Copy-Item examples\company-starter work\my-company -Recurse
+```
+
+```bash
+mkdir -p work
+cp -R examples/company-starter work/my-company
+```
+
+元のexampleを直接書き換えず、作業copyを使うと差分とrollbackが明確になります。
+
+## 2. manifestで正本の場所を決める
+
+`work/my-company/manifest.json`で最初に変更するのは次の3点です。
+
+| Field | 書くもの | 書かないもの |
+|---|---|---|
+| `id` | 小文字・数字・hyphenのpack ID | 会社の秘密名や個人情報 |
+| `human_intent_ref` | governed Human Intent recordの参照名 | Human Intent本文やtoken |
+| `canonical_owners` | fact familyごとの正本owner/保存先 | 同じfactの競合する正本 |
+
+`human_intent_ref`はlocatorのplaceholderです。このvalidatorは参照先の存在、真正性、承認を確認しません。
+
+`id`を変更したら、`mocs/company-operations.json`の先頭refも同じIDへ変更します。MOCの参照先が存在しなければvalidatorはfail closedします。
+
+## 3. MOC順にBlockを読む
+
+[`company-operations.json`](../examples/company-starter/mocs/company-operations.json)は、次の順序だけを示すnavigation projectionです。
+
+```mermaid
+flowchart LR
+  S["Source Intake"] --> I["Intent Candidate"]
+  I --> D["Human Decision record"]
+  D --> W["Work Order candidate"]
+  W --> V["Verification Receipt"]
+  V --> P["Promotion Candidate"]
+  P -. "separate governed action" .-> C["Current Truth"]
+```
+
+MOCはDecision、Promotion、Current Truthを変更しません。
+
+## 4. Blockを自分の運用へ合わせる
+
+各Blockで必ず確認します。
+
+- `inputs` / `outputs`: 前後のrecord名がつながっているか
+- `authority`: owner、許可action、拒否action、期限が具体的か
+- `verification`: successだけでなくnegative testがあるか
+- `rollback`: 失敗時に何を戻し、何が変わっていないと確認するか
+- `stop_conditions`: 不明点やdriftで安全に止まるか
+
+例の`2099-01-01`は書式を示すplaceholderです。実運用では短い作業windowに置き換えます。
+
+## 5. validatorを実行する
+
+```powershell
+python tools\validate_template_pack.py work\my-company
+```
+
+```bash
+python3 tools/validate_template_pack.py work/my-company
+```
+
+成功例:
+
+```json
+{"errors": [], "pack_id": "my-company", "status": "PASS", "validated_files": 8}
+```
+
+## 6. PASSの意味を狭く保つ
+
+PASSが示すのは、pack構造、参照、限定authority、secretらしい値、必須denialなどの検査結果です。次は証明しません。
+
+- Humanが意図・Decision・Promotionを承認したこと
+- 外部providerやruntimeが安全に動くこと
+- rollbackや削除が実環境で成功すること
+- Current Truthが変更されたこと
+- Public Beta GO
+
+実行やPromotionへ進む場合は、対象revisionを固定したWork Order、実結果のVerification Receipt、必要な独立承認を別途用意します。
+
+## よくある失敗
+
+| Error | 確認すること |
+|---|---|
+| `unsafe relative path` | pack外参照、空白、絶対pathを使っていないか |
+| `references unknown id` | MOCのIDと各JSONの`id`が一致しているか |
+| `forbidden allowed action` | Blockが公開safe allowlistを越えていないか |
+| `secret-bearing key is forbidden` | secret値ではなく安全な参照名へ置換したか |
+| `public_beta must remain NO_GO_UNPUBLISHED` | template自身にGOを宣言させていないか |
+
+validatorの完全な境界は[Template Pack Validation](VALIDATION.md)を参照してください。

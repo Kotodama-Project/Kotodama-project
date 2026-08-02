@@ -4,7 +4,7 @@
 
 | Category | Purpose | Current status |
 |---|---|---|
-| [Company](company/README.md) | 会社・チーム全体の構造と導入順 | design starter |
+| [Company](company/README.md) | 会社・チーム全体の構造と導入順 | validated JSON governance starter available |
 | [Blocks](blocks/README.md) | 小さな実行・判断・検証部品 | Markdown design example |
 | [MOCs](mocs/company-operations-moc.md) | 目的別の入口と読み順 | Markdown navigation example |
 
@@ -32,3 +32,5 @@ templates/
 詳しい考え方は[テンプレート利用ガイド](../docs/TEMPLATE-GUIDE.md)を参照してください。
 
 実際にvalidatorへ通せるJSON packは[Company starter example](../examples/company-starter/README.md)にあります。上記Markdown例そのものをvalidator済みと読み替えないでください。
+
+最短の導入手順は[Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)にあります。

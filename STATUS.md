@@ -1,11 +1,12 @@
 # Project Status
 
-Updated: 2026-08-02
+Updated: 2026-08-03
 
 | Surface | Status |
 |---|---|
 | Public repository | Published preview |
 | Product direction and roadmap | Public |
+| Company governance starter | Published and locally validated |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
 | Public Voice Bot | Inactive |
@@ -17,6 +18,10 @@ Updated: 2026-08-02
 最新の CT200 Voice cutover attempt は、read-only reconciliation 後に `BLOCKED_NO_EFFECT` と判定されました。候補ファイルの deploy は 0、外部 provider API の作用も 0 でした。
 
 これは安全に停止したことの証拠であり、Voice runtime が公開稼働していることの証明ではありません。
+
+## Latest public template result
+
+公開Company starterは、Source IntakeからPromotion Candidateまでの6 Block、Company Operations MOC、manifestを含みます。標準ライブラリvalidatorで構造・権限境界・参照整合を検査できますが、Human approval、runtime deployment、Promotion、Current Truthを作るものではありません。
 
 ## Current boundary
 

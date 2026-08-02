@@ -7,6 +7,7 @@
 - [x] Privacy and publication boundary
 - [x] Minimal Company manifest / Block / MOC schemas
 - [x] Dependency-free validator and negative tests
+- [x] Source-to-Promotion-Candidate governance starter and walkthrough
 
 ## Required before opening access
 

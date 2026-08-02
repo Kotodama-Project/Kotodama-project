@@ -31,6 +31,8 @@ python3 tools/validate_template_pack.py examples/company-starter
 
 JSON Schemaは`schemas/`にあります。stdlib validatorは、portable schemaだけでは表現しにくいcross-file参照と公開安全境界も検査します。
 
+validatorは汎用packの構造と安全境界を検査するため、すべてのpackへ同じBlock構成や順序を強制しません。公開Company starter固有の6 Block構成とMOC順序は、repository test `test_shipped_starter_exposes_the_minimal_governance_chain`で別に固定しています。
+
 ## Tests
 
 ```powershell
