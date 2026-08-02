@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/protected-compose-evidence-attestation.schema.json",
+  "title": "Protected Compose Evidence Attestation Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind", "version", "status", "namespace", "signer_identity_sha256",
+    "signer_role", "issued_at", "expires_at", "nonce_sha256",
+    "evidence_file_sha256", "claims", "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "protected_compose_evidence_attestation"},
+    "version": {"const": "1.0"},
+    "status": {"const": "PROTECTED_ATTESTATION_CANDIDATE"},
+    "namespace": {"const": "kotodama-compose-evidence"},
+    "signer_identity_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "signer_role": {"const": "independent_reviewer"},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "nonce_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evidence_file_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_authenticity_verified", "observation_freshness_verified",
+        "observation_atomicity_verified", "current_daemon_reachable_verified",
+        "current_local_image_available_verified", "clean_install_verified",
+        "services_started_verified", "migrations_verified",
+        "database_positive_checks_verified", "database_negative_checks_verified",
+        "application_least_privilege_verified", "restart_verified",
+        "rollback_verified", "backup_verified", "restore_verified",
+        "promotion_verified", "current_truth_changed", "final_human_go", "public_beta_go"
+      ],
+      "properties": {
+        "execution_authenticity_verified": {"const": false},
+        "observation_freshness_verified": {"const": false},
+        "observation_atomicity_verified": {"const": false},
+        "current_daemon_reachable_verified": {"const": false},
+        "current_local_image_available_verified": {"const": false},
+        "clean_install_verified": {"const": false},
+        "services_started_verified": {"const": false},
+        "migrations_verified": {"const": false},
+        "database_positive_checks_verified": {"const": false},
+        "database_negative_checks_verified": {"const": false},
+        "application_least_privilege_verified": {"const": false},
+        "restart_verified": {"const": false},
+        "rollback_verified": {"const": false},
+        "backup_verified": {"const": false},
+        "restore_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  }
+}

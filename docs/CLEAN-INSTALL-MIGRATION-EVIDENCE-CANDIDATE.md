@@ -45,6 +45,8 @@ Negative checks:
 
 hashが異なることは、実在する別人や独立reviewを証明しません。protected runner側でidentity、署名、trust rootを検証する必要があります。
 
+保存候補へOpenSSH署名、許可署名者、限定evaluation clock、nonce snapshotを重ねる次段は[Protected Compose Evidence Attestation](PROTECTED-COMPOSE-EVIDENCE-ATTESTATION.md)です。そのpoint-in-time PASSもreported checksの真実性や原子的nonce予約を証明しません。
+
 ## 保存候補を検査する
 
 ```powershell
