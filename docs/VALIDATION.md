@@ -14,6 +14,15 @@ python3 tools/validate_template_pack.py examples/company-starter
 
 成功時は終了code `0`、失敗時は`1`、使い方の誤りは`2`を返します。標準出力は機械可読JSONです。
 
+新しい作業copyを作る場合は、先にinitializerを使えます。
+
+```powershell
+New-Item -ItemType Directory -Force work | Out-Null
+python tools/create_company_pack.py my-company work/my-company
+```
+
+initializerはshipped starterをpreflightし、既存targetを拒否し、manifest IDと全該当MOCを再束縛し、生成後にこのvalidatorを実行します。任意の既存packを更新・migrationするツールではありません。
+
 ## What it validates
 
 - `manifest.json`と必須governance fields
@@ -63,3 +72,5 @@ python -m unittest discover -s tests -v
 ## Boundary
 
 PASSはtemplate packの構造と限定された公開安全条件だけを示します。`human_intent_ref`は非空文字列であることだけを検査し、locator形式、参照先の存在・真正性・承認状態は証明しません。実際のgoverned recordとは別途reconciliationが必要です。runtime deployment、provider E2E、実データ安全性、Human approval、Promotion、Current Truth、Public Beta GOの証明でもありません。
+
+initializerのPASSも同じ境界です。copy、ID再束縛、構造検証を示すだけで、組織固有のHuman Intent、owner、保持方針、実行権限を確定しません。

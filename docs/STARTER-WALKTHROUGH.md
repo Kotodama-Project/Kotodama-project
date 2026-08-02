@@ -2,25 +2,35 @@
 
 この手順は、公開starterを自分の会社・チーム用の**候補pack**として試すためのものです。約3分、Python標準ライブラリだけで構造検証できます。
 
-## 1. starterをcopyする
+## 1. initializerで作業copyを作る
 
 repository rootから実行します。
 
 ```powershell
 New-Item -ItemType Directory -Force work | Out-Null
-Copy-Item examples\company-starter work\my-company -Recurse
+python tools\create_company_pack.py my-company work\my-company
 ```
 
 ```bash
 mkdir -p work
-cp -R examples/company-starter work/my-company
+python3 tools/create_company_pack.py my-company work/my-company
 ```
 
-元のexampleを直接書き換えず、作業copyを使うと差分とrollbackが明確になります。
+initializerはPython標準ライブラリだけで動き、次を一度に行います。
+
+- 元のexampleを変更せず、新しいtargetへcopyする
+- manifestのpack IDと、manifest内MOCの先頭refを同じIDへ再束縛する
+- 生成packをvalidatorで検証する
+- targetが既に存在する場合は上書きせず停止する
+- 生成途中で失敗した場合は、この実行が新規作成したtargetだけを除去する
+
+targetの親directoryは先に作成してください。既存の作業copyを更新するコマンドではありません。
+
+手動でcopyする場合は、元のexampleを直接書き換えず、`manifest.json`とmanifest内の全MOCを一緒に変更してください。
 
 ## 2. manifestで正本の場所を決める
 
-`work/my-company/manifest.json`で最初に変更するのは次の3点です。
+initializerが`id`を設定した後、`work/my-company/manifest.json`で最初に確認・変更するのは次の3点です。
 
 | Field | 書くもの | 書かないもの |
 |---|---|---|
@@ -30,7 +40,7 @@ cp -R examples/company-starter work/my-company
 
 `human_intent_ref`はlocatorのplaceholderです。このvalidatorは参照先の存在、真正性、承認を確認しません。
 
-`id`を変更したら、`mocs/`にある3つのJSONの先頭refも同じIDへ変更します。MOCの参照先が存在しなければvalidatorはfail closedします。
+後から`id`を変更する場合は、manifest内に列挙された全MOCの先頭refも同じIDへ変更します。MOCの参照先が存在しなければvalidatorはfail closedします。initializerを再実行して既存targetを上書きすることはできません。
 
 ## 3. flow contractとMOC順にBlockを読む
 

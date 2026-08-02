@@ -30,4 +30,11 @@ python tools/validate_template_pack.py examples/company-starter
 
 これはsyntheticな構造例です。provider接続、runtime deployment、incident monitoring、recovery execution、権限付与、Promotion、Public Beta GOは行いません。
 
-copyして編集する手順は[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)を参照してください。
+元exampleを変更せず、IDを再束縛した作業copyを作るには次を使います。既存targetは上書きしません。
+
+```powershell
+New-Item -ItemType Directory -Force work | Out-Null
+python tools/create_company_pack.py my-company work/my-company
+```
+
+詳しい編集手順は[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)を参照してください。

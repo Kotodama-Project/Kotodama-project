@@ -42,4 +42,4 @@ MOCの入口例:
 
 3つともnavigation-onlyです。別のSSOT、実行権限、公開GOを作りません。
 
-最短の導入手順は[Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)にあります。
+最短の導入手順は[Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)にあります。`tools/create_company_pack.py`を使うと、元exampleと既存targetを上書きせず、pack IDとMOC参照をまとめて再束縛して検証できます。
