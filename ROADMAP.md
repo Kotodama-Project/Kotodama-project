@@ -10,6 +10,7 @@
 - [x] Source-to-Promotion-Candidate governance starter and walkthrough
 - [x] Machine-verified flow inputs, Block sequence, dataflow, and MOC binding
 - [x] Seven governed record contracts with exact Block-output coverage
+- [x] Capability Grant, Change Execution, and human Promotion Decision seams
 
 ## Required before opening access
 

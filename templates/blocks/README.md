@@ -27,3 +27,11 @@ Blockを単独で読んだときに、次の質問へ答えられるようにし
 6. どう停止し、どう戻すか。
 
 最小形式は[Work Order Block](work-order-block.md)を参照してください。
+
+## Public starterで動くauthority chain
+
+- [`work-order.json`](../../examples/company-starter/blocks/work-order.json): 実行権限を含まない作業候補
+- [`capability-grant.json`](../../examples/company-starter/blocks/capability-grant.json): exact Work Orderへ最小権限候補を束縛
+- [`change-execution.json`](../../examples/company-starter/blocks/change-execution.json): Work OrderとGrantが一致するときだけChange Candidateを生成
+- [`promotion-gate.json`](../../examples/company-starter/blocks/promotion-gate.json): receipt群をPromotion Candidateへ集約
+- [`promotion-decision.json`](../../examples/company-starter/blocks/promotion-decision.json): 人間の判断証拠を記録するがPromotion自体は実行しない

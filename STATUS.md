@@ -21,7 +21,7 @@ Updated: 2026-08-03
 
 ## Latest public template result
 
-公開Company starterは、Source IntakeからPromotion Candidateまでの6 Block、全出力を受ける7種のGoverned Record契約、Company Operations MOC、manifestを含みます。標準ライブラリvalidatorで構造・権限境界・参照整合に加え、flowの全Block coverage、前段出力、MOC順序、Record artifactの一対一coverageを検査できますが、Human approval、runtime deployment、Promotion、Current Truthを作るものではありません。
+公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations MOC、manifestを含みます。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、runtime deployment、Promotion、Current Truthを作るものではありません。
 
 ## Current boundary
 

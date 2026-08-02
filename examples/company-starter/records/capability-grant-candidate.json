@@ -1,0 +1,33 @@
+{
+  "kind": "record_template",
+  "spec_version": "0.1",
+  "id": "capability-grant-candidate-template",
+  "status": "example",
+  "artifact": "capability_grant_candidate",
+  "purpose": "Bind one subject and a minimal action set to an exact Work Order without changing live credentials or permissions.",
+  "canonical_owner": "governed-git",
+  "required_fields": [
+    "grant_id",
+    "work_order_ref",
+    "subject_ref",
+    "target",
+    "allowed_actions",
+    "denied_actions",
+    "issued_by_role",
+    "authority_evidence_ref",
+    "issued_at",
+    "expires_at",
+    "rollback",
+    "stop_conditions"
+  ],
+  "authority": {
+    "creator_role": "capability-grant-recorder",
+    "verifier_role": "execution-authority",
+    "promotion_required_for_current_truth": true
+  },
+  "retention": {
+    "mode": "policy_ref",
+    "policy_ref": "retention-policy:replace-with-governed-reference"
+  },
+  "denied_claims": ["self_approval", "self_promotion", "current_truth_without_promotion"]
+}

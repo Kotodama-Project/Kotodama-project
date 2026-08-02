@@ -50,7 +50,7 @@ class TemplatePackCliTests(unittest.TestCase):
         summary = json.loads(result.stdout)
         self.assertEqual(summary["status"], "PASS")
         self.assertEqual(summary["pack_id"], "kotodama-company-starter")
-        self.assertEqual(summary["validated_files"], 15)
+        self.assertEqual(summary["validated_files"], 20)
 
     def test_shipped_starter_validates_source_record_template(self) -> None:
         pack = EXAMPLES / "company-starter"
@@ -66,9 +66,11 @@ class TemplatePackCliTests(unittest.TestCase):
                 "records/intent-candidate.json",
                 "records/decision-record.json",
                 "records/work-order-candidate.json",
+                "records/capability-grant-candidate.json",
                 "records/change-candidate.json",
                 "records/verification-receipt.json",
                 "records/promotion-candidate.json",
+                "records/promotion-decision-record.json",
             ],
         )
         self.assertEqual(source_record["kind"], "record_template")
@@ -240,8 +242,11 @@ class TemplatePackCliTests(unittest.TestCase):
                 "blocks/intent-candidate.json",
                 "blocks/human-decision.json",
                 "blocks/work-order.json",
+                "blocks/capability-grant.json",
+                "blocks/change-execution.json",
                 "blocks/verification-receipt.json",
                 "blocks/promotion-gate.json",
+                "blocks/promotion-decision.json",
             ],
         )
         self.assertEqual(
@@ -252,9 +257,50 @@ class TemplatePackCliTests(unittest.TestCase):
                 "intent-candidate-starter",
                 "human-decision-starter",
                 "work-order-starter",
+                "capability-grant-starter",
+                "change-execution-starter",
                 "verification-receipt-starter",
                 "promotion-gate-starter",
+                "promotion-decision-starter",
             ],
+        )
+
+    def test_starter_requires_capability_before_change_and_human_promotion_decision(self) -> None:
+        pack = EXAMPLES / "company-starter"
+        work_order = json.loads(
+            (pack / "blocks" / "work-order.json").read_text(encoding="utf-8")
+        )
+        capability = json.loads(
+            (pack / "blocks" / "capability-grant.json").read_text(encoding="utf-8")
+        )
+        change = json.loads(
+            (pack / "blocks" / "change-execution.json").read_text(encoding="utf-8")
+        )
+        promotion_decision = json.loads(
+            (pack / "blocks" / "promotion-decision.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(work_order["outputs"], ["work_order_candidate"])
+        self.assertEqual(
+            capability["inputs"],
+            ["work_order_candidate", "capability_grant_evidence"],
+        )
+        self.assertEqual(capability["outputs"], ["capability_grant_candidate"])
+        self.assertEqual(
+            change["inputs"],
+            [
+                "work_order_candidate",
+                "capability_grant_candidate",
+                "candidate_revision",
+            ],
+        )
+        self.assertEqual(change["outputs"], ["change_candidate"])
+        self.assertEqual(
+            promotion_decision["inputs"],
+            ["promotion_candidate", "human_promotion_decision_evidence"],
+        )
+        self.assertEqual(
+            promotion_decision["outputs"], ["promotion_decision_record"]
         )
 
     def test_shipped_starter_declares_its_flow_contract(self) -> None:
@@ -272,15 +318,20 @@ class TemplatePackCliTests(unittest.TestCase):
                     "access_or_consent_ref",
                     "retention_rule",
                     "human_decision_evidence",
+                    "capability_grant_evidence",
                     "candidate_revision",
+                    "human_promotion_decision_evidence",
                 ],
                 "sequence": [
                     "source-intake-starter",
                     "intent-candidate-starter",
                     "human-decision-starter",
                     "work-order-starter",
+                    "capability-grant-starter",
+                    "change-execution-starter",
                     "verification-receipt-starter",
                     "promotion-gate-starter",
+                    "promotion-decision-starter",
                 ],
                 "moc_ref": "company-operations-starter",
             },
@@ -297,8 +348,11 @@ class TemplatePackCliTests(unittest.TestCase):
                 "intent-candidate-starter",
                 "work-order-starter",
                 "human-decision-starter",
+                "capability-grant-starter",
+                "change-execution-starter",
                 "verification-receipt-starter",
                 "promotion-gate-starter",
+                "promotion-decision-starter",
             ]
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             result = self.run_pack(pack)
@@ -307,6 +361,94 @@ class TemplatePackCliTests(unittest.TestCase):
         summary = json.loads(result.stdout)
         self.assertIn(
             "manifest flow block work-order-starter has unavailable input: decision_record",
+            summary["errors"],
+        )
+
+    def test_flow_rejects_change_before_capability_grant(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            sequence = manifest["flow"]["sequence"]
+            grant_index = sequence.index("capability-grant-starter")
+            change_index = sequence.index("change-execution-starter")
+            sequence[grant_index], sequence[change_index] = (
+                sequence[change_index],
+                sequence[grant_index],
+            )
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "manifest flow block change-execution-starter has unavailable input: capability_grant_candidate",
+            summary["errors"],
+        )
+
+    def test_flow_entry_inputs_cannot_shadow_protected_block_outputs(self) -> None:
+        cases = (
+            (
+                "capability_grant_candidate",
+                "capability-grant-starter",
+                "change-execution-starter",
+            ),
+            (
+                "promotion_candidate",
+                "promotion-gate-starter",
+                "promotion-decision-starter",
+            ),
+        )
+        for artifact, producer_id, consumer_id in cases:
+            with self.subTest(artifact=artifact):
+                with tempfile.TemporaryDirectory() as temporary:
+                    pack = Path(temporary) / "pack"
+                    shutil.copytree(EXAMPLES / "company-starter", pack)
+                    manifest_path = pack / "manifest.json"
+                    manifest = json.loads(
+                        manifest_path.read_text(encoding="utf-8")
+                    )
+                    sequence = manifest["flow"]["sequence"]
+                    producer_index = sequence.index(producer_id)
+                    consumer_index = sequence.index(consumer_id)
+                    sequence[producer_index], sequence[consumer_index] = (
+                        sequence[consumer_index],
+                        sequence[producer_index],
+                    )
+                    manifest["flow"]["entry_inputs"].append(artifact)
+                    manifest_path.write_text(
+                        json.dumps(manifest), encoding="utf-8"
+                    )
+                    moc_path = pack / "mocs" / "company-operations.json"
+                    moc = json.loads(moc_path.read_text(encoding="utf-8"))
+                    moc["refs"] = [manifest["id"], *sequence]
+                    moc_path.write_text(json.dumps(moc), encoding="utf-8")
+                    result = self.run_pack(pack)
+
+            self.assertEqual(result.returncode, 1)
+            summary = json.loads(result.stdout)
+            self.assertIn(
+                f"manifest flow entry input shadows Block output: {artifact}",
+                summary["errors"],
+            )
+
+    def test_promotion_decision_requires_human_evidence_entry(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(EXAMPLES / "company-starter", pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["flow"]["entry_inputs"].remove(
+                "human_promotion_decision_evidence"
+            )
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "manifest flow block promotion-decision-starter has unavailable input: human_promotion_decision_evidence",
             summary["errors"],
         )
 
@@ -437,6 +579,41 @@ class TemplatePackCliTests(unittest.TestCase):
             "public_beta must remain NO_GO_UNPUBLISHED",
             summary["errors"],
         )
+
+    def test_template_blocks_and_records_cannot_output_governed_terminal_state(self) -> None:
+        forbidden = (
+            "capability_grant",
+            "promotion",
+            "promoted",
+            "current_truth",
+            "public_go",
+            "final_human_go",
+        )
+        for artifact in forbidden:
+            with self.subTest(artifact=artifact):
+                with tempfile.TemporaryDirectory() as temporary:
+                    pack = Path(temporary) / "pack"
+                    shutil.copytree(EXAMPLES / "company-starter", pack)
+                    block_path = pack / "blocks" / "source-intake.json"
+                    block = json.loads(block_path.read_text(encoding="utf-8"))
+                    block["outputs"] = [artifact]
+                    block_path.write_text(json.dumps(block), encoding="utf-8")
+                    record_path = pack / "records" / "source-record.json"
+                    record = json.loads(record_path.read_text(encoding="utf-8"))
+                    record["artifact"] = artifact
+                    record_path.write_text(json.dumps(record), encoding="utf-8")
+                    result = self.run_pack(pack)
+
+            self.assertEqual(result.returncode, 1)
+            summary = json.loads(result.stdout)
+            self.assertIn(
+                f"blocks/source-intake.json forbidden output artifact: {artifact}",
+                summary["errors"],
+            )
+            self.assertIn(
+                f"records/source-record.json forbidden record artifact: {artifact}",
+                summary["errors"],
+            )
 
     def test_moc_is_navigation_only_and_references_known_ids(self) -> None:
         result = self.run_validator("invalid-moc")

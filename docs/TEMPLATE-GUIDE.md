@@ -84,7 +84,7 @@ Source Evidence
 
 会話、Discord投稿、音声、Notion、Obsidianは入口や表示面として使えますが、それだけでDecisionやCurrent Truthにはなりません。
 
-各Blockの`outputs`は、manifestの`records`にあるGoverned Recordの`artifact`へ一対一で接続します。公開starterでは7種を用意していますが、これは本番データではなく記録契約です。詳細は[Governed Record Catalog](../templates/records/README.md)を参照してください。
+各Blockの`outputs`は、manifestの`records`にあるGoverned Recordの`artifact`へ一対一で接続します。公開starterでは9種を用意していますが、これは本番データではなく記録契約です。Work OrderとCapability Grant、Promotion CandidateとHuman Promotion Decisionを別Recordにし、権限と判断を暗黙に補完しません。詳細は[Governed Record Catalog](../templates/records/README.md)を参照してください。
 
 ### 5. 検証できる状態で配布する
 
@@ -112,7 +112,7 @@ flowchart LR
 
 - プロジェクトの目的、現在状態、ロードマップ
 - このテンプレート利用ガイド
-- Source Intake、Intent Candidate、Human Decision、Work Order、Verification Receipt、Promotion Gateを含むCompany starter
+- Source Intake、Intent Candidate、Human Decision、Work Order、Capability Grant、Change Execution、Verification Receipt、Promotion Gate、Promotion Decisionを含むCompany starter
 - Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
 
 これらは構造検証できるstarterです。まだclean installできるCompany OS一式ではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)を参照してください。

@@ -7,7 +7,7 @@
 | [Company](company/README.md) | 会社・チーム全体の構造と導入順 | validated JSON governance starter available |
 | [Blocks](blocks/README.md) | 小さな実行・判断・検証部品 | Markdown design example |
 | [MOCs](mocs/company-operations-moc.md) | 目的別の入口と読み順 | Markdown navigation example |
-| [Records](records/README.md) | Block出力を証拠鎖へ残す記録契約 | 7種のJSON schema-backed starter available |
+| [Records](records/README.md) | Block出力を証拠鎖へ残す記録契約 | 9種のJSON schema-backed starter available |
 
 ## Planned catalog
 

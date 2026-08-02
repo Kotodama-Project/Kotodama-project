@@ -41,9 +41,12 @@ flowchart LR
   S["Source Intake"] --> I["Intent Candidate"]
   I --> D["Human Decision record"]
   D --> W["Work Order candidate"]
-  W --> V["Verification Receipt"]
+  W --> G["Capability Grant candidate"]
+  G --> X["Change Candidate"]
+  X --> V["Verification Receipt"]
   V --> P["Promotion Candidate"]
-  P -. "separate governed action" .-> C["Current Truth"]
+  P --> H["Human Promotion Decision"]
+  H -. "separate governed Promotion" .-> C["Current Truth"]
 ```
 
 MOCはDecision、Promotion、Current Truthを変更しません。
@@ -87,7 +90,7 @@ python3 tools/validate_template_pack.py work/my-company
 成功例:
 
 ```json
-{"errors": [], "pack_id": "my-company", "status": "PASS", "validated_files": 15}
+{"errors": [], "pack_id": "my-company", "status": "PASS", "validated_files": 20}
 ```
 
 ## 7. PASSの意味を狭く保つ

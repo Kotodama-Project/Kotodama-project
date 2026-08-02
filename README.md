@@ -37,7 +37,7 @@ python tools/validate_template_pack.py examples/company-starter
 python -m unittest discover -s tests -v
 ```
 
-starterには、Source Intake、Intent Candidate、Human Decision、Work Order、Verification Receipt、Promotion Gateの6 Blockと、その出力を受け取る7種のGoverned Recordテンプレートが含まれます。manifestのflow contractにより、外部入力、Block順序、入出力の接続、MOCの読み順、Block出力とRecordの一対一対応をvalidatorで検査できます。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
+starterには、Source IntakeからPromotion Decision Recordまでの9 Blockと、その出力を受け取る9種のGoverned Recordテンプレートが含まれます。Capability GrantなしのChange、Human evidenceなしのPromotion Decisionをflow contractが拒否し、Block順序、入出力、MOCの読み順、Block出力とRecordの一対一対応をvalidatorで検査できます。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
 
 ## Public Beta まで
 

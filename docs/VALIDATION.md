@@ -29,15 +29,17 @@ python3 tools/validate_template_pack.py examples/company-starter
 - MOCの必須field、string refs、`navigation_only` authority
 - ID型・重複と、MOCから未知IDへの参照拒否
 - `flow`宣言時のentry inputs、全Blockの一度ずつのcoverage、前段出力、MOC完全一致
+- Block出力名を外部entry inputとして再注入するdependency shadowingの拒否
 - Governed Recordのschema相当契約、authority、retention参照、mandatory denied claims
 - Governed Recordのcreator roleとverifier roleの分離
 - 全Block出力とmanifest内Record artifactの一対一coverage
+- templateからのactual Capability Grant、Promotion/`promoted`、Current Truth、Public GO/Final Human GO artifact出力の拒否
 
 JSON Schemaは`schemas/`にあります。stdlib validatorは、portable schemaだけでは表現しにくいcross-file参照と公開安全境界も検査します。
 
 JSON Schema単体のPASSはpackの検証完了を意味しません。作成roleと検証roleの分離、Block出力とRecordの一対一対応、pack全体のsecret scanなどのcross-field/cross-file境界を含め、公開前は必ずこのCLI validatorを実行してください。
 
-validatorは汎用packの構造と安全境界を検査するため、`flow`や`records`を持たない既存packへ同じBlock構成や順序を強制しません。`flow`を宣言したpackでは、そのpack自身が列挙したentry inputs、sequence、MOC bindingを検査します。`records`を宣言したpackでは、全Block出力との一対一対応を検査します。公開Company starter固有の6 Block ID、7 Record artifact、順序はrepository testでも固定しています。
+validatorは汎用packの構造と安全境界を検査するため、`flow`や`records`を持たない既存packへ同じBlock構成や順序を強制しません。`flow`を宣言したpackでは、そのpack自身が列挙したentry inputs、sequence、MOC bindingを検査します。`records`を宣言したpackでは、全Block出力との一対一対応を検査します。公開Company starter固有の9 Block ID、9 Record artifact、Capability-before-Change、Human-evidence-before-Promotion-Decisionの順序はrepository testでも固定しています。
 
 ## Tests
 

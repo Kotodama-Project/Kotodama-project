@@ -21,8 +21,11 @@
     "blocks/intent-candidate.json",
     "blocks/human-decision.json",
     "blocks/work-order.json",
+    "blocks/capability-grant.json",
+    "blocks/change-execution.json",
     "blocks/verification-receipt.json",
-    "blocks/promotion-gate.json"
+    "blocks/promotion-gate.json",
+    "blocks/promotion-decision.json"
   ],
   "mocs": ["mocs/company-operations.json"],
   "records": [
@@ -30,9 +33,11 @@
     "records/intent-candidate.json",
     "records/decision-record.json",
     "records/work-order-candidate.json",
+    "records/capability-grant-candidate.json",
     "records/change-candidate.json",
     "records/verification-receipt.json",
-    "records/promotion-candidate.json"
+    "records/promotion-candidate.json",
+    "records/promotion-decision-record.json"
   ],
   "flow": {
     "entry_inputs": [
@@ -40,15 +45,20 @@
       "access_or_consent_ref",
       "retention_rule",
       "human_decision_evidence",
-      "candidate_revision"
+      "capability_grant_evidence",
+      "candidate_revision",
+      "human_promotion_decision_evidence"
     ],
     "sequence": [
       "source-intake-starter",
       "intent-candidate-starter",
       "human-decision-starter",
       "work-order-starter",
+      "capability-grant-starter",
+      "change-execution-starter",
       "verification-receipt-starter",
-      "promotion-gate-starter"
+      "promotion-gate-starter",
+      "promotion-decision-starter"
     ],
     "moc_ref": "company-operations-starter"
   },

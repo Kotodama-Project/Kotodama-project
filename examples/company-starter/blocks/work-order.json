@@ -3,9 +3,9 @@
   "spec_version": "0.1",
   "id": "work-order-starter",
   "status": "example",
-  "purpose": "Turn an approved decision into a bounded local change candidate.",
+  "purpose": "Turn an approved decision into a bounded Work Order candidate without granting execution authority.",
   "inputs": ["source_record", "decision_record", "candidate_revision"],
-  "outputs": ["work_order_candidate", "change_candidate"],
+  "outputs": ["work_order_candidate"],
   "authority": {
     "owner_role": "human-intent-owner",
     "allowed_actions": ["local_preview", "synthetic_validation"],

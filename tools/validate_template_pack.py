@@ -39,6 +39,14 @@ ALLOWED_BLOCK_ACTIONS = {
     "draft",
     "analyze",
 }
+FORBIDDEN_TERMINAL_ARTIFACTS = {
+    "capability_grant",
+    "promotion",
+    "promoted",
+    "current_truth",
+    "public_go",
+    "final_human_go",
+}
 REQUIRED_MANIFEST_FIELDS = {
     "kind",
     "spec_version",
@@ -332,7 +340,12 @@ def validate_block(relative: str, document: dict[str, Any], errors: list[str]) -
     if not is_non_empty_string(document.get("purpose")):
         errors.append(f"{relative} field purpose must be a non-empty string")
     require_string_list(document, "inputs", errors, relative, minimum=1, unique=True)
-    require_string_list(document, "outputs", errors, relative, minimum=1, unique=True)
+    outputs = require_string_list(
+        document, "outputs", errors, relative, minimum=1, unique=True
+    )
+    for output in outputs:
+        if output in FORBIDDEN_TERMINAL_ARTIFACTS:
+            errors.append(f"{relative} forbidden output artifact: {output}")
     require_string_list(
         document, "stop_conditions", errors, relative, minimum=1, unique=True
     )
@@ -431,6 +444,8 @@ def validate_record(relative: str, document: dict[str, Any], errors: list[str]) 
     artifact = document.get("artifact")
     if not is_non_empty_string(artifact) or ARTIFACT_PATTERN.fullmatch(artifact) is None:
         errors.append(f"{relative} field artifact must use snake_case")
+    elif artifact in FORBIDDEN_TERMINAL_ARTIFACTS:
+        errors.append(f"{relative} forbidden record artifact: {artifact}")
     for field in ("purpose", "canonical_owner"):
         if not is_non_empty_string(document.get(field)):
             errors.append(f"{relative} field {field} must be a non-empty string")
@@ -505,7 +520,17 @@ def validate_flow_dataflow(
         errors.append(
             "manifest flow sequence must contain every manifest block exactly once"
         )
-    available = set(collections["flow_entry_inputs"])
+    declared_outputs = {
+        output
+        for block in blocks_by_id.values()
+        if isinstance(block.get("outputs"), list)
+        for output in block["outputs"]
+        if is_non_empty_string(output)
+    }
+    entry_inputs = set(collections["flow_entry_inputs"])
+    for shadowed in sorted(entry_inputs & declared_outputs):
+        errors.append(f"manifest flow entry input shadows Block output: {shadowed}")
+    available = entry_inputs - declared_outputs
     for block_id in sequence:
         block = blocks_by_id.get(block_id)
         if block is None:

@@ -1,0 +1,25 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "promotion-decision-starter",
+  "status": "example",
+  "purpose": "Record a human promotion decision against one Promotion Candidate without performing Promotion.",
+  "inputs": ["promotion_candidate", "human_promotion_decision_evidence"],
+  "outputs": ["promotion_decision_record"],
+  "authority": {
+    "owner_role": "promotion-authority",
+    "allowed_actions": ["read_only", "analyze", "draft"],
+    "denied_actions": ["self_approval", "self_promotion", "current_truth_write"],
+    "expires_at": "2099-01-01T00:00:00Z"
+  },
+  "verification": {
+    "success_conditions": ["human decision evidence, exact candidate digest, approver role, outcome, and review condition are bound"],
+    "negative_tests": ["missing human evidence, candidate drift, approver conflict, or unresolved gate blocks the decision"],
+    "receipt_required": true
+  },
+  "rollback": {
+    "action": "invalidate the unpromoted decision record and return to Promotion Candidate review",
+    "verify": "no Promotion or Current Truth write occurred"
+  },
+  "stop_conditions": ["human decision evidence missing", "candidate binding mismatch", "independence rule not satisfied"]
+}

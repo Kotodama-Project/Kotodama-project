@@ -1,0 +1,30 @@
+{
+  "kind": "record_template",
+  "spec_version": "0.1",
+  "id": "promotion-decision-record-template",
+  "status": "example",
+  "artifact": "promotion_decision_record",
+  "purpose": "Record an explicit human decision on one Promotion Candidate without performing Promotion or changing Current Truth.",
+  "canonical_owner": "governed-git",
+  "required_fields": [
+    "promotion_decision_id",
+    "promotion_candidate_ref",
+    "candidate_digest",
+    "decision",
+    "approver_role",
+    "human_evidence_ref",
+    "decided_at",
+    "review_condition",
+    "unresolved_gates"
+  ],
+  "authority": {
+    "creator_role": "promotion-decision-recorder",
+    "verifier_role": "promotion-authority",
+    "promotion_required_for_current_truth": true
+  },
+  "retention": {
+    "mode": "policy_ref",
+    "policy_ref": "retention-policy:replace-with-governed-reference"
+  },
+  "denied_claims": ["self_approval", "self_promotion", "current_truth_without_promotion"]
+}

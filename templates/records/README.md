@@ -9,9 +9,11 @@ Source Record
   -> Intent Candidate
   -> Decision Record
   -> Work Order Candidate
+  -> Capability Grant Candidate
   -> Change Candidate
   -> Verification Receipt
   -> Promotion Candidate
+  -> Promotion Decision Record
   -> separate governed Promotion
   -> Current Truth
 ```
@@ -20,7 +22,7 @@ Source Record
 
 ## この公開starterで今できること
 
-`examples/company-starter/records/` に次の7契約があります。
+`examples/company-starter/records/` に次の9契約があります。
 
 | Artifact | 主な役割 | Canonical owner example |
 |---|---|---|
@@ -28,9 +30,11 @@ Source Record
 | `intent_candidate` | Sourceから読み取った意図候補を未承認のまま記録 | Human Intent owner |
 | `decision_record` | 人間の判断と根拠を記録 | Governed Git |
 | `work_order_candidate` | target、action、revision、effects、rollback、期限を束縛 | Governed Git |
+| `capability_grant_candidate` | subjectと最小actionをexact Work Orderへ期限付きで束縛 | Governed Git |
 | `change_candidate` | Work Orderの下で生成した差分・成果物を記録 | Evidence Store |
 | `verification_receipt` | exact candidateへのcheck、negative test、effectを記録 | Governed Git |
 | `promotion_candidate` | Promotion審査に必要なreceiptを集約 | Governed Git |
+| `promotion_decision_record` | 人間のPromotion判断を記録するがPromotionは実行しない | Governed Git |
 
 公開validatorは、Recordの必須field、snake_case、作成roleと検証roleの分離、retention参照、自己承認/自己Promotion禁止、および全Block出力との一対一対応を検査します。サンプルは値の入った本番Recordではなく、`required_fields`を示すテンプレートです。
 

@@ -1,0 +1,25 @@
+{
+  "kind": "block",
+  "spec_version": "0.1",
+  "id": "capability-grant-starter",
+  "status": "example",
+  "purpose": "Bind explicit execution authority to one Work Order without executing it or changing permissions.",
+  "inputs": ["work_order_candidate", "capability_grant_evidence"],
+  "outputs": ["capability_grant_candidate"],
+  "authority": {
+    "owner_role": "execution-authority",
+    "allowed_actions": ["read_only", "analyze", "draft"],
+    "denied_actions": ["self_grant", "credential_permission_change", "unbound_execution"],
+    "expires_at": "2099-01-01T00:00:00Z"
+  },
+  "verification": {
+    "success_conditions": ["subject, target, actions, Work Order, expiry, rollback, and stop conditions are bound"],
+    "negative_tests": ["missing authority evidence, subject mismatch, over-broad action, or expired grant is rejected"],
+    "receipt_required": true
+  },
+  "rollback": {
+    "action": "discard the unactivated Capability Grant candidate",
+    "verify": "no execution, permission, credential, or Current Truth change occurred"
+  },
+  "stop_conditions": ["authority evidence missing", "scope exceeds Work Order", "expiry or candidate drift"]
+}

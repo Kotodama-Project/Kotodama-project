@@ -11,7 +11,10 @@
     "intent-candidate-starter",
     "human-decision-starter",
     "work-order-starter",
+    "capability-grant-starter",
+    "change-execution-starter",
     "verification-receipt-starter",
-    "promotion-gate-starter"
+    "promotion-gate-starter",
+    "promotion-decision-starter"
   ]
 }
