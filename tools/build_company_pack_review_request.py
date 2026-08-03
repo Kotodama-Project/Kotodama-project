@@ -7,6 +7,7 @@ import sys
 
 sys.dont_write_bytecode = True
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -89,6 +90,12 @@ def build_review_request(bundle_path: Path, pack_dir: Path) -> dict[str, Any]:
     if loaded is None:
         return refusal("SOURCE_DRIFT_DETECTED")
     saved_bundle, saved_bytes = loaded
+    if (
+        hashlib.sha256(saved_bytes).hexdigest()
+        != first_verification["saved_bundle"]["sha256"]
+        or len(saved_bytes) != first_verification["saved_bundle"]["bytes"]
+    ):
+        return refusal("SOURCE_DRIFT_DETECTED")
 
     try:
         first_customization = check_customization(pack_dir)

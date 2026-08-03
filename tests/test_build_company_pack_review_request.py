@@ -4,10 +4,16 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+sys.path.insert(0, str(TOOLS))
+import build_company_pack_review_request as request_builder
+
+
 REQUEST_BUILDER = ROOT / "tools" / "build_company_pack_review_request.py"
 BUNDLE_BUILDER = ROOT / "tools" / "build_company_pack_review_bundle.py"
 CREATOR = ROOT / "tools" / "create_company_pack.py"
@@ -192,6 +198,24 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
                 for definition in schema["properties"]["claims"]["properties"].values()
             )
         )
+
+    def test_bundle_file_change_during_read_is_refused_as_source_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pack, _human_intent_ref, _retention_policy_ref = self.create_ready_pack(root)
+            bundle_path = root / "saved-review-bundle.json"
+            bundle, bundle_bytes = self.save_bundle(pack, bundle_path)
+            with mock.patch.object(
+                request_builder,
+                "load_valid_saved_bundle",
+                return_value=(bundle, bundle_bytes + b" "),
+            ):
+                request = request_builder.build_review_request(bundle_path, pack)
+
+        self.assertEqual(request["status"], "REQUEST_REFUSED")
+        self.assertEqual(request["reason"], "SOURCE_DRIFT_DETECTED")
+        self.assertIsNone(request["candidate_binding"])
+        self.assertEqual(request["review_request"]["items"], [])
 
 
 if __name__ == "__main__":
