@@ -82,7 +82,10 @@ def load_valid_saved_bundle(path: Path) -> tuple[dict[str, Any], bytes] | None:
 
 
 def build_review_request(bundle_path: Path, pack_dir: Path) -> dict[str, Any]:
-    first_verification = verify_saved_bundle(bundle_path, pack_dir)
+    try:
+        first_verification = verify_saved_bundle(bundle_path, pack_dir)
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return refusal("BUNDLE_VERIFICATION_FAILED")
     if first_verification.get("status") != "MATCH":
         return refusal("BUNDLE_VERIFICATION_FAILED")
 

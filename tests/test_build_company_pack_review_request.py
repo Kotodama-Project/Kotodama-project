@@ -217,6 +217,21 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         self.assertIsNone(request["candidate_binding"])
         self.assertEqual(request["review_request"]["items"], [])
 
+    def test_unexpected_verifier_read_failure_is_a_safe_refusal(self) -> None:
+        with mock.patch.object(
+            request_builder,
+            "verify_saved_bundle",
+            side_effect=OSError("private operating system detail"),
+        ):
+            request = request_builder.build_review_request(
+                Path("private-bundle-name.json"), Path("private-pack-name")
+            )
+
+        self.assertEqual(request["status"], "REQUEST_REFUSED")
+        self.assertEqual(request["reason"], "BUNDLE_VERIFICATION_FAILED")
+        self.assertNotIn("private", json.dumps(request))
+        self.assertIsNone(request["candidate_binding"])
+
 
 if __name__ == "__main__":
     unittest.main()
