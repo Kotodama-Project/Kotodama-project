@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-decision-handoff.schema.json",
+  "title": "Kotodama Company Pack Review Decision Handoff Candidate",
+  "$comment": "This artifact only binds a verified review chain for later Human entry. It does not verify identity, authority, independence, approval, an overall Decision, evidence, Promotion, Current Truth, runtime readiness, Final Human GO, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "reason", "pack_id", "artifact_bindings", "candidate_binding", "source_checks", "review_summary", "unresolved_evidence", "decision_requirements", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "company_pack_review_decision_handoff"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["CANDIDATE_DECISION_HANDOFF", "HANDOFF_BUILD_REFUSED"]},
+    "reason": {"oneOf": [{"type": "null"}, {"enum": ["SOURCE_INVALID", "CHAIN_MISMATCH", "SOURCE_DRIFT_DETECTED"]}]},
+    "pack_id": {"oneOf": [{"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"}, {"type": "null"}]},
+    "artifact_bindings": {"oneOf": [{"$ref": "#/$defs/artifact_bindings"}, {"type": "null"}]},
+    "candidate_binding": {"oneOf": [{"$ref": "#/$defs/candidate_binding"}, {"type": "null"}]},
+    "source_checks": {"$ref": "#/$defs/source_checks"},
+    "review_summary": {"$ref": "#/$defs/review_summary"},
+    "unresolved_evidence": {"$ref": "#/$defs/unresolved_evidence"},
+    "decision_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "required_fields", "permitted_outcomes", "decision", "selected_outcome"],
+      "properties": {
+        "state": {"enum": ["HUMAN_DECISION_REQUIRED", "NOT_CREATED"]},
+        "required_fields": {"oneOf": [{"$ref": "#/$defs/required_decision_fields"}, {"type": "array", "maxItems": 0}]},
+        "permitted_outcomes": {"$ref": "#/$defs/permitted_outcomes"},
+        "decision": {"type": "null"},
+        "selected_outcome": {"type": "null"}
+      }
+    },
+    "claims": {"$ref": "#/$defs/claims"},
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "file_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "bytes"],
+      "properties": {
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1048576}
+      }
+    },
+    "artifact_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle", "bundle_verification", "request", "response", "response_verification"],
+      "properties": {
+        "bundle": {"$ref": "#/$defs/file_binding"},
+        "bundle_verification": {"$ref": "#/$defs/file_binding"},
+        "request": {"$ref": "#/$defs/file_binding"},
+        "response": {"$ref": "#/$defs/file_binding"},
+        "response_verification": {"$ref": "#/$defs/file_binding"}
+      }
+    },
+    "candidate_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["saved_bundle", "bundle_digest", "binding_count"],
+      "properties": {
+        "saved_bundle": {"$ref": "#/$defs/file_binding"},
+        "bundle_digest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "canonicalization", "value"],
+          "properties": {
+            "algorithm": {"const": "SHA-256"},
+            "canonicalization": {"const": "utf8-json-sort-keys-no-whitespace-v1"},
+            "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        },
+        "binding_count": {"const": 22}
+      }
+    },
+    "source_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_bundle", "response"],
+      "properties": {
+        "current_bundle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "matched_bindings"],
+          "properties": {
+            "status": {"enum": ["MATCH", "UNKNOWN"]},
+            "matched_bindings": {"type": "integer", "minimum": 0, "maximum": 22}
+          }
+        },
+        "response": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {"status": {"enum": ["ITEM_RESPONSES_MATCH_REQUEST", "UNKNOWN"]}}
+        }
+      }
+    },
+    "review_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "expected_items", "completed_items", "outcome_counts", "selected_outcome"],
+      "properties": {
+        "state": {"enum": ["ALL_ITEM_RESPONSES_PRESENT", "UNKNOWN"]},
+        "expected_items": {"type": "integer", "minimum": 0, "maximum": 46},
+        "completed_items": {"type": "integer", "minimum": 0, "maximum": 46},
+        "outcome_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["accept", "request_changes", "reject"],
+          "properties": {
+            "accept": {"type": "integer", "minimum": 0, "maximum": 46},
+            "request_changes": {"type": "integer", "minimum": 0, "maximum": 46},
+            "reject": {"type": "integer", "minimum": 0, "maximum": 46}
+          }
+        },
+        "selected_outcome": {"type": "null"}
+      }
+    },
+    "unresolved_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "item_count"],
+      "properties": {
+        "state": {"enum": ["EVIDENCE_REQUIRED", "UNKNOWN"]},
+        "item_count": {"type": "integer", "minimum": 0, "maximum": 5}
+      }
+    },
+    "permitted_outcomes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [{"const": "accept"}, {"const": "request_changes"}, {"const": "reject"}],
+      "items": false
+    },
+    "required_decision_fields": {
+      "type": "array",
+      "minItems": 20,
+      "maxItems": 20,
+      "prefixItems": [
+        {"const": "decision_id"},
+        {"const": "intent_candidate_ref"},
+        {"const": "reviewer_identity_ref"},
+        {"const": "reviewer_role"},
+        {"const": "reviewer_authority_ref"},
+        {"const": "reviewer_independence_ref"},
+        {"const": "reviewed_at"},
+        {"const": "decision_maker_identity_ref"},
+        {"const": "decision_maker_role"},
+        {"const": "decision_maker_authority_ref"},
+        {"const": "decided_at"},
+        {"const": "selected_outcome"},
+        {"const": "scope"},
+        {"const": "reason"},
+        {"const": "expires_at"},
+        {"const": "review_trigger"},
+        {"const": "unresolved_evidence_refs"},
+        {"const": "artifact_bindings"},
+        {"const": "candidate_binding"},
+        {"const": "retention_policy_ref"}
+      ],
+      "items": false
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewer_identity_verified", "reviewer_authority_verified", "reviewer_independence_verified", "decision_maker_identity_verified", "decision_maker_authority_verified", "governed_review_completed", "human_approval_verified", "candidate_bound_human_decision_verified", "external_evidence_verified", "promotion_verified", "current_truth_changed", "runtime_ready", "final_human_go", "public_beta_go"],
+      "properties": {
+        "reviewer_identity_verified": {"const": false},
+        "reviewer_authority_verified": {"const": false},
+        "reviewer_independence_verified": {"const": false},
+        "decision_maker_identity_verified": {"const": false},
+        "decision_maker_authority_verified": {"const": false},
+        "governed_review_completed": {"const": false},
+        "human_approval_verified": {"const": false},
+        "candidate_bound_human_decision_verified": {"const": false},
+        "external_evidence_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "runtime_ready": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    }
+  },
+  "allOf": [{
+    "if": {"properties": {"status": {"const": "CANDIDATE_DECISION_HANDOFF"}}},
+    "then": {"properties": {
+      "reason": {"type": "null"},
+      "pack_id": {"type": "string"},
+      "artifact_bindings": {"$ref": "#/$defs/artifact_bindings"},
+      "candidate_binding": {"$ref": "#/$defs/candidate_binding"},
+      "source_checks": {"properties": {"current_bundle": {"properties": {"status": {"const": "MATCH"}, "matched_bindings": {"const": 22}}}, "response": {"properties": {"status": {"const": "ITEM_RESPONSES_MATCH_REQUEST"}}}}},
+      "review_summary": {"properties": {"state": {"const": "ALL_ITEM_RESPONSES_PRESENT"}, "expected_items": {"const": 46}, "completed_items": {"const": 46}}},
+      "unresolved_evidence": {"properties": {"state": {"const": "EVIDENCE_REQUIRED"}, "item_count": {"const": 5}}},
+      "decision_requirements": {"properties": {"state": {"const": "HUMAN_DECISION_REQUIRED"}, "required_fields": {"$ref": "#/$defs/required_decision_fields"}}}
+    }},
+    "else": {"properties": {
+      "reason": {"type": "string"},
+      "pack_id": {"type": "null"},
+      "artifact_bindings": {"type": "null"},
+      "candidate_binding": {"type": "null"},
+      "source_checks": {"properties": {"current_bundle": {"properties": {"status": {"const": "UNKNOWN"}, "matched_bindings": {"const": 0}}}, "response": {"properties": {"status": {"const": "UNKNOWN"}}}}},
+      "review_summary": {"properties": {"state": {"const": "UNKNOWN"}, "expected_items": {"const": 0}, "completed_items": {"const": 0}, "outcome_counts": {"properties": {"accept": {"const": 0}, "request_changes": {"const": 0}, "reject": {"const": 0}}}}},
+      "unresolved_evidence": {"properties": {"state": {"const": "UNKNOWN"}, "item_count": {"const": 0}}},
+      "decision_requirements": {"properties": {"state": {"const": "NOT_CREATED"}, "required_fields": {"type": "array", "maxItems": 0}}}
+    }}
+  }]
+}

@@ -338,6 +338,95 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
         self.assertTrue(all(value is False for value in report["claims"].values()))
         self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
 
+    def test_handoff_schemas_close_the_decision_and_authority_boundaries(self) -> None:
+        handoff_schema = json.loads(
+            (
+                ROOT
+                / "schemas"
+                / "company-pack-review-decision-handoff.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        verification_schema = json.loads(
+            (
+                ROOT
+                / "schemas"
+                / "company-pack-review-decision-handoff-verification.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        for schema in (handoff_schema, verification_schema):
+            self.assertEqual(schema["additionalProperties"], False)
+            self.assertEqual(
+                schema["properties"]["public_beta"]["const"],
+                "NO_GO_UNPUBLISHED",
+            )
+            claims = schema["$defs"]["claims"]
+            self.assertEqual(claims["additionalProperties"], False)
+            self.assertEqual(
+                set(claims["properties"]),
+                {
+                    "reviewer_identity_verified",
+                    "reviewer_authority_verified",
+                    "reviewer_independence_verified",
+                    "decision_maker_identity_verified",
+                    "decision_maker_authority_verified",
+                    "governed_review_completed",
+                    "human_approval_verified",
+                    "candidate_bound_human_decision_verified",
+                    "external_evidence_verified",
+                    "promotion_verified",
+                    "current_truth_changed",
+                    "runtime_ready",
+                    "final_human_go",
+                    "public_beta_go",
+                },
+            )
+            self.assertTrue(
+                all(
+                    definition["const"] is False
+                    for definition in claims["properties"].values()
+                )
+            )
+
+        artifact_bindings = handoff_schema["$defs"]["artifact_bindings"]
+        self.assertEqual(artifact_bindings["additionalProperties"], False)
+        self.assertEqual(
+            artifact_bindings["required"],
+            [
+                "bundle",
+                "bundle_verification",
+                "request",
+                "response",
+                "response_verification",
+            ],
+        )
+        handoff_requirements = handoff_schema["properties"][
+            "decision_requirements"
+        ]
+        self.assertEqual(handoff_requirements["additionalProperties"], False)
+        self.assertEqual(
+            handoff_requirements["properties"]["decision"]["type"], "null"
+        )
+        self.assertEqual(
+            handoff_requirements["properties"]["selected_outcome"]["type"],
+            "null",
+        )
+        self.assertEqual(
+            handoff_schema["$defs"]["required_decision_fields"]["prefixItems"],
+            [{"const": field} for field in EXPECTED_DECISION_FIELDS],
+        )
+        verification_requirements = verification_schema["properties"][
+            "decision_requirements"
+        ]
+        self.assertEqual(verification_requirements["additionalProperties"], False)
+        self.assertEqual(
+            verification_requirements["properties"]["decision"]["type"], "null"
+        )
+        self.assertEqual(
+            verification_requirements["properties"]["selected_outcome"]["type"],
+            "null",
+        )
+
     def _mutate_json(self, path: Path, mutation) -> None:
         value = json.loads(path.read_bytes())
         mutation(value)
