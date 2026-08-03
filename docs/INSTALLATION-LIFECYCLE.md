@@ -14,6 +14,36 @@ JSON例:
 - [`compose-minimum.json`](../examples/installation-lifecycle/compose-minimum.json)
 - [`proxmox-segmented.json`](../examples/installation-lifecycle/proxmox-segmented.json)
 
+## 理想の導入ライフサイクルと現在の公開candidate
+
+### 理想の導入ライフサイクル
+
+理想的には、Company Templateと必要なBlock、Governed Record、MOCを
+選んだあと、同じcandidateへ次の6フェーズを束縛します。
+
+1. `preflight`で対象、能力、privacy境界をread-only確認する。
+2. `stage_candidate`で設定、revision、digestを固定する。
+3. exact Work Orderに束縛した`apply`で、限定したtargetだけへ変更する。
+4. `verify`でhealth、negative test、network境界、digestを照合する。
+5. 失敗または停止条件なら`rollback`し、戻ったことを再検証する。
+6. 本番と隔離した場所で`restore_rehearsal`を行い、回復可能性を確認する。
+
+この流れが完了したあとも、Promotion、Current Truth、Public Beta GOは
+別のcandidate-bound decisionです。導入が成功したことだけで公開許可には
+なりません。
+
+### 現在の公開candidate
+
+このrepositoryに同梱されているのは、secret-freeな2つのsanitized profile、
+そのschema、validator、runbook、syntheticな例だけです。公開candidateで
+確認できるのは、構造、参照、必要証拠の名前、stop condition、コマンドの
+導線です。実環境に束縛したtarget-bound runtime receipt、image取得、起動、
+restart、migration、restore、provider接続は含まれません。
+
+したがって、現在はprofileの契約を読んでlocal候補を準備する段階です。
+実環境へ進む場合は、private preflightとexact Work Orderを別に作り、
+fresh receiptが揃うまで`NO_GO_UNPUBLISHED`を維持します。
+
 ## 最初に選ぶ
 
 最初からruntimeを起動する必要はありません。Companyの仕事の型だけを
