@@ -1,5 +1,8 @@
 import copy
 import json
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,6 +12,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / "schemas" / "company-pack-protected-execution-request-handoff-candidate.schema.json"
 RUNBOOK = ROOT / "docs" / "PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md"
+VALIDATOR = ROOT / "tools" / "validate_company_pack_protected_execution_request_handoff.py"
 
 EXPECTED_PRIVATE_ROLES = [
     "source_record",
@@ -188,7 +192,7 @@ def request_candidate(*, refused: bool = False) -> dict:
             "physical_locator_embedded": False,
             "candidate_visibility": "PUBLIC_CONTRACT_OPAQUE_REFS",
         },
-        "recorded_at": "2026-08-03T20:30:01+09:00",
+        "recorded_at": "2026-08-03T20:29:59+09:00",
         "expires_at": "2026-08-03T21:30:01+09:00",
         "review_trigger": EXPECTED_REVIEW_TRIGGERS,
         "claims": {name: False for name in EXPECTED_CLAIMS},
@@ -344,6 +348,47 @@ class ProtectedExecutionRequestHandoffCandidateContractTests(unittest.TestCase):
         self.assertIn("expires_at", runbook)
         self.assertIn("schema alone does not prove", runbook)
 
+    def test_read_only_preflight_enforces_window_order_duration_and_parent_expiry(self) -> None:
+        def run(instance: dict) -> subprocess.CompletedProcess[str]:
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "candidate.json"
+                path.write_text(json.dumps(instance), encoding="utf-8")
+                return subprocess.run(
+                    [sys.executable, str(VALIDATOR), str(path)],
+                    cwd=ROOT,
+                    text=True,
+                    encoding="utf-8",
+                    capture_output=True,
+                    check=False,
+                )
+
+        valid = run(request_candidate())
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+        self.assertIn('"result": "PRECONDITIONS_MATCH_UNVERIFIED"', valid.stdout)
+        self.assertNotIn("20:30", valid.stdout)
+
+        reversed_window = request_candidate()
+        reversed_window["evaluation_window"]["not_before"], reversed_window["evaluation_window"]["expires_at"] = (
+            reversed_window["evaluation_window"]["expires_at"],
+            reversed_window["evaluation_window"]["not_before"],
+        )
+        refused = run(reversed_window)
+        self.assertEqual(refused.returncode, 2)
+        self.assertIn('"result": "REFUSED"', refused.stdout)
+        self.assertIn("WINDOW_ORDER_INVALID", refused.stdout)
+
+        wrong_duration = request_candidate()
+        wrong_duration["evaluation_window"]["requested_duration_seconds"] = 7200
+        refused = run(wrong_duration)
+        self.assertEqual(refused.returncode, 2)
+        self.assertIn("WINDOW_DURATION_MISMATCH", refused.stdout)
+
+        parent_expired = request_candidate()
+        parent_expired["expires_at"] = "2026-08-03T20:45:00+09:00"
+        refused = run(parent_expired)
+        self.assertEqual(refused.returncode, 2)
+        self.assertIn("WINDOW_EXCEEDS_PARENT_EXPIRY", refused.stdout)
+
     def test_runbook_and_public_navigation_links_are_discoverable(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
@@ -356,6 +401,8 @@ class ProtectedExecutionRequestHandoffCandidateContractTests(unittest.TestCase):
         for markdown in (readme, status, roadmap, receipt_runbook, template_guide, starter_readme):
             self.assertIn("PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md", markdown)
         self.assertIn("company-pack-protected-execution-request-handoff-candidate.schema.json", readme)
+        self.assertIn("validate_company_pack_protected_execution_request_handoff.py", readme)
+        self.assertIn("validate_company_pack_protected_execution_request_handoff.py", RUNBOOK.read_text(encoding="utf-8"))
         self.assertIn("NO_GO_UNPUBLISHED", RUNBOOK.read_text(encoding="utf-8"))
 
 

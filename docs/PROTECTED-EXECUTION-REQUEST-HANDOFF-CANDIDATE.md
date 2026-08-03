@@ -93,12 +93,24 @@ The public repository currently contains only:
 
 - the closed Draft 2020-12 schema;
 - contract tests using a real Draft 2020-12 validator and hostile instances;
+- a read-only cross-field preflight that refuses invalid window ordering,
+  duration, or parent-expiry relationships without echoing candidate values;
 - this documentation and navigation links from the Company starter material.
 
 There is no request builder, protected runner, private-store resolver, trusted
 clock adapter, nonce/replay store, deletion worker, signature verifier, or
 populated handoff. The R33 receipt schema remains the expected-output contract;
 this R35 document does not duplicate or activate it.
+
+The preflight is local and candidate-only:
+
+```powershell
+python tools/validate_company_pack_protected_execution_request_handoff.py <candidate.json>
+```
+
+`PRECONDITIONS_MATCH_UNVERIFIED` means only that the saved candidate satisfies
+the public schema and cross-field preconditions. It does not start or authorize
+execution, resolve private locators, establish trusted time, or emit a receipt.
 
 ## Verification and rollback boundary
 

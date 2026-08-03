@@ -625,6 +625,7 @@ machine-readable な完了境界ではありません。最新チェックリス
 - [Protected Source Binding Receipt Candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)
 - [Protected Execution Request / Handoff Candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) — opaque request shape only; no runner or private evidence
   Schema: `schemas/company-pack-protected-execution-request-handoff-candidate.schema.json`
+  Read-only preflight: `tools/validate_company_pack_protected_execution_request_handoff.py`
 
 ## Evidence and provenance
 
