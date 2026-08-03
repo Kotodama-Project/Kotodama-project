@@ -9,9 +9,10 @@
 | 1. Prepare | Pack preparer | draft Company pack | approval、authority |
 | 2. Bind | Candidate builder | saved review bundle + bundle file SHA-256 | reviewer identity、Decision |
 | 3. Verify | Independent reviewer | verification report + report file SHA-256 | approval、Promotion |
-| 4. Decide | authorized Human / policy | candidate-bound Decision Record | deployment result、Current Truth |
-| 5. Execute | bounded Work Order owner | Change Candidate + Verification Receipt | self-Promotion |
-| 6. Promote | separate promotion authority | Promotion Decision Record | automatic Public Beta GO |
+| 4. Request | Review coordinator | pending review request + request file SHA-256 | selected outcome、approval |
+| 5. Decide | authorized Human / policy | candidate-bound Decision Record | deployment result、Current Truth |
+| 6. Execute | bounded Work Order owner | Change Candidate + Verification Receipt | self-Promotion |
+| 7. Promote | separate promotion authority | Promotion Decision Record | automatic Public Beta GO |
 
 小さなチームで同じ人が複数roleを担当する場合も、artifactと時刻、どのauthorityで行ったかを分けて記録します。独立性が必須のlaneでは、同一人物を別role名で書くだけでは要件を満たしません。
 
@@ -65,7 +66,25 @@ verifierはduplicate JSON key、非finite JSON、unknown/不足field、falseで�
 
 `mismatched_paths`は検証済みrelative JSON pathだけを列挙し、Human Intentやretention locatorの値、文書本文は出力しません。bundle自体が不正、またはPackがreview-readyでない場合はpath比較を出しません。
 
-## 3. Record the Human decision separately
+## 3. Prepare the exact pending review request
+
+`MATCH`したsaved bundleとPackから、46件の個別review itemを手転記せず、5件のevidence gapと分けたpending requestを作れます。
+
+```powershell
+python tools\build_company_pack_review_request.py `
+  work\my-company-review-bundle.json `
+  work\my-company
+```
+
+```bash
+python3 tools/build_company_pack_review_request.py \
+  work/my-company-review-bundle.json \
+  work/my-company
+```
+
+`CANDIDATE_REVIEW_REQUEST`の`selected_outcome`は常に`null`です。保存と非上書きを含む手順、schema、refusal条件は[Company Pack Review Request](REVIEW-REQUEST.md)を参照してください。
+
+## 4. Record the Human decision separately
 
 `MATCH`を得た後も、次をDecision Recordへ明示します。
 
@@ -81,7 +100,7 @@ verifierはduplicate JSON key、非finite JSON、unknown/不足field、falseで�
 
 verifierはidentity、署名、authority、同意、時刻を推測しません。これらをCLI出力へ後付けして元のdeterministic reportを改変せず、別のgoverned Recordへ束縛します。
 
-## 4. Handle changes without silent rebinding
+## 5. Handle changes without silent rebinding
 
 Packを1 byteでも変更したら、旧bundleは更新しません。
 

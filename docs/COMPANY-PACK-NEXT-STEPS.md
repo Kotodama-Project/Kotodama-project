@@ -75,4 +75,4 @@ plannerは次の順序を常に表示します。
 - `CANDIDATE_BINDING`はapproval、runtime readiness、Promotion、Current Truthではありません。
 - すべての`claims`はfalseで、`public_beta`は常に`NO_GO_UNPUBLISHED`です。
 
-exact itemの意味は[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)、候補bytesを固定した後の手順は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)を参照してください。
+exact itemの意味は[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)、候補bytesを固定した後の手順は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)を参照してください。保存bundleが`MATCH`したcandidateへ個別review itemを束縛するには[Company Pack Review Request](REVIEW-REQUEST.md)を使います。

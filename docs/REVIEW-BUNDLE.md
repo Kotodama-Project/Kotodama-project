@@ -56,4 +56,4 @@ bundleが示すのは、次の限定された事実です。
 
 機械可読schemaは[`company-pack-review-bundle.schema.json`](../schemas/company-pack-review-bundle.schema.json)です。
 
-保存したbundleを後から同じPack bytesへ照合する手順は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)を参照してください。verifierの`MATCH`も、bytes同一性だけを示します。
+保存したbundleを後から同じPack bytesへ照合する手順は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)を参照してください。verifierの`MATCH`も、bytes同一性だけを示します。`MATCH`後に46件の個別itemを手転記せずpending artifactへ束縛する場合は[Company Pack Review Request](REVIEW-REQUEST.md)を使います。

@@ -94,4 +94,4 @@ python tools/plan_company_pack_next_steps.py work/my-company --format markdown
 | Governed review | owner、role、profile、Human Intent、retentionをauthorityのある人が確認 | checkerは46 review項目と5 evidence項目を残す。承認は自動化しない |
 | Promotion | candidate-bound Human Decision後に別processでCurrent Truthへ反映 | 未実装・未実行。creation reportのclaimsはfalse、Public BetaはNO_GO |
 
-次は[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)で`0/46/5`を確認し、[Company Pack Review Bundle](REVIEW-BUNDLE.md)でexact bytesを固定します。`READY_FOR_GOVERNED_REVIEW`やbundle `MATCH`はapprovalではありません。
+次は[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)で`0/46/5`を確認し、[Company Pack Review Bundle](REVIEW-BUNDLE.md)でexact bytesを固定します。保存bundleを照合した後は[Company Pack Review Request](REVIEW-REQUEST.md)で46件を手転記なしのpending requestへ束縛できます。`READY_FOR_GOVERNED_REVIEW`、bundle `MATCH`、pending requestはいずれもapprovalではありません。

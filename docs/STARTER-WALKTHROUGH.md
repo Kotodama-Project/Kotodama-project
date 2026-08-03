@@ -72,6 +72,8 @@ python tools\build_company_pack_review_bundle.py work\my-company
 
 bundleを保存して別reviewerへ渡す場合は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)に従います。`verify_company_pack_review_bundle.py`の`MATCH`はsaved metadata/digestと現在bytesの一致であり、reviewerの判断そのものではありません。
 
+`MATCH`したbundleとPackから46件の個別review itemを手転記なしで依頼へまとめるには[Company Pack Review Request](REVIEW-REQUEST.md)を使います。出力は`PENDING_AUTHORIZED_REVIEW`かつ`selected_outcome=null`で、5件のevidence gapも未解決のまま分離します。
+
 ## 5. flow contractとMOC順にBlockを読む
 
 `manifest.json`の`flow`は、外部から入る`entry_inputs`、Block IDの`sequence`、読み順を示す`moc_ref`を宣言します。[`company-operations.json`](../examples/company-starter/mocs/company-operations.json)は、同じ順序を示すnavigation projectionです。
