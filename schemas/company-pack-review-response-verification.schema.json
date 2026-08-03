@@ -120,7 +120,7 @@
             "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
           }
         },
-        "binding_count": {"const": 22}
+        "binding_count": {"type": "integer", "minimum": 1}
       }
     },
     "claims": {
@@ -169,14 +169,14 @@
           "review_summary": {
             "properties": {
               "state": {"const": "ALL_ITEM_RESPONSES_PRESENT"},
-              "expected_items": {"const": 46},
-              "completed_items": {"const": 46}
+              "expected_items": {"type": "integer", "minimum": 0},
+              "completed_items": {"type": "integer", "minimum": 0}
             }
           },
           "unresolved_evidence": {
             "properties": {
               "state": {"const": "EVIDENCE_REQUIRED"},
-              "item_count": {"const": 5}
+              "item_count": {"type": "integer", "minimum": 0}
             }
           }
         }

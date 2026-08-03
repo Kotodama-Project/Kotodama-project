@@ -174,7 +174,7 @@ def valid_candidate_binding(value: Any) -> bool:
         and isinstance(digest["value"], str)
         and SHA256_RE.fullmatch(digest["value"]) is not None
         and type(value["binding_count"]) is int
-        and value["binding_count"] == 22
+        and value["binding_count"] > 0
     )
 
 
@@ -186,6 +186,16 @@ def valid_request(request: Any) -> bool:
     review = request["review_request"]
     evidence = request["unresolved_evidence"]
     claims = request["claims"]
+    candidate_binding = request["candidate_binding"]
+    bundle_verification = (
+        source_checks.get("bundle_verification")
+        if isinstance(source_checks, dict)
+        else None
+    )
+    customization = (
+        source_checks.get("customization") if isinstance(source_checks, dict) else None
+    )
+    counts = customization.get("counts") if isinstance(customization, dict) else None
     if (
         request["kind"] != "company_pack_review_request"
         or request["version"] != "1.0"
@@ -193,43 +203,43 @@ def valid_request(request: Any) -> bool:
         or request["reason"] is not None
         or not isinstance(pack_id, str)
         or PACK_ID_RE.fullmatch(pack_id) is None
-        or not valid_candidate_binding(request["candidate_binding"])
+        or not valid_candidate_binding(candidate_binding)
         or not exact_dict(source_checks, {"bundle_verification", "customization"})
         or not exact_dict(
-            source_checks["bundle_verification"], {"status", "matched_bindings"}
+            bundle_verification, {"status", "matched_bindings"}
         )
-        or source_checks["bundle_verification"]["status"] != "MATCH"
-        or type(source_checks["bundle_verification"]["matched_bindings"]) is not int
-        or source_checks["bundle_verification"]["matched_bindings"] != 22
-        or not exact_dict(source_checks["customization"], {"status", "counts"})
-        or source_checks["customization"]["status"] != "READY_FOR_GOVERNED_REVIEW"
+        or bundle_verification["status"] != "MATCH"
+        or type(bundle_verification["matched_bindings"]) is not int
+        or bundle_verification["matched_bindings"] <= 0
+        or bundle_verification["matched_bindings"] != candidate_binding["binding_count"]
+        or not exact_dict(customization, {"status", "counts"})
+        or customization["status"] != "READY_FOR_GOVERNED_REVIEW"
         or not exact_dict(
-            source_checks["customization"]["counts"],
+            counts,
             {"replacement_required", "review_required", "evidence_required"},
         )
         or any(
-            type(source_checks["customization"]["counts"][key]) is not int
+            type(counts[key]) is not int or counts[key] < 0
             for key in ("replacement_required", "review_required", "evidence_required")
         )
-        or source_checks["customization"]["counts"]
-        != {"replacement_required": 0, "review_required": 46, "evidence_required": 5}
+        or counts["replacement_required"] != 0
         or not exact_dict(
             review,
             {"state", "item_count", "items", "permitted_outcomes", "selected_outcome"},
         )
         or review["state"] != "PENDING_AUTHORIZED_REVIEW"
         or type(review["item_count"]) is not int
-        or review["item_count"] != 46
+        or review["item_count"] != counts["review_required"]
         or not isinstance(review["items"], list)
-        or len(review["items"]) != 46
+        or len(review["items"]) != review["item_count"]
         or review["permitted_outcomes"] != PERMITTED_OUTCOMES
         or review["selected_outcome"] is not None
         or not exact_dict(evidence, {"state", "item_count", "items"})
         or evidence["state"] != "EVIDENCE_REQUIRED"
         or type(evidence["item_count"]) is not int
-        or evidence["item_count"] != 5
+        or evidence["item_count"] != counts["evidence_required"]
         or not isinstance(evidence["items"], list)
-        or len(evidence["items"]) != 5
+        or len(evidence["items"]) != evidence["item_count"]
         or not exact_dict(claims, REQUEST_CLAIM_KEYS)
         or any(value is not False for value in claims.values())
         or request["public_beta"] != "NO_GO_UNPUBLISHED"

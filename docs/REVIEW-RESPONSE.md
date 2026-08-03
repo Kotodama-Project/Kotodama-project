@@ -1,6 +1,8 @@
 # Company Pack Review Response Candidate
 
-R26のpending requestにある46件を、ID・path・reasonの再入力なしで一件ずつ確認するための編集用candidateです。builderはrequestの各itemへ`outcome: null`と`reviewer_note: null`だけを追加します。verifierは編集後も元requestと全itemが一致し、46件すべてにoutcomeがあることを確認します。
+pending requestに含まれるreview itemを、ID・path・reasonの再入力なしで一件ずつ確認するための編集用candidateです。builderはrequestの各itemへ`outcome: null`と`reviewer_note: null`だけを追加します。verifierは編集後も元requestと全itemが一致し、requestが示す件数すべてにoutcomeがあることを確認します。
+
+公開 Company starter の例は22 bindings / 46 review items / 5 evidence itemsです。recordless Packのように構成が異なる場合、builder/verifierは保存済みrequestの実際の`binding_count`、`review_request.item_count`、`unresolved_evidence.item_count`へ追従します。現在のrecordless fixtureは13 / 19 / 5です。
 
 これは**review worksheetと構造照合**です。reviewer identity、authority、独立性、Human approval、全体outcome、Decision Record、5件のexternal evidence、Promotion、Current Truth、Final Human GO、Public Beta GOではありません。
 
@@ -15,7 +17,7 @@ R26のpending requestにある46件を、ID・path・reasonの再入力なしで
 
 ## Current implementation
 
-現在のpublic CLIはlocal fileを読み、deterministic UTF-8 JSONをstdoutへ返します。外部provider、identity store、signature、protected evidence store、Packのatomic snapshotへ接続しません。`ITEM_RESPONSES_MATCH_REQUEST`は「保存requestと46件のitem responseが構造的に一致した」というpoint-in-timeのlocal resultだけです。
+現在のpublic CLIはlocal fileを読み、deterministic UTF-8 JSONをstdoutへ返します。外部provider、identity store、signature、protected evidence store、Packのatomic snapshotへ接続しません。`ITEM_RESPONSES_MATCH_REQUEST`は「保存requestと、そのrequestが束縛する全item responseが構造的に一致した」というpoint-in-timeのlocal resultだけです。
 
 ## 1. Build and save the editable candidate
 
@@ -58,14 +60,14 @@ CLI自体はfileを書きません。上の例は既存targetを上書きしま�
 
 ## 2. Edit only the response fields
 
-`review_response.items`はrequestと同じ順序で46件あります。編集してよいのは次だけです。
+`review_response.items`はrequestと同じ順序・件数です。編集してよいのは次だけです。
 
 - `outcome`: `accept` / `request_changes` / `reject`
 - `reviewer_note`: `accept`では`null`または短い説明、`request_changes`と`reject`では必須の短い説明
 
 `id`、`category`、`path`、`reason`、`item_count`、binding、evidence、claim、`selected_outcome`は編集しません。noteへcredential、token、個人情報、private absolute path、Human Intent本文を入れず、必要ならsecret-freeなgoverned evidence referenceを使います。
 
-responseの`selected_outcome`は常に`null`です。46件のoutcomeを埋めても、全体のaccept/request changes/rejectを自動決定しません。
+responseの`selected_outcome`は常に`null`です。全itemのoutcomeを埋めても、全体のaccept/request changes/rejectを自動決定しません。
 
 ## 3. Verify and save the structural report
 
@@ -95,11 +97,11 @@ ReportJson=$(python3 tools/verify_company_pack_review_response.py \
 
 | Result | Exit | 意味 |
 |---|---:|---|
-| `ITEM_RESPONSES_MATCH_REQUEST` | 0 | request bytes、candidate binding、46 immutable item、全outcome、必要note、5 unresolved evidenceが一致 |
+| `ITEM_RESPONSES_MATCH_REQUEST` | 0 | request bytes、candidate binding、requestが束縛するimmutable item、全outcome、必要note、unresolved evidenceが一致 |
 | `RESPONSE_MISMATCH` | 1 | request/response不正、binding差分、未入力、または読み取り中drift |
 | usage error | 2 | CLI引数が不正 |
 
-成功reportは個別itemやnoteを反射せず、request/response file SHA-256・byte count、candidate binding、46件の完了数、3 outcomeのcount、未解決evidence countだけを返します。
+成功reportは個別itemやnoteを反射せず、request/response file SHA-256・byte count、candidate binding、request由来の完了数、3 outcomeのcount、未解決evidence countだけを返します。
 
 ## Safe refusal
 

@@ -9,6 +9,8 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
@@ -81,6 +83,54 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
         )
         self.assertEqual(request.returncode, 0, request.stdout.decode("utf-8"))
         request_path = parent / "saved-review-request.json"
+        request_path.write_bytes(request.stdout)
+        return request_path, json.loads(request.stdout), request.stdout
+
+    def create_saved_recordless_request(self, parent: Path) -> tuple[Path, dict, bytes]:
+        pack = parent / "recordless-review-response-pack"
+        creation = subprocess.run(
+            [
+                sys.executable,
+                str(CREATOR),
+                "recordless-review-response-pack",
+                str(pack),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(creation.returncode, 0, creation.stdout.decode("utf-8"))
+
+        human_intent_ref = "human-intent:private-recordless-review-response-source"
+        manifest_path = pack / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["human_intent_ref"] = human_intent_ref
+        manifest.pop("records")
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        for relative in manifest["blocks"]:
+            path = pack / relative
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+            path.write_text(json.dumps(document), encoding="utf-8")
+
+        bundle = subprocess.run(
+            [sys.executable, str(BUNDLE_BUILDER), str(pack)],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(bundle.returncode, 0, bundle.stdout.decode("utf-8"))
+        bundle_path = parent / "recordless-saved-review-bundle.json"
+        bundle_path.write_bytes(bundle.stdout)
+
+        request = subprocess.run(
+            [sys.executable, str(REQUEST_BUILDER), str(bundle_path), str(pack)],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(request.returncode, 0, request.stdout.decode("utf-8"))
+        request_path = parent / "recordless-saved-review-request.json"
         request_path.write_bytes(request.stdout)
         return request_path, json.loads(request.stdout), request.stdout
 
@@ -169,6 +219,80 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
         self.assertEqual(response["unresolved_evidence"], request["unresolved_evidence"])
         self.assertTrue(all(value is False for value in response["claims"].values()))
         self.assertEqual(response["public_beta"], "NO_GO_UNPUBLISHED")
+
+    def test_recordless_request_builds_and_verifies_dynamic_response(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request_path, request, request_bytes = self.create_saved_recordless_request(root)
+            self.assertEqual(request["candidate_binding"]["binding_count"], 13)
+            self.assertEqual(
+                request["source_checks"]["bundle_verification"]["matched_bindings"],
+                13,
+            )
+            self.assertEqual(request["review_request"]["item_count"], 19)
+            self.assertEqual(request["unresolved_evidence"]["item_count"], 5)
+
+            built = self.run_builder(request_path)
+            self.assertEqual(built.returncode, 0, built.stdout.decode("utf-8"))
+            response = json.loads(built.stdout)
+            response_schema = json.loads(
+                (ROOT / "schemas" / "company-pack-review-response.schema.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            Draft202012Validator(response_schema).validate(response)
+            self.assertEqual(
+                response["candidate_binding"]["binding_count"],
+                request["candidate_binding"]["binding_count"],
+            )
+            self.assertEqual(
+                response["review_response"]["item_count"],
+                request["review_request"]["item_count"],
+            )
+            for item in response["review_response"]["items"]:
+                item["outcome"] = "accept"
+
+            response_path = root / "recordless-saved-review-response.json"
+            response_bytes = self.save_json(response_path, response)
+            verification = self.run_verifier(request_path, response_path)
+            self.assertEqual(verification.returncode, 0, verification.stdout.decode("utf-8"))
+            report = json.loads(verification.stdout)
+            verification_schema = json.loads(
+                (
+                    ROOT
+                    / "schemas"
+                    / "company-pack-review-response-verification.schema.json"
+                ).read_text(encoding="utf-8")
+            )
+            Draft202012Validator(verification_schema).validate(report)
+
+        self.assertEqual(report["status"], "ITEM_RESPONSES_MATCH_REQUEST")
+        self.assertEqual(report["candidate_binding"]["binding_count"], 13)
+        self.assertEqual(
+            report["review_summary"],
+            {
+                "state": "ALL_ITEM_RESPONSES_PRESENT",
+                "expected_items": 19,
+                "completed_items": 19,
+                "outcome_counts": {
+                    "accept": 19,
+                    "request_changes": 0,
+                    "reject": 0,
+                },
+                "selected_outcome": None,
+            },
+        )
+        self.assertEqual(
+            report["request_binding"],
+            {"sha256": hashlib.sha256(request_bytes).hexdigest(), "bytes": len(request_bytes)},
+        )
+        self.assertEqual(
+            report["response_binding"],
+            {"sha256": hashlib.sha256(response_bytes).hexdigest(), "bytes": len(response_bytes)},
+        )
+        self.assertEqual(report["unresolved_evidence"], {"state": "EVIDENCE_REQUIRED", "item_count": 5})
+        self.assertTrue(all(value is False for value in report["claims"].values()))
+        self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
 
     def test_all_item_outcomes_match_the_exact_request_without_making_a_decision(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -260,6 +384,15 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             float_binding_count["candidate_binding"]["binding_count"] = 22.0
             cases.append(
                 ("float binding count", json.dumps(float_binding_count).encode("utf-8"))
+            )
+
+            mismatched_binding_count = json.loads(json.dumps(request))
+            mismatched_binding_count["candidate_binding"]["binding_count"] = 21
+            cases.append(
+                (
+                    "candidate binding count mismatch",
+                    json.dumps(mismatched_binding_count).encode("utf-8"),
+                )
             )
 
             oversized_saved_bundle = json.loads(json.dumps(request))
@@ -678,6 +811,28 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
         self.assertEqual(
             item["properties"]["outcome"]["oneOf"][1]["enum"],
             ["accept", "request_changes", "reject"],
+        )
+        response_binding_count = response_schema["$defs"]["candidate_binding"][
+            "properties"
+        ]["binding_count"]
+        verification_binding_count = verification_schema["$defs"]["candidate_binding"][
+            "properties"
+        ]["binding_count"]
+        self.assertEqual(response_binding_count, {"type": "integer", "minimum": 1})
+        self.assertEqual(
+            verification_binding_count, {"type": "integer", "minimum": 1}
+        )
+        self.assertNotIn(
+            "const",
+            response_schema["allOf"][0]["then"]["properties"]["review_response"][
+                "properties"
+            ]["item_count"],
+        )
+        self.assertNotIn(
+            "const",
+            verification_schema["allOf"][0]["then"]["properties"]["review_summary"][
+                "properties"
+            ]["expected_items"],
         )
 
         summary = verification_schema["properties"]["review_summary"]

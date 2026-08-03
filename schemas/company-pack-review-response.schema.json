@@ -103,7 +103,7 @@
             "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
           }
         },
-        "binding_count": {"const": 22}
+        "binding_count": {"type": "integer", "minimum": 1}
       }
     },
     "permitted_outcomes": {
@@ -211,15 +211,15 @@
           "review_response": {
             "properties": {
               "state": {"const": "ITEM_RESPONSES_PENDING"},
-              "item_count": {"const": 46},
-              "items": {"minItems": 46, "maxItems": 46}
+              "item_count": {"type": "integer", "minimum": 0},
+              "items": {"minItems": 0}
             }
           },
           "unresolved_evidence": {
             "properties": {
               "state": {"const": "EVIDENCE_REQUIRED"},
-              "item_count": {"const": 5},
-              "items": {"minItems": 5, "maxItems": 5}
+              "item_count": {"type": "integer", "minimum": 0},
+              "items": {"minItems": 0}
             }
           }
         }
