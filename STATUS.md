@@ -18,6 +18,7 @@ Updated: 2026-08-03
 | Checkpoint-head anchor / restore-drill evidence | Published protected-local contract; signed reported binding only |
 | Checkpoint segment transition / key rotation | Published protected-local contract; one presented boundary only |
 | Segment transition candidate builder | Published protected-local CLI; deterministic new-file creation only, unsigned and unverified |
+| [Source binding verification candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md) | Published read-only local CLI; stable postcheck and R30 projection digest only |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -34,6 +35,8 @@ Updated: 2026-08-03
 ## Latest public template result
 
 公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。
+
+Source binding verification candidateは、privateなR31 record、Source Content、aggregate access evidenceをbounded no-link readerで照合し、strict parse、exact raw-byte binding、lossless R30 source-binding projection digest、二回のterminal rereadを報告します。reportは常に`CANDIDATE_ONLY`で、成功しても`STABLE_POSTCHECK_UNVERIFIED` / `ELIGIBLE_UNVERIFIED`です。full R31 schema、cross-file atomic snapshot、locator resolution、origin、authenticity、consent authority、retention enforcement、trusted time、Intent builder、runtime、GOは未証明です。populated inputとprivate projectionはrepositoryへ含めていません。
 
 Compose minimum / Proxmox segmentedには、preflight、candidate作成、Work Order付きapply、positive/negative verification、rollback、隔離restore演習の6フェーズ契約、schema、標準ライブラリvalidator、公開runbookを追加しています。実環境識別子やsecretを含まないplanning/evidence contractであり、実installer、deploy、restart、restore、provider E2Eのreceiptではありません。
 

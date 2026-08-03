@@ -34,6 +34,7 @@
 - [x] Signed checkpoint-head candidate and restore-drill reported-evidence binding with exact private report/receipt digests
 - [x] Signed checkpoint segment-transition candidate with same-policy and key-rotation boundary verification
 - [x] Deterministic new-file-only private segment-transition candidate builder with R22 round-trip verification
+- [x] [Read-only Source binding candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md) with strict bounded parsing, stable terminal reread, non-reflective refusal, and non-emitted R30 projection digest
 
 ## Runtime profiles still requiring live evidence
 

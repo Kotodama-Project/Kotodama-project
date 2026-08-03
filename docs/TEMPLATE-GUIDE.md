@@ -135,6 +135,7 @@ flowchart LR
 
 - 合成Discord textまたは正規化済みの合成voice transcriptを入力にしたCompany OSの垂直スライス
 - Source RecordからIntent Candidate、idea、review、Work Order candidate、zero-effect preview、Verification Receiptまでの処理
+- 保存済みR31/Source Content/access evidenceをstrictに読み、non-emitted R30 projection digestまでを照合するread-only candidate
 - session、requirement、plan、taskといった階層テンプレート
 - Discord onboarding、Voice Adapter、Clone Birth、Agent Foundry、activity projectionの候補実装
 - 同じ入力のreplay、改ざん検出、明示stop、外部通信0の安全検証
@@ -166,13 +167,14 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 9. [review response](REVIEW-RESPONSE.md)でoutcomeだけを入力し、元requestとの構造一致を確認する。
 10. [review decision handoff](REVIEW-DECISION-HANDOFF.md)で5成果物を非承認candidateへ束縛する。
 11. [Source Record Instance Contract](SOURCE-RECORD-INSTANCE.md)でprivate source locator/content/acquisition/lineage/consent/retention/attributionと全false claimを確認する。
-12. [Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)でprivate source binding、untrusted inference、Human確認前のfalse claimを確認する。
-13. 実Decisionの前に[Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)でfieldと全false claimを確認する。このschema-only契約はDecisionや権限を生成しない。
-14. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、identity・authority・全体outcomeを別Decision Recordへ束縛する。
-15. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
-16. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
-17. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
-18. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
+12. private保存済みbytesを扱う場合だけ[Source Binding Verification Candidate](SOURCE-BINDING-VERIFIER-CANDIDATE.md)でstrict parse、binding、terminal reread、非公開R30 projection digestを照合する。candidate matchをatomic snapshotやconsent verificationへ昇格しない。
+13. [Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)でprivate source binding、untrusted inference、Human確認前のfalse claimを確認する。
+14. 実Decisionの前に[Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)でfieldと全false claimを確認する。このschema-only契約はDecisionや権限を生成しない。
+15. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、identity・authority・全体outcomeを別Decision Recordへ束縛する。
+16. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
+17. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
+18. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
+19. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
 
 ## Statusの読み方
 

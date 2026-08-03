@@ -2,8 +2,9 @@
 
 Source ItemをprivateなSource Record候補へ記述し、R30 Intent Candidate
 Instanceへ渡す前に必要なfieldと否定claimを固定する**schema-only**契約です。
-公開するのは契約だけで、実Source、content、transcript、audio、capture、
-attribution、builder、verifierは作成しません。
+このschemaが公開するのは契約だけで、実Source、content、transcript、audio、
+capture、attribution、builderは作成しません。保存済みsynthetic/private bytesの
+限定照合は別の[Source Binding Verification Candidate](SOURCE-BINDING-VERIFIER-CANDIDATE.md)が扱います。
 
 ## Ideal use
 
@@ -22,15 +23,20 @@ attribution、builder、verifierは作成しません。
 
 現在公開しているのは
 [`company-pack-source-record-instance.schema.json`](../schemas/company-pack-source-record-instance.schema.json)、
-このHuman runbook、実Draft 2020-12 contract testsだけです。既存の
+このHuman runbook、実Draft 2020-12 contract testsに加え、別契約として
+strict/local/read-onlyな[Source Binding Verification Candidate](SOURCE-BINDING-VERIFIER-CANDIDATE.md)です。既存の
 [`source-record.json`](../examples/company-starter/records/source-record.json)は
 実instanceではなくrequired field名を示すgeneric templateです。
 
-このroundには次がありません。
+R32 candidateはprojectionに必要なR31/access evidenceのclosed subset、exact raw
+bytes、content digest/size、terminal rereadを照合します。ただしreportは常に
+`CANDIDATE_ONLY`で、full R31 schemaとatomic multi-file snapshotをclaimしません。
 
-- capture、retriever、strict parser、builder、verifier、protected store
+現在も次がありません。
+
+- capture、protected retriever/verifier、builder、protected store
 - real source、audio、transcript、excerpt、prompt、model output、private ID
-- locator resolution、atomic before/after read、byte currentness
+- locator resolution、transactional atomic snapshot、post-return currentness
 - source authenticity/completeness、media/encoding、lineage
 - subject/speaker/channel/session identityまたはattribution
 - access/consent authenticity、revocation、retention/deletion enforcement
@@ -128,8 +134,9 @@ record bytesが変化して循環するためです。`r30_binding_handoff`は
 `serialized_record_locator: null`, `serialized_record_binding: null`,
 `EXTERNAL_BINDING_REQUIRED`, `NOT_VERIFIED`に固定します。
 
-future verifierがR31を外部保存した後、次のfield mappingを同じatomic snapshot
-から構築します。これはprojection, not object reuseです。
+R32 candidateまたは将来のprotected verifierがR31を外部保存した後、次のfield
+mappingを構築します。R32は`Stable Source Read Set`から非公開projection digest
+だけを作り、atomic snapshotをclaimしません。これはprojection, not object reuseです。
 
 projection eligibilityはfail closedです。`REFERENCE_DECLARED_UNVERIFIED` cannot be projected
 because `content_observation` is absent while R30 requires content locator、binding、media
@@ -167,7 +174,7 @@ R30 `access_or_consent`は、statusが`DECLARED_PERMITTED_UNVERIFIED`のuse名�
 `WITHDRAWAL_ENTERED_UNVERIFIED`がある場合は、単一のR30 shapeではlosslessに
 表せないためfail closedです。
 
-R30には`purpose_scope_ref` fieldがないため、future verifierは共通purpose、
+R30には`purpose_scope_ref` fieldがないため、R32 candidateまたはfuture verifierは共通purpose、
 permitted uses、subject、expiry、revocation、R31 basisと各use evidenceのexact
 bindingsを一つのgoverned aggregate evidence artifactへ束縛し、そのartifactの
 locator/bindingだけをR30 `evidence_ref/evidence_binding`へ入れます。R31
@@ -216,7 +223,7 @@ private storage/parser/retrieval policy、candidate/authority expiryを固定12
 triggerとして列挙します。時刻はformat-check済みのeditable値であり、trusted
 timeや正しい順序を証明しません。
 
-## Claims and future verifier
+## Claims and verifier boundary
 
 57 claimはすべて`false`固定です。locator、kind、revision、record schema/
 bytes/external binding、content bytes、authenticity/completeness/lineage/
@@ -226,12 +233,16 @@ authority/confirmation/Intent、Decision、execution/Work Order authority、
 Promotion、Current Truth、runtime、Voice、Discord、provider/external transfer、
 Final Human GO、Public Beta GOのどれも成立しません。
 
-schemaはunknown fieldやphysical locator、malformed media typeを拒否します。
-一方、output binding mismatch、time ordering、record/content revision mismatch、
-unbound lineage/revocation/deletion ref、source/content/candidate substitution、
-atomic retrieval、strict JSON/UTF-8/resource limits、ID uniquenessは実行しません。
-duplicate key、non-finite、depth、size、UTF-8/BOM、surrogate、bool-int、
-symlink/junction/reparse point、TOCTOU、late drift、truncation、secret/PII
-non-reflectionを閉じるfuture verifierとprotected evidenceができるまで、R30
-Intent builder/verifierを追加しません。Public Betaは
-`NO_GO_UNPUBLISHED`です。
+schemaはunknown fieldやphysical locator、malformed media typeを拒否しますが、
+bytesを読みません。R32 candidateはprojection-relevant subsetについてoutput
+binding、time ordering、record/content revision、lineage、source/content/evidence
+substitution、strict JSON/UTF-8/resource limits、symlink/junction/reparse point、
+TOCTOU/late drift、truncation、non-reflectionを追加検査します。
+具体的には、schema単体が許すoutput binding mismatch、time ordering、
+record/content revision mismatchをcandidate refusalへ変えます。
+
+それでもcross-file atomic retrieval、post-return currentness、full R31 schema、
+locator resolution、origin/authenticity/completeness、consent/revocation authority、
+retention/deletion/redaction enforcement、ID uniqueness/replay、trusted timeは検証
+しません。protected evidenceがこれらを閉じるまでR30 Intent builder/verifierを
+追加しません。Public Betaは`NO_GO_UNPUBLISHED`です。

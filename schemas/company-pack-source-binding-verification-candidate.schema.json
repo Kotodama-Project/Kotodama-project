@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-source-binding-verification-candidate.schema.json",
+  "title": "Kotodama Company Pack Source Binding Verification Candidate",
+  "$comment": "Read-only point-in-time candidate report. A match is not a protected verification, atomic multi-file snapshot, Source authenticity, consent authority, retention enforcement, Promotion, Current Truth, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "result",
+    "r31_input_status",
+    "read_set_status",
+    "r30_projection_eligibility",
+    "reason_codes",
+    "evaluated_inputs",
+    "checks",
+    "r30_projection_digest_candidate",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_source_binding_verification_candidate"},
+    "version": {"const": "1.0"},
+    "status": {"const": "CANDIDATE_ONLY"},
+    "result": {"enum": ["SOURCE_BINDING_MATCH_POINT_IN_TIME", "REFUSED"]},
+    "r31_input_status": {
+      "enum": [
+        "PARSED_PROJECTION_CONTRACT_MATCHED_UNVERIFIED",
+        "REJECTED",
+        "NOT_EVALUATED"
+      ]
+    },
+    "read_set_status": {
+      "enum": [
+        "STABLE_POSTCHECK_UNVERIFIED",
+        "LATE_DRIFT_DETECTED",
+        "NOT_EVALUATED"
+      ]
+    },
+    "r30_projection_eligibility": {
+      "enum": ["ELIGIBLE_UNVERIFIED", "INELIGIBLE", "NOT_EVALUATED"]
+    },
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "ACCESS_EVIDENCE_CONTRACT_MISMATCH",
+          "INPUT_INVALID",
+          "R30_PROJECTION_INELIGIBLE",
+          "RECORD_CONTRACT_MISMATCH",
+          "SOURCE_DRIFT_DETECTED",
+          "STRICT_JSON_INVALID"
+        ]
+      }
+    },
+    "evaluated_inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_record", "source_content", "access_projection_evidence"],
+      "properties": {
+        "source_record": {"$ref": "#/$defs/nullable_binding"},
+        "source_content": {"$ref": "#/$defs/nullable_binding"},
+        "access_projection_evidence": {"$ref": "#/$defs/nullable_binding"}
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_read_set",
+        "strict_parsing",
+        "record_projection_contract",
+        "source_content_binding",
+        "access_projection_evidence",
+        "r30_projection",
+        "terminal_reread"
+      ],
+      "properties": {
+        "input_read_set": {"$ref": "#/$defs/check"},
+        "strict_parsing": {"$ref": "#/$defs/check"},
+        "record_projection_contract": {"$ref": "#/$defs/check"},
+        "source_content_binding": {"$ref": "#/$defs/check"},
+        "access_projection_evidence": {"$ref": "#/$defs/check"},
+        "r30_projection": {"$ref": "#/$defs/check"},
+        "terminal_reread": {"$ref": "#/$defs/check"}
+      }
+    },
+    "r30_projection_digest_candidate": {"$ref": "#/$defs/nullable_binding"},
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "access_or_consent_verified",
+        "access_evidence_locator_resolution_verified",
+        "access_projection_evidence_contract_matched",
+        "atomic_multi_file_snapshot_verified",
+        "current_truth_changed",
+        "deletion_enforced",
+        "discord_runtime_verified",
+        "external_transfer_authorized",
+        "final_human_go",
+        "full_r31_schema_verified",
+        "human_decision_verified",
+        "human_intent_confirmed",
+        "identity_or_attribution_verified",
+        "promotion_verified",
+        "provider_transfer_authorized",
+        "public_beta_go",
+        "r30_projection_digest_computed",
+        "record_projection_contract_matched",
+        "redaction_verified",
+        "replay_prevented",
+        "retention_enforced",
+        "source_authenticity_verified",
+        "source_completeness_verified",
+        "source_content_binding_matched",
+        "source_lineage_verified",
+        "source_record_locator_resolution_verified",
+        "source_record_file_binding_matched",
+        "stable_read_set_reread_matched",
+        "strict_input_parsing_matched",
+        "trusted_time_verified",
+        "voice_runtime_verified",
+        "work_order_authority_granted"
+      ],
+      "properties": {
+        "access_or_consent_verified": {"const": false},
+        "access_evidence_locator_resolution_verified": {"const": false},
+        "access_projection_evidence_contract_matched": {"type": "boolean"},
+        "atomic_multi_file_snapshot_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "deletion_enforced": {"const": false},
+        "discord_runtime_verified": {"const": false},
+        "external_transfer_authorized": {"const": false},
+        "final_human_go": {"const": false},
+        "full_r31_schema_verified": {"const": false},
+        "human_decision_verified": {"const": false},
+        "human_intent_confirmed": {"const": false},
+        "identity_or_attribution_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "provider_transfer_authorized": {"const": false},
+        "public_beta_go": {"const": false},
+        "r30_projection_digest_computed": {"type": "boolean"},
+        "record_projection_contract_matched": {"type": "boolean"},
+        "redaction_verified": {"const": false},
+        "replay_prevented": {"const": false},
+        "retention_enforced": {"const": false},
+        "source_authenticity_verified": {"const": false},
+        "source_completeness_verified": {"const": false},
+        "source_content_binding_matched": {"type": "boolean"},
+        "source_lineage_verified": {"const": false},
+        "source_record_locator_resolution_verified": {"const": false},
+        "source_record_file_binding_matched": {"type": "boolean"},
+        "stable_read_set_reread_matched": {"type": "boolean"},
+        "strict_input_parsing_matched": {"type": "boolean"},
+        "trusted_time_verified": {"const": false},
+        "voice_runtime_verified": {"const": false},
+        "work_order_authority_granted": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"result": {"const": "SOURCE_BINDING_MATCH_POINT_IN_TIME"}},
+        "required": ["result"]
+      },
+      "then": {
+        "properties": {
+          "reason_codes": {"maxItems": 0},
+          "r31_input_status": {"const": "PARSED_PROJECTION_CONTRACT_MATCHED_UNVERIFIED"},
+          "read_set_status": {"const": "STABLE_POSTCHECK_UNVERIFIED"},
+          "r30_projection_eligibility": {"const": "ELIGIBLE_UNVERIFIED"},
+          "r30_projection_digest_candidate": {"$ref": "#/$defs/binding"},
+          "checks": {
+            "properties": {
+              "input_read_set": {"const": "MATCH"},
+              "strict_parsing": {"const": "MATCH"},
+              "record_projection_contract": {"const": "MATCH"},
+              "source_content_binding": {"const": "MATCH"},
+              "access_projection_evidence": {"const": "MATCH"},
+              "r30_projection": {"const": "MATCH"},
+              "terminal_reread": {"const": "MATCH"}
+            }
+          },
+          "claims": {
+            "properties": {
+              "access_projection_evidence_contract_matched": {"const": true},
+              "r30_projection_digest_computed": {"const": true},
+              "record_projection_contract_matched": {"const": true},
+              "source_content_binding_matched": {"const": true},
+              "source_record_file_binding_matched": {"const": true},
+              "stable_read_set_reread_matched": {"const": true},
+              "strict_input_parsing_matched": {"const": true}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "reason_codes": {"minItems": 1},
+          "r30_projection_digest_candidate": {"type": "null"},
+          "claims": {
+            "properties": {
+              "access_projection_evidence_contract_matched": {"const": false},
+              "r30_projection_digest_computed": {"const": false},
+              "record_projection_contract_matched": {"const": false},
+              "source_content_binding_matched": {"const": false},
+              "source_record_file_binding_matched": {"const": false},
+              "stable_read_set_reread_matched": {"const": false},
+              "strict_input_parsing_matched": {"const": false}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "bytes"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+      }
+    },
+    "nullable_binding": {
+      "oneOf": [{"type": "null"}, {"$ref": "#/$defs/binding"}]
+    },
+    "check": {"enum": ["MATCH", "MISMATCH", "NOT_EVALUATED"]}
+  }
+}

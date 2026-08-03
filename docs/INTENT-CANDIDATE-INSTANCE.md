@@ -19,9 +19,11 @@ Source Evidenceから人間の意図らしき内容を抽出し、R29 Decision R
 
 R30へ渡す前のprivate Source Record shapeは[Company Pack Source Record Instance Contract](SOURCE-RECORD-INSTANCE.md)で確認できます。このschema-only契約もsource authenticity、consent、attribution、retention enforcementを証明しません。
 
-このroundには次がありません。
+R32の[Source Binding Verification Candidate](SOURCE-BINDING-VERIFIER-CANDIDATE.md)は、保存済みR31/content/access evidenceのstrict parse、local file binding、lossless R30 projection digest、terminal rereadだけをread-onlyで照合します。これはIntent builder/verifierではなく、full R31 schema、atomic snapshot、authenticity、consent/retention authorityも証明しません。
 
-- populated Source Record instance、strict parser、retriever、verifier
+このcontractには次がありません。
+
+- populated Source Record instance、protected retriever/verifier、atomic snapshot
 - source locatorやSHA-256の真正性・完全性・current性の検査
 - access/consent、subject identity/attribution、retention enforcement
 - extraction actor/tool/model/prompt/receiptの真正性検査
@@ -63,7 +65,7 @@ Human向け入力欄が埋まった形です。選べるのは`confirm_candidate
 
 source bodyやexcerptは埋め込めません。locator/hash/sizeが記録されても、参照先の存在、同じbytesの取得、sourceの真正性・完全性、同意・保持の有効性は証明されません。
 
-JSON Schemaは既にparseされたobjectを検証します。duplicate JSON key、非finite JSON、encoding、resource limit、read-driftを閉じるstrict parser/retrieverはfuture verifierの責任です。
+JSON Schemaは既にparseされたobjectを検証します。R32 candidateはR31/access evidenceに限ってduplicate JSON key、非finite JSON、encoding、resource limit、local read-driftを閉じますが、R30 Intent Candidate自身のstrict parser/retriever、protected atomic retrievalはまだfuture verifierの責任です。
 
 ## Private content boundary
 

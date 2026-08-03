@@ -66,6 +66,12 @@ response schemaとverifierはrequest file SHA-256/size、Pack candidate binding�
 
 Intent抽出へ渡す前のprivate Source Record field/claim契約は[Company Pack Source Record Instance Contract](SOURCE-RECORD-INSTANCE.md)を参照してください。locator/content/acquisition/lineage/attribution/consent/retentionのshapeだけを検証し、source authenticity、current bytes、identity、authority、retention enforcementを証明しません。
 
+保存済みR31 record、別保存のSource Content、aggregate access evidenceのlocal bindingを照合する場合は[Source Binding Verification Candidate](SOURCE-BINDING-VERIFIER-CANDIDATE.md)を使います。CLIは標準ライブラリだけで動き、strict JSON/resource limits、exact raw-byte digest/size、projection-relevant cross-field、terminal rereadを検査します。full R31 schema、atomic multi-file snapshot、locator resolution、source authenticity、consent authority、retention enforcement、Intent、runtime、GOは検証しません。
+
+```powershell
+python tools\verify_company_pack_source_binding_candidate.py <private-record.json> <private-content.bin> <private-access-evidence.json> ref/source-record/serialized ref/access-consent/aggregate
+```
+
 Compose / Proxmoxのinstallation lifecycle契約は、別のstdlib validatorで確認します。
 
 ```powershell
@@ -214,11 +220,13 @@ python -m pip install -r requirements-test.txt
 python -m unittest discover -s tests -v
 ```
 
-公開CLIはPython標準ライブラリだけで動きます。`requirements-test.txt`はtest-onlyで、R29 Decision Record Candidate schemaを`Draft202012Validator`とdate-time assertionを含む`FormatChecker`へ実際に通し、validなpending/entered-unverified instanceとinvalidな日時・越権shapeを回帰検証するために使います。
+公開CLIはPython標準ライブラリだけで動きます。`requirements-test.txt`はtest-onlyで、R29 Decision、R30 Intent、R31 Source Record、R32 access-evidence/report schemaを`Draft202012Validator`とdate-time assertionを含む`FormatChecker`へ実際に通し、valid candidateとinvalidな日時・越権shapeを回帰検証するために使います。
 
 正常packに加え、path traversal、未参照JSONを含むsecret key表記揺れ、自己昇格、Public GO、未知profile、Block action越権、無効な期限、MOC authority/shape、参照切れ、flow順序・coverage・primary MOC drift、secondary MOCのreorder、Record role分離、nested rollback/receipt欠落、governance owner欠落、重複ID、型不一致をnegative caseで検査します。installation lifecycleではphase reorder、Work Order/rollback binding欠落、profile evidence欠落、unknown field、duplicate key、non-finite number、secret/private value、live claimを検査します。Compose skeletonではbyte drift、unbound file、hardcoded password、host port、mutable image、共有network/volume、LOGIN role化、core table欠落、Windows checkoutでのLF固定を検査します。resolved candidateではpassword非開示、password非依存digest、同一password、mutable image、unsafe project name、tamper、unknown field、live claimを検査します。image availabilityではread-only command境界、private identity非開示、candidate/snapshot drift、自己再計算digestがauthenticity/freshness/atomicityを付与しないことを検査します。clean-install/migration evidence candidateではcandidate/preflight/migration drift、同一actor、service evidence再利用、reported check欠落、危険なeffect、live claim、unknown/duplicate/self-digest tamper、古い時刻がfreshnessを得ないことを検査します。protected attestationではattestation/evidence byte drift、wrong identity/trust root/role、expired/future/過大window、used nonce、stale/future snapshot、duplicate nonce/key、unknown field、秘密marker非漏洩を検査します。one-use evaluatorでは同時二重評価、同時初期化、invalid input非消費、policy/trust-root/store drift、local-clock overclaim、policy expiry/limit、store schema/constraint弱体化、missing store非作成を検査します。nonce-store checkpointではGenesis/successor、巻き戻し、同件数差替え、parent欠落、digest/signature/chain/strict-JSON改ざん、output overwrite、SQLite read-leaseを検査します。recursive chainでは3-checkpoint success、bundle signer-policy rebinding、rollback/same-count replacement、determinism、overwrite、extra entry、欠番、boolean sequenceのinteger alias、bundle digest/strict JSON/overclaim、middle signature、wrong parent、aggregate byte limit、pinned `ssh-keygen` mismatch/PATH stub、malformed policy type、schema authority境界を検査します。head-anchor/restore-drillではsigned hostile candidate、private marker非漏洩、authority/実行overclaim、同一report再利用、unsigned report overclaim、独立pin不一致、期限外評価、runner/reviewer hash衝突を検査します。Windowsでsymlink作成権限がない場合、symlink E2Eだけはskipされますが、resolved-path containment自体はvalidatorで常時有効です。
 
 checkpoint segment transitionではkey-rotation/same-policy success、signed overclaim、fake rotation、transition/bundle/successor/store/policy/`ssh-keygen` pin drift、期限外、同一reviewer hash、prior/successor/transition署名改ざん、wrong parent、duplicate key、non-finite number、過深JSON、private marker非反映、schema authority境界を検査します。
+
+Source binding candidateではcontent/derived stateのexact projection digest、reference/withdrawal/lossy access scope/revision/retention/lineage refusal、record/content/evidence substitution、duplicate/non-finite/BOM/invalid UTF-8/surrogate/depth/node/bool-int、empty/over-limit/reparse input、byte/identity late drift、canonical one-line output、private path/ref/body/exception非反射、全GO claim falseを検査します。
 
 segment transition builderではkey-rotation/same-policyのR22 round-trip、deterministic bytes、existing output refusal、bundle/successor digest pin、mode/ID/window、同一鍵fake rotation、reviewer hash衝突、wrong parent、duplicate key、non-finite number、過深JSON、private marker非反映、creation schema authority境界、usage/structured refusal分離を検査します。
 
