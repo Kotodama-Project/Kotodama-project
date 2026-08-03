@@ -163,6 +163,25 @@ def canonical_sha256(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def matches_json_value(actual: object, expected: object) -> bool:
+    """Compare JSON values with Draft 2020-12 boolean type semantics."""
+    if isinstance(expected, bool):
+        return type(actual) is bool and actual is expected
+    if isinstance(expected, dict):
+        return (
+            isinstance(actual, dict)
+            and actual.keys() == expected.keys()
+            and all(matches_json_value(actual[key], expected[key]) for key in expected)
+        )
+    if isinstance(expected, list):
+        return (
+            isinstance(actual, list)
+            and len(actual) == len(expected)
+            and all(matches_json_value(left, right) for left, right in zip(actual, expected))
+        )
+    return actual == expected
+
+
 def false_claims() -> dict[str, bool]:
     return {claim: False for claim in sorted(CLAIM_FIELDS)}
 
@@ -256,16 +275,16 @@ def validate_candidate(candidate: dict[str, Any]) -> list[str]:
             "resolved.credential_contract",
             errors,
         )
-        if credential is not None and credential != {
+        if credential is not None and not matches_json_value(credential, {
             "source": "process_environment",
             "both_present_observed": True,
             "distinct_values_observed": True,
             "values_emitted": False,
             "password_derived_digest": False,
-        }:
+        }):
             errors.append("credential contract must remain non-disclosing and distinct")
         networks = resolved.get("networks")
-        if networks != EXPECTED_NETWORKS:
+        if not matches_json_value(networks, EXPECTED_NETWORKS):
             errors.append("resolved networks must remain internal, separate, and ordered")
         if isinstance(networks, list):
             for index, network in enumerate(networks):

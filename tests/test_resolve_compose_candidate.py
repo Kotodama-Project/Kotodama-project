@@ -331,6 +331,36 @@ class ResolvedComposeCandidateCliTests(unittest.TestCase):
         Draft202012Validator(schema).validate(candidate)
         self.assertEqual(candidate_validator.validate_candidate(candidate), [])
 
+    def test_resolved_boolean_fixed_fields_reject_integer_aliases_in_schema_and_validator(self) -> None:
+        cases = (
+            (("resolved", "credential_contract", "both_present_observed"),
+             "credential contract must remain non-disclosing and distinct"),
+            (("resolved", "credential_contract", "distinct_values_observed"),
+             "credential contract must remain non-disclosing and distinct"),
+            (("resolved", "networks", 0, "internal"),
+             "resolved networks must remain internal, separate, and ordered"),
+        )
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        for path, expected_error in cases:
+            with self.subTest(path=path):
+                candidate = synthetic_candidate()
+                value = candidate
+                for key in path[:-1]:
+                    value = value[key]
+                value[path[-1]] = 1
+                candidate["resolved"]["resolved_contract_sha256"] = (
+                    candidate_validator.canonical_sha256(
+                        candidate_validator.safe_contract_projection(candidate)
+                    )
+                )
+
+                with self.assertRaises(ValidationError):
+                    Draft202012Validator(schema).validate(candidate)
+                self.assertIn(
+                    expected_error,
+                    candidate_validator.validate_candidate(candidate),
+                )
+
     def test_resolved_binding_bytes_rejects_boolean_fraction_negative_and_non_finite(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         for invalid in (True, 1.5, -1, float("nan")):
