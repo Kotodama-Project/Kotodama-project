@@ -159,6 +159,40 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         self.assertTrue(all(value is False for value in request["claims"].values()))
         self.assertEqual(request["public_beta"], "NO_GO_UNPUBLISHED")
 
+    def test_review_request_schema_closes_request_and_decision_boundaries(self) -> None:
+        schema = json.loads(
+            (
+                ROOT / "schemas" / "company-pack-review-request.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(schema["additionalProperties"], False)
+        self.assertEqual(
+            schema["properties"]["public_beta"]["const"], "NO_GO_UNPUBLISHED"
+        )
+        review_schema = schema["properties"]["review_request"]
+        self.assertEqual(review_schema["additionalProperties"], False)
+        self.assertEqual(
+            review_schema["properties"]["selected_outcome"]["type"], "null"
+        )
+        self.assertEqual(
+            review_schema["properties"]["permitted_outcomes"]["prefixItems"],
+            [
+                {"const": "accept"},
+                {"const": "request_changes"},
+                {"const": "reject"},
+            ],
+        )
+        self.assertEqual(
+            schema["properties"]["claims"]["additionalProperties"], False
+        )
+        self.assertTrue(
+            all(
+                definition["const"] is False
+                for definition in schema["properties"]["claims"]["properties"].values()
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

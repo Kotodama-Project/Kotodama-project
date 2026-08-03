@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-request.schema.json",
+  "title": "Kotodama Company Pack Review Request",
+  "$comment": "A request binds open review questions to a saved Company Pack bundle. It is never an approval, authority assignment, Promotion, Current Truth change, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "reason",
+    "pack_id",
+    "candidate_binding",
+    "source_checks",
+    "review_request",
+    "unresolved_evidence",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_review_request"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["CANDIDATE_REVIEW_REQUEST", "REQUEST_REFUSED"]},
+    "reason": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["BUNDLE_VERIFICATION_FAILED", "SOURCE_DRIFT_DETECTED"]}
+      ]
+    },
+    "pack_id": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"},
+        {"type": "null"}
+      ]
+    },
+    "candidate_binding": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["saved_bundle", "bundle_digest", "binding_count"],
+          "properties": {
+            "saved_bundle": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["sha256", "bytes"],
+              "properties": {
+                "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "bytes": {"type": "integer", "minimum": 1}
+              }
+            },
+            "bundle_digest": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["algorithm", "canonicalization", "value"],
+              "properties": {
+                "algorithm": {"const": "SHA-256"},
+                "canonicalization": {"const": "utf8-json-sort-keys-no-whitespace-v1"},
+                "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+              }
+            },
+            "binding_count": {"type": "integer", "minimum": 1}
+          }
+        }
+      ]
+    },
+    "source_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle_verification", "customization"],
+      "properties": {
+        "bundle_verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "matched_bindings"],
+          "properties": {
+            "status": {"enum": ["MATCH", "MISMATCH"]},
+            "matched_bindings": {"type": "integer", "minimum": 0}
+          }
+        },
+        "customization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "counts"],
+          "properties": {
+            "status": {
+              "oneOf": [
+                {"const": "READY_FOR_GOVERNED_REVIEW"},
+                {"type": "null"}
+              ]
+            },
+            "counts": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["replacement_required", "review_required", "evidence_required"],
+              "properties": {
+                "replacement_required": {"type": "integer", "minimum": 0},
+                "review_required": {"type": "integer", "minimum": 0},
+                "evidence_required": {"type": "integer", "minimum": 0}
+              }
+            }
+          }
+        }
+      }
+    },
+    "review_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "item_count", "items", "permitted_outcomes", "selected_outcome"],
+      "properties": {
+        "state": {"enum": ["PENDING_AUTHORIZED_REVIEW", "NOT_CREATED"]},
+        "item_count": {"type": "integer", "minimum": 0},
+        "items": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/review_item"}
+        },
+        "permitted_outcomes": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {"const": "accept"},
+            {"const": "request_changes"},
+            {"const": "reject"}
+          ],
+          "items": false
+        },
+        "selected_outcome": {"type": "null"}
+      }
+    },
+    "unresolved_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "item_count", "items"],
+      "properties": {
+        "state": {"enum": ["EVIDENCE_REQUIRED", "UNKNOWN"]},
+        "item_count": {"type": "integer", "minimum": 0},
+        "items": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidence_item"}
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_intent_authenticated",
+        "human_approval_verified",
+        "authority_assignment_verified",
+        "retention_policy_verified",
+        "candidate_bound_human_decision_verified",
+        "promotion_verified",
+        "current_truth_changed",
+        "runtime_ready",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "human_intent_authenticated": {"const": false},
+        "human_approval_verified": {"const": false},
+        "authority_assignment_verified": {"const": false},
+        "retention_policy_verified": {"const": false},
+        "candidate_bound_human_decision_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "runtime_ready": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "review_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "path", "reason"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "category": {"const": "review_required"},
+        "path": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "evidence_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "path", "reason"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "category": {"const": "evidence_required"},
+        "path": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "CANDIDATE_REVIEW_REQUEST"}}},
+      "then": {
+        "properties": {
+          "reason": {"type": "null"},
+          "pack_id": {"type": "string"},
+          "candidate_binding": {"type": "object"},
+          "source_checks": {
+            "properties": {
+              "bundle_verification": {
+                "properties": {"status": {"const": "MATCH"}}
+              },
+              "customization": {
+                "properties": {"status": {"const": "READY_FOR_GOVERNED_REVIEW"}}
+              }
+            }
+          },
+          "review_request": {
+            "properties": {
+              "state": {"const": "PENDING_AUTHORIZED_REVIEW"},
+              "item_count": {"minimum": 1},
+              "items": {"minItems": 1}
+            }
+          },
+          "unresolved_evidence": {
+            "properties": {"state": {"const": "EVIDENCE_REQUIRED"}}
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "reason": {"type": "string"},
+          "pack_id": {"type": "null"},
+          "candidate_binding": {"type": "null"},
+          "source_checks": {
+            "properties": {
+              "bundle_verification": {
+                "properties": {
+                  "status": {"const": "MISMATCH"},
+                  "matched_bindings": {"const": 0}
+                }
+              },
+              "customization": {
+                "properties": {
+                  "status": {"type": "null"},
+                  "counts": {
+                    "properties": {
+                      "replacement_required": {"const": 0},
+                      "review_required": {"const": 0},
+                      "evidence_required": {"const": 0}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "review_request": {
+            "properties": {
+              "state": {"const": "NOT_CREATED"},
+              "item_count": {"const": 0},
+              "items": {"maxItems": 0}
+            }
+          },
+          "unresolved_evidence": {
+            "properties": {
+              "state": {"const": "UNKNOWN"},
+              "item_count": {"const": 0},
+              "items": {"maxItems": 0}
+            }
+          }
+        }
+      }
+    }
+  ]
+}
