@@ -165,4 +165,6 @@ handoff内の`required_fields`は、実運用のDecision instanceでさらに必
 
 どちらも`decision: null`、`selected_outcome: null`、全authority/approval/Promotion/runtime/GO claimの`false`、`NO_GO_UNPUBLISHED`を閉じます。
 
+handoffとは別に必要なexact Intent Candidateのschema-only private instance形は[Company Pack Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)で確認できます。Source ref、抽出結果、Human確認entryが埋まってもHuman IntentやDecisionを証明しません。
+
 実Decision instanceへ進む前のfield/claim形だけを確認する次stepは[Company Pack Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)です。現時点ではschema-onlyであり、builder/verifierやHuman Decisionを提供しません。

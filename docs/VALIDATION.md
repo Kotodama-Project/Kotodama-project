@@ -62,6 +62,8 @@ response schemaとverifierはrequest file SHA-256/size、Pack candidate binding�
 
 後続の実Decision Recordに必要なfieldと否定claimの閉じたschemaは[Company Pack Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)を参照してください。これはschema-only検証であり、Human outcomeの真正性、identity、authority、trusted time、evidence解決、Decision、Work Order authority、Promotion、GOを証明しません。
 
+実Intent Candidate前のprivate field/claim契約は[Company Pack Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)を参照してください。Source binding、untrusted inference、provenance参照、Human確認entryのshapeだけを検証し、source authenticity、consent、Human Intent、authority、Decisionを証明しません。
+
 Compose / Proxmoxのinstallation lifecycle契約は、別のstdlib validatorで確認します。
 
 ```powershell

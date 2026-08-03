@@ -1,0 +1,487 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-intent-candidate-instance.schema.json",
+  "title": "Kotodama Company Pack Intent Candidate Instance",
+  "$comment": "Schema-only private candidate contract. Validation does not retrieve a source body, verify a Source Record, source authenticity or completeness, access or consent, retention, subject identity or attribution, extraction provenance, prompt-injection safety, disclosure safety, Human confirmation, Human Intent, authority, a Decision, execution, Promotion, Current Truth, runtime readiness, Final Human GO, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "intent_state",
+    "intent_candidate_id",
+    "candidate_revision",
+    "source_bindings",
+    "intent_content",
+    "extraction_provenance",
+    "human_confirmation",
+    "content_handling",
+    "candidate_recorded_at",
+    "expires_at",
+    "review_trigger",
+    "candidate_retention_policy_ref",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_intent_candidate_instance"},
+    "version": {"const": "1.0"},
+    "status": {"const": "CANDIDATE_ONLY"},
+    "intent_state": {
+      "enum": [
+        "EXTRACTION_REQUIRED",
+        "EXTRACTED_UNVERIFIED",
+        "HUMAN_CONFIRMATION_ENTERED_UNVERIFIED"
+      ]
+    },
+    "intent_candidate_id": {"$ref": "#/$defs/id"},
+    "candidate_revision": {"$ref": "#/$defs/ref"},
+    "source_bindings": {"$ref": "#/$defs/source_bindings"},
+    "intent_content": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/intent_content"}
+      ]
+    },
+    "extraction_provenance": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/extraction_provenance"}
+      ]
+    },
+    "human_confirmation": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/human_confirmation"}
+      ]
+    },
+    "content_handling": {"$ref": "#/$defs/content_handling"},
+    "candidate_recorded_at": {"$ref": "#/$defs/timestamp"},
+    "expires_at": {"$ref": "#/$defs/timestamp"},
+    "review_trigger": {"$ref": "#/$defs/review_trigger"},
+    "candidate_retention_policy_ref": {"$ref": "#/$defs/ref"},
+    "claims": {"$ref": "#/$defs/claims"},
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512,
+      "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "file_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "bytes"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 17179869184
+        }
+      }
+    },
+    "source_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_record_locator",
+        "source_record_binding",
+        "source_content_locator",
+        "source_content_binding",
+        "declared_media_type",
+        "source_revision",
+        "observed_at",
+        "source_record_schema_status",
+        "derived_from_refs",
+        "lineage_status",
+        "access_or_consent",
+        "retention"
+      ],
+      "properties": {
+        "source_record_locator": {"$ref": "#/$defs/ref"},
+        "source_record_binding": {"$ref": "#/$defs/file_binding"},
+        "source_content_locator": {"$ref": "#/$defs/ref"},
+        "source_content_binding": {"$ref": "#/$defs/file_binding"},
+        "declared_media_type": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 127,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9!#$&^_.+/-]+$"
+        },
+        "source_revision": {"$ref": "#/$defs/ref"},
+        "observed_at": {"$ref": "#/$defs/timestamp"},
+        "source_record_schema_status": {"const": "NOT_VERIFIED"},
+        "derived_from_refs": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/ref"}
+        },
+        "lineage_status": {"const": "NOT_VERIFIED"},
+        "access_or_consent": {"$ref": "#/$defs/access_or_consent"},
+        "retention": {"$ref": "#/$defs/retention"}
+      }
+    },
+    "access_or_consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_ref",
+        "evidence_binding",
+        "declared_permitted_uses",
+        "subject_scope_ref",
+        "scope_expires_at",
+        "revocation_evidence_ref",
+        "verification_status"
+      ],
+      "properties": {
+        "evidence_ref": {"$ref": "#/$defs/ref"},
+        "evidence_binding": {"$ref": "#/$defs/file_binding"},
+        "declared_permitted_uses": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["capture", "read", "analyze", "store", "transfer", "reuse"]
+          }
+        },
+        "subject_scope_ref": {"$ref": "#/$defs/ref"},
+        "scope_expires_at": {"$ref": "#/$defs/timestamp"},
+        "revocation_evidence_ref": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/ref"}
+          ]
+        },
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_ref",
+        "policy_binding",
+        "retain_until",
+        "deletion_trigger",
+        "deletion_receipt_ref",
+        "enforcement_status"
+      ],
+      "properties": {
+        "policy_ref": {"$ref": "#/$defs/ref"},
+        "policy_binding": {"$ref": "#/$defs/file_binding"},
+        "retain_until": {"$ref": "#/$defs/timestamp"},
+        "deletion_trigger": {
+          "enum": ["expiry", "withdrawal", "expiry_or_withdrawal"]
+        },
+        "deletion_receipt_ref": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/ref"}
+          ]
+        },
+        "enforcement_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "source_bindings": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 16,
+      "propertyNames": {"$ref": "#/$defs/id"},
+      "additionalProperties": {"$ref": "#/$defs/source_binding"}
+    },
+    "bounded_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": ".*\\S.*"
+    },
+    "bounded_text_list": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/bounded_text"}
+    },
+    "source_id_list": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/id"}
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["in_scope", "out_of_scope"],
+      "properties": {
+        "in_scope": {"$ref": "#/$defs/bounded_text_list"},
+        "out_of_scope": {"$ref": "#/$defs/bounded_text_list"}
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_ref", "status"],
+      "properties": {
+        "policy_ref": {"$ref": "#/$defs/ref"},
+        "status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "intent_content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interpretation_status",
+        "source_refs",
+        "purpose",
+        "beneficiary",
+        "scope",
+        "constraints",
+        "success_conditions",
+        "stop_conditions",
+        "unresolved_items",
+        "redaction"
+      ],
+      "properties": {
+        "interpretation_status": {"const": "UNTRUSTED_INFERENCE"},
+        "source_refs": {"$ref": "#/$defs/source_id_list"},
+        "purpose": {"$ref": "#/$defs/bounded_text"},
+        "beneficiary": {"$ref": "#/$defs/bounded_text"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "constraints": {"$ref": "#/$defs/bounded_text_list"},
+        "success_conditions": {"$ref": "#/$defs/bounded_text_list"},
+        "stop_conditions": {"$ref": "#/$defs/bounded_text_list"},
+        "unresolved_items": {"$ref": "#/$defs/bounded_text_list"},
+        "redaction": {"$ref": "#/$defs/redaction"}
+      }
+    },
+    "extraction_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_ref",
+        "tool_ref",
+        "tool_version_ref",
+        "model_ref",
+        "config_ref",
+        "prompt_template_ref",
+        "execution_receipt_ref",
+        "input_binding_refs",
+        "output_binding",
+        "extracted_at",
+        "verification_status"
+      ],
+      "properties": {
+        "actor_ref": {"$ref": "#/$defs/ref"},
+        "tool_ref": {"$ref": "#/$defs/ref"},
+        "tool_version_ref": {"$ref": "#/$defs/ref"},
+        "model_ref": {"$ref": "#/$defs/ref"},
+        "config_ref": {"$ref": "#/$defs/ref"},
+        "prompt_template_ref": {"$ref": "#/$defs/ref"},
+        "execution_receipt_ref": {"$ref": "#/$defs/ref"},
+        "input_binding_refs": {"$ref": "#/$defs/source_id_list"},
+        "output_binding": {"$ref": "#/$defs/file_binding"},
+        "extracted_at": {"$ref": "#/$defs/timestamp"},
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "human_confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "selected_action",
+        "entry_evidence_ref",
+        "identity_ref",
+        "authority_ref",
+        "entered_at"
+      ],
+      "properties": {
+        "state": {"const": "UNVERIFIED_HUMAN_ENTRY"},
+        "selected_action": {
+          "enum": ["confirm_candidate", "request_changes", "reject_candidate"]
+        },
+        "entry_evidence_ref": {"$ref": "#/$defs/ref"},
+        "identity_ref": {"$ref": "#/$defs/ref"},
+        "authority_ref": {"$ref": "#/$defs/ref"},
+        "entered_at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "content_handling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_content_embedded",
+        "candidate_visibility",
+        "prompt_treatment",
+        "disclosure_review_status"
+      ],
+      "properties": {
+        "source_content_embedded": {"const": false},
+        "candidate_visibility": {"const": "PRIVATE_GOVERNED_ONLY"},
+        "prompt_treatment": {"const": "UNTRUSTED_DATA_ONLY"},
+        "disclosure_review_status": {"const": "NOT_REVIEWED"}
+      }
+    },
+    "review_trigger": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "prefixItems": [
+        {"const": "source_record_digest_drift"},
+        {"const": "source_content_digest_drift"},
+        {"const": "source_set_or_lineage_change"},
+        {"const": "access_consent_scope_or_revocation_change"},
+        {"const": "retention_policy_or_deadline_change"},
+        {"const": "extraction_provenance_change"},
+        {"const": "redaction_policy_or_status_change"},
+        {"const": "intent_content_or_scope_change"},
+        {"const": "unresolved_items_change"},
+        {"const": "human_confirmation_change"},
+        {"const": "candidate_revision_or_replay_conflict"},
+        {"const": "candidate_or_authority_expiry"}
+      ],
+      "items": false
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_record_schema_verified",
+        "source_record_bytes_current_verified",
+        "source_content_bytes_current_verified",
+        "source_authenticity_verified",
+        "source_completeness_verified",
+        "source_lineage_verified",
+        "access_or_consent_verified",
+        "retention_enforced",
+        "subject_identity_verified",
+        "subject_attribution_verified",
+        "extraction_actor_verified",
+        "extraction_tool_verified",
+        "extraction_model_verified",
+        "extraction_prompt_verified",
+        "extraction_receipt_verified",
+        "extraction_provenance_verified",
+        "prompt_injection_cleared",
+        "redaction_verified",
+        "sensitive_content_reviewed",
+        "human_confirmation_identity_verified",
+        "human_confirmation_authority_verified",
+        "human_confirmation_authenticity_verified",
+        "human_intent_confirmed",
+        "candidate_id_uniqueness_verified",
+        "replay_prevented",
+        "candidate_bound_human_decision_verified",
+        "execution_authority_granted",
+        "work_order_authority_granted",
+        "promotion_verified",
+        "current_truth_changed",
+        "runtime_ready",
+        "voice_runtime_verified",
+        "discord_runtime_verified",
+        "provider_transfer_authorized",
+        "external_transfer_authorized",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "source_record_schema_verified": {"const": false},
+        "source_record_bytes_current_verified": {"const": false},
+        "source_content_bytes_current_verified": {"const": false},
+        "source_authenticity_verified": {"const": false},
+        "source_completeness_verified": {"const": false},
+        "source_lineage_verified": {"const": false},
+        "access_or_consent_verified": {"const": false},
+        "retention_enforced": {"const": false},
+        "subject_identity_verified": {"const": false},
+        "subject_attribution_verified": {"const": false},
+        "extraction_actor_verified": {"const": false},
+        "extraction_tool_verified": {"const": false},
+        "extraction_model_verified": {"const": false},
+        "extraction_prompt_verified": {"const": false},
+        "extraction_receipt_verified": {"const": false},
+        "extraction_provenance_verified": {"const": false},
+        "prompt_injection_cleared": {"const": false},
+        "redaction_verified": {"const": false},
+        "sensitive_content_reviewed": {"const": false},
+        "human_confirmation_identity_verified": {"const": false},
+        "human_confirmation_authority_verified": {"const": false},
+        "human_confirmation_authenticity_verified": {"const": false},
+        "human_intent_confirmed": {"const": false},
+        "candidate_id_uniqueness_verified": {"const": false},
+        "replay_prevented": {"const": false},
+        "candidate_bound_human_decision_verified": {"const": false},
+        "execution_authority_granted": {"const": false},
+        "work_order_authority_granted": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "runtime_ready": {"const": false},
+        "voice_runtime_verified": {"const": false},
+        "discord_runtime_verified": {"const": false},
+        "provider_transfer_authorized": {"const": false},
+        "external_transfer_authorized": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"intent_state": {"const": "EXTRACTION_REQUIRED"}}
+      },
+      "then": {
+        "properties": {
+          "intent_content": {"type": "null"},
+          "extraction_provenance": {"type": "null"},
+          "human_confirmation": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"intent_state": {"const": "EXTRACTED_UNVERIFIED"}}
+      },
+      "then": {
+        "properties": {
+          "intent_content": {"$ref": "#/$defs/intent_content"},
+          "extraction_provenance": {"$ref": "#/$defs/extraction_provenance"},
+          "human_confirmation": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "intent_state": {"const": "HUMAN_CONFIRMATION_ENTERED_UNVERIFIED"}
+        }
+      },
+      "then": {
+        "properties": {
+          "intent_content": {"$ref": "#/$defs/intent_content"},
+          "extraction_provenance": {"$ref": "#/$defs/extraction_provenance"},
+          "human_confirmation": {"$ref": "#/$defs/human_confirmation"}
+        }
+      }
+    }
+  ]
+}

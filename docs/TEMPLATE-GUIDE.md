@@ -165,12 +165,13 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 8. [review request](REVIEW-REQUEST.md)を作り、46件のID/path/reasonと5件のevidence gapを同じcandidateへ束縛する。
 9. [review response](REVIEW-RESPONSE.md)でoutcomeだけを入力し、元requestとの構造一致を確認する。
 10. [review decision handoff](REVIEW-DECISION-HANDOFF.md)で5成果物を非承認candidateへ束縛する。
-11. 実Decisionの前に[Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)でfieldと全false claimを確認する。このschema-only契約はDecisionや権限を生成しない。
-12. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、identity・authority・全体outcomeを別Decision Recordへ束縛する。
-13. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
-14. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
-15. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
-16. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
+11. [Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)でprivate source binding、untrusted inference、Human確認前のfalse claimを確認する。
+12. 実Decisionの前に[Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)でfieldと全false claimを確認する。このschema-only契約はDecisionや権限を生成しない。
+13. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、identity・authority・全体outcomeを別Decision Recordへ束縛する。
+14. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
+15. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
+16. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
+17. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
 
 ## Statusの読み方
 

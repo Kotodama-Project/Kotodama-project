@@ -133,6 +133,8 @@ complete response chainを後続Decisionへ手転記せず渡す場合は[Review
 
 `MATCH`を得た後も、次をDecision Recordへ明示します。
 
+Decisionへ渡す前のprivate Intent Candidate shapeは[Company Pack Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)で確認できます。schema PASSやHuman入力欄からHuman Intent、source authenticity、consent、authorityを導出しません。
+
 具体instanceを実装する前のcandidate fieldと否定claimは[Company Pack Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)で確認できます。このschema-only契約はidentity、authority、Human outcome、Decisionを検証せず、builder/verifierも提供しません。
 
 - candidate pack ID
