@@ -12,6 +12,22 @@ ROOT = Path(__file__).resolve().parents[1]
 CREATOR = ROOT / "tools" / "create_company_pack.py"
 VALIDATOR = ROOT / "tools" / "validate_template_pack.py"
 STARTER = ROOT / "examples" / "company-starter"
+CREATION_SCHEMA = ROOT / "schemas" / "company-pack-creation-report.schema.json"
+CREATION_REPORT_KEYS = {
+    "kind",
+    "version",
+    "status",
+    "pack_id",
+    "target",
+    "validated_files",
+    "rebound_mocs",
+    "draft_documents",
+    "static_customizations_applied",
+    "customization_status",
+    "claims",
+    "public_beta",
+    "errors",
+}
 
 
 class CreateCompanyPackCliTests(unittest.TestCase):
@@ -41,10 +57,15 @@ class CreateCompanyPackCliTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             summary = json.loads(result.stdout)
             self.assertEqual(summary["status"], "PASS")
+            self.assertEqual(set(summary), CREATION_REPORT_KEYS)
+            self.assertEqual(summary["kind"], "company_pack_creation_report")
+            self.assertEqual(summary["version"], "1.0")
             self.assertEqual(summary["pack_id"], "my-company")
             self.assertEqual(summary["validated_files"], 22)
             self.assertEqual(summary["rebound_mocs"], 3)
             self.assertEqual(summary["draft_documents"], 22)
+            self.assertTrue(all(not value for value in summary["claims"].values()))
+            self.assertEqual(summary["public_beta"], "NO_GO_UNPUBLISHED")
 
             manifest = json.loads(
                 (target / "manifest.json").read_text(encoding="utf-8")
@@ -163,6 +184,43 @@ class CreateCompanyPackCliTests(unittest.TestCase):
             self.assertEqual(summary["status"], "FAIL")
             self.assertIn("pack id must match", summary["errors"][0])
             self.assertFalse(target.exists())
+
+    def test_failure_report_is_closed_secret_safe_and_no_go(self) -> None:
+        invalid_pack_id = "sk-abcdefghijklmnopqrstuvwxyz123456"
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "candidate"
+            result = self.run_creator(invalid_pack_id, target)
+
+            self.assertEqual(result.returncode, 1)
+            report = json.loads(result.stdout)
+            self.assertEqual(set(report), CREATION_REPORT_KEYS)
+            self.assertEqual(report["kind"], "company_pack_creation_report")
+            self.assertEqual(report["version"], "1.0")
+            self.assertEqual(report["status"], "FAIL")
+            self.assertIsNone(report["pack_id"])
+            self.assertIsNone(report["target"])
+            self.assertEqual(report["static_customizations_applied"], 0)
+            self.assertIsNone(report["customization_status"])
+            self.assertTrue(all(not value for value in report["claims"].values()))
+            self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+            self.assertNotIn(invalid_pack_id, result.stdout + result.stderr)
+            self.assertNotIn(str(target), result.stdout + result.stderr)
+            self.assertFalse(target.exists())
+
+    def test_creation_report_schema_declares_the_exact_closed_contract(self) -> None:
+        schema = json.loads(CREATION_SCHEMA.read_text(encoding="utf-8"))
+
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(set(schema["required"]), CREATION_REPORT_KEYS)
+        self.assertEqual(
+            schema["properties"]["kind"]["const"],
+            "company_pack_creation_report",
+        )
+        self.assertEqual(schema["properties"]["version"]["const"], "1.0")
+        self.assertEqual(
+            schema["properties"]["public_beta"]["const"],
+            "NO_GO_UNPUBLISHED",
+        )
 
     def test_guided_options_are_all_or_none_and_never_create_a_target_on_usage_error(self) -> None:
         option_sets = (

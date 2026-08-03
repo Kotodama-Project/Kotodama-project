@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-creation-report.schema.json",
+  "title": "Kotodama Company Pack Creation Report",
+  "$comment": "PASS proves only that a new non-overwritten draft Pack was generated and locally checked. READY_FOR_GOVERNED_REVIEW means static placeholders are closed; it does not prove Human approval, authority, retention enforcement, Promotion, Current Truth, runtime readiness, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "pack_id",
+    "target",
+    "validated_files",
+    "rebound_mocs",
+    "draft_documents",
+    "static_customizations_applied",
+    "customization_status",
+    "claims",
+    "public_beta",
+    "errors"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_creation_report"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["PASS", "FAIL"]},
+    "pack_id": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"},
+        {"type": "null"}
+      ]
+    },
+    "target": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "null"}
+      ]
+    },
+    "validated_files": {"type": "integer", "minimum": 0, "maximum": 22},
+    "rebound_mocs": {"type": "integer", "minimum": 0, "maximum": 3},
+    "draft_documents": {"type": "integer", "minimum": 0, "maximum": 22},
+    "static_customizations_applied": {"type": "integer", "enum": [0, 19]},
+    "customization_status": {
+      "oneOf": [
+        {"enum": ["CUSTOMIZATION_REQUIRED", "READY_FOR_GOVERNED_REVIEW"]},
+        {"type": "null"}
+      ]
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_intent_authenticated",
+        "human_approval_verified",
+        "authority_assignment_verified",
+        "retention_policy_verified",
+        "promotion_verified",
+        "current_truth_changed"
+      ],
+      "properties": {
+        "human_intent_authenticated": {"const": false},
+        "human_approval_verified": {"const": false},
+        "authority_assignment_verified": {"const": false},
+        "retention_policy_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"},
+    "errors": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

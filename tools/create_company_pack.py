@@ -94,13 +94,32 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
 
 
 def failure(pack_id: str, target: Path, message: str) -> dict[str, Any]:
+    safe_pack_id = (
+        pack_id
+        if ID_PATTERN.fullmatch(pack_id) is not None
+        and not any(pattern.search(pack_id) for pattern in SECRET_VALUE_PATTERNS)
+        else None
+    )
     return {
+        "kind": "company_pack_creation_report",
+        "version": "1.0",
         "status": "FAIL",
-        "pack_id": pack_id,
-        "target": str(target),
+        "pack_id": safe_pack_id,
+        "target": None,
         "validated_files": 0,
         "rebound_mocs": 0,
         "draft_documents": 0,
+        "static_customizations_applied": 0,
+        "customization_status": None,
+        "claims": {
+            "human_intent_authenticated": False,
+            "human_approval_verified": False,
+            "authority_assignment_verified": False,
+            "retention_policy_verified": False,
+            "promotion_verified": False,
+            "current_truth_changed": False,
+        },
+        "public_beta": "NO_GO_UNPUBLISHED",
         "errors": [message],
     }
 
@@ -129,8 +148,8 @@ def create_company_pack(
         source = STARTER.resolve(strict=True)
         parent = target.parent.resolve(strict=True)
         destination = parent / target.name
-    except OSError as exc:
-        return failure(pack_id, target, f"target parent is unavailable: {exc}")
+    except OSError:
+        return failure(pack_id, target, "target parent is unavailable")
 
     if not parent.is_dir():
         return failure(pack_id, target, "target parent must be an existing directory")
@@ -186,9 +205,7 @@ def create_company_pack(
 
         validation = validate_pack(destination)
         if validation["status"] != "PASS":
-            raise ValueError(
-                "generated pack failed validation: " + "; ".join(validation["errors"])
-            )
+            raise ValueError("generated pack failed validation")
 
         customization_report = check_customization(destination)
         expected_status = (
@@ -200,6 +217,8 @@ def create_company_pack(
             raise ValueError("generated pack failed customization post-check")
 
         return {
+            "kind": "company_pack_creation_report",
+            "version": "1.0",
             "status": "PASS",
             "pack_id": pack_id,
             "target": str(target),
@@ -208,12 +227,21 @@ def create_company_pack(
             "draft_documents": draft_documents,
             "static_customizations_applied": static_customizations_applied,
             "customization_status": customization_report["status"],
+            "claims": {
+                "human_intent_authenticated": False,
+                "human_approval_verified": False,
+                "authority_assignment_verified": False,
+                "retention_policy_verified": False,
+                "promotion_verified": False,
+                "current_truth_changed": False,
+            },
+            "public_beta": "NO_GO_UNPUBLISHED",
             "errors": [],
         }
-    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
         if created_destination and destination.is_dir() and not destination.is_symlink():
             shutil.rmtree(destination)
-        return failure(pack_id, target, str(exc))
+        return failure(pack_id, target, "pack generation failed safely")
 
 
 def write_stdout_utf8(value: str) -> None:
