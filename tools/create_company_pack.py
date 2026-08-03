@@ -38,6 +38,12 @@ class StaticCustomization:
     retention_policy_ref: str
 
 
+class SafeArgumentParser(argparse.ArgumentParser):
+    def error(self, _message: str) -> None:
+        self.print_usage(sys.stderr)
+        self.exit(2, f"{self.prog}: error: invalid command-line arguments\n")
+
+
 def validate_static_customization(
     customization: StaticCustomization,
     now: datetime | None = None,
@@ -251,7 +257,7 @@ def write_stdout_utf8(value: str) -> None:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = SafeArgumentParser(
         prog="create_company_pack.py",
         description="Create a validated working copy of the Company starter.",
     )

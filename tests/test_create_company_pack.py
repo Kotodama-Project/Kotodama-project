@@ -246,6 +246,27 @@ class CreateCompanyPackCliTests(unittest.TestCase):
                     self.assertIn("must be supplied together", result.stderr)
                     self.assertFalse(target.exists())
 
+    def test_unknown_or_extra_cli_input_is_never_reflected(self) -> None:
+        secret_like = "sk-abcdefghijklmnopqrstuvwxyz123456"
+        option_sets = (
+            ("--unknown", secret_like),
+            (secret_like,),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "work"
+            parent.mkdir()
+            for index, options in enumerate(option_sets):
+                with self.subTest(options=options):
+                    target = parent / f"invalid-cli-{index}"
+                    result = self.run_creator("invalid-cli", target, *options)
+
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("invalid command-line arguments", result.stderr)
+                    self.assertNotIn(secret_like, result.stderr)
+                    self.assertNotIn(str(target), result.stderr)
+                    self.assertFalse(target.exists())
+
     def test_guided_options_reject_unsafe_locators_and_unbounded_expiry_without_reflection(self) -> None:
         tomorrow = (
             datetime.now(timezone.utc) + timedelta(days=1)
