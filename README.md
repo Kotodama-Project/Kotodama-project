@@ -118,6 +118,19 @@ Private Discord Voice Channel
 - 退出・再参加後も listener と rotation が回復する
 - 同意と保持期限に従って raw audio、chunk、transcript を削除し、receipt を残す
 
+#### 利用者が受け取る15分の境界
+
+15分 rotation は、内部処理の区切りではなく、会話を続ける利用者へ返す
+成果の契約です。理想の製品体験と現在の Public Preview を、同じ項目で
+読み分けられるようにします。
+
+| 項目 | 理想の製品体験 | 現在の Public Preview |
+|---|---|---|
+| 境界 | 自然な 900秒境界で、それまでの発話を一つの区間として確定する | 実音声での 900秒 rotation は未証明 |
+| 投稿 | 話者・時刻付き transcript を private channel へ投稿し、次の区間を開始する | public Voice Bot と Discord 投稿は未提供 |
+| 継続 | listener / rejoin を維持し、退出・再参加でも rotation を途切れさせない | 既存 local candidate はあるが、常時 listener / rejoin E2E は未証明 |
+| 保持 | raw audio、chunk、transcript を retention policy に従って削除し、retention/delete receipt を残す | raw audio・transcript corpus・公開削除 receipt は含まれない |
+
 常時 listener、確実な rejoin、自然な 900 秒 rotation、Discord 投稿、期限内削除を同じ候補と時間窓で結んだ E2E は、まだ公開済みの証明ではありません。
 
 ### Voice-to-Verified-Handoff
