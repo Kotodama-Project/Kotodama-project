@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-checkpoint-segment-transition-verification.schema.json",
+  "title": "Attestation Nonce Store Checkpoint Segment Transition Verification Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "errors", "evaluated_at", "clock_source", "input_bindings", "counts", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_checkpoint_segment_transition_verification"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["SIGNED_KEY_ROTATION_SEGMENT_TRANSITION", "SIGNED_SAME_POLICY_SEGMENT_TRANSITION", "INVALID"]},
+    "errors": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "evaluated_at": {"type": ["string", "null"], "format": "date-time"},
+    "clock_source": {"const": "supplied_evaluation_time_untrusted"},
+    "input_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transition_file_sha256": {"$ref": "#/$defs/sha256"},
+        "transition_id_sha256": {"$ref": "#/$defs/sha256"},
+        "prior_bundle_file_sha256": {"$ref": "#/$defs/sha256"},
+        "prior_head_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "successor_checkpoint_file_sha256": {"$ref": "#/$defs/sha256"},
+        "store_id_sha256": {"$ref": "#/$defs/sha256"},
+        "prior_allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+        "prior_identity_file_sha256": {"$ref": "#/$defs/sha256"},
+        "successor_allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+        "successor_identity_file_sha256": {"$ref": "#/$defs/sha256"},
+        "reviewer_allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
+        "reviewer_identity_file_sha256": {"$ref": "#/$defs/sha256"},
+        "ssh_keygen_executable_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prior_checkpoints_verified", "prior_links_verified", "successor_parent_links_verified", "prior_reservations", "successor_reservations"],
+      "properties": {
+        "prior_checkpoints_verified": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "prior_links_verified": {"type": "integer", "minimum": 0, "maximum": 1023},
+        "successor_parent_links_verified": {"type": "integer", "minimum": 0, "maximum": 1},
+        "prior_reservations": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "successor_reservations": {"type": "integer", "minimum": 0, "maximum": 10000}
+      }
+    },
+    "claims": {"$ref": "#/$defs/report_claims"},
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "INVALID"}}},
+      "then": {
+        "properties": {
+          "errors": {"minItems": 1},
+          "counts": {"properties": {"prior_checkpoints_verified": {"const": 0}, "prior_links_verified": {"const": 0}, "successor_parent_links_verified": {"const": 0}, "prior_reservations": {"const": 0}, "successor_reservations": {"const": 0}}},
+          "claims": {"$ref": "#/$defs/invalid_claims"}
+        }
+      },
+      "else": {
+        "properties": {
+          "errors": {"maxItems": 0},
+          "evaluated_at": {"type": "string"},
+          "input_bindings": {"required": ["transition_file_sha256", "transition_id_sha256", "prior_bundle_file_sha256", "prior_head_checkpoint_sha256", "successor_checkpoint_file_sha256", "store_id_sha256", "prior_allowed_signers_file_sha256", "prior_identity_file_sha256", "successor_allowed_signers_file_sha256", "successor_identity_file_sha256", "reviewer_allowed_signers_file_sha256", "reviewer_identity_file_sha256", "ssh_keygen_executable_sha256"]},
+          "counts": {"properties": {"prior_checkpoints_verified": {"minimum": 1}, "successor_parent_links_verified": {"const": 1}}},
+          "claims": {"$ref": "#/$defs/common_success_claims"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "SIGNED_KEY_ROTATION_SEGMENT_TRANSITION"}}},
+      "then": {"properties": {"claims": {"properties": {"key_rotation_transition_binding_verified": {"const": true}, "same_policy_segmentation_binding_verified": {"const": false}}}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "SIGNED_SAME_POLICY_SEGMENT_TRANSITION"}}},
+      "then": {"properties": {"claims": {"properties": {"key_rotation_transition_binding_verified": {"const": false}, "same_policy_segmentation_binding_verified": {"const": true}}}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "report_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transition_file_digest_match_verified", "prior_bundle_digest_match_verified", "prior_bundle_structure_verified", "prior_checkpoint_signatures_verified", "prior_head_binding_verified", "successor_checkpoint_digest_match_verified", "successor_checkpoint_signature_verified", "parent_link_verified", "store_identity_continuity_verified", "reservation_append_only_verified", "successor_store_match_verified", "transition_signature_verified", "prior_signer_policy_verified", "successor_signer_policy_verified", "transition_reviewer_policy_verified", "signer_policy_mode_verified", "checkpoint_segment_boundary_verified", "signed_evaluation_window_verified", "ssh_keygen_binary_binding_verified", "key_rotation_transition_binding_verified", "same_policy_segmentation_binding_verified", "canonical_anchor_authority_verified", "trusted_clock_source_verified", "authoritative_complete_history_verified", "parallel_branch_absence_verified", "old_key_revocation_verified", "key_compromise_absence_verified", "segmentation_policy_adopted", "actual_store_continuity_verified", "backup_creation_verified", "restore_execution_verified", "protected_runner_execution_verified", "signer_reviewer_person_independence_verified", "promotion_verified", "current_truth_changed", "final_human_go", "public_beta_go", "ssh_keygen_vendor_authority_verified"],
+      "properties": {
+        "transition_file_digest_match_verified": {"type": "boolean"},
+        "prior_bundle_digest_match_verified": {"type": "boolean"},
+        "prior_bundle_structure_verified": {"type": "boolean"},
+        "prior_checkpoint_signatures_verified": {"type": "boolean"},
+        "prior_head_binding_verified": {"type": "boolean"},
+        "successor_checkpoint_digest_match_verified": {"type": "boolean"},
+        "successor_checkpoint_signature_verified": {"type": "boolean"},
+        "parent_link_verified": {"type": "boolean"},
+        "store_identity_continuity_verified": {"type": "boolean"},
+        "reservation_append_only_verified": {"type": "boolean"},
+        "successor_store_match_verified": {"type": "boolean"},
+        "transition_signature_verified": {"type": "boolean"},
+        "prior_signer_policy_verified": {"type": "boolean"},
+        "successor_signer_policy_verified": {"type": "boolean"},
+        "transition_reviewer_policy_verified": {"type": "boolean"},
+        "signer_policy_mode_verified": {"type": "boolean"},
+        "checkpoint_segment_boundary_verified": {"type": "boolean"},
+        "signed_evaluation_window_verified": {"type": "boolean"},
+        "ssh_keygen_binary_binding_verified": {"type": "boolean"},
+        "key_rotation_transition_binding_verified": {"type": "boolean"},
+        "same_policy_segmentation_binding_verified": {"type": "boolean"},
+        "canonical_anchor_authority_verified": {"const": false},
+        "trusted_clock_source_verified": {"const": false},
+        "authoritative_complete_history_verified": {"const": false},
+        "parallel_branch_absence_verified": {"const": false},
+        "old_key_revocation_verified": {"const": false},
+        "key_compromise_absence_verified": {"const": false},
+        "segmentation_policy_adopted": {"const": false},
+        "actual_store_continuity_verified": {"const": false},
+        "backup_creation_verified": {"const": false},
+        "restore_execution_verified": {"const": false},
+        "protected_runner_execution_verified": {"const": false},
+        "signer_reviewer_person_independence_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false},
+        "ssh_keygen_vendor_authority_verified": {"const": false}
+      }
+    },
+    "common_success_claims": {"properties": {"transition_file_digest_match_verified": {"const": true}, "prior_bundle_digest_match_verified": {"const": true}, "prior_bundle_structure_verified": {"const": true}, "prior_checkpoint_signatures_verified": {"const": true}, "prior_head_binding_verified": {"const": true}, "successor_checkpoint_digest_match_verified": {"const": true}, "successor_checkpoint_signature_verified": {"const": true}, "parent_link_verified": {"const": true}, "store_identity_continuity_verified": {"const": true}, "reservation_append_only_verified": {"const": true}, "successor_store_match_verified": {"const": true}, "transition_signature_verified": {"const": true}, "prior_signer_policy_verified": {"const": true}, "successor_signer_policy_verified": {"const": true}, "transition_reviewer_policy_verified": {"const": true}, "signer_policy_mode_verified": {"const": true}, "checkpoint_segment_boundary_verified": {"const": true}, "signed_evaluation_window_verified": {"const": true}, "ssh_keygen_binary_binding_verified": {"const": true}}},
+    "invalid_claims": {"properties": {"transition_file_digest_match_verified": {"const": false}, "prior_bundle_digest_match_verified": {"const": false}, "prior_bundle_structure_verified": {"const": false}, "prior_checkpoint_signatures_verified": {"const": false}, "prior_head_binding_verified": {"const": false}, "successor_checkpoint_digest_match_verified": {"const": false}, "successor_checkpoint_signature_verified": {"const": false}, "parent_link_verified": {"const": false}, "store_identity_continuity_verified": {"const": false}, "reservation_append_only_verified": {"const": false}, "successor_store_match_verified": {"const": false}, "transition_signature_verified": {"const": false}, "prior_signer_policy_verified": {"const": false}, "successor_signer_policy_verified": {"const": false}, "transition_reviewer_policy_verified": {"const": false}, "signer_policy_mode_verified": {"const": false}, "checkpoint_segment_boundary_verified": {"const": false}, "signed_evaluation_window_verified": {"const": false}, "ssh_keygen_binary_binding_verified": {"const": false}, "key_rotation_transition_binding_verified": {"const": false}, "same_policy_segmentation_binding_verified": {"const": false}}}
+  }
+}
