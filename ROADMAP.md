@@ -29,8 +29,9 @@ R58 synchronizes this roadmap with the current public Company Pack surface.
 The published review chain remains read-only/candidate-only: it binds exact
 bytes, saved Pack-specific counts, and false claims, but it does not create
 Human approval, runtime authority, Promotion, Current Truth, or Public Beta
-access. R54, R55, R56, R57, and R58 extend the public documentation/test
-surface only.
+access. R54, R55, R56, R57, R58, and R62 extend the public documentation/test
+surface only. R62 is the latest navigation synchronization; R58 remains the
+current Company Pack surface label.
 
 - [x] Template/Company/Blocks/Records/MOCs/starter navigation synchronization
       with ideal/current usage, dynamic Pack-count guidance, and the
@@ -40,6 +41,7 @@ surface only.
 - [x] Installation lifecycle first-read and profile-selection guidance
       for Company Pack-only, `compose_minimum`, and `proxmox_segmented`
 - [x] README first-stop guide and bounded profile-selection navigation
+- [x] Company Pack Catalog first-stop sequence with bounded no-runtime guidance
 
 - [x] Sanitized Compose minimum and Proxmox segmented lifecycle contracts
 - [x] Machine-checked preflight/apply/verify/rollback/isolated-restore evidence requirements

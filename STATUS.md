@@ -57,9 +57,11 @@ R55 hardened standard unittest discovery for that Catalog regression. R56 added
 the first-read order and bounded runtime profile selection for
 `compose_minimum` and `proxmox_segmented`. R58 added the README first-stop guide
 that sends readers through Catalog, Starter Walkthrough, and Installation
-Lifecycle only when a runtime profile is needed. These surfaces do not add runtime
-authority or access, and activation, Promotion, Current Truth, and Public Beta
-remain outside the published preview.
+Lifecycle only when a runtime profile is needed. R62 added the Company Pack
+Catalog first-stop sequence with the same bounded order and no-runtime
+boundary. These surfaces do not add runtime authority or access, and
+activation, Promotion, Current Truth, and Public Beta remain outside the
+published preview.
 
 公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Review Request、Response、Decision Handoffは保存済みchainを再入力なしで運びますが、すべてread-only/candidate-onlyです。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。
 
