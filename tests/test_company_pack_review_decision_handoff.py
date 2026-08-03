@@ -147,6 +147,20 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
             env=env,
         )
 
+    def run_handoff_verifier(self, chain: dict, handoff_path: Path, *, env=None):
+        paths = chain["paths"]
+        return self.run_cli(
+            HANDOFF_VERIFIER,
+            paths["bundle"],
+            chain["pack"],
+            paths["bundle_verification"],
+            paths["request"],
+            paths["response"],
+            paths["response_verification"],
+            handoff_path,
+            env=env,
+        )
+
     def test_complete_chain_builds_non_authorizing_decision_handoff(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             chain = self.create_complete_chain(Path(temporary))
@@ -214,6 +228,115 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
         )
         self.assertTrue(all(value is False for value in handoff["claims"].values()))
         self.assertEqual(handoff["public_beta"], "NO_GO_UNPUBLISHED")
+
+    def test_report_substitution_and_current_pack_drift_fail_closed(self) -> None:
+        mutations = {
+            "bundle bytes": lambda chain: chain["paths"]["bundle"].write_bytes(
+                chain["paths"]["bundle"].read_bytes() + b" "
+            ),
+            "bundle verification": lambda chain: self._mutate_json(
+                chain["paths"]["bundle_verification"],
+                lambda value: value.__setitem__("matched_bindings", 21),
+            ),
+            "request candidate binding": lambda chain: self._mutate_json(
+                chain["paths"]["request"],
+                lambda value: value["candidate_binding"]["saved_bundle"].__setitem__(
+                    "sha256", "0" * 64
+                ),
+            ),
+            "response item": lambda chain: self._mutate_json(
+                chain["paths"]["response"],
+                lambda value: value["review_response"]["items"][0].__setitem__(
+                    "reason", "tampered-private-reason"
+                ),
+            ),
+            "response verification": lambda chain: self._mutate_json(
+                chain["paths"]["response_verification"],
+                lambda value: value["review_summary"]["outcome_counts"].__setitem__(
+                    "accept", 17
+                ),
+            ),
+            "current Pack": lambda chain: (
+                chain["pack"] / "records" / "source-record.json"
+            ).write_bytes(
+                (chain["pack"] / "records" / "source-record.json").read_bytes()
+                + b"\n"
+            ),
+        }
+
+        for label, mutate in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                chain = self.create_complete_chain(Path(temporary))
+                mutate(chain)
+                result = self.run_builder(chain)
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stderr, b"")
+            self.assertNotIn(b"private-decision-handoff", result.stdout)
+            self.assertNotIn(b"tampered-private-reason", result.stdout)
+            refusal = json.loads(result.stdout)
+            self.assertEqual(refusal["status"], "HANDOFF_BUILD_REFUSED")
+            self.assertIn(
+                refusal["reason"],
+                {"SOURCE_INVALID", "CHAIN_MISMATCH", "SOURCE_DRIFT_DETECTED"},
+            )
+            self.assertIsNone(refusal["pack_id"])
+            self.assertIsNone(refusal["artifact_bindings"])
+            self.assertIsNone(refusal["candidate_binding"])
+            self.assertEqual(refusal["review_summary"]["completed_items"], 0)
+            self.assertEqual(refusal["decision_requirements"]["required_fields"], [])
+            self.assertTrue(all(value is False for value in refusal["claims"].values()))
+            self.assertEqual(refusal["public_beta"], "NO_GO_UNPUBLISHED")
+
+    def test_saved_handoff_matches_current_chain_without_becoming_a_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            chain = self.create_complete_chain(root)
+            built = self.run_builder(chain)
+            self.assertEqual(built.returncode, 0, built.stdout.decode("utf-8"))
+            handoff_path = root / "saved-decision-handoff.json"
+            handoff_path.write_bytes(built.stdout)
+            result = self.run_handoff_verifier(chain, handoff_path)
+            handoff = json.loads(built.stdout)
+
+        self.assertEqual(result.returncode, 0, result.stdout.decode("utf-8"))
+        self.assertEqual(result.stderr, b"")
+        self.assertNotIn(b"private-decision-handoff", result.stdout)
+        self.assertNotIn(b"private-review-note", result.stdout)
+        report = json.loads(result.stdout)
+        self.assertEqual(
+            report["kind"], "company_pack_review_decision_handoff_verification"
+        )
+        self.assertEqual(report["version"], "1.0")
+        self.assertEqual(report["status"], "DECISION_HANDOFF_MATCH")
+        self.assertIsNone(report["reason"])
+        self.assertEqual(report["pack_id"], "decision-handoff-pack")
+        self.assertEqual(report["artifact_bindings"], handoff["artifact_bindings"])
+        self.assertEqual(
+            report["handoff_binding"],
+            {
+                "sha256": hashlib.sha256(built.stdout).hexdigest(),
+                "bytes": len(built.stdout),
+            },
+        )
+        self.assertEqual(report["candidate_binding"], handoff["candidate_binding"])
+        self.assertEqual(report["source_checks"], handoff["source_checks"])
+        self.assertEqual(report["review_summary"], handoff["review_summary"])
+        self.assertEqual(
+            report["unresolved_evidence"],
+            {"state": "EVIDENCE_REQUIRED", "item_count": 5},
+        )
+        self.assertEqual(
+            report["decision_requirements"],
+            {"state": "HUMAN_DECISION_REQUIRED", "selected_outcome": None},
+        )
+        self.assertTrue(all(value is False for value in report["claims"].values()))
+        self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+
+    def _mutate_json(self, path: Path, mutation) -> None:
+        value = json.loads(path.read_bytes())
+        mutation(value)
+        self.save_json(path, value)
 
 
 if __name__ == "__main__":
