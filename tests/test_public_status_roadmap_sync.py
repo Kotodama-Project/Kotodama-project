@@ -1,29 +1,44 @@
 from pathlib import Path
+import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_public_status_and_roadmap_name_r52_documentation_surface() -> None:
-    status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
-    roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
-    status_flat = " ".join(status.split())
-    roadmap_flat = " ".join(roadmap.split())
+class PublicStatusRoadmapSyncTests(unittest.TestCase):
+    def test_public_status_and_roadmap_name_r56_documentation_surface(self) -> None:
+        status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
+        roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        status_flat = " ".join(status.split())
+        roadmap_flat = " ".join(roadmap.split())
 
-    assert "R52 is the current public Template/Company/Blocks/Records/MOCs/starter" in status_flat
-    assert "R48 is the current public template/documentation surface" not in status_flat
-    assert "R50 added the eight-entry-point navigation synchronization" in status_flat
-    assert "R52 added the explicit ideal/current Company Template usage" in status_flat
-    assert "Review Request, Review Response, and Decision Handoff" in status_flat
-    assert "Public Beta access" in status_flat
-    assert "Not open" in status_flat
-    assert "Final Human GO" in status_flat
-    assert "Not completed" in status_flat
+        self.assertIn(
+            "R56 is the current public Template/Company/Blocks/Records/MOCs/starter",
+            status_flat,
+        )
+        self.assertNotIn("R52 is the current public Template/Company/Blocks/Records/MOCs/starter", status_flat)
+        self.assertNotIn("R48 is the current public template/documentation surface", status_flat)
+        self.assertIn("R50 added the eight-entry-point navigation synchronization", status_flat)
+        self.assertIn("R52 added the explicit ideal/current Company Template usage", status_flat)
+        self.assertIn("R54 added the practical ideal/current Template Catalog usage", status_flat)
+        self.assertIn("R55 hardened standard unittest discovery", status_flat)
+        self.assertIn("R56 added the first-read order and bounded runtime profile selection", status_flat)
+        self.assertIn("Review Request, Review Response, and Decision Handoff", status_flat)
+        self.assertIn("Public Beta access", status_flat)
+        self.assertIn("Not open", status_flat)
+        self.assertIn("Final Human GO", status_flat)
+        self.assertIn("Not completed", status_flat)
 
-    assert "R52 synchronizes this roadmap with the current public Company Pack surface" in roadmap_flat
-    assert "R49 synchronizes this roadmap with the R48 public Company Pack surface" not in roadmap_flat
-    assert "[x] Template/Company/Blocks/Records/MOCs/starter navigation synchronization" in roadmap_flat
-    assert "[x] Company Template ideal/current usage documentation synchronization" in roadmap_flat
-    assert "read-only/candidate-only" in roadmap_flat
-    assert "Public Beta GO" in roadmap_flat
-    assert "[ ] Candidate-bound Final Human GO" in roadmap_flat
+        self.assertIn("R56 synchronizes this roadmap with the current public", roadmap_flat)
+        self.assertNotIn("R52 synchronizes this roadmap with the current public Company Pack surface", roadmap_flat)
+        self.assertNotIn("R49 synchronizes this roadmap with the R48 public Company Pack surface", roadmap_flat)
+        self.assertIn("[x] Template/Company/Blocks/Records/MOCs/starter navigation synchronization", roadmap_flat)
+        self.assertIn("[x] Company Template ideal/current usage documentation synchronization", roadmap_flat)
+        self.assertIn("[x] Installation lifecycle first-read and profile-selection guidance", roadmap_flat)
+        self.assertIn("read-only/candidate-only", roadmap_flat)
+        self.assertIn("Public Beta GO", roadmap_flat)
+        self.assertIn("[ ] Candidate-bound Final Human GO", roadmap_flat)
+
+
+if __name__ == "__main__":
+    unittest.main()
