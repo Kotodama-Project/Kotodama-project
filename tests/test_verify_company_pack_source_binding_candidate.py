@@ -297,6 +297,7 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
             ("false narrow claim", json.loads(json.dumps(report))),
             ("atomic overclaim", json.loads(json.dumps(report))),
             ("wrong read status", json.loads(json.dumps(report))),
+            ("refusal preserving success states", json.loads(json.dumps(report))),
         ):
             if name == "missing projection":
                 mutation["r30_projection_digest_candidate"] = None
@@ -304,8 +305,14 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
                 mutation["claims"]["strict_input_parsing_matched"] = False
             elif name == "atomic overclaim":
                 mutation["claims"]["atomic_multi_file_snapshot_verified"] = True
-            else:
+            elif name == "wrong read status":
                 mutation["read_set_status"] = "NOT_EVALUATED"
+            else:
+                mutation["result"] = "REFUSED"
+                mutation["reason_codes"] = ["INPUT_INVALID"]
+                mutation["r30_projection_digest_candidate"] = None
+                for claim in verifier.NARROW_CLAIMS:
+                    mutation["claims"][claim] = False
             with self.subTest(report_schema=name):
                 self.assertTrue(list(report_validator.iter_errors(mutation)))
         evidence_schema = json.loads(EVIDENCE_SCHEMA.read_text(encoding="utf-8"))

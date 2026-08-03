@@ -204,7 +204,24 @@
       "else": {
         "properties": {
           "reason_codes": {"minItems": 1},
+          "read_set_status": {
+            "enum": ["LATE_DRIFT_DETECTED", "NOT_EVALUATED"]
+          },
+          "r30_projection_eligibility": {
+            "enum": ["INELIGIBLE", "NOT_EVALUATED"]
+          },
           "r30_projection_digest_candidate": {"type": "null"},
+          "checks": {
+            "anyOf": [
+              {"properties": {"input_read_set": {"const": "MISMATCH"}}},
+              {"properties": {"strict_parsing": {"const": "MISMATCH"}}},
+              {"properties": {"record_projection_contract": {"const": "MISMATCH"}}},
+              {"properties": {"source_content_binding": {"const": "MISMATCH"}}},
+              {"properties": {"access_projection_evidence": {"const": "MISMATCH"}}},
+              {"properties": {"r30_projection": {"const": "MISMATCH"}}},
+              {"properties": {"terminal_reread": {"const": "MISMATCH"}}}
+            ]
+          },
           "claims": {
             "properties": {
               "access_projection_evidence_contract_matched": {"const": false},
