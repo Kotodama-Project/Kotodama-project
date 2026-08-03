@@ -49,8 +49,10 @@ attribution、builder、verifierは作成しません。
 - `DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED`: parent Source Record、
   transformation、任意segmentationを宣言したderived content候補。lineageは
   `DECLARED_DERIVED`だが未検証。
-- `WITHDRAWAL_RECORDED_UNVERIFIED`: useの一つにwithdrawal evidence refを
-  入力しただけで、取消の真正性、削除、保持停止を証明しない。
+- `WITHDRAWAL_RECORDED_UNVERIFIED`: content-bound source onlyのstate。
+  `content_observation`と`acquisition_provenance`を保持したSourceで、useの一つに
+  withdrawal evidence refを入力した形だけを許す。locator-only referenceをこの
+  stateへ変更することはできず、取消の真正性、削除、保持停止も証明しない。
 
 attributionはcontent lifecycleのstateにしません。nullableな
 `attribution_candidate`として独立し、どのstateでも入力だけでは本人性や
@@ -139,7 +141,7 @@ any `WITHDRAWAL_ENTERED_UNVERIFIED` in the six use declarations、またはroot
 
 R30 containerはR31 `source_record_id`をkeyにした
 `source_bindings[source_record_id]`として作ります。R30 `intent_content.source_refs`と
-`extraction_provenance.input_source_refs`が存在するstateでは、そのkey集合も同じ
+`extraction_provenance.input_binding_refs`が存在するstateでは、そのkey集合も同じ
 Source Record集合へ一致させます。key不一致、欠落、別recordへのaliasはfail closedです。
 
 | R30 required field | R31 input / fail-closed rule |

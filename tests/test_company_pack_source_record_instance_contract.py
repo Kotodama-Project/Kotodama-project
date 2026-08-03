@@ -552,6 +552,19 @@ class CompanyPackSourceRecordInstanceContractTests(unittest.TestCase):
     def test_r30_mapping_is_field_complete_and_requires_projection(self) -> None:
         r30_schema = json.loads(R30_SCHEMA_PATH.read_text(encoding="utf-8"))
         required_fields = r30_schema["$defs"]["source_binding"]["required"]
+        self.assertIn(
+            "source_refs",
+            r30_schema["$defs"]["intent_content"]["required"],
+        )
+        self.assertIn(
+            "input_binding_refs",
+            r30_schema["$defs"]["extraction_provenance"]["required"],
+        )
+        self.assertIn("lineage_kind", self.schema["$defs"]["lineage"]["required"])
+        self.assertNotIn(
+            "declaration_status",
+            self.schema["$defs"]["lineage"]["properties"],
+        )
         runbook = RUNBOOK_PATH.read_text(encoding="utf-8")
         mapping = runbook.split("## R30 mapping", 1)[1].split(
             "## generic template mapping", 1
@@ -645,9 +658,39 @@ class CompanyPackSourceRecordInstanceContractTests(unittest.TestCase):
             "any `WITHDRAWAL_ENTERED_UNVERIFIED`",
             "`purpose_scope_ref`",
             "`source_bindings[source_record_id]`",
+            "`extraction_provenance.input_binding_refs`",
         ):
             self.assertIn(phrase, mapping)
         self.assertNotIn("`lineage.declaration_status`", mapping)
+        self.assertNotIn("`extraction_provenance.input_source_refs`", mapping)
+
+    def test_withdrawal_state_is_content_bound_and_unverified(self) -> None:
+        withdrawal = source_record_instance("WITHDRAWAL_RECORDED_UNVERIFIED")
+        self.assert_valid(withdrawal)
+        self.assertIsNotNone(withdrawal["content_observation"])
+        self.assertIsNotNone(withdrawal["acquisition_provenance"])
+        self.assertFalse(withdrawal["claims"]["withdrawal_recorded_verified"])
+
+        reference_without_content = source_record_instance(
+            "REFERENCE_DECLARED_UNVERIFIED"
+        )
+        reference_without_content["source_state"] = (
+            "WITHDRAWAL_RECORDED_UNVERIFIED"
+        )
+        reference_without_content["access_or_consent"]["use_declarations"][
+            "read"
+        ] = use_declaration(
+            "read",
+            "WITHDRAWAL_ENTERED_UNVERIFIED",
+            "ref/use-revocation/read",
+        )
+        self.assert_invalid(
+            reference_without_content,
+            "withdrawal state without content/provenance",
+        )
+
+        runbook = RUNBOOK_PATH.read_text(encoding="utf-8")
+        self.assertIn("content-bound source only", runbook)
 
     def test_strict_parser_and_resource_limits_remain_future_gates(self) -> None:
         self.assertEqual(json.loads('{"a": 1, "a": 2}'), {"a": 2})
