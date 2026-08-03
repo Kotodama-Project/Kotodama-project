@@ -22,6 +22,8 @@ initializerはpack IDを再束縛し、manifest、9 Blocks、3 MOCs、9 Records�
 - Blockのbounded expiry: 9
 - Recordのretention policy locator: 9
 
+3値が決まっている場合は[guided initializer](GUIDED-COMPANY-PACK-INITIALIZATION.md)で、19件を手編集せずに新規Packへ一括反映できます。その場合の開始点は`replacement_required: 0`、`review_required: 46`、`evidence_required: 5`です。既存targetを更新・上書きする機能ではありません。
+
 元のshipped exampleを直接検査すると、上記19件にstarter ID 1件と`example` status 22件を加えた42件が表示されます。
 
 ## Three categories

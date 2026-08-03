@@ -93,7 +93,18 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     )
 
 
-def failure(pack_id: str, target: Path, message: str) -> dict[str, Any]:
+def empty_claims() -> dict[str, bool]:
+    return {
+        "human_intent_authenticated": False,
+        "human_approval_verified": False,
+        "authority_assignment_verified": False,
+        "retention_policy_verified": False,
+        "promotion_verified": False,
+        "current_truth_changed": False,
+    }
+
+
+def failure(pack_id: str, message: str) -> dict[str, Any]:
     safe_pack_id = (
         pack_id
         if ID_PATTERN.fullmatch(pack_id) is not None
@@ -111,14 +122,7 @@ def failure(pack_id: str, target: Path, message: str) -> dict[str, Any]:
         "draft_documents": 0,
         "static_customizations_applied": 0,
         "customization_status": None,
-        "claims": {
-            "human_intent_authenticated": False,
-            "human_approval_verified": False,
-            "authority_assignment_verified": False,
-            "retention_policy_verified": False,
-            "promotion_verified": False,
-            "current_truth_changed": False,
-        },
+        "claims": empty_claims(),
         "public_beta": "NO_GO_UNPUBLISHED",
         "errors": [message],
     }
@@ -132,7 +136,6 @@ def create_company_pack(
     if ID_PATTERN.fullmatch(pack_id) is None:
         return failure(
             pack_id,
-            target,
             "pack id must match ^[a-z0-9][a-z0-9-]{1,62}$",
         )
     if customization is not None:
@@ -140,7 +143,6 @@ def create_company_pack(
         if customization_error is not None:
             return failure(
                 pack_id,
-                target,
                 f"guided customization input refused: {customization_error}",
             )
 
@@ -149,18 +151,18 @@ def create_company_pack(
         parent = target.parent.resolve(strict=True)
         destination = parent / target.name
     except OSError:
-        return failure(pack_id, target, "target parent is unavailable")
+        return failure(pack_id, "target parent is unavailable")
 
     if not parent.is_dir():
-        return failure(pack_id, target, "target parent must be an existing directory")
+        return failure(pack_id, "target parent must be an existing directory")
     if destination.exists() or destination.is_symlink():
-        return failure(pack_id, target, "target already exists; no files were changed")
+        return failure(pack_id, "target already exists; no files were changed")
     if destination == source or source in destination.parents:
-        return failure(pack_id, target, "target must be outside the shipped starter")
+        return failure(pack_id, "target must be outside the shipped starter")
 
     source_validation = validate_pack(source)
     if source_validation["status"] != "PASS":
-        return failure(pack_id, target, "shipped starter failed pre-copy validation")
+        return failure(pack_id, "shipped starter failed pre-copy validation")
 
     created_destination = False
     try:
@@ -227,21 +229,14 @@ def create_company_pack(
             "draft_documents": draft_documents,
             "static_customizations_applied": static_customizations_applied,
             "customization_status": customization_report["status"],
-            "claims": {
-                "human_intent_authenticated": False,
-                "human_approval_verified": False,
-                "authority_assignment_verified": False,
-                "retention_policy_verified": False,
-                "promotion_verified": False,
-                "current_truth_changed": False,
-            },
+            "claims": empty_claims(),
             "public_beta": "NO_GO_UNPUBLISHED",
             "errors": [],
         }
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
         if created_destination and destination.is_dir() and not destination.is_symlink():
             shutil.rmtree(destination)
-        return failure(pack_id, target, "pack generation failed safely")
+        return failure(pack_id, "pack generation failed safely")
 
 
 def write_stdout_utf8(value: str) -> None:

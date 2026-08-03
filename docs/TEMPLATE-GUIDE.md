@@ -124,7 +124,7 @@ flowchart LR
 - このテンプレート利用ガイド
 - Source Intake、Intent Candidate、Human Decision、Work Order、Capability Grant、Change Execution、Verification Receipt、Promotion Gate、Promotion Decisionを含むCompany starter
 - Company Operations、Public Release Review、Incident / Recoveryの3つのnavigation-only MOC
-- sourceを保ったまま22文書を`draft`化するinitializer、置換・review・evidenceを分離するcustomization checker、現在地・理想・次の一手をJSON/Markdownへ集約するguided planner、review対象bytesを固定して再照合するbundle builder/verifier
+- sourceを保ったまま22文書を`draft`化し、任意のall-or-none guided optionで19静的fieldも一括反映するinitializer、置換・review・evidenceを分離するcustomization checker、現在地・理想・次の一手をJSON/Markdownへ集約するguided planner、review対象bytesを固定して再照合するbundle builder/verifier
 - Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
 - Compose minimum / Proxmox segmentedの6フェーズinstallation lifecycle契約、validator、公開runbook
 - Compose minimumのCompany DB / Evidence metadata Store data-plane skeletonとexact-byte validator
@@ -156,11 +156,11 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 ## 現時点での使い方
 
 1. [テンプレートカタログ](../templates/README.md)から目的に近いstarterを選ぶ。
-2. initializerで[Company starter](../examples/company-starter/README.md)の`draft`作業copyを作る。
+2. initializerで[Company starter](../examples/company-starter/README.md)の`draft`作業copyを作る。3値が決まっていれば[guided path](GUIDED-COMPANY-PACK-INITIALIZATION.md)で19静的fieldも一括反映する。
 3. `compose_minimum`または`proxmox_segmented`を選び、[installation lifecycle](INSTALLATION-LIFECYCLE.md)の契約例を検証する。
 4. [customization checker](CUSTOMIZATION-CHECKLIST.md)で、置換19件、review 46件、別evidence 5件を分けて確認する。
 5. [guided planner](COMPANY-PACK-NEXT-STEPS.md)で、現在stage、理想の7段階、分類別残件、次コマンドを人間向けMarkdownへまとめる。
-6. placeholderを自分の組織用の参照名へ置き換える。tokenや個人情報の値は書かない。
+6. 通常pathならplaceholderを自分の組織用の参照名へ置き換える。guided pathなら`replacement_required: 0`を確認する。どちらもtokenや個人情報の値は書かない。
 7. [review bundle](REVIEW-BUNDLE.md)を作り、manifest、Blocks、MOCs、Recordsのexact bytesを固定する。
 8. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、Decisionを別Recordへ束縛する。
 9. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。

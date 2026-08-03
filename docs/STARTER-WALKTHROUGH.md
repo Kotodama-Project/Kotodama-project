@@ -25,6 +25,8 @@ initializerはPython標準ライブラリだけで動き、次を一度に行い
 - targetが既に存在する場合は上書きせず停止する
 - 生成途中で失敗した場合は、この実行が新規作成したtargetだけを除去する
 
+3つの組織固有値が決まっている場合は、[guided initializer](GUIDED-COMPANY-PACK-INITIALIZATION.md)を使うと、Human Intent locator 1件、Block expiry 9件、Record retention policy locator 9件も同じ新規作成内で反映できます。通常の2引数commandは変更されず、値をまだ決めていない場合に19件を残して作業を始めるpathです。
+
 targetの親directoryは先に作成してください。既存の作業copyを更新するコマンドではありません。
 
 手動でcopyする場合は、元のexampleを直接書き換えず、`manifest.json`とmanifest内の全MOCを一緒に変更してください。
@@ -51,6 +53,8 @@ python tools\plan_company_pack_next_steps.py work\my-company --format markdown
 ```
 
 作成直後は`CUSTOMIZATION_REQUIRED`で終了し、通常は19件を返します。これは失敗ではなく、組織固有のHuman Intent locator 1件、Block expiry 9件、Record retention policy 9件がまだexampleであることを示します。
+
+guided initializerで作成した場合は`READY_FOR_GOVERNED_REVIEW`、`0/46/5`から始まります。0は静的placeholderだけで、46のgoverned reviewと5の外部evidenceは残ります。
 
 `review_required`のowner・profile・roleは、文字列を変更すれば承認済みになるものではありません。`evidence_required`も静的CLIでは閉じません。詳細は[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)を参照してください。
 

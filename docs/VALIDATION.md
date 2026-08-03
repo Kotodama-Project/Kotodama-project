@@ -23,6 +23,8 @@ python tools/create_company_pack.py my-company work/my-company
 
 initializerはshipped starterをpreflightし、既存targetを拒否し、manifest IDと全該当MOCを再束縛し、生成後にこのvalidatorを実行します。任意の既存packを更新・migrationするツールではありません。
 
+3つのguided optionをall-or-noneで渡すと、19静的placeholderも新規Pack内で一括反映し、validatorに加えてcustomization checkerの`READY_FOR_GOVERNED_REVIEW`をpost-checkします。入力、期限、非上書き、失敗reportの境界は[Guided Company Pack Initialization](GUIDED-COMPANY-PACK-INITIALIZATION.md)、出力contractは[`company-pack-creation-report.schema.json`](../schemas/company-pack-creation-report.schema.json)を参照してください。
+
 生成したpackのexample placeholderとgoverned review項目は別のcheckerで確認します。
 
 ```powershell

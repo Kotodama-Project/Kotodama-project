@@ -71,5 +71,45 @@
       "type": "array",
       "items": {"type": "string", "minLength": 1}
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "PASS"}}},
+      "then": {
+        "properties": {
+          "pack_id": {"type": "string"},
+          "target": {"type": "string"},
+          "validated_files": {"const": 22},
+          "rebound_mocs": {"const": 3},
+          "draft_documents": {"const": 22},
+          "errors": {"maxItems": 0}
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "static_customizations_applied": {"const": 0},
+              "customization_status": {"const": "CUSTOMIZATION_REQUIRED"}
+            }
+          },
+          {
+            "properties": {
+              "static_customizations_applied": {"const": 19},
+              "customization_status": {"const": "READY_FOR_GOVERNED_REVIEW"}
+            }
+          }
+        ]
+      },
+      "else": {
+        "properties": {
+          "target": {"type": "null"},
+          "validated_files": {"const": 0},
+          "rebound_mocs": {"const": 0},
+          "draft_documents": {"const": 0},
+          "static_customizations_applied": {"const": 0},
+          "customization_status": {"type": "null"},
+          "errors": {"minItems": 1}
+        }
+      }
+    }
+  ]
 }
