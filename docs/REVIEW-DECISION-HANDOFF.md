@@ -19,11 +19,13 @@
 
 builderが確認するのは次です。
 
-- saved bundleがstrict JSONで、現在の22-file Packと`MATCH`
+- saved bundleがstrict JSONで、現在のPackが束縛する実際のfile setと`MATCH`
 - saved bundle verificationがfresh verifier outputと完全一致
 - saved requestが同じbundle/Packからfreshに再生成した結果と完全一致
 - saved response verificationがrequest/responseからfreshに再計算した結果と完全一致
-- 46件のitem responseが完了し、5件のexternal evidenceが未解決のまま分離
+- saved Request/Response が束縛する実際のitem responseが完了し、
+  unresolved evidenceは別配列のまま分離（公開starterの例は46/5、現在の
+  recordless fixtureは19/5）
 - 5成果物が最初と最後のreadで同じbytes
 
 これは通常のlocal filesystem上のdrift検知であり、敵対的writerに対するatomic snapshotではありません。
@@ -90,7 +92,7 @@ CLI自体はfileを書きません。既存targetは上書きせず、新しいc
 
 | Result | Exit | 意味 |
 |---|---:|---|
-| `CANDIDATE_DECISION_HANDOFF` | 0 | 5成果物、current Pack、46 response、5 evidence gapが同じcandidateへ束縛された |
+| `CANDIDATE_DECISION_HANDOFF` | 0 | 5成果物、current Pack、Request由来の全response、Request由来のevidence gapが同じcandidateへ束縛された |
 | `HANDOFF_BUILD_REFUSED` | 1 | source不正、chain差分、または読み取り中drift |
 | usage error | 2 | CLI引数が不正 |
 

@@ -202,10 +202,15 @@ def build_decision_handoff(
             response_report.get("candidate_binding"), expected_candidate_binding
         )
         or response_report.get("pack_id") != bundle.get("pack_id")
-        or response_report.get("review_summary", {}).get("expected_items") != 46
-        or response_report.get("review_summary", {}).get("completed_items") != 46
+        or response_report.get("review_summary", {}).get("expected_items")
+        != expected_request["review_request"]["item_count"]
+        or response_report.get("review_summary", {}).get("completed_items")
+        != expected_request["review_request"]["item_count"]
         or response_report.get("unresolved_evidence")
-        != {"state": "EVIDENCE_REQUIRED", "item_count": 5}
+        != {
+            "state": "EVIDENCE_REQUIRED",
+            "item_count": expected_request["unresolved_evidence"]["item_count"],
+        }
     ):
         return refusal("CHAIN_MISMATCH")
 

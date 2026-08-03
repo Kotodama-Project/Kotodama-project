@@ -85,7 +85,7 @@ verifierはduplicate JSON key、非finite JSON、unknown/不足field、falseで�
 
 ## 3. Prepare the exact pending review request
 
-`MATCH`したsaved bundleとPackから、46件の個別review itemを手転記せず、5件のevidence gapと分けたpending requestを作れます。
+`MATCH`したsaved bundleとPackから、customization reportの実際のreview itemを手転記せず、実際のevidence gapと分けたpending requestを作れます（starterの例は46/5、recordless fixtureは19/5）。
 
 ```powershell
 python tools\build_company_pack_review_request.py `
@@ -103,7 +103,7 @@ python3 tools/build_company_pack_review_request.py \
 
 ## 4. Complete and verify per-item responses
 
-saved requestから46件の`id/category/path/reason`を再入力せず、outcomeと短いnoteだけを編集するresponse candidateを作ります。
+saved requestから実際の`id/category/path/reason`を再入力せず、outcomeと短いnoteだけを編集するresponse candidateを作ります。
 
 ```powershell
 python tools\build_company_pack_review_response.py `
@@ -123,7 +123,7 @@ python3 tools/verify_company_pack_review_response.py \
   work/my-company-review-response.json
 ```
 
-`ITEM_RESPONSES_MATCH_REQUEST`は46件のimmutable itemと全outcomeが元requestへ一致したことだけを示します。個別item/noteはverification reportへ反射せず、5件のevidence gapと`selected_outcome=null`を維持します。保存、編集範囲、note hygiene、schema、refusal条件は[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を参照してください。
+`ITEM_RESPONSES_MATCH_REQUEST`はrequest由来のimmutable itemと全outcomeが元requestへ一致したことだけを示します。個別item/noteはverification reportへ反射せず、request由来のevidence gapと`selected_outcome=null`を維持します。保存、編集範囲、note hygiene、schema、refusal条件は[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を参照してください。
 
 ## 5. Bind the complete review evidence without deciding
 

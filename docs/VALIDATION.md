@@ -49,14 +49,14 @@ python tools/verify_company_pack_review_bundle.py work/my-company-review-bundle.
 
 verifierはbundle構造・metadata・digestを信頼せず再検査し、Packからfresh bundleを再構築して比較します。`MATCH`はbytes同一性だけで、reviewer identity、Human Decision、Promotionを証明しません。運用手順は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)を参照してください。
 
-MATCH済みbundle/Packからpending requestを保存した後、46件のoutcomeをID/path/reasonの再入力なしで編集・再照合するには次を使います。
+MATCH済みbundle/Packからpending requestを保存した後、requestが束縛する実際の件数のoutcomeをID/path/reasonの再入力なしで編集・再照合するには次を使います（starterの例は46件、recordless fixtureは19件）。
 
 ```powershell
 python tools\build_company_pack_review_response.py work\my-company-review-request.json
 python tools\verify_company_pack_review_response.py work\my-company-review-request.json work\my-company-review-response.json
 ```
 
-response schemaとverifierはrequest file SHA-256/size、Pack candidate binding、46 immutable item、5 unresolved evidence、全outcome入力をfail closedで確認します。成功reportは個別item/noteを反射しません。`ITEM_RESPONSES_MATCH_REQUEST`はidentity、authority、Human approval、selected overall outcome、Decision Record、evidence解決、Promotionを証明しません。詳細は[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を参照してください。
+response schemaとverifierはrequest file SHA-256/size、Pack candidate binding、request由来のimmutable item、unresolved evidence、全outcome入力をfail closedで確認します。成功reportは個別item/noteを反射しません。`ITEM_RESPONSES_MATCH_REQUEST`はidentity、authority、Human approval、selected overall outcome、Decision Record、evidence解決、Promotionを証明しません。詳細は[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を参照してください。
 
 5つのsaved review成果物とcurrent PackをDecision前に再束縛するCLIは`build_company_pack_review_decision_handoff.py`と`verify_company_pack_review_decision_handoff.py`です。schema、非上書き保存、refusal境界は[Review Evidence to Decision Handoff](REVIEW-DECISION-HANDOFF.md)を参照してください。MATCHでも`decision: null`でありHuman Decisionではありません。
 

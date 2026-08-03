@@ -8,6 +8,8 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
@@ -67,26 +69,42 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
         path.write_bytes(data)
         return data
 
-    def create_complete_chain(self, root: Path) -> dict:
-        pack = root / "decision-handoff-pack"
+    def create_complete_chain(self, root: Path, *, recordless: bool = False) -> dict:
+        pack_id = "recordless-decision-handoff-pack" if recordless else "decision-handoff-pack"
+        pack = root / pack_id
+        creation_args = [sys.executable, str(CREATOR), pack_id, str(pack)]
+        if not recordless:
+            creation_args.extend(
+                [
+                    "--human-intent-ref",
+                    "human-intent:private-decision-handoff-source",
+                    "--authority-expires-at",
+                    "2026-08-20T00:00:00Z",
+                    "--retention-policy-ref",
+                    "retention-policy:private-decision-handoff-policy",
+                ]
+            )
         creation = subprocess.run(
-            [
-                sys.executable,
-                str(CREATOR),
-                "decision-handoff-pack",
-                str(pack),
-                "--human-intent-ref",
-                "human-intent:private-decision-handoff-source",
-                "--authority-expires-at",
-                "2026-08-20T00:00:00Z",
-                "--retention-policy-ref",
-                "retention-policy:private-decision-handoff-policy",
-            ],
+            creation_args,
             cwd=ROOT,
             capture_output=True,
             check=False,
         )
         self.assertEqual(creation.returncode, 0, creation.stdout.decode("utf-8"))
+
+        if recordless:
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["human_intent_ref"] = (
+                "human-intent:private-recordless-decision-handoff-source"
+            )
+            manifest.pop("records")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            for relative in manifest["blocks"]:
+                path = pack / relative
+                document = json.loads(path.read_text(encoding="utf-8"))
+                document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+                path.write_text(json.dumps(document), encoding="utf-8")
 
         paths = {
             "bundle": root / "saved-review-bundle.json",
@@ -236,6 +254,70 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
         )
         self.assertTrue(all(value is False for value in handoff["claims"].values()))
         self.assertEqual(handoff["public_beta"], "NO_GO_UNPUBLISHED")
+
+    def test_recordless_complete_chain_builds_and_verifies_dynamic_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            chain = self.create_complete_chain(Path(temporary), recordless=True)
+            result = self.run_builder(chain)
+            self.assertEqual(result.returncode, 0, result.stdout.decode("utf-8"))
+            handoff = json.loads(result.stdout)
+            handoff_schema = json.loads(
+                (
+                    ROOT
+                    / "schemas"
+                    / "company-pack-review-decision-handoff.schema.json"
+                ).read_text(encoding="utf-8")
+            )
+            Draft202012Validator(handoff_schema).validate(handoff)
+            self.assertEqual(handoff["candidate_binding"]["binding_count"], 13)
+            self.assertEqual(
+                handoff["source_checks"]["current_bundle"]["matched_bindings"],
+                13,
+            )
+            self.assertEqual(
+                handoff["review_summary"],
+                {
+                    "state": "ALL_ITEM_RESPONSES_PRESENT",
+                    "expected_items": 19,
+                    "completed_items": 19,
+                    "outcome_counts": {
+                        "accept": 7,
+                        "request_changes": 6,
+                        "reject": 6,
+                    },
+                    "selected_outcome": None,
+                },
+            )
+            self.assertEqual(
+                handoff["unresolved_evidence"],
+                {"state": "EVIDENCE_REQUIRED", "item_count": 5},
+            )
+            self.assertTrue(all(value is False for value in handoff["claims"].values()))
+            self.assertEqual(handoff["public_beta"], "NO_GO_UNPUBLISHED")
+
+            handoff_path = Path(temporary) / "recordless-saved-decision-handoff.json"
+            handoff_path.write_bytes(result.stdout)
+            verification = self.run_handoff_verifier(chain, handoff_path)
+            self.assertEqual(
+                verification.returncode, 0, verification.stdout.decode("utf-8")
+            )
+            report = json.loads(verification.stdout)
+            verification_schema = json.loads(
+                (
+                    ROOT
+                    / "schemas"
+                    / "company-pack-review-decision-handoff-verification.schema.json"
+                ).read_text(encoding="utf-8")
+            )
+            Draft202012Validator(verification_schema).validate(report)
+
+        self.assertEqual(report["status"], "DECISION_HANDOFF_MATCH")
+        self.assertEqual(report["candidate_binding"]["binding_count"], 13)
+        self.assertEqual(report["review_summary"]["expected_items"], 19)
+        self.assertEqual(report["review_summary"]["completed_items"], 19)
+        self.assertEqual(report["unresolved_evidence"]["item_count"], 5)
+        self.assertTrue(all(value is False for value in report["claims"].values()))
+        self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
 
     def test_report_substitution_and_current_pack_drift_fail_closed(self) -> None:
         mutations = {
@@ -418,6 +500,35 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
             handoff_requirements["properties"]["selected_outcome"]["type"],
             "null",
         )
+        self.assertEqual(
+            handoff_schema["$defs"]["candidate_binding"]["properties"][
+                "binding_count"
+            ],
+            {"type": "integer", "minimum": 1},
+        )
+        self.assertEqual(
+            verification_schema["$defs"]["candidate_binding"]["properties"][
+                "binding_count"
+            ],
+            {"type": "integer", "minimum": 1},
+        )
+        for schema, definition_name in (
+            (handoff_schema, "review_summary"),
+            (verification_schema, "review_summary"),
+        ):
+            summary_properties = schema["$defs"][definition_name]["properties"]
+            for field in ("expected_items", "completed_items"):
+                self.assertNotIn("maximum", summary_properties[field])
+        for schema in (handoff_schema, verification_schema):
+            self.assertNotIn(
+                "maximum",
+                schema["$defs"]["source_checks"]["properties"]["current_bundle"][
+                    "properties"
+                ]["matched_bindings"],
+            )
+            self.assertNotIn(
+                "maximum", schema["$defs"]["unresolved_evidence"]["properties"]["item_count"]
+            )
         self.assertEqual(
             handoff_schema["$defs"]["required_decision_fields"]["prefixItems"],
             [{"const": field} for field in EXPECTED_DECISION_FIELDS],
