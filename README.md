@@ -1,98 +1,646 @@
 # Kotodama
 
-会話を、監査可能な意図・仕事・学習へ。
+**会話を、監査可能な意図・仕事・成果・学習へ。**
 
-Kotodama は、Discord をはじめとする会話や音声を入力として、人間の意図を尊重しながら、確認可能なタスク・成果物・判断記録へ変換するためのプロジェクトです。
+Kotodama は、人間が普段どおり話し、相談し、アイデアを共有するところから、その中にある意図を AI と人間が一緒に理解し、要件、判断、仕事、成果物、検証証拠へ接続する **Local-first Company OS** を目指すプロジェクトです。
+
+私たちが作ろうとしているのは、単独の Discord Bot、文字起こしサービス、Markdown テンプレート集、エージェントを並べただけの自動化基盤ではありません。Discord の Voice・テキスト、Issue、文書、業務データを会社への入口として、人間と AI が目的、文脈、権限境界、証拠を共有しながら、会社を立ち上げ、仕事を進め、価値を提供し、学習できる環境です。
 
 > [!IMPORTANT]
-> このリポジトリは **Incomplete Public Preview** です。Public Beta の利用受付、Discord 招待、公開 Voice Bot はまだ提供していません。
+> このリポジトリは **Incomplete Public Preview** です。公開している Company starter、schema、validator、runtime/evidence candidate は試せますが、Public Beta の利用受付、Discord 招待、公開 Voice Bot はまだ提供していません。公開アクセスを開くための Final Human GO も完了していません。最新の境界は [Project Status](STATUS.md) を確認してください。
 
-## 目指していること
+## North Star
 
-- Discord Voice の音声を高精度に文字起こしする
-- 発言者と発言内容を結び付ける
-- 会話から確認可能な handoff を生成する
-- 判断・実行・検証を追跡できる証拠鎖として残す
-- ローカル優先で、音声・文字起こし・保持期間を明確に管理する
+> 人間の意図を最上位の基準として、会話から意図を抽出し、監査可能な仕事・成果物・学習へ変換する。
 
-## 現在の公開範囲
+会話は重要な Source Evidence です。しかし、会話や AI の推測だけで会社の Current Truth を書き換えることはありません。提案、決定、実装、検証、採用を分離することで、速く作りながら、後から次を確認できる状態を作ります。
 
-現在公開しているのは、プロジェクトの方向性、状態、ロードマップ、テンプレート設計、最小Company starter、schema、validator、テストです。実音声、文字起こし corpus、認証情報、Discord の非公開識別子は含みません。
+- なぜこの仕事を始めたのか
+- どの発言や資料を根拠にしたのか
+- 誰が何を決め、何を許可したのか
+- どの候補 bytes を、どの方法で検証したのか
+- 何が採用され、何がまだ候補なのか
+- いつ、どの条件で停止・rollback するのか
 
-- [現在の状態](STATUS.md)
-- [公開までのロードマップ](ROADMAP.md)
-- [Company Template / Blocks / MOCs の使い方](docs/TEMPLATE-GUIDE.md)
-- [3分で試すCompany starter](docs/STARTER-WALKTHROUGH.md)
-- [19項目を安全に一括反映するguided initializer](docs/GUIDED-COMPANY-PACK-INITIALIZATION.md)
-- [Company pack customization checklist](docs/CUSTOMIZATION-CHECKLIST.md)
-- [現在地・理想・次の一手を出すCompany pack guide](docs/COMPANY-PACK-NEXT-STEPS.md)
-- [Company pack review bundle](docs/REVIEW-BUNDLE.md)
-- [46項目をexact candidateへ束縛するpending review request](docs/REVIEW-REQUEST.md)
-- [46項目のoutcomeを再入力なしで記録・構造照合するreview response](docs/REVIEW-RESPONSE.md)
-- [5つのreview成果物をHuman Decisionへ非承認handoffする手順](docs/REVIEW-DECISION-HANDOFF.md)
-- [SourceからHuman確認前までのprivate schema-only Intent Candidate instance契約](docs/INTENT-CANDIDATE-INSTANCE.md)
-- [Source ItemからR30へ渡す前のprivate schema-only Source Record instance契約](docs/SOURCE-RECORD-INSTANCE.md)
-- [保存済みSource bytesを非反射で照合するread-only candidate CLI](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md)
-- [protected runnerが残すprivate Source binding receiptのschema-only契約](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)
-- [Human Decision前のschema-only Decision Record candidate契約](docs/DECISION-RECORD-CANDIDATE.md)
-- [Candidate-bound review workflow](docs/REVIEW-WORKFLOW.md)
-- [Compose / Proxmox installation lifecycle](docs/INSTALLATION-LIFECYCLE.md)
-- [Compose minimum runbook](docs/COMPOSE-MINIMUM-RUNBOOK.md)
-- [Proxmox segmented runbook](docs/PROXMOX-SEGMENTED-RUNBOOK.md)
-- [Compose minimum data-plane skeleton](runtime/compose-minimum/README.md)
-- [資格情報非開示のResolved Compose Candidate](docs/RESOLVED-COMPOSE-CANDIDATE.md)
-- [read-only Compose Image Availability Preflight](docs/IMAGE-AVAILABILITY-PREFLIGHT.md)
-- [Protected Compose Evidence Attestation](docs/PROTECTED-COMPOSE-EVIDENCE-ATTESTATION.md)
-- [One-Use Compose Attestation Evaluation](docs/ONE-USE-COMPOSE-ATTESTATION-EVALUATION.md)
-- [Attestation Nonce Store Checkpoint](docs/ATTESTATION-NONCE-STORE-CHECKPOINT.md)
-- [Attestation Nonce Store Checkpoint Chain](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-CHAIN.md)
-- [Checkpoint Head Anchor / Restore Drill Evidence](docs/ATTESTATION-NONCE-STORE-HEAD-ANCHOR-AND-RESTORE-DRILL.md)
-- [Checkpoint Segment Transition / Key Rotation Binding](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-SEGMENT-TRANSITION.md)
-- [Checkpoint Segment Transition Candidate Builder](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-SEGMENT-TRANSITION-CREATION.md)
-- [テンプレートカタログ](templates/README.md)
-- [Governed Record カタログ](templates/records/README.md)
-- [動くCompany starter example](examples/company-starter/README.md)
-- [テンプレート検証方法](docs/VALIDATION.md)
+## なぜ Kotodama を作るのか
 
-## Try the starter
+会社の仕事は、会話の中から始まることが多い一方、その意図はチャット、議事録、Issue、個人の記憶へ散らばります。自動化を追加しても、目的と実装がずれたり、誰が許可したのか分からなくなったり、local test を本番稼働と誤認したりすれば、会社の能力にはなりません。
 
-starterと公開CLIの実行にはPython以外の追加dependencyは不要です。full test suiteは、実Draft 2020-12 schema validatorを動かすtest-only dependencyを先に導入します。
+Kotodama は、この分断を一つの証拠鎖でつなぐことを目指します。
+
+```text
+会話・音声・Issue・文書
+    ↓
+何を実現したいのかを検知
+    ↓
+不足している要件だけを確認
+    ↓
+目的・制約・成功条件・停止条件を整理
+    ↓
+実行可能な仕事へ分解
+    ↓
+実装・調査・制作・運用
+    ↓
+成果物と検証証拠
+    ↓
+人間または定められた policy が採用を判断
+    ↓
+会社の知識・能力・Current Truth へ反映
+```
+
+## Founder Intent と開発原則
+
+Kotodama の設計は、次の意図を同時に満たす方向で進めています。
+
+- **Human Intent first** — 開発や自動化そのものを目的にせず、人間の目的、受益者、制約、成功条件、停止条件を上位に置く
+- **Build first** — 安全で可逆な候補実装は承認待ちだけで止めず、まず動く小さな縦切りを作る
+- **Evidence matched claims** — local test だけで live、deployed、safe、complete、Public Beta と呼ばない
+- **Local first** — 音声、文字起こし、会社データ、証拠を可能な限り local trust boundary に置く
+- **Simple interaction, explicit governance** — 利用者の操作は軽くしつつ、同意、権限、訂正、保持、監査、停止を省略しない
+- **One canonical owner per fact family** — Discord、DB、Git、ダッシュボードへ競合する正本を増やさない
+- **Replaceable adapters** — Voice、LLM、workflow、storage provider を一つの実装へ固定せず、契約の後ろで交換できるようにする
+
+「まず作る」と「証拠なしに完成と呼ばない」は対立しません。Kotodama では、実装開始は速く、昇格と公開の主張は慎重に行います。
+
+## Discord の中に会社を作る
+
+Kotodama における Discord は、Bot の設置場所ではなく、人間と AI が共に働く **Office / Input Surface / Projection** です。
+
+- 日常会話や Voice でアイデアを共有する
+- 仕事を依頼し、必要な要件だけを詰める
+- AI の活動、進捗、成果、問題を見る
+- 人間と AI が同じ場所で協働する
+- 新しい人、Resident Clone、専門エージェントを迎える
+- 判断候補や実行結果を、元の会話へ分かりやすく返す
+
+ただし、Discord 自体を Company SSOT にはしません。メッセージや transcript は Source Evidence であり、Human Decision、Capability Grant、Verification Receipt、Promotion、Current Truth は Discord から独立した統治層で扱います。
+
+## 理想のユーザー体験
+
+Kotodama が目指す体験は、長い仕様書を最初に書くことではありません。
+
+1. 人間が Discord、Voice、Issue、文書で普段どおり相談する
+2. Kotodama が目的、受益者、制約、成功条件、停止条件の候補を抽出する
+3. 重要な曖昧さだけを GrillU が一問ずつ確認する
+4. 確認済みの候補を、権限と停止条件を持つ Work Order へ変換する
+5. AI または人間が bounded execution lane で仕事を進める
+6. 成果物、test、観測、rollback 情報を Verification Receipt に束縛する
+7. authority を持つ人または policy が、候補の採用・拒否を判断する
+8. 結果と学習が会社の Office と正本へ戻る
+
+この完全な体験はまだ Public Beta として提供していません。現在の公開リポジトリでは、その中核となる Company governance flow と検証ツールを先に試せます。
+
+## Voice — 最初に価値を体感する入口
+
+Voice は付属機能ではなく、Kotodama の思想を最短で体感できる最初のプロダクト面です。目指しているのは、音声を一つの文章へ変換するだけの仕組みではありません。
+
+```text
+Private Discord Voice Channel
+→ 話者ごとの音声取得
+→ consent / retention gate
+→ local ASR
+→ 話者・時刻・発話内容の対応
+→ 話者別 transcript と全体 context
+→ 15分単位で private channel へ返す
+→ Intent / ToDo / Goal / Decision Candidate
+→ GrillU または Verified Handoff
+```
+
+既存の local / Proxmox Voice 処理系と話者別処理の候補はありますが、この公開リポジトリに public Voice runtime、実音声、transcript corpus、private Discord identifier は含みません。公開保証された Voice service ではありません。
+
+### 15分 Voice rotation
+
+15分は内部 timeout ではなく、利用者が会話を続けながら価値を受け取るための製品体験です。
+
+- 会話中の無音や退出だけに依存せず、自然な 900 秒境界で区切る
+- それまでの内容を、話者と時刻を保ったまま private channel へ返す
+- 次の rotation を途切れさせずに開始する
+- 退出・再参加後も listener と rotation が回復する
+- 同意と保持期限に従って raw audio、chunk、transcript を削除し、receipt を残す
+
+常時 listener、確実な rejoin、自然な 900 秒 rotation、Discord 投稿、期限内削除を同じ候補と時間窓で結んだ E2E は、まだ公開済みの証明ではありません。
+
+### Voice-to-Verified-Handoff
+
+Voice の品質は文字認識率だけでは決まりません。
+
+- 誰が話したか
+- いつ話したか
+- どの発話を根拠にしたか
+- どの Intent Candidate を抽出したか
+- どの候補を人が確認・訂正したか
+- そこから何が実行され、何が採用されたか
+
+これらを追跡できることが重要です。話者別 audio / ASR を authority とし、mixed audio や merged transcript は比較・文脈用途として扱う設計を目指します。
+
+> Kotodama Voice は、音声を文章へ変換するだけでなく、会話を検証可能な仕事へ接続する Voice-to-Verified-Handoff pipeline を目指します。
+
+## GrillU — 一度に一つだけ深掘りする
+
+GrillU は、利用者に長い仕様書を書かせる仕組みでも、自動承認する Discord Bot 機能でもありません。検知した Intent Candidate に重要な曖昧さがあるとき、次の一問だけを出すチャネル非依存の要件深掘り機能です。
+
+```text
+検知された Intent Candidate
+→ 現在の Requirement State
+→ 次の重要な質問を一つ
+→ 最大3つの選択肢 + 保留 / 修正
+→ Human response
+→ 根拠付き Requirement State 更新
+→ 次の質問、または Human-confirmed Requirement Candidate
+```
+
+回答は、はい / いいえ、1 / 2 / 3、この理解で OK、修正する、分からない、後で、のように軽くします。Human が内容を確認しても、それだけで Human Decision、Work Order、execution authority、Promotion、Current Truth にはなりません。
+
+将来は Discord、Voice、Web、Mobile、Codex UI のどこからでも同じ Requirement State を扱える構造を目指します。GrillU contract と prototype は local candidate であり、この公開 preview の提供機能ではありません。
+
+## Evidence Chain — 会話から Current Truth まで
+
+Kotodama の正規鎖は次です。
+
+```text
+Source Evidence
+→ Intent Candidate
+→ Human Decision
+→ Work Order
+→ Capability Grant
+→ Change Candidate
+→ Verification Receipt
+→ Promotion Candidate
+→ Promotion Decision
+→ Current Truth
+```
+
+| 段階 | 意味 | それだけでは作らないもの |
+|---|---|---|
+| Source Evidence | 会話、音声、Issue、文書などの出典付き入力 | 確定意図、実行権限 |
+| Intent Candidate | 目的、受益者、制約、成功・停止条件の仮説 | Human Decision |
+| Human Decision | authority を持つ人が範囲と条件を持って採否を決めた記録 | 実行そのもの |
+| Work Order | 成果物、対象、期限、受入・停止条件を結ぶ実行契約 | 未記載の権限 |
+| Capability Grant | identity、resource、action、期限、上限を限定した権限 | 無制限のアクセス |
+| Change Candidate | まだ採用されていない可逆な変更候補 | Current Truth |
+| Verification Receipt | exact bytes、test、観測結果を束縛した記録 | 真正性や Human approval の自動保証 |
+| Promotion Decision | 候補を採用・拒否する authority-bound 判断 | 別候補への包括的 GO |
+| Current Truth | 採用済みの現在状態 | Source の履歴消去 |
+
+この鎖を短絡しないことが、速度を失わずに訂正可能性と監査性を保つ鍵です。
+
+## Human Intent SSOT
+
+人間の発言を一文だけ切り出して「確定意図」にすることはしません。Human Intent には、少なくとも次の要素が必要です。
+
+- purpose / beneficiary
+- vision / mission
+- constraints / non-goals
+- KGI / KPI または受入条件
+- authority と対象範囲
+- stop / rollback / review conditions
+- 根拠となる Source と revision
+- confirmed / proposed / unknown の区別
+
+後から届いた訂正、撤回、精緻化は、古い提案より優先して追跡します。たとえば「Discord を SSOT にする」という初期表現は、現在は「Discord は Office、正本は governed Company OS」として精緻化されています。
+
+## Company Template — 会社を再現できる部品
+
+現在このリポジトリで最も具体的に試せるものが [Company starter](examples/company-starter/README.md) です。単なる Markdown 雛形ではなく、仕事を進める構造と検証可能な記録を組み合わせています。
+
+| 部品 | 役割 | 公開 starter |
+|---|---|---:|
+| Blocks | 入力、出力、authority、拒否条件を持つ再利用可能な処理単位 | 9 |
+| Governed Records | Block から生まれる監査可能な候補記録 | 9 |
+| MOCs | 同じ canonical flow を目的別に辿る navigation map | 3 |
+| Manifest | owner、profile、flow、禁止 action を束縛する入口 | 1 |
+| Validators | 構造、参照、順序、禁止経路を機械検査する | dependency-free |
+| Review Bundle | 全 22 JSON 文書の exact bytes を SHA-256 へ固定する | candidate-only |
+
+### 9 Blocks
+
+1. Source Intake
+2. Intent Candidate
+3. Human Decision
+4. Work Order
+5. Capability Grant
+6. Change Execution
+7. Verification Receipt
+8. Promotion Gate
+9. Promotion Decision
+
+各 Block の出力は、対応する Governed Record へ一対一で接続します。Capability Grant のない Change、Human evidence のない Promotion Decision、flow 順序の短絡を validator が拒否します。
+
+### 3 MOCs
+
+- **Company Operations** — Source Intake から Promotion Decision までの canonical flow
+- **Public Release Review** — 公開候補の確認に必要な部分列
+- **Incident & Recovery** — 問題発生時の判断、変更、検証、復旧を辿る部分列
+
+MOC は navigation projection です。MOC 自体が新しい SSOT や実行権限を作ることはありません。
+
+詳しい編集方法は [Template Guide](docs/TEMPLATE-GUIDE.md)、最短の体験は [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)、candidate-bound review は [Review Workflow](docs/REVIEW-WORKFLOW.md) を参照してください。
+
+## Context Platform — 会社の共有記憶
+
+人物、Goal、ToDo、会話、ファイル、Issue、判断、証拠、エージェント状態を、許可された範囲で横断できる共有文脈が必要です。
+
+```text
+People / Goals / ToDos / Projects
+Conversations / Documents / Source Records
+Relations / Chunks / Embeddings
+Consent / Retention / Capability Grants
+Retrieval Receipts
+```
+
+目標は「一つの DB user が全データを読めること」ではありません。**一つの governed query plane から、その AI identity に許可された Authorized Corpus へ一貫して到達できること**です。エージェントが storage へ無制限な生 SQL で接続するのではなく、Context Gateway が corpus、purpose、retention、redaction、rate、receipt を検査する構造を目指します。
+
+TiDB は People / ToDo / File / Conversation / relation / embedding を横断する Context Platform の第一評価候補ですが、採用済み、deployed、PostgreSQL replacement、Current Truth ではありません。この公開 preview に TiDB runtime は含まれません。
+
+## Resident Clone と Clone Birth
+
+Kotodama の onboarding は、設定画面を埋めるだけでなく、新しい協働主体が境界付きで「誕生する」体験を目指します。
+
+```text
+利用者との対話
+→ 目的・過去 context・境界の確認
+→ Agent Cell Candidate の選択
+→ Voice Persona Candidate
+→ capability と prohibited actions
+→ 協力する agent / workflow
+→ recovery / stop 条件
+→ Resident Clone Candidate
+→ reviewable receipt
+```
+
+Resident Clone は、利用者の仕事を引き受け、必要に応じて他のエージェントと協力する長期的な AI identity の候補です。Voice Persona は本人認証ではなく、Resident Clone も無制限の権限主体ではありません。目的、accessible corpus、capability、費用上限、期限、review、停止、recovery を持つ必要があります。
+
+Clone Birth prototype と resident runtime / OpenClaw 接続候補は local candidate であり、この公開 preview から clone を作成・起動することはできません。
+
+## Agent Foundry と AI Workforce
+
+Kotodama は、固定されたエージェント一覧を install して終わる設計ではありません。実際の仕事の中で「この仕事には、どの専門 role / skill / agent cell が必要か」を判断し、候補を作り、検証し、採用する Agent Foundry を目指します。
+
+各 agent cell には少なくとも次が必要です。
+
+- role / purpose / owner
+- accessible Authorized Corpus
+- capability / prohibited actions
+- environment / provider / tool boundary
+- cost / rate / time limit
+- expiry / review policy
+- stop / recovery
+- activity / verification receipt
+
+AI は、自分自身の権限、評価基準、採用状態を勝手に変更できません。能力を増やすことと、authority を増やすことは別の Decision として扱います。
+
+## AI-only と human-audited
+
+Kotodama は、完全自動化か人間中心かの二択を取りません。同じ Source、Intent、Work Order、Change Candidate、Receipt を使い、lane ごとに Promotion policy を変えます。
+
+| Lane | 例 | Promotion policy |
+|---|---|---|
+| AI-only candidate | local analysis、synthetic test、可逆な draft | policy 内で自動評価できる候補。権限外へは出ない |
+| Human-audited | 内部変更候補、費用や利用者影響を持つ操作 | 人間が receipt と差分を確認して採否を決める |
+| Human-controlled | 公開、契約、価格、請求、決済、個人情報、権限変更、不可逆操作 | candidate-bound Human Decision が実行前に必要 |
+
+AI-only でも証拠と停止条件は省略しません。human-audited でも人間が全手順を手作業する必要はありません。
+
+## AI Business Loop
+
+長期的には、Kotodama を社内業務だけでなく、AI 主導の価値創出と収益化へ使います。
+
+```text
+Idea generation
+→ independent challenge
+→ market validation
+→ offer design
+→ build
+→ distribution
+→ fulfillment
+→ finance
+→ customer / community feedback
+→ learning
+```
+
+すべてを同じ証拠鎖と権限モデルで扱い、AI-only と human-audited の lane を選びます。「稼げる」という一語でまとめず、revenue hypothesis、支払意思、契約、入金、contribution margin、継続可能な利益を分けて記録します。
+
+この AI Business Loop は product direction です。公開 preview は事業運営、契約、請求、決済を実行しません。
+
+## Local-first architecture
+
+Local-first は、すべてを一台へ詰め込むことではありません。private data と authority を local trust boundary に保ち、外部 provider を明示的な adapter と grant の後ろへ置く考え方です。
+
+| Surface / component | 役割 | 現在の扱い |
+|---|---|---|
+| Discord | Office、Input Surface、Projection | SSOT ではない |
+| Voice Adapter | 話者別 capture / ASR / handoff contract | existing local candidate、public runtime なし |
+| n8n | bounded workflow / AI call plane | local direction、公開 runtime なし |
+| OpenClaw / resident runtime | Resident Clone の長期実行候補 | local integration candidate |
+| PostgreSQL Company DB | operational fact family の候補 | Compose skeleton は公開、live E2E は未証明 |
+| Evidence metadata Store | receipt、hash、provenance の候補 | Compose skeleton は公開、live E2E は未証明 |
+| Context Gateway | Authorized Corpus への governed query plane | design / local candidate |
+| TiDB | Context Platform の第一評価候補 | 未採用、未配備 |
+| Proxmox | segmented local runtime の基準候補 | lifecycle contract 公開、live receipt なし |
+| Compose minimum | 小さな導入 profile | secret-free skeleton / candidate 公開 |
+| Cloudflare | optional public edge | optional、free-plan-first、必須ではない |
+
+provider を利用する場合も、exact artifact、participant scope、purpose、provider/model、expiry、cancellation、retention を持つ transfer grant の後ろに置く方針です。
+
+## Consent、privacy、retention
+
+Voice channel への参加だけを、録音、外部転送、学習再利用、長期保持への包括同意とは扱いません。
+
+- capture、transcription、provider transfer、reuse を別目的として扱う
+- participant と時間窓へ同意を束縛する
+- raw audio、chunk、transcript、derived record の保持条件を分ける
+- 同意撤回、削除、停止、incident recovery を設計する
+- public artifact へ secret、token、cookie、invite、private identifier、実音声を含めない
+- synthetic / bot record を Human Decision evidence として使わない
+
+現在の公開リポジトリには raw audio や transcript corpus を含みません。
+
+## Security、authority、stop
+
+アクセス可能であることと、実行を許可されていることは別です。Kotodama は capability を identity、resource、action、purpose、期限、上限、停止条件へ限定します。
+
+公開、外部送信、本番 write、契約、価格確定、請求、決済、credential / permission 変更、不可逆削除は、高影響 action として候補と authority を明示的に束縛します。Public launch は、同じ candidate bytes に対する scope-matched E2E、独立検証、Final Human GO が揃うまで NO-GO です。
+
+## 過去の表現から現在の設計へ
+
+Kotodama は、初期の言葉を消すのではなく、後続の指示、実装、失敗、privacy 境界で精緻化してきました。
+
+| 初期の表現 | 現在の解釈 |
+|---|---|
+| Discord を SSOT として一元化 | Discord は Office。正本は governed Company OS |
+| AI がすべての権限と情報を握る | identity 別の bounded Capability Grant |
+| 全員身内なので複雑にしない | UX は簡単にし、同意、訂正、削除、監査は省略しない |
+| Voice channel 参加者は同意済み | historical proposal。現在は目的別 consent-bound policy を優先 |
+| 音声を test corpus として再利用 | 後続の再利用・共有禁止指示を優先 |
+| まず自分の声の clone を作る | Voice Persona Candidate を Clone Birth へ組み込む |
+| Bot を作ってと言えば全部作る | GrillU → Requirement Candidate → bounded Work Order |
+| AI だけで稼げる会社 | policy 内で AI が loop を進め、人間が監査・例外・高影響判断を担当 |
+| まず動かして後から直す | build-first。ただし live、安全、完成の主張は証拠に合わせる |
+| TiDB をできるだけ採用する | Context Platform 第一評価候補。PoC と fact-family 別 Decision 後に採否を決める |
+| 未完成でも公開する | Incomplete Public Preview として、実証済みの面だけを公開する |
+
+この表は経緯を説明する projection であり、単独で Human Decision や Current Truth を作るものではありません。
+
+## 現在地 — 夢と実証範囲を分ける
+
+### この Public Preview で利用できるもの
+
+- プロジェクトの方向性、[status](STATUS.md)、[roadmap](ROADMAP.md)
+- 9 Blocks、9 Governed Records、3 MOCs を持つ Company starter
+- manifest / Block / Record / MOC schema と dependency-free validator
+- 上書きを拒否する starter initializer
+- placeholder、review、runtime evidence を分離する customization checker
+- 全 22 JSON 文書を exact SHA-256 / byte size へ束縛する review bundle と verifier
+- Compose minimum / Proxmox segmented の 6-phase installation lifecycle contract
+- secret-freeな Company DB / Evidence Store の Compose skeleton
+- credential を出力しない resolved Compose candidate
+- local image の read-only availability preflight
+- clean-install / migration evidence candidate contract
+- OpenSSH attestation、one-use nonce、checkpoint、supplied chain/store equivalence の検証候補
+- Human Decision 前の [Decision Record Candidate](docs/DECISION-RECORD-CANDIDATE.md)、private な [Intent Candidate Instance](docs/INTENT-CANDIDATE-INSTANCE.md)、[Source Record Instance](docs/SOURCE-RECORD-INSTANCE.md) の closed schema 契約
+- R31 record / Source Content / access evidence を照合する read-only [Source Binding Verification Candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md)
+- 将来の protected runner receipt の field を固定する unpopulated [Protected Source Binding Receipt Candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)
+
+### 既存実装または local candidate だが、公開保証ではないもの
+
+- Proxmox 上の既存 Voice 処理系と話者別音声処理
+- Voice-to-Verified-Handoff contract
+- GrillU contract
+- Clone Birth prototype
+- Company OS vertical slice
+- Context Gateway design
+- TiDB Context Platform evaluation
+- resident agent / OpenClaw integration candidate
+- n8n を使う bounded workflow plane
+
+### Public Beta 完成としてまだ証明されていないもの
+
+- Voice Bot の常時 listener と確実な rejoin
+- 自然な 900 秒 rotation と 15分 transcript 投稿
+- retention 期限内の delete receipt
+- 現行 deployed bytes と候補 bytes の parity
+- distinct real people を含む 3-persona Voice E2E
+- live Compose / Proxmox install、migration、restart、rollback、isolated restore
+- protected reconciliation と独立した trust / person separation
+- public Discord invite と public Voice Bot
+- 対象候補へ束縛された Final Human GO
+
+詳しい最新状態は [STATUS.md](STATUS.md)、公開アクセスまでの未完了 gate は [ROADMAP.md](ROADMAP.md) にあります。
+
+## Public Preview と Public Beta
+
+| | Incomplete Public Preview | Public Beta |
+|---|---|---|
+| 読める | direction、starter、schema、runbook、candidate tooling | preview の内容に加え、提供対象の利用説明 |
+| 試せる | local / synthetic Company pack と validator | scope-matched な利用者体験 |
+| Voice | 説明と local candidate の境界のみ | candidate-bound E2E を通過した提供面 |
+| Runtime | planning / validation candidate | live receipt と rollback / restore evidence が必要 |
+| Access | invite / public Bot なし | 明示された範囲だけを開く |
+| GO | `NO_GO_UNPUBLISHED` | independent evidence と Final Human GO 後のみ |
+
+公開 repository があることと、Public Beta access が開いていることは別です。
+
+## Quick Start — Company starter を試す
+
+Python 以外の追加 dependency は不要です。repository root で次を実行します。
 
 ```powershell
 New-Item -ItemType Directory -Force work | Out-Null
 python tools/create_company_pack.py my-company work/my-company
 python tools/check_company_pack_customization.py work/my-company
-python tools/plan_company_pack_next_steps.py work/my-company --format markdown
 python tools/validate_template_pack.py examples/company-starter
-python tools/validate_installation_lifecycle.py examples/installation-lifecycle/compose-minimum.json
-python tools/validate_installation_lifecycle.py examples/installation-lifecycle/proxmox-segmented.json
+```
+
+initializer は元 example や既存 target を上書きしません。pack ID と 3 MOC の参照を再束縛し、22 JSON 文書を `draft` に戻してから validator を実行します。
+
+次に [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) に沿って Human Intent reference、canonical owner、role、expiry、retention、profile を自分の候補へ置き換えます。
+
+```powershell
+python tools/check_company_pack_customization.py work/my-company
+$BundlePath = 'work/my-company-review-bundle.json'
+if (Test-Path -LiteralPath $BundlePath) { throw 'bundle target already exists' }
+$BundleJson = python tools/build_company_pack_review_bundle.py work/my-company
+if ($LASTEXITCODE -ne 0) { throw 'bundle was refused' }
+[IO.File]::WriteAllText(
+  $BundlePath,
+  $BundleJson + "`n",
+  [Text.UTF8Encoding]::new($false)
+)
+python tools/verify_company_pack_review_bundle.py `
+  $BundlePath `
+  work/my-company
+```
+
+`READY_FOR_GOVERNED_REVIEW` や bundle `MATCH` は、Human approval、execution authority、Promotion、Current Truth、Public Beta GO を意味しません。詳細は [Customization Checklist](docs/CUSTOMIZATION-CHECKLIST.md)、[Review Bundle](docs/REVIEW-BUNDLE.md)、[Review Workflow](docs/REVIEW-WORKFLOW.md) を参照してください。
+
+## Runtime candidate を検査する
+
+Compose minimum / Proxmox segmented の lifecycle contract と公開 skeleton は、次のコマンドで local validation できます。
+
+```powershell
+python tools/validate_installation_lifecycle.py `
+  examples/installation-lifecycle/compose-minimum.json
+python tools/validate_installation_lifecycle.py `
+  examples/installation-lifecycle/proxmox-segmented.json
 python tools/validate_compose_minimum_skeleton.py runtime/compose-minimum
+```
+
+これらは plan/schema/current shipped bytes の検査です。image pull、container 起動、migration、health、restart、backup、restore を実行せず、live receipt も作りません。
+
+- [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)
+- [Compose Minimum Runbook](docs/COMPOSE-MINIMUM-RUNBOOK.md)
+- [Proxmox Segmented Runbook](docs/PROXMOX-SEGMENTED-RUNBOOK.md)
+- [Resolved Compose Candidate](docs/RESOLVED-COMPOSE-CANDIDATE.md)
+- [Image Availability Preflight](docs/IMAGE-AVAILABILITY-PREFLIGHT.md)
+- [Clean Install / Migration Evidence Candidate](docs/CLEAN-INSTALL-MIGRATION-EVIDENCE-CANDIDATE.md)
+
+## Evidence tooling の境界
+
+公開している attestation tooling は、段階ごとに証明範囲を限定しています。
+
+| Tooling | 証明できる範囲 | 証明しないもの |
+|---|---|---|
+| Saved bundle verifier | bundle metadata、digest、current bytes の一致 | Human approval、完全な directory snapshot |
+| Source Binding Verification Candidate | 保存済み R31 record / content / access evidence の strict parse、exact binding、terminal reread、非公開 R30 projection digest | full R31 schema、atomic snapshot、locator resolution、authenticity、consent、retention enforcement |
+| Protected Source Binding Receipt Candidate | runner、clock、snapshot、locator、evidence、replay、deletion、independent handoff の closed field shape | protected execution、trusted time、signature、person separation、実削除、verified receipt |
+| Image availability snapshot verifier | historical self-digest と candidate binding | authenticity、freshness、current daemon state |
+| Clean-install evidence verifier | reported evidence の構造と hash binding | 実行の真正性、current runtime |
+| Protected attestation verifier | OpenSSH signature と point-in-time policy | trusted clock、canonical trust root、execution truth |
+| One-use evaluator | 同じ bound SQLite store 内での atomic nonce reservation | store continuity、外部 authoritative nonce source |
+| Signed checkpoint | exact logical snapshot と immediate parent | authoritative full history、parallel branch 不存在 |
+| Recursive chain verifier | 提示された path 全体と supplied store の logical equivalence | external anchor authority、actual restore execution |
+
+関連文書:
+
+- [Protected Compose Evidence Attestation](docs/PROTECTED-COMPOSE-EVIDENCE-ATTESTATION.md)
+- [One-Use Compose Attestation Evaluation](docs/ONE-USE-COMPOSE-ATTESTATION-EVALUATION.md)
+- [Attestation Nonce Store Checkpoint](docs/ATTESTATION-NONCE-STORE-CHECKPOINT.md)
+- [Attestation Nonce Store Checkpoint Chain](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-CHAIN.md)
+
+## Validation
+
+公開 CLI と validator は Python standard library だけで動きます。full contract suite は R29〜R33 の Draft 2020-12 schema を実 validator に通すため、固定した test-only dependency を先に導入します。
+
+```powershell
 python -m pip install -r requirements-test.txt
 python -m unittest discover -s tests -v
 ```
 
-initializerは元exampleや既存targetを上書きせず、pack IDと3 MOCを再束縛し、22文書を`draft`にしてからvalidatorを通します。3つのguided optionをall-or-noneで渡すと、Human Intent参照1件、Block期限9件、Record保持方針参照9件も一括反映し、checkerの`replacement_required`を0にできます。入力未確定の通常pathは従来どおり19件を残します。詳しくは[Guided Company Pack Initialization](docs/GUIDED-COMPANY-PACK-INITIALIZATION.md)を参照してください。customization checkerは静的置換、46のreview項目、静的には証明できない5のevidence項目を分離します。guided plannerは同じchecker reportを現在地・理想の7段階・分類別件数・次コマンドへcategory countを保って集約し、JSONまたは人間向けMarkdownで表示します。placeholderを閉じた後は`python tools/build_company_pack_review_bundle.py work/my-company`で、manifest・Blocks・MOCs・Recordsの全22ファイルをSHA-256へ固定したreview候補を作れます。保存したbundleは`python tools/verify_company_pack_review_bundle.py BUNDLE_JSON PACK_DIRECTORY`で再照合でき、`python tools/build_company_pack_review_request.py BUNDLE_JSON PACK_DIRECTORY`は同じcandidateへ46 review itemと別枠5 evidence gapをpending requestとして束縛します。requestのoutcomeは未選択で、MATCHと同様に承認やPublic Beta GOではありません。starterには、Source IntakeからPromotion Decision Recordまでの9 Block、その出力を受け取る9種のGoverned Recordテンプレート、3つのnavigation-only MOCが含まれます。Capability GrantなしのChange、Human evidenceなしのPromotion Decisionをflow contractが拒否し、Block順序、入出力、MOCの完全順序・目的別部分列、Block出力とRecordの一対一対応をvalidatorで検査できます。Compose minimum / Proxmox segmentedについては、secret-freeな6フェーズのinstallation lifecycle契約とrunbookを公開しています。ComposeにはCompany DB / Evidence metadata Storeの実行候補skeletonがあります。private process environmentで設定を解決し、password、image repository、host pathを出さずにproject namespace、image digest、network、volume、migrationを候補JSONへ固定するCLIもあります。設定解決済み候補はruntime preflightへの入力であり、image取得・起動・migration・restoreのlive receiptではありません。最初の編集方法は[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)を参照してください。
+個別の構造検査、negative case、JSON の安全な出力規則は [Validation Guide](docs/VALIDATION.md) を参照してください。test PASS は、対象になった local bytes と契約の証拠です。Discord、provider、Proxmox、Docker daemon、本番 DB、実 Voice、Public Beta の E2E 証明へ拡張しません。
 
-pending requestから`build_company_pack_review_response.py`で46件の編集用candidateを作り、outcome入力後に`verify_company_pack_review_response.py`で元requestへの構造一致を確認できます。[Review Response Candidate](docs/REVIEW-RESPONSE.md)のMATCHはreviewer本人性、authority、Human approval、全体Decision、5件のevidence解決を証明しません。
+## Example Company の作り方
 
-completeなresponse chainは[Review Evidence to Decision Handoff](docs/REVIEW-DECISION-HANDOFF.md)で5成果物と現在のPackへ再束縛できます。成功しても`decision`と`selected_outcome`は`null`で、identity、authority、Human Decision、Promotion、Public Beta GOは別です。
+1. [Company starter](examples/company-starter/README.md) を initializer で複製する
+2. Vision / Mission / Human Intent reference / boundary を編集する
+3. canonical owner と runtime profile を決める
+4. 必要な Blocks を同じ evidence chain の中で構成する
+5. MOC で Company Operations、Public Release、Incident / Recovery の導線を確認する
+6. validator と customization checker を実行する
+7. exact bytes の review bundle を作る
+8. authority を持つ人が、候補と未証明項目を確認する
+9. 別の Work Order と runtime evidence を使って activation candidate を作る
 
-privateなR31 Source Record、Source Content、aggregate access evidenceのexact bytesを照合する場合は[Source Binding Verification Candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md)を使えます。標準ライブラリだけのread-only CLIで、strict JSON、digest/size、lossless R30 mapping、terminal rereadだけを確認し、private projection自体は出しません。`CANDIDATE_ONLY`のpoint-in-time matchはatomic snapshot、locator resolution、source authenticity、consent authority、retention enforcement、Human Intent、runtime、Public Beta GOではありません。
+starter の placeholder を埋めただけでは、Company の設立、runtime activation、法的権限、Human Decision、Promotion は完了しません。
 
-将来のprotected runnerがatomic private snapshot、trusted clock、immutable locator resolution、authenticity/consent/retention evidence、replay reservation、deletion receiptを残すためのfield形は[Protected Source Binding Receipt Candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)です。現在はschema-onlyで、populated receipt、runner、private evidence、署名検証、実削除は含みません。構造PASSでも全authority/runtime/GO claimは`false`です。
+## Roadmap
 
-Compose候補の設定解決には、別途Docker CLI / Compose pluginとprivate process environmentが必要です。手順は[Resolved Compose Candidate](docs/RESOLVED-COMPOSE-CANDIDATE.md)を参照してください。既存local imageのdigest一致だけをread-onlyで確認する場合は[Compose Image Availability Preflight](docs/IMAGE-AVAILABILITY-PREFLIGHT.md)を使えます。imageがなくても自動取得や起動はしません。保存snapshotの再検査はhistorical self-digest/candidate bindingだけで、署名された真正性、freshness、複数queryのatomicity、current stateを証明しません。外部runnerが報告したclean-install/migration結果を安全なhash bindingへまとめる場合は[Clean Install / Migration Evidence Candidate](docs/CLEAN-INSTALL-MIGRATION-EVIDENCE-CANDIDATE.md)を使えます。[Protected Compose Evidence Attestation](docs/PROTECTED-COMPOSE-EVIDENCE-ATTESTATION.md)はOpenSSH署名とpoint-in-time policyを検査し、[One-Use Compose Attestation Evaluation](docs/ONE-USE-COMPOSE-ATTESTATION-EVALUATION.md)は同一bound SQLite store内でnonceを一度だけ原子的に予約します。[Attestation Nonce Store Checkpoint](docs/ATTESTATION-NONCE-STORE-CHECKPOINT.md)はprivate storeの署名済みpoint-in-time snapshotと直前checkpointへの1リンクを検証し、[Attestation Nonce Store Checkpoint Chain](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-CHAIN.md)は独立pinと一致する`ssh-keygen` exact bytesを使って、self-contained private bundle内のGenesis-to-current path全体とopened-object copyで照合したstoreのlogical equivalenceを再帰検証します。[Checkpoint Head Anchor / Restore Drill Evidence](docs/ATTESTATION-NONCE-STORE-HEAD-ANCHOR-AND-RESTORE-DRILL.md)は、そのbundle headを短時間の署名済みcandidateへ固定し、source/restored verification reportとprivate receiptのexact digestを別の署名済みreported drill candidateへ束縛します。それでもbinary vendor authority、外部anchorのcanonical authority、trusted clock、authoritative complete history、parallel branch不存在、actual store continuity、backup/restore実行、physical lineage、人物としてのrole分離、reported executionの真実性、current state、Public Beta GOは証明しません。
+現在の優先順位は次です。
 
-[Checkpoint Segment Transition / Key Rotation Binding](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-SEGMENT-TRANSITION.md)は、提示されたR20 bundle headから1つのsuccessor checkpointへの境界、detached successor signature、同一store IDとappend-only reservation、旧/new signer policyとOpenSSH key-blob集合の差、distinct reviewer policy、短時間window、pinned `ssh-keygen`を一つの署名済みcandidateとして検証します。key-rotation modeの成功は旧鍵失効、侵害不存在、canonical segmentation policy、complete history、実store continuityを証明しません。
+1. 公開 Company starter と evidence tooling を、再現可能で正直な preview として保つ
+2. exact runtime candidate に対する clean install / migration / restart / rollback / restore evidence を作る
+3. consent-bound Voice の listener / rejoin / 900秒 rotation / post / readback / delete を一つの E2E で証明する
+4. speaker attribution から Intent / ToDo / Goal / Verified Handoff までを結ぶ
+5. distinct real people、protected reconciliation、独立 review を揃える
+6. 同じ candidate bytes に Final Human GO を束縛してから、限定された Public Beta access を開く
 
-[Checkpoint Segment Transition Candidate Builder](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-SEGMENT-TRANSITION-CREATION.md)は、そのprivate transition candidateをprior bundle、successor checkpoint/signature、3つのpolicy、mode、ID、時刻から決定的に新規作成します。existing outputは上書きせず、wrong parent、store/policy drift、同一鍵の見かけ上のrotation、reviewer hash衝突、無効windowを署名前に拒否します。builderは署名もsignature verificationもせず、作成後に独立reviewerの署名とR22 verifierが必要です。
+machine-readable な完了境界ではありません。最新チェックリストは [Roadmap to Public Beta](ROADMAP.md) を参照してください。
 
-## Public Beta まで
+## Contribution
 
-Voice runtime の候補は fail-closed で検証中です。実際の公開には、15分単位の文字起こし投稿、話者 attribution、保持期限内の削除、独立検証、対象候補に対する Final Human GO が必要です。
+現在は Incomplete Public Preview です。Issue や Pull Request を作る前に、次を明確にしてください。
 
-公開プレビューは閲覧できますが、現時点で音声を送信したり Discord Bot を招待したりしないでください。
+- どの利用者の、どの問題を解く変更か
+- Source / Intent / Decision / Work Order chain のどこを扱うか
+- 変更候補と、検証方法、rollback は何か
+- public artifact に secret、private identifier、実音声、transcript corpus を含めていないか
+- local PASS を live / deployed / production / Public GO と表現していないか
+- 新しい SSOT を増やさず、既存の canonical owner を尊重しているか
+
+公開 repository の contribution policy と license は整備途中です。大きな導入や再配布を前提にしないでください。
+
+## 用語
+
+| 用語 | 短い定義 |
+|---|---|
+| Authorized Corpus | 特定 identity が、明示目的・期間・操作で参照を許された情報集合 |
+| Intent Candidate | 会話や資料から抽出した、まだ未確定の意図仮説 |
+| GrillU | 一問ずつ曖昧さを閉じるチャネル非依存の要件深掘り機能 |
+| Work Order | 成果物、対象、権限、受入・停止条件を結ぶ実行契約 |
+| Capability Grant | identity と action を resource、期限、上限へ限定した権限記録 |
+| Verification Receipt | exact input / candidate / test / result を束縛した追記型記録 |
+| Promotion | 検証済み候補を authority-bound decision で採用する段階 |
+| Company SSOT | current truth を record、event、authority、source へ遡れる統治体系 |
+| MOC | 同じ canonical records を目的別に辿る navigation map |
+| Resident Clone | 境界付きで利用者の仕事を担う長期 AI identity candidate |
+
+## Document Map
+
+### 最初に読む
+
+- [Project Status](STATUS.md) — 現在公開しているものと未証明範囲
+- [Roadmap to Public Beta](ROADMAP.md) — access を開く前に必要な gate
+- [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) — 最短の実行例
+- [Template Guide](docs/TEMPLATE-GUIDE.md) — Blocks / Records / MOCs の編集
+
+### Company pack を review する
+
+- [Customization Checklist](docs/CUSTOMIZATION-CHECKLIST.md)
+- [Review Bundle](docs/REVIEW-BUNDLE.md)
+- [Review Workflow](docs/REVIEW-WORKFLOW.md)
+- [Validation Guide](docs/VALIDATION.md)
+- [Decision Record Candidate Contract](docs/DECISION-RECORD-CANDIDATE.md)
+- [Intent Candidate Instance Contract](docs/INTENT-CANDIDATE-INSTANCE.md)
+- [Source Record Instance Contract](docs/SOURCE-RECORD-INSTANCE.md)
+
+### Runtime candidate を理解する
+
+- [Runtime overview](runtime/README.md)
+- [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)
+- [Compose Minimum Runbook](docs/COMPOSE-MINIMUM-RUNBOOK.md)
+- [Proxmox Segmented Runbook](docs/PROXMOX-SEGMENTED-RUNBOOK.md)
+- [Resolved Compose Candidate](docs/RESOLVED-COMPOSE-CANDIDATE.md)
+
+### Evidence trust boundary を理解する
+
+- [Image Availability Preflight](docs/IMAGE-AVAILABILITY-PREFLIGHT.md)
+- [Clean Install / Migration Evidence Candidate](docs/CLEAN-INSTALL-MIGRATION-EVIDENCE-CANDIDATE.md)
+- [Protected Compose Evidence Attestation](docs/PROTECTED-COMPOSE-EVIDENCE-ATTESTATION.md)
+- [One-Use Compose Attestation Evaluation](docs/ONE-USE-COMPOSE-ATTESTATION-EVALUATION.md)
+- [Attestation Nonce Store Checkpoint](docs/ATTESTATION-NONCE-STORE-CHECKPOINT.md)
+- [Attestation Nonce Store Checkpoint Chain](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-CHAIN.md)
+- [Source Binding Verification Candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md)
+- [Protected Source Binding Receipt Candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)
+
+## Evidence and provenance
+
+この README は、Founder Intent、現行 governance model、公開 Company starter の current bytes、Project Status、Roadmap を、人間が最初に読める projection としてまとめています。README 自体は Human Decision、runtime receipt、canonical Promotion、Current Truth の代替ではありません。
+
+数や機能の主張はこの repository に含まれる current files を基準にしています。local / private 実装に触れる箇所は、公開済み機能ではなく candidate または direction と明記しています。より新しい [STATUS.md](STATUS.md) と candidate-bound receipt がある場合は、そちらの狭い主張を優先してください。
+
+## Current limitations
+
+- Public Discord invite、public Voice Bot、Public Beta signup はありません
+- Voice capture、ASR、15分 rotation、post、delete の公開 E2E はありません
+- raw audio、transcript corpus、credential、private infrastructure identifier は公開しません
+- Company starter は governance candidate であり、会社、契約、権限を自動作成しません
+- Compose / Proxmox artifacts は planning / validation candidate であり、live deployment receipt ではありません
+- Context Platform、TiDB、GrillU、Resident Clone、Agent Foundry、AI Business Loop は完成済み公開機能ではありません
+- attestation tooling は、それぞれ明示した trust boundary を超えて runtime truth を証明しません
+- Source Binding の local match は point-in-time candidate であり、protected snapshot、authenticity、consent、retention enforcement を証明しません
+- Protected Source Binding Receipt は unpopulated schema-only 契約であり、runner、trusted clock、signature、replay、deletion、independent verification の実行証拠ではありません
+- independent protected reconciliation と candidate-bound Final Human GO は未完了です
+- Public Beta は **NO-GO / unpublished** のままです
 
 ## License
 
-ライセンスはまだ決定していません。明示的なライセンスが追加されるまで、再利用・再配布の許諾を意味しません。
+ライセンスはまだ決定していません。明示的な license が追加されるまで、閲覧可能であることは再利用・改変・再配布の許諾を意味しません。
