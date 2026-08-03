@@ -182,6 +182,9 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 item["outcome"] = outcomes[index % len(outcomes)]
                 if item["outcome"] != "accept":
                     item["reviewer_note"] = f"review-note-ref:{index:02d}"
+            response["review_response"]["items"][0]["reviewer_note"] = (
+                "https://example.com/evidence/review-00"
+            )
             response_bytes = (
                 json.dumps(response, ensure_ascii=False, sort_keys=True) + "\n"
             ).encode("utf-8")
@@ -257,6 +260,17 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             float_binding_count["candidate_binding"]["binding_count"] = 22.0
             cases.append(
                 ("float binding count", json.dumps(float_binding_count).encode("utf-8"))
+            )
+
+            oversized_saved_bundle = json.loads(json.dumps(request))
+            oversized_saved_bundle["candidate_binding"]["saved_bundle"]["bytes"] = (
+                response_builder.MAX_JSON_BYTES + 1
+            )
+            cases.append(
+                (
+                    "oversized saved bundle binding",
+                    json.dumps(oversized_saved_bundle).encode("utf-8"),
+                )
             )
 
             boolean_zero_count = json.loads(json.dumps(request))

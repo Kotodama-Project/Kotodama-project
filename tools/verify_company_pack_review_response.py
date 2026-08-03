@@ -47,7 +47,7 @@ SECRET_NOTE_RE = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----)"
 )
 LOCAL_PATH_RE = re.compile(
-    r"(?i)(?:[A-Za-z]:[\\/]|\\\\[^\\/\s]+[\\/]|//[^/\s]+/|"
+    r"(?i)(?:(?<![A-Za-z])[A-Za-z]:[\\/]|\\\\[^\\/\s]+[\\/]|(?<!:)//[^/\s]+/|"
     r"/(?:home|Users|private|root|tmp|etc|var/folders)/|AppData[\\/])"
 )
 from verify_company_pack_review_bundle import (

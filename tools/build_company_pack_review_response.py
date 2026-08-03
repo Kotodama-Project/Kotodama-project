@@ -167,7 +167,7 @@ def valid_candidate_binding(value: Any) -> bool:
         and isinstance(saved["sha256"], str)
         and SHA256_RE.fullmatch(saved["sha256"]) is not None
         and type(saved["bytes"]) is int
-        and saved["bytes"] > 0
+        and 0 < saved["bytes"] <= MAX_JSON_BYTES
         and exact_dict(digest, {"algorithm", "canonicalization", "value"})
         and digest["algorithm"] == "SHA-256"
         and digest["canonicalization"] == "utf8-json-sort-keys-no-whitespace-v1"
