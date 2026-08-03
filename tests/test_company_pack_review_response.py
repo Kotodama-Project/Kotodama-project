@@ -526,6 +526,42 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                     )
                 )
 
+            embedded_locator_note = self.completed_response(request_path)
+            embedded_locator_note["review_response"]["items"][0][
+                "reviewer_note"
+            ] = (
+                "https://example.com/evidence?next="
+                "file://private-host/review-share/review.txt"
+            )
+            cases.append(
+                (
+                    "private locator in HTTPS query",
+                    json.dumps(embedded_locator_note).encode("utf-8"),
+                )
+            )
+
+            encoded_locator_note = self.completed_response(request_path)
+            encoded_locator_note["review_response"]["items"][0][
+                "reviewer_note"
+            ] = "https://example.com/evidence?next=file%3A%2F%2Fprivate-host%2Freview"
+            cases.append(
+                (
+                    "encoded private locator in HTTPS query",
+                    json.dumps(encoded_locator_note).encode("utf-8"),
+                )
+            )
+
+            userinfo_locator_note = self.completed_response(request_path)
+            userinfo_locator_note["review_response"]["items"][0][
+                "reviewer_note"
+            ] = "https://example.com@private-host/review-share/review.txt"
+            cases.append(
+                (
+                    "userinfo private HTTPS locator",
+                    json.dumps(userinfo_locator_note).encode("utf-8"),
+                )
+            )
+
             duplicate_key = (
                 '{"kind":"company_pack_review_response","kind":"'
                 + sentinel

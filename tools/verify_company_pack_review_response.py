@@ -12,6 +12,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 from build_company_pack_review_response import (
     PERMITTED_OUTCOMES,
@@ -46,9 +47,9 @@ SECRET_NOTE_RE = re.compile(
     r"AIza[0-9A-Za-z_-]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}|"
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----)"
 )
-PUBLIC_HTTPS_URL_RE = re.compile(
-    r"(?i)\bhttps://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
-    r"[a-z]{2,63}(?::[0-9]{1,5})?(?:/[^\s]*)?"
+HTTPS_TOKEN_RE = re.compile(r"(?i)\bhttps://[^\s]+")
+PUBLIC_DNS_RE = re.compile(
+    r"(?i)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
 )
 LOCAL_PATH_RE = re.compile(
     r"(?i)(?:[A-Za-z]:[\\/]|\\\\[^\\/\s]+[\\/]|//[^/\s]+/|"
@@ -112,8 +113,33 @@ def valid_file_binding(value: Any) -> bool:
 
 
 def contains_private_locator(note: str) -> bool:
-    without_public_https = PUBLIC_HTTPS_URL_RE.sub("", note)
-    return LOCAL_PATH_RE.search(without_public_https) is not None
+    remaining: list[str] = []
+    cursor = 0
+    for match in HTTPS_TOKEN_RE.finditer(note):
+        remaining.append(note[cursor : match.start()])
+        try:
+            parsed = urlsplit(match.group(0))
+            hostname = parsed.hostname
+            port = parsed.port
+        except ValueError:
+            return True
+        if (
+            parsed.scheme.lower() != "https"
+            or parsed.username is not None
+            or parsed.password is not None
+            or hostname is None
+            or PUBLIC_DNS_RE.fullmatch(hostname) is None
+            or (port is not None and not 1 <= port <= 65535)
+        ):
+            return True
+        embedded = f"{parsed.query} {parsed.fragment}"
+        for _ in range(2):
+            embedded = unquote(embedded)
+        if LOCAL_PATH_RE.search(embedded) is not None:
+            return True
+        cursor = match.end()
+    remaining.append(note[cursor:])
+    return LOCAL_PATH_RE.search("".join(remaining)) is not None
 
 
 def load_response(path: Path) -> tuple[dict[str, Any], bytes] | None:
