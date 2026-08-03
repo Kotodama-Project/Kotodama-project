@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 import shutil
@@ -324,6 +325,47 @@ class AttestationNonceStoreCheckpointHeadAnchorCliTests(unittest.TestCase):
         report = json.loads(result.stdout)
         self.assertEqual(report["status"], "INVALID")
         self.assertEqual(report["errors"], ["input is invalid"])
+        self.assertTrue(all(not value for value in report["claims"].values()))
+
+    def test_deep_checkpoint_json_in_digest_valid_bundle_is_a_structured_refusal(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            case = self.make_r20_case(temporary)
+            bundle = case["bundle"]
+            assert isinstance(bundle, Path)
+            bundle_value = json.loads(bundle.read_text(encoding="utf-8"))
+            deep_checkpoint = (b'{"nested":' * 5000) + b"0" + (b"}" * 5000)
+            deep_digest = hashlib.sha256(deep_checkpoint).hexdigest()
+            bundle_value["entries"][0]["checkpoint_bytes_base64"] = (
+                base64.b64encode(deep_checkpoint).decode("ascii")
+            )
+            bundle_value["entries"][0]["checkpoint_file_sha256"] = deep_digest
+            bundle_value["genesis_checkpoint_sha256"] = deep_digest
+            bundle_value["ordered_chain_sha256"] = (
+                r20_helpers.chain_tool.ordered_chain_sha256(bundle_value["entries"])
+            )
+            bundle.write_text(json.dumps(bundle_value), encoding="utf-8")
+            case["bundle_sha256"] = hashlib.sha256(bundle.read_bytes()).hexdigest()
+
+            anchor = temporary / "checkpoint-head-anchor.json"
+            anchor.write_text(
+                json.dumps(self.make_anchor(case), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            signature = self.sign(
+                anchor,
+                temporary / "inputs" / "reviewer-key",
+                "kotodama-nonce-store-checkpoint-head",
+            )
+            result = self.verify_anchor(case, anchor, signature)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
+        report = json.loads(result.stdout)
+        self.assertEqual(report["status"], "INVALID")
+        self.assertIn("checkpoint 0 input is invalid", report["errors"])
         self.assertTrue(all(not value for value in report["claims"].values()))
 
 

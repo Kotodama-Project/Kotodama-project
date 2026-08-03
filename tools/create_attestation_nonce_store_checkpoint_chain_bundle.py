@@ -420,7 +420,13 @@ def chain_from_bundle(
             continue
         try:
             checkpoint = load_strict_json_bytes(checkpoint_bytes)
-        except (UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+        except (
+            UnicodeError,
+            json.JSONDecodeError,
+            RecursionError,
+            TypeError,
+            ValueError,
+        ):
             errors.append(f"checkpoint {sequence} input is invalid")
             continue
         if not isinstance(checkpoint, dict) or validate_checkpoint(checkpoint):
