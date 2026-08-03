@@ -8,11 +8,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SKELETON = ROOT / "runtime" / "compose-minimum"
 VALIDATOR = ROOT / "tools" / "validate_compose_minimum_skeleton.py"
 GIT_ATTRIBUTES = ROOT / ".gitattributes"
+SCHEMA = ROOT / "schemas" / "compose-minimum-skeleton.schema.json"
 
 
 class ComposeMinimumSkeletonValidatorCliTests(unittest.TestCase):
@@ -74,6 +77,37 @@ class ComposeMinimumSkeletonValidatorCliTests(unittest.TestCase):
         self.assertEqual(report["errors"], [])
         self.assertTrue(all(not value for value in report["claims"].values()))
         self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+
+    def test_integer_valued_json_number_for_binding_bytes_matches_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            skeleton = self.copy_skeleton(Path(temporary))
+            manifest_path = skeleton / "skeleton.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["bindings"][0]["bytes"] = float(manifest["bindings"][0]["bytes"])
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+            Draft202012Validator(schema).validate(manifest)
+            result = self.run_validator(skeleton)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout)["status"], "PASS")
+
+    def test_binding_bytes_still_rejects_boolean_fraction_and_negative_number(self) -> None:
+        for invalid in (True, 1.5, -1.0):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as temporary:
+                skeleton = self.copy_skeleton(Path(temporary))
+                manifest_path = skeleton / "skeleton.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["bindings"][0]["bytes"] = invalid
+                manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+                result = self.run_validator(skeleton)
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(
+                "binding[0].bytes must be a non-negative integer",
+                json.loads(result.stdout)["errors"],
+            )
 
     def test_one_byte_drift_fails_the_binding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

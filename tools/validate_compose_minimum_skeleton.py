@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sys
 from pathlib import Path, PurePosixPath
@@ -206,6 +207,20 @@ def safe_relative_path(value: object) -> bool:
     return not path.is_absolute() and ".." not in path.parts and "" not in path.parts
 
 
+def is_non_negative_integer(value: object) -> bool:
+    """Match JSON Schema integer semantics without treating booleans as sizes."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value >= 0
+    return (
+        isinstance(value, float)
+        and math.isfinite(value)
+        and value.is_integer()
+        and value >= 0
+    )
+
+
 def validate_security(manifest: dict[str, Any], errors: list[str]) -> None:
     security = manifest.get("security")
     if not isinstance(security, dict):
@@ -305,7 +320,7 @@ def validate_bindings(
         byte_count = binding.get("bytes")
         if not isinstance(sha256, str) or SHA256_PATTERN.fullmatch(sha256) is None:
             errors.append(f"{location}.sha256 must be lowercase SHA-256")
-        if not isinstance(byte_count, int) or isinstance(byte_count, bool) or byte_count < 0:
+        if not is_non_negative_integer(byte_count):
             errors.append(f"{location}.bytes must be a non-negative integer")
         path = root / Path(*PurePosixPath(relative).parts)
         try:
