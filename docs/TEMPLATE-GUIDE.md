@@ -59,6 +59,9 @@ Blockは、一つの責任を持つ小さなテンプレートです。すべて
 
 MOCは「この仕事を始めるとき、何をどの順番で読むか」を示します。
 
+以下は、理想のCompany OSで考えられる概念的な導線候補です。
+**Conceptual ideal/future MOC candidates (not shipped starter files):**
+
 例:
 
 - Company Operations MOC
@@ -68,6 +71,8 @@ MOCは「この仕事を始めるとき、何をどの順番で読むか」を�
 - Venture / Customer Discovery MOC
 
 MOCからDecisionやCurrent Truthを直接変更しません。MOCはリンクと現在地を示すProjectionです。
+
+**The public starter currently ships exactly three MOCs:**
 
 公開starterでは、同じcanonical Block鎖に対して3つの入口を用意しています。
 

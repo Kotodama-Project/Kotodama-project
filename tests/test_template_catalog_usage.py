@@ -60,3 +60,26 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             "[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)"
         )
         self.assertLess(starter, lifecycle)
+
+    def test_template_guide_separates_ideal_mocs_from_shipped_current_mocs(self) -> None:
+        guide = (ROOT / "docs" / "TEMPLATE-GUIDE.md").read_text(encoding="utf-8")
+        ideal_marker = "Conceptual ideal/future MOC candidates (not shipped starter files)"
+        current_marker = "The public starter currently ships exactly three MOCs:"
+        self.assertIn(ideal_marker, guide)
+        self.assertIn(current_marker, guide)
+
+        ideal_start = guide.index(ideal_marker)
+        current_start = guide.index(current_marker)
+        ideal = guide[ideal_start:current_start]
+        current = guide[current_start:]
+        for future_moc in ("Voice Operations MOC", "Venture / Customer Discovery MOC"):
+            with self.subTest(future_moc=future_moc):
+                self.assertIn(future_moc, ideal)
+                self.assertNotIn(future_moc, current)
+        for shipped_moc in (
+            "Company Operations",
+            "Public Release Review",
+            "Incident / Recovery",
+        ):
+            with self.subTest(shipped_moc=shipped_moc):
+                self.assertIn(shipped_moc, current)
