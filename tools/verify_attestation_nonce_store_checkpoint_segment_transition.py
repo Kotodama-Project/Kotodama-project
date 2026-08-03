@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -134,6 +135,16 @@ ALWAYS_FALSE_FIELDS = {
 }
 
 
+@dataclass(frozen=True)
+class SegmentPolicyInputs:
+    prior_allowed_signers: bytes
+    prior_identity: bytes
+    successor_allowed_signers: bytes
+    successor_identity: bytes
+    reviewer_allowed_signers: bytes
+    reviewer_identity: bytes
+
+
 def require_exact_fields(
     value: object, expected: set[str], location: str, errors: list[str]
 ) -> dict[str, Any] | None:
@@ -232,12 +243,7 @@ def validate_transition(
     successor_signature_bytes: bytes,
     expected_successor_sha256: str,
     successor: dict[str, Any],
-    prior_allowed_bytes: bytes,
-    prior_identity_bytes: bytes,
-    successor_allowed_bytes: bytes,
-    successor_identity_bytes: bytes,
-    reviewer_allowed_bytes: bytes,
-    reviewer_identity_bytes: bytes,
+    policies: SegmentPolicyInputs,
     evaluated_at: datetime,
 ) -> list[str]:
     errors: list[str] = []
@@ -291,7 +297,10 @@ def validate_transition(
             errors,
         )
         if prior_binding != expected_prior_binding(
-            bundle_bytes, chain, prior_allowed_bytes, prior_identity_bytes
+            bundle_bytes,
+            chain,
+            policies.prior_allowed_signers,
+            policies.prior_identity,
         ):
             errors.append("prior segment binding mismatch")
 
@@ -317,8 +326,8 @@ def validate_transition(
             successor_bytes,
             successor_signature_bytes,
             successor,
-            successor_allowed_bytes,
-            successor_identity_bytes,
+            policies.successor_allowed_signers,
+            policies.successor_identity,
         ):
             errors.append("successor checkpoint binding mismatch")
 
@@ -340,8 +349,10 @@ def validate_transition(
             errors,
         )
         expected_reviewer_policy = {
-            "allowed_signers_file_sha256": sha256_bytes(reviewer_allowed_bytes),
-            "signer_identity_file_sha256": sha256_bytes(reviewer_identity_bytes),
+            "allowed_signers_file_sha256": sha256_bytes(
+                policies.reviewer_allowed_signers
+            ),
+            "signer_identity_file_sha256": sha256_bytes(policies.reviewer_identity),
             "signer_role": "independent_transition_reviewer",
         }
         if reviewer_policy != expected_reviewer_policy:
@@ -469,12 +480,7 @@ def validate_segment_boundary(
     bundle: dict[str, Any],
     chain: list[dict[str, Any]],
     successor: dict[str, Any],
-    prior_allowed_bytes: bytes,
-    prior_identity_bytes: bytes,
-    successor_allowed_bytes: bytes,
-    successor_identity_bytes: bytes,
-    reviewer_allowed_bytes: bytes,
-    reviewer_identity_bytes: bytes,
+    policies: SegmentPolicyInputs,
     mode: object,
 ) -> list[str]:
     """Validate the shared unsigned boundary contract used by creator and verifier."""
@@ -484,18 +490,18 @@ def validate_segment_boundary(
     prior_policy = chain[0]["checkpoint"].get("signature_policy_binding", {})
     successor_policy = successor.get("signature_policy_binding", {})
     expected_prior_policy = expected_checkpoint_policy(
-        prior_allowed_bytes, prior_identity_bytes
+        policies.prior_allowed_signers, policies.prior_identity
     )
     expected_successor_policy = expected_checkpoint_policy(
-        successor_allowed_bytes, successor_identity_bytes
+        policies.successor_allowed_signers, policies.successor_identity
     )
     if bundle_policy != expected_prior_policy or prior_policy != expected_prior_policy:
         errors.append("prior signer policy mismatch")
     if successor_policy != expected_successor_policy:
         errors.append("successor signer policy mismatch")
 
-    prior_key_set = allowed_signer_key_set(prior_allowed_bytes)
-    successor_key_set = allowed_signer_key_set(successor_allowed_bytes)
+    prior_key_set = allowed_signer_key_set(policies.prior_allowed_signers)
+    successor_key_set = allowed_signer_key_set(policies.successor_allowed_signers)
     if prior_key_set is None:
         errors.append("prior allowed-signers key set is invalid")
     if successor_key_set is None:
@@ -503,8 +509,8 @@ def validate_segment_boundary(
     if mode == "KEY_ROTATION_SEGMENT":
         if (
             prior_policy == successor_policy
-            or sha256_bytes(prior_allowed_bytes)
-            == sha256_bytes(successor_allowed_bytes)
+            or sha256_bytes(policies.prior_allowed_signers)
+            == sha256_bytes(policies.successor_allowed_signers)
             or prior_key_set is None
             or successor_key_set is None
             or prior_key_set == successor_key_set
@@ -514,14 +520,14 @@ def validate_segment_boundary(
         errors.append("same-policy mode requires an unchanged signer policy")
 
     reviewer_hashes = {
-        sha256_bytes(reviewer_allowed_bytes),
-        sha256_bytes(reviewer_identity_bytes),
+        sha256_bytes(policies.reviewer_allowed_signers),
+        sha256_bytes(policies.reviewer_identity),
     }
     if reviewer_hashes & {
-        sha256_bytes(prior_allowed_bytes),
-        sha256_bytes(prior_identity_bytes),
-        sha256_bytes(successor_allowed_bytes),
-        sha256_bytes(successor_identity_bytes),
+        sha256_bytes(policies.prior_allowed_signers),
+        sha256_bytes(policies.prior_identity),
+        sha256_bytes(policies.successor_allowed_signers),
+        sha256_bytes(policies.successor_identity),
     }:
         errors.append("transition reviewer hashes must be structurally distinct")
 
@@ -651,6 +657,14 @@ def main(argv: list[str]) -> int:
         ]
         if any(IDENTITY.fullmatch(identity) is None for identity in identities):
             raise ValueError
+        policy_inputs = SegmentPolicyInputs(
+            prior_allowed_signers=prior_allowed_bytes,
+            prior_identity=prior_identity_bytes,
+            successor_allowed_signers=successor_allowed_bytes,
+            successor_identity=successor_identity_bytes,
+            reviewer_allowed_signers=reviewer_allowed_bytes,
+            reviewer_identity=reviewer_identity_bytes,
+        )
         time_errors: list[str] = []
         evaluated_at = parse_time(argv[17], "evaluated_at", time_errors)
         if time_errors or evaluated_at is None:
@@ -700,12 +714,7 @@ def main(argv: list[str]) -> int:
         successor_signature_bytes=successor_signature_bytes,
         expected_successor_sha256=argv[8],
         successor=successor,
-        prior_allowed_bytes=prior_allowed_bytes,
-        prior_identity_bytes=prior_identity_bytes,
-        successor_allowed_bytes=successor_allowed_bytes,
-        successor_identity_bytes=successor_identity_bytes,
-        reviewer_allowed_bytes=reviewer_allowed_bytes,
-        reviewer_identity_bytes=reviewer_identity_bytes,
+        policies=policy_inputs,
         evaluated_at=evaluated_at,
     )
     bindings = {
@@ -750,12 +759,7 @@ def main(argv: list[str]) -> int:
             bundle=bundle,
             chain=chain,
             successor=successor,
-            prior_allowed_bytes=prior_allowed_bytes,
-            prior_identity_bytes=prior_identity_bytes,
-            successor_allowed_bytes=successor_allowed_bytes,
-            successor_identity_bytes=successor_identity_bytes,
-            reviewer_allowed_bytes=reviewer_allowed_bytes,
-            reviewer_identity_bytes=reviewer_identity_bytes,
+            policies=policy_inputs,
             mode=mode,
         )
     )

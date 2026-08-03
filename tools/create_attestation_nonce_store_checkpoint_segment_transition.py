@@ -27,6 +27,7 @@ from verify_attestation_nonce_store_checkpoint_segment_transition import (
     MAX_SIGNED_WINDOW_SECONDS,
     NAMESPACE,
     SHA256_HEX,
+    SegmentPolicyInputs,
     TRANSITION_MODES,
     expected_prior_binding,
     expected_successor_binding,
@@ -114,6 +115,14 @@ def main(argv: list[str]) -> int:
         ]
         if any(IDENTITY.fullmatch(identity) is None for identity in identities):
             raise ValueError
+        policy_inputs = SegmentPolicyInputs(
+            prior_allowed_signers=prior_allowed_bytes,
+            prior_identity=prior_identity_bytes,
+            successor_allowed_signers=successor_allowed_bytes,
+            successor_identity=successor_identity_bytes,
+            reviewer_allowed_signers=reviewer_allowed_bytes,
+            reviewer_identity=reviewer_identity_bytes,
+        )
         if SHA256_HEX.fullmatch(argv[2]) is None or argv[2] != sha256_bytes(
             bundle_bytes
         ):
@@ -153,12 +162,7 @@ def main(argv: list[str]) -> int:
             bundle=bundle,
             chain=chain,
             successor=successor,
-            prior_allowed_bytes=prior_allowed_bytes,
-            prior_identity_bytes=prior_identity_bytes,
-            successor_allowed_bytes=successor_allowed_bytes,
-            successor_identity_bytes=successor_identity_bytes,
-            reviewer_allowed_bytes=reviewer_allowed_bytes,
-            reviewer_identity_bytes=reviewer_identity_bytes,
+            policies=policy_inputs,
             mode=argv[12],
         )
         if boundary_errors:
@@ -209,12 +213,7 @@ def main(argv: list[str]) -> int:
             successor_signature_bytes=successor_signature_bytes,
             expected_successor_sha256=argv[5],
             successor=successor,
-            prior_allowed_bytes=prior_allowed_bytes,
-            prior_identity_bytes=prior_identity_bytes,
-            successor_allowed_bytes=successor_allowed_bytes,
-            successor_identity_bytes=successor_identity_bytes,
-            reviewer_allowed_bytes=reviewer_allowed_bytes,
-            reviewer_identity_bytes=reviewer_identity_bytes,
+            policies=policy_inputs,
             evaluated_at=issued_at,
         )
         if validation_errors:
