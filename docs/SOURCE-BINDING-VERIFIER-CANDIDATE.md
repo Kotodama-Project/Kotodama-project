@@ -87,7 +87,8 @@ matchはexit `0`、evaluated refusalはexit `1`、usage errorはexit `2`です�
   名前集合の欠落・追加と一つでも`false`以外の値を拒否します。
 - evidenceのrecord/content binding、record-ID digest、use集合、common scope、basis、
   per-use evidence binding、recordより前のevidence時刻、candidate expiry不一致が
-  一つでもあれば拒否します。
+  一つでもあれば拒否します。access scopeまたはretention windowがevidence記録時刻
+  以前に終了している候補も拒否します。
 - Source Item、Source Content、serialized record、access evidenceのlocator aliasを
   拒否します。三つの入力pathと観測file identityも別objectを要求し、外部locatorを
   確認する前にprivate fileを開きません。

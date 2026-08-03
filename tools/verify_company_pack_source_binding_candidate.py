@@ -732,7 +732,7 @@ def validate_access_evidence(
         or evidence["revocation_evidence_ref"] != common["revocation_evidence_ref"]
     ):
         fail()
-    parse_timestamp(evidence["scope_expires_at"])
+    scope_expires_at = parse_timestamp(evidence["scope_expires_at"])
     require_nullable_ref(evidence["revocation_evidence_ref"])
     access = record_view["access"]
     if evidence["basis_ref"] != access["basis_ref"]:
@@ -750,9 +750,12 @@ def validate_access_evidence(
             fail()
     recorded_at = parse_timestamp(evidence["recorded_at"])
     expires_at = parse_timestamp(evidence["expires_at"])
+    retain_until = parse_timestamp(record_view["retention"]["retain_until"])
     if (
         recorded_at < parse_timestamp(record["recorded_at"])
         or expires_at <= recorded_at
+        or scope_expires_at <= recorded_at
+        or retain_until <= recorded_at
         or evidence["expires_at"] != record["expires_at"]
     ):
         fail()

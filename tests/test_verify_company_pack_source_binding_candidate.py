@@ -728,6 +728,41 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
                 self.assertIsNone(report["r30_projection_digest_candidate"])
                 self.assertNotIn("PRIVATE-EVIDENCE-PAYLOAD", result.stdout + result.stderr)
 
+    def test_expired_projection_scope_and_retention_refuse_at_evidence_time(self) -> None:
+        record, content, evidence = matched_inputs()
+        scope_expired = json.loads(json.dumps(record))
+        for declaration in scope_expired["access_or_consent"]["use_declarations"].values():
+            if declaration["declaration_status"] == "DECLARED_PERMITTED_UNVERIFIED":
+                declaration["scope_expires_at"] = "2026-08-03T17:20:30+09:00"
+        scope_evidence = json.loads(json.dumps(evidence))
+        scope_evidence["scope_expires_at"] = "2026-08-03T17:20:30+09:00"
+        scope_evidence["source_record_binding"] = binding(canonical_bytes(scope_expired))
+
+        retention_expired = json.loads(json.dumps(record))
+        retention_expired["retention"]["retain_until"] = (
+            "2026-08-03T17:20:30+09:00"
+        )
+        retention_evidence = json.loads(json.dumps(evidence))
+        retention_evidence["source_record_binding"] = binding(
+            canonical_bytes(retention_expired)
+        )
+
+        for name, changed_record, changed_evidence in (
+            ("access scope", scope_expired, scope_evidence),
+            ("retention window", retention_expired, retention_evidence),
+        ):
+            with self.subTest(name=name):
+                result = self.run_tool(changed_record, content, changed_evidence)
+                self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+                report = json.loads(result.stdout)
+                self.assertEqual(
+                    report["reason_codes"],
+                    ["ACCESS_EVIDENCE_CONTRACT_MISMATCH"],
+                )
+                self.assertEqual(report["result"], "REFUSED")
+                self.assertIsNone(report["r30_projection_digest_candidate"])
+                self.assertTrue(all(value is False for value in report["claims"].values()))
+
     def test_terminal_reread_refuses_byte_or_identity_drift_with_all_claims_false(self) -> None:
         record, content, evidence = matched_inputs()
         with tempfile.TemporaryDirectory() as temporary:
