@@ -46,6 +46,7 @@ CHECK_IDS = (
     "customization_boundary",
     "claim_boundary",
 )
+OUTPUT_FORMATS = {"json", "markdown"}
 REFUSAL_REASONS = {
     "INPUT_NOT_DIRECTORY",
     "INVALID_PACK",
@@ -166,12 +167,79 @@ def write_stdout(value: dict[str, Any]) -> None:
         buffer.flush()
 
 
+def render_markdown(value: dict[str, Any]) -> str:
+    """Render the fixed report as a human-readable, path-free summary."""
+    lines = [
+        "# Company Pack Public Preview self-check",
+        "",
+        f"- Status: `{value['status']}`",
+        f"- Public Beta: `{value['public_beta']}`",
+        f"- Refusal reason: `{value['refusal_reason'] or 'none'}`",
+        "",
+        "## Counts",
+        "",
+        "| Metric | Value |",
+        "| --- | ---: |",
+    ]
+    for key in (
+        "validated_files",
+        "blocks",
+        "records",
+        "mocs",
+        "replacement_required",
+        "review_required",
+        "evidence_required",
+    ):
+        lines.append(f"| `{key}` | {value['counts'][key]} |")
+
+    lines.extend(["", "## Checks", "", "| Check | Status |", "| --- | --- |"])
+    for check in value["checks"]:
+        lines.append(f"| `{check['id']}` | `{check['status']}` |")
+
+    lines.extend(["", "## Claims", "", "| Claim | Verified |", "| --- | --- |"])
+    for key, claim in value["claims"].items():
+        lines.append(f"| `{key}` | `{str(claim).lower()}` |")
+
+    lines.extend(
+        [
+            "",
+            "This is a deterministic, read-only summary. It does not authenticate",
+            "Human approval, verify runtime/provider/deployment state, promote a",
+            "candidate, or change Current Truth. Public Beta remains NO_GO_UNPUBLISHED.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def parse_invocation(argv: list[str]) -> tuple[str, str] | None:
+    if len(argv) == 2:
+        return argv[1], "json"
+    if len(argv) == 4 and argv[2] == "--format" and argv[3] in OUTPUT_FORMATS:
+        return argv[1], argv[3]
+    return None
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("usage: check_company_pack_public_preview.py PACK_DIRECTORY", file=sys.stderr)
+    invocation = parse_invocation(argv)
+    if invocation is None:
+        print(
+            "usage: check_company_pack_public_preview.py PACK_DIRECTORY [--format json|markdown]",
+            file=sys.stderr,
+        )
         return 2
-    result = build_check(Path(argv[1]).resolve())
-    write_stdout(result)
+    pack_directory, output_format = invocation
+    result = build_check(Path(pack_directory).resolve())
+    if output_format == "markdown":
+        payload = render_markdown(result).encode("utf-8")
+        buffer = getattr(sys.stdout, "buffer", None)
+        if buffer is None:
+            sys.stdout.write(payload.decode("utf-8"))
+        else:
+            buffer.write(payload)
+            buffer.flush()
+    else:
+        write_stdout(result)
     return 0 if result["status"] == "PASS" else 1
 
 

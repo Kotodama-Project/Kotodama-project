@@ -23,6 +23,7 @@ Block、Record、MOCの対応を一度に確認するには、read-onlyのCatalo
 ~~~powershell
 python tools/catalog_company_pack.py examples/company-starter --format markdown
 python tools/check_company_pack_public_preview.py examples/company-starter
+python tools/check_company_pack_public_preview.py examples/company-starter --format markdown
 ~~~
 
 JSONを機械処理する場合は、formatを省略します。Catalogはpackを変更せず、

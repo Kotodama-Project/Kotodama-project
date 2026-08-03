@@ -84,6 +84,7 @@ Block、Record、MOCを編集する前に、Company Pack Catalogで現在の対�
 ~~~powershell
 python tools/catalog_company_pack.py examples/company-starter --format markdown
 python tools/check_company_pack_public_preview.py examples/company-starter
+python tools/check_company_pack_public_preview.py examples/company-starter --format markdown
 ~~~
 
 CatalogとSelf-checkはread-onlyのnavigation / preview projectionです。出力のPASSは構造を読めた

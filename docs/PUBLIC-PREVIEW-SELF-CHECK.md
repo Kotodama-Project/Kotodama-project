@@ -18,6 +18,16 @@ python tools\check_company_pack_public_preview.py examples\company-starter
 python3 tools/check_company_pack_public_preview.py examples/company-starter
 ```
 
+機械処理には既定のJSON、人間が最初に読む場合は同じ結果をMarkdownで表示できます。
+
+```powershell
+python tools\check_company_pack_public_preview.py examples\company-starter --format markdown
+```
+
+Markdownもpack ID、path、manifest値、validation error本文を表示せず、JSONと同じ
+read-only・`NO_GO_UNPUBLISHED`境界を保ちます。`--format json`を明示した場合も
+既定と同じJSON契約です。
+
 initializer で作業 copy を作った後も、同じ command の対象だけを変えます。
 
 ```powershell
@@ -26,8 +36,9 @@ python tools\create_company_pack.py my-company work\my-company
 python tools\check_company_pack_public_preview.py work\my-company
 ```
 
-出力は標準出力の一行 JSON です。ファイルへ保存する場合も、pack や
-private locator の値を出力へ追加しません。
+JSON出力は標準出力の一行 JSON です。Markdownを選んだ場合は見出し・表形式の
+固定サマリーになります。どちらもファイルへ保存する場合にpackやprivate
+locatorの値を出力へ追加しません。
 
 ## 成功時の意味
 

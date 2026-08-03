@@ -98,6 +98,45 @@ class PublicPreviewCheckTests(unittest.TestCase):
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)
 
+    def test_markdown_output_is_deterministic_and_preserves_claim_boundary(self) -> None:
+        first = self.run_tool(STARTER, "--format", "markdown")
+        second = self.run_tool(STARTER, "--format", "markdown")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(first.stdout, second.stdout)
+        self.assertTrue(first.stdout.startswith("# Company Pack Public Preview self-check\n"))
+        for marker in (
+            "- Status: `PASS`",
+            "- Public Beta: `NO_GO_UNPUBLISHED`",
+            "## Counts",
+            "| `validated_files` | 22 |",
+            "| `blocks` | 9 |",
+            "| `records` | 9 |",
+            "| `mocs` | 3 |",
+            "## Checks",
+            "| `pack_structure` | `PASS` |",
+            "| `claim_boundary` | `PASS` |",
+            "## Claims",
+            "| `human_approval_verified` | `false` |",
+            "| `public_beta_go` | `false` |",
+            "read-only",
+        ):
+            self.assertIn(marker, first.stdout)
+        self.assertNotIn(str(STARTER), first.stdout)
+
+    def test_markdown_refusal_is_fixed_and_does_not_echo_input(self) -> None:
+        result = self.run_tool(INVALID, "--format", "markdown")
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
+        self.assertTrue(result.stdout.startswith("# Company Pack Public Preview self-check\n"))
+        self.assertIn("- Status: `REFUSED`", result.stdout)
+        self.assertIn("- Refusal reason: `INVALID_PACK`", result.stdout)
+        self.assertIn("| `validated_files` | 0 |", result.stdout)
+        self.assertIn("| `pack_structure` | `REFUSED` |", result.stdout)
+        self.assertIn("| `public_beta_go` | `false` |", result.stdout)
+        self.assertNotIn(str(INVALID), result.stdout)
+        self.assertNotIn("manifest", result.stdout)
+
     def test_generated_working_copy_exposes_the_nineteen_static_replacements(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "my-company"
@@ -157,6 +196,12 @@ class PublicPreviewCheckTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertNotIn(secret_like, result.stdout + result.stderr)
 
+    def test_unknown_output_format_is_usage_error_without_echo(self) -> None:
+        secret_like = "sk-unknown-format-secret"
+        result = self.run_tool(STARTER, "--format", secret_like)
+        self.assertEqual(result.returncode, 2)
+        self.assertNotIn(secret_like, result.stdout + result.stderr)
+
     def test_public_docs_expose_the_self_check_from_each_onboarding_surface(self) -> None:
         expected = {
             ROOT / "README.md": "docs/PUBLIC-PREVIEW-SELF-CHECK.md",
@@ -171,6 +216,17 @@ class PublicPreviewCheckTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(marker, path.read_text(encoding="utf-8"))
         self.assertTrue((ROOT / "docs" / "PUBLIC-PREVIEW-SELF-CHECK.md").is_file())
+        for path in (
+            ROOT / "README.md",
+            ROOT / "STATUS.md",
+            ROOT / "docs" / "PUBLIC-PREVIEW-SELF-CHECK.md",
+            ROOT / "docs" / "STARTER-WALKTHROUGH.md",
+            ROOT / "docs" / "TEMPLATE-GUIDE.md",
+            ROOT / "docs" / "COMPANY-PACK-CATALOG.md",
+            ROOT / "examples" / "company-starter" / "README.md",
+        ):
+            with self.subTest(markdown_surface=path):
+                self.assertIn("--format markdown", path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

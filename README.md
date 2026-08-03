@@ -452,13 +452,14 @@ python tools/check_company_pack_customization.py work/my-company
 python tools/validate_template_pack.py examples/company-starter
 python tools/catalog_company_pack.py examples/company-starter --format markdown
 python tools/check_company_pack_public_preview.py examples/company-starter
+python tools/check_company_pack_public_preview.py examples/company-starter --format markdown
 ```
 
 initializer は元 example や既存 target を上書きしません。pack ID と 3 MOC の参照を再束縛し、22 JSON 文書を `draft` に戻してから validator を実行します。
 
 次に [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) に沿って Human Intent reference、canonical owner、role、expiry、retention、profile を自分の候補へ置き換えます。
 
-複数の確認を一度に再実行する場合は [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) を使えます。これは pack の構造、Catalog、customization の分類、false claim の境界だけを read-only で確認します。
+複数の確認を一度に再実行する場合は [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) を使えます。既定のJSONは自動処理向け、`--format markdown`は同じ結果を人間が最初に読むための固定サマリーです。どちらも pack の構造、Catalog、customization の分類、false claim の境界だけを read-only で確認します。
 
 ```powershell
 python tools/check_company_pack_customization.py work/my-company

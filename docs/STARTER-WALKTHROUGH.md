@@ -51,6 +51,7 @@ initializerが`id`を設定した後、`work/my-company/manifest.json`で最初�
 python tools\check_company_pack_customization.py work\my-company
 python tools\plan_company_pack_next_steps.py work\my-company --format markdown
 python tools\check_company_pack_public_preview.py work\my-company
+python tools\check_company_pack_public_preview.py work\my-company --format markdown
 ```
 
 作成直後は`CUSTOMIZATION_REQUIRED`で終了し、通常は19件を返します。これは失敗ではなく、組織固有のHuman Intent locator 1件、Block expiry 9件、Record retention policy 9件がまだexampleであることを示します。

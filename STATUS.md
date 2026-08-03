@@ -37,8 +37,9 @@ Updated: 2026-08-03
 
 ## Latest public template result
 
-R36 adds a read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md)
-that aggregates the existing starter validator, Catalog projection,
+R37 extends the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md)
+with a deterministic `--format markdown` summary alongside the JSON contract.
+It aggregates the existing starter validator, Catalog projection,
 customization categories, and false-claim boundary. It does not add authority,
 runtime, Promotion, Current Truth, or Public Beta access.
 
