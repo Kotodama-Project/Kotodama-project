@@ -150,6 +150,10 @@ def load_json(path: Path) -> dict[str, Any]:
 def is_safe_relative_json_path(value: object) -> bool:
     if not isinstance(value, str) or not value:
         return False
+    # Keep the source spelling canonical before Path normalizes separators.
+    # The published manifest schema rejects empty path segments as well.
+    if "//" in value:
+        return False
     path = Path(value)
     return (
         SAFE_RELATIVE_JSON_PATH_PATTERN.fullmatch(value) is not None

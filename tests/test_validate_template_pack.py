@@ -874,6 +874,23 @@ class TemplatePackCliTests(unittest.TestCase):
         summary = json.loads(result.stdout)
         self.assertIn("unsafe relative path: blocks/work order.json", summary["errors"])
 
+    def test_manifest_paths_reject_empty_segments(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "pack"
+            shutil.copytree(FIXTURES / "valid-pack", pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["blocks"] = ["blocks//work-order.json"]
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = self.run_pack(pack)
+
+        self.assertEqual(result.returncode, 1)
+        summary = json.loads(result.stdout)
+        self.assertIn(
+            "unsafe relative path: blocks//work-order.json",
+            summary["errors"],
+        )
+
     def test_block_expiry_must_be_timezone_aware_iso8601(self) -> None:
         result = self.run_validator("invalid-expiry")
 
