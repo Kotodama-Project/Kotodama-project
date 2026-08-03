@@ -42,7 +42,7 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R56 is the current public Template/Company/Blocks/Records/MOCs/starter
+R58 is the current public Template/Company/Blocks/Records/MOCs/starter
 documentation surface. R37 introduced the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a deterministic `--format markdown`
 summary. R45 added the saved-bundle to Review Request boundary, R46
 added the dynamic Review Response boundary, R47 added the dynamic Decision
@@ -55,7 +55,9 @@ added the explicit ideal/current Company Template usage flow to README. R54
 added the practical ideal/current Template Catalog usage sequence and links.
 R55 hardened standard unittest discovery for that Catalog regression. R56 added
 the first-read order and bounded runtime profile selection for
-`compose_minimum` and `proxmox_segmented`. These surfaces do not add runtime
+`compose_minimum` and `proxmox_segmented`. R58 added the README first-stop guide
+that sends readers through Catalog, Starter Walkthrough, and Installation
+Lifecycle only when a runtime profile is needed. These surfaces do not add runtime
 authority or access, and activation, Promotion, Current Truth, and Public Beta
 remain outside the published preview.
 
