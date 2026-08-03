@@ -692,6 +692,49 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
         self.assertEqual(report["reason"], "SOURCE_DRIFT_DETECTED")
         self.assertIsNone(report["artifact_bindings"])
 
+    def test_verifier_pack_change_after_second_handoff_rebuild_is_refused(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            chain = self.create_complete_chain(root)
+            paths = chain["paths"]
+            built = self.run_builder(chain)
+            self.assertEqual(built.returncode, 0, built.stdout.decode("utf-8"))
+            handoff_path = root / "saved-decision-handoff.json"
+            handoff_path.write_bytes(built.stdout)
+            pack_file = chain["pack"] / "records" / "source-record.json"
+            original_build_handoff = handoff_verifier.build_decision_handoff
+            call_count = 0
+
+            def rebuild_then_change_pack(*arguments):
+                nonlocal call_count
+                result = original_build_handoff(*arguments)
+                call_count += 1
+                if call_count == 2:
+                    pack_file.write_bytes(pack_file.read_bytes() + b"\n")
+                return result
+
+            with mock.patch.object(
+                handoff_verifier,
+                "build_decision_handoff",
+                side_effect=rebuild_then_change_pack,
+            ):
+                report = handoff_verifier.verify_decision_handoff(
+                    paths["bundle"],
+                    chain["pack"],
+                    paths["bundle_verification"],
+                    paths["request"],
+                    paths["response"],
+                    paths["response_verification"],
+                    handoff_path,
+                )
+
+        self.assertEqual(call_count, 3)
+        self.assertEqual(report["status"], "DECISION_HANDOFF_MISMATCH")
+        self.assertEqual(report["reason"], "SOURCE_DRIFT_DETECTED")
+        self.assertIsNone(report["handoff_binding"])
+
     def _mutate_json(self, path: Path, mutation) -> None:
         value = json.loads(path.read_bytes())
         mutation(value)

@@ -89,6 +89,19 @@ def verify_decision_handoff(
         or final_handoff_bytes != handoff_bytes
     ):
         return mismatch("SOURCE_DRIFT_DETECTED")
+    terminal_expected = build_decision_handoff(
+        bundle_path,
+        pack_dir,
+        bundle_verification_path,
+        request_path,
+        response_path,
+        response_verification_path,
+    )
+    if (
+        terminal_expected.get("status") != "CANDIDATE_DECISION_HANDOFF"
+        or not exact_json_equal(terminal_expected, expected)
+    ):
+        return mismatch("SOURCE_DRIFT_DETECTED")
 
     return {
         "kind": "company_pack_review_decision_handoff_verification",
