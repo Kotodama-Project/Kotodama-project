@@ -3,6 +3,10 @@
 
 from __future__ import annotations
 
+import sys
+
+sys.dont_write_bytecode = True
+
 import argparse
 import json
 from pathlib import Path
@@ -191,7 +195,9 @@ def build_plan(pack_dir: Path) -> dict[str, Any]:
         "kind": "company_pack_next_steps_plan",
         "version": "1.0",
         "status": report["status"],
-        "pack_id": report["pack_id"],
+        "pack_id": (
+            None if report["status"] == "INVALID_PACK" else report["pack_id"]
+        ),
         "current_state": {
             "stage": stage,
             "structural_status": validation["status"],
@@ -288,13 +294,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def write_stdout_utf8(value: str) -> None:
+    encoded = value.encode("utf-8")
+    binary_stdout = getattr(sys.stdout, "buffer", None)
+    if binary_stdout is not None:
+        binary_stdout.write(encoded)
+        binary_stdout.flush()
+        return
+    sys.stdout.write(value)
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = parse_args(argv)
     plan = build_plan(arguments.pack_directory)
     if arguments.output_format == "markdown":
-        print(render_markdown(plan), end="")
+        output = render_markdown(plan)
     else:
-        print(json.dumps(plan, ensure_ascii=False, sort_keys=True))
+        output = json.dumps(plan, ensure_ascii=False, sort_keys=True) + "\n"
+    write_stdout_utf8(output)
     return 1 if plan["status"] == "INVALID_PACK" else 0
 
 

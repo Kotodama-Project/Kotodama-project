@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -20,7 +21,7 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
         return subprocess.run(
             [sys.executable, str(PLANNER), str(pack), *arguments],
             cwd=ROOT,
-            text=True,
+            encoding="utf-8",
             capture_output=True,
             check=False,
         )
@@ -30,7 +31,7 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
         creation = subprocess.run(
             [sys.executable, str(CREATOR), "my-company", str(pack)],
             cwd=ROOT,
-            text=True,
+            encoding="utf-8",
             capture_output=True,
             check=False,
         )
@@ -161,11 +162,13 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
 
     def test_invalid_pack_fails_closed_without_echoing_private_locator(self) -> None:
         private_locator = "human-intent:private-sensitive-client"
+        private_pack_id = "sk-AAAAAAAAAAAAAAAAAAAA"
         with tempfile.TemporaryDirectory() as temporary:
             pack = Path(temporary) / "pack"
             shutil.copytree(STARTER, pack)
             manifest_path = pack / "manifest.json"
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["id"] = private_pack_id
             manifest["human_intent_ref"] = private_locator
             del manifest["profiles"]
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
@@ -174,8 +177,10 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stderr, "")
         self.assertNotIn(private_locator, result.stdout)
+        self.assertNotIn(private_pack_id, result.stdout)
         plan = json.loads(result.stdout)
         self.assertEqual(plan["status"], "INVALID_PACK")
+        self.assertIsNone(plan["pack_id"])
         self.assertEqual(plan["current_state"]["stage"], "STRUCTURAL_REPAIR")
         self.assertEqual(plan["current_state"]["structural_status"], "FAIL")
         self.assertEqual(plan["recommended_next"]["action"], "FIX_STRUCTURE")
@@ -183,6 +188,69 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
             plan["recommended_next"]["command"],
             "python tools/validate_template_pack.py PACK_DIRECTORY",
         )
+
+    def test_markdown_is_always_written_as_utf8_despite_legacy_console_encoding(self) -> None:
+        environment = os.environ.copy()
+        environment["PYTHONIOENCODING"] = "cp1252"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(PLANNER),
+                str(STARTER),
+                "--format",
+                "markdown",
+            ],
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8"))
+        self.assertEqual(result.stderr, b"")
+        markdown = result.stdout.decode("utf-8")
+        self.assertIn("現在地", markdown)
+        self.assertIn("理想の流れ", markdown)
+        self.assertIn("NO_GO_UNPUBLISHED", markdown)
+
+    def test_read_only_run_does_not_change_pack_or_create_bytecode_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            replica = Path(temporary) / "replica"
+            tools = replica / "tools"
+            starter = replica / "examples" / "company-starter"
+            tools.mkdir(parents=True)
+            for name in (
+                "plan_company_pack_next_steps.py",
+                "check_company_pack_customization.py",
+                "validate_template_pack.py",
+            ):
+                shutil.copy2(ROOT / "tools" / name, tools / name)
+            shutil.copytree(STARTER, starter)
+            before = {
+                path.relative_to(starter).as_posix(): path.read_bytes()
+                for path in starter.rglob("*")
+                if path.is_file()
+            }
+
+            result = subprocess.run(
+                [sys.executable, str(tools / PLANNER.name), str(starter)],
+                cwd=replica,
+                capture_output=True,
+                check=False,
+            )
+
+            after = {
+                path.relative_to(starter).as_posix(): path.read_bytes()
+                for path in starter.rglob("*")
+                if path.is_file()
+            }
+            caches = list(replica.rglob("__pycache__")) + list(
+                replica.rglob("*.pyc")
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8"))
+        self.assertEqual(before, after)
+        self.assertEqual(caches, [])
 
     def test_json_output_matches_closed_public_schema_shape_and_is_deterministic(self) -> None:
         first = self.run_planner(STARTER)
@@ -215,7 +283,7 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, str(PLANNER)],
             cwd=ROOT,
-            text=True,
+            encoding="utf-8",
             capture_output=True,
             check=False,
         )

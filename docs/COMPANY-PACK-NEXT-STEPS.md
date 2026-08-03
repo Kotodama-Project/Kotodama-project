@@ -24,7 +24,7 @@ defaultはautomation向けのdeterministic JSONです。
 python tools\plan_company_pack_next_steps.py work\my-company
 ```
 
-同じPack bytesと同じtool bytesからは、同じ1行JSONを返します。JSON schemaは[`company-pack-next-steps.schema.json`](../schemas/company-pack-next-steps.schema.json)です。
+同じPack bytesと同じtool bytesからは、同じUTF-8の1行JSONを返します。Markdownもconsole localeへ依存せずUTF-8で出力します。JSON schemaは[`company-pack-next-steps.schema.json`](../schemas/company-pack-next-steps.schema.json)です。
 
 ## 現在地の読み方
 
@@ -69,8 +69,9 @@ plannerは次の順序を常に表示します。
 ## Boundary
 
 - plannerはPackをread-onlyで検査し、fileを作成・変更・削除しません。
-- invalid reportのvalidator error本文は再出力せず、意図locatorなどの入力値をplanへ複製しません。
-- MarkdownのPack IDはmanifestの非secret IDです。Pack IDに秘密名や個人情報を書かないでください。
+- invalid reportのvalidator error本文とmanifest値は再出力せず、`pack_id`も`null`にします。
+- 構造PASS後のMarkdownに表示するPack IDはmanifestの非secret IDです。Pack IDに秘密名や個人情報を書かないでください。
+- local module importではbytecode cacheを作らず、Packも変更しません。
 - `CANDIDATE_BINDING`はapproval、runtime readiness、Promotion、Current Truthではありません。
 - すべての`claims`はfalseで、`public_beta`は常に`NO_GO_UNPUBLISHED`です。
 
