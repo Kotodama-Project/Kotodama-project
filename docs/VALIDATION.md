@@ -60,6 +60,8 @@ response schemaとverifierはrequest file SHA-256/size、Pack candidate binding�
 
 5つのsaved review成果物とcurrent PackをDecision前に再束縛するCLIは`build_company_pack_review_decision_handoff.py`と`verify_company_pack_review_decision_handoff.py`です。schema、非上書き保存、refusal境界は[Review Evidence to Decision Handoff](REVIEW-DECISION-HANDOFF.md)を参照してください。MATCHでも`decision: null`でありHuman Decisionではありません。
 
+後続の実Decision Recordに必要なfieldと否定claimの閉じたschemaは[Company Pack Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)を参照してください。これはschema-only検証であり、Human outcomeの真正性、identity、authority、trusted time、evidence解決、Decision、Work Order authority、Promotion、GOを証明しません。
+
 Compose / Proxmoxのinstallation lifecycle契約は、別のstdlib validatorで確認します。
 
 ```powershell

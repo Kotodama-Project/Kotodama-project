@@ -52,3 +52,5 @@ bundleが`MATCH`した後、46件のreview itemを手転記せずexact candidate
 46件のoutcomeだけを編集し、ID/path/reasonと元requestのbindingを再照合する次stepは[Company Pack Review Response Candidate](../../docs/REVIEW-RESPONSE.md)です。構造MATCHはreviewer identity、authority、Human approval、全体Decision、evidence解決を作りません。
 
 completeな5成果物を別Human Decision stepへ渡す非承認candidateは[Review Evidence to Decision Handoff](../../docs/REVIEW-DECISION-HANDOFF.md)で作れます。handoffはgeneric Decision Record templateを変更せず、後続Recordの`evidence_ref`候補になります。
+
+実Decision前のschema-only field/claim契約は[Company Pack Decision Record Candidate Contract](../../docs/DECISION-RECORD-CANDIDATE.md)です。これはDecision、承認、権限、Promotion、GOを生成せず、既存のgeneric Decision Record templateも変更しません。

@@ -67,9 +67,10 @@ plannerは元reportのcategory別countをgroup合計へ集約し、各category�
 6. [review request](REVIEW-REQUEST.md)で個別review itemを同じbundleへ束縛する。outcomeは選択しない。
 7. [review response](REVIEW-RESPONSE.md)で46件のoutcomeだけを入力し、元requestとの構造一致を検証する。
 8. [review decision handoff](REVIEW-DECISION-HANDOFF.md)で5成果物を非承認candidateへ束縛する。
-9. reviewer identity・authority、bundle/request/response/report digest、全体outcomeを別Decision Recordへ残す。
-10. `evidence_required`をcandidate-bound evidenceで閉じる。
-11. 別のgoverned processだけがPromotionやCurrent Truth変更を行う。
+9. [Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)で実Decision前のfieldと全false claimを確認する。schema-only契約からDecisionや権限を導出しない。
+10. reviewer identity・authority、bundle/request/response/report digest、全体outcomeを別Decision Recordへ残す。
+11. `evidence_required`をcandidate-bound evidenceで閉じる。
+12. 別のgoverned processだけがPromotionやCurrent Truth変更を行う。
 
 ## Current implementation boundary
 

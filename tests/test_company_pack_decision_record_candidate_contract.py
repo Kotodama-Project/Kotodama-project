@@ -86,9 +86,21 @@ class CompanyPackDecisionRecordCandidateContractTests(unittest.TestCase):
             "NO_GO_UNPUBLISHED",
         ):
             self.assertIn(required, text)
-        self.assertIn("DECISION-RECORD-CANDIDATE.md", (ROOT / "README.md").read_text(encoding="utf-8"))
-        self.assertIn("DECISION-RECORD-CANDIDATE.md", (ROOT / "docs" / "REVIEW-DECISION-HANDOFF.md").read_text(encoding="utf-8"))
-        self.assertIn("DECISION-RECORD-CANDIDATE.md", (ROOT / "docs" / "REVIEW-WORKFLOW.md").read_text(encoding="utf-8"))
+        discoverability_files = (
+            ROOT / "README.md",
+            ROOT / "docs" / "REVIEW-DECISION-HANDOFF.md",
+            ROOT / "docs" / "REVIEW-WORKFLOW.md",
+            ROOT / "docs" / "STARTER-WALKTHROUGH.md",
+            ROOT / "docs" / "TEMPLATE-GUIDE.md",
+            ROOT / "docs" / "VALIDATION.md",
+            ROOT / "docs" / "CUSTOMIZATION-CHECKLIST.md",
+            ROOT / "examples" / "company-starter" / "README.md",
+        )
+        for path in discoverability_files:
+            with self.subTest(path=path.relative_to(ROOT)):
+                self.assertIn(
+                    "DECISION-RECORD-CANDIDATE.md", path.read_text(encoding="utf-8")
+                )
 
 
 if __name__ == "__main__":

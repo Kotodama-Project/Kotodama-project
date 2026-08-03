@@ -78,6 +78,8 @@ requestの46件へID/path/reasonを再入力せずoutcomeを記録するには[C
 
 responseまで完了した5成果物をHuman Decisionへ渡すには[Review Evidence to Decision Handoff](REVIEW-DECISION-HANDOFF.md)を使います。handoffはexact bytesを固定するだけで、Decision、identity、authority、GOを作りません。
 
+実Decisionを作る前に記録fieldと否定claimを確認するには[Company Pack Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)を使います。これはschema-only契約であり、Decision、承認、権限、Promotion、GOを生成しません。
+
 ## 5. flow contractとMOC順にBlockを読む
 
 `manifest.json`の`flow`は、外部から入る`entry_inputs`、Block IDの`sequence`、読み順を示す`moc_ref`を宣言します。[`company-operations.json`](../examples/company-starter/mocs/company-operations.json)は、同じ順序を示すnavigation projectionです。
