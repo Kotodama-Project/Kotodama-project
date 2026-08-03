@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -40,6 +42,10 @@ MAX_SIGNATURE_SECONDS = 30
 MAX_TOTAL_SIGNATURE_SECONDS = 180
 SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 IDENTITY = re.compile(r"^[A-Za-z0-9._@+-]{1,256}$")
+RFC3339 = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+)
 TRANSITION_MODES = {
     "KEY_ROTATION_SEGMENT",
     "SAME_POLICY_SEGMENT",
@@ -70,6 +76,7 @@ PRIOR_BINDING_FIELDS = {
 }
 SUCCESSOR_BINDING_FIELDS = {
     "checkpoint_file_sha256",
+    "checkpoint_signature_file_sha256",
     "checkpoint_chain_sha256",
     "store_id_sha256",
     "reservation_count",
@@ -159,6 +166,12 @@ def parse_time(value: object, location: str, errors: list[str]) -> datetime | No
     if not isinstance(value, str):
         errors.append(f"{location} must be timezone-aware ISO-8601")
         return None
+    if len(value) > 64:
+        errors.append(f"{location} exceeds 64 characters")
+        return None
+    if RFC3339.fullmatch(value) is None:
+        errors.append(f"{location} must be timezone-aware ISO-8601")
+        return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
@@ -191,12 +204,14 @@ def expected_prior_binding(
 
 def expected_successor_binding(
     checkpoint_bytes: bytes,
+    signature_bytes: bytes,
     checkpoint: dict[str, Any],
     allowed_signers_bytes: bytes,
     identity_bytes: bytes,
 ) -> dict[str, object]:
     return {
         "checkpoint_file_sha256": sha256_bytes(checkpoint_bytes),
+        "checkpoint_signature_file_sha256": sha256_bytes(signature_bytes),
         "checkpoint_chain_sha256": checkpoint["checkpoint_chain_sha256"],
         "store_id_sha256": checkpoint["store_binding"]["store_id_sha256"],
         "reservation_count": checkpoint["store_binding"]["reservation_count"],
@@ -214,6 +229,7 @@ def validate_transition(
     expected_bundle_sha256: str,
     chain: list[dict[str, Any]],
     successor_bytes: bytes,
+    successor_signature_bytes: bytes,
     expected_successor_sha256: str,
     successor: dict[str, Any],
     prior_allowed_bytes: bytes,
@@ -240,7 +256,7 @@ def validate_transition(
         errors.append(f"namespace must be {NAMESPACE}")
     require_sha256(value.get("transition_id_sha256"), "transition_id_sha256", errors)
     mode = value.get("transition_mode")
-    if mode not in TRANSITION_MODES:
+    if not isinstance(mode, str) or mode not in TRANSITION_MODES:
         errors.append("transition_mode is invalid")
     if (
         SHA256_HEX.fullmatch(expected_transition_sha256) is None
@@ -299,6 +315,7 @@ def validate_transition(
         )
         if successor_binding != expected_successor_binding(
             successor_bytes,
+            successor_signature_bytes,
             successor,
             successor_allowed_bytes,
             successor_identity_bytes,
@@ -387,13 +404,53 @@ def verify_signature(
                     str(signature),
                 ],
                 input=document_bytes,
-                capture_output=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
                 check=False,
                 timeout=timeout_seconds,
             )
     except (OSError, subprocess.SubprocessError):
         return False
     return result.returncode == 0
+
+
+def allowed_signer_key_set(allowed_signers_bytes: bytes) -> set[str] | None:
+    """Return exact OpenSSH public-key blob digests from an allowed-signers file."""
+
+    try:
+        text = allowed_signers_bytes.decode("utf-8")
+    except UnicodeError:
+        return None
+    key_digests: set[str] = set()
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        try:
+            tokens = shlex.split(line, comments=True, posix=True)
+        except ValueError:
+            return None
+        matches: list[bytes] = []
+        for index in range(1, len(tokens) - 1):
+            key_type = tokens[index]
+            try:
+                blob = base64.b64decode(tokens[index + 1], validate=True)
+            except (ValueError, TypeError):
+                continue
+            if len(blob) < 5:
+                continue
+            type_length = int.from_bytes(blob[:4], "big")
+            if not 1 <= type_length <= len(blob) - 4:
+                continue
+            try:
+                embedded_type = blob[4 : 4 + type_length].decode("ascii")
+            except UnicodeError:
+                continue
+            if embedded_type == key_type:
+                matches.append(blob)
+        if len(matches) != 1:
+            return None
+        key_digests.add(sha256_bytes(matches[0]))
+    return key_digests or None
 
 
 def report(
@@ -546,6 +603,7 @@ def main(argv: list[str]) -> int:
         expected_bundle_sha256=argv[5],
         chain=chain,
         successor_bytes=successor_bytes,
+        successor_signature_bytes=successor_signature_bytes,
         expected_successor_sha256=argv[8],
         successor=successor,
         prior_allowed_bytes=prior_allowed_bytes,
@@ -558,9 +616,15 @@ def main(argv: list[str]) -> int:
     )
     bindings = {
         "transition_file_sha256": sha256_bytes(transition_bytes),
+        "transition_signature_file_sha256": sha256_bytes(
+            transition_signature_bytes
+        ),
         "prior_bundle_file_sha256": sha256_bytes(bundle_bytes),
         "prior_head_checkpoint_sha256": chain[-1]["checkpoint_file_sha256"],
         "successor_checkpoint_file_sha256": sha256_bytes(successor_bytes),
+        "successor_checkpoint_signature_file_sha256": sha256_bytes(
+            successor_signature_bytes
+        ),
         "store_id_sha256": successor["store_binding"]["store_id_sha256"],
         "prior_allowed_signers_file_sha256": sha256_bytes(prior_allowed_bytes),
         "prior_identity_file_sha256": sha256_bytes(prior_identity_bytes),
@@ -571,10 +635,13 @@ def main(argv: list[str]) -> int:
         "reviewer_allowed_signers_file_sha256": sha256_bytes(reviewer_allowed_bytes),
         "reviewer_identity_file_sha256": sha256_bytes(reviewer_identity_bytes),
     }
-    if isinstance(transition, dict) and SHA256_HEX.fullmatch(
-        transition.get("transition_id_sha256", "")
-    ):
-        bindings["transition_id_sha256"] = transition["transition_id_sha256"]
+    transition_id = (
+        transition.get("transition_id_sha256")
+        if isinstance(transition, dict)
+        else None
+    )
+    if isinstance(transition_id, str) and SHA256_HEX.fullmatch(transition_id):
+        bindings["transition_id_sha256"] = transition_id
 
     errors = list(validation_errors)
     bundle_policy = bundle.get("signature_policy_binding", {})
@@ -598,11 +665,20 @@ def main(argv: list[str]) -> int:
         errors.append("successor signer policy mismatch")
 
     mode = transition.get("transition_mode") if isinstance(transition, dict) else None
+    prior_key_set = allowed_signer_key_set(prior_allowed_bytes)
+    successor_key_set = allowed_signer_key_set(successor_allowed_bytes)
+    if prior_key_set is None:
+        errors.append("prior allowed-signers key set is invalid")
+    if successor_key_set is None:
+        errors.append("successor allowed-signers key set is invalid")
     if mode == "KEY_ROTATION_SEGMENT":
         if (
             prior_policy == successor_policy
             or sha256_bytes(prior_allowed_bytes)
             == sha256_bytes(successor_allowed_bytes)
+            or prior_key_set is None
+            or successor_key_set is None
+            or prior_key_set == successor_key_set
         ):
             errors.append("key rotation mode requires a changed signer key set")
     elif mode == "SAME_POLICY_SEGMENT" and prior_policy != successor_policy:

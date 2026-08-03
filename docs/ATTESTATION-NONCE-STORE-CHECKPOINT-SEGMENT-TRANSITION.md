@@ -6,14 +6,14 @@ R22は、提示された1つのR20 checkpoint-chain bundleのheadと、その直
 
 ## 2つのmode
 
-- `KEY_ROTATION_SEGMENT`: prior bundleのsigner policyとsuccessor checkpointのsigner policyが異なり、allowed-signers bytesのSHA-256も変わっていることを要求します。これは境界上の新旧policy bindingであり、旧鍵の失効や侵害不存在の証明ではありません。
+- `KEY_ROTATION_SEGMENT`: prior bundleのsigner policyとsuccessor checkpointのsigner policyが異なり、allowed-signers bytesのSHA-256と、各行から復号したOpenSSH public-key blobのdigest集合も変わっていることを要求します。コメント・空白だけを変えた同一鍵集合はrotationとして受理しません。これは境界上の新旧policy bindingであり、旧鍵の失効や侵害不存在の証明ではありません。
 - `SAME_POLICY_SEGMENT`: priorとsuccessorのsigner policyがexactに一致することを要求します。これは同じpolicyのまま提示されたsegmentを開始するためのmodeです。
 
 transition candidateは、次をexact digestまたはclosed fieldで束縛します。
 
 - prior R20 bundle、prior head checkpoint、prior chain hash、store ID、checkpoint count
 - prior allowed-signers fileとidentity file
-- successor checkpoint、successor chain hash、store ID、reservation count
+- successor checkpoint、detached successor signature、successor chain hash、store ID、reservation count
 - successor allowed-signers fileとidentity file
 - 構造上distinctな`independent_transition_reviewer` policy
 - 最大900秒のsigned evaluation window
@@ -50,7 +50,7 @@ python tools\verify_attestation_nonce_store_checkpoint_segment_transition.py `
 
 成功statusは`SIGNED_KEY_ROTATION_SEGMENT_TRANSITION`または`SIGNED_SAME_POLICY_SEGMENT_TRANSITION`です。verifierは以下を同時に満たしたときだけ成功します。
 
-1. transition、prior bundle、successor checkpointの独立digest pinが一致する。
+1. transition、prior bundle、successor checkpoint、detached successor signatureの独立digest pinが一致する。verification reportは、実際に検証したtransition signatureのdigestも返す。
 2. prior bundleのclosed structure、全checkpoint digest、全signature digest、Genesisからheadまでのparent link、append-only reservation pathが妥当である。
 3. prior bundle内の全checkpoint signatureがprior policyで検証できる。
 4. successor checkpointがprior headをimmediate parentとして参照し、同じstore IDとreservation subsetを維持する。
@@ -62,7 +62,7 @@ python tools\verify_attestation_nonce_store_checkpoint_segment_transition.py `
 ## Fail-closed limits
 
 - inputはstable regular fileとして読み、transitionは1 MiB、R20 bundleは24 MiB、checkpointは2 MiB、各signatureは64 KiB、allowed-signersは各1 MiB、identityは各4 KiB、`ssh-keygen`は16 MiBまでです。
-- `ssh-keygen`はPATHから一度だけ解決・読取し、expected SHA-256と一致したexact temporary copyだけを使います。1署名30秒、全署名180秒が上限です。
+- `ssh-keygen`はPATHから一度だけ解決・読取し、expected SHA-256と一致したexact temporary copyだけを使います。1署名30秒、全署名180秒が上限で、子processのstdout/stderrは保持しません。
 - signature検証が終わるまでsource SQLite read transactionとopened-object snapshotを保持します。長いchainはmaintenance windowで検査してください。
 - duplicate key、non-finite number、過深JSON、unknown field、digest drift、wrong parent、store drift、policy drift、期限外、signature tamper、authority overclaimはstructured `INVALID`として拒否します。
 - invalid reportでは全success claimが`false`です。private input本文、path、identity、signature bodyはstdout/stderrへ反映しません。

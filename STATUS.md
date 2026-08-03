@@ -50,7 +50,7 @@ recursive checkpoint-chain verifierは、最大1,024 checkpointをself-contained
 
 checkpoint-head anchor verifierは、独立pinされたanchor/bundle bytes、bundle内のhead/store/count、短時間window、reviewer policy、OpenSSH署名を束縛します。restore-drill verifierは、成功shapeを持つanchor/source/restored report、distinctなreport/receipt digest、同一checkpoint state、全reported check、runner/reviewer identity hashの不一致を一つの署名済みcandidateへ束縛します。これらはunsigned reportやopaque receipt本文の真正性を再実行せず、external anchorのcanonical authority、trusted clock、complete history、branch不存在、actual backup/restore、physical lineage、protected runner、人物分離、Promotion、Current Truth、Public Beta GOは未証明です。
 
-checkpoint segment-transition verifierは、独立pinされたR20 bundle、prior head、1つのsuccessor checkpoint、supplied store、旧/new signer policy、distinct reviewer policy、最大900秒window、pinned `ssh-keygen` exact bytesを検証します。key-rotationとsame-policyのmodeを分離しますが、検証範囲は提示された1境界だけです。canonical anchor authority、trusted clock、complete history、parallel branch不存在、旧鍵失効、鍵侵害不存在、segmentation policy採用、actual store continuity、backup/restore、protected runner、人物分離、Promotion、Current Truth、Public Beta GOは未証明です。
+checkpoint segment-transition verifierは、独立pinされたR20 bundle、prior head、1つのsuccessor checkpointとdetached signature、supplied store、旧/new signer policyとOpenSSH key-blob集合、distinct reviewer policy、最大900秒window、pinned `ssh-keygen` exact bytesを検証します。key-rotationとsame-policyのmodeを分離し、検証したtransition/successor signature bytesのdigestをreportへ残しますが、検証範囲は提示された1境界だけです。canonical anchor authority、trusted clock、complete history、parallel branch不存在、旧鍵失効、鍵侵害不存在、segmentation policy採用、actual store continuity、backup/restore、protected runner、人物分離、Promotion、Current Truth、Public Beta GOは未証明です。
 
 ## Current boundary
 

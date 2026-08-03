@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +29,8 @@ VERIFICATION_SCHEMA = (
 TRANSITION_NAMESPACE = "kotodama-nonce-store-checkpoint-segment-transition"
 sys.path.insert(0, str(ROOT / "tests"))
 import test_attestation_nonce_store_checkpoint_chain as r20_helpers  # noqa: E402
+sys.path.insert(0, str(ROOT / "tools"))
+import verify_attestation_nonce_store_checkpoint_segment_transition as transition_tool  # noqa: E402,E501
 
 
 TRANSITION_SUCCESS_CLAIMS = {
@@ -76,8 +79,6 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
     @classmethod
     def setUpClass(cls) -> None:
         cls.ssh_keygen = shutil.which("ssh-keygen")
-        if cls.ssh_keygen is None:
-            raise unittest.SkipTest("ssh-keygen is unavailable")
 
     def digest(self, path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -107,6 +108,10 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
             ]["reservation_count"]["minimum"],
             0,
         )
+        self.assertIn(
+            "checkpoint_signature_file_sha256",
+            transition["properties"]["successor_checkpoint_binding"]["required"],
+        )
         transition_claims = transition["$defs"]["terminal_claims"]
         self.assertEqual(set(transition_claims["required"]), TRANSITION_FALSE_CLAIMS)
         for definition in transition_claims["properties"].values():
@@ -114,6 +119,22 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
 
         self.assertFalse(verification["additionalProperties"])
         self.assertEqual(len(verification["allOf"]), 3)
+        verification_bindings = verification["properties"]["input_bindings"]
+        self.assertIn(
+            "transition_signature_file_sha256",
+            verification_bindings["properties"],
+        )
+        self.assertIn(
+            "successor_checkpoint_signature_file_sha256",
+            verification_bindings["properties"],
+        )
+        success_bindings = verification["allOf"][0]["else"]["properties"][
+            "input_bindings"
+        ]["required"]
+        self.assertIn("transition_signature_file_sha256", success_bindings)
+        self.assertIn(
+            "successor_checkpoint_signature_file_sha256", success_bindings
+        )
         report_claims = verification["$defs"]["report_claims"]
         self.assertEqual(
             set(report_claims["required"]),
@@ -138,6 +159,8 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
     def make_signer(
         self, temporary: Path, name: str, identity_value: str
     ) -> dict[str, Path]:
+        if self.ssh_keygen is None:
+            self.skipTest("ssh-keygen is unavailable")
         key = temporary / name
         generated = subprocess.run(
             [self.ssh_keygen, "-q", "-t", "ed25519", "-N", "", "-f", str(key)],
@@ -155,6 +178,8 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
         return {"key": key, "identity": identity, "allowed": allowed}
 
     def sign(self, document: Path, key: Path, namespace: str) -> Path:
+        if self.ssh_keygen is None:
+            self.skipTest("ssh-keygen is unavailable")
         result = subprocess.run(
             [
                 self.ssh_keygen,
@@ -193,8 +218,14 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
         )
 
     def make_case(
-        self, temporary: Path, mode: str = "KEY_ROTATION_SEGMENT"
+        self,
+        temporary: Path,
+        mode: str = "KEY_ROTATION_SEGMENT",
+        *,
+        reuse_prior_key_with_reformatted_policy: bool = False,
     ) -> dict[str, object]:
+        if self.ssh_keygen is None:
+            self.skipTest("ssh-keygen is unavailable")
         helper = r20_helpers.AttestationNonceStoreCheckpointChainCliTests(
             methodName="test_three_checkpoint_chain_and_supplied_store_are_logically_equivalent"
         )
@@ -221,9 +252,17 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
         )
         successor_inputs = dict(old_inputs)
         if mode == "KEY_ROTATION_SEGMENT":
-            successor_inputs["allowed_signers"] = new_signer["allowed"]
-            successor_inputs["identity_file"] = new_signer["identity"]
-            successor_key = new_signer["key"]
+            if reuse_prior_key_with_reformatted_policy:
+                reformatted = temporary / "same-key-reformatted.allowed-signers"
+                reformatted.write_bytes(
+                    Path(old_inputs["allowed_signers"]).read_bytes() + b"\n"
+                )
+                successor_inputs["allowed_signers"] = reformatted
+                successor_key = temporary / "inputs" / "reviewer-key"
+            else:
+                successor_inputs["allowed_signers"] = new_signer["allowed"]
+                successor_inputs["identity_file"] = new_signer["identity"]
+                successor_key = new_signer["key"]
         else:
             successor_key = temporary / "inputs" / "reviewer-key"
 
@@ -272,6 +311,9 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
             },
             "successor_checkpoint_binding": {
                 "checkpoint_file_sha256": self.digest(successor),
+                "checkpoint_signature_file_sha256": self.digest(
+                    successor_signature
+                ),
                 "checkpoint_chain_sha256": successor_value[
                     "checkpoint_chain_sha256"
                 ],
@@ -362,7 +404,9 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
                 str(reviewer_allowed or transition_reviewer["allowed"]),
                 str(reviewer_identity or transition_reviewer["identity"]),
                 expected_ssh_keygen_sha256
-                or hashlib.sha256(Path(self.ssh_keygen).read_bytes()).hexdigest(),
+                or hashlib.sha256(
+                    Path(self.ssh_keygen or "ssh-keygen-unavailable").read_bytes()
+                ).hexdigest(),
                 evaluated_at,
             ],
             cwd=ROOT,
@@ -375,11 +419,27 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
         with tempfile.TemporaryDirectory() as directory:
             material = self.make_case(Path(directory))
             result = self.verify_transition(material)
+            transition_signature_sha256 = self.digest(
+                Path(material["transition_signature"])
+            )
+            successor_signature_sha256 = self.digest(
+                Path(material["successor_signature"])
+            )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stderr, "")
         report = json.loads(result.stdout)
         self.assertEqual(report["status"], "SIGNED_KEY_ROTATION_SEGMENT_TRANSITION")
+        self.assertEqual(
+            report["input_bindings"]["transition_signature_file_sha256"],
+            transition_signature_sha256,
+        )
+        self.assertEqual(
+            report["input_bindings"][
+                "successor_checkpoint_signature_file_sha256"
+            ],
+            successor_signature_sha256,
+        )
         for name in TRANSITION_SUCCESS_CLAIMS | {
             "key_rotation_transition_binding_verified"
         }:
@@ -580,6 +640,127 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
             report["errors"],
         )
         self.assertTrue(all(not value for value in report["claims"].values()))
+
+    def test_malformed_mode_and_transition_id_are_structured_refusals(self) -> None:
+        results: list[tuple[str, subprocess.CompletedProcess[str]]] = []
+        for field in ("transition_mode", "transition_id_sha256"):
+            with tempfile.TemporaryDirectory() as directory:
+                material = self.make_case(Path(directory))
+                transition = Path(material["transition"])
+                value = json.loads(transition.read_text(encoding="utf-8"))
+                value[field] = []
+                self.rewrite_and_resign_transition(material, value)
+                results.append((field, self.verify_transition(material)))
+
+        for field, result in results:
+            with self.subTest(field=field):
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stderr, "")
+                report = json.loads(result.stdout)
+                self.assertEqual(report["status"], "INVALID")
+                self.assertTrue(all(not value for value in report["claims"].values()))
+
+    def test_schema_length_timestamp_is_enforced_by_the_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            material = self.make_case(Path(directory))
+            transition = Path(material["transition"])
+            value = json.loads(transition.read_text(encoding="utf-8"))
+            value["issued_at"] = "2026-08-03T01:00:00." + ("0" * 50) + "Z"
+            self.rewrite_and_resign_transition(material, value)
+            result = self.verify_transition(material)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
+        report = json.loads(result.stdout)
+        self.assertIn("issued_at exceeds 64 characters", report["errors"])
+        self.assertTrue(all(not value for value in report["claims"].values()))
+
+    def test_key_rotation_requires_a_changed_public_key_set(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            material = self.make_case(
+                Path(directory), reuse_prior_key_with_reformatted_policy=True
+            )
+            result = self.verify_transition(material)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
+        report = json.loads(result.stdout)
+        self.assertIn(
+            "key rotation mode requires a changed signer key set", report["errors"]
+        )
+        self.assertTrue(all(not value for value in report["claims"].values()))
+
+    def test_bundle_successor_policy_and_oversized_window_drift_fail_closed(
+        self,
+    ) -> None:
+        cases: list[tuple[str, subprocess.CompletedProcess[str], str]] = []
+        for name in (
+            "bundle-digest",
+            "successor-digest",
+            "prior-policy",
+            "successor-policy",
+            "oversized-window",
+        ):
+            with tempfile.TemporaryDirectory() as directory:
+                material = self.make_case(Path(directory))
+                if name == "bundle-digest":
+                    result = self.verify_transition(
+                        material, expected_bundle_sha256="0" * 64
+                    )
+                    expected = "supplied prior bundle digest mismatch"
+                elif name == "successor-digest":
+                    result = self.verify_transition(
+                        material, expected_successor_sha256="0" * 64
+                    )
+                    expected = "supplied successor checkpoint digest mismatch"
+                elif name == "prior-policy":
+                    result = self.verify_transition(
+                        material, prior_allowed=Path(material["successor_allowed"])
+                    )
+                    expected = "prior signer policy mismatch"
+                elif name == "successor-policy":
+                    inputs = material["case"]["inputs"]
+                    result = self.verify_transition(
+                        material,
+                        successor_allowed=Path(inputs["allowed_signers"]),
+                    )
+                    expected = "successor signer policy mismatch"
+                else:
+                    transition = Path(material["transition"])
+                    value = json.loads(transition.read_text(encoding="utf-8"))
+                    value["expires_at"] = "2026-08-03T01:20:00Z"
+                    self.rewrite_and_resign_transition(material, value)
+                    result = self.verify_transition(material)
+                    expected = "signed window exceeds 900 seconds"
+                cases.append((name, result, expected))
+
+        for name, result, expected in cases:
+            with self.subTest(name=name):
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stderr, "")
+                report = json.loads(result.stdout)
+                self.assertIn(expected, report["errors"])
+                self.assertTrue(all(not value for value in report["claims"].values()))
+
+    def test_signature_verifier_discards_child_output(self) -> None:
+        completed = subprocess.CompletedProcess(args=[], returncode=0)
+        with mock.patch.object(
+            transition_tool.subprocess, "run", return_value=completed
+        ) as run:
+            verified = transition_tool.verify_signature(
+                Path("synthetic-ssh-keygen"),
+                allowed_signers_bytes=b"reviewer ssh-ed25519 AAAA\n",
+                identity="reviewer",
+                signature_bytes=b"synthetic-signature",
+                document_bytes=b"synthetic-document",
+                namespace=TRANSITION_NAMESPACE,
+                timeout_seconds=1.0,
+            )
+
+        self.assertTrue(verified)
+        self.assertIs(run.call_args.kwargs["stdout"], subprocess.DEVNULL)
+        self.assertIs(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
+        self.assertNotIn("capture_output", run.call_args.kwargs)
 
     def test_strict_and_deep_transition_json_are_structured_refusals(self) -> None:
         payloads = {

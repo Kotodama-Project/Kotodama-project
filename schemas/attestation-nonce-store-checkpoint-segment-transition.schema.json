@@ -32,9 +32,10 @@
     "successor_checkpoint_binding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["checkpoint_file_sha256", "checkpoint_chain_sha256", "store_id_sha256", "reservation_count", "allowed_signers_file_sha256", "signer_identity_file_sha256"],
+      "required": ["checkpoint_file_sha256", "checkpoint_signature_file_sha256", "checkpoint_chain_sha256", "store_id_sha256", "reservation_count", "allowed_signers_file_sha256", "signer_identity_file_sha256"],
       "properties": {
         "checkpoint_file_sha256": {"$ref": "#/$defs/sha256"},
+        "checkpoint_signature_file_sha256": {"$ref": "#/$defs/sha256"},
         "checkpoint_chain_sha256": {"$ref": "#/$defs/sha256"},
         "store_id_sha256": {"$ref": "#/$defs/sha256"},
         "reservation_count": {"type": "integer", "minimum": 0, "maximum": 10000},

@@ -17,10 +17,12 @@
       "additionalProperties": false,
       "properties": {
         "transition_file_sha256": {"$ref": "#/$defs/sha256"},
+        "transition_signature_file_sha256": {"$ref": "#/$defs/sha256"},
         "transition_id_sha256": {"$ref": "#/$defs/sha256"},
         "prior_bundle_file_sha256": {"$ref": "#/$defs/sha256"},
         "prior_head_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
         "successor_checkpoint_file_sha256": {"$ref": "#/$defs/sha256"},
+        "successor_checkpoint_signature_file_sha256": {"$ref": "#/$defs/sha256"},
         "store_id_sha256": {"$ref": "#/$defs/sha256"},
         "prior_allowed_signers_file_sha256": {"$ref": "#/$defs/sha256"},
         "prior_identity_file_sha256": {"$ref": "#/$defs/sha256"},
@@ -60,7 +62,7 @@
         "properties": {
           "errors": {"maxItems": 0},
           "evaluated_at": {"type": "string"},
-          "input_bindings": {"required": ["transition_file_sha256", "transition_id_sha256", "prior_bundle_file_sha256", "prior_head_checkpoint_sha256", "successor_checkpoint_file_sha256", "store_id_sha256", "prior_allowed_signers_file_sha256", "prior_identity_file_sha256", "successor_allowed_signers_file_sha256", "successor_identity_file_sha256", "reviewer_allowed_signers_file_sha256", "reviewer_identity_file_sha256", "ssh_keygen_executable_sha256"]},
+          "input_bindings": {"required": ["transition_file_sha256", "transition_signature_file_sha256", "transition_id_sha256", "prior_bundle_file_sha256", "prior_head_checkpoint_sha256", "successor_checkpoint_file_sha256", "successor_checkpoint_signature_file_sha256", "store_id_sha256", "prior_allowed_signers_file_sha256", "prior_identity_file_sha256", "successor_allowed_signers_file_sha256", "successor_identity_file_sha256", "reviewer_allowed_signers_file_sha256", "reviewer_identity_file_sha256", "ssh_keygen_executable_sha256"]},
           "counts": {"properties": {"prior_checkpoints_verified": {"minimum": 1}, "successor_parent_links_verified": {"const": 1}}},
           "claims": {"$ref": "#/$defs/common_success_claims"}
         }
