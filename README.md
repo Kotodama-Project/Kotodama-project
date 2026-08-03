@@ -471,6 +471,19 @@ Kotodama は、初期の言葉を消すのではなく、後続の指示、実�
 
 公開 repository があることと、Public Beta access が開いていることは別です。
 
+## 最初に選ぶ
+
+最初はruntimeを起動せず、会社の構造と現在の境界を読むところから始めます。
+目的に応じた最短の入口は次のとおりです。
+
+| 目的 | 最初に読む | 次にできること |
+|---|---|---|
+| Company Template、Blocks、Records、MOCsの関係だけを確認する | [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) | [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)で理想/currentの差分を読む |
+| starterを自分の候補へ複製し、localで検査する | [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) | initializer、customization checker、validator、Review Bundleをread-only/candidate-onlyで実行する |
+| runtime候補のprofileを選ぶ | [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md) | `compose_minimum`または`proxmox_segmented`を選び、preflightから始める |
+
+validatorやrunbookの`PASS`は、install、deploy、provider接続、Voice E2E、Promotion、Current Truth、Final Human GOを意味しません。公開面の既定は`NO_GO_UNPUBLISHED`です。迷った場合はruntime profileを選ばず、Catalogから読み始めます。
+
 ## Quick Start — Company starter を試す
 
 Python 以外の追加 dependency は不要です。repository root で次を実行します。
@@ -625,9 +638,11 @@ machine-readable な完了境界ではありません。最新チェックリス
 
 - [Project Status](STATUS.md) — 現在公開しているものと未証明範囲
 - [Roadmap to Public Beta](ROADMAP.md) — access を開く前に必要な gate
+- [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) — Company Template / Blocks / Records / MOCsの対応
 - [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) — 最短の実行例
 - [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) — validator / Catalog / customization境界の一括read-only確認
 - [Template Guide](docs/TEMPLATE-GUIDE.md) — Blocks / Records / MOCs の編集
+- [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md) — runtime profileを選ぶ前のread-only導線
 
 ### Company pack を review する
 

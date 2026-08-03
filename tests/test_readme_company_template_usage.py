@@ -30,6 +30,29 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
         self.assertLess(validator, review)
         self.assertLess(review, activation)
 
+    def test_readme_first_stop_points_to_catalog_before_runtime_profiles(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        for marker in (
+            "## 最初に選ぶ",
+            "Company Pack Catalog",
+            "Starter Walkthrough",
+            "Installation Lifecycle",
+            "compose_minimum",
+            "proxmox_segmented",
+            "read-only",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, readme)
+
+        first_stop = readme.index("## 最初に選ぶ")
+        catalog = readme.index("Company Pack Catalog", first_stop)
+        starter = readme.index("Starter Walkthrough", first_stop)
+        lifecycle = readme.index("Installation Lifecycle", first_stop)
+        self.assertLess(catalog, starter)
+        self.assertLess(starter, lifecycle)
+
 
 if __name__ == "__main__":
     unittest.main()
