@@ -237,6 +237,36 @@ MOC は navigation projection です。MOC 自体が新しい SSOT や実行権�
 
 まず全体の対応を一覧したい場合は [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) を実行してください。詳しい編集方法は [Template Guide](docs/TEMPLATE-GUIDE.md)、最短の体験は [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)、candidate-bound review は [Review Workflow](docs/REVIEW-WORKFLOW.md) を参照してください。
 
+### 理想の使い方と、現在の Public Preview でできること
+
+理想的には、Company Template は「ファイルをコピーして終わる雛形」ではなく、新しい会社の境界と仕事の流れを再現する入口です。
+
+```text
+Company Template を複製
+→ Vision / Mission / Boundary を編集
+→ 必要な Blocks と human role を選択
+→ MOC で目的別の導線を決める
+→ Manifest、owner、profile、capability、expiry を束縛
+→ validator と customization checker
+→ exact-byte Review Bundle
+→ protected evaluation
+→ activation candidate
+```
+
+現在の Public Preview では、このうち **複製、編集、Catalog、validator、customization checker、Review Bundle の作成と照合**を local / synthetic の範囲で実行できます。starter の `draft` 記録を確認し、Blocks がどの Governed Record を生み、MOC がどの順番で辿るかを読むことができます。
+
+一方、`protected evaluation` と `activation candidate` は、候補の exact bytes、Work Order、権限、検証 receipt、rollback 条件を別途束ねる次の段階です。公開 README を読んだこと、validator が PASS したこと、Review Bundle が MATCH したことだけでは、会社の runtime を起動したり、権限を付与したり、Promotion や Current Truth を変更したりしません。
+
+| 段階 | 理想 | 現在の Public Preview |
+|---|---|---|
+| Template | 会社の Vision、Boundary、owner、profile を持つ再利用可能な開始点 | `examples/company-starter` を複製して自分の候補へ編集できる |
+| Blocks | 仕事の処理単位を組み替え、必要な能力と拒否条件を束ねる | 9 Blocks の schema、Record 対応、validator を読んで検査できる |
+| MOCs | Company Operations、Public Release、Incident / Recovery を目的別に辿る | 3 MOCs の順序と参照を Catalog で read-only に確認できる |
+| Records | Source、Decision、Work、Receipt、Promotion を証拠付きでつなぐ | 9 Governed Records の `draft` 候補を作り、構造を検査できる |
+| Activation | protected evaluation 後に candidate-bound decision で採用する | runtime activation、公開招待、Public Beta GO は未提供 |
+
+この区別により、理想の Company OS の設計を先に試しながら、現在実際に動く local candidate と、まだ証明されていない runtime / authority を混同しません。
+
 ## Context Platform — 会社の共有記憶
 
 人物、Goal、ToDo、会話、ファイル、Issue、判断、証拠、エージェント状態を、許可された範囲で横断できる共有文脈が必要です。
