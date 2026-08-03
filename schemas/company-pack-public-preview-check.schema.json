@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-public-preview-check.schema.json",
   "title": "Kotodama Company Pack Public Preview Check",
-  "$comment": "A deterministic read-only aggregate of the public starter structural validator, Catalog projection, customization boundary, and false-claim boundary. It does not grant authority, execute runtime work, promote a candidate, or open Public Beta access.",
+  "$comment": "A deterministic read-only aggregate of the public starter structural validator, Catalog projection, customization boundary, and false-claim boundary. It does not grant authority, execute runtime work, promote a candidate, or open Public Beta access. A validator-PASS Pack may omit optional manifest.records; PASS may therefore report counts.records as zero while still requiring validated files, Blocks, MOCs, projection alignment, and the fixed false-claim boundary.",
   "type": "object",
   "additionalProperties": false,
   "required": [

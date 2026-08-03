@@ -44,14 +44,19 @@ locatorの値を出力へ追加しません。
 
 `status: PASS` は、次の4面が同じ pack bytes で確認できたことを示します。
 
-1. `pack_structure`: Company manifest、Blocks、Records、MOCs の既存
-   structural validator が PASS した
+1. `pack_structure`: Company manifest、Blocks、MOCs と、存在する場合は
+   Records の structural validator が PASS した
 2. `catalog_projection`: read-only Catalog が生成でき、flow と Block 数、
    false claims、`NO_GO_UNPUBLISHED` が一致した
 3. `customization_boundary`: placeholder replacement、governed review、
    別途必要な evidence が別 category で表現された
 4. `claim_boundary`: Human approval、runtime、Promotion、Current Truth、
    Public Beta GO をすべて false のまま保持した
+
+`manifest.records` は汎用 Pack では任意です。Records を省略した
+validator-PASS Pack は、Catalog の `records: []` と `counts.records: 0` を
+保ったまま、この self-check でも `PASS` になります。公開 Company starter
+自身は9 Recordsを持つため、上の代表例では `records: 9` と表示されます。
 
 公開 example では通常 `replacement_required: 42` です。initializer で
 ID、status、Human Intent locator、Block expiry、Record retention locator を

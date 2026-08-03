@@ -137,7 +137,6 @@ def build_check(pack_directory: Path) -> dict[str, Any]:
         if (
             counts["validated_files"] == 0
             or counts["blocks"] == 0
-            or counts["records"] == 0
             or counts["mocs"] == 0
             or catalog_validation.get("structural_status") != "PASS"
             or len(catalog.get("flow", [])) != counts["blocks"]

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -155,6 +156,39 @@ class PublicPreviewCheckTests(unittest.TestCase):
             self.assertEqual(report["counts"]["replacement_required"], 19)
             self.assertEqual(report["counts"]["review_required"], 46)
             self.assertEqual(report["counts"]["evidence_required"], 5)
+
+    def test_validator_pass_recordless_pack_remains_preview_eligible(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "recordless-company"
+            shutil.copytree(STARTER, pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.pop("records")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            result = self.run_tool(pack)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        report = json.loads(result.stdout)
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        Draft202012Validator(schema=schema).validate(report)
+        self.assertIn("may omit optional manifest.records", schema["$comment"])
+        self.assertEqual(report["status"], "PASS")
+        self.assertIsNone(report["refusal_reason"])
+        self.assertEqual(report["counts"]["records"], 0)
+        self.assertEqual(
+            report["checks"],
+            [
+                {"id": "pack_structure", "status": "PASS"},
+                {"id": "catalog_projection", "status": "PASS"},
+                {"id": "customization_boundary", "status": "PASS"},
+                {"id": "claim_boundary", "status": "PASS"},
+            ],
+        )
+        self.assertTrue(all(not value for value in report["claims"].values()))
+        self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+        self.assertNotIn(str(pack), result.stdout)
 
     def test_invalid_pack_refuses_without_echoing_path_or_validation_detail(self) -> None:
         result = self.run_tool(INVALID)
