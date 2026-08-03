@@ -10,6 +10,8 @@ read-only CLIです。
 lossless mapping、二回のcomplete terminal rereadが一致したことだけを示します。
 Source authenticity、consent/access authority、retention enforcement、Human Intent、
 runtime、Promotion、Current Truth、Final Human GO、Public Beta GOは証明しません。
+将来のprotected runnerが残すprivate receiptのfield契約は
+[Protected Source Binding Receipt Candidate](PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)へ分離しています。
 
 ## Ideal use
 
@@ -137,3 +139,5 @@ TOCTOU完全排除、immutable storage、post-return currentnessはclaimしま�
 次段のprotected runnerにはprivate transactional snapshot、trusted clock、signed
 trust root、replay reservation、retention/deletion receipt、rollback drill、real
 owner-scoped evidenceが必要です。それらをlocal candidate matchで代用しません。
+R33はこれらのreceipt shapeだけをschema-onlyで固定し、runnerやpopulated evidenceを
+実装・公開しません。

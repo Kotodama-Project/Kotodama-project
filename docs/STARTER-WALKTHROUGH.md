@@ -82,6 +82,8 @@ Source ItemをIntent抽出前のprivate shapeへ閉じるには[Company Pack Sou
 
 保存済みR31 recordと別保存のcontentをlocalで照合する必要がある場合は[Source Binding Verification Candidate](SOURCE-BINDING-VERIFIER-CANDIDATE.md)を使います。private inputをrepositoryへ置かず、point-in-time candidate matchをatomic snapshotやconsent verificationへ昇格しません。
 
+protected runnerのreceipt fieldを設計するときは[Protected Source Binding Receipt Candidate](PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)を使います。これはunpopulated schema-only契約であり、private evidenceやaudio/transcriptをstarterへ追加せず、shape validationをprotected executionへ昇格しません。
+
 Sourceから抽出した意図候補をHuman確認前のprivate shapeへ閉じるには[Company Pack Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)を使います。source bodyや実candidateを公開せず、schema PASSをHuman Intentへ昇格しません。
 
 実Decisionを作る前に記録fieldと否定claimを確認するには[Company Pack Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)を使います。これはschema-only契約であり、Decision、承認、権限、Promotion、GOを生成しません。

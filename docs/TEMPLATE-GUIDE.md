@@ -168,9 +168,10 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 10. [review decision handoff](REVIEW-DECISION-HANDOFF.md)で5成果物を非承認candidateへ束縛する。
 11. [Source Record Instance Contract](SOURCE-RECORD-INSTANCE.md)でprivate source locator/content/acquisition/lineage/consent/retention/attributionと全false claimを確認する。
 12. private保存済みbytesを扱う場合だけ[Source Binding Verification Candidate](SOURCE-BINDING-VERIFIER-CANDIDATE.md)でstrict parse、binding、terminal reread、非公開R30 projection digestを照合する。candidate matchをatomic snapshotやconsent verificationへ昇格しない。
-13. [Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)でprivate source binding、untrusted inference、Human確認前のfalse claimを確認する。
-14. 実Decisionの前に[Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)でfieldと全false claimを確認する。このschema-only契約はDecisionや権限を生成しない。
-15. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、identity・authority・全体outcomeを別Decision Recordへ束縛する。
+13. protected runnerのreceipt fieldは[Protected Source Binding Receipt Candidate](PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)で固定する。unpopulated schema PASSをprotected execution、trusted time、atomicity、retention/deletion、replay verificationへ昇格しない。
+14. [Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)でprivate source binding、untrusted inference、Human確認前のfalse claimを確認する。
+15. 実Decisionの前に[Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)でfieldと全false claimを確認する。このschema-only契約はDecisionや権限を生成しない。
+16. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、identity・authority・全体outcomeを別Decision Recordへ束縛する。
 16. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
 17. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
 18. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。

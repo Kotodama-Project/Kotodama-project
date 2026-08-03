@@ -5,6 +5,8 @@ Instanceへ渡す前に必要なfieldと否定claimを固定する**schema-only*
 このschemaが公開するのは契約だけで、実Source、content、transcript、audio、
 capture、attribution、builderは作成しません。保存済みsynthetic/private bytesの
 限定照合は別の[Source Binding Verification Candidate](SOURCE-BINDING-VERIFIER-CANDIDATE.md)が扱います。
+protected runnerが将来残すprivate receiptのshapeは
+[Protected Source Binding Receipt Candidate](PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)へ分離します。
 
 ## Ideal use
 
