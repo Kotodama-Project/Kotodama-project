@@ -8,6 +8,8 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
@@ -18,6 +20,8 @@ import build_company_pack_review_request as request_builder
 REQUEST_BUILDER = ROOT / "tools" / "build_company_pack_review_request.py"
 BUNDLE_BUILDER = ROOT / "tools" / "build_company_pack_review_bundle.py"
 CREATOR = ROOT / "tools" / "create_company_pack.py"
+REQUEST_SCHEMA = ROOT / "schemas" / "company-pack-review-request.schema.json"
+REVIEW_REQUEST_DOC = ROOT / "docs" / "REVIEW-REQUEST.md"
 
 
 class CompanyPackReviewRequestCliTests(unittest.TestCase):
@@ -48,6 +52,30 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
                     document["retention"]["policy_ref"] = retention_policy_ref
                 path.write_text(json.dumps(document), encoding="utf-8")
         return pack, human_intent_ref, retention_policy_ref
+
+    def create_recordless_ready_pack(self, parent: Path) -> tuple[Path, str]:
+        pack = parent / "recordless-review-request-pack"
+        creation = subprocess.run(
+            [sys.executable, str(CREATOR), "recordless-review-request-pack", str(pack)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(creation.returncode, 0, creation.stdout)
+
+        human_intent_ref = "human-intent:private-recordless-review-request-source"
+        manifest_path = pack / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["human_intent_ref"] = human_intent_ref
+        manifest.pop("records")
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        for relative in manifest["blocks"]:
+            path = pack / relative
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+            path.write_text(json.dumps(document), encoding="utf-8")
+        return pack, human_intent_ref
 
     def save_bundle(self, pack: Path, path: Path) -> tuple[dict, bytes]:
         result = subprocess.run(
@@ -144,6 +172,37 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         )
         self.assertTrue(all(value is False for value in request["claims"].values()))
         self.assertEqual(request["public_beta"], "NO_GO_UNPUBLISHED")
+
+    def test_recordless_pack_request_uses_dynamic_item_and_binding_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pack, human_intent_ref = self.create_recordless_ready_pack(root)
+            bundle_path = root / "recordless-saved-review-bundle.json"
+            bundle, _bundle_bytes = self.save_bundle(pack, bundle_path)
+            result = self.run_builder(bundle_path, pack)
+
+        self.assertEqual(result.returncode, 0, result.stdout.decode("utf-8"))
+        self.assertEqual(result.stderr, b"")
+        self.assertNotIn(str(pack).encode("utf-8"), result.stdout)
+        self.assertNotIn(str(bundle_path).encode("utf-8"), result.stdout)
+        self.assertNotIn(human_intent_ref.encode("utf-8"), result.stdout)
+        request = json.loads(result.stdout)
+        schema = json.loads(REQUEST_SCHEMA.read_text(encoding="utf-8"))
+        Draft202012Validator(schema).validate(request)
+        self.assertEqual(request["status"], "CANDIDATE_REVIEW_REQUEST")
+        self.assertEqual(request["candidate_binding"]["binding_count"], 13)
+        self.assertEqual(
+            request["source_checks"]["bundle_verification"]["matched_bindings"], 13
+        )
+        review = request["review_request"]
+        evidence = request["unresolved_evidence"]
+        self.assertEqual(review["item_count"], len(review["items"]))
+        self.assertEqual(evidence["item_count"], len(evidence["items"]))
+        self.assertEqual(review["item_count"], bundle["source_checks"]["customization"]["counts"]["review_required"])
+        self.assertEqual(evidence["item_count"], bundle["source_checks"]["customization"]["counts"]["evidence_required"])
+        self.assertTrue(all(value is False for value in request["claims"].values()))
+        self.assertEqual(request["public_beta"], "NO_GO_UNPUBLISHED")
+        self.assertIn("`review_request.item_count`", REVIEW_REQUEST_DOC.read_text(encoding="utf-8"))
 
     def test_pack_byte_change_refuses_request_without_echoing_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
