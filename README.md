@@ -597,6 +597,7 @@ machine-readable な完了境界ではありません。最新チェックリス
 - [Customization Checklist](docs/CUSTOMIZATION-CHECKLIST.md)
 - [Review Bundle](docs/REVIEW-BUNDLE.md)
 - [Review Workflow](docs/REVIEW-WORKFLOW.md)
+- [Review Evidence to Decision Handoff](docs/REVIEW-DECISION-HANDOFF.md)
 - [Validation Guide](docs/VALIDATION.md)
 - [Decision Record Candidate Contract](docs/DECISION-RECORD-CANDIDATE.md)
 - [Intent Candidate Instance Contract](docs/INTENT-CANDIDATE-INSTANCE.md)
