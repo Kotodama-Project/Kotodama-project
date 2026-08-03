@@ -126,11 +126,42 @@ record bytesが変化して循環するためです。`r30_binding_handoff`は
 `serialized_record_locator: null`, `serialized_record_binding: null`,
 `EXTERNAL_BINDING_REQUIRED`, `NOT_VERIFIED`に固定します。
 
-future verifierがR31を外部保存した後、保存済みR31 serialized bytesのlocator、
-SHA-256、byte sizeをR30の`source_record_locator/source_record_binding`へ、
-R31 content observationのstorage locator/bindingをR30の
-`source_content_locator/source_content_binding`へ写します。schemaはこの
-mapping、同一snapshot、currentnessを検証しません。
+future verifierがR31を外部保存した後、次のfield mappingを同じatomic snapshot
+から構築します。これはprojection, not object reuseです。
+
+| R30 required field | R31 input / fail-closed rule |
+| --- | --- |
+| `source_record_locator` | 保存済みR31 serialized bytesの外部governed locator。R31自身には書き戻さない |
+| `source_record_binding` | 保存済みR31 serialized bytesを保存後に計算したSHA-256とbyte size |
+| `source_content_locator` | `content_observation.storage_locator_ref` |
+| `source_content_binding` | `content_observation.content_binding` |
+| `declared_media_type` | `content_observation.declared_media_type` |
+| `source_revision` | root `source_revision`と`content_observation.declared_source_revision`が一致するときだけ、その値を写す。不一致はfail closed |
+| `observed_at` | bytes bindingの観測時刻として`content_observation.observed_at`を写す。root `source_observed_at`はSource Item観測として別に保持し、time orderingは別途検証する |
+| `source_record_schema_status` | 常に`NOT_VERIFIED`。R31 schema PASSをsource/currentness verificationへ昇格しない |
+| `derived_from_refs` | `lineage.declaration_status`が`DECLARED_ORIGINAL`なら空配列、`DECLARED_DERIVED`なら`lineage.parent_source_record_refs`。状態と配列が矛盾すればfail closed |
+| `lineage_status` | 常に`NOT_VERIFIED` |
+| `access_or_consent` | 下記の明示projectionを作る。R31 objectをそのまま再利用しない |
+| `retention` | 下記の明示projectionを作る。R31 objectをそのまま再利用しない |
+
+R30 `access_or_consent`は、`evidence_ref/evidence_binding`をR31
+`access_or_consent.basis_ref/basis_binding`から取り、
+`declared_permitted_uses`をstatusが`DECLARED_PERMITTED_UNVERIFIED`のuse名だけから
+作ります。all projected permitted usesの`subject_scope_ref`、`scope_expires_at`、
+`revocation_evidence_ref`がそれぞれ同一の場合だけ、その共通値をR30へ写します。
+一つでも異なる場合、空になる場合、withdrawalと矛盾する場合は、単一のR30
+shapeではlosslessに表せないためfail closedです。R30
+`verification_status`は常に`NOT_VERIFIED`です。
+
+R30 `retention`はR31の`policy_ref`、`policy_binding`、`retain_until`、
+`deletion_trigger`、`deletion_receipt_ref`を個別に写し、
+`enforcement_status`を常に`NOT_VERIFIED`にします。R30には
+`covered_artifacts` fieldがないため、R31側が少なくとも
+`source_record_serialized_bytes`と`source_content_bytes`の両方をcoverしない場合は
+projectionをfail closedにします。
+
+schemaはこのmapping、同一snapshot、cross-field一致、currentness、projectionの
+losslessnessを検証しません。
 
 ## generic template mapping
 

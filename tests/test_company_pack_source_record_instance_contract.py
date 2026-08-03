@@ -9,6 +9,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas" / "company-pack-source-record-instance.schema.json"
+R30_SCHEMA_PATH = ROOT / "schemas" / "company-pack-intent-candidate-instance.schema.json"
 RUNBOOK_PATH = ROOT / "docs" / "SOURCE-RECORD-INSTANCE.md"
 
 EXPECTED_CLAIMS = {
@@ -459,6 +460,23 @@ class CompanyPackSourceRecordInstanceContractTests(unittest.TestCase):
             "future verifier",
         ):
             self.assertIn(phrase, runbook)
+
+    def test_r30_mapping_is_field_complete_and_requires_projection(self) -> None:
+        r30_schema = json.loads(R30_SCHEMA_PATH.read_text(encoding="utf-8"))
+        required_fields = r30_schema["$defs"]["source_binding"]["required"]
+        runbook = RUNBOOK_PATH.read_text(encoding="utf-8")
+        mapping = runbook.split("## R30 mapping", 1)[1].split(
+            "## generic template mapping", 1
+        )[0]
+        for field in required_fields:
+            self.assertIn(f"`{field}`", mapping, field)
+        for phrase in (
+            "projection, not object reuse",
+            "all projected permitted uses",
+            "covered_artifacts",
+            "fail closed",
+        ):
+            self.assertIn(phrase, mapping)
 
     def test_strict_parser_and_resource_limits_remain_future_gates(self) -> None:
         self.assertEqual(json.loads('{"a": 1, "a": 2}'), {"a": 2})
