@@ -93,6 +93,29 @@ class ComposeMinimumSkeletonValidatorCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "PASS")
 
+    def test_security_boolean_fixed_fields_reject_integer_aliases_in_schema_and_validator(self) -> None:
+        for field in (
+            "host_ports_forbidden",
+            "networks_internal_and_separate",
+            "volumes_separate",
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                skeleton = self.copy_skeleton(Path(temporary))
+                manifest_path = skeleton / "skeleton.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["security"][field] = 1
+                manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+                schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+                self.assertTrue(list(Draft202012Validator(schema).iter_errors(manifest)))
+                result = self.run_validator(skeleton)
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(
+                f"security.{field} does not match the safe skeleton contract",
+                json.loads(result.stdout)["errors"],
+            )
+
     def test_binding_bytes_still_rejects_boolean_fraction_and_negative_number(self) -> None:
         for invalid in (True, 1.5, -1.0):
             with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as temporary:

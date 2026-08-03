@@ -221,6 +221,13 @@ def is_non_negative_integer(value: object) -> bool:
     )
 
 
+def matches_fixed_value(actual: object, expected: object) -> bool:
+    """Match JSON Schema const semantics without Python bool/int aliasing."""
+    if isinstance(expected, bool):
+        return type(actual) is bool and actual is expected
+    return actual == expected
+
+
 def validate_security(manifest: dict[str, Any], errors: list[str]) -> None:
     security = manifest.get("security")
     if not isinstance(security, dict):
@@ -229,7 +236,7 @@ def validate_security(manifest: dict[str, Any], errors: list[str]) -> None:
     require_fields(security, SECURITY_FIELDS, "security", errors)
     reject_unknown(security, SECURITY_FIELDS, "security", errors)
     for field, expected in EXPECTED_SECURITY.items():
-        if security.get(field) != expected:
+        if not matches_fixed_value(security.get(field), expected):
             errors.append(f"security.{field} does not match the safe skeleton contract")
 
 
