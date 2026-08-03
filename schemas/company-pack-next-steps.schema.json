@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-next-steps.schema.json",
+  "title": "Kotodama Company Pack Next Steps Plan",
+  "$comment": "This plan summarizes static checklist state. It does not prove Human approval, authority, external evidence, Promotion, Current Truth, runtime readiness, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "pack_id",
+    "current_state",
+    "ideal_flow",
+    "groups",
+    "recommended_next",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_next_steps_plan"},
+    "version": {"const": "1.0"},
+    "status": {
+      "enum": [
+        "INVALID_PACK",
+        "CUSTOMIZATION_REQUIRED",
+        "READY_FOR_GOVERNED_REVIEW"
+      ]
+    },
+    "pack_id": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "null"}
+      ]
+    },
+    "current_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "structural_status", "validated_files", "counts"],
+      "properties": {
+        "stage": {
+          "enum": [
+            "STRUCTURAL_REPAIR",
+            "STATIC_CUSTOMIZATION",
+            "CANDIDATE_BINDING"
+          ]
+        },
+        "structural_status": {"enum": ["PASS", "FAIL"]},
+        "validated_files": {"type": "integer", "minimum": 0},
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "replacement_required",
+            "review_required",
+            "evidence_required"
+          ],
+          "properties": {
+            "replacement_required": {"type": "integer", "minimum": 0},
+            "review_required": {"type": "integer", "minimum": 0},
+            "evidence_required": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "ideal_flow": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "outcome", "authority_boundary"],
+        "properties": {
+          "id": {
+            "enum": [
+              "create_draft_copy",
+              "replace_static_placeholders",
+              "validate_candidate",
+              "bind_exact_review_candidate",
+              "governed_review",
+              "collect_external_evidence",
+              "separate_promotion"
+            ]
+          },
+          "outcome": {"type": "string", "minLength": 1},
+          "authority_boundary": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "label", "purpose", "count", "state"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "category": {
+            "enum": [
+              "replacement_required",
+              "review_required",
+              "evidence_required"
+            ]
+          },
+          "label": {"type": "string", "minLength": 1},
+          "purpose": {"type": "string", "minLength": 1},
+          "count": {"type": "integer", "minimum": 0},
+          "state": {"enum": ["COMPLETE", "ACTION_REQUIRED"]}
+        }
+      }
+    },
+    "recommended_next": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "command", "rationale"],
+      "properties": {
+        "action": {
+          "enum": [
+            "FIX_STRUCTURE",
+            "REPLACE_STATIC_PLACEHOLDERS",
+            "BUILD_EXACT_REVIEW_BUNDLE"
+          ]
+        },
+        "command": {"type": "string", "minLength": 1},
+        "rationale": {"type": "string", "minLength": 1}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_intent_authenticated",
+        "human_approval_verified",
+        "authority_assignment_verified",
+        "retention_policy_verified",
+        "promotion_verified",
+        "current_truth_changed"
+      ],
+      "properties": {
+        "human_intent_authenticated": {"const": false},
+        "human_approval_verified": {"const": false},
+        "authority_assignment_verified": {"const": false},
+        "retention_policy_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  }
+}

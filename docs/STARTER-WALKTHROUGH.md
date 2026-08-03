@@ -43,15 +43,18 @@ initializerが`id`を設定した後、`work/my-company/manifest.json`で最初�
 
 後から`id`を変更する場合は、manifest内に列挙された全MOCの先頭refも同じIDへ変更します。MOCの参照先が存在しなければvalidatorはfail closedします。initializerを再実行して既存targetを上書きすることはできません。
 
-## 3. customization checklistを実行する
+## 3. customization checklistとguided planを実行する
 
 ```powershell
 python tools\check_company_pack_customization.py work\my-company
+python tools\plan_company_pack_next_steps.py work\my-company --format markdown
 ```
 
 作成直後は`CUSTOMIZATION_REQUIRED`で終了し、通常は19件を返します。これは失敗ではなく、組織固有のHuman Intent locator 1件、Block expiry 9件、Record retention policy 9件がまだexampleであることを示します。
 
 `review_required`のowner・profile・roleは、文字列を変更すれば承認済みになるものではありません。`evidence_required`も静的CLIでは閉じません。詳細は[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)を参照してください。
+
+checkerの一件ずつのJSONが長い場合、guided plannerは同じ結果を現在地、理想の7段階、分類別件数、次の一手へ集約します。作成直後の現在地は`STATIC_CUSTOMIZATION`で、Human Intent locator 1件、Block authority window 9件、Governed Record retention policy 9件が表示されます。plannerのexit code `0`は案内の生成成功であり、placeholder完了や承認ではありません。詳しくは[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)を参照してください。
 
 ## 4. review対象のbytesを固定する
 

@@ -45,6 +45,16 @@ initializerはpack IDを再束縛し、manifest、9 Blocks、3 MOCs、9 Records�
 
 `READY_FOR_GOVERNED_REVIEW`はadoption ready、runtime ready、approved、promotedを意味しません。reportの`claims`は常にfalseで、`public_beta`は`NO_GO_UNPUBLISHED`です。
 
+## Human-readable guided view
+
+exact itemを一件ずつ読む前に現在地と優先順を把握したい場合は、同じcheckerを内部で使うread-only plannerを実行します。
+
+```powershell
+python tools\plan_company_pack_next_steps.py work\my-company --format markdown
+```
+
+plannerは元reportの全itemをcategory別groupへlosslessに集計し、現在stage、理想の7段階、recommended next commandを表示します。default JSONのschemaは[`company-pack-next-steps.schema.json`](../schemas/company-pack-next-steps.schema.json)です。plannerのexit code `0`はplan生成成功を表すため、`CUSTOMIZATION_REQUIRED`でも`0`です。詳細は[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)を参照してください。
+
 ## Ideal use
 
 1. initializerで新しい`draft`作業copyを作る。
