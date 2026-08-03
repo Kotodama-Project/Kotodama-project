@@ -11,6 +11,25 @@
 | [Runtime profiles](company/README.md#runtime-profile-contracts) | Compose minimum / Proxmox segmentedの導入・検証・復旧境界 | sanitized lifecycle contracts and runbooks available |
 | [Runtime candidates](../runtime/README.md) | profileをsecret-freeな実行候補へ接続する | Compose data-plane skeleton available; live receipt absent |
 
+## 使う順番
+
+理想のCompany OSでは、次の順番で「会社の境界」から「検証できる仕事」へ
+組み立てます。各層は前の層を置き換えず、同じ証拠鎖へ接続します。
+
+| 層 | 理想で決めること | 現在の公開Previewでできること |
+|---|---|---|
+| Company Template | Vision、Boundary、owner、profile、採用する能力 | `examples/company-starter`を作業copyへ複製し、組織固有の候補へ編集 |
+| Blocks | 入力・出力、authority、拒否条件、verification、rollback | 9 Blockの設計とschema/validatorを読み、flow接続を検査 |
+| Governed Records | Block出力の必須field、canonical owner、保持・検証境界 | 9種のJSON-backed Record契約を確認し、候補bytesを検証 |
+| MOCs | 目的別の入口と読み順。新しい正本や権限は作らない | Company Operations / Public Release / Incident & Recoveryをread-onlyで辿る |
+| Runtime profile | Compose/Proxmox境界、activation、recovery、停止条件 | lifecycle runbookとsecret-freeな実行候補を読む。live runtimeは含まない |
+
+迷ったら、まずCompany Templateの境界を編集し、次に必要なBlockだけを
+選び、対応するRecordを確認し、MOCで目的に合う読み順を選びます。その後、
+ [Catalog](../docs/COMPANY-PACK-CATALOG.md)、validator、customization checker、guided planner、Review Bundleの
+順に候補を狭めます。`MATCH`やvalidator `PASS`は、Human Decision、権限付与、
+Promotion、Current Truth、runtime activation、Public Beta GOを意味しません。
+
 ## Planned catalog
 
 ```text
