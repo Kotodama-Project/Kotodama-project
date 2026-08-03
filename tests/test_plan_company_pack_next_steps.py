@@ -292,6 +292,15 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertIn("usage:", result.stderr.lower())
 
+    def test_unknown_format_is_usage_error_without_echoing_secret_like_argument(self) -> None:
+        secret_like = "sk-r38-planner-secret-value"
+        result = self.run_planner(STARTER, "--format", secret_like)
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("usage:", result.stderr.lower())
+        self.assertNotIn(secret_like, result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

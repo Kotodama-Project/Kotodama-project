@@ -280,8 +280,16 @@ def render_markdown(plan: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+class SafeArgumentParser(argparse.ArgumentParser):
+    """Reject malformed CLI input without reflecting the untrusted value."""
+
+    def error(self, _message: str) -> None:
+        self.print_usage(sys.stderr)
+        self.exit(2, f"{self.prog}: error: invalid command-line arguments\n")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = SafeArgumentParser(
         description="Summarize Company Pack current state, ideal flow, and next action."
     )
     parser.add_argument("pack_directory", type=Path)

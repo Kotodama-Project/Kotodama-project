@@ -34,7 +34,7 @@ python tools\plan_company_pack_next_steps.py work\my-company
 | `STATIC_CUSTOMIZATION` | 構造PASSだがexample placeholderが残る | 元checkerのexact itemを見ながら置換する |
 | `CANDIDATE_BINDING` | 静的placeholderは0件 | 22ファイルをreview bundleへ固定する |
 
-plannerが成功してplanを作れた場合、`CUSTOMIZATION_REQUIRED`でもexit codeは`0`です。Pack自体が不正な`INVALID_PACK`は`1`、CLI usage errorは`2`です。これはcustomization checkerのexit codeとは異なります。plannerの成功は「次の作業を安全に案内できた」という意味だけです。
+plannerが成功してplanを作れた場合、`CUSTOMIZATION_REQUIRED`でもexit codeは`0`です。Pack自体が不正な`INVALID_PACK`は`1`、CLI usage errorは`2`です。未知のformatや余分な引数は固定usageだけを返し、入力値をエラーメッセージへ反射しません。これはcustomization checkerのexit codeとは異なります。plannerの成功は「次の作業を安全に案内できた」という意味だけです。
 
 ## 分類別の見方
 
