@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicStatusRoadmapSyncTests(unittest.TestCase):
-    def test_public_status_and_roadmap_name_r74_documentation_surface(self) -> None:
+    def test_public_status_and_roadmap_name_r76_documentation_surface(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
         status_flat = " ".join(status.split())
@@ -60,6 +60,14 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
             "numeric 0/1 aliases are rejected by both schema and stdlib validator",
             status_flat,
         )
+        self.assertIn(
+            "R76 clarified the ideal/current MOC boundary",
+            status_flat,
+        )
+        self.assertIn(
+            "public starter ships exactly three navigation-only MOCs",
+            status_flat,
+        )
         self.assertIn("real Voice rotation remains unproven", status_flat)
         self.assertIn("Review Request, Review Response, and Decision Handoff", status_flat)
         self.assertIn("Public Beta access", status_flat)
@@ -71,6 +79,10 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("R68 is the latest README contract synchronization", roadmap_flat)
         self.assertIn(
             "R74 is the latest documentation synchronization for schema/validator parity",
+            roadmap_flat,
+        )
+        self.assertIn(
+            "R76 is the latest Template Guide usability synchronization",
             roadmap_flat,
         )
         self.assertIn("R62 remains the latest navigation synchronization", roadmap_flat)
@@ -90,6 +102,10 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         )
         self.assertIn(
             "[x] Resolved Compose nested boolean schema/validator parity",
+            roadmap_flat,
+        )
+        self.assertIn(
+            "[x] Template Guide ideal/future versus shipped MOC distinction",
             roadmap_flat,
         )
         self.assertIn("R58 remains the current Company Pack surface label", roadmap_flat)
