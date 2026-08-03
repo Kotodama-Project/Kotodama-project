@@ -325,6 +325,9 @@ class ProtectedSourceBindingReceiptCandidateContractTests(unittest.TestCase):
             "ref/forged-independent-result"
         )
         cases["forged independent result"] = mutated
+        mutated = copy.deepcopy(base)
+        del mutated["independent_verification_handoff"]
+        cases["missing independent verification handoff"] = mutated
 
         for name, instance in cases.items():
             with self.subTest(name=name):
@@ -385,6 +388,7 @@ class ProtectedSourceBindingReceiptCandidateContractTests(unittest.TestCase):
         )
 
     def test_independent_verification_is_required_but_not_preclaimed(self) -> None:
+        self.assertIn("independent_verification_handoff", self.schema["required"])
         handoff = self.schema["$defs"]["independent_verification_handoff"]
         self.assertEqual(handoff["properties"]["verification_result_ref"]["type"], "null")
         self.assertEqual(
