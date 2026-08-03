@@ -33,6 +33,7 @@
 - [x] Recursive private checkpoint-path verification with all signatures and supplied-store logical equivalence
 - [x] Signed checkpoint-head candidate and restore-drill reported-evidence binding with exact private report/receipt digests
 - [x] Signed checkpoint segment-transition candidate with same-policy and key-rotation boundary verification
+- [x] Deterministic new-file-only private segment-transition candidate builder with R22 round-trip verification
 
 ## Runtime profiles still requiring live evidence
 

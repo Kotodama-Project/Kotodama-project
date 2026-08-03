@@ -453,6 +453,100 @@ def allowed_signer_key_set(allowed_signers_bytes: bytes) -> set[str] | None:
     return key_digests or None
 
 
+def expected_checkpoint_policy(
+    allowed_signers_bytes: bytes, identity_bytes: bytes
+) -> dict[str, str]:
+    return {
+        "namespace": CHECKPOINT_NAMESPACE,
+        "allowed_signers_file_sha256": sha256_bytes(allowed_signers_bytes),
+        "signer_identity_sha256": sha256_bytes(identity_bytes),
+        "signer_role": "independent_reviewer",
+    }
+
+
+def validate_segment_boundary(
+    *,
+    bundle: dict[str, Any],
+    chain: list[dict[str, Any]],
+    successor: dict[str, Any],
+    prior_allowed_bytes: bytes,
+    prior_identity_bytes: bytes,
+    successor_allowed_bytes: bytes,
+    successor_identity_bytes: bytes,
+    reviewer_allowed_bytes: bytes,
+    reviewer_identity_bytes: bytes,
+    mode: object,
+) -> list[str]:
+    """Validate the shared unsigned boundary contract used by creator and verifier."""
+
+    errors: list[str] = []
+    bundle_policy = bundle.get("signature_policy_binding", {})
+    prior_policy = chain[0]["checkpoint"].get("signature_policy_binding", {})
+    successor_policy = successor.get("signature_policy_binding", {})
+    expected_prior_policy = expected_checkpoint_policy(
+        prior_allowed_bytes, prior_identity_bytes
+    )
+    expected_successor_policy = expected_checkpoint_policy(
+        successor_allowed_bytes, successor_identity_bytes
+    )
+    if bundle_policy != expected_prior_policy or prior_policy != expected_prior_policy:
+        errors.append("prior signer policy mismatch")
+    if successor_policy != expected_successor_policy:
+        errors.append("successor signer policy mismatch")
+
+    prior_key_set = allowed_signer_key_set(prior_allowed_bytes)
+    successor_key_set = allowed_signer_key_set(successor_allowed_bytes)
+    if prior_key_set is None:
+        errors.append("prior allowed-signers key set is invalid")
+    if successor_key_set is None:
+        errors.append("successor allowed-signers key set is invalid")
+    if mode == "KEY_ROTATION_SEGMENT":
+        if (
+            prior_policy == successor_policy
+            or sha256_bytes(prior_allowed_bytes)
+            == sha256_bytes(successor_allowed_bytes)
+            or prior_key_set is None
+            or successor_key_set is None
+            or prior_key_set == successor_key_set
+        ):
+            errors.append("key rotation mode requires a changed signer key set")
+    elif mode == "SAME_POLICY_SEGMENT" and prior_policy != successor_policy:
+        errors.append("same-policy mode requires an unchanged signer policy")
+
+    reviewer_hashes = {
+        sha256_bytes(reviewer_allowed_bytes),
+        sha256_bytes(reviewer_identity_bytes),
+    }
+    if reviewer_hashes & {
+        sha256_bytes(prior_allowed_bytes),
+        sha256_bytes(prior_identity_bytes),
+        sha256_bytes(successor_allowed_bytes),
+        sha256_bytes(successor_identity_bytes),
+    }:
+        errors.append("transition reviewer hashes must be structurally distinct")
+
+    head = chain[-1]
+    head_checkpoint = head["checkpoint"]
+    parent = successor.get("parent_binding", {})
+    if (
+        parent.get("mode") != "SUCCESSOR"
+        or parent.get("parent_checkpoint_file_sha256")
+        != head["checkpoint_file_sha256"]
+        or parent.get("parent_checkpoint_chain_sha256")
+        != head_checkpoint.get("checkpoint_chain_sha256")
+    ):
+        errors.append("successor parent binding does not match prior segment head")
+    prior_store = head_checkpoint.get("store_binding", {})
+    successor_store = successor.get("store_binding", {})
+    if prior_store.get("store_id_sha256") != successor_store.get("store_id_sha256"):
+        errors.append("store identity changed across segment boundary")
+    prior_reservations = set(prior_store.get("reservation_sha256s", []))
+    successor_reservations = set(successor_store.get("reservation_sha256s", []))
+    if not prior_reservations.issubset(successor_reservations):
+        errors.append("successor is not an append-only extension of prior segment")
+    return sorted(set(errors))
+
+
 def report(
     status: str,
     errors: list[str],
@@ -643,78 +737,28 @@ def main(argv: list[str]) -> int:
     if isinstance(transition_id, str) and SHA256_HEX.fullmatch(transition_id):
         bindings["transition_id_sha256"] = transition_id
 
-    errors = list(validation_errors)
-    bundle_policy = bundle.get("signature_policy_binding", {})
-    prior_policy = chain[0]["checkpoint"].get("signature_policy_binding", {})
-    successor_policy = successor.get("signature_policy_binding", {})
-    expected_prior_policy = {
-        "namespace": CHECKPOINT_NAMESPACE,
-        "allowed_signers_file_sha256": sha256_bytes(prior_allowed_bytes),
-        "signer_identity_sha256": sha256_bytes(prior_identity_bytes),
-        "signer_role": "independent_reviewer",
-    }
-    expected_successor_policy = {
-        "namespace": CHECKPOINT_NAMESPACE,
-        "allowed_signers_file_sha256": sha256_bytes(successor_allowed_bytes),
-        "signer_identity_sha256": sha256_bytes(successor_identity_bytes),
-        "signer_role": "independent_reviewer",
-    }
-    if bundle_policy != expected_prior_policy or prior_policy != expected_prior_policy:
-        errors.append("prior signer policy mismatch")
-    if successor_policy != expected_successor_policy:
-        errors.append("successor signer policy mismatch")
-
     mode = transition.get("transition_mode") if isinstance(transition, dict) else None
-    prior_key_set = allowed_signer_key_set(prior_allowed_bytes)
-    successor_key_set = allowed_signer_key_set(successor_allowed_bytes)
-    if prior_key_set is None:
-        errors.append("prior allowed-signers key set is invalid")
-    if successor_key_set is None:
-        errors.append("successor allowed-signers key set is invalid")
-    if mode == "KEY_ROTATION_SEGMENT":
-        if (
-            prior_policy == successor_policy
-            or sha256_bytes(prior_allowed_bytes)
-            == sha256_bytes(successor_allowed_bytes)
-            or prior_key_set is None
-            or successor_key_set is None
-            or prior_key_set == successor_key_set
-        ):
-            errors.append("key rotation mode requires a changed signer key set")
-    elif mode == "SAME_POLICY_SEGMENT" and prior_policy != successor_policy:
-        errors.append("same-policy mode requires an unchanged signer policy")
-
-    reviewer_hashes = {
-        sha256_bytes(reviewer_allowed_bytes),
-        sha256_bytes(reviewer_identity_bytes),
-    }
-    if reviewer_hashes & {
-        sha256_bytes(prior_allowed_bytes),
-        sha256_bytes(prior_identity_bytes),
-        sha256_bytes(successor_allowed_bytes),
-        sha256_bytes(successor_identity_bytes),
-    }:
-        errors.append("transition reviewer hashes must be structurally distinct")
-
     head = chain[-1]
     head_checkpoint = head["checkpoint"]
-    parent = successor.get("parent_binding", {})
-    if (
-        parent.get("mode") != "SUCCESSOR"
-        or parent.get("parent_checkpoint_file_sha256")
-        != head["checkpoint_file_sha256"]
-        or parent.get("parent_checkpoint_chain_sha256")
-        != head_checkpoint.get("checkpoint_chain_sha256")
-    ):
-        errors.append("successor parent binding does not match prior segment head")
     prior_store = head_checkpoint.get("store_binding", {})
     successor_store = successor.get("store_binding", {})
-    if prior_store.get("store_id_sha256") != successor_store.get("store_id_sha256"):
-        errors.append("store identity changed across segment boundary")
     prior_reservations = set(prior_store.get("reservation_sha256s", []))
     successor_reservations = set(successor_store.get("reservation_sha256s", []))
-    if not prior_reservations.issubset(successor_reservations):
-        errors.append("successor is not an append-only extension of prior segment")
+    errors = list(validation_errors)
+    errors.extend(
+        validate_segment_boundary(
+            bundle=bundle,
+            chain=chain,
+            successor=successor,
+            prior_allowed_bytes=prior_allowed_bytes,
+            prior_identity_bytes=prior_identity_bytes,
+            successor_allowed_bytes=successor_allowed_bytes,
+            successor_identity_bytes=successor_identity_bytes,
+            reviewer_allowed_bytes=reviewer_allowed_bytes,
+            reviewer_identity_bytes=reviewer_identity_bytes,
+            mode=mode,
+        )
+    )
 
     with hold_store_snapshot(Path(argv[9])) as (store_binding, store_errors):
         if store_errors or store_binding is None:

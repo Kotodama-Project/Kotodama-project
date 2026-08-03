@@ -23,6 +23,8 @@ transition candidateは、次をexact digestまたはclosed fieldで束縛しま
 
 populated transition、bundle、checkpoint、SQLite store、allowed-signers、identity、private key、signatureをpublic repository、Issue、log、test corpusへ置かないでください。Work Orderから渡すexpected digestと評価時刻も、対象candidateへ束縛してください。
 
+R23以降は、digestとbindingを手作業で転記せず、[Checkpoint Segment Transition Candidate Builder](ATTESTATION-NONCE-STORE-CHECKPOINT-SEGMENT-TRANSITION-CREATION.md)で新規candidate fileを作成できます。builderはdeterministic・new-file-onlyで、source structure、digest pin、parent/store/policy/mode/windowを検査しますが、署名作成やsignature verificationは行いません。成功reportのcandidate digestを照合した後、以下の署名とR22 verificationを別工程として実行します。
+
 ```powershell
 ssh-keygen -Y sign -f <private-transition-reviewer-key> `
   -n kotodama-nonce-store-checkpoint-segment-transition `

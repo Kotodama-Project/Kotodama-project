@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/attestation-nonce-store-checkpoint-segment-transition-creation.schema.json",
+  "title": "Private Attestation Nonce Store Checkpoint Segment Transition Creation Report",
+  "$comment": "This report contains safe status and digests only. It does not prove either detached signature, protected execution, key rotation, authority, promotion, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "version", "status", "errors", "transition_file_sha256", "claims", "public_beta"],
+  "properties": {
+    "kind": {"const": "attestation_nonce_store_checkpoint_segment_transition_creation"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["SEGMENT_TRANSITION_CANDIDATE_CREATED", "INVALID"]},
+    "errors": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 256}
+    },
+    "transition_file_sha256": {
+      "oneOf": [
+        {"$ref": "#/$defs/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["private_transition_candidate_created", "source_bindings_structurally_validated", "transition_signature_created", "transition_signature_verified", "successor_checkpoint_signature_verified", "actual_key_rotation_executed", "old_key_revocation_verified", "protected_runner_execution_verified", "promotion_verified", "current_truth_changed", "final_human_go", "public_beta_go"],
+      "properties": {
+        "private_transition_candidate_created": {"type": "boolean"},
+        "source_bindings_structurally_validated": {"type": "boolean"},
+        "transition_signature_created": {"const": false},
+        "transition_signature_verified": {"const": false},
+        "successor_checkpoint_signature_verified": {"const": false},
+        "actual_key_rotation_executed": {"const": false},
+        "old_key_revocation_verified": {"const": false},
+        "protected_runner_execution_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "SEGMENT_TRANSITION_CANDIDATE_CREATED"}}},
+      "then": {
+        "properties": {
+          "errors": {"maxItems": 0},
+          "transition_file_sha256": {"$ref": "#/$defs/sha256"},
+          "claims": {
+            "properties": {
+              "private_transition_candidate_created": {"const": true},
+              "source_bindings_structurally_validated": {"const": true}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "errors": {"minItems": 1},
+          "transition_file_sha256": {"type": "null"},
+          "claims": {
+            "properties": {
+              "private_transition_candidate_created": {"const": false},
+              "source_bindings_structurally_validated": {"const": false}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

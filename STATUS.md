@@ -17,6 +17,7 @@ Updated: 2026-08-03
 | Recursive nonce-store checkpoint chain | Published protected-local candidate; supplied path/store equivalence only |
 | Checkpoint-head anchor / restore-drill evidence | Published protected-local contract; signed reported binding only |
 | Checkpoint segment transition / key rotation | Published protected-local contract; one presented boundary only |
+| Segment transition candidate builder | Published protected-local CLI; deterministic new-file creation only, unsigned and unverified |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -51,6 +52,8 @@ recursive checkpoint-chain verifierは、最大1,024 checkpointをself-contained
 checkpoint-head anchor verifierは、独立pinされたanchor/bundle bytes、bundle内のhead/store/count、短時間window、reviewer policy、OpenSSH署名を束縛します。restore-drill verifierは、成功shapeを持つanchor/source/restored report、distinctなreport/receipt digest、同一checkpoint state、全reported check、runner/reviewer identity hashの不一致を一つの署名済みcandidateへ束縛します。これらはunsigned reportやopaque receipt本文の真正性を再実行せず、external anchorのcanonical authority、trusted clock、complete history、branch不存在、actual backup/restore、physical lineage、protected runner、人物分離、Promotion、Current Truth、Public Beta GOは未証明です。
 
 checkpoint segment-transition verifierは、独立pinされたR20 bundle、prior head、1つのsuccessor checkpointとdetached signature、supplied store、旧/new signer policyとOpenSSH key-blob集合、distinct reviewer policy、最大900秒window、pinned `ssh-keygen` exact bytesを検証します。key-rotationとsame-policyのmodeを分離し、検証したtransition/successor signature bytesのdigestをreportへ残しますが、検証範囲は提示された1境界だけです。canonical anchor authority、trusted clock、complete history、parallel branch不存在、旧鍵失効、鍵侵害不存在、segmentation policy採用、actual store continuity、backup/restore、protected runner、人物分離、Promotion、Current Truth、Public Beta GOは未証明です。
+
+segment transition candidate builderは、prior bundleとsuccessor checkpoint/signatureのexpected digest、旧/new/reviewer policy、mode、ID、最大900秒windowからR22 candidateをdeterministicに新規作成します。strict JSON、R20/R19 structure、immediate parent、store ID、append-only reservation、modeごとのOpenSSH key-blob集合、reviewer hash衝突を署名前に検査し、existing outputを上書きしません。creation reportはsource bindingの構造検査だけを示し、transition/successor signature validity、実key rotation、旧鍵失効、protected execution、人物分離、Promotion、Current Truth、Final Human GO、Public Beta GOを示しません。
 
 ## Current boundary
 
