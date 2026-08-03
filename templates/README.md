@@ -34,6 +34,14 @@ templates/
 
 詳しい考え方は[テンプレート利用ガイド](../docs/TEMPLATE-GUIDE.md)を参照してください。
 
+## 理想と現在
+
+理想のCompany OSでは、Company Templateを複製してHuman Intent、Block、
+Governed Record、MOC、runtime profile、adapterを組織の境界へ合わせます。
+現在の公開面では、Company starterを作業copyへ複製し、Catalog・validator・
+customization checker・guided plannerで構造と残件を確認するところまでを
+read-only/candidate-onlyで試せます。
+
 実際にvalidatorへ通せるJSON packは[Company starter example](../examples/company-starter/README.md)にあります。上記Markdown例そのものをvalidator済みと読み替えないでください。
 
 MOCの入口例:
@@ -44,4 +52,11 @@ MOCの入口例:
 
 3つともnavigation-onlyです。別のSSOT、実行権限、公開GOを作りません。
 
-最短の導入手順は[Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)にあります。`tools/create_company_pack.py`を使うと、元exampleと既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして検証できます。3つのoptionをall-or-noneで指定する[guided initializer](../docs/GUIDED-COMPANY-PACK-INITIALIZATION.md)は、19静的fieldを手編集せずに閉じます。続く[`check_company_pack_customization.py`](../tools/check_company_pack_customization.py)は、placeholder置換、governed review、別途必要なevidenceを混同せず列挙します。[Public Preview Self-check](../docs/PUBLIC-PREVIEW-SELF-CHECK.md)はvalidator、Catalog、customization、false-claim境界を一つのread-only結果へまとめます。[guided planner](../docs/COMPANY-PACK-NEXT-STEPS.md)は同じreportを現在地・理想flow・分類別件数・次コマンドへ集約します。placeholderを閉じた候補は[`build_company_pack_review_bundle.py`](../tools/build_company_pack_review_bundle.py)でexact SHA-256 / byte sizeへ固定し、[`verify_company_pack_review_bundle.py`](../tools/verify_company_pack_review_bundle.py)で再照合できますが、MATCH自体はapprovalではありません。
+最短の導入手順は[Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)にあります。`tools/create_company_pack.py`を使うと、元exampleと既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして検証できます。3つのoptionをall-or-noneで指定する[guided initializer](../docs/GUIDED-COMPANY-PACK-INITIALIZATION.md)は、公開starterの19静的fieldを手編集せずに閉じます。続く[`check_company_pack_customization.py`](../tools/check_company_pack_customization.py)は、placeholder置換、governed review、別途必要なevidenceを混同せず列挙します。公開starterの`19/46/5`は例示値であり、別Packではcheckerとsaved reportの実数を使います。[Public Preview Self-check](../docs/PUBLIC-PREVIEW-SELF-CHECK.md)はvalidator、Catalog、customization、false-claim境界を一つのread-only結果へまとめます。[guided planner](../docs/COMPANY-PACK-NEXT-STEPS.md)は同じreportを現在地・理想flow・分類別件数・次コマンドへ集約します。placeholderを閉じた候補は[`build_company_pack_review_bundle.py`](../tools/build_company_pack_review_bundle.py)でexact SHA-256 / byte sizeへ固定し、[`verify_company_pack_review_bundle.py`](../tools/verify_company_pack_review_bundle.py)で再照合できますが、MATCH自体はapprovalではありません。
+
+保存したbundleから先は、[Review Request](../docs/REVIEW-REQUEST.md) →
+[Review Response](../docs/REVIEW-RESPONSE.md) →
+[Decision Handoff](../docs/REVIEW-DECISION-HANDOFF.md)の順で、Pack固有の
+件数を再入力せずcandidateへ束縛できます。これらはレビューの入力形と
+readbackを整える契約であり、Human Decision、Promotion、Current Truth、
+runtime、Public Beta GOを生成しません。

@@ -22,6 +22,13 @@ authority: navigation_only
 
 機械可読例は[`incident-recovery.json`](../../examples/company-starter/mocs/incident-recovery.json)です。現在は既存Company Blockへ辿るnavigation projectionだけで、専用Incident Record、monitor、production recovery E2Eは未実装です。
 
+## Current evidence path
+
+停止・復旧候補のbytesは[Review Workflow](../../docs/REVIEW-WORKFLOW.md)と
+[Decision Handoff](../../docs/REVIEW-DECISION-HANDOFF.md)でread-onlyに再照合
+できます。これはincident runtime、削除、復旧済みCurrent Truth、または
+Public Beta GOのreceiptではありません。
+
 ## Add your organization links
 
 - Incident record: `<INCIDENT_REF>`

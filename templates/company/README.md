@@ -33,9 +33,16 @@ company/
 6. stop、replay、rollback、restoreを検証する。
 7. MOCを作り、人間が現在状態とreceiptへ到達できるようにする。
 
+理想では、この順序をCompany Templateのcanonical flowとして組織の
+Human Intent、正本owner、runtime profileへ合わせます。現在の公開starterで
+できるのは、構造を作業copyへ複製し、synthetic/local候補をvalidatorと
+review bundleへ通すところまでです。review request、response、decision
+handoffは保存済みcandidateを再照合するread-only後段で、実行権限や承認を
+追加しません。
+
 ## Current status
 
-Company governanceのJSON starterと、runtime profileのplanning/evidence contractを公開しています。上記package全体、実service installer、live deployment receiptはまだ実装・公開されていません。
+Company governanceのJSON starterと、runtime profileのplanning/evidence contractを公開しています。上記package全体、実service installer、live deployment receiptはまだ実装・公開されていません。Company Packのreview chainは[Template Guide](../../docs/TEMPLATE-GUIDE.md)、[Review Workflow](../../docs/REVIEW-WORKFLOW.md)、[Review Request](../../docs/REVIEW-REQUEST.md)、[Review Response](../../docs/REVIEW-RESPONSE.md)、[Decision Handoff](../../docs/REVIEW-DECISION-HANDOFF.md)で確認できます。
 
 ## Runtime profile contracts
 

@@ -22,6 +22,14 @@ authority: navigation_only
 
 機械可読例は[`public-release.json`](../../examples/company-starter/mocs/public-release.json)です。既存Blockの順序を保った部分列だけを参照し、独立したrelease SSOTを作りません。validatorのPASSも、実公開やFinal Human GOを意味しません。
 
+## Current read-only review path
+
+公開starterの例では、review bundleから[Review Request](../../docs/REVIEW-REQUEST.md)、
+[Review Response](../../docs/REVIEW-RESPONSE.md)、[Decision Handoff](../../docs/REVIEW-DECISION-HANDOFF.md)
+へ進みます。`46/5`などの件数はstarter例で、別Packはsaved reportの実数を使います。
+このMOCは公開を実行せず、Decision、authority、Promotion、Current Truth、Public
+Beta GOを生成しません。
+
 ## Add your organization links
 
 - Candidate revision: `<CANDIDATE_REVISION_REF>`

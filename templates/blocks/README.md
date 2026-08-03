@@ -35,3 +35,12 @@ Blockを単独で読んだときに、次の質問へ答えられるようにし
 - [`change-execution.json`](../../examples/company-starter/blocks/change-execution.json): Work OrderとGrantが一致するときだけChange Candidateを生成
 - [`promotion-gate.json`](../../examples/company-starter/blocks/promotion-gate.json): receipt群をPromotion Candidateへ集約
 - [`promotion-decision.json`](../../examples/company-starter/blocks/promotion-decision.json): 人間の判断証拠を記録するがPromotion自体は実行しない
+
+## 現在のstarterと後続review
+
+公開starterのBlockは、実行runtimeではなく入力・出力・authority・拒否条件を
+検証する契約です。Block出力をexact bytesへ固定した後は、[Review Request](../../docs/REVIEW-REQUEST.md)、
+[Review Response](../../docs/REVIEW-RESPONSE.md)、[Decision Handoff](../../docs/REVIEW-DECISION-HANDOFF.md)
+へ進めます。starterの`19/46/5`は例示値で、別Packでは保存済みreportとchainの
+実数を使います。いずれもHuman approval、Promotion、Current Truth、runtime、
+Public Beta GOを作りません。

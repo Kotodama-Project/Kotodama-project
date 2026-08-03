@@ -38,6 +38,12 @@ Source Record
 
 公開validatorは、Recordの必須field、snake_case、作成roleと検証roleの分離、retention参照、自己承認/自己Promotion禁止、および全Block出力との一対一対応を検査します。サンプルは値の入った本番Recordではなく、`required_fields`を示すテンプレートです。
 
+Recordを実際のcandidate chainへ渡すときは、まずreview bundleでBlock・Record・
+MOCのbytesを固定し、[Review Request](../../docs/REVIEW-REQUEST.md)、[Review Response](../../docs/REVIEW-RESPONSE.md)、
+[Decision Handoff](../../docs/REVIEW-DECISION-HANDOFF.md)で保存済み件数と参照を
+再照合します。starterの`19/46/5`は公開例であり、Recordを省略・追加したPackの
+件数を固定しません。
+
 `schemas/record.schema.json`はportableな構造確認用です。JSON Schema単体ではrole間の値比較やpack全体の対応関係を表現しきれないため、公開前の安全判定には`tools/validate_template_pack.py`のPASSが必須です。
 
 ## まだ証明しないこと

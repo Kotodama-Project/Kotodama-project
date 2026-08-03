@@ -23,6 +23,17 @@ authority: navigation_only
 - [Blocks](../blocks/README.md)
 - [Work Order Block example](../blocks/work-order-block.md)
 
+## Review and readback path
+
+- [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)
+- [Review Workflow](../../docs/REVIEW-WORKFLOW.md)
+- [Review Request](../../docs/REVIEW-REQUEST.md)
+- [Review Response](../../docs/REVIEW-RESPONSE.md)
+- [Decision Handoff](../../docs/REVIEW-DECISION-HANDOFF.md)
+
+この後段もnavigation-onlyです。MOCがreviewer、approval、Promotion、Current
+Truthを自動的に作ることはありません。
+
 ## Add your organization links
 
 - Human Intent: `<HUMAN_INTENT_REF>`
