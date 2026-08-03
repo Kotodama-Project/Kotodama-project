@@ -133,6 +133,7 @@
           ]
         },
         "reviewer_note": {
+          "description": "Structural length/required-note contract only. The verifier applies additional non-exhaustive high-confidence secret/private-path checks; schema validity and verifier success do not attest that a note is safe to disclose.",
           "oneOf": [
             {"type": "null"},
             {"type": "string", "maxLength": 2000}

@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import os
 import subprocess
@@ -24,6 +25,23 @@ RESPONSE_VERIFIER = ROOT / "tools" / "verify_company_pack_review_response.py"
 
 
 class CompanyPackReviewResponseCliTests(unittest.TestCase):
+    def test_input_reader_never_requests_more_than_limit_plus_one(self) -> None:
+        class TrackingBytesIO(io.BytesIO):
+            def __init__(self, value: bytes) -> None:
+                super().__init__(value)
+                self.read_sizes: list[int] = []
+
+            def read(self, size: int = -1) -> bytes:
+                self.read_sizes.append(size)
+                return super().read(size)
+
+        stream = TrackingBytesIO(b"{}")
+        with mock.patch.object(Path, "open", return_value=stream):
+            result = response_builder.read_limited_bytes(Path("ignored.json"))
+
+        self.assertEqual(result, b"{}")
+        self.assertEqual(stream.read_sizes, [response_builder.MAX_JSON_BYTES + 1])
+
     def create_saved_request(self, parent: Path) -> tuple[Path, dict, bytes]:
         pack = parent / "review-response-pack"
         creation = subprocess.run(
@@ -231,11 +249,44 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             wrong_count["review_request"]["item_count"] = 45
             cases.append(("wrong count", json.dumps(wrong_count).encode("utf-8")))
 
+            float_count = json.loads(json.dumps(request))
+            float_count["review_request"]["item_count"] = 46.0
+            cases.append(("float item count", json.dumps(float_count).encode("utf-8")))
+
+            float_binding_count = json.loads(json.dumps(request))
+            float_binding_count["candidate_binding"]["binding_count"] = 22.0
+            cases.append(
+                ("float binding count", json.dumps(float_binding_count).encode("utf-8"))
+            )
+
+            boolean_zero_count = json.loads(json.dumps(request))
+            boolean_zero_count["source_checks"]["customization"]["counts"][
+                "replacement_required"
+            ] = False
+            cases.append(
+                ("boolean zero count", json.dumps(boolean_zero_count).encode("utf-8"))
+            )
+
             duplicate_item = json.loads(json.dumps(request))
             duplicate_item["review_request"]["items"][1]["id"] = duplicate_item[
                 "review_request"
             ]["items"][0]["id"]
             cases.append(("duplicate item", json.dumps(duplicate_item).encode("utf-8")))
+
+            cross_category_path = json.loads(json.dumps(request))
+            cross_category_path["unresolved_evidence"]["items"][0]["path"] = (
+                cross_category_path["review_request"]["items"][0]["path"]
+            )
+            cases.append(
+                (
+                    "cross-category duplicate path",
+                    json.dumps(cross_category_path).encode("utf-8"),
+                )
+            )
+
+            surrogate_text = json.loads(json.dumps(request))
+            surrogate_text["review_request"]["items"][0]["reason"] = "bad-\ud800-text"
+            cases.append(("surrogate text", json.dumps(surrogate_text).encode("utf-8")))
 
             raised_claim = json.loads(json.dumps(request))
             raised_claim["claims"]["human_approval_verified"] = True
@@ -279,8 +330,8 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             root = Path(temporary)
             request_path, _request, request_bytes = self.create_saved_request(root)
             with mock.patch.object(
-                Path,
-                "read_bytes",
+                response_builder,
+                "read_limited_bytes",
                 side_effect=[request_bytes, request_bytes + b" "],
             ):
                 response = response_builder.build_response_candidate(request_path)
@@ -327,6 +378,21 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             )
             binding_cases.append(("reordered items", reordered))
 
+            missing_item = self.completed_response(request_path)
+            missing_item["review_response"]["items"].pop()
+            binding_cases.append(("missing item", missing_item))
+
+            duplicate_response_item = self.completed_response(request_path)
+            duplicate_response_item["review_response"]["items"][1] = dict(
+                duplicate_response_item["review_response"]["items"][0]
+            )
+            binding_cases.append(("duplicate item", duplicate_response_item))
+
+            for field in ("category", "path", "reason"):
+                tampered_field = self.completed_response(request_path)
+                tampered_field["review_response"]["items"][0][field] = sentinel
+                binding_cases.append((f"tampered {field}", tampered_field))
+
             changed_evidence = self.completed_response(request_path)
             changed_evidence["unresolved_evidence"]["items"] = []
             changed_evidence["unresolved_evidence"]["item_count"] = 0
@@ -360,6 +426,38 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             unknown["unknown"] = sentinel
             cases.append(("unknown field", json.dumps(unknown).encode("utf-8")))
 
+            nested_unknown = self.completed_response(request_path)
+            nested_unknown["review_response"]["unknown"] = sentinel
+            cases.append(
+                ("nested unknown field", json.dumps(nested_unknown).encode("utf-8"))
+            )
+
+            numeric_false_claim = self.completed_response(request_path)
+            numeric_false_claim["claims"]["human_approval_verified"] = 0
+            cases.append(
+                ("numeric false claim", json.dumps(numeric_false_claim).encode("utf-8"))
+            )
+
+            float_request_binding = self.completed_response(request_path)
+            float_request_binding["request_binding"]["bytes"] = float(
+                float_request_binding["request_binding"]["bytes"]
+            )
+            cases.append(
+                (
+                    "float request binding",
+                    json.dumps(float_request_binding).encode("utf-8"),
+                )
+            )
+
+            float_candidate_binding = self.completed_response(request_path)
+            float_candidate_binding["candidate_binding"]["binding_count"] = 22.0
+            cases.append(
+                (
+                    "float candidate binding",
+                    json.dumps(float_candidate_binding).encode("utf-8"),
+                )
+            )
+
             secret_note = self.completed_response(request_path)
             secret_note["review_response"]["items"][0]["reviewer_note"] = (
                 "sk-abcdefghijklmnopqrstuvwxyz123456"
@@ -371,6 +469,25 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 "C:\\Users\\private\\review.txt"
             )
             cases.append(("local path note", json.dumps(local_path_note).encode("utf-8")))
+
+            forward_slash_local_path_note = self.completed_response(request_path)
+            forward_slash_local_path_note["review_response"]["items"][0][
+                "reviewer_note"
+            ] = "C:/Users/private/review.txt"
+            cases.append(
+                (
+                    "forward slash local path note",
+                    json.dumps(forward_slash_local_path_note).encode("utf-8"),
+                )
+            )
+
+            unc_local_path_note = self.completed_response(request_path)
+            unc_local_path_note["review_response"]["items"][0]["reviewer_note"] = (
+                "\\\\private-host\\review-share\\review.txt"
+            )
+            cases.append(
+                ("UNC local path note", json.dumps(unc_local_path_note).encode("utf-8"))
+            )
 
             duplicate_key = (
                 '{"kind":"company_pack_review_response","kind":"'
@@ -411,9 +528,8 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             cases = [
                 (
                     "late request drift",
+                    [request_bytes, request_bytes],
                     [
-                        request_bytes,
-                        request_bytes,
                         response_bytes,
                         response_bytes,
                         request_bytes + b" ",
@@ -422,9 +538,8 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 ),
                 (
                     "late response drift",
+                    [request_bytes, request_bytes],
                     [
-                        request_bytes,
-                        request_bytes,
                         response_bytes,
                         response_bytes,
                         request_bytes,
@@ -432,9 +547,17 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                     ],
                 ),
             ]
-            for label, reads in cases:
+            for label, request_reads, response_reads in cases:
                 with self.subTest(label=label):
-                    with mock.patch.object(Path, "read_bytes", side_effect=reads):
+                    with mock.patch.object(
+                        response_builder,
+                        "read_limited_bytes",
+                        side_effect=request_reads,
+                    ), mock.patch.object(
+                        response_verifier,
+                        "read_limited_bytes",
+                        side_effect=response_reads,
+                    ):
                         report = response_verifier.verify_response(
                             request_path, response_path
                         )

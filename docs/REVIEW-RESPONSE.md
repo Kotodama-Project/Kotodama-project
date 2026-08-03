@@ -105,6 +105,8 @@ ReportJson=$(python3 tools/verify_company_pack_review_response.py \
 
 builder/verifierは1 MiBを超えるfile、深すぎるJSON、duplicate key、非finite値、unknown/missing field、unsafe/重複item、falseでないclaim、request/response byte driftをfail closedで拒否します。verifierはunknown outcome、欠落/追加/reorder/tamper、`request_changes`/`reject`のnote欠落、高信頼secretらしいnote、private absolute pathらしいnoteも拒否します。
 
+schemaのnote規則は型・長さ・条件付き必須だけを表す構造契約です。verifierのsecret/private-path検査は追加の保守的denylistであり、完全な情報漏えい検出器ではありません。そのためschema validation PASSや`ITEM_RESPONSES_MATCH_REQUEST`だけではnoteの公開安全性を証明しません。authorized reviewerとDecision作成者は、個人情報、private locator、Human Intent本文、denylist未検出のcredentialを含まないことを別途確認します。
+
 拒否reportはPack ID、binding、item、note、入力path、hostile値、OS exception本文を返しません。複数回readは通常のlocal filesystemでのdrift検知であり、敵対的processに対するatomic snapshotやsignatureではありません。
 
 ## Before the Human Decision
