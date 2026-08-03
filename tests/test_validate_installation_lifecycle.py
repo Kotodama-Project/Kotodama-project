@@ -77,6 +77,21 @@ class InstallationLifecycleValidatorCliTests(unittest.TestCase):
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         self.assertTrue(list(Draft202012Validator(schema).iter_errors(document)))
 
+    def test_boolean_fixed_fields_reject_integer_aliases_in_schema_and_validator(self) -> None:
+        document = self.load_example("compose-minimum.json")
+        document["scope"]["live_mutation_allowed"] = 0
+
+        result = self.run_document(document)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "scope.live_mutation_allowed must be false",
+            json.loads(result.stdout)["errors"],
+        )
+
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        self.assertTrue(list(Draft202012Validator(schema).iter_errors(document)))
+
     def test_material_phases_require_work_orders_and_rollback_binding(self) -> None:
         document = self.load_example("compose-minimum.json")
         apply_phase = document["phases"][2]

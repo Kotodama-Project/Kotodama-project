@@ -274,7 +274,12 @@ def validate_fixed_object(
     require_fields(value, allowed, field, errors)
     reject_unknown(value, allowed, field, errors)
     for key, expected_value in expected.items():
-        if value.get(key) != expected_value:
+        actual_value = value.get(key)
+        if isinstance(expected_value, bool):
+            matches = type(actual_value) is bool and actual_value is expected_value
+        else:
+            matches = actual_value == expected_value
+        if not matches:
             errors.append(f"{field}.{key} must be {json.dumps(expected_value, separators=(',', ':'))}")
     return value
 
