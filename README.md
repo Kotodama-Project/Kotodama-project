@@ -52,7 +52,7 @@ Kotodama は、Discord をはじめとする会話や音声を入力として、
 
 ## Try the starter
 
-Python以外の追加dependencyは不要です。
+starterと公開CLIの実行にはPython以外の追加dependencyは不要です。full test suiteは、実Draft 2020-12 schema validatorを動かすtest-only dependencyを先に導入します。
 
 ```powershell
 New-Item -ItemType Directory -Force work | Out-Null
@@ -63,6 +63,7 @@ python tools/validate_template_pack.py examples/company-starter
 python tools/validate_installation_lifecycle.py examples/installation-lifecycle/compose-minimum.json
 python tools/validate_installation_lifecycle.py examples/installation-lifecycle/proxmox-segmented.json
 python tools/validate_compose_minimum_skeleton.py runtime/compose-minimum
+python -m pip install -r requirements-test.txt
 python -m unittest discover -s tests -v
 ```
 

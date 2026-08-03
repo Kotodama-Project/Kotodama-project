@@ -13,7 +13,7 @@ R28のreview handoffを、既存のgeneric Decision Recordへ進める前に必�
 
 ## Current implementation
 
-現在公開しているのは[`company-pack-decision-record-candidate.schema.json`](../schemas/company-pack-decision-record-candidate.schema.json)だけです。手入力candidateの形を閉じますが、source fileを読みません。builder、verifier、署名、identity provider、trusted clock、protected store、real Intent Candidate instance schemaはありません。
+現在公開しているのは[`company-pack-decision-record-candidate.schema.json`](../schemas/company-pack-decision-record-candidate.schema.json)だけです。手入力candidateの形を閉じますが、source fileを読みません。builder、verifier、署名、identity provider、trusted clock、protected store、real Intent Candidate instance schemaはありません。test suiteはtest-onlyの`jsonschema[format-nongpl]` Draft 2020-12 validatorとformat checkerでvalid/invalid instanceを実検証しますが、schema consumerもdate-time format assertionを有効にする必要があります。
 
 したがってschema validationが成功しても、次はすべて`NOT_VERIFIED`です。
 
@@ -57,7 +57,7 @@ expected status文字列をcandidateへ書くだけでは、実fileがその結�
 - `decision_maker_evidence`: opaque identity/role/authority refs。
 - `scope`: in-scopeとout-of-scopeを分離。
 - `reason`: 全体Decision候補の理由。個別review noteではない。
-- `reviewed_at` / `decided_at`: editable時刻文字列。trusted clock proofではない。
+- `reviewed_at` / `decided_at`: RFC 3339 date-time形式のeditable時刻文字列。format妥当性はtrusted clock proofではない。
 - `proposed_effective_at`: 提案時刻だけ。`effective_at`は存在しない。
 - `expires_at`: candidate/authority/evidenceの再確認期限候補。
 - `review_trigger`: Intent/handoff digest、evidence、scope、authority/expiry、retentionの変化を固定した6条件。
