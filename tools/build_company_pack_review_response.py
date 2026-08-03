@@ -60,7 +60,7 @@ def empty_claims() -> dict[str, bool]:
         "reviewer_identity_verified": False,
         "reviewer_authority_verified": False,
         "reviewer_independence_verified": False,
-        "item_responses_structurally_verified": False,
+        "governed_review_completed": False,
         "human_approval_verified": False,
         "candidate_bound_human_decision_verified": False,
         "external_evidence_verified": False,

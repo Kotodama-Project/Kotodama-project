@@ -443,6 +443,52 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                     self.assertIsNone(report["request_binding"])
                     self.assertIsNone(report["response_binding"])
 
+    def test_response_schemas_are_closed_and_keep_authority_claims_false(self) -> None:
+        response_schema = json.loads(
+            (ROOT / "schemas" / "company-pack-review-response.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        verification_schema = json.loads(
+            (
+                ROOT
+                / "schemas"
+                / "company-pack-review-response-verification.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        for schema in (response_schema, verification_schema):
+            self.assertEqual(schema["additionalProperties"], False)
+            self.assertEqual(
+                schema["properties"]["public_beta"]["const"],
+                "NO_GO_UNPUBLISHED",
+            )
+            claims = schema["$defs"]["claims"]
+            self.assertEqual(claims["additionalProperties"], False)
+            self.assertTrue(
+                all(
+                    definition["const"] is False
+                    for definition in claims["properties"].values()
+                )
+            )
+
+        response_review = response_schema["properties"]["review_response"]
+        self.assertEqual(response_review["additionalProperties"], False)
+        self.assertEqual(
+            response_review["properties"]["selected_outcome"]["type"], "null"
+        )
+        item = response_schema["$defs"]["response_item"]
+        self.assertEqual(item["additionalProperties"], False)
+        self.assertEqual(
+            item["properties"]["outcome"]["oneOf"][1]["enum"],
+            ["accept", "request_changes", "reject"],
+        )
+
+        summary = verification_schema["properties"]["review_summary"]
+        self.assertEqual(summary["additionalProperties"], False)
+        self.assertEqual(summary["properties"]["selected_outcome"]["type"], "null")
+        self.assertNotIn("items", summary["properties"])
+
 
 if __name__ == "__main__":
     unittest.main()

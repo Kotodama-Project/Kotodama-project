@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-response.schema.json",
+  "title": "Kotodama Company Pack Review Response Candidate",
+  "$comment": "An editable item-response candidate is not reviewer authentication, Human approval, an overall Decision, evidence resolution, Promotion, Current Truth, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "reason",
+    "pack_id",
+    "request_binding",
+    "candidate_binding",
+    "review_response",
+    "unresolved_evidence",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_review_response"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["REVIEW_RESPONSE_CANDIDATE", "RESPONSE_BUILD_REFUSED"]},
+    "reason": {
+      "oneOf": [
+        {"type": "null"},
+        {"enum": ["REQUEST_INVALID", "SOURCE_DRIFT_DETECTED"]}
+      ]
+    },
+    "pack_id": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"},
+        {"type": "null"}
+      ]
+    },
+    "request_binding": {
+      "oneOf": [
+        {"$ref": "#/$defs/file_binding"},
+        {"type": "null"}
+      ]
+    },
+    "candidate_binding": {
+      "oneOf": [
+        {"$ref": "#/$defs/candidate_binding"},
+        {"type": "null"}
+      ]
+    },
+    "review_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "item_count", "items", "permitted_outcomes", "selected_outcome"],
+      "properties": {
+        "state": {"enum": ["ITEM_RESPONSES_PENDING", "NOT_CREATED"]},
+        "item_count": {"type": "integer", "minimum": 0},
+        "items": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/response_item"}
+        },
+        "permitted_outcomes": {"$ref": "#/$defs/permitted_outcomes"},
+        "selected_outcome": {"type": "null"}
+      }
+    },
+    "unresolved_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "item_count", "items"],
+      "properties": {
+        "state": {"enum": ["EVIDENCE_REQUIRED", "UNKNOWN"]},
+        "item_count": {"type": "integer", "minimum": 0},
+        "items": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidence_item"}
+        }
+      }
+    },
+    "claims": {"$ref": "#/$defs/claims"},
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "file_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "bytes"],
+      "properties": {
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1048576}
+      }
+    },
+    "candidate_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["saved_bundle", "bundle_digest", "binding_count"],
+      "properties": {
+        "saved_bundle": {"$ref": "#/$defs/file_binding"},
+        "bundle_digest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algorithm", "canonicalization", "value"],
+          "properties": {
+            "algorithm": {"const": "SHA-256"},
+            "canonicalization": {"const": "utf8-json-sort-keys-no-whitespace-v1"},
+            "value": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        },
+        "binding_count": {"const": 22}
+      }
+    },
+    "permitted_outcomes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {"const": "accept"},
+        {"const": "request_changes"},
+        {"const": "reject"}
+      ],
+      "items": false
+    },
+    "response_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "path", "reason", "outcome", "reviewer_note"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 512},
+        "category": {"const": "review_required"},
+        "path": {"type": "string", "minLength": 1, "maxLength": 512},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "outcome": {
+          "oneOf": [
+            {"type": "null"},
+            {"enum": ["accept", "request_changes", "reject"]}
+          ]
+        },
+        "reviewer_note": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "maxLength": 2000}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {"enum": ["request_changes", "reject"]}
+            }
+          },
+          "then": {
+            "properties": {
+              "reviewer_note": {"type": "string", "minLength": 1, "pattern": ".*\\S.*"}
+            }
+          }
+        }
+      ]
+    },
+    "evidence_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "path", "reason"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 512},
+        "category": {"const": "evidence_required"},
+        "path": {"type": "string", "minLength": 1, "maxLength": 512},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewer_identity_verified",
+        "reviewer_authority_verified",
+        "reviewer_independence_verified",
+        "governed_review_completed",
+        "human_approval_verified",
+        "candidate_bound_human_decision_verified",
+        "external_evidence_verified",
+        "promotion_verified",
+        "current_truth_changed",
+        "runtime_ready",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "reviewer_identity_verified": {"const": false},
+        "reviewer_authority_verified": {"const": false},
+        "reviewer_independence_verified": {"const": false},
+        "governed_review_completed": {"const": false},
+        "human_approval_verified": {"const": false},
+        "candidate_bound_human_decision_verified": {"const": false},
+        "external_evidence_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "runtime_ready": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "REVIEW_RESPONSE_CANDIDATE"}}},
+      "then": {
+        "properties": {
+          "reason": {"type": "null"},
+          "pack_id": {"type": "string"},
+          "request_binding": {"$ref": "#/$defs/file_binding"},
+          "candidate_binding": {"$ref": "#/$defs/candidate_binding"},
+          "review_response": {
+            "properties": {
+              "state": {"const": "ITEM_RESPONSES_PENDING"},
+              "item_count": {"const": 46},
+              "items": {"minItems": 46, "maxItems": 46}
+            }
+          },
+          "unresolved_evidence": {
+            "properties": {
+              "state": {"const": "EVIDENCE_REQUIRED"},
+              "item_count": {"const": 5},
+              "items": {"minItems": 5, "maxItems": 5}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "reason": {"type": "string"},
+          "pack_id": {"type": "null"},
+          "request_binding": {"type": "null"},
+          "candidate_binding": {"type": "null"},
+          "review_response": {
+            "properties": {
+              "state": {"const": "NOT_CREATED"},
+              "item_count": {"const": 0},
+              "items": {"maxItems": 0}
+            }
+          },
+          "unresolved_evidence": {
+            "properties": {
+              "state": {"const": "UNKNOWN"},
+              "item_count": {"const": 0},
+              "items": {"maxItems": 0}
+            }
+          }
+        }
+      }
+    }
+  ]
+}
