@@ -32,7 +32,7 @@ Write-NewUtf8File -LiteralPath $BundlePath -Text ($BundleJson + "`n")
 BundlePath=work/my-company-review-bundle.json
 BundleJson=$(python3 tools/build_company_pack_review_bundle.py work/my-company) || exit 1
 (set -C; printf '%s\n' "$BundleJson" > "$BundlePath") || {
-  printf '%s\n' 'bundle target already exists' >&2
+  printf '%s\n' 'failed to create bundle target without overwriting' >&2
   exit 1
 }
 ```
@@ -60,7 +60,7 @@ RequestJson=$(python3 tools/build_company_pack_review_request.py \
   work/my-company-review-bundle.json \
   work/my-company) || exit 1
 (set -C; printf '%s\n' "$RequestJson" > "$RequestPath") || {
-  printf '%s\n' 'request target already exists' >&2
+  printf '%s\n' 'failed to create request target without overwriting' >&2
   exit 1
 }
 ```
