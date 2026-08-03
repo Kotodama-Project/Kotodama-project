@@ -146,7 +146,14 @@ def main(argv: list[str]) -> int:
         if re.fullmatch(r"[A-Za-z0-9._@+-]{1,256}", identity) is None:
             raise ValueError
         checkpoint = load_strict_json_bytes(checkpoint_bytes)
-    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        TypeError,
+        ValueError,
+    ):
         print(json.dumps(report("INVALID", ["input is invalid"]), sort_keys=True))
         return 1
 
@@ -240,7 +247,14 @@ def main(argv: list[str]) -> int:
                         parent_bytes,
                     ):
                         errors.append("parent checkpoint signature verification failed")
-                except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+                except (
+                    OSError,
+                    UnicodeError,
+                    json.JSONDecodeError,
+                    RecursionError,
+                    TypeError,
+                    ValueError,
+                ):
                     errors.append("parent checkpoint input is invalid")
         errors = sorted(set(errors))
         if errors:

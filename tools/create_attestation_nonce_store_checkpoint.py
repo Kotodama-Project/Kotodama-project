@@ -513,7 +513,15 @@ def main(argv: list[str]) -> int:
             json.dumps(checkpoint, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         ).encode("utf-8")
         write_new_file(output_path, checkpoint_bytes)
-    except (OSError, UnicodeError, json.JSONDecodeError, sqlite3.Error, TypeError, ValueError):
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        sqlite3.Error,
+        TypeError,
+        ValueError,
+    ):
         print(json.dumps(creation_report("INVALID", ["checkpoint creation failed"]), sort_keys=True))
         return 1
     print(json.dumps(creation_report("CHECKPOINT_CREATED", [], checkpoint_bytes), sort_keys=True))

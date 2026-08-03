@@ -462,6 +462,59 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
             self.assertEqual(json.loads(result.stdout)["status"], "INVALID")
             self.assertNotIn(private_marker, result.stdout + result.stderr)
 
+    def test_deep_checkpoint_and_parent_json_are_structured_refusals(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            inputs = self.make_r18_inputs(temporary)
+            deep = temporary / "deep-checkpoint.json"
+            deep.write_bytes((b'{"nested":' * 5000) + b"0" + (b"}" * 5000))
+            placeholder_signature = temporary / "placeholder.sig"
+            placeholder_signature.write_bytes(b"not-a-private-signature-body")
+
+            direct = self.verify_checkpoint(inputs, deep, placeholder_signature)
+            refused_output = temporary / "must-not-exist.json"
+            parent_creation = self.create_checkpoint(inputs, refused_output, deep)
+
+            genesis = temporary / "genesis.json"
+            self.assertEqual(self.create_checkpoint(inputs, genesis).returncode, 0)
+            genesis_signature = self.sign_checkpoint(
+                genesis, temporary / "reviewer-key"
+            )
+            self.add_reservation(inputs, b"deep-parent-regression")
+            successor = temporary / "successor.json"
+            self.assertEqual(
+                self.create_checkpoint(inputs, successor, genesis).returncode, 0
+            )
+            successor_signature = self.sign_checkpoint(
+                successor, temporary / "reviewer-key"
+            )
+            parent_verify = self.verify_checkpoint(
+                inputs,
+                successor,
+                successor_signature,
+                deep,
+                genesis_signature,
+                hashlib.sha256(deep.read_bytes()).hexdigest(),
+            )
+            refused_output_exists = refused_output.exists()
+
+        for result in (direct, parent_creation, parent_verify):
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stderr, "")
+            report = json.loads(result.stdout)
+            self.assertEqual(report["status"], "INVALID")
+            self.assertTrue(all(not value for value in report["claims"].values()))
+        self.assertEqual(json.loads(direct.stdout)["errors"], ["input is invalid"])
+        self.assertEqual(
+            json.loads(parent_creation.stdout)["errors"],
+            ["checkpoint creation failed"],
+        )
+        self.assertIn(
+            "parent checkpoint input is invalid",
+            json.loads(parent_verify.stdout)["errors"],
+        )
+        self.assertFalse(refused_output_exists)
+
     def test_allowed_signers_identity_and_store_corruption_fail_closed(self) -> None:
         results: list[tuple[subprocess.CompletedProcess[str], str | None]] = []
         with tempfile.TemporaryDirectory() as directory:

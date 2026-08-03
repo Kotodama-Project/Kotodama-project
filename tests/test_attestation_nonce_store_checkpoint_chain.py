@@ -251,6 +251,45 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         self.assertIn("entry 0 sequence mismatch", report["errors"])
         self.assertTrue(all(not value for value in report["claims"].values()))
 
+    def test_deep_checkpoint_in_chain_directory_is_a_structured_creation_refusal(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            case = self.make_chain(temporary, length=1)
+            checkpoints = case["checkpoints"]
+            assert isinstance(checkpoints, list)
+            checkpoints[0].write_bytes(
+                (b'{"nested":' * 5000) + b"0" + (b"}" * 5000)
+            )
+            output = temporary / "deep-checkpoint-bundle.json"
+            created = self.create_bundle(case, output)
+
+        self.assertEqual(created.returncode, 1)
+        self.assertEqual(created.stderr, "")
+        report = json.loads(created.stdout)
+        self.assertEqual(report["status"], "INVALID")
+        self.assertEqual(report["errors"], ["chain bundle creation failed"])
+        self.assertTrue(all(not value for value in report["claims"].values()))
+        self.assertFalse(output.exists())
+
+    def test_deep_outer_bundle_json_is_a_structured_verification_refusal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            case = self.make_chain(temporary, length=1)
+            bundle = temporary / "deep-outer-bundle.json"
+            bundle.write_bytes(
+                (b'{"nested":' * 5000) + b"0" + (b"}" * 5000)
+            )
+            verified = self.verify_bundle(case, bundle)
+
+        self.assertEqual(verified.returncode, 1)
+        self.assertEqual(verified.stderr, "")
+        report = json.loads(verified.stdout)
+        self.assertEqual(report["status"], "INVALID")
+        self.assertEqual(report["errors"], ["input is invalid"])
+        self.assertTrue(all(not value for value in report["claims"].values()))
+
     def test_rollback_and_same_count_replacement_do_not_match_current_checkpoint(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)

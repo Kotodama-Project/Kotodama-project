@@ -291,7 +291,14 @@ def read_chain_directory(
             if actual_total_bytes > MAX_CHAIN_TOTAL_BYTES:
                 raise ValueError
             checkpoint = load_strict_json_bytes(checkpoint_bytes)
-        except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            RecursionError,
+            TypeError,
+            ValueError,
+        ):
             errors.append(f"checkpoint {sequence} input is invalid")
             continue
         if not isinstance(checkpoint, dict):
@@ -533,7 +540,14 @@ def main(argv: list[str]) -> int:
         if len(bundle_bytes) > MAX_BUNDLE_BYTES:
             raise ValueError
         write_new_file(output, bundle_bytes)
-    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        TypeError,
+        ValueError,
+    ):
         print(
             json.dumps(
                 creation_report("INVALID", ["chain bundle creation failed"]),

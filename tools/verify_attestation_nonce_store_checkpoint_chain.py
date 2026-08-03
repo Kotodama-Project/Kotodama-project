@@ -118,7 +118,14 @@ def main(argv: list[str]) -> int:
         if re.fullmatch(r"[A-Za-z0-9._@+-]{1,256}", identity) is None:
             raise ValueError
         bundle = load_strict_json_bytes(bundle_bytes)
-    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        RecursionError,
+        TypeError,
+        ValueError,
+    ):
         print(json.dumps(report("INVALID", ["input is invalid"]), sort_keys=True))
         return 1
     chain, chain_errors = chain_from_bundle(bundle)
