@@ -68,6 +68,14 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
             "public starter ships exactly three navigation-only MOCs",
             status_flat,
         )
+        self.assertIn(
+            "R78 clarified the ideal six-phase installation lifecycle",
+            status_flat,
+        )
+        self.assertIn(
+            "target-bound runtime receipt",
+            status_flat,
+        )
         self.assertIn("real Voice rotation remains unproven", status_flat)
         self.assertIn("Review Request, Review Response, and Decision Handoff", status_flat)
         self.assertIn("Public Beta access", status_flat)
@@ -83,6 +91,10 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         )
         self.assertIn(
             "R76 is the latest Template Guide usability synchronization",
+            roadmap_flat,
+        )
+        self.assertIn(
+            "R78 is the latest installation lifecycle usability synchronization",
             roadmap_flat,
         )
         self.assertIn("R62 remains the latest navigation synchronization", roadmap_flat)
@@ -106,6 +118,10 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         )
         self.assertIn(
             "[x] Template Guide ideal/future versus shipped MOC distinction",
+            roadmap_flat,
+        )
+        self.assertIn(
+            "[x] Installation lifecycle ideal/current and command/path clarity",
             roadmap_flat,
         )
         self.assertIn("R58 remains the current Company Pack surface label", roadmap_flat)

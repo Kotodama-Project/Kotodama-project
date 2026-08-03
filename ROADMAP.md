@@ -25,8 +25,9 @@
 
 ## Current public documentation revision
 
-R68 is the latest README contract synchronization. R76 is the latest Template
-Guide usability synchronization. R74 is the latest documentation
+R68 is the latest README contract synchronization. R78 is the latest
+installation lifecycle usability synchronization. R76 is the latest
+Template Guide usability synchronization. R74 is the latest documentation
 synchronization for schema/validator parity. R58 synchronizes
 this roadmap with the current public Company Pack surface.
 The published review chain remains read-only/candidate-only: it binds exact
@@ -59,6 +60,7 @@ current Company Pack surface label.
 - [x] Compose security fixed-boolean schema/validator parity
 - [x] Resolved Compose nested boolean schema/validator parity
 - [x] Template Guide ideal/future versus shipped MOC distinction
+- [x] Installation lifecycle ideal/current and command/path clarity
 - [x] README Voice rotation ideal/current contract synchronization with an
       explicit no-runtime and no-Public-Beta boundary
 
