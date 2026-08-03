@@ -129,6 +129,19 @@ record bytesが変化して循環するためです。`r30_binding_handoff`は
 future verifierがR31を外部保存した後、次のfield mappingを同じatomic snapshot
 から構築します。これはprojection, not object reuseです。
 
+projection eligibilityはfail closedです。`REFERENCE_DECLARED_UNVERIFIED` cannot be projected
+because `content_observation` is absent while R30 requires content locator、binding、media
+type、observed-at。`CONTENT_BINDING_RECORDED_UNVERIFIED`と
+`DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED`だけが次の条件付きprojection候補です。
+any `WITHDRAWAL_ENTERED_UNVERIFIED` in the six use declarations、またはroot
+`WITHDRAWAL_RECORDED_UNVERIFIED`があれば、R30はper-use withdrawalをlosslessに
+表せないためprojectionを拒否します。
+
+R30 containerはR31 `source_record_id`をkeyにした
+`source_bindings[source_record_id]`として作ります。R30 `intent_content.source_refs`と
+`extraction_provenance.input_source_refs`が存在するstateでは、そのkey集合も同じ
+Source Record集合へ一致させます。key不一致、欠落、別recordへのaliasはfail closedです。
+
 | R30 required field | R31 input / fail-closed rule |
 | --- | --- |
 | `source_record_locator` | 保存済みR31 serialized bytesの外部governed locator。R31自身には書き戻さない |
@@ -139,18 +152,26 @@ future verifierがR31を外部保存した後、次のfield mappingを同じatom
 | `source_revision` | root `source_revision`と`content_observation.declared_source_revision`が一致するときだけ、その値を写す。不一致はfail closed |
 | `observed_at` | bytes bindingの観測時刻として`content_observation.observed_at`を写す。root `source_observed_at`はSource Item観測として別に保持し、time orderingは別途検証する |
 | `source_record_schema_status` | 常に`NOT_VERIFIED`。R31 schema PASSをsource/currentness verificationへ昇格しない |
-| `derived_from_refs` | `lineage.declaration_status`が`DECLARED_ORIGINAL`なら空配列、`DECLARED_DERIVED`なら`lineage.parent_source_record_refs`。状態と配列が矛盾すればfail closed |
+| `derived_from_refs` | `lineage.lineage_kind`が`DECLARED_ORIGINAL`なら空配列、`DECLARED_DERIVED`なら`lineage.parent_source_record_refs`。状態と配列が矛盾すればfail closed |
 | `lineage_status` | 常に`NOT_VERIFIED` |
 | `access_or_consent` | 下記の明示projectionを作る。R31 objectをそのまま再利用しない |
 | `retention` | 下記の明示projectionを作る。R31 objectをそのまま再利用しない |
 
-R30 `access_or_consent`は、`evidence_ref/evidence_binding`をR31
-`access_or_consent.basis_ref/basis_binding`から取り、
-`declared_permitted_uses`をstatusが`DECLARED_PERMITTED_UNVERIFIED`のuse名だけから
-作ります。all projected permitted usesの`subject_scope_ref`、`scope_expires_at`、
-`revocation_evidence_ref`がそれぞれ同一の場合だけ、その共通値をR30へ写します。
-一つでも異なる場合、空になる場合、withdrawalと矛盾する場合は、単一のR30
-shapeではlosslessに表せないためfail closedです。R30
+R30 `access_or_consent`は、statusが`DECLARED_PERMITTED_UNVERIFIED`のuse名だけから
+`declared_permitted_uses`を作ります。all projected permitted usesの
+`purpose_scope_ref`、`subject_scope_ref`、`scope_expires_at`、
+`revocation_evidence_ref`がそれぞれ同一の場合だけprojection候補にできます。
+一つでも異なる場合、permitted useが空の場合、またはany
+`WITHDRAWAL_ENTERED_UNVERIFIED`がある場合は、単一のR30 shapeではlosslessに
+表せないためfail closedです。
+
+R30には`purpose_scope_ref` fieldがないため、future verifierは共通purpose、
+permitted uses、subject、expiry、revocation、R31 basisと各use evidenceのexact
+bindingsを一つのgoverned aggregate evidence artifactへ束縛し、そのartifactの
+locator/bindingだけをR30 `evidence_ref/evidence_binding`へ入れます。R31
+`access_or_consent.basis_ref/basis_binding`を無条件にcopyしてはいけません。
+aggregate artifactが無い、全入力bytesを同じsnapshotで検証できない、または
+projection後にpurposeを再確認できない場合はfail closedです。R30
 `verification_status`は常に`NOT_VERIFIED`です。
 
 R30 `retention`はR31の`policy_ref`、`policy_binding`、`retain_until`、

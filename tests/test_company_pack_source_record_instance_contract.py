@@ -276,6 +276,94 @@ class CompanyPackSourceRecordInstanceContractTests(unittest.TestCase):
     def assert_invalid(self, instance: dict, name: str) -> None:
         self.assertTrue(list(self.validator.iter_errors(instance)), name)
 
+    def project_r30_source_binding_for_contract_test(
+        self, instance: dict, container_key: str
+    ) -> dict:
+        """Test-only oracle for the documented future fail-closed projection."""
+        if container_key != instance["source_record_id"]:
+            raise ValueError("source_bindings key mismatch")
+        if instance["source_state"] == "REFERENCE_DECLARED_UNVERIFIED":
+            raise ValueError("content binding not recorded")
+        if instance["source_state"] == "WITHDRAWAL_RECORDED_UNVERIFIED":
+            raise ValueError("per-use withdrawal is not representable in R30")
+        content = instance["content_observation"]
+        if content is None:
+            raise ValueError("content observation missing")
+        if instance["source_revision"] != content["declared_source_revision"]:
+            raise ValueError("record/content revision mismatch")
+
+        uses = instance["access_or_consent"]["use_declarations"]
+        if any(
+            item["declaration_status"] == "WITHDRAWAL_ENTERED_UNVERIFIED"
+            for item in uses.values()
+        ):
+            raise ValueError("per-use withdrawal is not representable in R30")
+        permitted = [
+            (name, uses[name])
+            for name in USES
+            if uses[name]["declaration_status"] == "DECLARED_PERMITTED_UNVERIFIED"
+        ]
+        if not permitted:
+            raise ValueError("no permitted use to project")
+        for field in (
+            "purpose_scope_ref",
+            "subject_scope_ref",
+            "scope_expires_at",
+            "revocation_evidence_ref",
+        ):
+            values = {json.dumps(item[field], sort_keys=True) for _, item in permitted}
+            if len(values) != 1:
+                raise ValueError(f"non-lossless access projection: {field}")
+
+        required_coverage = {
+            "source_record_serialized_bytes",
+            "source_content_bytes",
+        }
+        if not required_coverage.issubset(instance["retention"]["covered_artifacts"]):
+            raise ValueError("retention coverage cannot be represented in R30")
+
+        lineage = instance["lineage"]
+        if lineage["lineage_kind"] == "DECLARED_ORIGINAL":
+            derived_from_refs = []
+        elif lineage["lineage_kind"] == "DECLARED_DERIVED":
+            derived_from_refs = lineage["parent_source_record_refs"]
+        else:
+            raise ValueError("unknown lineage kind")
+
+        first = permitted[0][1]
+        return {
+            "source_record_locator": "ref/source-record/serialized",
+            "source_record_binding": binding("7", 512),
+            "source_content_locator": content["storage_locator_ref"],
+            "source_content_binding": content["content_binding"],
+            "declared_media_type": content["declared_media_type"],
+            "source_revision": instance["source_revision"],
+            "observed_at": content["observed_at"],
+            "source_record_schema_status": "NOT_VERIFIED",
+            "derived_from_refs": derived_from_refs,
+            "lineage_status": "NOT_VERIFIED",
+            "access_or_consent": {
+                "evidence_ref": "ref/access-consent/aggregate",
+                "evidence_binding": binding("8", 256),
+                "declared_permitted_uses": [name for name, _ in permitted],
+                "subject_scope_ref": first["subject_scope_ref"],
+                "scope_expires_at": first["scope_expires_at"],
+                "revocation_evidence_ref": first["revocation_evidence_ref"],
+                "verification_status": "NOT_VERIFIED",
+            },
+            "retention": {
+                key: instance["retention"][key]
+                for key in (
+                    "policy_ref",
+                    "policy_binding",
+                    "retain_until",
+                    "deletion_trigger",
+                    "deletion_receipt_ref",
+                    "enforcement_status",
+                )
+            },
+        }
+
     def test_real_draft_2020_12_validation_accepts_only_candidate_states(self) -> None:
         reference = source_record_instance("REFERENCE_DECLARED_UNVERIFIED")
         content = source_record_instance("CONTENT_BINDING_RECORDED_UNVERIFIED")
@@ -477,6 +565,89 @@ class CompanyPackSourceRecordInstanceContractTests(unittest.TestCase):
             "fail closed",
         ):
             self.assertIn(phrase, mapping)
+
+    def test_r30_projection_contract_rejects_loss_and_uses_real_r31_fields(self) -> None:
+        r30_schema = json.loads(R30_SCHEMA_PATH.read_text(encoding="utf-8"))
+        source_binding_schema = {
+            "$schema": r30_schema["$schema"],
+            "$defs": r30_schema["$defs"],
+            **r30_schema["$defs"]["source_binding"],
+        }
+        r30_validator = Draft202012Validator(
+            source_binding_schema,
+            format_checker=FormatChecker(),
+        )
+
+        for state, expected_parents in (
+            ("CONTENT_BINDING_RECORDED_UNVERIFIED", []),
+            (
+                "DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED",
+                ["ref/source-record/parent"],
+            ),
+        ):
+            instance = source_record_instance(state)
+            permitted = [
+                item
+                for item in instance["access_or_consent"]["use_declarations"].values()
+                if item["declaration_status"] == "DECLARED_PERMITTED_UNVERIFIED"
+            ]
+            for item in permitted:
+                item["purpose_scope_ref"] = "ref/use-purpose/common"
+                item["subject_scope_ref"] = "ref/use-subject/common"
+            projected = self.project_r30_source_binding_for_contract_test(
+                instance,
+                instance["source_record_id"],
+            )
+            r30_validator.validate(projected)
+            self.assertEqual(projected["derived_from_refs"], expected_parents)
+
+        reference = source_record_instance("REFERENCE_DECLARED_UNVERIFIED")
+        withdrawal = source_record_instance("WITHDRAWAL_RECORDED_UNVERIFIED")
+        mismatched_purpose = source_record_instance(
+            "CONTENT_BINDING_RECORDED_UNVERIFIED"
+        )
+        for item in mismatched_purpose["access_or_consent"]["use_declarations"].values():
+            if item["declaration_status"] == "DECLARED_PERMITTED_UNVERIFIED":
+                item["subject_scope_ref"] = "ref/use-subject/common"
+        mismatched_revision = source_record_instance(
+            "CONTENT_BINDING_RECORDED_UNVERIFIED"
+        )
+        mismatched_revision["content_observation"]["declared_source_revision"] = (
+            "ref/source-revision/other"
+        )
+        incomplete_retention = source_record_instance(
+            "CONTENT_BINDING_RECORDED_UNVERIFIED"
+        )
+        incomplete_retention["retention"]["covered_artifacts"] = [
+            "source_record_serialized_bytes"
+        ]
+        for instance, key in (
+            (reference, reference["source_record_id"]),
+            (withdrawal, withdrawal["source_record_id"]),
+            (mismatched_purpose, mismatched_purpose["source_record_id"]),
+            (mismatched_revision, mismatched_revision["source_record_id"]),
+            (incomplete_retention, incomplete_retention["source_record_id"]),
+            (
+                source_record_instance("CONTENT_BINDING_RECORDED_UNVERIFIED"),
+                "wrong-source-key",
+            ),
+        ):
+            with self.assertRaises(ValueError):
+                self.project_r30_source_binding_for_contract_test(instance, key)
+
+        runbook = RUNBOOK_PATH.read_text(encoding="utf-8")
+        mapping = runbook.split("## R30 mapping", 1)[1].split(
+            "## generic template mapping", 1
+        )[0]
+        for phrase in (
+            "`lineage.lineage_kind`",
+            "`REFERENCE_DECLARED_UNVERIFIED` cannot be projected",
+            "any `WITHDRAWAL_ENTERED_UNVERIFIED`",
+            "`purpose_scope_ref`",
+            "`source_bindings[source_record_id]`",
+        ):
+            self.assertIn(phrase, mapping)
+        self.assertNotIn("`lineage.declaration_status`", mapping)
 
     def test_strict_parser_and_resource_limits_remain_future_gates(self) -> None:
         self.assertEqual(json.loads('{"a": 1, "a": 2}'), {"a": 2})
