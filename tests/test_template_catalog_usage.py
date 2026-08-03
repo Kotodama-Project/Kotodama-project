@@ -1,35 +1,37 @@
 from pathlib import Path
+import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_template_catalog_explains_layer_order_and_current_preview_boundary() -> None:
-    catalog = (ROOT / "templates" / "README.md").read_text(encoding="utf-8")
-    flat = " ".join(catalog.split())
+class TemplateCatalogUsageTests(unittest.TestCase):
+    def test_template_catalog_explains_layer_order_and_current_preview_boundary(self) -> None:
+        catalog = (ROOT / "templates" / "README.md").read_text(encoding="utf-8")
+        flat = " ".join(catalog.split())
 
-    assert "## 使う順番" in catalog
-    assert "Company Template" in catalog
-    assert "Blocks" in catalog
-    assert "Governed Records" in catalog
-    assert "MOCs" in catalog
-    assert "runtime profile" in catalog
-    assert "理想" in catalog
-    assert "現在" in catalog
-    assert "read-only/candidate-only" in flat
-    assert "navigation-only" in flat
-    assert "Public Beta GO" in flat
-    assert "../docs/COMPANY-PACK-CATALOG.md" in catalog
-    assert "../docs/TEMPLATE-GUIDE.md" in catalog
-    assert "../docs/STARTER-WALKTHROUGH.md" in catalog
-    assert "../docs/PUBLIC-PREVIEW-SELF-CHECK.md" in catalog
-    assert "../examples/company-starter/README.md" in catalog
+        self.assertIn("## 使う順番", catalog)
+        self.assertIn("Company Template", catalog)
+        self.assertIn("Blocks", catalog)
+        self.assertIn("Governed Records", catalog)
+        self.assertIn("MOCs", catalog)
+        self.assertIn("runtime profile", catalog)
+        self.assertIn("理想", catalog)
+        self.assertIn("現在", catalog)
+        self.assertIn("read-only/candidate-only", flat)
+        self.assertIn("navigation-only", flat)
+        self.assertIn("Public Beta GO", flat)
+        self.assertIn("../docs/COMPANY-PACK-CATALOG.md", catalog)
+        self.assertIn("../docs/TEMPLATE-GUIDE.md", catalog)
+        self.assertIn("../docs/STARTER-WALKTHROUGH.md", catalog)
+        self.assertIn("../docs/PUBLIC-PREVIEW-SELF-CHECK.md", catalog)
+        self.assertIn("../examples/company-starter/README.md", catalog)
 
-    for link in (
-        "../docs/COMPANY-PACK-CATALOG.md",
-        "../docs/TEMPLATE-GUIDE.md",
-        "../docs/STARTER-WALKTHROUGH.md",
-        "../docs/PUBLIC-PREVIEW-SELF-CHECK.md",
-        "../examples/company-starter/README.md",
-    ):
-        assert (ROOT / "templates" / link).exists()
+        for link in (
+            "../docs/COMPANY-PACK-CATALOG.md",
+            "../docs/TEMPLATE-GUIDE.md",
+            "../docs/STARTER-WALKTHROUGH.md",
+            "../docs/PUBLIC-PREVIEW-SELF-CHECK.md",
+            "../examples/company-starter/README.md",
+        ):
+            self.assertTrue((ROOT / "templates" / link).exists(), link)
