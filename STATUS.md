@@ -71,6 +71,12 @@ boundary, speaker/timestamp private-channel post, listener/rejoin continuity,
 and retention/delete receipt. This is documentation only; real Voice rotation
 remains unproven, and no capture, ASR, Discord post, deletion receipt, runtime
 authority, Promotion, Current Truth, or Public Beta access was added.
+R70 aligned the resolved Compose candidate's bytes semantics with Draft 2020-12:
+finite non-negative integer-valued JSON numbers are accepted while booleans,
+fractions, negatives, and non-finite values remain rejected. A Docker-free
+synthetic candidate passes both validators. This is validator/test hardening
+only; it does not add Compose runtime, image, provider, deployment, restart,
+credential/permission, Promotion, Current Truth, or Public Beta access.
 
 公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Review Request、Response、Decision Handoffは保存済みchainを再入力なしで運びますが、すべてread-only/candidate-onlyです。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。
 

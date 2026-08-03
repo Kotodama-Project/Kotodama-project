@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicStatusRoadmapSyncTests(unittest.TestCase):
-    def test_public_status_and_roadmap_name_r58_documentation_surface(self) -> None:
+    def test_public_status_and_roadmap_name_r70_documentation_surface(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
         status_flat = " ".join(status.split())
@@ -36,6 +36,14 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
             "R68 added the README Voice rotation ideal/current contract",
             status_flat,
         )
+        self.assertIn(
+            "R70 aligned the resolved Compose candidate's bytes semantics",
+            status_flat,
+        )
+        self.assertIn(
+            "Docker-free synthetic candidate passes both validators",
+            status_flat,
+        )
         self.assertIn("real Voice rotation remains unproven", status_flat)
         self.assertIn("Review Request, Review Response, and Decision Handoff", status_flat)
         self.assertIn("Public Beta access", status_flat)
@@ -45,10 +53,17 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
 
         self.assertIn("R58 synchronizes this roadmap with the current public", roadmap_flat)
         self.assertIn("R68 is the latest README contract synchronization", roadmap_flat)
-        self.assertIn("R66 is the latest documentation synchronization", roadmap_flat)
+        self.assertIn(
+            "R70 is the latest documentation synchronization for schema/validator parity",
+            roadmap_flat,
+        )
         self.assertIn("R62 remains the latest navigation synchronization", roadmap_flat)
-        self.assertIn("R66 is the latest parity synchronization", roadmap_flat)
+        self.assertIn("R70 is the latest parity synchronization", roadmap_flat)
         self.assertIn("R68 added the README Voice rotation ideal/current contract", roadmap_flat)
+        self.assertIn(
+            "[x] Resolved Compose binding integer schema/validator parity",
+            roadmap_flat,
+        )
         self.assertIn("R58 remains the current Company Pack surface label", roadmap_flat)
         self.assertNotIn("R56 synchronizes this roadmap with the current public", roadmap_flat)
         self.assertNotIn("R52 synchronizes this roadmap with the current public Company Pack surface", roadmap_flat)
