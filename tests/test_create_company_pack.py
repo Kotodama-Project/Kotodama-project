@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -273,6 +274,54 @@ class CreateCompanyPackCliTests(unittest.TestCase):
             summary = json.loads(result.stdout)
             self.assertIn("target parent is unavailable", summary["errors"][0])
             self.assertFalse(missing_parent.exists())
+
+    def test_utf8_json_output_is_independent_of_windows_stdout_locale(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "作業"
+            parent.mkdir()
+            target = parent / "会社候補"
+            environment = os.environ.copy()
+            environment["PYTHONIOENCODING"] = "cp1252"
+            result = subprocess.run(
+                [sys.executable, str(CREATOR), "locale-company", str(target)],
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            summary = json.loads(result.stdout.decode("utf-8"))
+            self.assertEqual(summary["status"], "PASS")
+            self.assertEqual(summary["target"], str(target))
+
+    def test_normal_cli_run_does_not_write_import_bytecode(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "work"
+            parent.mkdir()
+            target = parent / "no-bytecode-company"
+            bytecode_root = Path(temporary) / "bytecode"
+            environment = os.environ.copy()
+            environment.pop("PYTHONDONTWRITEBYTECODE", None)
+            environment["PYTHONPYCACHEPREFIX"] = str(bytecode_root)
+            result = subprocess.run(
+                [sys.executable, str(CREATOR), "no-bytecode-company", str(target)],
+                cwd=ROOT,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            local_import_bytecode = [
+                path
+                for path in bytecode_root.rglob("*.pyc")
+                if path.name.startswith(
+                    ("check_company_pack_customization", "validate_template_pack")
+                )
+            ]
+            self.assertEqual(local_import_bytecode, [])
 
     def test_refuses_to_create_a_target_inside_the_shipped_starter(self) -> None:
         target = STARTER / "nested-company-test"

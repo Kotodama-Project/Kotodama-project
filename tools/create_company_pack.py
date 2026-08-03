@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
+import sys
+
+sys.dont_write_bytecode = True
+
 import argparse
 import json
 import re
 import shutil
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -213,6 +216,17 @@ def create_company_pack(
         return failure(pack_id, target, str(exc))
 
 
+def write_stdout_utf8(value: str) -> None:
+    encoded = (value + "\n").encode("utf-8")
+    buffer = getattr(sys.stdout, "buffer", None)
+    if buffer is not None:
+        buffer.write(encoded)
+        buffer.flush()
+    else:
+        sys.stdout.write(encoded.decode("utf-8"))
+        sys.stdout.flush()
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="create_company_pack.py",
@@ -248,7 +262,7 @@ def main(argv: list[str]) -> int:
         else None
     )
     summary = create_company_pack(args.pack_id, args.target, customization)
-    print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    write_stdout_utf8(json.dumps(summary, ensure_ascii=True, sort_keys=True))
     return 0 if summary["status"] == "PASS" else 1
 
 
