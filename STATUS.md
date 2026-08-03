@@ -59,7 +59,10 @@ the first-read order and bounded runtime profile selection for
 that sends readers through Catalog, Starter Walkthrough, and Installation
 Lifecycle only when a runtime profile is needed. R62 added the Company Pack
 Catalog first-stop sequence with the same bounded order and no-runtime
-boundary. These surfaces do not add runtime authority or access, and
+boundary. R64 added template-pack path canonicalization, R65 added
+installation-lifecycle purpose schema/validator parity, and R66 added Compose
+binding integer schema/validator parity. These surfaces do not add runtime
+authority or access, and
 activation, Promotion, Current Truth, and Public Beta remain outside the
 published preview.
 
