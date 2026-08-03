@@ -32,6 +32,11 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("R64 added template-pack path canonicalization", status_flat)
         self.assertIn("R65 added installation-lifecycle purpose schema/validator parity", status_flat)
         self.assertIn("R66 added Compose binding integer schema/validator parity", status_flat)
+        self.assertIn(
+            "R68 added the README Voice rotation ideal/current contract",
+            status_flat,
+        )
+        self.assertIn("real Voice rotation remains unproven", status_flat)
         self.assertIn("Review Request, Review Response, and Decision Handoff", status_flat)
         self.assertIn("Public Beta access", status_flat)
         self.assertIn("Not open", status_flat)
@@ -39,9 +44,12 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("Not completed", status_flat)
 
         self.assertIn("R58 synchronizes this roadmap with the current public", roadmap_flat)
+        self.assertIn("R68 is the latest README contract synchronization", roadmap_flat)
         self.assertIn("R66 is the latest documentation synchronization", roadmap_flat)
         self.assertIn("R62 remains the latest navigation synchronization", roadmap_flat)
         self.assertIn("R66 is the latest parity synchronization", roadmap_flat)
+        self.assertIn("R68 added the README Voice rotation ideal/current contract", roadmap_flat)
+        self.assertIn("R58 remains the current Company Pack surface label", roadmap_flat)
         self.assertNotIn("R56 synchronizes this roadmap with the current public", roadmap_flat)
         self.assertNotIn("R52 synchronizes this roadmap with the current public Company Pack surface", roadmap_flat)
         self.assertNotIn("R49 synchronizes this roadmap with the R48 public Company Pack surface", roadmap_flat)

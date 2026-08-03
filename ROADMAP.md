@@ -25,8 +25,9 @@
 
 ## Current public documentation revision
 
-R66 is the latest documentation synchronization. R58 synchronizes this roadmap
-with the current public Company Pack surface.
+R68 is the latest README contract synchronization. R66 is the latest
+documentation synchronization for schema/validator parity. R58 synchronizes
+this roadmap with the current public Company Pack surface.
 The published review chain remains read-only/candidate-only: it binds exact
 bytes, saved Pack-specific counts, and false claims, but it does not create
 Human approval, runtime authority, Promotion, Current Truth, or Public Beta
@@ -34,7 +35,8 @@ access. R54, R55, R56, R57, R58, and R62 extend the public documentation/test
 surface only. R64, R65, and R66 extend local schema/validator parity checks
 without changing the Company Pack surface or runtime claims. R62 remains the
 latest navigation synchronization; R66 is the latest parity synchronization.
-R58 remains the current Company Pack surface label.
+R68 added the README Voice rotation ideal/current contract while preserving the
+runtime boundary. R58 remains the current Company Pack surface label.
 
 - [x] Template/Company/Blocks/Records/MOCs/starter navigation synchronization
       with ideal/current usage, dynamic Pack-count guidance, and the
@@ -48,6 +50,8 @@ R58 remains the current Company Pack surface label.
 - [x] Template-pack path canonicalization aligned with the published manifest schema
 - [x] Installation-lifecycle purpose schema/validator parity for non-whitespace values
 - [x] Compose binding integer schema/validator parity for integer-valued JSON numbers
+- [x] README Voice rotation ideal/current contract synchronization with an
+      explicit no-runtime and no-Public-Beta boundary
 
 - [x] Sanitized Compose minimum and Proxmox segmented lifecycle contracts
 - [x] Machine-checked preflight/apply/verify/rollback/isolated-restore evidence requirements
