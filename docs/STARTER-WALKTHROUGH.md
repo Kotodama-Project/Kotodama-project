@@ -78,6 +78,8 @@ requestの46件へID/path/reasonを再入力せずoutcomeを記録するには[C
 
 responseまで完了した5成果物をHuman Decisionへ渡すには[Review Evidence to Decision Handoff](REVIEW-DECISION-HANDOFF.md)を使います。handoffはexact bytesを固定するだけで、Decision、identity、authority、GOを作りません。
 
+Source ItemをIntent抽出前のprivate shapeへ閉じるには[Company Pack Source Record Instance Contract](SOURCE-RECORD-INSTANCE.md)を使います。source bodyや実recordを公開せず、locator/hashをauthenticityへ昇格しません。
+
 Sourceから抽出した意図候補をHuman確認前のprivate shapeへ閉じるには[Company Pack Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)を使います。source bodyや実candidateを公開せず、schema PASSをHuman Intentへ昇格しません。
 
 実Decisionを作る前に記録fieldと否定claimを確認するには[Company Pack Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)を使います。これはschema-only契約であり、Decision、承認、権限、Promotion、GOを生成しません。

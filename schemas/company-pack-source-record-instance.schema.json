@@ -1,0 +1,768 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-source-record-instance.schema.json",
+  "title": "Kotodama Company Pack Source Record Instance",
+  "$comment": "Schema-only private candidate contract. Validation does not retrieve source content, create the external R30 record-byte binding, verify record or content bytes, origin, completeness, media type, encoding, acquisition provenance, lineage, identity, attribution, access or consent, retention, deletion, redaction, trusted time, Human Intent, authority, a Decision, execution, Promotion, Current Truth, runtime readiness, Final Human GO, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "source_state",
+    "source_record_id",
+    "record_revision",
+    "source_item_kind",
+    "source_locator_ref",
+    "source_revision",
+    "source_observed_at",
+    "acquisition_mode",
+    "content_observation",
+    "acquisition_provenance",
+    "lineage",
+    "attribution_candidate",
+    "access_or_consent",
+    "retention",
+    "redaction",
+    "r30_binding_handoff",
+    "content_handling",
+    "recorded_at",
+    "expires_at",
+    "review_trigger",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_source_record_instance"},
+    "version": {"const": "1.0"},
+    "status": {"const": "CANDIDATE_ONLY"},
+    "source_state": {
+      "enum": [
+        "REFERENCE_DECLARED_UNVERIFIED",
+        "CONTENT_BINDING_RECORDED_UNVERIFIED",
+        "DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED",
+        "WITHDRAWAL_RECORDED_UNVERIFIED"
+      ]
+    },
+    "source_record_id": {"$ref": "#/$defs/id"},
+    "record_revision": {"$ref": "#/$defs/ref"},
+    "source_item_kind": {"$ref": "#/$defs/source_item_kind"},
+    "source_locator_ref": {"$ref": "#/$defs/ref"},
+    "source_revision": {"$ref": "#/$defs/ref"},
+    "source_observed_at": {"$ref": "#/$defs/timestamp"},
+    "acquisition_mode": {"$ref": "#/$defs/acquisition_mode"},
+    "content_observation": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/content_observation"}
+      ]
+    },
+    "acquisition_provenance": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/acquisition_provenance"}
+      ]
+    },
+    "lineage": {"$ref": "#/$defs/lineage"},
+    "attribution_candidate": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/attribution_candidate"}
+      ]
+    },
+    "access_or_consent": {"$ref": "#/$defs/access_or_consent"},
+    "retention": {"$ref": "#/$defs/retention"},
+    "redaction": {"$ref": "#/$defs/redaction"},
+    "r30_binding_handoff": {"$ref": "#/$defs/r30_binding_handoff"},
+    "content_handling": {"$ref": "#/$defs/content_handling"},
+    "recorded_at": {"$ref": "#/$defs/timestamp"},
+    "expires_at": {"$ref": "#/$defs/timestamp"},
+    "review_trigger": {"$ref": "#/$defs/review_trigger"},
+    "claims": {"$ref": "#/$defs/claims"},
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 512,
+      "pattern": "^ref/[a-z0-9][a-z0-9_-]*(?:/[a-z0-9][a-z0-9_-]*)*$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "file_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "bytes"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 17179869184
+        }
+      }
+    },
+    "source_item_kind": {
+      "enum": [
+        "message",
+        "audio",
+        "transcript",
+        "document",
+        "webhook",
+        "git_object",
+        "image",
+        "video",
+        "derived_artifact",
+        "synthetic_fixture",
+        "other"
+      ]
+    },
+    "acquisition_mode": {
+      "enum": ["reference", "capture", "import", "derived", "synthetic"]
+    },
+    "declared_media_type": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 127,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,62}/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,62}$"
+    },
+    "content_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "storage_locator_ref",
+        "content_binding",
+        "declared_media_type",
+        "declared_encoding_ref",
+        "declared_source_revision",
+        "observed_at",
+        "observation_status"
+      ],
+      "properties": {
+        "storage_locator_ref": {"$ref": "#/$defs/ref"},
+        "content_binding": {"$ref": "#/$defs/file_binding"},
+        "declared_media_type": {"$ref": "#/$defs/declared_media_type"},
+        "declared_encoding_ref": {"$ref": "#/$defs/ref"},
+        "declared_source_revision": {"$ref": "#/$defs/ref"},
+        "observed_at": {"$ref": "#/$defs/timestamp"},
+        "observation_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "acquisition_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_ref",
+        "tool_ref",
+        "tool_version_ref",
+        "config_ref",
+        "runtime_ref",
+        "execution_receipt_ref",
+        "input_locator_ref",
+        "output_binding",
+        "started_at",
+        "completed_at",
+        "verification_status"
+      ],
+      "properties": {
+        "actor_ref": {"$ref": "#/$defs/ref"},
+        "tool_ref": {"$ref": "#/$defs/ref"},
+        "tool_version_ref": {"$ref": "#/$defs/ref"},
+        "config_ref": {"$ref": "#/$defs/ref"},
+        "runtime_ref": {"$ref": "#/$defs/ref"},
+        "execution_receipt_ref": {"$ref": "#/$defs/ref"},
+        "input_locator_ref": {"$ref": "#/$defs/ref"},
+        "output_binding": {"$ref": "#/$defs/file_binding"},
+        "started_at": {"$ref": "#/$defs/timestamp"},
+        "completed_at": {"$ref": "#/$defs/timestamp"},
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lineage_kind",
+        "parent_source_record_refs",
+        "transformation_refs",
+        "segmentation_ref",
+        "verification_status"
+      ],
+      "properties": {
+        "lineage_kind": {
+          "enum": ["DECLARED_ORIGINAL", "DECLARED_DERIVED"]
+        },
+        "parent_source_record_refs": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/ref"}
+        },
+        "transformation_refs": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/ref"}
+        },
+        "segmentation_ref": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/ref"}
+          ]
+        },
+        "verification_status": {"const": "NOT_VERIFIED"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"lineage_kind": {"const": "DECLARED_ORIGINAL"}}
+          },
+          "then": {
+            "properties": {
+              "parent_source_record_refs": {"maxItems": 0},
+              "transformation_refs": {"maxItems": 0},
+              "segmentation_ref": {"type": "null"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"lineage_kind": {"const": "DECLARED_DERIVED"}}
+          },
+          "then": {
+            "properties": {
+              "parent_source_record_refs": {"minItems": 1},
+              "transformation_refs": {"minItems": 1}
+            }
+          }
+        }
+      ]
+    },
+    "attribution_candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject_refs",
+        "speaker_refs",
+        "channel_refs",
+        "session_refs",
+        "entered_by_ref",
+        "identity_evidence_ref",
+        "identity_evidence_binding",
+        "authority_evidence_ref",
+        "authority_evidence_binding",
+        "entry_evidence_ref",
+        "entry_evidence_binding",
+        "verification_status"
+      ],
+      "properties": {
+        "subject_refs": {"$ref": "#/$defs/ref_array"},
+        "speaker_refs": {"$ref": "#/$defs/ref_array"},
+        "channel_refs": {"$ref": "#/$defs/ref_array"},
+        "session_refs": {"$ref": "#/$defs/ref_array"},
+        "entered_by_ref": {"$ref": "#/$defs/ref"},
+        "identity_evidence_ref": {"$ref": "#/$defs/ref"},
+        "identity_evidence_binding": {"$ref": "#/$defs/file_binding"},
+        "authority_evidence_ref": {"$ref": "#/$defs/ref"},
+        "authority_evidence_binding": {"$ref": "#/$defs/file_binding"},
+        "entry_evidence_ref": {"$ref": "#/$defs/ref"},
+        "entry_evidence_binding": {"$ref": "#/$defs/file_binding"},
+        "verification_status": {"const": "NOT_VERIFIED"}
+      },
+      "anyOf": [
+        {"properties": {"subject_refs": {"minItems": 1}}},
+        {"properties": {"speaker_refs": {"minItems": 1}}},
+        {"properties": {"channel_refs": {"minItems": 1}}},
+        {"properties": {"session_refs": {"minItems": 1}}}
+      ]
+    },
+    "ref_array": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/ref"}
+    },
+    "use_declaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "declaration_status",
+        "evidence_ref",
+        "evidence_binding",
+        "purpose_scope_ref",
+        "subject_scope_ref",
+        "scope_expires_at",
+        "revocation_evidence_ref",
+        "verification_status"
+      ],
+      "properties": {
+        "declaration_status": {
+          "enum": [
+            "DECLARED_PERMITTED_UNVERIFIED",
+            "DECLARED_NOT_PERMITTED",
+            "WITHDRAWAL_ENTERED_UNVERIFIED"
+          ]
+        },
+        "evidence_ref": {"$ref": "#/$defs/ref"},
+        "evidence_binding": {"$ref": "#/$defs/file_binding"},
+        "purpose_scope_ref": {"$ref": "#/$defs/ref"},
+        "subject_scope_ref": {"$ref": "#/$defs/ref"},
+        "scope_expires_at": {"$ref": "#/$defs/timestamp"},
+        "revocation_evidence_ref": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/ref"}
+          ]
+        },
+        "verification_status": {"const": "NOT_VERIFIED"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "declaration_status": {"const": "WITHDRAWAL_ENTERED_UNVERIFIED"}
+            }
+          },
+          "then": {
+            "properties": {
+              "revocation_evidence_ref": {"$ref": "#/$defs/ref"}
+            }
+          }
+        }
+      ]
+    },
+    "use_declarations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capture", "read", "analyze", "store", "transfer", "reuse"],
+      "properties": {
+        "capture": {"$ref": "#/$defs/use_declaration"},
+        "read": {"$ref": "#/$defs/use_declaration"},
+        "analyze": {"$ref": "#/$defs/use_declaration"},
+        "store": {"$ref": "#/$defs/use_declaration"},
+        "transfer": {"$ref": "#/$defs/use_declaration"},
+        "reuse": {"$ref": "#/$defs/use_declaration"}
+      }
+    },
+    "access_or_consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_ref",
+        "basis_binding",
+        "use_declarations",
+        "verification_status"
+      ],
+      "properties": {
+        "basis_ref": {"$ref": "#/$defs/ref"},
+        "basis_binding": {"$ref": "#/$defs/file_binding"},
+        "use_declarations": {"$ref": "#/$defs/use_declarations"},
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_ref",
+        "policy_binding",
+        "covered_artifacts",
+        "retain_until",
+        "deletion_trigger",
+        "deletion_receipt_ref",
+        "enforcement_status"
+      ],
+      "properties": {
+        "policy_ref": {"$ref": "#/$defs/ref"},
+        "policy_binding": {"$ref": "#/$defs/file_binding"},
+        "covered_artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "source_record_serialized_bytes",
+              "source_content_bytes",
+              "storage_metadata"
+            ]
+          }
+        },
+        "retain_until": {"$ref": "#/$defs/timestamp"},
+        "deletion_trigger": {
+          "enum": ["expiry", "withdrawal", "expiry_or_withdrawal"]
+        },
+        "deletion_receipt_ref": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/ref"}
+          ]
+        },
+        "enforcement_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_ref",
+        "policy_binding",
+        "covered_artifacts",
+        "verification_status"
+      ],
+      "properties": {
+        "policy_ref": {"$ref": "#/$defs/ref"},
+        "policy_binding": {"$ref": "#/$defs/file_binding"},
+        "covered_artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "source_record_metadata",
+              "source_content_bytes",
+              "attribution_metadata"
+            ]
+          }
+        },
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "r30_binding_handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_contract",
+        "serialized_record_locator",
+        "serialized_record_binding",
+        "binding_status",
+        "mapping_status"
+      ],
+      "properties": {
+        "target_contract": {"const": "R30_SOURCE_RECORD_BINDING"},
+        "serialized_record_locator": {"type": "null"},
+        "serialized_record_binding": {"type": "null"},
+        "binding_status": {"const": "EXTERNAL_BINDING_REQUIRED"},
+        "mapping_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "content_handling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_content_embedded",
+        "candidate_visibility",
+        "prompt_treatment",
+        "disclosure_review_status"
+      ],
+      "properties": {
+        "source_content_embedded": {"const": false},
+        "candidate_visibility": {"const": "PRIVATE_GOVERNED_ONLY"},
+        "prompt_treatment": {"const": "UNTRUSTED_DATA_ONLY"},
+        "disclosure_review_status": {"const": "NOT_REVIEWED"}
+      }
+    },
+    "review_trigger": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "prefixItems": [
+        {"const": "source_locator_kind_or_revision_change"},
+        {"const": "content_digest_size_or_observation_change"},
+        {"const": "media_type_or_encoding_change"},
+        {"const": "acquisition_mode_or_provenance_change"},
+        {"const": "lineage_kind_parent_or_segmentation_change"},
+        {"const": "attribution_candidate_or_evidence_change"},
+        {"const": "access_consent_use_scope_or_revocation_change"},
+        {"const": "retention_scope_deadline_or_deletion_change"},
+        {"const": "redaction_policy_scope_or_status_change"},
+        {"const": "record_revision_r30_binding_or_replay_conflict"},
+        {"const": "private_storage_parser_or_retrieval_policy_change"},
+        {"const": "candidate_or_authority_expiry"}
+      ],
+      "items": false
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_locator_resolved",
+        "source_item_kind_verified",
+        "source_revision_verified",
+        "source_record_schema_verified",
+        "source_record_bytes_current_verified",
+        "source_record_external_binding_verified",
+        "source_content_bytes_current_verified",
+        "source_authenticity_verified",
+        "source_completeness_verified",
+        "source_lineage_verified",
+        "source_media_type_verified",
+        "source_encoding_verified",
+        "acquisition_actor_verified",
+        "acquisition_tool_verified",
+        "acquisition_runtime_verified",
+        "acquisition_receipt_verified",
+        "acquisition_provenance_verified",
+        "subject_identity_verified",
+        "subject_attribution_verified",
+        "speaker_identity_verified",
+        "channel_session_attribution_verified",
+        "attribution_entry_identity_verified",
+        "attribution_entry_authority_verified",
+        "attribution_entry_authenticity_verified",
+        "access_or_consent_verified",
+        "capture_authorized",
+        "read_authorized",
+        "analyze_authorized",
+        "storage_authorized",
+        "transfer_authorized",
+        "reuse_authorized",
+        "revocation_verified",
+        "retention_scope_verified",
+        "retention_enforced",
+        "deletion_verified",
+        "withdrawal_recorded_verified",
+        "prompt_injection_cleared",
+        "sensitive_content_reviewed",
+        "redaction_verified",
+        "record_id_uniqueness_verified",
+        "replay_prevented",
+        "human_identity_verified",
+        "human_authority_verified",
+        "human_confirmation_authenticity_verified",
+        "human_intent_confirmed",
+        "candidate_bound_human_decision_verified",
+        "execution_authority_granted",
+        "work_order_authority_granted",
+        "promotion_verified",
+        "current_truth_changed",
+        "runtime_ready",
+        "voice_runtime_verified",
+        "discord_runtime_verified",
+        "provider_transfer_authorized",
+        "external_transfer_authorized",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "source_locator_resolved": {"const": false},
+        "source_item_kind_verified": {"const": false},
+        "source_revision_verified": {"const": false},
+        "source_record_schema_verified": {"const": false},
+        "source_record_bytes_current_verified": {"const": false},
+        "source_record_external_binding_verified": {"const": false},
+        "source_content_bytes_current_verified": {"const": false},
+        "source_authenticity_verified": {"const": false},
+        "source_completeness_verified": {"const": false},
+        "source_lineage_verified": {"const": false},
+        "source_media_type_verified": {"const": false},
+        "source_encoding_verified": {"const": false},
+        "acquisition_actor_verified": {"const": false},
+        "acquisition_tool_verified": {"const": false},
+        "acquisition_runtime_verified": {"const": false},
+        "acquisition_receipt_verified": {"const": false},
+        "acquisition_provenance_verified": {"const": false},
+        "subject_identity_verified": {"const": false},
+        "subject_attribution_verified": {"const": false},
+        "speaker_identity_verified": {"const": false},
+        "channel_session_attribution_verified": {"const": false},
+        "attribution_entry_identity_verified": {"const": false},
+        "attribution_entry_authority_verified": {"const": false},
+        "attribution_entry_authenticity_verified": {"const": false},
+        "access_or_consent_verified": {"const": false},
+        "capture_authorized": {"const": false},
+        "read_authorized": {"const": false},
+        "analyze_authorized": {"const": false},
+        "storage_authorized": {"const": false},
+        "transfer_authorized": {"const": false},
+        "reuse_authorized": {"const": false},
+        "revocation_verified": {"const": false},
+        "retention_scope_verified": {"const": false},
+        "retention_enforced": {"const": false},
+        "deletion_verified": {"const": false},
+        "withdrawal_recorded_verified": {"const": false},
+        "prompt_injection_cleared": {"const": false},
+        "sensitive_content_reviewed": {"const": false},
+        "redaction_verified": {"const": false},
+        "record_id_uniqueness_verified": {"const": false},
+        "replay_prevented": {"const": false},
+        "human_identity_verified": {"const": false},
+        "human_authority_verified": {"const": false},
+        "human_confirmation_authenticity_verified": {"const": false},
+        "human_intent_confirmed": {"const": false},
+        "candidate_bound_human_decision_verified": {"const": false},
+        "execution_authority_granted": {"const": false},
+        "work_order_authority_granted": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "runtime_ready": {"const": false},
+        "voice_runtime_verified": {"const": false},
+        "discord_runtime_verified": {"const": false},
+        "provider_transfer_authorized": {"const": false},
+        "external_transfer_authorized": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"source_state": {"const": "REFERENCE_DECLARED_UNVERIFIED"}}
+      },
+      "then": {
+        "properties": {
+          "acquisition_mode": {"const": "reference"},
+          "content_observation": {"type": "null"},
+          "acquisition_provenance": {"type": "null"},
+          "lineage": {
+            "properties": {"lineage_kind": {"const": "DECLARED_ORIGINAL"}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source_state": {"const": "CONTENT_BINDING_RECORDED_UNVERIFIED"}
+        }
+      },
+      "then": {
+        "properties": {
+          "acquisition_mode": {"enum": ["capture", "import", "synthetic"]},
+          "content_observation": {"$ref": "#/$defs/content_observation"},
+          "acquisition_provenance": {"$ref": "#/$defs/acquisition_provenance"},
+          "lineage": {
+            "properties": {"lineage_kind": {"const": "DECLARED_ORIGINAL"}}
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source_state": {
+            "const": "DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "acquisition_mode": {"const": "derived"},
+          "content_observation": {"$ref": "#/$defs/content_observation"},
+          "acquisition_provenance": {"$ref": "#/$defs/acquisition_provenance"},
+          "lineage": {
+            "properties": {
+              "lineage_kind": {"const": "DECLARED_DERIVED"},
+              "parent_source_record_refs": {"minItems": 1},
+              "transformation_refs": {"minItems": 1}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source_state": {"const": "WITHDRAWAL_RECORDED_UNVERIFIED"}
+        }
+      },
+      "then": {
+        "properties": {
+          "acquisition_mode": {
+            "enum": ["capture", "import", "derived", "synthetic"]
+          },
+          "content_observation": {"$ref": "#/$defs/content_observation"},
+          "acquisition_provenance": {"$ref": "#/$defs/acquisition_provenance"},
+          "access_or_consent": {
+            "properties": {
+              "use_declarations": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "capture": {
+                        "properties": {
+                          "declaration_status": {
+                            "const": "WITHDRAWAL_ENTERED_UNVERIFIED"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "read": {
+                        "properties": {
+                          "declaration_status": {
+                            "const": "WITHDRAWAL_ENTERED_UNVERIFIED"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "analyze": {
+                        "properties": {
+                          "declaration_status": {
+                            "const": "WITHDRAWAL_ENTERED_UNVERIFIED"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "store": {
+                        "properties": {
+                          "declaration_status": {
+                            "const": "WITHDRAWAL_ENTERED_UNVERIFIED"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "transfer": {
+                        "properties": {
+                          "declaration_status": {
+                            "const": "WITHDRAWAL_ENTERED_UNVERIFIED"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "reuse": {
+                        "properties": {
+                          "declaration_status": {
+                            "const": "WITHDRAWAL_ENTERED_UNVERIFIED"
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

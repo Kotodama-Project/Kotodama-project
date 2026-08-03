@@ -53,6 +53,8 @@ bundleが`MATCH`した後、46件のreview itemを手転記せずexact candidate
 
 completeな5成果物を別Human Decision stepへ渡す非承認candidateは[Review Evidence to Decision Handoff](../../docs/REVIEW-DECISION-HANDOFF.md)で作れます。handoffはgeneric Decision Record templateを変更せず、後続Recordの`evidence_ref`候補になります。
 
+Source ItemからIntent抽出へ渡す前のprivate schema-only instance形は[Company Pack Source Record Instance Contract](../../docs/SOURCE-RECORD-INSTANCE.md)です。source bodyやpopulated recordはこの公開exampleへ含めず、locator/hashをauthenticityへ昇格しません。
+
 SourceからHuman確認前までのprivate schema-only instance形は[Company Pack Intent Candidate Instance Contract](../../docs/INTENT-CANDIDATE-INSTANCE.md)です。source bodyやpopulated candidateはこの公開exampleへ含めず、schema PASSをHuman Intentへ昇格しません。
 
 実Decision前のschema-only field/claim契約は[Company Pack Decision Record Candidate Contract](../../docs/DECISION-RECORD-CANDIDATE.md)です。これはDecision、承認、権限、Promotion、GOを生成せず、既存のgeneric Decision Record templateも変更しません。

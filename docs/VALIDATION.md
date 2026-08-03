@@ -64,6 +64,8 @@ response schemaとverifierはrequest file SHA-256/size、Pack candidate binding�
 
 実Intent Candidate前のprivate field/claim契約は[Company Pack Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)を参照してください。Source binding、untrusted inference、provenance参照、Human確認entryのshapeだけを検証し、source authenticity、consent、Human Intent、authority、Decisionを証明しません。
 
+Intent抽出へ渡す前のprivate Source Record field/claim契約は[Company Pack Source Record Instance Contract](SOURCE-RECORD-INSTANCE.md)を参照してください。locator/content/acquisition/lineage/attribution/consent/retentionのshapeだけを検証し、source authenticity、current bytes、identity、authority、retention enforcementを証明しません。
+
 Compose / Proxmoxのinstallation lifecycle契約は、別のstdlib validatorで確認します。
 
 ```powershell
