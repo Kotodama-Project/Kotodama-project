@@ -30,7 +30,7 @@
     "version": {"const": "1.0"},
     "status": {"const": "CANDIDATE_ONLY"},
     "source_record_id_sha256": {"$ref": "#/$defs/sha256"},
-    "source_record_binding": {"$ref": "#/$defs/file_binding"},
+    "source_record_binding": {"$ref": "#/$defs/record_file_binding"},
     "source_content_binding": {"$ref": "#/$defs/file_binding"},
     "common_purpose_scope_ref": {"$ref": "#/$defs/ref"},
     "declared_permitted_uses": {
@@ -76,6 +76,38 @@
     },
     "public_beta": {"const": "NO_GO_UNPUBLISHED"}
   },
+  "allOf": [
+    {
+      "if": {"properties": {"declared_permitted_uses": {"contains": {"const": "capture"}}}},
+      "then": {"properties": {"use_evidence_bindings": {"required": ["capture"]}}},
+      "else": {"properties": {"use_evidence_bindings": {"not": {"required": ["capture"]}}}}
+    },
+    {
+      "if": {"properties": {"declared_permitted_uses": {"contains": {"const": "read"}}}},
+      "then": {"properties": {"use_evidence_bindings": {"required": ["read"]}}},
+      "else": {"properties": {"use_evidence_bindings": {"not": {"required": ["read"]}}}}
+    },
+    {
+      "if": {"properties": {"declared_permitted_uses": {"contains": {"const": "analyze"}}}},
+      "then": {"properties": {"use_evidence_bindings": {"required": ["analyze"]}}},
+      "else": {"properties": {"use_evidence_bindings": {"not": {"required": ["analyze"]}}}}
+    },
+    {
+      "if": {"properties": {"declared_permitted_uses": {"contains": {"const": "store"}}}},
+      "then": {"properties": {"use_evidence_bindings": {"required": ["store"]}}},
+      "else": {"properties": {"use_evidence_bindings": {"not": {"required": ["store"]}}}}
+    },
+    {
+      "if": {"properties": {"declared_permitted_uses": {"contains": {"const": "transfer"}}}},
+      "then": {"properties": {"use_evidence_bindings": {"required": ["transfer"]}}},
+      "else": {"properties": {"use_evidence_bindings": {"not": {"required": ["transfer"]}}}}
+    },
+    {
+      "if": {"properties": {"declared_permitted_uses": {"contains": {"const": "reuse"}}}},
+      "then": {"properties": {"use_evidence_bindings": {"required": ["reuse"]}}},
+      "else": {"properties": {"use_evidence_bindings": {"not": {"required": ["reuse"]}}}}
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "ref": {
@@ -96,6 +128,15 @@
       "properties": {
         "sha256": {"$ref": "#/$defs/sha256"},
         "bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+      }
+    },
+    "record_file_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "bytes"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 1048576}
       }
     },
     "use_evidence_binding": {

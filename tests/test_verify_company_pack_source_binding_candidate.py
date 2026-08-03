@@ -297,6 +297,7 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
             ("false narrow claim", json.loads(json.dumps(report))),
             ("atomic overclaim", json.loads(json.dumps(report))),
             ("wrong read status", json.loads(json.dumps(report))),
+            ("null evaluated input on success", json.loads(json.dumps(report))),
             ("refusal preserving success states", json.loads(json.dumps(report))),
             ("input reason with record mismatch state", json.loads(json.dumps(report))),
         ):
@@ -308,6 +309,8 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
                 mutation["claims"]["atomic_multi_file_snapshot_verified"] = True
             elif name == "wrong read status":
                 mutation["read_set_status"] = "NOT_EVALUATED"
+            elif name == "null evaluated input on success":
+                mutation["evaluated_inputs"]["source_record"] = None
             elif name == "refusal preserving success states":
                 mutation["result"] = "REFUSED"
                 mutation["reason_codes"] = ["INPUT_INVALID"]
@@ -340,6 +343,26 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
             evidence_schema,
             format_checker=FormatChecker(),
         ).validate(evidence)
+        evidence_validator = Draft202012Validator(
+            evidence_schema,
+            format_checker=FormatChecker(),
+        )
+        missing_use_binding = json.loads(json.dumps(evidence))
+        missing_use_binding["use_evidence_bindings"].pop(
+            missing_use_binding["declared_permitted_uses"][0]
+        )
+        extra_use_binding = json.loads(json.dumps(evidence))
+        removed_use = extra_use_binding["declared_permitted_uses"].pop()
+        self.assertIn(removed_use, extra_use_binding["use_evidence_bindings"])
+        oversized_record = json.loads(json.dumps(evidence))
+        oversized_record["source_record_binding"]["bytes"] = 1048577
+        for name, mutation in (
+            ("missing declared use binding", missing_use_binding),
+            ("extra undeclared use binding", extra_use_binding),
+            ("oversized record binding", oversized_record),
+        ):
+            with self.subTest(evidence_schema=name):
+                self.assertTrue(list(evidence_validator.iter_errors(mutation)))
 
     def test_strict_json_limits_types_and_refs_are_non_reflective_refusals(self) -> None:
         record, content, evidence = matched_inputs()

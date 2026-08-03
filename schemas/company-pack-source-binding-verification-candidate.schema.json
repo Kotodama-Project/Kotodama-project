@@ -173,6 +173,7 @@
       "then": {
         "properties": {
           "reason_codes": {"maxItems": 0},
+          "evaluated_inputs": {"$ref": "#/$defs/all_bound_inputs"},
           "r31_input_status": {"const": "PARSED_PROJECTION_CONTRACT_MATCHED_UNVERIFIED"},
           "read_set_status": {"const": "STABLE_POSTCHECK_UNVERIFIED"},
           "r30_projection_eligibility": {"const": "ELIGIBLE_UNVERIFIED"},
