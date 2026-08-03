@@ -18,6 +18,19 @@
 - [x] Candidate-bound review bundle with exact SHA-256 and byte-size bindings
 - [x] Saved-bundle verifier with metadata, digest, and byte-drift detection
 - [x] Candidate-bound review workflow with separate Human Decision and Promotion
+- [x] Dynamic saved-bundle to Review Request contract with Pack-specific counts
+- [x] Dynamic Review Response contract bound to the saved request
+- [x] Dynamic Decision Handoff contract bound to the saved review chain
+- [x] Public Template Guide, Starter Walkthrough, Status, and Roadmap current-state sync
+
+## Current public documentation revision
+
+R49 synchronizes this roadmap with the R48 public Company Pack surface. The
+published review chain remains read-only/candidate-only: it binds exact
+bytes, saved Pack-specific counts, and false claims, but it does not create
+Human approval, runtime authority, Promotion, Current Truth, or Public Beta
+access.
+
 - [x] Sanitized Compose minimum and Proxmox segmented lifecycle contracts
 - [x] Machine-checked preflight/apply/verify/rollback/isolated-restore evidence requirements
 - [x] Public runbooks separating planning contracts from live installation receipts

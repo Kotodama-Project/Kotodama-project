@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-08-03
+Updated: 2026-08-04
 
 | Surface | Status |
 |---|---|
@@ -22,6 +22,11 @@ Updated: 2026-08-03
 | [Protected Source binding receipt candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md) | Included as an unpopulated schema-only private receipt contract; no protected runner or verified receipt |
 | [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) | Included as an opaque schema-only request shape; no execution accepted, executed, or private handoff |
 | [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) | Included as a read-only aggregate of starter validator, Catalog, customization, and false-claim checks |
+| [Company Pack review bundle](docs/REVIEW-BUNDLE.md) | Published candidate-only exact-byte binding and drift verifier; no approval or Promotion |
+| [Company Pack Review Request](docs/REVIEW-REQUEST.md) | Published read-only request candidate; counts follow the saved Pack report |
+| [Company Pack Review Response](docs/REVIEW-RESPONSE.md) | Published read-only response candidate; saved-request binding and item counts are dynamic |
+| [Company Pack Decision Handoff](docs/REVIEW-DECISION-HANDOFF.md) | Published read-only handoff candidate; decision and selected outcome remain null |
+| [Template Guide / Starter Walkthrough](docs/TEMPLATE-GUIDE.md) | Published ideal/current usage docs; starter counts are examples, not universal Pack invariants |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -37,13 +42,17 @@ Updated: 2026-08-03
 
 ## Latest public template result
 
-R37 extends the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md)
-with a deterministic `--format markdown` summary alongside the JSON contract.
-It aggregates the existing starter validator, Catalog projection,
-customization categories, and false-claim boundary. It does not add authority,
-runtime, Promotion, Current Truth, or Public Beta access.
+R48 is the current public template/documentation surface. R37 introduced the
+read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a
+deterministic `--format markdown` summary. R45 added the saved-bundle to
+Review Request boundary, R46 added the dynamic Review Response boundary, and
+R47 added the dynamic Decision Handoff boundary. R48 clarified that the
+starter's `19/46/5` values are examples; another Pack follows its actual
+checker, saved report, and review-chain counts. These surfaces do not add
+authority, runtime, Promotion, Current Truth, or Public Beta access.
 
 公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。
+公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Review Request、Response、Decision Handoffはその保存済みchainを再入力なしで運びますが、すべてread-only/candidate-onlyです。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。
 
 Source binding verification candidateは、privateなR31 record、Source Content、aggregate access evidenceをbounded no-link readerで照合し、strict parse、exact raw-byte binding、lossless R30 source-binding projection digest、二回のterminal rereadを報告します。reportは常に`CANDIDATE_ONLY`で、成功しても`STABLE_POSTCHECK_UNVERIFIED` / `ELIGIBLE_UNVERIFIED`です。full R31 schema、cross-file atomic snapshot、locator resolution、origin、authenticity、consent authority、retention enforcement、trusted time、Intent builder、runtime、GOは未証明です。populated inputとprivate projectionはrepositoryへ含めていません。
 
