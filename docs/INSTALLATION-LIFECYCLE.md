@@ -14,6 +14,29 @@ JSON例:
 - [`compose-minimum.json`](../examples/installation-lifecycle/compose-minimum.json)
 - [`proxmox-segmented.json`](../examples/installation-lifecycle/proxmox-segmented.json)
 
+## 最初に選ぶ
+
+最初からruntimeを起動する必要はありません。Companyの仕事の型だけを
+確認したい場合は、まず [Company Pack Catalog](COMPANY-PACK-CATALOG.md) と
+ [Starter Walkthrough](STARTER-WALKTHROUGH.md) を読み、必要なBlock、Governed
+ Record、MOCを選びます。runtime候補まで進める場合は、目的に応じて次の一つを
+ 選びます。
+
+| 目的 | 選ぶprofile | 最初に行うこと | この公開例でまだ証明しないこと |
+|---|---|---|---|
+| 1台の管理対象hostで小さく、可逆な候補を作る | `compose_minimum` | Compose契約をvalidatorで確認し、[Compose Minimum Runbook](COMPOSE-MINIMUM-RUNBOOK.md)のpreflightへ進む | image取得、起動、restart、migration、restore、provider接続 |
+| 既存のProxmox環境でservice roleとnetwork境界を分けて評価する | `proxmox_segmented` | role/evidence契約をvalidatorで確認し、[Proxmox Segmented Runbook](PROXMOX-SEGMENTED-RUNBOOK.md)のread-only inventoryへ進む | guest変更、public ingress、Voice E2E、provider転送、稼働receipt |
+| まだ実環境を使わず、会社の構造だけを読む | runtime profileを選ばない | [Company Template Guide](TEMPLATE-GUIDE.md)からstarterを確認する | install、deploy、Promotion、Current Truth、Public Beta GO |
+
+最短の読み順は次のとおりです。
+
+1. [Company Pack Catalog](COMPANY-PACK-CATALOG.md)で、Company Template → Blocks → Governed Records → MOCsの順に候補を選ぶ。
+2. [Starter Walkthrough](STARTER-WALKTHROUGH.md)で、理想の使い方と現在のread-only/candidate-only境界を確認する。
+3. runtime候補が必要な場合だけ、下のvalidatorで`compose_minimum`または`proxmox_segmented`の公開契約を確認する。
+4. 実環境を扱う場合は、選んだprofileのrunbookでpreflightを行い、material effectの前にexact Work Orderを作る。
+
+validatorの`PASS`やrunbookの存在は、実行済み、稼働中、デプロイ済み、または公開可能という意味ではありません。迷った場合はruntime profileを選ばず、Company Packのread-only導線から始めます。
+
 ## 共通の6フェーズ
 
 ```mermaid
