@@ -215,6 +215,52 @@ class PublicPreviewCheckTests(unittest.TestCase):
         self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
         self.assertNotIn(str(pack), result.stdout)
 
+    def test_validator_pass_recordless_markdown_preserves_preview_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "recordless-company"
+            shutil.copytree(STARTER, pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.pop("records")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            before = {
+                path.relative_to(pack).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in pack.rglob("*")
+                if path.is_file()
+            }
+
+            result = subprocess.run(
+                [sys.executable, str(TOOL), str(pack), "--format", "markdown"],
+                cwd=ROOT,
+                capture_output=True,
+                check=False,
+            )
+            markdown = result.stdout.decode("utf-8")
+            stderr = result.stderr.decode("utf-8")
+            after = {
+                path.relative_to(pack).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in pack.rglob("*")
+                if path.is_file()
+            }
+
+        self.assertEqual(result.returncode, 0, stderr)
+        self.assertEqual(stderr, "")
+        self.assertIn("- Status: `PASS`", markdown)
+        self.assertIn("- Public Beta: `NO_GO_UNPUBLISHED`", markdown)
+        self.assertIn("| `records` | 0 |", markdown)
+        self.assertEqual(markdown.count("| `PASS` |"), 4)
+        for claim in (
+            "human_approval_verified",
+            "runtime_verified",
+            "promotion_verified",
+            "current_truth_changed",
+            "public_beta_go",
+        ):
+            self.assertIn(f"| `{claim}` | `false` |", markdown)
+        self.assertNotIn(str(pack), markdown)
+        self.assertNotIn("manifest", markdown)
+        self.assertEqual(before, after)
+
     def test_invalid_pack_refuses_without_echoing_path_or_validation_detail(self) -> None:
         result = self.run_tool(INVALID)
         self.assertEqual(result.returncode, 1)
