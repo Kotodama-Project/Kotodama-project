@@ -15,6 +15,64 @@
     "claims",
     "public_beta"
   ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "PASS"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "counts": {
+            "properties": {
+              "validated_files": {"minimum": 1},
+              "blocks": {"minimum": 1},
+              "mocs": {"minimum": 1}
+            }
+          },
+          "checks": {
+            "items": {
+              "properties": {"status": {"const": "PASS"}}
+            }
+          },
+          "refusal_reason": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "REFUSED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "counts": {
+            "properties": {
+              "validated_files": {"const": 0},
+              "blocks": {"const": 0},
+              "records": {"const": 0},
+              "mocs": {"const": 0},
+              "replacement_required": {"const": 0},
+              "review_required": {"const": 0},
+              "evidence_required": {"const": 0}
+            }
+          },
+          "checks": {
+            "items": {
+              "properties": {"status": {"const": "REFUSED"}}
+            }
+          },
+          "refusal_reason": {
+            "enum": [
+              "INPUT_NOT_DIRECTORY",
+              "INVALID_PACK",
+              "INTERNAL_CONTRACT_REFUSAL"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "properties": {
     "kind": {"const": "company_pack_public_preview_check"},
     "version": {"const": "1.0"},

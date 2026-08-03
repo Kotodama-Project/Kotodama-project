@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,6 +98,31 @@ class PublicPreviewCheckTests(unittest.TestCase):
         report = json.loads(first.stdout)
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)
+
+    def test_schema_rejects_inconsistent_status_shape(self) -> None:
+        result = self.run_tool(STARTER)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema, format_checker=FormatChecker())
+
+        tampered_cases = (
+            {"status": "REFUSED"},
+            {"refusal_reason": "INVALID_PACK"},
+            {"checks": [{"id": "pack_structure", "status": "REFUSED"}]},
+            {"counts": {"blocks": 0}},
+        )
+        for mutation in tampered_cases:
+            with self.subTest(mutation=mutation):
+                tampered = json.loads(json.dumps(report))
+                if "checks" in mutation:
+                    tampered["checks"][0] = mutation["checks"][0]
+                elif "counts" in mutation:
+                    tampered["counts"].update(mutation["counts"])
+                else:
+                    tampered.update(mutation)
+                with self.assertRaises(ValidationError):
+                    validator.validate(tampered)
 
     def test_markdown_output_is_deterministic_and_preserves_claim_boundary(self) -> None:
         first = self.run_tool(STARTER, "--format", "markdown")

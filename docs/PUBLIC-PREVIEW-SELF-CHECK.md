@@ -58,6 +58,15 @@ validator-PASS Pack は、Catalog の `records: []` と `counts.records: 0` を
 保ったまま、この self-check でも `PASS` になります。公開 Company starter
 自身は9 Recordsを持つため、上の代表例では `records: 9` と表示されます。
 
+状態フィールドは相互に矛盾しない形で固定されます。`PASS` では
+`validated_files`、`blocks`、`mocs` がそれぞれ1以上で、4つの `checks` が
+すべて `PASS`、`refusal_reason` が `null` でなければなりません。任意の
+`manifest.records` を省略した場合だけは `records: 0` を許容します。
+`REFUSED` ではすべての count が0、4つの `checks` がすべて `REFUSED`、
+`refusal_reason` が固定された拒否理由のいずれかである必要があります。
+この形状検査は、statusだけを差し替えたレポートや、一部のcheck/countだけを
+書き換えたレポートを有効な証拠として扱わないためのschema-level guardです。
+
 公開 example では通常 `replacement_required: 42` です。initializer で
 ID、status、Human Intent locator、Block expiry、Record retention locator を
 再束縛した作業 copy では、通常 `replacement_required: 19` になります。
