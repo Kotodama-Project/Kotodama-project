@@ -73,8 +73,8 @@ plannerは元reportのcategory別countをgroup合計へ集約し、各category�
 12. [Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)でSource binding・private content・抽出provenance・Human確認前のfalse claimを確認する。実dataやHuman Intentを公開しない。
 13. [Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)で実Decision前のfieldと全false claimを確認する。schema-only契約からDecisionや権限を導出しない。
 14. reviewer identity・authority、bundle/request/response/report digest、全体outcomeを別Decision Recordへ残す。
-14. `evidence_required`をcandidate-bound evidenceで閉じる。
-15. 別のgoverned processだけがPromotionやCurrent Truth変更を行う。
+15. `evidence_required`をcandidate-bound evidenceで閉じる。
+16. 別のgoverned processだけがPromotionやCurrent Truth変更を行う。
 
 ## Current implementation boundary
 

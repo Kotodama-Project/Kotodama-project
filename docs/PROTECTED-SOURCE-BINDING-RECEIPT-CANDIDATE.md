@@ -27,7 +27,8 @@ Content、aggregate access evidenceを取得し、次を一つのprivate evidenc
 6. bound store内のatomic replay reservation
 7. retention deadline、withdrawal、実削除後のdeletion receipt
 8. R32 result、非公開R30 projection digest、detached attestation
-9. receipt保存後に別工程で作るserialized receiptの外部binding
+9. runner/signerとは別のindependent reviewer policyとverification handoff
+10. receipt保存後に別工程で作るserialized receiptの外部binding
 
 独立verifierはその後、raw evidenceをprivate trust boundary内で読み、cross-binding、
 time ordering、signature/trust root、snapshot atomicity、nonce uniqueness、retentionと
@@ -109,6 +110,12 @@ schemaはsignatureを検証しません。receipt自身のserialized bytesは自
 ため常に`EXTERNAL_BINDING_REQUIRED`です。保存後の別工程がlocatorとbindingを作り、
 別verifierがこのcandidateへ束縛する必要があります。
 
+`independent_verification_handoff`はreviewer policyだけを先に束縛し、result refと
+bindingを必ず`null`、statusを`INDEPENDENT_VERIFICATION_REQUIRED`にします。この
+candidate自身が自己review結果を埋めたり、runner、signer、reviewerの人物分離を
+claimしたりすることを禁止します。独立verification resultは別contractで保存後の
+receipt bytesへ束縛します。
+
 ## What contract tests reject
 
 - authority/runtime/GO claimを一つでも`true`にするoverclaim
@@ -129,8 +136,9 @@ future protected verifierはそれらをfail closedにし、入力値やprivate 
 
 ## Claims boundary
 
-全33 claimは常に`false`です。protected execution、runner identity/binary/config、
-detached attestation、trusted clock、atomic snapshot、locator resolution、immutable
+全35 claimは常に`false`です。protected execution、runner identity/binary/config、
+runner/signer person independence、detached attestation、independent receipt
+verification、trusted clock、atomic snapshot、locator resolution、immutable
 version、authenticity/completeness/lineage、identity/attribution、consent/revocation、
 retention/deletion、replay、R32 result、R30 projection、Human Intent/Decision、Work
 Order authority、Voice/Discord/provider/external transfer、Promotion、Current Truth、

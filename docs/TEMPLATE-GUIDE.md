@@ -172,10 +172,10 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 14. [Intent Candidate Instance Contract](INTENT-CANDIDATE-INSTANCE.md)でprivate source binding、untrusted inference、Human確認前のfalse claimを確認する。
 15. 実Decisionの前に[Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)でfieldと全false claimを確認する。このschema-only契約はDecisionや権限を生成しない。
 16. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、identity・authority・全体outcomeを別Decision Recordへ束縛する。
-16. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
-17. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
-18. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
-19. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
+17. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
+18. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
+19. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
+20. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
 
 ## Statusの読み方
 

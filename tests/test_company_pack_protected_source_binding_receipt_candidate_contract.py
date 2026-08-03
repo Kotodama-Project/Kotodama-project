@@ -1,5 +1,6 @@
 import copy
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -24,7 +25,9 @@ EXPECTED_CLAIMS = {
     "runner_identity_verified",
     "runner_binary_verified",
     "runner_configuration_verified",
+    "runner_signer_person_independence_verified",
     "detached_attestation_verified",
+    "independent_receipt_verification_verified",
     "trusted_time_verified",
     "atomic_private_snapshot_verified",
     "source_record_locator_resolution_verified",
@@ -67,6 +70,7 @@ REVIEW_TRIGGERS = [
     "replay_store_nonce_or_reservation_change",
     "r32_candidate_result_or_projection_digest_change",
     "detached_attestation_or_receipt_binding_change",
+    "independent_reviewer_policy_or_result_change",
     "receipt_or_authority_expiry",
 ]
 
@@ -192,6 +196,13 @@ def receipt_candidate(*, deletion_receipt: bool = False) -> dict:
             "signature_binding": binding("1"),
             "verification_status": "NOT_VERIFIED",
         },
+        "independent_verification_handoff": {
+            "reviewer_policy_ref": "ref/independent-reviewer/policy",
+            "reviewer_policy_binding": binding("2"),
+            "verification_result_ref": None,
+            "verification_result_binding": None,
+            "handoff_status": "INDEPENDENT_VERIFICATION_REQUIRED",
+        },
         "receipt_binding_handoff": {
             "serialized_receipt_locator": None,
             "serialized_receipt_binding": None,
@@ -309,6 +320,11 @@ class ProtectedSourceBindingReceiptCandidateContractTests(unittest.TestCase):
             mutated["review_trigger"][0],
         )
         cases["review trigger reorder"] = mutated
+        mutated = copy.deepcopy(base)
+        mutated["independent_verification_handoff"]["verification_result_ref"] = (
+            "ref/forged-independent-result"
+        )
+        cases["forged independent result"] = mutated
 
         for name, instance in cases.items():
             with self.subTest(name=name):
@@ -367,6 +383,33 @@ class ProtectedSourceBindingReceiptCandidateContractTests(unittest.TestCase):
             handoff["properties"]["binding_status"]["const"],
             "EXTERNAL_BINDING_REQUIRED",
         )
+
+    def test_independent_verification_is_required_but_not_preclaimed(self) -> None:
+        handoff = self.schema["$defs"]["independent_verification_handoff"]
+        self.assertEqual(handoff["properties"]["verification_result_ref"]["type"], "null")
+        self.assertEqual(
+            handoff["properties"]["verification_result_binding"]["type"],
+            "null",
+        )
+        self.assertEqual(
+            handoff["properties"]["handoff_status"]["const"],
+            "INDEPENDENT_VERIFICATION_REQUIRED",
+        )
+
+    def test_documented_workflow_steps_are_strictly_numbered(self) -> None:
+        cases = (
+            (ROOT / "docs" / "CUSTOMIZATION-CHECKLIST.md", "## Ideal use"),
+            (ROOT / "docs" / "TEMPLATE-GUIDE.md", "## 現時点での使い方"),
+        )
+        for path, heading in cases:
+            text = path.read_text(encoding="utf-8")
+            section = text.split(heading, 1)[1].split("\n## ", 1)[0]
+            numbers = [
+                int(match.group(1))
+                for match in re.finditer(r"(?m)^(\d+)\. ", section)
+            ]
+            with self.subTest(path=path.relative_to(ROOT)):
+                self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
 
     def test_runbook_states_ideal_current_and_unverified_boundaries(self) -> None:
         text = RUNBOOK.read_text(encoding="utf-8")
