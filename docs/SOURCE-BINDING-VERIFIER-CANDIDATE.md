@@ -28,6 +28,8 @@ atomic snapshotではありません。したがって成功時も
 成功時も`read_set_status: STABLE_POSTCHECK_UNVERIFIED`、
 `r30_projection_eligibility: ELIGIBLE_UNVERIFIED`であり、`VERIFIED`、`CURRENT`、
 `ATOMIC`とは表現しません。
+R31だけをstrict parseでき、access evidenceが壊れていた場合は
+`r31_input_status: STRICTLY_PARSED_UNVERIFIED`までに止まります。
 
 full R31 Draft 2020-12 schemaはtest suiteが実validatorで検証します。CLIは
 projectionに必要なclosed shapeとcross-fieldだけを標準ライブラリで検査し、
@@ -69,16 +71,26 @@ matchはexit `0`、evaluated refusalはexit `1`、usage errorはexit `2`です�
 ## Strict input contract
 
 - UTF-8のみ。BOM、invalid UTF-8、surrogateを拒否します。
-- duplicate key、non-finite JSON、top-level non-object、depth 32超、20,000 node超を
-  拒否します。
+- duplicate key、literalまたは指数overflowのnon-finite JSON、過大integer、
+  decoder recursion、top-level non-object、depth 32超、20,000 node超を拒否します。
 - booleanをinteger binding sizeとして受け入れません。
-- symlink、junction、reparse component、non-regular file、size/identity change、
-  truncation、over-limit、TOCTOU、late driftをfail closedにします。
+- 観測時点のsymlink、junction、reparse component、non-regular file、
+  size/identity change、truncation、over-limit、detectable substitution、late driftを
+  fail closedにします。
 - R31 reference-only、root/per-use withdrawal、contentなし、permitted useなし、
   purpose/subject/expiry/revocation不一致、revision不一致、retention coverage不足、
   lineage矛盾をR30 projection不適格として拒否します。
+- content-bound original stateはR31どおり`capture`、`import`、`synthetic`を受理し、
+  derived stateは`derived`だけを受理します。acquisition開始・完了、content観測、
+  record記録とsource観測の逆転を拒否します。
+- R31の固定12 review triggerは値と順序を完全一致で要求し、固定57 denial claimは
+  名前集合の欠落・追加と一つでも`false`以外の値を拒否します。
 - evidenceのrecord/content binding、record-ID digest、use集合、common scope、basis、
-  per-use evidence bindingが一つでも不一致なら拒否します。
+  per-use evidence binding、recordより前のevidence時刻、candidate expiry不一致が
+  一つでもあれば拒否します。
+- Source Item、Source Content、serialized record、access evidenceのlocator aliasを
+  拒否します。三つの入力pathと観測file identityも別objectを要求し、外部locatorを
+  確認する前にprivate fileを開きません。
 
 ## Non-reflective refusal
 
@@ -108,6 +120,10 @@ attribution、access/consent authority、revocation authority、retention/deleti
 trusted time、replay、Human Intent/Decision/Work Order authority、Voice/Discord/provider/
 external transfer/runtime、Promotion、Current Truth、Final Human GO、Public Beta GOは
 常にfalseです。Public Betaは`NO_GO_UNPUBLISHED`です。
+
+component checkとopenの間に起き、同じobject identityとして観測される競合や、
+最後のreread後の変更はこのportable local CLIでは証明不能です。したがって
+TOCTOU完全排除、immutable storage、post-return currentnessはclaimしません。
 
 ## Rollback and next gate
 

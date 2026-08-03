@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import stat
@@ -29,6 +30,10 @@ ELIGIBLE_STATES = {
     "CONTENT_BINDING_RECORDED_UNVERIFIED",
     "DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED",
 }
+KNOWN_STATES = ELIGIBLE_STATES | {
+    "REFERENCE_DECLARED_UNVERIFIED",
+    "WITHDRAWAL_RECORDED_UNVERIFIED",
+}
 REF = re.compile(r"^ref/[a-z0-9][a-z0-9_-]*(?:/[a-z0-9][a-z0-9_-]*)*$")
 IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -36,7 +41,8 @@ TIMESTAMP = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
 )
 MEDIA_TYPE = re.compile(
-    r"^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+(?:;[A-Za-z0-9!#$&^_.+-]+=[A-Za-z0-9!#$&^_.+-]+)*$"
+    r"^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,62}/"
+    r"[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,62}$"
 )
 
 RECORD_FIELDS = {
@@ -65,6 +71,79 @@ RECORD_FIELDS = {
     "review_trigger",
     "claims",
     "public_beta",
+}
+R31_REVIEW_TRIGGERS = (
+    "source_locator_kind_or_revision_change",
+    "content_digest_size_or_observation_change",
+    "media_type_or_encoding_change",
+    "acquisition_mode_or_provenance_change",
+    "lineage_kind_parent_or_segmentation_change",
+    "attribution_candidate_or_evidence_change",
+    "access_consent_use_scope_or_revocation_change",
+    "retention_scope_deadline_or_deletion_change",
+    "redaction_policy_scope_or_status_change",
+    "record_revision_r30_binding_or_replay_conflict",
+    "private_storage_parser_or_retrieval_policy_change",
+    "candidate_or_authority_expiry",
+)
+R31_REQUIRED_FALSE_CLAIMS = {
+    "source_locator_resolved",
+    "source_item_kind_verified",
+    "source_revision_verified",
+    "source_record_schema_verified",
+    "source_record_bytes_current_verified",
+    "source_record_external_binding_verified",
+    "source_content_bytes_current_verified",
+    "source_authenticity_verified",
+    "source_completeness_verified",
+    "source_lineage_verified",
+    "source_media_type_verified",
+    "source_encoding_verified",
+    "acquisition_actor_verified",
+    "acquisition_tool_verified",
+    "acquisition_runtime_verified",
+    "acquisition_receipt_verified",
+    "acquisition_provenance_verified",
+    "subject_identity_verified",
+    "subject_attribution_verified",
+    "speaker_identity_verified",
+    "channel_session_attribution_verified",
+    "attribution_entry_identity_verified",
+    "attribution_entry_authority_verified",
+    "attribution_entry_authenticity_verified",
+    "access_or_consent_verified",
+    "capture_authorized",
+    "read_authorized",
+    "analyze_authorized",
+    "storage_authorized",
+    "transfer_authorized",
+    "reuse_authorized",
+    "revocation_verified",
+    "retention_scope_verified",
+    "retention_enforced",
+    "deletion_verified",
+    "withdrawal_recorded_verified",
+    "prompt_injection_cleared",
+    "sensitive_content_reviewed",
+    "redaction_verified",
+    "record_id_uniqueness_verified",
+    "replay_prevented",
+    "human_identity_verified",
+    "human_authority_verified",
+    "human_confirmation_authenticity_verified",
+    "human_intent_confirmed",
+    "candidate_bound_human_decision_verified",
+    "execution_authority_granted",
+    "work_order_authority_granted",
+    "promotion_verified",
+    "current_truth_changed",
+    "runtime_ready",
+    "voice_runtime_verified",
+    "discord_runtime_verified",
+    "provider_transfer_authorized",
+    "external_transfer_authorized",
+    "final_human_go",
+    "public_beta_go",
 }
 CONTENT_FIELDS = {
     "storage_locator_ref",
@@ -314,6 +393,8 @@ def check_json_limits(root: object) -> None:
             stack.extend((item, depth + 1) for item in value.values())
         elif isinstance(value, list):
             stack.extend((item, depth + 1) for item in value)
+        elif type(value) is float and not math.isfinite(value):
+            fail()
 
 
 def load_strict_json(content: bytes) -> dict[str, Any]:
@@ -326,7 +407,7 @@ def load_strict_json(content: bytes) -> dict[str, Any]:
             object_pairs_hook=reject_duplicate_pairs,
             parse_constant=reject_non_finite,
         )
-    except (UnicodeError, json.JSONDecodeError):
+    except (UnicodeError, ValueError, RecursionError):
         fail()
     if not isinstance(value, dict):
         fail()
@@ -433,18 +514,17 @@ def validate_record(record: dict[str, Any], content_bytes: bytes) -> dict[str, A
     require_string(record["source_record_id"], IDENTIFIER, 63)
     for field in ("record_revision", "source_locator_ref", "source_revision"):
         require_ref(record[field])
-    parse_timestamp(record["source_observed_at"])
-    parse_timestamp(record["recorded_at"])
-    if parse_timestamp(record["expires_at"]) <= parse_timestamp(record["recorded_at"]):
+    source_observed_at = parse_timestamp(record["source_observed_at"])
+    recorded_at = parse_timestamp(record["recorded_at"])
+    if parse_timestamp(record["expires_at"]) <= recorded_at:
+        fail()
+    if record["source_state"] not in KNOWN_STATES:
         fail()
     if record["source_state"] not in ELIGIBLE_STATES:
         raise ProjectionIneligible("closed")
-    expected_mode = (
-        "derived"
-        if record["source_state"] == "DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED"
-        else "import"
-    )
-    if record["acquisition_mode"] != expected_mode:
+    derived_state = record["source_state"] == "DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED"
+    allowed_modes = {"derived"} if derived_state else {"capture", "import", "synthetic"}
+    if record["acquisition_mode"] not in allowed_modes:
         fail()
 
     content = exact_object(record["content_observation"], CONTENT_FIELDS)
@@ -452,10 +532,10 @@ def validate_record(record: dict[str, Any], content_bytes: bytes) -> dict[str, A
     declared_binding = require_binding(content["content_binding"])
     if declared_binding != binding(content_bytes):
         fail()
-    require_string(content["declared_media_type"], MEDIA_TYPE, 255)
+    require_string(content["declared_media_type"], MEDIA_TYPE, 127)
     require_ref(content["declared_encoding_ref"])
     require_ref(content["declared_source_revision"])
-    parse_timestamp(content["observed_at"])
+    content_observed_at = parse_timestamp(content["observed_at"])
     if content["observation_status"] != "NOT_VERIFIED":
         fail()
     if record["source_revision"] != content["declared_source_revision"]:
@@ -474,19 +554,28 @@ def validate_record(record: dict[str, Any], content_bytes: bytes) -> dict[str, A
         require_ref(provenance[field])
     if require_binding(provenance["output_binding"]) != declared_binding:
         fail()
-    if parse_timestamp(provenance["completed_at"]) < parse_timestamp(provenance["started_at"]):
+    started_at = parse_timestamp(provenance["started_at"])
+    completed_at = parse_timestamp(provenance["completed_at"])
+    if not started_at <= completed_at <= content_observed_at <= recorded_at:
+        fail()
+    if source_observed_at > recorded_at:
         fail()
     if provenance["verification_status"] != "NOT_VERIFIED":
         fail()
 
     lineage = exact_object(record["lineage"], LINEAGE_FIELDS)
-    parents = require_ref_list(lineage["parent_source_record_refs"])
-    transformations = require_ref_list(lineage["transformation_refs"])
-    require_nullable_ref(lineage["segmentation_ref"])
+    parents = require_ref_list(lineage["parent_source_record_refs"], 16)
+    transformations = require_ref_list(lineage["transformation_refs"], 16)
+    segmentation = require_nullable_ref(lineage["segmentation_ref"])
     if lineage["verification_status"] != "NOT_VERIFIED":
         fail()
-    if expected_mode == "import":
-        if lineage["lineage_kind"] != "DECLARED_ORIGINAL" or parents or transformations:
+    if not derived_state:
+        if (
+            lineage["lineage_kind"] != "DECLARED_ORIGINAL"
+            or parents
+            or transformations
+            or segmentation is not None
+        ):
             fail()
     elif (
         lineage["lineage_kind"] != "DECLARED_DERIVED"
@@ -536,7 +625,16 @@ def validate_record(record: dict[str, Any], content_bytes: bytes) -> dict[str, A
     require_ref(retention["policy_ref"])
     require_binding(retention["policy_binding"])
     covered = retention["covered_artifacts"]
-    if not isinstance(covered, list) or not all(isinstance(item, str) for item in covered):
+    allowed_coverage = {
+        "source_record_serialized_bytes",
+        "source_content_bytes",
+        "storage_metadata",
+    }
+    if (
+        not isinstance(covered, list)
+        or not 1 <= len(covered) <= 3
+        or not all(isinstance(item, str) and item in allowed_coverage for item in covered)
+    ):
         fail()
     if len(covered) != len(set(covered)) or not {
         "source_record_serialized_bytes",
@@ -548,7 +646,6 @@ def validate_record(record: dict[str, Any], content_bytes: bytes) -> dict[str, A
         "expiry",
         "withdrawal",
         "expiry_or_withdrawal",
-        "manual_review",
     }:
         fail()
     require_nullable_ref(retention["deletion_receipt_ref"])
@@ -582,14 +679,10 @@ def validate_record(record: dict[str, Any], content_bytes: bytes) -> dict[str, A
         "disclosure_review_status": "NOT_REVIEWED",
     }:
         fail()
-    if (
-        not isinstance(record["review_trigger"], list)
-        or not record["review_trigger"]
-        or not all(isinstance(item, str) for item in record["review_trigger"])
-    ):
+    if record["review_trigger"] != list(R31_REVIEW_TRIGGERS):
         fail()
-    claims = record["claims"]
-    if not isinstance(claims, dict) or not claims or any(value is not False for value in claims.values()):
+    claims = exact_object(record["claims"], R31_REQUIRED_FALSE_CLAIMS)
+    if any(value is not False for value in claims.values()):
         fail()
 
     first = permitted[0][1]
@@ -656,7 +749,12 @@ def validate_access_evidence(
         if require_binding(item["evidence_binding"]) != declaration["evidence_binding"]:
             fail()
     recorded_at = parse_timestamp(evidence["recorded_at"])
-    if parse_timestamp(evidence["expires_at"]) <= recorded_at:
+    expires_at = parse_timestamp(evidence["expires_at"])
+    if (
+        recorded_at < parse_timestamp(record["recorded_at"])
+        or expires_at <= recorded_at
+        or evidence["expires_at"] != record["expires_at"]
+    ):
         fail()
     claims = exact_object(evidence["claims"], EVIDENCE_CLAIMS)
     if any(value is not False for value in claims.values()):
@@ -760,9 +858,19 @@ def evaluate(
     report = empty_report()
     paths = (record_path, content_path, evidence_path)
     try:
-        first = read_set(paths)
         require_ref(record_locator)
         require_ref(evidence_locator)
+        if record_locator == evidence_locator:
+            fail()
+        normalized_paths = {
+            os.path.normcase(os.path.abspath(path))
+            for path in paths
+        }
+        if len(normalized_paths) != 3:
+            fail()
+        first = read_set(paths)
+        if len({snapshot.identity[:2] for snapshot in first}) != 3:
+            fail()
     except StrictInputError:
         report["reason_codes"] = ["INPUT_INVALID"]
         report["checks"]["input_read_set"] = "MISMATCH"
@@ -777,10 +885,17 @@ def evaluate(
 
     try:
         record = load_strict_json(first[0].content)
-        evidence = load_strict_json(first[2].content)
     except StrictInputError:
         clear_narrow_claims(report)
         report["r31_input_status"] = "REJECTED"
+        report["reason_codes"] = ["STRICT_JSON_INVALID"]
+        report["checks"]["strict_parsing"] = "MISMATCH"
+        return report
+    report["r31_input_status"] = "STRICTLY_PARSED_UNVERIFIED"
+    try:
+        evidence = load_strict_json(first[2].content)
+    except StrictInputError:
+        clear_narrow_claims(report)
         report["reason_codes"] = ["STRICT_JSON_INVALID"]
         report["checks"]["strict_parsing"] = "MISMATCH"
         return report
@@ -809,6 +924,19 @@ def evaluate(
     report["claims"]["record_projection_contract_matched"] = True
     report["claims"]["source_content_binding_matched"] = True
     report["r31_input_status"] = "PARSED_PROJECTION_CONTRACT_MATCHED_UNVERIFIED"
+
+    artifact_locators = {
+        record_locator,
+        evidence_locator,
+        record["source_locator_ref"],
+        view["content"]["storage_locator_ref"],
+    }
+    if len(artifact_locators) != 4:
+        clear_narrow_claims(report)
+        report["r30_projection_eligibility"] = "INELIGIBLE"
+        report["reason_codes"] = ["R30_PROJECTION_INELIGIBLE"]
+        report["checks"]["r30_projection"] = "MISMATCH"
+        return report
 
     try:
         validate_access_evidence(

@@ -236,12 +236,12 @@ Final Human GO、Public Beta GOのどれも成立しません。
 schemaはunknown fieldやphysical locator、malformed media typeを拒否しますが、
 bytesを読みません。R32 candidateはprojection-relevant subsetについてoutput
 binding、time ordering、record/content revision、lineage、source/content/evidence
-substitution、strict JSON/UTF-8/resource limits、symlink/junction/reparse point、
-TOCTOU/late drift、truncation、non-reflectionを追加検査します。
+substitution、strict JSON/UTF-8/resource limits、観測できるsymlink/junction/
+reparse point、identity/byte late drift、truncation、non-reflectionを追加検査します。
 具体的には、schema単体が許すoutput binding mismatch、time ordering、
 record/content revision mismatchをcandidate refusalへ変えます。
 
-それでもcross-file atomic retrieval、post-return currentness、full R31 schema、
+それでもresidual component race、cross-file atomic retrieval、post-return currentness、full R31 schema、
 locator resolution、origin/authenticity/completeness、consent/revocation authority、
 retention/deletion/redaction enforcement、ID uniqueness/replay、trusted timeは検証
 しません。protected evidenceがこれらを閉じるまでR30 Intent builder/verifierを

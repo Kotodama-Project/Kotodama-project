@@ -28,6 +28,7 @@
     "r31_input_status": {
       "enum": [
         "PARSED_PROJECTION_CONTRACT_MATCHED_UNVERIFIED",
+        "STRICTLY_PARSED_UNVERIFIED",
         "REJECTED",
         "NOT_EVALUATED"
       ]

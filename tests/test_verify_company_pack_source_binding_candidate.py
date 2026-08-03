@@ -35,6 +35,8 @@ EVIDENCE_SCHEMA = (
     ROOT / "schemas" / "company-pack-source-access-projection-evidence.schema.json"
 )
 RUNBOOK = ROOT / "docs" / "SOURCE-BINDING-VERIFIER-CANDIDATE.md"
+R31_SCHEMA = ROOT / "schemas" / "company-pack-source-record-instance.schema.json"
+R30_SCHEMA = ROOT / "schemas" / "company-pack-intent-candidate-instance.schema.json"
 
 
 def binding(content: bytes) -> dict[str, object]:
@@ -322,6 +324,14 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
         for _ in range(40):
             deep = {"nested": deep}
         many_nodes = {f"key-{index}": index for index in range(10_100)}
+        recursive_json = b'{"nested":' * 1_100 + b"0" + b"}" * 1_100
+        huge_integer_json = (
+            b'{"value":'
+            + b"9" * 5_000
+            + b',"marker":"'
+            + private_marker.encode()
+            + b'"}'
+        )
 
         bool_size = json.loads(json.dumps(evidence))
         bool_size["source_content_binding"]["bytes"] = True
@@ -338,6 +348,13 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
             (b'["' + private_marker.encode() + b'"]', evidence_bytes, "STRICT_JSON_INVALID"),
             (canonical_bytes(deep), evidence_bytes, "STRICT_JSON_INVALID"),
             (record_bytes, canonical_bytes(many_nodes), "STRICT_JSON_INVALID"),
+            (
+                record_bytes,
+                b'{"value":1e9999,"marker":"' + private_marker.encode() + b'"}',
+                "STRICT_JSON_INVALID",
+            ),
+            (record_bytes, huge_integer_json, "STRICT_JSON_INVALID"),
+            (recursive_json, evidence_bytes, "STRICT_JSON_INVALID"),
             (record_bytes, canonical_bytes(bool_size), "ACCESS_EVIDENCE_CONTRACT_MISMATCH"),
         ]
         for hostile_record, hostile_evidence, expected_reason in cases:
@@ -377,7 +394,29 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
                 self.assertEqual(json.loads(result.stdout)["reason_codes"], ["INPUT_INVALID"])
                 self.assertNotIn(bad_ref, result.stdout + result.stderr)
 
+        malformed_evidence = self.run_raw(
+            record_bytes,
+            content,
+            b'{"value":NaN}',
+        )
+        malformed_report = json.loads(malformed_evidence.stdout)
+        self.assertEqual(
+            malformed_report["r31_input_status"],
+            "STRICTLY_PARSED_UNVERIFIED",
+        )
+        self.assertEqual(malformed_report["reason_codes"], ["STRICT_JSON_INVALID"])
+
     def test_projection_digest_matches_independent_r30_mapping_for_both_states(self) -> None:
+        r30_schema = json.loads(R30_SCHEMA.read_text(encoding="utf-8"))
+        source_binding_schema = {
+            "$schema": r30_schema["$schema"],
+            "$defs": r30_schema["$defs"],
+            **r30_schema["$defs"]["source_binding"],
+        }
+        r30_validator = Draft202012Validator(
+            source_binding_schema,
+            format_checker=FormatChecker(),
+        )
         for state in (
             "CONTENT_BINDING_RECORDED_UNVERIFIED",
             "DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED",
@@ -392,6 +431,7 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
                     canonical_bytes(evidence),
                     canonical_bytes(record),
                 )
+                r30_validator.validate(json.loads(expected))
                 self.assertEqual(
                     report["r30_projection_digest_candidate"],
                     binding(expected),
@@ -413,6 +453,109 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
             json.loads(changed_locator.stdout)["r30_projection_digest_candidate"],
         )
         self.assertNotIn("alternate", changed_locator.stdout)
+
+    def test_all_r31_eligible_acquisition_modes_match_and_media_contract_is_exact(self) -> None:
+        r31_schema = json.loads(R31_SCHEMA.read_text(encoding="utf-8"))
+        r31_validator = Draft202012Validator(
+            r31_schema,
+            format_checker=FormatChecker(),
+        )
+        for mode in ("capture", "import", "synthetic"):
+            record, content, evidence = matched_inputs()
+            record["acquisition_mode"] = mode
+            evidence["source_record_binding"] = binding(canonical_bytes(record))
+            with self.subTest(mode=mode):
+                r31_validator.validate(record)
+                result = self.run_tool(record, content, evidence)
+                self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+                self.assertEqual(
+                    json.loads(result.stdout)["result"],
+                    "SOURCE_BINDING_MATCH_POINT_IN_TIME",
+                )
+
+        record, content, evidence = matched_inputs()
+        record["content_observation"]["declared_media_type"] = (
+            "application/json;charset=utf-8"
+        )
+        refused = self.run_tool(record, content, evidence)
+        self.assertEqual(refused.returncode, 1)
+        self.assertEqual(
+            json.loads(refused.stdout)["reason_codes"],
+            ["RECORD_CONTRACT_MISMATCH"],
+        )
+
+    def test_projection_relevant_time_ordering_is_fail_closed(self) -> None:
+        record, content, evidence = matched_inputs()
+        cases: list[tuple[str, dict]] = []
+        started_after_completed = json.loads(json.dumps(record))
+        started_after_completed["acquisition_provenance"]["started_at"] = (
+            "2026-08-03T17:21:00+09:00"
+        )
+        cases.append(("started after completed", started_after_completed))
+        completed_after_observed = json.loads(json.dumps(record))
+        completed_after_observed["acquisition_provenance"]["completed_at"] = (
+            "2026-08-03T17:21:00+09:00"
+        )
+        cases.append(("completed after content observation", completed_after_observed))
+        content_after_recorded = json.loads(json.dumps(record))
+        content_after_recorded["content_observation"]["observed_at"] = (
+            "2026-08-03T17:21:00+09:00"
+        )
+        cases.append(("content observed after record", content_after_recorded))
+        source_after_recorded = json.loads(json.dumps(record))
+        source_after_recorded["source_observed_at"] = "2026-08-03T17:21:00+09:00"
+        cases.append(("source observed after record", source_after_recorded))
+
+        for name, mutation in cases:
+            with self.subTest(name=name):
+                refused = self.run_tool(mutation, content, evidence)
+                self.assertEqual(refused.returncode, 1)
+                self.assertEqual(
+                    json.loads(refused.stdout)["reason_codes"],
+                    ["RECORD_CONTRACT_MISMATCH"],
+                )
+
+    def test_consumed_r31_subset_rejects_out_of_schema_projection_loss(self) -> None:
+        cases: list[tuple[str, dict, bytes, dict]] = []
+
+        record, content, evidence = matched_inputs()
+        manual_trigger = json.loads(json.dumps(record))
+        manual_trigger["retention"]["deletion_trigger"] = "manual_review"
+        cases.append(("manual deletion trigger", manual_trigger, content, evidence))
+
+        unknown_coverage = json.loads(json.dumps(record))
+        unknown_coverage["retention"]["covered_artifacts"].append(
+            "private_unknown_artifact"
+        )
+        cases.append(("unknown retention coverage", unknown_coverage, content, evidence))
+
+        original_segmentation = json.loads(json.dumps(record))
+        original_segmentation["lineage"]["segmentation_ref"] = (
+            "ref/segmentation/unexpected"
+        )
+        cases.append(("original segmentation", original_segmentation, content, evidence))
+
+        derived, derived_content, derived_evidence = matched_inputs(
+            "DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED"
+        )
+        derived["lineage"]["parent_source_record_refs"] = [
+            f"ref/source-record/parent-{index:02d}" for index in range(17)
+        ]
+        derived["lineage"]["transformation_refs"] = [
+            f"ref/transformation/item-{index:02d}" for index in range(17)
+        ]
+        cases.append(("oversized lineage", derived, derived_content, derived_evidence))
+
+        for name, mutation, case_content, case_evidence in cases:
+            case_evidence = json.loads(json.dumps(case_evidence))
+            case_evidence["source_record_binding"] = binding(canonical_bytes(mutation))
+            with self.subTest(name=name):
+                refused = self.run_tool(mutation, case_content, case_evidence)
+                self.assertEqual(refused.returncode, 1, (refused.stdout, refused.stderr))
+                self.assertEqual(
+                    json.loads(refused.stdout)["reason_codes"],
+                    ["RECORD_CONTRACT_MISMATCH"],
+                )
 
     def test_r31_projection_loss_and_binding_drift_fail_closed(self) -> None:
         base_record, content, base_evidence = matched_inputs()
@@ -483,6 +626,58 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
                 self.assertFalse(report["claims"]["r30_projection_digest_computed"])
                 self.assertFalse(report["claims"]["access_or_consent_verified"])
 
+        unknown_state = json.loads(json.dumps(base_record))
+        unknown_state["source_state"] = "PRIVATE-UNKNOWN-STATE"
+        unknown = self.run_tool(unknown_state, content, base_evidence)
+        self.assertEqual(unknown.returncode, 1)
+        self.assertEqual(
+            json.loads(unknown.stdout)["reason_codes"],
+            ["RECORD_CONTRACT_MISMATCH"],
+        )
+
+    def test_fixed_r31_denial_claims_and_review_triggers_fail_closed(self) -> None:
+        base_record, content, _ = matched_inputs()
+        cases: list[tuple[str, dict]] = []
+
+        missing_claim = json.loads(json.dumps(base_record))
+        del missing_claim["claims"]["public_beta_go"]
+        cases.append(("missing denial claim", missing_claim))
+
+        unknown_claim = json.loads(json.dumps(base_record))
+        unknown_claim["claims"]["private_false_claim"] = False
+        cases.append(("unknown denial claim", unknown_claim))
+
+        overclaim = json.loads(json.dumps(base_record))
+        overclaim["claims"]["source_authenticity_verified"] = True
+        cases.append(("true denial claim", overclaim))
+
+        missing_trigger = json.loads(json.dumps(base_record))
+        missing_trigger["review_trigger"].pop()
+        cases.append(("missing review trigger", missing_trigger))
+
+        reordered_trigger = json.loads(json.dumps(base_record))
+        reordered_trigger["review_trigger"][0:2] = reversed(
+            reordered_trigger["review_trigger"][0:2]
+        )
+        cases.append(("reordered review trigger", reordered_trigger))
+
+        unknown_trigger = json.loads(json.dumps(base_record))
+        unknown_trigger["review_trigger"][-1] = "private-trigger-marker"
+        cases.append(("unknown review trigger", unknown_trigger))
+
+        for name, record in cases:
+            with self.subTest(name=name):
+                _, _, evidence = matched_inputs()
+                evidence["source_record_binding"] = binding(canonical_bytes(record))
+                result = self.run_tool(record, content, evidence)
+                self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+                report = json.loads(result.stdout)
+                self.assertEqual(report["reason_codes"], ["RECORD_CONTRACT_MISMATCH"])
+                self.assertEqual(report["result"], "REFUSED")
+                self.assertIsNone(report["r30_projection_digest_candidate"])
+                self.assertTrue(all(value is False for value in report["claims"].values()))
+                self.assertNotIn("private", result.stdout.lower() + result.stderr.lower())
+
     def test_access_projection_evidence_substitution_and_overclaim_fail_closed(self) -> None:
         record, content, evidence = matched_inputs()
         mutations: list[tuple[str, dict]] = []
@@ -499,6 +694,10 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
         changed("uses")["declared_permitted_uses"] = ["read", "store"]
         changed("subject")["subject_scope_ref"] = "ref/use-subject/other"
         changed("expiry")["scope_expires_at"] = "2026-08-04T17:21:00+09:00"
+        changed("candidate expiry")["expires_at"] = "2026-08-03T18:21:00+09:00"
+        changed("evidence predates record")["recorded_at"] = (
+            "2026-08-03T17:19:00+09:00"
+        )
         changed("revocation")["revocation_evidence_ref"] = (
             "ref/use-revocation/other"
         )
@@ -647,6 +846,93 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
             result.stdout,
             json.dumps(json.loads(result.stdout), sort_keys=True) + "\n",
         )
+
+    def test_locator_validation_precedes_file_reads_and_artifact_aliases_refuse(self) -> None:
+        with mock.patch.object(verifier, "read_set") as read_set:
+            report = verifier.evaluate(
+                Path("PRIVATE-record"),
+                Path("PRIVATE-content"),
+                Path("PRIVATE-evidence"),
+                "C:/PRIVATE/record.json",
+                "ref/access-consent/aggregate",
+            )
+        read_set.assert_not_called()
+        self.assertEqual(report["reason_codes"], ["INPUT_INVALID"])
+        self.assertTrue(all(value is False for value in report["claims"].values()))
+
+        with mock.patch.object(verifier, "read_set") as aliased_read_set:
+            aliased_path_report = verifier.evaluate(
+                Path("PRIVATE-same"),
+                Path("PRIVATE-same"),
+                Path("PRIVATE-evidence"),
+                "ref/source-record/serialized",
+                "ref/access-consent/aggregate",
+            )
+        aliased_read_set.assert_not_called()
+        self.assertEqual(aliased_path_report["reason_codes"], ["INPUT_INVALID"])
+
+        same_object = verifier.FileSnapshot(
+            content=b"{}",
+            identity=(1, 1, 2, 1),
+        )
+        with mock.patch.object(
+            verifier,
+            "read_set",
+            return_value=(same_object, same_object, same_object),
+        ):
+            same_object_report = verifier.evaluate(
+                Path("PRIVATE-record"),
+                Path("PRIVATE-content"),
+                Path("PRIVATE-evidence"),
+                "ref/source-record/serialized",
+                "ref/access-consent/aggregate",
+            )
+        self.assertEqual(same_object_report["reason_codes"], ["INPUT_INVALID"])
+
+        record, content, evidence = matched_inputs()
+        same_external = self.run_raw(
+            canonical_bytes(record),
+            content,
+            canonical_bytes(evidence),
+            record_locator="ref/source-record/same",
+            evidence_locator="ref/source-record/same",
+        )
+        self.assertEqual(same_external.returncode, 1)
+        self.assertEqual(
+            json.loads(same_external.stdout)["reason_codes"],
+            ["INPUT_INVALID"],
+        )
+
+        for name, record_locator, evidence_locator in (
+            (
+                "record aliases source item",
+                record["source_locator_ref"],
+                "ref/access-consent/aggregate",
+            ),
+            (
+                "record aliases content",
+                record["content_observation"]["storage_locator_ref"],
+                "ref/access-consent/aggregate",
+            ),
+            (
+                "evidence aliases content",
+                "ref/source-record/serialized",
+                record["content_observation"]["storage_locator_ref"],
+            ),
+        ):
+            with self.subTest(name=name):
+                result = self.run_raw(
+                    canonical_bytes(record),
+                    content,
+                    canonical_bytes(evidence),
+                    record_locator=record_locator,
+                    evidence_locator=evidence_locator,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(
+                    json.loads(result.stdout)["reason_codes"],
+                    ["R30_PROJECTION_INELIGIBLE"],
+                )
 
     def test_record_hash_binds_exact_raw_bytes_and_unknown_consumed_fields_refuse(self) -> None:
         record, content, evidence = matched_inputs()
