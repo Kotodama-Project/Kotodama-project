@@ -623,6 +623,8 @@ machine-readable な完了境界ではありません。最新チェックリス
 - [Attestation Nonce Store Checkpoint Chain](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-CHAIN.md)
 - [Source Binding Verification Candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md)
 - [Protected Source Binding Receipt Candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)
+- [Protected Execution Request / Handoff Candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) — opaque request shape only; no runner or private evidence
+  Schema: `schemas/company-pack-protected-execution-request-handoff-candidate.schema.json`
 
 ## Evidence and provenance
 

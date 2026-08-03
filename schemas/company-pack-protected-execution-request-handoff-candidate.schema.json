@@ -1,0 +1,421 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-protected-execution-request-handoff-candidate.schema.json",
+  "title": "Kotodama Company Pack Protected Execution Request / Handoff Candidate",
+  "$comment": "Schema-only public candidate contract. It records an opaque request shape for a future protected runner; it does not request, accept, execute, authenticate, resolve, retain, delete, verify, promote, deploy, or publish private evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "request_state",
+    "request_id_ref",
+    "source_contract",
+    "runner_request",
+    "private_inputs",
+    "evaluation_window",
+    "failure_and_rollback",
+    "expected_output",
+    "handoff",
+    "content_handling",
+    "recorded_at",
+    "expires_at",
+    "review_trigger",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_protected_execution_request_handoff_candidate"},
+    "version": {"const": "1.0"},
+    "status": {"const": "CANDIDATE_ONLY"},
+    "request_state": {
+      "enum": ["REQUEST_DEFINED_UNVERIFIED", "REFUSED_UNVERIFIED"]
+    },
+    "request_id_ref": {"$ref": "#/$defs/opaque_ref"},
+    "source_contract": {"$ref": "#/$defs/source_contract"},
+    "runner_request": {"$ref": "#/$defs/runner_request"},
+    "private_inputs": {"$ref": "#/$defs/private_inputs"},
+    "evaluation_window": {"$ref": "#/$defs/evaluation_window"},
+    "failure_and_rollback": {"$ref": "#/$defs/failure_and_rollback"},
+    "expected_output": {"$ref": "#/$defs/expected_output"},
+    "handoff": {"$ref": "#/$defs/handoff"},
+    "content_handling": {"$ref": "#/$defs/content_handling"},
+    "recorded_at": {"$ref": "#/$defs/timestamp"},
+    "expires_at": {"$ref": "#/$defs/timestamp"},
+    "review_trigger": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        {"const": "source_contract_or_receipt_schema_change"},
+        {"const": "runner_policy_executable_configuration_or_environment_change"},
+        {"const": "private_locator_or_immutable_version_change"},
+        {"const": "clock_policy_window_or_skew_change"},
+        {"const": "stop_condition_or_rollback_policy_change"},
+        {"const": "expected_output_or_handoff_policy_change"},
+        {"const": "authority_consent_or_retention_change"},
+        {"const": "request_expiry"}
+      ],
+      "items": false
+    },
+    "claims": {"$ref": "#/$defs/claims"},
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "opaque_ref": {
+      "type": "string",
+      "minLength": 6,
+      "maxLength": 512,
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "bytes"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+      }
+    },
+    "source_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt_schema_ref",
+        "receipt_schema_binding",
+        "public_revision",
+        "expected_receipt_kind",
+        "expected_receipt_status",
+        "expected_receipt_state",
+        "verification_status"
+      ],
+      "properties": {
+        "receipt_schema_ref": {"$ref": "#/$defs/opaque_ref"},
+        "receipt_schema_binding": {"$ref": "#/$defs/binding"},
+        "public_revision": {"$ref": "#/$defs/sha1"},
+        "expected_receipt_kind": {
+          "const": "company_pack_protected_source_binding_receipt_candidate"
+        },
+        "expected_receipt_status": {"const": "CANDIDATE_ONLY"},
+        "expected_receipt_state": {
+          "const": "PROTECTED_RECEIPT_RECORDED_UNVERIFIED"
+        },
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "runner_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner_policy_ref",
+        "runner_policy_binding",
+        "executable_ref",
+        "executable_binding",
+        "configuration_ref",
+        "configuration_binding",
+        "execution_environment_ref",
+        "operation_kind",
+        "credentials_embedded",
+        "physical_locator_embedded",
+        "verification_status"
+      ],
+      "properties": {
+        "runner_policy_ref": {"$ref": "#/$defs/opaque_ref"},
+        "runner_policy_binding": {"$ref": "#/$defs/binding"},
+        "executable_ref": {"$ref": "#/$defs/opaque_ref"},
+        "executable_binding": {"$ref": "#/$defs/binding"},
+        "configuration_ref": {"$ref": "#/$defs/opaque_ref"},
+        "configuration_binding": {"$ref": "#/$defs/binding"},
+        "execution_environment_ref": {"$ref": "#/$defs/opaque_ref"},
+        "operation_kind": {"const": "PRIVATE_SOURCE_BINDING_RECEIPT_CANDIDATE"},
+        "credentials_embedded": {"const": false},
+        "physical_locator_embedded": {"const": false},
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "private_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "locator_ref",
+        "immutable_version_ref",
+        "binding",
+        "purpose_ref",
+        "retention_ref",
+        "resolution_status",
+        "verification_status"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "source_record",
+            "source_content",
+            "access_consent_evidence",
+            "retention_policy"
+          ]
+        },
+        "locator_ref": {"$ref": "#/$defs/opaque_ref"},
+        "immutable_version_ref": {"$ref": "#/$defs/opaque_ref"},
+        "binding": {"$ref": "#/$defs/binding"},
+        "purpose_ref": {"$ref": "#/$defs/opaque_ref"},
+        "retention_ref": {"$ref": "#/$defs/opaque_ref"},
+        "resolution_status": {"const": "NOT_RESOLVED"},
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "private_inputs": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {
+          "allOf": [
+            {"$ref": "#/$defs/private_input"},
+            {"properties": {"role": {"const": "source_record"}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/private_input"},
+            {"properties": {"role": {"const": "source_content"}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/private_input"},
+            {"properties": {"role": {"const": "access_consent_evidence"}}}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/private_input"},
+            {"properties": {"role": {"const": "retention_policy"}}}
+          ]
+        }
+      ],
+      "items": false
+    },
+    "evaluation_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clock_policy_ref",
+        "clock_policy_binding",
+        "not_before",
+        "expires_at",
+        "max_skew_seconds",
+        "verification_status"
+      ],
+      "properties": {
+        "clock_policy_ref": {"$ref": "#/$defs/opaque_ref"},
+        "clock_policy_binding": {"$ref": "#/$defs/binding"},
+        "not_before": {"$ref": "#/$defs/timestamp"},
+        "expires_at": {"$ref": "#/$defs/timestamp"},
+        "max_skew_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400
+        },
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "failure_and_rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stop_conditions",
+        "rollback_policy_ref",
+        "rollback_policy_binding",
+        "rollback_receipt_ref",
+        "rollback_receipt_binding",
+        "failure_state",
+        "no_external_effects_expected",
+        "execution_receipt_ref",
+        "verification_status"
+      ],
+      "properties": {
+        "stop_conditions": {
+          "const": [
+            "locator_unresolved",
+            "consent_or_retention_missing",
+            "runner_binding_drift",
+            "clock_untrusted_or_window_expired",
+            "input_or_output_binding_drift",
+            "external_effect_detected"
+          ]
+        },
+        "rollback_policy_ref": {"$ref": "#/$defs/opaque_ref"},
+        "rollback_policy_binding": {"$ref": "#/$defs/binding"},
+        "rollback_receipt_ref": {"type": "null"},
+        "rollback_receipt_binding": {"type": "null"},
+        "failure_state": {"enum": ["NOT_EXECUTED", "REFUSED_UNVERIFIED"]},
+        "no_external_effects_expected": {"const": true},
+        "execution_receipt_ref": {"type": "null"},
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "expected_output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt_contract_ref",
+        "receipt_contract_binding",
+        "expected_status",
+        "expected_receipt_state",
+        "expected_claims_false",
+        "output_state",
+        "serialized_receipt_locator",
+        "serialized_receipt_binding",
+        "private_content_embedded",
+        "verification_status"
+      ],
+      "properties": {
+        "receipt_contract_ref": {"$ref": "#/$defs/opaque_ref"},
+        "receipt_contract_binding": {"$ref": "#/$defs/binding"},
+        "expected_status": {"const": "CANDIDATE_ONLY"},
+        "expected_receipt_state": {
+          "const": "PROTECTED_RECEIPT_RECORDED_UNVERIFIED"
+        },
+        "expected_claims_false": {"const": true},
+        "output_state": {"const": "NOT_EMITTED_UNVERIFIED"},
+        "serialized_receipt_locator": {"type": "null"},
+        "serialized_receipt_binding": {"type": "null"},
+        "private_content_embedded": {"const": false},
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recipient_role",
+        "recipient_policy_ref",
+        "recipient_policy_binding",
+        "handoff_status",
+        "independent_result_ref",
+        "independent_result_binding",
+        "human_decision_ref",
+        "authority_granted",
+        "verification_status"
+      ],
+      "properties": {
+        "recipient_role": {"const": "independent_verifier"},
+        "recipient_policy_ref": {"$ref": "#/$defs/opaque_ref"},
+        "recipient_policy_binding": {"$ref": "#/$defs/binding"},
+        "handoff_status": {"const": "INDEPENDENT_VERIFICATION_REQUIRED"},
+        "independent_result_ref": {"type": "null"},
+        "independent_result_binding": {"type": "null"},
+        "human_decision_ref": {"type": "null"},
+        "authority_granted": {"const": false},
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
+    "content_handling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_content_embedded",
+        "audio_embedded",
+        "transcript_embedded",
+        "model_output_embedded",
+        "private_projection_embedded",
+        "credentials_embedded",
+        "physical_locator_embedded",
+        "candidate_visibility"
+      ],
+      "properties": {
+        "source_content_embedded": {"const": false},
+        "audio_embedded": {"const": false},
+        "transcript_embedded": {"const": false},
+        "model_output_embedded": {"const": false},
+        "private_projection_embedded": {"const": false},
+        "credentials_embedded": {"const": false},
+        "physical_locator_embedded": {"const": false},
+        "candidate_visibility": {"const": "PUBLIC_CONTRACT_OPAQUE_REFS"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_requested",
+        "execution_accepted",
+        "executed",
+        "runner_verified",
+        "private_snapshot_verified",
+        "source_record_resolved",
+        "source_content_resolved",
+        "access_consent_resolved",
+        "retention_policy_resolved",
+        "trusted_clock_verified",
+        "rollback_verified",
+        "output_emitted",
+        "receipt_verified",
+        "source_authenticity_verified",
+        "consent_verified",
+        "retention_enforced",
+        "deletion_enforced",
+        "replay_prevented",
+        "independent_verification_verified",
+        "human_decision_verified",
+        "work_order_authority_granted",
+        "promotion_verified",
+        "current_truth_changed",
+        "voice_runtime_verified",
+        "discord_runtime_verified",
+        "provider_transfer_authorized",
+        "external_transfer_authorized",
+        "deploy_verified",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "execution_requested": {"const": false},
+        "execution_accepted": {"const": false},
+        "executed": {"const": false},
+        "runner_verified": {"const": false},
+        "private_snapshot_verified": {"const": false},
+        "source_record_resolved": {"const": false},
+        "source_content_resolved": {"const": false},
+        "access_consent_resolved": {"const": false},
+        "retention_policy_resolved": {"const": false},
+        "trusted_clock_verified": {"const": false},
+        "rollback_verified": {"const": false},
+        "output_emitted": {"const": false},
+        "receipt_verified": {"const": false},
+        "source_authenticity_verified": {"const": false},
+        "consent_verified": {"const": false},
+        "retention_enforced": {"const": false},
+        "deletion_enforced": {"const": false},
+        "replay_prevented": {"const": false},
+        "independent_verification_verified": {"const": false},
+        "human_decision_verified": {"const": false},
+        "work_order_authority_granted": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "voice_runtime_verified": {"const": false},
+        "discord_runtime_verified": {"const": false},
+        "provider_transfer_authorized": {"const": false},
+        "external_transfer_authorized": {"const": false},
+        "deploy_verified": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    }
+  }
+}

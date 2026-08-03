@@ -68,6 +68,8 @@ Source ItemからIntent抽出へ渡す前のprivate schema-only instance形は[C
 
 protected runnerのprivate receipt形は[Protected Source Binding Receipt Candidate](../../docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)を参照してください。schema-only契約であり、populated receipt、evidence body、audio、transcript、consent本文、deletion receiptをこのexampleへ追加しません。
 
+protected execution requestのopaque ref、評価window、stop/rollback、独立handoffは[PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md](../../docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md)を参照してください。schema-onlyであり、実行やprivate evidenceをこのexampleへ追加しません。
+
 SourceからHuman確認前までのprivate schema-only instance形は[Company Pack Intent Candidate Instance Contract](../../docs/INTENT-CANDIDATE-INSTANCE.md)です。source bodyやpopulated candidateはこの公開exampleへ含めず、schema PASSをHuman Intentへ昇格しません。
 
 実Decision前のschema-only field/claim契約は[Company Pack Decision Record Candidate Contract](../../docs/DECISION-RECORD-CANDIDATE.md)です。これはDecision、承認、権限、Promotion、GOを生成せず、既存のgeneric Decision Record templateも変更しません。

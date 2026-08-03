@@ -43,6 +43,8 @@ Decisionが揃うまで、Intent、Work Order、Promotion、Current Truthへ進�
 builder、runner、retriever、signature verifier、trusted clock connector、nonce store、
 deletion worker、protected evidence store、populated receiptはありません。
 
+protected runnerへ渡す前段のopaque request形は[PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md](PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md)に分離しています。こちらもschema-onlyであり、実行・受理・private evidenceを意味しません。
+
 R32の[Source Binding Verification Candidate](SOURCE-BINDING-VERIFIER-CANDIDATE.md)は
 local fileをstrictに読み、terminal rereadを二回行うread-only CLIです。R33 schemaは
 R32 result bytesとverifier bytesを参照できますが、それらを再実行も検証もしません。
