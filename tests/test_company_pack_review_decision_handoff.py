@@ -5,10 +5,17 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+sys.path.insert(0, str(TOOLS))
+import build_company_pack_review_decision_handoff as handoff_builder
+import verify_company_pack_review_decision_handoff as handoff_verifier
+
+
 CREATOR = ROOT / "tools" / "create_company_pack.py"
 BUNDLE_BUILDER = ROOT / "tools" / "build_company_pack_review_bundle.py"
 BUNDLE_VERIFIER = ROOT / "tools" / "verify_company_pack_review_bundle.py"
@@ -462,6 +469,192 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
                 self.assertIn(
                     "REVIEW-DECISION-HANDOFF.md", path.read_text(encoding="utf-8")
                 )
+
+    def test_saved_handoff_tamper_and_type_aliases_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            chain = self.create_complete_chain(root)
+            built = self.run_builder(chain)
+            self.assertEqual(built.returncode, 0, built.stdout.decode("utf-8"))
+            original = json.loads(built.stdout)
+            handoff_path = root / "saved-decision-handoff.json"
+            mutations = {
+                "unknown field": lambda value: value.__setitem__(
+                    "private_sentinel", "PRIVATE_SENTINEL_DO_NOT_ECHO"
+                ),
+                "overall decision": lambda value: value[
+                    "decision_requirements"
+                ].__setitem__("decision", "accept"),
+                "selected outcome": lambda value: value[
+                    "decision_requirements"
+                ].__setitem__("selected_outcome", "accept"),
+                "authority claim": lambda value: value["claims"].__setitem__(
+                    "decision_maker_authority_verified", True
+                ),
+                "boolean byte alias": lambda value: value["artifact_bindings"][
+                    "response"
+                ].__setitem__("bytes", True),
+                "float count alias": lambda value: value[
+                    "candidate_binding"
+                ].__setitem__("binding_count", 22.0),
+            }
+            for label, mutate in mutations.items():
+                with self.subTest(label=label):
+                    value = json.loads(json.dumps(original))
+                    mutate(value)
+                    self.save_json(handoff_path, value)
+                    result = self.run_handoff_verifier(chain, handoff_path)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stderr, b"")
+                    self.assertNotIn(b"PRIVATE_SENTINEL_DO_NOT_ECHO", result.stdout)
+                    report = json.loads(result.stdout)
+                    self.assertEqual(report["status"], "DECISION_HANDOFF_MISMATCH")
+                    self.assertEqual(report["reason"], "HANDOFF_MISMATCH")
+                    self.assertIsNone(report["pack_id"])
+                    self.assertIsNone(report["artifact_bindings"])
+                    self.assertIsNone(report["handoff_binding"])
+                    self.assertIsNone(report["decision_requirements"]["decision"])
+                    self.assertTrue(
+                        all(value is False for value in report["claims"].values())
+                    )
+
+    def test_saved_handoff_strict_json_boundary_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            chain = self.create_complete_chain(root)
+            handoff_path = root / "saved-decision-handoff.json"
+            deep: object = None
+            for _ in range(70):
+                deep = [deep]
+            cases = {
+                "missing": None,
+                "empty": b"",
+                "invalid utf8": b"\xff",
+                "duplicate key": b'{"kind":"a","kind":"b"}',
+                "nonfinite": b'{"value":NaN}',
+                "too deep": json.dumps({"value": deep}).encode("utf-8"),
+                "oversized": b'{"value":"' + b"x" * (1024 * 1024) + b'"}',
+            }
+            for label, data in cases.items():
+                with self.subTest(label=label):
+                    if data is None:
+                        handoff_path.unlink(missing_ok=True)
+                    else:
+                        handoff_path.write_bytes(data)
+                    result = self.run_handoff_verifier(chain, handoff_path)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stderr, b"")
+                    report = json.loads(result.stdout)
+                    self.assertEqual(report["status"], "DECISION_HANDOFF_MISMATCH")
+                    self.assertEqual(report["reason"], "HANDOFF_INVALID")
+                    self.assertIsNone(report["handoff_binding"])
+                    self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+
+    def test_output_is_deterministic_utf8_and_usage_does_not_reflect_arguments(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            chain = self.create_complete_chain(root)
+            legacy_env = dict(os.environ)
+            legacy_env["PYTHONIOENCODING"] = "cp1252"
+            first = self.run_builder(chain, env=legacy_env)
+            second = self.run_builder(chain, env=legacy_env)
+            self.assertEqual(first.returncode, 0)
+            self.assertEqual(first.stdout, second.stdout)
+            self.assertEqual(
+                json.loads(first.stdout.decode("utf-8"))["status"],
+                "CANDIDATE_DECISION_HANDOFF",
+            )
+            handoff_path = root / "saved-decision-handoff.json"
+            handoff_path.write_bytes(first.stdout)
+            first_verification = self.run_handoff_verifier(
+                chain, handoff_path, env=legacy_env
+            )
+            second_verification = self.run_handoff_verifier(
+                chain, handoff_path, env=legacy_env
+            )
+            self.assertEqual(first_verification.returncode, 0)
+            self.assertEqual(first_verification.stdout, second_verification.stdout)
+
+            sentinel = Path("PRIVATE_SENTINEL_DO_NOT_ECHO")
+            paths = chain["paths"]
+            builder_usage = self.run_cli(
+                HANDOFF_BUILDER,
+                paths["bundle"],
+                chain["pack"],
+                paths["bundle_verification"],
+                paths["request"],
+                paths["response"],
+                paths["response_verification"],
+                sentinel,
+            )
+            verifier_usage = self.run_cli(
+                HANDOFF_VERIFIER,
+                paths["bundle"],
+                chain["pack"],
+                paths["bundle_verification"],
+                paths["request"],
+                paths["response"],
+                paths["response_verification"],
+                handoff_path,
+                sentinel,
+            )
+
+        for result in (builder_usage, verifier_usage):
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(result.stdout, b"")
+            self.assertIn(b"usage:", result.stderr)
+            self.assertNotIn(bytes(sentinel), result.stderr)
+
+    def test_final_rereads_refuse_source_or_handoff_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            chain = self.create_complete_chain(root)
+            paths = chain["paths"]
+            initial_reads = [
+                paths[name].read_bytes() for name in handoff_builder.ARTIFACT_NAMES
+            ]
+            with mock.patch.object(
+                handoff_builder,
+                "read_limited_bytes",
+                side_effect=[*initial_reads, initial_reads[0] + b" "],
+            ):
+                report = handoff_builder.build_decision_handoff(
+                    paths["bundle"],
+                    chain["pack"],
+                    paths["bundle_verification"],
+                    paths["request"],
+                    paths["response"],
+                    paths["response_verification"],
+                )
+            self.assertEqual(report["status"], "HANDOFF_BUILD_REFUSED")
+            self.assertEqual(report["reason"], "SOURCE_DRIFT_DETECTED")
+            self.assertIsNone(report["artifact_bindings"])
+
+            built = self.run_builder(chain)
+            self.assertEqual(built.returncode, 0, built.stdout.decode("utf-8"))
+            handoff_path = root / "saved-decision-handoff.json"
+            handoff_path.write_bytes(built.stdout)
+            with mock.patch.object(
+                handoff_verifier,
+                "read_limited_bytes",
+                return_value=built.stdout + b" ",
+            ):
+                verification = handoff_verifier.verify_decision_handoff(
+                    paths["bundle"],
+                    chain["pack"],
+                    paths["bundle_verification"],
+                    paths["request"],
+                    paths["response"],
+                    paths["response_verification"],
+                    handoff_path,
+                )
+            self.assertEqual(
+                verification["status"], "DECISION_HANDOFF_MISMATCH"
+            )
+            self.assertEqual(verification["reason"], "SOURCE_DRIFT_DETECTED")
+            self.assertIsNone(verification["handoff_binding"])
 
     def _mutate_json(self, path: Path, mutation) -> None:
         value = json.loads(path.read_bytes())
