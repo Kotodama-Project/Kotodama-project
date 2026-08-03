@@ -5,10 +5,16 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+sys.path.insert(0, str(TOOLS))
+import build_company_pack_review_response as response_builder
+
+
 CREATOR = ROOT / "tools" / "create_company_pack.py"
 BUNDLE_BUILDER = ROOT / "tools" / "build_company_pack_review_bundle.py"
 REQUEST_BUILDER = ROOT / "tools" / "build_company_pack_review_request.py"
@@ -194,6 +200,79 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
         self.assertNotIn("items", report["review_summary"])
         self.assertTrue(all(value is False for value in report["claims"].values()))
         self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+
+    def test_builder_strictly_refuses_tampered_or_oversized_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request_path, request, _request_bytes = self.create_saved_request(root)
+            sentinel = "PRIVATE_SENTINEL_DO_NOT_ECHO"
+            cases: list[tuple[str, bytes]] = []
+
+            unknown = {**request, "unknown": sentinel}
+            cases.append(("unknown field", json.dumps(unknown).encode("utf-8")))
+
+            wrong_count = json.loads(json.dumps(request))
+            wrong_count["review_request"]["item_count"] = 45
+            cases.append(("wrong count", json.dumps(wrong_count).encode("utf-8")))
+
+            duplicate_item = json.loads(json.dumps(request))
+            duplicate_item["review_request"]["items"][1]["id"] = duplicate_item[
+                "review_request"
+            ]["items"][0]["id"]
+            cases.append(("duplicate item", json.dumps(duplicate_item).encode("utf-8")))
+
+            raised_claim = json.loads(json.dumps(request))
+            raised_claim["claims"]["human_approval_verified"] = True
+            cases.append(("raised claim", json.dumps(raised_claim).encode("utf-8")))
+
+            duplicate_key = (
+                '{"kind":"company_pack_review_request","kind":"'
+                + sentinel
+                + '"}'
+            ).encode("utf-8")
+            cases.append(("duplicate key", duplicate_key))
+
+            deep = (b'{"nested":' + b"[" * 80 + b"0" + b"]" * 80 + b"}")
+            cases.append(("deep input", deep))
+
+            oversized = json.dumps(request).encode("utf-8") + b" " * (1024 * 1024)
+            cases.append(("oversized input", oversized))
+
+            for label, payload in cases:
+                with self.subTest(label=label):
+                    request_path.write_bytes(payload)
+                    result = self.run_builder(request_path)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stderr, b"")
+                    self.assertNotIn(sentinel.encode("utf-8"), result.stdout)
+                    self.assertNotIn(str(request_path).encode("utf-8"), result.stdout)
+                    refusal = json.loads(result.stdout)
+                    self.assertEqual(refusal["status"], "RESPONSE_BUILD_REFUSED")
+                    self.assertEqual(refusal["reason"], "REQUEST_INVALID")
+                    self.assertIsNone(refusal["pack_id"])
+                    self.assertIsNone(refusal["request_binding"])
+                    self.assertIsNone(refusal["candidate_binding"])
+                    self.assertEqual(refusal["review_response"]["items"], [])
+                    self.assertEqual(refusal["unresolved_evidence"]["items"], [])
+                    self.assertTrue(
+                        all(value is False for value in refusal["claims"].values())
+                    )
+
+    def test_builder_refuses_request_byte_change_during_read_as_source_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request_path, _request, request_bytes = self.create_saved_request(root)
+            with mock.patch.object(
+                Path,
+                "read_bytes",
+                side_effect=[request_bytes, request_bytes + b" "],
+            ):
+                response = response_builder.build_response_candidate(request_path)
+
+        self.assertEqual(response["status"], "RESPONSE_BUILD_REFUSED")
+        self.assertEqual(response["reason"], "SOURCE_DRIFT_DETECTED")
+        self.assertIsNone(response["request_binding"])
+        self.assertEqual(response["review_response"]["items"], [])
 
 
 if __name__ == "__main__":

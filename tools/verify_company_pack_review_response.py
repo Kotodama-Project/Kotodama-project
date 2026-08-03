@@ -14,6 +14,7 @@ from typing import Any
 
 from build_company_pack_review_response import (
     PERMITTED_OUTCOMES,
+    SourceDriftError,
     empty_claims,
     load_request,
     write_stdout_utf8,
@@ -110,7 +111,10 @@ def response_shape_matches_request(response: dict[str, Any], request: dict[str, 
 
 
 def verify_response(request_path: Path, response_path: Path) -> dict[str, Any]:
-    loaded_request = load_request(request_path)
+    try:
+        loaded_request = load_request(request_path)
+    except SourceDriftError:
+        return mismatch("SOURCE_DRIFT_DETECTED")
     if loaded_request is None:
         return mismatch("REQUEST_INVALID")
     request, request_bytes = loaded_request
