@@ -42,14 +42,17 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R48 is the current public template/documentation surface. R37 introduced the
-read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a
-deterministic `--format markdown` summary. R45 added the saved-bundle to
-Review Request boundary, R46 added the dynamic Review Response boundary, and
-R47 added the dynamic Decision Handoff boundary. R48 clarified that the
-starter's `19/46/5` values are examples; another Pack follows its actual
-checker, saved report, and review-chain counts. These surfaces do not add
-authority, runtime, Promotion, Current Truth, or Public Beta access.
+R50 is the current public Template/Company/Blocks/Records/MOCs/starter
+documentation surface. R37 introduced the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a deterministic `--format markdown`
+summary. R45 added the saved-bundle to Review Request boundary, R46
+added the dynamic Review Response boundary, R47 added the dynamic Decision
+Handoff boundary, and R48 clarified that the starter's `19/46/5` values are
+examples; another Pack follows its actual checker, saved report, and
+review-chain counts. R50 added the eight-entry-point navigation
+synchronization: each entry point explains ideal/current usage and links the
+read-only Review Request, Review Response, and Decision Handoff path. These
+surfaces do not add authority, runtime, Promotion, Current Truth, or Public
+Beta access.
 
 公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。
 公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Review Request、Response、Decision Handoffはその保存済みchainを再入力なしで運びますが、すべてread-only/candidate-onlyです。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。

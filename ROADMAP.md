@@ -25,11 +25,15 @@
 
 ## Current public documentation revision
 
-R49 synchronizes this roadmap with the R48 public Company Pack surface. The
-published review chain remains read-only/candidate-only: it binds exact
+R50 synchronizes this roadmap with the current public Company Pack surface.
+The published review chain remains read-only/candidate-only: it binds exact
 bytes, saved Pack-specific counts, and false claims, but it does not create
 Human approval, runtime authority, Promotion, Current Truth, or Public Beta
 access.
+
+- [x] Template/Company/Blocks/Records/MOCs/starter navigation synchronization
+      with ideal/current usage, dynamic Pack-count guidance, and the
+      read-only Review Request -> Review Response -> Decision Handoff path
 
 - [x] Sanitized Compose minimum and Proxmox segmented lifecycle contracts
 - [x] Machine-checked preflight/apply/verify/rollback/isolated-restore evidence requirements
