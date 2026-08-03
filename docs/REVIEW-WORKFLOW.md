@@ -23,19 +23,34 @@
 PowerShell 7:
 
 ```powershell
+function Write-NewUtf8File {
+  param([string]$LiteralPath, [string]$Text)
+  $Bytes = [Text.UTF8Encoding]::new($false).GetBytes($Text)
+  $Stream = [IO.FileStream]::new(
+    $LiteralPath,
+    [IO.FileMode]::CreateNew,
+    [IO.FileAccess]::Write,
+    [IO.FileShare]::None
+  )
+  try { $Stream.Write($Bytes, 0, $Bytes.Length) }
+  finally { $Stream.Dispose() }
+}
+
 $BundlePath = 'work\my-company-review-bundle.json'
-if (Test-Path -LiteralPath $BundlePath) { throw 'bundle target already exists' }
 $BundleJson = python tools\build_company_pack_review_bundle.py work\my-company
 if ($LASTEXITCODE -ne 0) { throw 'bundle was refused' }
-[IO.File]::WriteAllText($BundlePath, $BundleJson + "`n", [Text.UTF8Encoding]::new($false))
+Write-NewUtf8File -LiteralPath $BundlePath -Text ($BundleJson + "`n")
 ```
 
 Bash:
 
 ```bash
-test ! -e work/my-company-review-bundle.json
+BundlePath=work/my-company-review-bundle.json
 BundleJson=$(python3 tools/build_company_pack_review_bundle.py work/my-company) || exit 1
-printf '%s\n' "$BundleJson" > work/my-company-review-bundle.json
+(set -C; printf '%s\n' "$BundleJson" > "$BundlePath") || {
+  printf '%s\n' 'bundle target already exists' >&2
+  exit 1
+}
 ```
 
 保存先が既にある場合は上書きせず、新しいcandidate名を使います。bundle内の`bundle_digest`はgoverned JSON bindingsを固定し、bundle fileのSHA-256はverifierが別に計算します。

@@ -102,8 +102,8 @@ def build_review_request(bundle_path: Path, pack_dir: Path) -> dict[str, Any]:
 
     try:
         first_customization = check_customization(pack_dir)
-        second_verification = verify_saved_bundle(bundle_path, pack_dir)
         second_customization = check_customization(pack_dir)
+        second_verification = verify_saved_bundle(bundle_path, pack_dir)
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
         return refusal("SOURCE_DRIFT_DETECTED")
 

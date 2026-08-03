@@ -240,6 +240,34 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         self.assertNotIn("private", json.dumps(request))
         self.assertIsNone(request["candidate_binding"])
 
+    def test_pack_change_during_second_checker_read_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pack, _human_intent_ref, _retention_policy_ref = self.create_ready_pack(root)
+            bundle_path = root / "saved-review-bundle.json"
+            self.save_bundle(pack, bundle_path)
+            stable_report = request_builder.check_customization(pack)
+            calls = 0
+
+            def checker_with_late_change(_pack: Path) -> dict:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    record_path = pack / "records" / "source-record.json"
+                    record_path.write_bytes(record_path.read_bytes() + b"\n")
+                return stable_report
+
+            with mock.patch.object(
+                request_builder,
+                "check_customization",
+                side_effect=checker_with_late_change,
+            ):
+                request = request_builder.build_review_request(bundle_path, pack)
+
+        self.assertEqual(request["status"], "REQUEST_REFUSED")
+        self.assertEqual(request["reason"], "SOURCE_DRIFT_DETECTED")
+        self.assertIsNone(request["candidate_binding"])
+
     def test_output_is_deterministic_utf8_under_legacy_console_encoding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

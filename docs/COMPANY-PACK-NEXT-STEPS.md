@@ -38,7 +38,7 @@ plannerが成功してplanを作れた場合、`CUSTOMIZATION_REQUIRED`でもexi
 
 ## 分類別の見方
 
-長いchecker reportを次のgroupへlosslessに集計します。各categoryのgroup合計は、元reportのcountと必ず一致します。
+長いchecker reportを次のgroupへ件数集計します。各categoryのgroup合計は元reportのcountと必ず一致しますが、個別`id/path/reason`はplanner出力に含めません。
 
 | Category | 主なgroup | 作業の境界 |
 |---|---|---|

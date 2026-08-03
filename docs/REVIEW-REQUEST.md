@@ -9,17 +9,32 @@
 先にreview bundleを新規fileへ保存します。既存fileは上書きしません。
 
 ```powershell
+function Write-NewUtf8File {
+  param([string]$LiteralPath, [string]$Text)
+  $Bytes = [Text.UTF8Encoding]::new($false).GetBytes($Text)
+  $Stream = [IO.FileStream]::new(
+    $LiteralPath,
+    [IO.FileMode]::CreateNew,
+    [IO.FileAccess]::Write,
+    [IO.FileShare]::None
+  )
+  try { $Stream.Write($Bytes, 0, $Bytes.Length) }
+  finally { $Stream.Dispose() }
+}
+
 $BundlePath = 'work\my-company-review-bundle.json'
-if (Test-Path -LiteralPath $BundlePath) { throw 'bundle target already exists' }
 $BundleJson = python tools\build_company_pack_review_bundle.py work\my-company
 if ($LASTEXITCODE -ne 0) { throw 'bundle was refused' }
-[IO.File]::WriteAllText($BundlePath, $BundleJson + "`n", [Text.UTF8Encoding]::new($false))
+Write-NewUtf8File -LiteralPath $BundlePath -Text ($BundleJson + "`n")
 ```
 
 ```bash
-test ! -e work/my-company-review-bundle.json
+BundlePath=work/my-company-review-bundle.json
 BundleJson=$(python3 tools/build_company_pack_review_bundle.py work/my-company) || exit 1
-printf '%s\n' "$BundleJson" > work/my-company-review-bundle.json
+(set -C; printf '%s\n' "$BundleJson" > "$BundlePath") || {
+  printf '%s\n' 'bundle target already exists' >&2
+  exit 1
+}
 ```
 
 bundleの意味と保存形式は[Company Pack Review Bundle](REVIEW-BUNDLE.md)を参照してください。
@@ -30,25 +45,27 @@ PowerShell 7:
 
 ```powershell
 $RequestPath = 'work\my-company-review-request.json'
-if (Test-Path -LiteralPath $RequestPath) { throw 'request target already exists' }
 $RequestJson = python tools\build_company_pack_review_request.py `
   $BundlePath `
   work\my-company
 if ($LASTEXITCODE -ne 0) { throw 'request was refused' }
-[IO.File]::WriteAllText($RequestPath, $RequestJson + "`n", [Text.UTF8Encoding]::new($false))
+Write-NewUtf8File -LiteralPath $RequestPath -Text ($RequestJson + "`n")
 ```
 
 Bash:
 
 ```bash
-test ! -e work/my-company-review-request.json
+RequestPath=work/my-company-review-request.json
 RequestJson=$(python3 tools/build_company_pack_review_request.py \
   work/my-company-review-bundle.json \
   work/my-company) || exit 1
-printf '%s\n' "$RequestJson" > work/my-company-review-request.json
+(set -C; printf '%s\n' "$RequestJson" > "$RequestPath") || {
+  printf '%s\n' 'request target already exists' >&2
+  exit 1
+}
 ```
 
-CLI自体はfileを作らず、UTF-8の1行JSONをstdoutへ返します。上のshell例が非上書きで保存します。引数はfile/directory pathだけです。locator値やcredentialをcommand lineへ渡さないでください。
+CLI自体はfileを作らず、UTF-8の1行JSONをstdoutへ返します。上のshell例はPowerShell `FileMode.CreateNew` / Bash noclobberを使い、競合時も既存fileを上書きしません。引数はfile/directory pathだけです。locator値やcredentialをcommand lineへ渡さないでください。
 
 ## Success contract
 
