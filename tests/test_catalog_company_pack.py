@@ -206,6 +206,28 @@ class CompanyPackCatalogCliTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertIn("usage:", result.stderr.lower())
 
+    def test_unknown_format_is_usage_error_without_echoing_secret_like_argument(self) -> None:
+        secret_like = "sk-r39-catalog-secret"
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(CATALOG),
+                str(STARTER),
+                "--format",
+                secret_like,
+            ],
+            cwd=ROOT,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("usage:", result.stderr.lower())
+        self.assertIn("invalid command-line arguments", result.stderr)
+        self.assertNotIn(secret_like, result.stderr)
+
     def test_schema_is_closed_at_top_level(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         self.assertFalse(schema["additionalProperties"])
@@ -233,6 +255,7 @@ class CompanyPackCatalogCliTests(unittest.TestCase):
         self.assertIn("../../docs/COMPANY-PACK-CATALOG.md", starter_readme)
         self.assertIn("read-only", runbook)
         self.assertIn("NO_GO_UNPUBLISHED", runbook)
+        self.assertIn("invalid command-line arguments", runbook)
         self.assertIn("Blocks", runbook)
         self.assertIn("MOCs", runbook)
 

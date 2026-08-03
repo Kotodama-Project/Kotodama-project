@@ -115,6 +115,11 @@ JSON Schemaはschemas/company-pack-catalog.schema.jsonです。出力を保存�
 revisionとCatalogのbytesを同じcandidateへ束縛してください。保存したCatalog
 だけを後からCurrent Truthの根拠にしてはいけません。
 
+未知の`--format`値や余分な引数は、終了code 2、固定usage、固定の
+`invalid command-line arguments`で拒否します。入力値そのものをusageやエラーへ
+反映しないため、secret-likeな値を渡してもCatalog本文やprivate locatorは出力され
+ません。
+
 ## 関連手順
 
 - Template Guide: Company Template、Blocks、Records、MOCsの編集方針

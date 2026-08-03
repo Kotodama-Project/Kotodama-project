@@ -26,6 +26,14 @@ CLAIMS = {
 }
 
 
+class SafeArgumentParser(argparse.ArgumentParser):
+    """Reject malformed CLI input without reflecting the untrusted value."""
+
+    def error(self, _message: str) -> None:
+        self.print_usage(sys.stderr)
+        self.exit(2, f"{self.prog}: error: invalid command-line arguments\n")
+
+
 def read_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         value = json.load(handle)
@@ -272,7 +280,7 @@ def write_stdout_utf8(value: str) -> None:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = SafeArgumentParser(
         description="Print a deterministic read-only Company Pack catalog."
     )
     parser.add_argument("pack_directory", type=Path)
