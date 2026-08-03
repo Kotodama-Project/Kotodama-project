@@ -3,6 +3,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -14,10 +15,10 @@ STARTER = ROOT / "examples" / "company-starter"
 
 class CreateCompanyPackCliTests(unittest.TestCase):
     def run_creator(
-        self, pack_id: str, target: Path
+        self, pack_id: str, target: Path, *options: str
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, str(CREATOR), pack_id, str(target)],
+            [sys.executable, str(CREATOR), pack_id, str(target), *options],
             cwd=ROOT,
             text=True,
             capture_output=True,
@@ -73,6 +74,81 @@ class CreateCompanyPackCliTests(unittest.TestCase):
             if path.is_file()
         }
         self.assertEqual(source_after, source_before)
+
+    def test_guided_options_close_only_the_nineteen_static_replacements(self) -> None:
+        expires_at = (
+            datetime.now(timezone.utc) + timedelta(days=1)
+        ).isoformat().replace("+00:00", "Z")
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "work"
+            parent.mkdir()
+            target = parent / "guided-company"
+            result = self.run_creator(
+                "guided-company",
+                target,
+                "--human-intent-ref",
+                "human-intent:governed-alpha-v1",
+                "--authority-expires-at",
+                expires_at,
+                "--retention-policy-ref",
+                "retention-policy:governed-v1",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            summary = json.loads(result.stdout)
+            self.assertEqual(summary["status"], "PASS")
+            self.assertEqual(summary["static_customizations_applied"], 19)
+            self.assertEqual(
+                summary["customization_status"],
+                "READY_FOR_GOVERNED_REVIEW",
+            )
+
+            manifest = json.loads(
+                (target / "manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                manifest["human_intent_ref"],
+                "human-intent:governed-alpha-v1",
+            )
+            self.assertEqual(manifest["status"], "draft")
+            for relative in manifest["blocks"]:
+                document = json.loads(
+                    (target / relative).read_text(encoding="utf-8")
+                )
+                self.assertEqual(document["authority"]["expires_at"], expires_at)
+            for relative in manifest["records"]:
+                document = json.loads(
+                    (target / relative).read_text(encoding="utf-8")
+                )
+                self.assertEqual(
+                    document["retention"]["policy_ref"],
+                    "retention-policy:governed-v1",
+                )
+
+            checked = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "tools" / "check_company_pack_customization.py"),
+                    str(target),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(checked.returncode, 0, checked.stdout)
+            report = json.loads(checked.stdout)
+            self.assertEqual(report["status"], "READY_FOR_GOVERNED_REVIEW")
+            self.assertEqual(
+                report["counts"],
+                {
+                    "replacement_required": 0,
+                    "review_required": 46,
+                    "evidence_required": 5,
+                },
+            )
+            self.assertTrue(all(not value for value in report["claims"].values()))
+            self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
 
     def test_rejects_an_invalid_pack_id_without_creating_the_target(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
