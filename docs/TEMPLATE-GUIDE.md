@@ -164,11 +164,12 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 7. [review bundle](REVIEW-BUNDLE.md)を作り、manifest、Blocks、MOCs、Recordsのexact bytesを固定する。
 8. [review request](REVIEW-REQUEST.md)を作り、46件のID/path/reasonと5件のevidence gapを同じcandidateへ束縛する。
 9. [review response](REVIEW-RESPONSE.md)でoutcomeだけを入力し、元requestとの構造一致を確認する。
-10. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、identity・authority・全体outcomeを別Decision Recordへ束縛する。
-11. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
-12. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
-13. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
-14. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
+10. [review decision handoff](REVIEW-DECISION-HANDOFF.md)で5成果物を非承認candidateへ束縛する。
+11. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、identity・authority・全体outcomeを別Decision Recordへ束縛する。
+12. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
+13. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
+14. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
+15. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
 
 ## Statusの読み方
 

@@ -76,6 +76,8 @@ bundleを保存して別reviewerへ渡す場合は[Candidate-bound Review Workfl
 
 requestの46件へID/path/reasonを再入力せずoutcomeを記録するには[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を使います。response verifierは元requestとの構造一致と全item入力をcountだけで報告しますが、reviewer identity、authority、approval、全体outcome、Decision Recordは別stepです。
 
+responseまで完了した5成果物をHuman Decisionへ渡すには[Review Evidence to Decision Handoff](REVIEW-DECISION-HANDOFF.md)を使います。handoffはexact bytesを固定するだけで、Decision、identity、authority、GOを作りません。
+
 ## 5. flow contractとMOC順にBlockを読む
 
 `manifest.json`の`flow`は、外部から入る`entry_inputs`、Block IDの`sequence`、読み順を示す`moc_ref`を宣言します。[`company-operations.json`](../examples/company-starter/mocs/company-operations.json)は、同じ順序を示すnavigation projectionです。

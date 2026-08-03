@@ -427,6 +427,42 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
             "null",
         )
 
+    def test_handoff_runbook_is_discoverable_and_preserves_the_human_gate(self) -> None:
+        runbook = (ROOT / "docs" / "REVIEW-DECISION-HANDOFF.md").read_text(
+            encoding="utf-8"
+        )
+        for required in (
+            "build_company_pack_review_decision_handoff.py",
+            "verify_company_pack_review_decision_handoff.py",
+            "[IO.FileMode]::CreateNew",
+            "noclobber",
+            "evidence_ref",
+            "decision: null",
+            "selected_outcome: null",
+            "HUMAN_DECISION_REQUIRED",
+            "NO_GO_UNPUBLISHED",
+            "intent_candidate_ref",
+            "reviewer_identity_ref",
+            "decision_maker_authority_ref",
+        ):
+            self.assertIn(required, runbook)
+
+        discoverability_files = (
+            ROOT / "README.md",
+            ROOT / "docs" / "REVIEW-WORKFLOW.md",
+            ROOT / "docs" / "REVIEW-RESPONSE.md",
+            ROOT / "docs" / "STARTER-WALKTHROUGH.md",
+            ROOT / "docs" / "TEMPLATE-GUIDE.md",
+            ROOT / "docs" / "VALIDATION.md",
+            ROOT / "docs" / "CUSTOMIZATION-CHECKLIST.md",
+            ROOT / "examples" / "company-starter" / "README.md",
+        )
+        for path in discoverability_files:
+            with self.subTest(path=path.relative_to(ROOT)):
+                self.assertIn(
+                    "REVIEW-DECISION-HANDOFF.md", path.read_text(encoding="utf-8")
+                )
+
     def _mutate_json(self, path: Path, mutation) -> None:
         value = json.loads(path.read_bytes())
         mutation(value)

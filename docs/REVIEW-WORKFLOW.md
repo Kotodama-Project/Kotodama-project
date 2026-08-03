@@ -11,9 +11,10 @@
 | 3. Verify | Independent reviewer | verification report + report file SHA-256 | approval、Promotion |
 | 4. Request | Review coordinator | pending review request + request file SHA-256 | selected outcome、approval |
 | 5. Respond | authorized reviewer under separate policy | item response candidate + structural report SHA-256 | identity proof、overall Decision |
-| 6. Decide | authorized Human / policy | candidate-bound Decision Record | deployment result、Current Truth |
-| 7. Execute | bounded Work Order owner | Change Candidate + Verification Receipt | self-Promotion |
-| 8. Promote | separate promotion authority | Promotion Decision Record | automatic Public Beta GO |
+| 6. Handoff | review coordinator | five-artifact handoff candidate + verification | identity proof、overall Decision |
+| 7. Decide | authorized Human / policy | candidate-bound Decision Record | deployment result、Current Truth |
+| 8. Execute | bounded Work Order owner | Change Candidate + Verification Receipt | self-Promotion |
+| 9. Promote | separate promotion authority | Promotion Decision Record | automatic Public Beta GO |
 
 小さなチームで同じ人が複数roleを担当する場合も、artifactと時刻、どのauthorityで行ったかを分けて記録します。独立性が必須のlaneでは、同一人物を別role名で書くだけでは要件を満たしません。
 
@@ -124,7 +125,11 @@ python3 tools/verify_company_pack_review_response.py \
 
 `ITEM_RESPONSES_MATCH_REQUEST`は46件のimmutable itemと全outcomeが元requestへ一致したことだけを示します。個別item/noteはverification reportへ反射せず、5件のevidence gapと`selected_outcome=null`を維持します。保存、編集範囲、note hygiene、schema、refusal条件は[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を参照してください。
 
-## 5. Record the Human decision separately
+## 5. Bind the complete review evidence without deciding
+
+complete response chainを後続Decisionへ手転記せず渡す場合は[Review Evidence to Decision Handoff](REVIEW-DECISION-HANDOFF.md)を使います。builder/verifierはsaved bundle、bundle verification、request、response、response verificationと現在のPackを再照合しますが、`decision: null`、`selected_outcome: null`を維持します。
+
+## 6. Record the Human decision separately
 
 `MATCH`を得た後も、次をDecision Recordへ明示します。
 
@@ -141,7 +146,7 @@ python3 tools/verify_company_pack_review_response.py \
 
 bundle/response verifierはidentity、署名、authority、同意、時刻を推測しません。これらをCLI出力へ後付けして元のdeterministic reportを改変せず、別のgoverned Recordへ束縛します。Decision直前にはsaved bundleと現在のPackも再度`MATCH`させます。
 
-## 6. Handle changes without silent rebinding
+## 7. Handle changes without silent rebinding
 
 Packを1 byteでも変更したら、旧bundleは更新しません。
 
@@ -158,4 +163,4 @@ Decision後の変更を同じcandidateとして扱わず、reviewを最初から
 
 このworkflowは署名サービス、protected evidence store、atomic filesystem snapshot、runtime deployment、provider E2E、rollback実行、Promotion、Current Truth、Final Human GO、Public Beta GOを実装しません。重要なlaneではbundle/report bytesをcontent-addressed storeまたはGit revisionへ保存し、identity・signature・retention・access policyを別のWork Orderで閉じます。
 
-機械可読contractは[`company-pack-review-bundle-verification.schema.json`](../schemas/company-pack-review-bundle-verification.schema.json)、[`company-pack-review-response.schema.json`](../schemas/company-pack-review-response.schema.json)、[`company-pack-review-response-verification.schema.json`](../schemas/company-pack-review-response-verification.schema.json)です。
+機械可読contractは[`company-pack-review-bundle-verification.schema.json`](../schemas/company-pack-review-bundle-verification.schema.json)、[`company-pack-review-response.schema.json`](../schemas/company-pack-review-response.schema.json)、[`company-pack-review-response-verification.schema.json`](../schemas/company-pack-review-response-verification.schema.json)、[`company-pack-review-decision-handoff.schema.json`](../schemas/company-pack-review-decision-handoff.schema.json)、[`company-pack-review-decision-handoff-verification.schema.json`](../schemas/company-pack-review-decision-handoff-verification.schema.json)です。

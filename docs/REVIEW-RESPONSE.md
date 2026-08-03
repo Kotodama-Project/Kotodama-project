@@ -113,6 +113,8 @@ schemaのnote規則は型・長さ・条件付き必須だけを表す構造契�
 
 response検証直前または直後にPackが変わり得るため、Decision Recordを作る前に[saved bundle verifier](REVIEW-WORKFLOW.md#2-verify-the-saved-bundle)で現在のPackをもう一度`MATCH`させます。Decision Recordには少なくとも次を別途束縛します。
 
+5成果物を一つの非承認candidateへ機械的に束縛する手順は[Review Evidence to Decision Handoff](REVIEW-DECISION-HANDOFF.md)です。handoff verifierのMATCHもidentity、authority、全体Decisionを証明せず、`decision: null`を維持します。
+
 - saved bundle、bundle verification、request、response、response verificationの各file SHA-256
 - reviewer identity / role / authority / independence evidence / reviewed-at
 - decision maker identity / authority / decided-at
