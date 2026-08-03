@@ -131,6 +131,34 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         self.assertTrue(all(value is False for value in request["claims"].values()))
         self.assertEqual(request["public_beta"], "NO_GO_UNPUBLISHED")
 
+    def test_pack_byte_change_refuses_request_without_echoing_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pack, human_intent_ref, retention_policy_ref = self.create_ready_pack(root)
+            bundle_path = root / "private-bundle-name.json"
+            self.save_bundle(pack, bundle_path)
+            record_path = pack / "records" / "source-record.json"
+            record_path.write_bytes(record_path.read_bytes() + b"\n")
+            result = self.run_builder(bundle_path, pack)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, b"")
+        self.assertNotIn(str(pack).encode("utf-8"), result.stdout)
+        self.assertNotIn(str(bundle_path).encode("utf-8"), result.stdout)
+        self.assertNotIn(human_intent_ref.encode("utf-8"), result.stdout)
+        self.assertNotIn(retention_policy_ref.encode("utf-8"), result.stdout)
+        request = json.loads(result.stdout)
+        self.assertEqual(request["status"], "REQUEST_REFUSED")
+        self.assertEqual(request["reason"], "BUNDLE_VERIFICATION_FAILED")
+        self.assertIsNone(request["pack_id"])
+        self.assertIsNone(request["candidate_binding"])
+        self.assertEqual(request["review_request"]["state"], "NOT_CREATED")
+        self.assertEqual(request["review_request"]["items"], [])
+        self.assertIsNone(request["review_request"]["selected_outcome"])
+        self.assertEqual(request["unresolved_evidence"]["items"], [])
+        self.assertTrue(all(value is False for value in request["claims"].values()))
+        self.assertEqual(request["public_beta"], "NO_GO_UNPUBLISHED")
+
 
 if __name__ == "__main__":
     unittest.main()
