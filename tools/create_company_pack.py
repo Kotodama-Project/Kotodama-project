@@ -5,18 +5,27 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from check_company_pack_customization import check_customization
-from validate_template_pack import ID_PATTERN, validate_pack
+from check_company_pack_customization import REFERENCE_PLACEHOLDER, check_customization
+from validate_template_pack import ID_PATTERN, SECRET_VALUE_PATTERNS, validate_pack
 
 
 ROOT = Path(__file__).resolve().parents[1]
 STARTER = ROOT / "examples" / "company-starter"
+HUMAN_INTENT_LOCATOR_PATTERN = re.compile(
+    r"^human-intent:[a-z0-9][a-z0-9._/-]{1,127}$"
+)
+RETENTION_POLICY_LOCATOR_PATTERN = re.compile(
+    r"^retention-policy:[a-z0-9][a-z0-9._/-]{1,127}$"
+)
+MAX_AUTHORITY_WINDOW = timedelta(days=30)
 
 
 @dataclass(frozen=True)
@@ -24,6 +33,53 @@ class StaticCustomization:
     human_intent_ref: str
     authority_expires_at: str
     retention_policy_ref: str
+
+
+def validate_static_customization(
+    customization: StaticCustomization,
+    now: datetime | None = None,
+) -> str | None:
+    if (
+        HUMAN_INTENT_LOCATOR_PATTERN.fullmatch(customization.human_intent_ref)
+        is None
+        or REFERENCE_PLACEHOLDER in customization.human_intent_ref
+    ):
+        return "HUMAN_INTENT_LOCATOR_INVALID"
+    if (
+        RETENTION_POLICY_LOCATOR_PATTERN.fullmatch(
+            customization.retention_policy_ref
+        )
+        is None
+        or REFERENCE_PLACEHOLDER in customization.retention_policy_ref
+    ):
+        return "RETENTION_POLICY_LOCATOR_INVALID"
+    if any(
+        pattern.search(locator)
+        for locator in (
+            customization.human_intent_ref,
+            customization.retention_policy_ref,
+        )
+        for pattern in SECRET_VALUE_PATTERNS
+    ):
+        return "SECRET_LIKE_LOCATOR"
+
+    try:
+        expires_at = datetime.fromisoformat(
+            customization.authority_expires_at.replace("Z", "+00:00")
+        )
+    except (TypeError, ValueError):
+        return "AUTHORITY_EXPIRY_INVALID"
+    if expires_at.tzinfo is None or expires_at.utcoffset() is None:
+        return "AUTHORITY_EXPIRY_INVALID"
+
+    evaluated_at = now or datetime.now(timezone.utc)
+    expires_at = expires_at.astimezone(timezone.utc)
+    evaluated_at = evaluated_at.astimezone(timezone.utc)
+    if expires_at <= evaluated_at:
+        return "AUTHORITY_EXPIRY_NOT_FUTURE"
+    if expires_at - evaluated_at > MAX_AUTHORITY_WINDOW:
+        return "AUTHORITY_EXPIRY_EXCEEDS_30_DAYS"
+    return None
 
 
 def write_json(path: Path, value: dict[str, Any]) -> None:
@@ -57,6 +113,14 @@ def create_company_pack(
             target,
             "pack id must match ^[a-z0-9][a-z0-9-]{1,62}$",
         )
+    if customization is not None:
+        customization_error = validate_static_customization(customization)
+        if customization_error is not None:
+            return failure(
+                pack_id,
+                target,
+                f"guided customization input refused: {customization_error}",
+            )
 
     try:
         source = STARTER.resolve(strict=True)
@@ -169,8 +233,19 @@ def main(argv: list[str]) -> int:
         args.authority_expires_at,
         args.retention_policy_ref,
     )
+    if any(value is not None for value in supplied) and not all(
+        value is not None for value in supplied
+    ):
+        print(
+            "create_company_pack.py: error: guided customization options "
+            "must be supplied together",
+            file=sys.stderr,
+        )
+        return 2
     customization = (
-        StaticCustomization(*supplied) if all(value is not None for value in supplied) else None
+        StaticCustomization(*supplied)
+        if all(value is not None for value in supplied)
+        else None
     )
     summary = create_company_pack(args.pack_id, args.target, customization)
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))

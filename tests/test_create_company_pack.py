@@ -163,6 +163,92 @@ class CreateCompanyPackCliTests(unittest.TestCase):
             self.assertIn("pack id must match", summary["errors"][0])
             self.assertFalse(target.exists())
 
+    def test_guided_options_are_all_or_none_and_never_create_a_target_on_usage_error(self) -> None:
+        option_sets = (
+            ("--human-intent-ref", "human-intent:governed-alpha-v1"),
+            (
+                "--authority-expires-at",
+                (datetime.now(timezone.utc) + timedelta(days=1))
+                .isoformat()
+                .replace("+00:00", "Z"),
+            ),
+            ("--retention-policy-ref", "retention-policy:governed-v1"),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "work"
+            parent.mkdir()
+            for index, options in enumerate(option_sets):
+                with self.subTest(options=options):
+                    target = parent / f"partial-{index}"
+                    result = self.run_creator("partial-company", target, *options)
+
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(result.stdout, "")
+                    self.assertIn("must be supplied together", result.stderr)
+                    self.assertFalse(target.exists())
+
+    def test_guided_options_reject_unsafe_locators_and_unbounded_expiry_without_reflection(self) -> None:
+        tomorrow = (
+            datetime.now(timezone.utc) + timedelta(days=1)
+        ).isoformat().replace("+00:00", "Z")
+        cases = (
+            (
+                "placeholder-human-intent",
+                "human-intent:replace-with-governed-reference",
+                tomorrow,
+                "retention-policy:governed-v1",
+            ),
+            (
+                "secret-like-human-intent",
+                "human-intent:sk-abcdefghijklmnopqrstuvwxyz123456",
+                tomorrow,
+                "retention-policy:governed-v1",
+            ),
+            (
+                "wrong-retention-prefix",
+                "human-intent:governed-alpha-v1",
+                tomorrow,
+                "policy:governed-v1",
+            ),
+            (
+                "expired-window",
+                "human-intent:governed-alpha-v1",
+                "2000-01-01T00:00:00Z",
+                "retention-policy:governed-v1",
+            ),
+            (
+                "unbounded-window",
+                "human-intent:governed-alpha-v1",
+                "2099-01-01T00:00:00Z",
+                "retention-policy:governed-v1",
+            ),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "work"
+            parent.mkdir()
+            for name, human_ref, expiry, retention_ref in cases:
+                with self.subTest(name=name):
+                    target = parent / name
+                    result = self.run_creator(
+                        "guided-company",
+                        target,
+                        "--human-intent-ref",
+                        human_ref,
+                        "--authority-expires-at",
+                        expiry,
+                        "--retention-policy-ref",
+                        retention_ref,
+                    )
+
+                    self.assertEqual(result.returncode, 1)
+                    summary = json.loads(result.stdout)
+                    self.assertEqual(summary["status"], "FAIL")
+                    self.assertIn("guided customization", summary["errors"][0])
+                    self.assertNotIn(human_ref, result.stdout + result.stderr)
+                    self.assertNotIn(expiry, result.stdout + result.stderr)
+                    self.assertNotIn(retention_ref, result.stdout + result.stderr)
+                    self.assertFalse(target.exists())
+
     def test_refuses_to_overwrite_an_existing_target(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / "existing-company"
