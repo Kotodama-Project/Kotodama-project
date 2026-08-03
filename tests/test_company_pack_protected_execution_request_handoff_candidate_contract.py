@@ -99,6 +99,13 @@ def request_candidate(*, refused: bool = False) -> dict:
         "status": "CANDIDATE_ONLY",
         "request_state": "REFUSED_UNVERIFIED" if refused else "REQUEST_DEFINED_UNVERIFIED",
         "request_id_ref": opaque_ref("execution-request/r35-01"),
+        "work_order": {
+            "work_order_ref": opaque_ref("work-order/r35-protected-handoff"),
+            "work_order_binding": binding("7"),
+            "work_order_status": "NOT_VERIFIED",
+            "authority_granted": False,
+            "verification_status": "NOT_VERIFIED",
+        },
         "source_contract": {
             "receipt_schema_ref": opaque_ref("schema/protected-source-binding-receipt-candidate"),
             "receipt_schema_binding": binding("a"),
@@ -116,6 +123,7 @@ def request_candidate(*, refused: bool = False) -> dict:
             "configuration_ref": opaque_ref("runner/configuration"),
             "configuration_binding": binding("d"),
             "execution_environment_ref": opaque_ref("runner/environment"),
+            "execution_environment_binding": binding("8"),
             "operation_kind": "PRIVATE_SOURCE_BINDING_RECEIPT_CANDIDATE",
             "credentials_embedded": False,
             "physical_locator_embedded": False,
@@ -133,6 +141,7 @@ def request_candidate(*, refused: bool = False) -> dict:
             "not_before": "2026-08-03T20:30:00+09:00",
             "expires_at": "2026-08-03T21:30:00+09:00",
             "max_skew_seconds": 30,
+            "requested_duration_seconds": 3600,
             "verification_status": "NOT_VERIFIED",
         },
         "failure_and_rollback": {
@@ -240,6 +249,9 @@ class ProtectedExecutionRequestHandoffCandidateContractTests(unittest.TestCase):
         mutated["evaluation_window"]["max_skew_seconds"] = 86401
         cases["unbounded skew"] = mutated
         mutated = copy.deepcopy(base)
+        mutated["evaluation_window"]["requested_duration_seconds"] = 86401
+        cases["unbounded duration"] = mutated
+        mutated = copy.deepcopy(base)
         mutated["evaluation_window"]["expires_at"] = "2026-02-30T25:61:61+09:00"
         cases["invalid evaluation time"] = mutated
         mutated = copy.deepcopy(base)
@@ -287,6 +299,25 @@ class ProtectedExecutionRequestHandoffCandidateContractTests(unittest.TestCase):
         self.assertEqual(set(claims["properties"]), EXPECTED_CLAIMS)
         self.assertTrue(all(spec["const"] is False for spec in claims["properties"].values()))
 
+    def test_work_order_and_execution_environment_are_explicitly_bound(self) -> None:
+        work_order = self.schema["$defs"]["work_order"]
+        self.assertEqual(
+            set(work_order["required"]),
+            {
+                "work_order_ref",
+                "work_order_binding",
+                "work_order_status",
+                "authority_granted",
+                "verification_status",
+            },
+        )
+        runner = self.schema["$defs"]["runner_request"]
+        self.assertIn("execution_environment_binding", runner["required"])
+        self.assertEqual(
+            runner["properties"]["execution_environment_binding"],
+            {"$ref": "#/$defs/binding"},
+        )
+
     def test_private_input_and_stop_condition_orders_are_exact(self) -> None:
         private = self.schema["$defs"]["private_inputs"]
         self.assertEqual(private["minItems"], 4)
@@ -305,6 +336,8 @@ class ProtectedExecutionRequestHandoffCandidateContractTests(unittest.TestCase):
     def test_evaluation_window_shape_is_bounded_and_runbook_explains_time_order(self) -> None:
         window = self.schema["$defs"]["evaluation_window"]
         self.assertEqual(window["properties"]["max_skew_seconds"]["maximum"], 86400)
+        self.assertEqual(window["properties"]["requested_duration_seconds"]["maximum"], 86400)
+        self.assertEqual(window["properties"]["requested_duration_seconds"]["minimum"], 1)
         self.assertEqual(window["properties"]["verification_status"]["const"], "NOT_VERIFIED")
         runbook = RUNBOOK.read_text(encoding="utf-8")
         self.assertIn("not_before", runbook)

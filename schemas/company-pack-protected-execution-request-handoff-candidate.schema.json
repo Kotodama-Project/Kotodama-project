@@ -11,6 +11,7 @@
     "status",
     "request_state",
     "request_id_ref",
+    "work_order",
     "source_contract",
     "runner_request",
     "private_inputs",
@@ -33,6 +34,7 @@
       "enum": ["REQUEST_DEFINED_UNVERIFIED", "REFUSED_UNVERIFIED"]
     },
     "request_id_ref": {"$ref": "#/$defs/opaque_ref"},
+    "work_order": {"$ref": "#/$defs/work_order"},
     "source_contract": {"$ref": "#/$defs/source_contract"},
     "runner_request": {"$ref": "#/$defs/runner_request"},
     "private_inputs": {"$ref": "#/$defs/private_inputs"},
@@ -91,6 +93,24 @@
         "bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
       }
     },
+    "work_order": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "work_order_ref",
+        "work_order_binding",
+        "work_order_status",
+        "authority_granted",
+        "verification_status"
+      ],
+      "properties": {
+        "work_order_ref": {"$ref": "#/$defs/opaque_ref"},
+        "work_order_binding": {"$ref": "#/$defs/binding"},
+        "work_order_status": {"const": "NOT_VERIFIED"},
+        "authority_granted": {"const": false},
+        "verification_status": {"const": "NOT_VERIFIED"}
+      }
+    },
     "source_contract": {
       "type": "object",
       "additionalProperties": false,
@@ -128,6 +148,7 @@
         "configuration_ref",
         "configuration_binding",
         "execution_environment_ref",
+        "execution_environment_binding",
         "operation_kind",
         "credentials_embedded",
         "physical_locator_embedded",
@@ -141,6 +162,7 @@
         "configuration_ref": {"$ref": "#/$defs/opaque_ref"},
         "configuration_binding": {"$ref": "#/$defs/binding"},
         "execution_environment_ref": {"$ref": "#/$defs/opaque_ref"},
+        "execution_environment_binding": {"$ref": "#/$defs/binding"},
         "operation_kind": {"const": "PRIVATE_SOURCE_BINDING_RECEIPT_CANDIDATE"},
         "credentials_embedded": {"const": false},
         "physical_locator_embedded": {"const": false},
@@ -219,6 +241,7 @@
         "not_before",
         "expires_at",
         "max_skew_seconds",
+        "requested_duration_seconds",
         "verification_status"
       ],
       "properties": {
@@ -229,6 +252,11 @@
         "max_skew_seconds": {
           "type": "integer",
           "minimum": 0,
+          "maximum": 86400
+        },
+        "requested_duration_seconds": {
+          "type": "integer",
+          "minimum": 1,
           "maximum": 86400
         },
         "verification_status": {"const": "NOT_VERIFIED"}

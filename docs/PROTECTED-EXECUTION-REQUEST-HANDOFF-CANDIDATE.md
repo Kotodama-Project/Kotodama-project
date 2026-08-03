@@ -48,6 +48,7 @@ It uses Draft 2020-12 with closed objects and exact ordered arrays.
 
 | Area | Contracted boundary |
 | --- | --- |
+| Work Order | Opaque Work Order ref and binding; authority remains `false` and `NOT_VERIFIED` |
 | Source contract | Exact public revision and expected R33 receipt kind/state, all `NOT_VERIFIED` |
 | Runner request | Opaque policy/executable/config/environment refs and bindings; no credentials or physical paths |
 | Private inputs | Exactly four ordered opaque refs; locators are not resolved |
@@ -64,7 +65,8 @@ not proof that the referenced bytes exist or are authentic.
 
 ## Time and stop conditions
 
-The schema bounds `max_skew_seconds` to 24 hours and validates timestamp shape.
+The schema bounds `max_skew_seconds` and the declared
+`requested_duration_seconds` to 24 hours and validates timestamp shape.
 The future protected runner must additionally enforce that `not_before` is
 strictly earlier than the nested `expires_at`, that the request and window are
 within their parent expiry, that its clock policy is trusted, and that the
