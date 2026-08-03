@@ -183,7 +183,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 if item["outcome"] != "accept":
                     item["reviewer_note"] = f"review-note-ref:{index:02d}"
             response["review_response"]["items"][0]["reviewer_note"] = (
-                "https://example.com/evidence/review-00"
+                "https://example.com/home/reviewer/evidence/review-00"
             )
             response_bytes = (
                 json.dumps(response, ensure_ascii=False, sort_keys=True) + "\n"
@@ -502,6 +502,29 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             cases.append(
                 ("UNC local path note", json.dumps(unc_local_path_note).encode("utf-8"))
             )
+
+            prefixed_drive_path_note = self.completed_response(request_path)
+            prefixed_drive_path_note["review_response"]["items"][0][
+                "reviewer_note"
+            ] = "memoC:\\Users\\private\\review.txt"
+            cases.append(
+                (
+                    "prefixed drive path note",
+                    json.dumps(prefixed_drive_path_note).encode("utf-8"),
+                )
+            )
+
+            for scheme in ("file", "smb"):
+                private_locator_note = self.completed_response(request_path)
+                private_locator_note["review_response"]["items"][0][
+                    "reviewer_note"
+                ] = f"{scheme}://private-host/review-share/review.txt"
+                cases.append(
+                    (
+                        f"{scheme} private locator note",
+                        json.dumps(private_locator_note).encode("utf-8"),
+                    )
+                )
 
             duplicate_key = (
                 '{"kind":"company_pack_review_response","kind":"'

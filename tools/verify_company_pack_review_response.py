@@ -46,8 +46,12 @@ SECRET_NOTE_RE = re.compile(
     r"AIza[0-9A-Za-z_-]{20,}|xox[baprs]-[0-9A-Za-z-]{10,}|"
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----)"
 )
+PUBLIC_HTTPS_URL_RE = re.compile(
+    r"(?i)\bhttps://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+    r"[a-z]{2,63}(?::[0-9]{1,5})?(?:/[^\s]*)?"
+)
 LOCAL_PATH_RE = re.compile(
-    r"(?i)(?:(?<![A-Za-z])[A-Za-z]:[\\/]|\\\\[^\\/\s]+[\\/]|(?<!:)//[^/\s]+/|"
+    r"(?i)(?:[A-Za-z]:[\\/]|\\\\[^\\/\s]+[\\/]|//[^/\s]+/|"
     r"/(?:home|Users|private|root|tmp|etc|var/folders)/|AppData[\\/])"
 )
 from verify_company_pack_review_bundle import (
@@ -105,6 +109,11 @@ def valid_file_binding(value: Any) -> bool:
         and type(value["bytes"]) is int
         and 0 < value["bytes"] <= MAX_JSON_BYTES
     )
+
+
+def contains_private_locator(note: str) -> bool:
+    without_public_https = PUBLIC_HTTPS_URL_RE.sub("", note)
+    return LOCAL_PATH_RE.search(without_public_https) is not None
 
 
 def load_response(path: Path) -> tuple[dict[str, Any], bytes] | None:
@@ -188,7 +197,7 @@ def response_problem(response: dict[str, Any], request: dict[str, Any]) -> str |
         if note is not None and (
             not valid_text(note, 0, 2000)
             or SECRET_NOTE_RE.search(note) is not None
-            or LOCAL_PATH_RE.search(note) is not None
+            or contains_private_locator(note)
         ):
             return "RESPONSE_INVALID"
         if item["outcome"] in {"request_changes", "reject"} and (
