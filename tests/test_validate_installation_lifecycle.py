@@ -5,10 +5,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft202012Validator
+
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "tools" / "validate_installation_lifecycle.py"
 EXAMPLES = ROOT / "examples" / "installation-lifecycle"
+SCHEMA = ROOT / "schemas" / "installation-lifecycle-profile.schema.json"
 
 
 class InstallationLifecycleValidatorCliTests(unittest.TestCase):
@@ -61,6 +64,18 @@ class InstallationLifecycleValidatorCliTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("phases must use the required lifecycle order", json.loads(result.stdout)["errors"])
+
+    def test_whitespace_only_purpose_is_rejected_by_schema_and_validator(self) -> None:
+        document = self.load_example("compose-minimum.json")
+        document["purpose"] = "   "
+
+        result = self.run_document(document)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("purpose must be a non-empty string", json.loads(result.stdout)["errors"])
+
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        self.assertTrue(list(Draft202012Validator(schema).iter_errors(document)))
 
     def test_material_phases_require_work_orders_and_rollback_binding(self) -> None:
         document = self.load_example("compose-minimum.json")

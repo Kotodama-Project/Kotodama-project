@@ -26,7 +26,7 @@
     "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"},
     "status": {"enum": ["example", "candidate_only"]},
     "profile": {"enum": ["compose_minimum", "proxmox_segmented"]},
-    "purpose": {"type": "string", "minLength": 1},
+    "purpose": {"type": "string", "minLength": 1, "pattern": ".*\\S.*"},
     "scope": {
       "type": "object",
       "additionalProperties": false,
