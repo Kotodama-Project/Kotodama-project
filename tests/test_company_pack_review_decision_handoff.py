@@ -223,6 +223,7 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
                 "state": "HUMAN_DECISION_REQUIRED",
                 "required_fields": EXPECTED_DECISION_FIELDS,
                 "permitted_outcomes": ["accept", "request_changes", "reject"],
+                "decision": None,
                 "selected_outcome": None,
             },
         )
@@ -328,7 +329,11 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
         )
         self.assertEqual(
             report["decision_requirements"],
-            {"state": "HUMAN_DECISION_REQUIRED", "selected_outcome": None},
+            {
+                "state": "HUMAN_DECISION_REQUIRED",
+                "decision": None,
+                "selected_outcome": None,
+            },
         )
         self.assertTrue(all(value is False for value in report["claims"].values()))
         self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")

@@ -39,6 +39,7 @@ def mismatch(reason: str) -> dict[str, Any]:
         "unresolved_evidence": {"state": "UNKNOWN", "item_count": 0},
         "decision_requirements": {
             "state": "UNKNOWN",
+            "decision": None,
             "selected_outcome": None,
         },
         "claims": empty_claims(),
@@ -103,6 +104,7 @@ def verify_decision_handoff(
         "unresolved_evidence": handoff["unresolved_evidence"],
         "decision_requirements": {
             "state": "HUMAN_DECISION_REQUIRED",
+            "decision": None,
             "selected_outcome": None,
         },
         "claims": empty_claims(),
