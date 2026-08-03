@@ -656,6 +656,42 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
             self.assertEqual(verification["reason"], "SOURCE_DRIFT_DETECTED")
             self.assertIsNone(verification["handoff_binding"])
 
+    def test_pack_change_after_final_request_rebuild_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            chain = self.create_complete_chain(root)
+            paths = chain["paths"]
+            pack_file = chain["pack"] / "records" / "source-record.json"
+            original_build_request = handoff_builder.build_review_request
+            call_count = 0
+
+            def rebuild_then_change_pack(bundle_path: Path, pack_dir: Path):
+                nonlocal call_count
+                result = original_build_request(bundle_path, pack_dir)
+                call_count += 1
+                if call_count == 2:
+                    pack_file.write_bytes(pack_file.read_bytes() + b"\n")
+                return result
+
+            with mock.patch.object(
+                handoff_builder,
+                "build_review_request",
+                side_effect=rebuild_then_change_pack,
+            ):
+                report = handoff_builder.build_decision_handoff(
+                    paths["bundle"],
+                    chain["pack"],
+                    paths["bundle_verification"],
+                    paths["request"],
+                    paths["response"],
+                    paths["response_verification"],
+                )
+
+        self.assertEqual(call_count, 2)
+        self.assertEqual(report["status"], "HANDOFF_BUILD_REFUSED")
+        self.assertEqual(report["reason"], "SOURCE_DRIFT_DETECTED")
+        self.assertIsNone(report["artifact_bindings"])
+
     def _mutate_json(self, path: Path, mutation) -> None:
         value = json.loads(path.read_bytes())
         mutation(value)

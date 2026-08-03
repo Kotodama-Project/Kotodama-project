@@ -225,6 +225,12 @@ def build_decision_handoff(
         final_data = read_limited_bytes(paths[name])
         if final_data is None or final_data != loaded[name][1]:
             return refusal("SOURCE_DRIFT_DETECTED")
+    try:
+        terminal_bundle_report = verify_saved_bundle(bundle_path, pack_dir)
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return refusal("SOURCE_DRIFT_DETECTED")
+    if not exact_json_equal(terminal_bundle_report, current_bundle_report):
+        return refusal("SOURCE_DRIFT_DETECTED")
 
     return {
         "kind": "company_pack_review_decision_handoff",
