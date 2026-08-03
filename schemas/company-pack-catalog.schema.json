@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-catalog.schema.json",
+  "title": "Kotodama Company Pack Catalog",
+  "$comment": "A deterministic read-only inventory of a structurally valid Pack. It is navigation and planning data, not a Company SSOT, Human approval, authority grant, runtime receipt, Promotion, Current Truth, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "pack_id",
+    "profiles",
+    "counts",
+    "validation",
+    "flow",
+    "blocks",
+    "records",
+    "mocs",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_catalog"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["PASS", "INVALID_PACK"]},
+    "pack_id": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"},
+        {"type": "null"}
+      ]
+    },
+    "profiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blocks", "records", "mocs", "validated_files"],
+      "properties": {
+        "blocks": {"type": "integer", "minimum": 0},
+        "records": {"type": "integer", "minimum": 0},
+        "mocs": {"type": "integer", "minimum": 0},
+        "validated_files": {"type": "integer", "minimum": 0}
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["structural_status", "validated_files", "error_count"],
+      "properties": {
+        "structural_status": {"enum": ["PASS", "FAIL"]},
+        "validated_files": {"type": "integer", "minimum": 0},
+        "error_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "flow": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "position",
+          "block_id",
+          "purpose",
+          "inputs",
+          "outputs",
+          "record_artifacts"
+        ],
+        "properties": {
+          "position": {"type": "integer", "minimum": 1},
+          "block_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+          },
+          "purpose": {"type": "string", "minLength": 1},
+          "inputs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "outputs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "record_artifacts": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,62}$"
+            }
+          }
+        }
+      }
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "position",
+          "id",
+          "path",
+          "purpose",
+          "inputs",
+          "outputs",
+          "record_artifacts",
+          "owner_role",
+          "allowed_actions",
+          "denied_actions",
+          "receipt_required"
+        ],
+        "properties": {
+          "position": {"type": "integer", "minimum": 1},
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/-]+\\.json$"
+          },
+          "purpose": {"type": "string", "minLength": 1},
+          "inputs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "outputs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "record_artifacts": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,62}$"
+            }
+          },
+          "owner_role": {"type": "string", "minLength": 1},
+          "allowed_actions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "denied_actions": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "receipt_required": {"const": true}
+        }
+      }
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "path",
+          "artifact",
+          "purpose",
+          "canonical_owner",
+          "creator_role",
+          "verifier_role",
+          "promotion_required_for_current_truth",
+          "retention_policy_ref"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/-]+\\.json$"
+          },
+          "artifact": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,62}$"
+          },
+          "purpose": {"type": "string", "minLength": 1},
+          "canonical_owner": {"type": "string", "minLength": 1},
+          "creator_role": {"type": "string", "minLength": 1},
+          "verifier_role": {"type": "string", "minLength": 1},
+          "promotion_required_for_current_truth": {"const": true},
+          "retention_policy_ref": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "mocs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "path",
+          "title",
+          "authority",
+          "projection",
+          "refs",
+          "flow_positions"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/-]+\\.json$"
+          },
+          "title": {"type": "string", "minLength": 1},
+          "authority": {"const": "navigation_only"},
+          "projection": {"enum": ["flow_sequence", "flow_subsequence"]},
+          "refs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "flow_positions": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalog_is_authoritative",
+        "human_approval_verified",
+        "runtime_verified",
+        "promotion_verified",
+        "current_truth_changed"
+      ],
+      "properties": {
+        "catalog_is_authoritative": {"const": false},
+        "human_approval_verified": {"const": false},
+        "runtime_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  }
+}

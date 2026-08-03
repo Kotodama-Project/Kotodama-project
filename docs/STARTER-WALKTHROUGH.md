@@ -60,6 +60,17 @@ guided initializerで作成した場合は`READY_FOR_GOVERNED_REVIEW`、`0/46/5`
 
 checkerの一件ずつのJSONが長い場合、guided plannerは同じ結果を現在地、理想の7段階、分類別件数、次の一手へ集約します。作成直後の現在地は`STATIC_CUSTOMIZATION`で、Human Intent locator 1件、Block authority window 9件、Governed Record retention policy 9件が表示されます。plannerのexit code `0`は案内の生成成功であり、placeholder完了や承認ではありません。詳しくは[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)を参照してください。
 
+作成直後または編集後の作業copyを、Block、Record、MOCの読み順として確認する
+場合は、次のread-only Catalogを実行します。
+
+~~~powershell
+python tools\catalog_company_pack.py work\my-company --format markdown
+~~~
+
+Catalogは現在地を短く投影するだけで、placeholder完了、Human approval、
+runtime、Promotion、Current Truth、Public Beta GOを作りません。契約とJSON
+出力の詳細は[Company Pack Catalog](COMPANY-PACK-CATALOG.md)を参照してください。
+
 ## 4. review対象のbytesを固定する
 
 `replacement_required`を0にしてcheckerが`READY_FOR_GOVERNED_REVIEW`になったら、次を実行します。

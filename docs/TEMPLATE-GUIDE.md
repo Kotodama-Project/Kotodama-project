@@ -79,6 +79,18 @@ MOCからDecisionやCurrent Truthを直接変更しません。MOCはリンク�
 
 目的別MOCは新しい記録や正本を持ちません。公開例は`projection: flow_subsequence`を明示し、manifest IDから始まり、canonical flowと同じ順序のBlockだけを参照することをvalidatorが確認します。
 
+Block、Record、MOCを編集する前に、Company Pack Catalogで現在の対応を一覧できます。
+
+~~~powershell
+python tools/catalog_company_pack.py examples/company-starter --format markdown
+~~~
+
+Catalogはread-onlyのnavigation projectionです。出力のPASSは構造を読めた
+ことだけを示し、Human approval、Capability Grant、runtime、Promotion、
+Current Truth、Public Beta GOを作りません。JSON Schemaに対して機械処理する
+場合や、無効packの終了codeを扱う場合は[Company Pack Catalog](COMPANY-PACK-CATALOG.md)
+を参照してください。
+
 ### 4. すべてを同じ証拠鎖に通す
 
 ```text

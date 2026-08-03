@@ -210,6 +210,7 @@ Source Evidence
 | MOCs | 同じ canonical flow を目的別に辿る navigation map | 3 |
 | Manifest | owner、profile、flow、禁止 action を束縛する入口 | 1 |
 | Validators | 構造、参照、順序、禁止経路を機械検査する | dependency-free |
+| Catalog | Block、Record、MOCの関係をread-onlyで一覧する | JSON / Markdown |
 | Review Bundle | 全 22 JSON 文書の exact bytes を SHA-256 へ固定する | candidate-only |
 
 ### 9 Blocks
@@ -234,7 +235,7 @@ Source Evidence
 
 MOC は navigation projection です。MOC 自体が新しい SSOT や実行権限を作ることはありません。
 
-詳しい編集方法は [Template Guide](docs/TEMPLATE-GUIDE.md)、最短の体験は [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)、candidate-bound review は [Review Workflow](docs/REVIEW-WORKFLOW.md) を参照してください。
+まず全体の対応を一覧したい場合は [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) を実行してください。詳しい編集方法は [Template Guide](docs/TEMPLATE-GUIDE.md)、最短の体験は [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)、candidate-bound review は [Review Workflow](docs/REVIEW-WORKFLOW.md) を参照してください。
 
 ## Context Platform — 会社の共有記憶
 
@@ -449,6 +450,7 @@ New-Item -ItemType Directory -Force work | Out-Null
 python tools/create_company_pack.py my-company work/my-company
 python tools/check_company_pack_customization.py work/my-company
 python tools/validate_template_pack.py examples/company-starter
+python tools/catalog_company_pack.py examples/company-starter --format markdown
 ```
 
 initializer は元 example や既存 target を上書きしません。pack ID と 3 MOC の参照を再束縛し、22 JSON 文書を `draft` に戻してから validator を実行します。

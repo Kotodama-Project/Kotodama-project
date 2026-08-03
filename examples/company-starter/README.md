@@ -18,6 +18,15 @@
 
 後者2つは同じ9 Block鎖の順序を保った部分列です。Public Release MOCは公開を承認せず、Incident / Recovery MOCはmonitorや復旧runtimeを実装しません。どちらもnavigation-onlyで、別のSSOTを持ちません。
 
+Block、Record、MOCの対応を一度に確認するには、read-onlyのCatalogを使います。
+
+~~~powershell
+python tools/catalog_company_pack.py examples/company-starter --format markdown
+~~~
+
+JSONを機械処理する場合は、formatを省略します。Catalogはpackを変更せず、
+Human approval、runtime、Promotion、Current Truthを主張しません。詳しくは
+[Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)を参照してください。
 `manifest.json`の`flow`は、外部入力、9 Block IDの実行順、対象MOCを束縛します。validatorはCapability GrantなしのChangeやHuman evidenceなしのPromotion Decisionを含め、Block入力が前段出力または明示entry inputへ接続されていることを検査します。
 
 `records/`は9つのBlock出力を受け取るGoverned Record契約です。manifestの`records`と各Recordの`artifact`は一対一で検査されます。これらは実際のSource、Decision、Grant、Receiptではなく、実Recordが持つべきfieldとauthority/retention境界の例です。
