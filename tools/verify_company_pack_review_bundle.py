@@ -48,6 +48,7 @@ METADATA_KEYS = {
     "claims",
     "public_beta",
 }
+MAX_SAVED_BUNDLE_BYTES = 1024 * 1024
 
 
 def is_sha256(value: object) -> bool:
@@ -65,6 +66,17 @@ def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def reject_non_finite_constant(value: str) -> None:
     raise ValueError(f"non-finite JSON value: {value}")
+
+
+def read_limited_bundle_bytes(path: Path) -> bytes | None:
+    try:
+        with path.open("rb") as stream:
+            data = stream.read(MAX_SAVED_BUNDLE_BYTES + 1)
+    except OSError:
+        return None
+    if not data or len(data) > MAX_SAVED_BUNDLE_BYTES:
+        return None
+    return data
 
 
 def saved_bundle_summary(
@@ -208,9 +220,8 @@ def validate_saved_bundle(bundle: object) -> tuple[str | None, str | None]:
 
 
 def verify_saved_bundle(bundle_path: Path, pack_dir: Path) -> dict[str, Any]:
-    try:
-        saved_data = bundle_path.read_bytes()
-    except OSError:
+    saved_data = read_limited_bundle_bytes(bundle_path)
+    if saved_data is None:
         return verification_report(
             status="MISMATCH",
             reason="BUNDLE_READ_FAILED",

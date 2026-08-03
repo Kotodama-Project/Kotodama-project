@@ -17,6 +17,7 @@ from check_company_pack_customization import check_customization
 from verify_company_pack_review_bundle import (
     reject_duplicate_keys,
     reject_non_finite_constant,
+    read_limited_bundle_bytes,
     validate_saved_bundle,
     verify_saved_bundle,
 )
@@ -67,7 +68,9 @@ def refusal(reason: str) -> dict[str, Any]:
 
 def load_valid_saved_bundle(path: Path) -> tuple[dict[str, Any], bytes] | None:
     try:
-        data = path.read_bytes()
+        data = read_limited_bundle_bytes(path)
+        if data is None:
+            return None
         bundle = json.loads(
             data.decode("utf-8"),
             object_pairs_hook=reject_duplicate_keys,

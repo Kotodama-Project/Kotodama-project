@@ -97,6 +97,27 @@ class CompanyPackReviewBundleVerifierCliTests(unittest.TestCase):
         self.assertTrue(all(not value for value in report["claims"].values()))
         self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
 
+    def test_oversized_saved_bundle_is_rejected_before_matching_current_pack(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            pack, private_locator = self.create_ready_pack(parent)
+            bundle_path = parent / "oversized-review-bundle.json"
+            self.build_saved_bundle(pack, bundle_path)
+            bundle_path.write_bytes(
+                bundle_path.read_bytes() + b" " * (1024 * 1024)
+            )
+            result = self.run_verifier(bundle_path, pack)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn(private_locator, result.stdout)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["status"], "MISMATCH")
+        self.assertEqual(report["reason"], "BUNDLE_READ_FAILED")
+        self.assertIsNone(report["pack_id"])
+        self.assertEqual(report["binding_count"], 0)
+        self.assertEqual(report["matched_bindings"], 0)
+        self.assertEqual(report["mismatched_paths"], [])
+
     def test_one_byte_pack_drift_reports_only_safe_mismatched_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             parent = Path(temporary)
