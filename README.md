@@ -30,6 +30,7 @@ Kotodama は、Discord をはじめとする会話や音声を入力として、
 - [46項目をexact candidateへ束縛するpending review request](docs/REVIEW-REQUEST.md)
 - [46項目のoutcomeを再入力なしで記録・構造照合するreview response](docs/REVIEW-RESPONSE.md)
 - [5つのreview成果物をHuman Decisionへ非承認handoffする手順](docs/REVIEW-DECISION-HANDOFF.md)
+- [Human Decision前のschema-only Decision Record candidate契約](docs/DECISION-RECORD-CANDIDATE.md)
 - [Candidate-bound review workflow](docs/REVIEW-WORKFLOW.md)
 - [Compose / Proxmox installation lifecycle](docs/INSTALLATION-LIFECYCLE.md)
 - [Compose minimum runbook](docs/COMPOSE-MINIMUM-RUNBOOK.md)

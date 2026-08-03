@@ -164,3 +164,5 @@ handoff内の`required_fields`は、実運用のDecision instanceでさらに必
 - [`company-pack-review-decision-handoff-verification.schema.json`](../schemas/company-pack-review-decision-handoff-verification.schema.json)
 
 どちらも`decision: null`、`selected_outcome: null`、全authority/approval/Promotion/runtime/GO claimの`false`、`NO_GO_UNPUBLISHED`を閉じます。
+
+実Decision instanceへ進む前のfield/claim形だけを確認する次stepは[Company Pack Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)です。現時点ではschema-onlyであり、builder/verifierやHuman Decisionを提供しません。
