@@ -12,6 +12,23 @@ Catalogは、テンプレートを使い始める人が次の3つを同じ順序
 3. Company Operations、Public Release Review、Incident / Recoveryの各MOCが
    canonical flowのどの位置を辿るか
 
+## 最初に選ぶ
+
+初めてCompany Templateを読む場合は、runtimeを起動せず、次の順番で
+確認します。
+
+1. **Company Pack Catalog**でCompany Template、Blocks、Governed Records、
+   MOCsの対応と、現在のPack構造を一覧する。
+2. [Starter Walkthrough](STARTER-WALKTHROUGH.md)で、理想の使い方と現在の
+   local / synthetic、read-only/candidate-onlyの境界を確認する。
+3. 実行環境の候補が必要な場合だけ、[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)
+   で`compose_minimum`または`proxmox_segmented`のprofileを選ぶ。
+
+この順序はnavigationの案内であり、install、deploy、provider接続、Voice /
+Discord E2E、Promotion、Current Truth、Final Human GOを実行しません。Catalog
+やvalidatorのPASSは構造を読めたという意味だけで、公開アクセスは常に
+`NO_GO_UNPUBLISHED`です。
+
 ## Quick start
 
 repository rootから、公開exampleをそのまま表示します。
