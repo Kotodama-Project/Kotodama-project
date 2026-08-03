@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-public-preview-check.schema.json",
+  "title": "Kotodama Company Pack Public Preview Check",
+  "$comment": "A deterministic read-only aggregate of the public starter structural validator, Catalog projection, customization boundary, and false-claim boundary. It does not grant authority, execute runtime work, promote a candidate, or open Public Beta access.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "counts",
+    "checks",
+    "refusal_reason",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_public_preview_check"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["PASS", "REFUSED"]},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validated_files",
+        "blocks",
+        "records",
+        "mocs",
+        "replacement_required",
+        "review_required",
+        "evidence_required"
+      ],
+      "properties": {
+        "validated_files": {"type": "integer", "minimum": 0},
+        "blocks": {"type": "integer", "minimum": 0},
+        "records": {"type": "integer", "minimum": 0},
+        "mocs": {"type": "integer", "minimum": 0},
+        "replacement_required": {"type": "integer", "minimum": 0},
+        "review_required": {"type": "integer", "minimum": 0},
+        "evidence_required": {"type": "integer", "minimum": 0}
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status"],
+        "properties": {
+          "id": {
+            "enum": [
+              "pack_structure",
+              "catalog_projection",
+              "customization_boundary",
+              "claim_boundary"
+            ]
+          },
+          "status": {"enum": ["PASS", "REFUSED"]}
+        }
+      }
+    },
+    "refusal_reason": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "enum": [
+            "INPUT_NOT_DIRECTORY",
+            "INVALID_PACK",
+            "INTERNAL_CONTRACT_REFUSAL"
+          ]
+        }
+      ]
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_approval_verified",
+        "runtime_verified",
+        "promotion_verified",
+        "current_truth_changed",
+        "public_beta_go"
+      ],
+      "properties": {
+        "human_approval_verified": {"const": false},
+        "runtime_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  }
+}

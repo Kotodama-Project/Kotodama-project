@@ -83,13 +83,14 @@ Block、Record、MOCを編集する前に、Company Pack Catalogで現在の対�
 
 ~~~powershell
 python tools/catalog_company_pack.py examples/company-starter --format markdown
+python tools/check_company_pack_public_preview.py examples/company-starter
 ~~~
 
-Catalogはread-onlyのnavigation projectionです。出力のPASSは構造を読めた
+CatalogとSelf-checkはread-onlyのnavigation / preview projectionです。出力のPASSは構造を読めた
 ことだけを示し、Human approval、Capability Grant、runtime、Promotion、
 Current Truth、Public Beta GOを作りません。JSON Schemaに対して機械処理する
 場合や、無効packの終了codeを扱う場合は[Company Pack Catalog](COMPANY-PACK-CATALOG.md)
-を参照してください。
+と[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)を参照してください。
 
 ### 4. すべてを同じ証拠鎖に通す
 

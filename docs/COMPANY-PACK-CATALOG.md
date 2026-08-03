@@ -119,6 +119,7 @@ revisionとCatalogのbytesを同じcandidateへ束縛してください。保存
 
 - Template Guide: Company Template、Blocks、Records、MOCsの編集方針
 - Starter Walkthrough: initializer、customization、review bundleの順序
+- [Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md): validator、Catalog、customization、false-claim境界の一括read-only確認
 - Template Pack Validation: 構造・参照・禁止経路のvalidator境界
 - Company Pack Guided Next Steps: 現在地と理想の次の一手
 - Candidate-bound Review Workflow: exact bytesと独立reviewの束縛

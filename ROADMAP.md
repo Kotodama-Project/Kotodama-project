@@ -34,6 +34,7 @@
 - [x] Signed checkpoint-head candidate and restore-drill reported-evidence binding with exact private report/receipt digests
 - [x] Signed checkpoint segment-transition candidate with same-policy and key-rotation boundary verification
 - [x] Deterministic new-file-only private segment-transition candidate builder with R22 round-trip verification
+- [x] Read-only Public Preview self-check aggregating starter structure, Catalog, customization boundaries, and false-claim checks
 
 ## Candidate contract included in this revision
 
