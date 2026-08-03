@@ -138,7 +138,7 @@ flowchart LR
 - このテンプレート利用ガイド
 - Source Intake、Intent Candidate、Human Decision、Work Order、Capability Grant、Change Execution、Verification Receipt、Promotion Gate、Promotion Decisionを含むCompany starter
 - Company Operations、Public Release Review、Incident / Recoveryの3つのnavigation-only MOC
-- sourceを保ったまま22文書を`draft`化し、任意のall-or-none guided optionで19静的fieldも一括反映するinitializer、置換・review・evidenceを分離するcustomization checker、現在地・理想・次の一手をJSON/Markdownへ集約するguided planner、review対象bytesを固定して再照合するbundle builder/verifier、46件を再入力せずpending requestとitem response candidateへ運び構造照合するbuilder/verifier
+- sourceを保ったまま公開starterの22文書を`draft`化し、任意のall-or-none guided optionで19静的fieldも一括反映するinitializer、置換・review・evidenceを分離するcustomization checker、現在地・理想・次の一手をJSON/Markdownへ集約するguided planner、review対象bytesを固定して再照合するbundle builder/verifier、Packごとの実際の件数（公開starterの例は46件）を再入力せずpending requestとitem response candidateへ運び構造照合するbuilder/verifier
 - Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
 - Compose minimum / Proxmox segmentedの6フェーズinstallation lifecycle契約、validator、公開runbook
 - Compose minimumのCompany DB / Evidence metadata Store data-plane skeletonとexact-byte validator
@@ -173,13 +173,13 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 1. [テンプレートカタログ](../templates/README.md)から目的に近いstarterを選ぶ。
 2. initializerで[Company starter](../examples/company-starter/README.md)の`draft`作業copyを作る。3値が決まっていれば[guided path](GUIDED-COMPANY-PACK-INITIALIZATION.md)で19静的fieldも一括反映する。
 3. `compose_minimum`または`proxmox_segmented`を選び、[installation lifecycle](INSTALLATION-LIFECYCLE.md)の契約例を検証する。
-4. [customization checker](CUSTOMIZATION-CHECKLIST.md)で、置換19件、review 46件、別evidence 5件を分けて確認する。
+4. [customization checker](CUSTOMIZATION-CHECKLIST.md)で、出力された`replacement_required`、`review_required`、`evidence_required`を分けて確認する。公開starterの初期例は19/46/5だが、Recordsを省略したPackや将来のPackではvalidatorとsaved reportの実数が基準になる。
 5. [guided planner](COMPANY-PACK-NEXT-STEPS.md)で、現在stage、理想の7段階、分類別残件、次コマンドを人間向けMarkdownへまとめる。
 6. 通常pathならplaceholderを自分の組織用の参照名へ置き換える。guided pathなら`replacement_required: 0`を確認する。どちらもtokenや個人情報の値は書かない。
 7. [review bundle](REVIEW-BUNDLE.md)を作り、manifest、Blocks、MOCs、Recordsのexact bytesを固定する。
-8. [review request](REVIEW-REQUEST.md)を作り、46件のID/path/reasonと5件のevidence gapを同じcandidateへ束縛する。
-9. [review response](REVIEW-RESPONSE.md)でoutcomeだけを入力し、元requestとの構造一致を確認する。
-10. [review decision handoff](REVIEW-DECISION-HANDOFF.md)で5成果物を非承認candidateへ束縛する。
+8. [review request](REVIEW-REQUEST.md)を作り、保存済みcustomization reportの実際のreview itemとevidence gapを同じcandidateへ束縛する（公開starterの例は46/5）。
+9. [review response](REVIEW-RESPONSE.md)でoutcomeだけを入力し、saved requestのbindingとitem countへ構造一致させる。
+10. [review decision handoff](REVIEW-DECISION-HANDOFF.md)で保存済みchainの実際の件数を非承認candidateへ束縛する。builder/verifierはstarter例をPack共通の固定値として扱わない。
 11. [Source Record Instance Contract](SOURCE-RECORD-INSTANCE.md)でprivate source locator/content/acquisition/lineage/consent/retention/attributionと全false claimを確認する。
 12. private保存済みbytesを扱う場合だけ[Source Binding Verification Candidate](SOURCE-BINDING-VERIFIER-CANDIDATE.md)でstrict parse、binding、terminal reread、非公開R30 projection digestを照合する。candidate matchをatomic snapshotやconsent verificationへ昇格しない。
 13. protected runnerのreceipt fieldは[Protected Source Binding Receipt Candidate](PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)で固定する。unpopulated schema PASSをprotected execution、trusted time、atomicity、retention/deletion、replay verificationへ昇格しない。

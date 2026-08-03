@@ -25,7 +25,7 @@ initializerはPython標準ライブラリだけで動き、次を一度に行い
 - targetが既に存在する場合は上書きせず停止する
 - 生成途中で失敗した場合は、この実行が新規作成したtargetだけを除去する
 
-3つの組織固有値が決まっている場合は、[guided initializer](GUIDED-COMPANY-PACK-INITIALIZATION.md)を使うと、Human Intent locator 1件、Block expiry 9件、Record retention policy locator 9件も同じ新規作成内で反映できます。通常の2引数commandは変更されず、値をまだ決めていない場合に19件を残して作業を始めるpathです。
+3つの組織固有値が決まっている場合は、[guided initializer](GUIDED-COMPANY-PACK-INITIALIZATION.md)を使うと、Human Intent locator 1件、Block expiry 9件、Record retention policy locator 9件も同じ新規作成内で反映できます。通常の2引数commandは変更されず、値をまだ決めていない場合に、公開starterでは19件となる静的placeholderを残して作業を始めるpathです。Packを縮小・拡張した場合は、実行結果の件数を使います。
 
 targetの親directoryは先に作成してください。既存の作業copyを更新するコマンドではありません。
 
@@ -54,9 +54,9 @@ python tools\check_company_pack_public_preview.py work\my-company
 python tools\check_company_pack_public_preview.py work\my-company --format markdown
 ```
 
-作成直後は`CUSTOMIZATION_REQUIRED`で終了し、通常は19件を返します。これは失敗ではなく、組織固有のHuman Intent locator 1件、Block expiry 9件、Record retention policy 9件がまだexampleであることを示します。
+作成直後は`CUSTOMIZATION_REQUIRED`で終了し、公開starterでは19件を返します。これは失敗ではなく、組織固有のHuman Intent locator 1件、Block expiry 9件、Record retention policy 9件がまだexampleであることを示します。別のPackではcheckerが返した実際の件数が基準です。
 
-guided initializerで作成した場合は`READY_FOR_GOVERNED_REVIEW`、`0/46/5`から始まります。0は静的placeholderだけで、46のgoverned reviewと5の外部evidenceは残ります。
+guided initializerで公開starterを作成した場合は`READY_FOR_GOVERNED_REVIEW`、`0/46/5`から始まります。0は静的placeholderだけで、46のgoverned reviewと5の外部evidenceは残ります。これはstarterの例であり、review request以降のbuilder/verifierは保存済みreportの実際の件数へ追従します。
 
 `review_required`のowner・profile・roleは、文字列を変更すれば承認済みになるものではありません。`evidence_required`も静的CLIでは閉じません。詳細は[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)を参照してください。
 
@@ -85,9 +85,9 @@ python tools\build_company_pack_review_bundle.py work\my-company
 
 bundleを保存して別reviewerへ渡す場合は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)に従います。`verify_company_pack_review_bundle.py`の`MATCH`はsaved metadata/digestと現在bytesの一致であり、reviewerの判断そのものではありません。
 
-`MATCH`したbundleとPackから46件の個別review itemを手転記なしで依頼へまとめるには[Company Pack Review Request](REVIEW-REQUEST.md)を使います。出力は`PENDING_AUTHORIZED_REVIEW`かつ`selected_outcome=null`で、5件のevidence gapも未解決のまま分離します。
+`MATCH`したbundleとPackから、保存済みcustomization reportの個別review itemを手転記なしで依頼へまとめるには[Company Pack Review Request](REVIEW-REQUEST.md)を使います。公開starterの例は46件ですが、recordless Packのように構成が異なる場合は実際のitem countへ変わります。出力は`PENDING_AUTHORIZED_REVIEW`かつ`selected_outcome=null`で、evidence gapも未解決のまま分離します。
 
-requestの46件へID/path/reasonを再入力せずoutcomeを記録するには[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を使います。response verifierは元requestとの構造一致と全item入力をcountだけで報告しますが、reviewer identity、authority、approval、全体outcome、Decision Recordは別stepです。
+requestへID/path/reasonを再入力せずoutcomeを記録するには[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を使います。response verifierは元requestのbindingと実際のitem countへ構造一致させますが、reviewer identity、authority、approval、全体outcome、Decision Recordは別stepです。
 
 responseまで完了した5成果物をHuman Decisionへ渡すには[Review Evidence to Decision Handoff](REVIEW-DECISION-HANDOFF.md)を使います。handoffはexact bytesを固定するだけで、Decision、identity、authority、GOを作りません。
 
