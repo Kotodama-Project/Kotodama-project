@@ -105,4 +105,6 @@ authorized reviewerは、保存bundle、Pack、requestを照合した後、次�
 
 このtoolはidentity、signature、authority、Human Intent真正性、retention enforcement、人物分離、runtime、deployment、Promotion、Current Truth、Final Human GO、Public Beta GOを作りません。
 
+46件のID/path/reasonを再入力せずoutcomeを記録し、元requestへの構造一致を確認する次stepは[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)です。response builder/verifierもreviewer identity、authority、全体outcome、Decision Record、evidence解決を作りません。
+
 機械可読contractは[`company-pack-review-request.schema.json`](../schemas/company-pack-review-request.schema.json)、全体順序は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)です。

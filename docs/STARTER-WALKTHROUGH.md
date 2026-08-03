@@ -74,6 +74,8 @@ bundleを保存して別reviewerへ渡す場合は[Candidate-bound Review Workfl
 
 `MATCH`したbundleとPackから46件の個別review itemを手転記なしで依頼へまとめるには[Company Pack Review Request](REVIEW-REQUEST.md)を使います。出力は`PENDING_AUTHORIZED_REVIEW`かつ`selected_outcome=null`で、5件のevidence gapも未解決のまま分離します。
 
+requestの46件へID/path/reasonを再入力せずoutcomeを記録するには[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を使います。response verifierは元requestとの構造一致と全item入力をcountだけで報告しますが、reviewer identity、authority、approval、全体outcome、Decision Recordは別stepです。
+
 ## 5. flow contractとMOC順にBlockを読む
 
 `manifest.json`の`flow`は、外部から入る`entry_inputs`、Block IDの`sequence`、読み順を示す`moc_ref`を宣言します。[`company-operations.json`](../examples/company-starter/mocs/company-operations.json)は、同じ順序を示すnavigation projectionです。

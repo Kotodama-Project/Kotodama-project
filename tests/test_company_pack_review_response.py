@@ -489,6 +489,71 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
         self.assertEqual(summary["properties"]["selected_outcome"]["type"], "null")
         self.assertNotIn("items", summary["properties"])
 
+    def test_output_is_deterministic_utf8_and_usage_never_reflects_arguments(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request_path, _request, _request_bytes = self.create_saved_request(root)
+            legacy_env = dict(os.environ)
+            legacy_env["PYTHONIOENCODING"] = "cp1252"
+            first_builder = self.run_builder(request_path, env=legacy_env)
+            second_builder = self.run_builder(request_path, env=legacy_env)
+            self.assertEqual(first_builder.returncode, 0)
+            self.assertEqual(first_builder.stdout, second_builder.stdout)
+            self.assertEqual(
+                json.loads(first_builder.stdout)["status"],
+                "REVIEW_RESPONSE_CANDIDATE",
+            )
+
+            response = json.loads(first_builder.stdout)
+            for item in response["review_response"]["items"]:
+                item["outcome"] = "accept"
+            response_path = root / "saved-review-response.json"
+            self.save_json(response_path, response)
+            first_verifier = self.run_verifier(
+                request_path, response_path, env=legacy_env
+            )
+            second_verifier = self.run_verifier(
+                request_path, response_path, env=legacy_env
+            )
+            self.assertEqual(first_verifier.returncode, 0)
+            self.assertEqual(first_verifier.stdout, second_verifier.stdout)
+            self.assertEqual(
+                json.loads(first_verifier.stdout)["status"],
+                "ITEM_RESPONSES_MATCH_REQUEST",
+            )
+
+            sentinel = "PRIVATE_SENTINEL_DO_NOT_ECHO"
+            builder_usage = subprocess.run(
+                [
+                    sys.executable,
+                    str(RESPONSE_BUILDER),
+                    str(request_path),
+                    sentinel,
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                check=False,
+            )
+            verifier_usage = subprocess.run(
+                [
+                    sys.executable,
+                    str(RESPONSE_VERIFIER),
+                    str(request_path),
+                    str(response_path),
+                    sentinel,
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                check=False,
+            )
+
+        for result in (builder_usage, verifier_usage):
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(result.stdout, b"")
+            self.assertIn(b"usage:", result.stderr)
+            self.assertNotIn(sentinel.encode("utf-8"), result.stderr)
+            self.assertNotIn(str(request_path).encode("utf-8"), result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

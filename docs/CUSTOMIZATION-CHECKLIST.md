@@ -65,9 +65,10 @@ plannerは元reportのcategory別countをgroup合計へ集約し、各category�
 4. [review bundle](REVIEW-BUNDLE.md)で、review対象の22ファイルをexact SHA-256へ固定する。
 5. [review workflow](REVIEW-WORKFLOW.md)に従い、別のreviewerがsaved bundleを同じPack bytesへ照合する。
 6. [review request](REVIEW-REQUEST.md)で個別review itemを同じbundleへ束縛する。outcomeは選択しない。
-7. `review_required`をauthorityを持つ人と確認し、bundle/request/report digestと判断証拠を別Recordへ残す。
-8. `evidence_required`をcandidate-bound evidenceで閉じる。
-9. 別のgoverned processだけがPromotionやCurrent Truth変更を行う。
+7. [review response](REVIEW-RESPONSE.md)で46件のoutcomeだけを入力し、元requestとの構造一致を検証する。
+8. reviewer identity・authority、bundle/request/response/report digest、全体outcomeを別Decision Recordへ残す。
+9. `evidence_required`をcandidate-bound evidenceで閉じる。
+10. 別のgoverned processだけがPromotionやCurrent Truth変更を行う。
 
 ## Current implementation boundary
 

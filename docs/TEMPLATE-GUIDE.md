@@ -124,7 +124,7 @@ flowchart LR
 - このテンプレート利用ガイド
 - Source Intake、Intent Candidate、Human Decision、Work Order、Capability Grant、Change Execution、Verification Receipt、Promotion Gate、Promotion Decisionを含むCompany starter
 - Company Operations、Public Release Review、Incident / Recoveryの3つのnavigation-only MOC
-- sourceを保ったまま22文書を`draft`化し、任意のall-or-none guided optionで19静的fieldも一括反映するinitializer、置換・review・evidenceを分離するcustomization checker、現在地・理想・次の一手をJSON/Markdownへ集約するguided planner、review対象bytesを固定して再照合するbundle builder/verifier
+- sourceを保ったまま22文書を`draft`化し、任意のall-or-none guided optionで19静的fieldも一括反映するinitializer、置換・review・evidenceを分離するcustomization checker、現在地・理想・次の一手をJSON/Markdownへ集約するguided planner、review対象bytesを固定して再照合するbundle builder/verifier、46件を再入力せずpending requestとitem response candidateへ運び構造照合するbuilder/verifier
 - Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
 - Compose minimum / Proxmox segmentedの6フェーズinstallation lifecycle契約、validator、公開runbook
 - Compose minimumのCompany DB / Evidence metadata Store data-plane skeletonとexact-byte validator
@@ -162,11 +162,13 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 5. [guided planner](COMPANY-PACK-NEXT-STEPS.md)で、現在stage、理想の7段階、分類別残件、次コマンドを人間向けMarkdownへまとめる。
 6. 通常pathならplaceholderを自分の組織用の参照名へ置き換える。guided pathなら`replacement_required: 0`を確認する。どちらもtokenや個人情報の値は書かない。
 7. [review bundle](REVIEW-BUNDLE.md)を作り、manifest、Blocks、MOCs、Recordsのexact bytesを固定する。
-8. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、Decisionを別Recordへ束縛する。
-9. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
-10. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
-11. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
-12. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
+8. [review request](REVIEW-REQUEST.md)を作り、46件のID/path/reasonと5件のevidence gapを同じcandidateへ束縛する。
+9. [review response](REVIEW-RESPONSE.md)でoutcomeだけを入力し、元requestとの構造一致を確認する。
+10. [review workflow](REVIEW-WORKFLOW.md)でsaved bundleを再照合し、identity・authority・全体outcomeを別Decision Recordへ束縛する。
+11. Blockごとにowner、authority、denied actions、verification、rollbackをreviewする。
+12. Company Operations、Public Release Review、Incident / RecoveryのMOCから、目的に合う入口を選ぶ。
+13. validatorとcheckerを通し、実行後にsource revisionと結果を照合する。
+14. 独立した承認がある場合だけ、別のgoverned processでPromotionする。
 
 ## Statusの読み方
 

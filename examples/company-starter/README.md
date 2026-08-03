@@ -48,3 +48,5 @@ initializerは生成した22文書を`draft`にします。続くcheckerは通�
 保存したbundleと候補bytesの独立再照合は[Candidate-bound Review Workflow](../../docs/REVIEW-WORKFLOW.md)を参照してください。
 
 bundleが`MATCH`した後、46件のreview itemを手転記せずexact candidateへ束縛するには[Company Pack Review Request](../../docs/REVIEW-REQUEST.md)を使います。5件のevidence gapは別配列に残り、requestはoutcomeやapprovalを作りません。
+
+46件のoutcomeだけを編集し、ID/path/reasonと元requestのbindingを再照合する次stepは[Company Pack Review Response Candidate](../../docs/REVIEW-RESPONSE.md)です。構造MATCHはreviewer identity、authority、Human approval、全体Decision、evidence解決を作りません。

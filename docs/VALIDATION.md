@@ -49,6 +49,15 @@ python tools/verify_company_pack_review_bundle.py work/my-company-review-bundle.
 
 verifierはbundle構造・metadata・digestを信頼せず再検査し、Packからfresh bundleを再構築して比較します。`MATCH`はbytes同一性だけで、reviewer identity、Human Decision、Promotionを証明しません。運用手順は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)を参照してください。
 
+MATCH済みbundle/Packからpending requestを保存した後、46件のoutcomeをID/path/reasonの再入力なしで編集・再照合するには次を使います。
+
+```powershell
+python tools\build_company_pack_review_response.py work\my-company-review-request.json
+python tools\verify_company_pack_review_response.py work\my-company-review-request.json work\my-company-review-response.json
+```
+
+response schemaとverifierはrequest file SHA-256/size、Pack candidate binding、46 immutable item、5 unresolved evidence、全outcome入力をfail closedで確認します。成功reportは個別item/noteを反射しません。`ITEM_RESPONSES_MATCH_REQUEST`はidentity、authority、Human approval、selected overall outcome、Decision Record、evidence解決、Promotionを証明しません。詳細は[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を参照してください。
+
 Compose / Proxmoxのinstallation lifecycle契約は、別のstdlib validatorで確認します。
 
 ```powershell
