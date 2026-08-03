@@ -1,0 +1,136 @@
+import hashlib
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+REQUEST_BUILDER = ROOT / "tools" / "build_company_pack_review_request.py"
+BUNDLE_BUILDER = ROOT / "tools" / "build_company_pack_review_bundle.py"
+CREATOR = ROOT / "tools" / "create_company_pack.py"
+
+
+class CompanyPackReviewRequestCliTests(unittest.TestCase):
+    def create_ready_pack(self, parent: Path) -> tuple[Path, str, str]:
+        pack = parent / "review-request-pack"
+        creation = subprocess.run(
+            [sys.executable, str(CREATOR), "review-request-pack", str(pack)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(creation.returncode, 0, creation.stdout)
+
+        human_intent_ref = "human-intent:private-review-request-source"
+        retention_policy_ref = "retention-policy:private-review-request-policy"
+        manifest_path = pack / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["human_intent_ref"] = human_intent_ref
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        for collection in ("blocks", "records"):
+            for relative in manifest[collection]:
+                path = pack / relative
+                document = json.loads(path.read_text(encoding="utf-8"))
+                if collection == "blocks":
+                    document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+                else:
+                    document["retention"]["policy_ref"] = retention_policy_ref
+                path.write_text(json.dumps(document), encoding="utf-8")
+        return pack, human_intent_ref, retention_policy_ref
+
+    def save_bundle(self, pack: Path, path: Path) -> tuple[dict, bytes]:
+        result = subprocess.run(
+            [sys.executable, str(BUNDLE_BUILDER), str(pack)],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout.decode("utf-8"))
+        path.write_bytes(result.stdout)
+        return json.loads(result.stdout), result.stdout
+
+    def run_builder(
+        self, bundle_path: Path, pack: Path
+    ) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            [sys.executable, str(REQUEST_BUILDER), str(bundle_path), str(pack)],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+        )
+
+    def test_matched_ready_pack_builds_exact_pending_review_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pack, human_intent_ref, retention_policy_ref = self.create_ready_pack(root)
+            bundle_path = root / "saved-review-bundle.json"
+            bundle, bundle_bytes = self.save_bundle(pack, bundle_path)
+            result = self.run_builder(bundle_path, pack)
+
+        self.assertEqual(result.returncode, 0, result.stdout.decode("utf-8"))
+        self.assertEqual(result.stderr, b"")
+        self.assertNotIn(human_intent_ref.encode("utf-8"), result.stdout)
+        self.assertNotIn(retention_policy_ref.encode("utf-8"), result.stdout)
+        request = json.loads(result.stdout)
+        self.assertEqual(request["kind"], "company_pack_review_request")
+        self.assertEqual(request["version"], "1.0")
+        self.assertEqual(request["status"], "CANDIDATE_REVIEW_REQUEST")
+        self.assertIsNone(request["reason"])
+        self.assertEqual(request["pack_id"], "review-request-pack")
+        self.assertEqual(
+            request["candidate_binding"],
+            {
+                "saved_bundle": {
+                    "sha256": hashlib.sha256(bundle_bytes).hexdigest(),
+                    "bytes": len(bundle_bytes),
+                },
+                "bundle_digest": bundle["bundle_digest"],
+                "binding_count": 22,
+            },
+        )
+        self.assertEqual(
+            request["source_checks"],
+            {
+                "bundle_verification": {
+                    "status": "MATCH",
+                    "matched_bindings": 22,
+                },
+                "customization": {
+                    "status": "READY_FOR_GOVERNED_REVIEW",
+                    "counts": {
+                        "replacement_required": 0,
+                        "review_required": 46,
+                        "evidence_required": 5,
+                    },
+                },
+            },
+        )
+        review = request["review_request"]
+        self.assertEqual(review["state"], "PENDING_AUTHORIZED_REVIEW")
+        self.assertEqual(review["item_count"], 46)
+        self.assertEqual(len(review["items"]), 46)
+        self.assertTrue(
+            all(item["category"] == "review_required" for item in review["items"])
+        )
+        self.assertEqual(
+            review["permitted_outcomes"],
+            ["accept", "request_changes", "reject"],
+        )
+        self.assertIsNone(review["selected_outcome"])
+        evidence = request["unresolved_evidence"]
+        self.assertEqual(evidence["state"], "EVIDENCE_REQUIRED")
+        self.assertEqual(evidence["item_count"], 5)
+        self.assertEqual(len(evidence["items"]), 5)
+        self.assertTrue(
+            all(item["category"] == "evidence_required" for item in evidence["items"])
+        )
+        self.assertTrue(all(value is False for value in request["claims"].values()))
+        self.assertEqual(request["public_beta"], "NO_GO_UNPUBLISHED")
+
+
+if __name__ == "__main__":
+    unittest.main()
