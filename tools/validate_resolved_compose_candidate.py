@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -137,6 +138,20 @@ def load_strict_json(path: Path) -> dict[str, Any]:
     return load_strict_json_bytes(path.read_bytes())
 
 
+def is_non_negative_integer(value: object) -> bool:
+    """Match JSON Schema integer semantics without treating booleans as sizes."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value >= 0
+    return (
+        isinstance(value, float)
+        and math.isfinite(value)
+        and value.is_integer()
+        and value >= 0
+    )
+
+
 def canonical_sha256(value: object) -> str:
     encoded = json.dumps(
         value,
@@ -228,7 +243,7 @@ def validate_candidate(candidate: dict[str, Any]) -> list[str]:
                 if not isinstance(item.get("sha256"), str) or SHA256_PATTERN.fullmatch(item["sha256"]) is None:
                     errors.append(f"source.bindings[{index}].sha256 must be lowercase SHA-256")
                 byte_count = item.get("bytes")
-                if not isinstance(byte_count, int) or isinstance(byte_count, bool) or byte_count < 0:
+                if not is_non_negative_integer(byte_count):
                     errors.append(f"source.bindings[{index}].bytes must be a non-negative integer")
             if paths != EXPECTED_BINDING_PATHS:
                 errors.append("source bindings must use the exact shipped order")

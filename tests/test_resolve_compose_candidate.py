@@ -9,6 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft202012Validator, ValidationError
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import validate_resolved_compose_candidate as candidate_validator
 
@@ -20,6 +22,56 @@ SCHEMA = ROOT / "schemas" / "resolved-compose-candidate.schema.json"
 IMAGE = "postgres@sha256:" + "0" * 64
 COMPANY_SECRET = "synthetic-company-r13-secret"
 EVIDENCE_SECRET = "synthetic-evidence-r13-secret"
+
+
+def synthetic_candidate() -> dict:
+    source = candidate_validator.shipped_source()
+    bindings = source["bindings"]
+    binding_hashes = {item["path"]: item["sha256"] for item in bindings}
+    services = []
+    for service_id in ("company-db", "evidence-store"):
+        expected = candidate_validator.EXPECTED_SERVICE_BASE[service_id]
+        services.append(
+            {
+                "id": service_id,
+                "role": expected["role"],
+                "image_digest": IMAGE.replace("postgres@", ""),
+                "network": expected["network"],
+                "volume": expected["volume"],
+                "migration": expected["migration"],
+                "migration_sha256": binding_hashes[expected["migration"]],
+                "healthcheck_sha256": hashlib.sha256(
+                    expected["healthcheck"].encode("utf-8")
+                ).hexdigest(),
+            }
+        )
+    candidate = {
+        "kind": "resolved_compose_candidate",
+        "version": "1.0",
+        "status": "CANDIDATE_READY_FOR_RUNTIME_PREFLIGHT",
+        "project_name": "synthetic-resolved-candidate",
+        "source": copy.deepcopy(source),
+        "resolved": {
+            "credential_contract": {
+                "source": "process_environment",
+                "both_present_observed": True,
+                "distinct_values_observed": True,
+                "values_emitted": False,
+                "password_derived_digest": False,
+            },
+            "networks": copy.deepcopy(candidate_validator.EXPECTED_NETWORKS),
+            "services": services,
+            "resolved_contract_sha256": "0" * 64,
+        },
+        "claims": candidate_validator.false_claims(),
+        "public_beta": "NO_GO_UNPUBLISHED",
+    }
+    candidate["resolved"]["resolved_contract_sha256"] = (
+        candidate_validator.canonical_sha256(
+            candidate_validator.safe_contract_projection(candidate)
+        )
+    )
+    return candidate
 
 
 class ResolvedComposeCandidateCliTests(unittest.TestCase):
@@ -268,6 +320,26 @@ class ResolvedComposeCandidateCliTests(unittest.TestCase):
         self.assertFalse(credential["additionalProperties"])
         self.assertFalse(credential["properties"]["values_emitted"]["const"])
         self.assertFalse(credential["properties"]["password_derived_digest"]["const"])
+
+    def test_integer_valued_json_number_for_binding_bytes_matches_schema_and_validator(self) -> None:
+        candidate = synthetic_candidate()
+        candidate["source"]["bindings"][0]["bytes"] = float(
+            candidate["source"]["bindings"][0]["bytes"]
+        )
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+
+        Draft202012Validator(schema).validate(candidate)
+        self.assertEqual(candidate_validator.validate_candidate(candidate), [])
+
+    def test_resolved_binding_bytes_rejects_boolean_fraction_negative_and_non_finite(self) -> None:
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        for invalid in (True, 1.5, -1, float("nan")):
+            with self.subTest(invalid=invalid):
+                candidate = synthetic_candidate()
+                candidate["source"]["bindings"][0]["bytes"] = invalid
+                with self.assertRaises(ValidationError):
+                    Draft202012Validator(schema).validate(candidate)
+                self.assertTrue(candidate_validator.validate_candidate(candidate))
 
     def test_usage_errors_return_two_without_json(self) -> None:
         resolver = subprocess.run(
