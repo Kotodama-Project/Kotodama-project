@@ -233,7 +233,15 @@
               "strict_input_parsing_matched": {"const": false}
             }
           }
-        }
+        },
+        "oneOf": [
+          {"$ref": "#/$defs/refusal_input_invalid"},
+          {"$ref": "#/$defs/refusal_strict_json_invalid"},
+          {"$ref": "#/$defs/refusal_record_contract_mismatch"},
+          {"$ref": "#/$defs/refusal_r30_projection_ineligible"},
+          {"$ref": "#/$defs/refusal_access_evidence_mismatch"},
+          {"$ref": "#/$defs/refusal_source_drift"}
+        ]
       }
     }
   ],
@@ -251,6 +259,164 @@
     "nullable_binding": {
       "oneOf": [{"type": "null"}, {"$ref": "#/$defs/binding"}]
     },
-    "check": {"enum": ["MATCH", "MISMATCH", "NOT_EVALUATED"]}
+    "check": {"enum": ["MATCH", "MISMATCH", "NOT_EVALUATED"]},
+    "all_bound_inputs": {
+      "properties": {
+        "source_record": {"$ref": "#/$defs/binding"},
+        "source_content": {"$ref": "#/$defs/binding"},
+        "access_projection_evidence": {"$ref": "#/$defs/binding"}
+      }
+    },
+    "all_null_inputs": {
+      "properties": {
+        "source_record": {"type": "null"},
+        "source_content": {"type": "null"},
+        "access_projection_evidence": {"type": "null"}
+      }
+    },
+    "refusal_input_invalid": {
+      "properties": {
+        "reason_codes": {"const": ["INPUT_INVALID"]},
+        "r31_input_status": {"const": "NOT_EVALUATED"},
+        "read_set_status": {"const": "NOT_EVALUATED"},
+        "r30_projection_eligibility": {"const": "NOT_EVALUATED"},
+        "evaluated_inputs": {"$ref": "#/$defs/all_null_inputs"},
+        "checks": {
+          "properties": {
+            "input_read_set": {"const": "MISMATCH"},
+            "strict_parsing": {"const": "NOT_EVALUATED"},
+            "record_projection_contract": {"const": "NOT_EVALUATED"},
+            "source_content_binding": {"const": "NOT_EVALUATED"},
+            "access_projection_evidence": {"const": "NOT_EVALUATED"},
+            "r30_projection": {"const": "NOT_EVALUATED"},
+            "terminal_reread": {"const": "NOT_EVALUATED"}
+          }
+        }
+      }
+    },
+    "refusal_strict_json_invalid": {
+      "properties": {
+        "reason_codes": {"const": ["STRICT_JSON_INVALID"]},
+        "r31_input_status": {
+          "enum": ["REJECTED", "STRICTLY_PARSED_UNVERIFIED"]
+        },
+        "read_set_status": {"const": "NOT_EVALUATED"},
+        "r30_projection_eligibility": {"const": "NOT_EVALUATED"},
+        "evaluated_inputs": {"$ref": "#/$defs/all_bound_inputs"},
+        "checks": {
+          "properties": {
+            "input_read_set": {"const": "MATCH"},
+            "strict_parsing": {"const": "MISMATCH"},
+            "record_projection_contract": {"const": "NOT_EVALUATED"},
+            "source_content_binding": {"const": "NOT_EVALUATED"},
+            "access_projection_evidence": {"const": "NOT_EVALUATED"},
+            "r30_projection": {"const": "NOT_EVALUATED"},
+            "terminal_reread": {"const": "NOT_EVALUATED"}
+          }
+        }
+      }
+    },
+    "refusal_record_contract_mismatch": {
+      "properties": {
+        "reason_codes": {"const": ["RECORD_CONTRACT_MISMATCH"]},
+        "r31_input_status": {"const": "REJECTED"},
+        "read_set_status": {"const": "NOT_EVALUATED"},
+        "r30_projection_eligibility": {"const": "NOT_EVALUATED"},
+        "evaluated_inputs": {"$ref": "#/$defs/all_bound_inputs"},
+        "checks": {
+          "properties": {
+            "input_read_set": {"const": "MATCH"},
+            "strict_parsing": {"const": "MATCH"},
+            "record_projection_contract": {"const": "MISMATCH"},
+            "source_content_binding": {"const": "MISMATCH"},
+            "access_projection_evidence": {"const": "NOT_EVALUATED"},
+            "r30_projection": {"const": "NOT_EVALUATED"},
+            "terminal_reread": {"const": "NOT_EVALUATED"}
+          }
+        }
+      }
+    },
+    "refusal_access_evidence_mismatch": {
+      "properties": {
+        "reason_codes": {"const": ["ACCESS_EVIDENCE_CONTRACT_MISMATCH"]},
+        "r31_input_status": {"const": "PARSED_PROJECTION_CONTRACT_MATCHED_UNVERIFIED"},
+        "read_set_status": {"const": "NOT_EVALUATED"},
+        "r30_projection_eligibility": {"const": "INELIGIBLE"},
+        "evaluated_inputs": {"$ref": "#/$defs/all_bound_inputs"},
+        "checks": {
+          "properties": {
+            "input_read_set": {"const": "MATCH"},
+            "strict_parsing": {"const": "MATCH"},
+            "record_projection_contract": {"const": "MATCH"},
+            "source_content_binding": {"const": "MATCH"},
+            "access_projection_evidence": {"const": "MISMATCH"},
+            "r30_projection": {"const": "NOT_EVALUATED"},
+            "terminal_reread": {"const": "NOT_EVALUATED"}
+          }
+        }
+      }
+    },
+    "refusal_source_drift": {
+      "properties": {
+        "reason_codes": {"const": ["SOURCE_DRIFT_DETECTED"]},
+        "r31_input_status": {"const": "PARSED_PROJECTION_CONTRACT_MATCHED_UNVERIFIED"},
+        "read_set_status": {"const": "LATE_DRIFT_DETECTED"},
+        "r30_projection_eligibility": {"const": "INELIGIBLE"},
+        "evaluated_inputs": {"$ref": "#/$defs/all_bound_inputs"},
+        "checks": {
+          "properties": {
+            "input_read_set": {"const": "MATCH"},
+            "strict_parsing": {"const": "MATCH"},
+            "record_projection_contract": {"const": "MATCH"},
+            "source_content_binding": {"const": "MATCH"},
+            "access_projection_evidence": {"const": "MATCH"},
+            "r30_projection": {"const": "MATCH"},
+            "terminal_reread": {"const": "MISMATCH"}
+          }
+        }
+      }
+    },
+    "refusal_r30_projection_ineligible": {
+      "properties": {
+        "reason_codes": {"const": ["R30_PROJECTION_INELIGIBLE"]},
+        "read_set_status": {"const": "NOT_EVALUATED"},
+        "r30_projection_eligibility": {"const": "INELIGIBLE"},
+        "evaluated_inputs": {"$ref": "#/$defs/all_bound_inputs"},
+        "checks": {
+          "properties": {
+            "input_read_set": {"const": "MATCH"},
+            "strict_parsing": {"const": "MATCH"},
+            "r30_projection": {"const": "MISMATCH"},
+            "terminal_reread": {"const": "NOT_EVALUATED"}
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "r31_input_status": {"const": "REJECTED"},
+            "checks": {
+              "properties": {
+                "record_projection_contract": {"const": "MISMATCH"},
+                "source_content_binding": {"const": "NOT_EVALUATED"},
+                "access_projection_evidence": {"const": "NOT_EVALUATED"}
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "r31_input_status": {"const": "PARSED_PROJECTION_CONTRACT_MATCHED_UNVERIFIED"},
+            "checks": {
+              "properties": {
+                "record_projection_contract": {"const": "MATCH"},
+                "source_content_binding": {"const": "MATCH"},
+                "access_projection_evidence": {"enum": ["MATCH", "NOT_EVALUATED"]}
+              }
+            }
+          }
+        }
+      ]
+    }
   }
 }

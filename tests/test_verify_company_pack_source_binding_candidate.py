@@ -298,6 +298,7 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
             ("atomic overclaim", json.loads(json.dumps(report))),
             ("wrong read status", json.loads(json.dumps(report))),
             ("refusal preserving success states", json.loads(json.dumps(report))),
+            ("input reason with record mismatch state", json.loads(json.dumps(report))),
         ):
             if name == "missing projection":
                 mutation["r30_projection_digest_candidate"] = None
@@ -307,10 +308,28 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
                 mutation["claims"]["atomic_multi_file_snapshot_verified"] = True
             elif name == "wrong read status":
                 mutation["read_set_status"] = "NOT_EVALUATED"
-            else:
+            elif name == "refusal preserving success states":
                 mutation["result"] = "REFUSED"
                 mutation["reason_codes"] = ["INPUT_INVALID"]
                 mutation["r30_projection_digest_candidate"] = None
+                for claim in verifier.NARROW_CLAIMS:
+                    mutation["claims"][claim] = False
+            else:
+                mutation["result"] = "REFUSED"
+                mutation["r31_input_status"] = "REJECTED"
+                mutation["read_set_status"] = "NOT_EVALUATED"
+                mutation["r30_projection_eligibility"] = "NOT_EVALUATED"
+                mutation["reason_codes"] = ["INPUT_INVALID"]
+                mutation["r30_projection_digest_candidate"] = None
+                mutation["checks"] = {
+                    "input_read_set": "MATCH",
+                    "strict_parsing": "MATCH",
+                    "record_projection_contract": "MISMATCH",
+                    "source_content_binding": "MISMATCH",
+                    "access_projection_evidence": "NOT_EVALUATED",
+                    "r30_projection": "NOT_EVALUATED",
+                    "terminal_reread": "NOT_EVALUATED",
+                }
                 for claim in verifier.NARROW_CLAIMS:
                     mutation["claims"][claim] = False
             with self.subTest(report_schema=name):
@@ -412,6 +431,99 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
             "STRICTLY_PARSED_UNVERIFIED",
         )
         self.assertEqual(malformed_report["reason_codes"], ["STRICT_JSON_INVALID"])
+
+    def test_unhashable_choice_values_are_non_reflective_refusals(self) -> None:
+        record, content, _ = matched_inputs()
+        cases: list[tuple[str, dict]] = []
+
+        source_state = json.loads(json.dumps(record))
+        source_state["source_state"] = []
+        cases.append(("source state", source_state))
+
+        acquisition_mode = json.loads(json.dumps(record))
+        acquisition_mode["acquisition_mode"] = {}
+        cases.append(("acquisition mode", acquisition_mode))
+
+        declaration_status = json.loads(json.dumps(record))
+        declaration_status["access_or_consent"]["use_declarations"]["read"][
+            "declaration_status"
+        ] = []
+        cases.append(("declaration status", declaration_status))
+
+        deletion_trigger = json.loads(json.dumps(record))
+        deletion_trigger["retention"]["deletion_trigger"] = {}
+        cases.append(("deletion trigger", deletion_trigger))
+
+        for name, changed_record in cases:
+            with self.subTest(name=name):
+                _, _, evidence = matched_inputs()
+                evidence["source_record_binding"] = binding(
+                    canonical_bytes(changed_record)
+                )
+                result = self.run_tool(changed_record, content, evidence)
+                self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+                self.assertEqual(result.stderr, "")
+                report = json.loads(result.stdout)
+                self.assertEqual(report["reason_codes"], ["RECORD_CONTRACT_MISMATCH"])
+                self.assertTrue(all(value is False for value in report["claims"].values()))
+
+    def test_emitted_refusals_match_the_reason_specific_schema_matrix(self) -> None:
+        schema = json.loads(REPORT_SCHEMA.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema, format_checker=FormatChecker())
+        record, content, evidence = matched_inputs()
+
+        record_mismatch = json.loads(json.dumps(record))
+        record_mismatch["source_state"] = "PRIVATE-UNKNOWN-STATE"
+        record_mismatch_evidence = json.loads(json.dumps(evidence))
+        record_mismatch_evidence["source_record_binding"] = binding(
+            canonical_bytes(record_mismatch)
+        )
+
+        reference = source_record_instance("REFERENCE_DECLARED_UNVERIFIED")
+        reference_evidence = json.loads(json.dumps(evidence))
+        reference_evidence["source_record_binding"] = binding(canonical_bytes(reference))
+
+        access_mismatch = json.loads(json.dumps(evidence))
+        access_mismatch["source_record_id_sha256"] = "0" * 64
+
+        cases = (
+            (
+                "input",
+                self.run_raw(
+                    canonical_bytes(record),
+                    content,
+                    canonical_bytes(evidence),
+                    record_locator="invalid-locator",
+                ),
+                "INPUT_INVALID",
+            ),
+            (
+                "strict json",
+                self.run_raw(b'{"value":NaN}', content, canonical_bytes(evidence)),
+                "STRICT_JSON_INVALID",
+            ),
+            (
+                "record contract",
+                self.run_tool(record_mismatch, content, record_mismatch_evidence),
+                "RECORD_CONTRACT_MISMATCH",
+            ),
+            (
+                "r30 ineligible",
+                self.run_tool(reference, content, reference_evidence),
+                "R30_PROJECTION_INELIGIBLE",
+            ),
+            (
+                "access evidence",
+                self.run_tool(record, content, access_mismatch),
+                "ACCESS_EVIDENCE_CONTRACT_MISMATCH",
+            ),
+        )
+        for name, result, expected_reason in cases:
+            with self.subTest(name=name):
+                self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+                report = json.loads(result.stdout)
+                self.assertEqual(report["reason_codes"], [expected_reason])
+                validator.validate(report)
 
     def test_projection_digest_matches_independent_r30_mapping_for_both_states(self) -> None:
         r30_schema = json.loads(R30_SCHEMA.read_text(encoding="utf-8"))
@@ -765,6 +877,10 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
 
     def test_terminal_reread_refuses_byte_or_identity_drift_with_all_claims_false(self) -> None:
         record, content, evidence = matched_inputs()
+        report_validator = Draft202012Validator(
+            json.loads(REPORT_SCHEMA.read_text(encoding="utf-8")),
+            format_checker=FormatChecker(),
+        )
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             paths = (
@@ -829,6 +945,7 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
                     self.assertEqual(report["checks"]["terminal_reread"], "MISMATCH")
                     self.assertIsNone(report["r30_projection_digest_candidate"])
                     self.assertTrue(all(value is False for value in report["claims"].values()))
+                    report_validator.validate(report)
 
     def test_stable_reader_rejects_empty_directory_over_limit_and_reparse(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

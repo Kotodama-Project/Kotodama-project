@@ -328,6 +328,12 @@ def require_string(value: object, pattern: re.Pattern[str], maximum: int = 512) 
     return value
 
 
+def require_choice(value: object, choices: set[str]) -> str:
+    if not isinstance(value, str) or value not in choices:
+        fail()
+    return value
+
+
 def require_ref(value: object) -> str:
     return require_string(value, REF)
 
@@ -518,14 +524,12 @@ def validate_record(record: dict[str, Any], content_bytes: bytes) -> dict[str, A
     recorded_at = parse_timestamp(record["recorded_at"])
     if parse_timestamp(record["expires_at"]) <= recorded_at:
         fail()
-    if record["source_state"] not in KNOWN_STATES:
-        fail()
+    require_choice(record["source_state"], KNOWN_STATES)
     if record["source_state"] not in ELIGIBLE_STATES:
         raise ProjectionIneligible("closed")
     derived_state = record["source_state"] == "DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED"
     allowed_modes = {"derived"} if derived_state else {"capture", "import", "synthetic"}
-    if record["acquisition_mode"] not in allowed_modes:
-        fail()
+    require_choice(record["acquisition_mode"], allowed_modes)
 
     content = exact_object(record["content_observation"], CONTENT_FIELDS)
     require_ref(content["storage_locator_ref"])
@@ -593,12 +597,14 @@ def validate_record(record: dict[str, Any], content_bytes: bytes) -> dict[str, A
     permitted: list[tuple[str, dict[str, Any]]] = []
     for use in USES:
         declaration = exact_object(declarations[use], USE_DECLARATION_FIELDS)
-        if declaration["declaration_status"] not in {
-            "DECLARED_NOT_PERMITTED",
-            "DECLARED_PERMITTED_UNVERIFIED",
-            "WITHDRAWAL_ENTERED_UNVERIFIED",
-        }:
-            fail()
+        require_choice(
+            declaration["declaration_status"],
+            {
+                "DECLARED_NOT_PERMITTED",
+                "DECLARED_PERMITTED_UNVERIFIED",
+                "WITHDRAWAL_ENTERED_UNVERIFIED",
+            },
+        )
         for field in ("evidence_ref", "purpose_scope_ref", "subject_scope_ref"):
             require_ref(declaration[field])
         require_binding(declaration["evidence_binding"])
@@ -642,12 +648,10 @@ def validate_record(record: dict[str, Any], content_bytes: bytes) -> dict[str, A
     }.issubset(covered):
         raise ProjectionIneligible("closed")
     parse_timestamp(retention["retain_until"])
-    if retention["deletion_trigger"] not in {
-        "expiry",
-        "withdrawal",
-        "expiry_or_withdrawal",
-    }:
-        fail()
+    require_choice(
+        retention["deletion_trigger"],
+        {"expiry", "withdrawal", "expiry_or_withdrawal"},
+    )
     require_nullable_ref(retention["deletion_receipt_ref"])
     if retention["enforcement_status"] != "NOT_VERIFIED":
         fail()

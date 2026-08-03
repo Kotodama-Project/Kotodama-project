@@ -74,6 +74,8 @@ matchはexit `0`、evaluated refusalはexit `1`、usage errorはexit `2`です�
 - duplicate key、literalまたは指数overflowのnon-finite JSON、過大integer、
   decoder recursion、top-level non-object、depth 32超、20,000 node超を拒否します。
 - booleanをinteger binding sizeとして受け入れません。
+- state、acquisition mode、use declaration status、deletion triggerは文字列の固定
+  allowlistで検査し、list/object等のunhashable値もtracebackなしで拒否します。
 - 観測時点のsymlink、junction、reparse component、non-regular file、
   size/identity change、truncation、over-limit、detectable substitution、late driftを
   fail closedにします。
@@ -98,6 +100,9 @@ matchはexit `0`、evaluated refusalはexit `1`、usage errorはexit `2`です�
 invalid inputは固定`reason_codes`と固定check名だけで説明します。入力本文、Source
 Content、物理path、locator、record ID、unknown key、例外文をstdout/stderrへ返しません。
 安全に読み終えた三入力はSHA-256/byte sizeだけを返します。
+report schemaは6個のrefusal reasonそれぞれについて、R31/read-set/R30 status、
+evaluated input binding、7 checkの因果matrixを固定し、別reasonの状態を取り違えた
+合成reportを受理しません。
 
 成功時もprivateなR30 projection自体は出力しません。memory内でcanonical化した
 projectionのSHA-256/byte sizeだけを`r30_projection_digest_candidate`へ返します。
