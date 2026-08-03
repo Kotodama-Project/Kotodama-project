@@ -115,6 +115,13 @@ JSON Schemaはschemas/company-pack-catalog.schema.jsonです。出力を保存�
 revisionとCatalogのbytesを同じcandidateへ束縛してください。保存したCatalog
 だけを後からCurrent Truthの根拠にしてはいけません。
 
+Schemaは`status`と内容の整合も確認します。`PASS`ではpack id、profile、flow、
+Block、MOC、structural status、error countが成功形でなければなりません。
+`INVALID_PACK`ではpack id、profile、flow、Block、Record、MOCを空にし、
+structural statusを`FAIL`、error countを1以上にします。validatorがRecordを
+任意に省略できるPackは、Catalogでも`PASS`・`records: []`として安全に一覧でき
+ます。これらは構造状態の境界であり、承認やruntimeの証明ではありません。
+
 未知の`--format`値や余分な引数は、終了code 2、固定usage、固定の
 `invalid command-line arguments`で拒否します。入力値そのものをusageやエラーへ
 反映しないため、secret-likeな値を渡してもCatalog本文やprivate locatorは出力され

@@ -264,5 +264,57 @@
       }
     },
     "public_beta": {"const": "NO_GO_UNPUBLISHED"}
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "PASS"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "pack_id": {"type": "string"},
+          "profiles": {"minItems": 1},
+          "flow": {"minItems": 1},
+          "blocks": {"minItems": 1},
+          "mocs": {"minItems": 1},
+          "validation": {
+            "properties": {
+              "structural_status": {"const": "PASS"},
+              "error_count": {"const": 0}
+            }
+          },
+          "counts": {
+            "properties": {
+              "blocks": {"minimum": 1},
+              "mocs": {"minimum": 1}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "pack_id": {"type": "null"},
+          "profiles": {"maxItems": 0},
+          "flow": {"maxItems": 0},
+          "blocks": {"maxItems": 0},
+          "records": {"maxItems": 0},
+          "mocs": {"maxItems": 0},
+          "counts": {
+            "properties": {
+              "blocks": {"const": 0},
+              "records": {"const": 0},
+              "mocs": {"const": 0}
+            }
+          },
+          "validation": {
+            "properties": {
+              "structural_status": {"const": "FAIL"},
+              "error_count": {"minimum": 1}
+            }
+          }
+        }
+      }
+    }
+  ]
 }

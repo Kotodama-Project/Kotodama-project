@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, ValidationError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -163,6 +163,8 @@ class CompanyPackCatalogCliTests(unittest.TestCase):
         self.assertNotIn(private_locator, result.stdout)
         self.assertNotIn(private_pack_id, result.stdout)
         catalog = json.loads(result.stdout)
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        Draft202012Validator(schema).validate(catalog)
         self.assertEqual(catalog["status"], "INVALID_PACK")
         self.assertIsNone(catalog["pack_id"])
         self.assertEqual(catalog["blocks"], [])
@@ -170,6 +172,36 @@ class CompanyPackCatalogCliTests(unittest.TestCase):
         self.assertEqual(catalog["records"], [])
         self.assertGreater(catalog["validation"]["error_count"], 0)
         self.assertFalse(any(catalog["claims"].values()))
+
+    def test_catalog_handles_validator_pass_without_optional_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = Path(temporary) / "recordless-pack"
+            shutil.copytree(STARTER, pack)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.pop("records")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            result = self.run_catalog(pack)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        catalog = json.loads(result.stdout)
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        Draft202012Validator(schema).validate(catalog)
+        self.assertEqual(catalog["status"], "PASS")
+        self.assertEqual(catalog["counts"]["records"], 0)
+        self.assertEqual(catalog["records"], [])
+
+    def test_catalog_schema_rejects_inconsistent_status_shape(self) -> None:
+        result = self.run_catalog(STARTER)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        catalog = json.loads(result.stdout)
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+
+        catalog["status"] = "INVALID_PACK"
+        with self.assertRaises(ValidationError):
+            Draft202012Validator(schema).validate(catalog)
 
     def test_markdown_output_is_utf8_even_when_console_encoding_is_legacy(self) -> None:
         environment = os.environ.copy()
@@ -256,6 +288,8 @@ class CompanyPackCatalogCliTests(unittest.TestCase):
         self.assertIn("read-only", runbook)
         self.assertIn("NO_GO_UNPUBLISHED", runbook)
         self.assertIn("invalid command-line arguments", runbook)
+        self.assertIn("records: []", runbook)
+        self.assertIn("structural status", runbook)
         self.assertIn("Blocks", runbook)
         self.assertIn("MOCs", runbook)
 

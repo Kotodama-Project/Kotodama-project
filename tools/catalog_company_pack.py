@@ -86,7 +86,7 @@ def build_catalog(pack_directory: Path) -> dict[str, Any]:
     }
     record_documents = {
         relative: read_json(pack_directory / relative)
-        for relative in manifest["records"]
+        for relative in manifest.get("records", [])
     }
     moc_documents = {
         relative: read_json(pack_directory / relative)
