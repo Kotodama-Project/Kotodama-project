@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -60,13 +61,14 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         return json.loads(result.stdout), result.stdout
 
     def run_builder(
-        self, bundle_path: Path, pack: Path
+        self, bundle_path: Path, pack: Path, *, env: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[bytes]:
         return subprocess.run(
             [sys.executable, str(REQUEST_BUILDER), str(bundle_path), str(pack)],
             cwd=ROOT,
             capture_output=True,
             check=False,
+            env=env,
         )
 
     def test_matched_ready_pack_builds_exact_pending_review_request(self) -> None:
@@ -121,6 +123,12 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         self.assertEqual(len(review["items"]), 46)
         self.assertTrue(
             all(item["category"] == "review_required" for item in review["items"])
+        )
+        self.assertEqual(
+            len({item["id"] for item in review["items"]}), review["item_count"]
+        )
+        self.assertEqual(
+            len({item["path"] for item in review["items"]}), review["item_count"]
         )
         self.assertEqual(
             review["permitted_outcomes"],
@@ -231,6 +239,58 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         self.assertEqual(request["reason"], "BUNDLE_VERIFICATION_FAILED")
         self.assertNotIn("private", json.dumps(request))
         self.assertIsNone(request["candidate_binding"])
+
+    def test_output_is_deterministic_utf8_under_legacy_console_encoding(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pack, _human_intent_ref, _retention_policy_ref = self.create_ready_pack(root)
+            bundle_path = root / "saved-review-bundle.json"
+            self.save_bundle(pack, bundle_path)
+            legacy_env = dict(os.environ)
+            legacy_env["PYTHONIOENCODING"] = "cp1252"
+            first = self.run_builder(bundle_path, pack, env=legacy_env)
+            second = self.run_builder(bundle_path, pack, env=legacy_env)
+
+        self.assertEqual(first.returncode, 0, first.stdout.decode("utf-8"))
+        self.assertEqual(first.stderr, b"")
+        self.assertEqual(first.stdout, second.stdout)
+        self.assertEqual(
+            json.loads(first.stdout)["review_request"]["state"],
+            "PENDING_AUTHORIZED_REVIEW",
+        )
+
+    def test_malformed_bundle_and_hostile_extra_arg_do_not_reflect_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pack, _human_intent_ref, _retention_policy_ref = self.create_ready_pack(root)
+            bundle_path = root / "malformed-private-bundle.json"
+            hostile_value = "PRIVATE_SENTINEL_DO_NOT_ECHO"
+            bundle_path.write_text(
+                json.dumps({"unexpected": hostile_value}), encoding="utf-8"
+            )
+            refused = self.run_builder(bundle_path, pack)
+            usage = subprocess.run(
+                [
+                    sys.executable,
+                    str(REQUEST_BUILDER),
+                    str(bundle_path),
+                    str(pack),
+                    hostile_value,
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(refused.returncode, 1)
+        self.assertNotIn(hostile_value.encode("utf-8"), refused.stdout)
+        self.assertEqual(
+            json.loads(refused.stdout)["reason"], "BUNDLE_VERIFICATION_FAILED"
+        )
+        self.assertEqual(usage.returncode, 2)
+        self.assertEqual(usage.stdout, b"")
+        self.assertNotIn(hostile_value.encode("utf-8"), usage.stderr)
+        self.assertIn(b"usage:", usage.stderr)
 
 
 if __name__ == "__main__":
