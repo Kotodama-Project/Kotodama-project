@@ -54,6 +54,28 @@ class CompanyPackReviewBundleCliTests(unittest.TestCase):
                 path.write_text(json.dumps(document), encoding="utf-8")
         return pack, private_locator
 
+    def create_recordless_pack(self, parent: Path) -> Path:
+        pack = parent / "recordless-review-pack"
+        result = subprocess.run(
+            [sys.executable, str(CREATOR), "recordless-review-pack", str(pack)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        manifest_path = pack / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["human_intent_ref"] = "human-intent:governed-alpha"
+        manifest.pop("records")
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        for relative in manifest["blocks"]:
+            path = pack / relative
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["authority"]["expires_at"] = "2026-09-01T00:00:00Z"
+            path.write_text(json.dumps(document), encoding="utf-8")
+        return pack
+
     def test_ready_pack_builds_exact_candidate_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             pack, private_locator = self.create_pack(Path(temporary))
@@ -130,6 +152,24 @@ class CompanyPackReviewBundleCliTests(unittest.TestCase):
             json.loads(first.stdout)["bundle_digest"]["value"],
             json.loads(drifted.stdout)["bundle_digest"]["value"],
         )
+
+    def test_recordless_pack_binds_only_referenced_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = self.create_recordless_pack(Path(temporary))
+            result = self.run_builder(pack)
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(result.stderr, "")
+        bundle = json.loads(result.stdout)
+        self.assertEqual(bundle["status"], "CANDIDATE_FOR_GOVERNED_REVIEW")
+        self.assertEqual(bundle["source_checks"]["structural_validation"], {
+            "status": "PASS",
+            "validated_files": 13,
+        })
+        self.assertEqual(bundle["binding_count"], 13)
+        self.assertTrue(all("records/" not in binding["path"] for binding in bundle["bindings"]))
+        self.assertTrue(all(not value for value in bundle["claims"].values()))
+        self.assertEqual(bundle["public_beta"], "NO_GO_UNPUBLISHED")
 
     def test_initialized_pack_is_refused_without_file_bindings(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -73,10 +73,14 @@ CLI自体はfileを作らず、UTF-8の1行JSONをstdoutへ返します。上の
 
 - 保存bundleがclosed contractとdigestを満たす
 - bundleと現在のPackが2回とも`MATCH`した
-- bundle fileのSHA-256/byte sizeと22-file bundle digestを依頼へ束縛した
+- bundle fileのSHA-256/byte sizeと、実際に参照されたfile setのbundle digestを依頼へ束縛した
 - customization reportが両方とも同一の`READY_FOR_GOVERNED_REVIEW`だった
 - `replacement_required=0`で、review/evidence item配列長がbundleのcountと一致した
 - 46件の`id/category/path/reason`を`review_request.items`へ、5件を`unresolved_evidence.items`へ値本文なしで分離した
+
+公開 Company starter の参照数は22ファイルです。`manifest.records`を省略した
+recordless Packでは、Recordsを除いた実際の参照数（現行starter形では13ファイル）
+だけがbundleとrequestへ束縛されます。固定の22という数を、任意のPackへ適用しません。
 
 同じsaved bundle bytes、Pack bytes、tool bytesからは同じrequest JSONになります。request fileを共有またはDecision Recordへ参照するときは、保存したrequest file自体のSHA-256も別途記録してください。
 

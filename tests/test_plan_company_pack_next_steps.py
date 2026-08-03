@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PLANNER = ROOT / "tools" / "plan_company_pack_next_steps.py"
 CREATOR = ROOT / "tools" / "create_company_pack.py"
 STARTER = ROOT / "examples" / "company-starter"
+RUNBOOK = ROOT / "docs" / "COMPANY-PACK-NEXT-STEPS.md"
 
 
 class CompanyPackNextStepsCliTests(unittest.TestCase):
@@ -48,7 +49,7 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
             document = json.loads(path.read_text(encoding="utf-8"))
             document["authority"]["expires_at"] = "2026-08-04T00:00:00Z"
             path.write_text(json.dumps(document), encoding="utf-8")
-        for relative in manifest["records"]:
+        for relative in manifest.get("records", []):
             path = pack / relative
             document = json.loads(path.read_text(encoding="utf-8"))
             document["retention"]["policy_ref"] = "retention:governed-v1"
@@ -140,6 +141,26 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
         self.assertFalse(plan["claims"]["promotion_verified"])
         self.assertFalse(plan["claims"]["current_truth_changed"])
 
+    def test_recordless_review_ready_plan_uses_current_validated_file_count(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            pack = self.create_working_copy(Path(temporary))
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest.pop("records")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            self.close_static_replacements(pack)
+            result = self.run_planner(pack)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        plan = json.loads(result.stdout)
+        self.assertEqual(plan["status"], "READY_FOR_GOVERNED_REVIEW")
+        self.assertEqual(plan["current_state"]["validated_files"], 13)
+        self.assertIn(
+            "candidate bound by digest and byte size for the current validated file set",
+            next(step["outcome"] for step in plan["ideal_flow"] if step["id"] == "bind_exact_review_candidate"),
+        )
+        self.assertIn("13-file Pack", plan["recommended_next"]["rationale"])
+
     def test_markdown_format_is_concise_and_names_current_ideal_and_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             pack = self.create_working_copy(Path(temporary))
@@ -159,6 +180,9 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
         )
         self.assertIn("`NO_GO_UNPUBLISHED`", result.stdout)
         self.assertLess(len(result.stdout.splitlines()), 70)
+        runbook = RUNBOOK.read_text(encoding="utf-8")
+        self.assertIn("validated file set", runbook)
+        self.assertIn("recordless Packでは13ファイル", runbook)
 
     def test_invalid_pack_fails_closed_without_echoing_private_locator(self) -> None:
         private_locator = "human-intent:private-sensitive-client"

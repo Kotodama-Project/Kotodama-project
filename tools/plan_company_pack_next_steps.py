@@ -120,7 +120,7 @@ IDEAL_FLOW = (
     ),
     (
         "bind_exact_review_candidate",
-        "22-file candidate bound by digest and byte size",
+        "candidate bound by digest and byte size for the current validated file set",
         "binding does not equal approval",
     ),
     (
@@ -168,6 +168,7 @@ def build_groups(items: list[dict[str, str]]) -> list[dict[str, Any]]:
 def build_plan(pack_dir: Path) -> dict[str, Any]:
     report = check_customization(pack_dir)
     counts = report["counts"]
+    validation = report["structural_validation"]
     if report["status"] == "INVALID_PACK":
         stage = "STRUCTURAL_REPAIR"
         recommended_next = {
@@ -187,10 +188,12 @@ def build_plan(pack_dir: Path) -> dict[str, Any]:
         recommended_next = {
             "action": "BUILD_EXACT_REVIEW_BUNDLE",
             "command": "python tools/build_company_pack_review_bundle.py PACK_DIRECTORY",
-            "rationale": "bind the review-ready 22-file Pack before governed review",
+            "rationale": (
+                "bind the review-ready "
+                f"{validation['validated_files']}-file Pack before governed review"
+            ),
         }
 
-    validation = report["structural_validation"]
     return {
         "kind": "company_pack_next_steps_plan",
         "version": "1.0",

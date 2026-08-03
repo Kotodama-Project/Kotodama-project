@@ -32,7 +32,7 @@ python tools\plan_company_pack_next_steps.py work\my-company
 |---|---|---|
 | `STRUCTURAL_REPAIR` | pack validatorがFAILし、customizationを解釈していない | `validate_template_pack.py`で構造を直す |
 | `STATIC_CUSTOMIZATION` | 構造PASSだがexample placeholderが残る | 元checkerのexact itemを見ながら置換する |
-| `CANDIDATE_BINDING` | 静的placeholderは0件 | 22ファイルをreview bundleへ固定する |
+| `CANDIDATE_BINDING` | 静的placeholderは0件 | Packのvalidated file setをreview bundleへ固定する |
 
 plannerが成功してplanを作れた場合、`CUSTOMIZATION_REQUIRED`でもexit codeは`0`です。Pack自体が不正な`INVALID_PACK`は`1`、CLI usage errorは`2`です。未知のformatや余分な引数は固定usageだけを返し、入力値をエラーメッセージへ反射しません。これはcustomization checkerのexit codeとは異なります。plannerの成功は「次の作業を安全に案内できた」という意味だけです。
 
@@ -59,7 +59,10 @@ plannerは次の順序を常に表示します。
 1. `create_draft_copy`: 組織固有IDへ再束縛した`draft`を作る。
 2. `replace_static_placeholders`: locator、期限、retention参照を置き換える。
 3. `validate_candidate`: schemaとcross-file contractを検証する。
-4. `bind_exact_review_candidate`: 22ファイルのexact bytesをbundleへ固定する。
+4. `bind_exact_review_candidate`: 現在のPackでvalidatorが確認したfile setの
+   exact bytesをbundleへ固定する。公開Company starterでは22ファイル、
+   `manifest.records`を省略したrecordless Packでは13ファイルというように、
+   実際に参照された数へ束縛される。
 5. `governed_review`: owner、profile、roleを実authorityの下で確認する。
 6. `collect_external_evidence`: 真正性、受諾、人物分離、保持、Human Decisionの証拠を閉じる。
 7. `separate_promotion`: 承認済みcandidateだけを別のPromotion processへ渡す。
