@@ -23,6 +23,8 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
             "[Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)",
             "[Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)",
             "理想のCompany Template層",
+            "Status と Roadmap は公開状況とPublic Beta gateを確認するためのorientationです",
+            "その後の5項目",
             "read-only/candidate-only",
             "NO_GO_UNPUBLISHED",
         )
@@ -33,6 +35,13 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
         links = required[:10]
         positions = [section.index(link) for link in links]
         self.assertEqual(positions, sorted(positions))
+        orientation = section.index(
+            "Status と Roadmap は公開状況とPublic Beta gateを確認するためのorientationです"
+        )
+        template_guide = section.index("[Template Guide](docs/TEMPLATE-GUIDE.md)")
+        ideal_layers = section.index("その後の5項目")
+        self.assertLess(orientation, template_guide)
+        self.assertLess(ideal_layers, template_guide)
         for relative_path in (
             "docs/TEMPLATE-GUIDE.md",
             "templates/company/README.md",

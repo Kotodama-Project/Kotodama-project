@@ -693,6 +693,10 @@ machine-readable な完了境界ではありません。最新チェックリス
 
 ### 最初に読む
 
+Status と Roadmap は公開状況とPublic Beta gateを確認するためのorientationです。
+その後の5項目（Template Guide → Company Template → Blocks → Governed Records →
+MOCs）が理想のCompany Template層を読む順番です。
+
 - [Project Status](STATUS.md) — 現在公開しているものと未証明範囲
 - [Roadmap to Public Beta](ROADMAP.md) — access を開く前に必要な gate
 - [Template Guide](docs/TEMPLATE-GUIDE.md) — Blocks / Records / MOCs の編集
@@ -706,7 +710,7 @@ machine-readable な完了境界ではありません。最新チェックリス
 - [Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md) — current stage、理想flow、分類別件数、次コマンドを案内する
 - [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md) — runtime profileを選ぶ前のread-only導線
 
-最初の5項目は理想のCompany Template層を読む順番です。Catalog以降は現在の
+Catalog以降は現在の
 read-only/candidate-only公開導線であり、validatorやrunbookがPASSしても
 `NO_GO_UNPUBLISHED`、runtime、Promotion、Current Truth、Public Beta GOの境界は変わりません。
 
