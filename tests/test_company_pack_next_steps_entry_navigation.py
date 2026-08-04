@@ -23,6 +23,7 @@ class CompanyPackNextStepsEntryNavigationTests(unittest.TestCase):
             "../templates/mocs/README.md",
             "**Current:**",
             "COMPANY-PACK-CATALOG.md",
+            "PUBLIC-PREVIEW-SELF-CHECK.md",
             "STARTER-WALKTHROUGH.md",
             "**Smoke:**",
             "plan_company_pack_next_steps.py",
@@ -47,12 +48,21 @@ class CompanyPackNextStepsEntryNavigationTests(unittest.TestCase):
             "../templates/records/README.md",
             "../templates/mocs/README.md",
             "COMPANY-PACK-CATALOG.md",
+            "PUBLIC-PREVIEW-SELF-CHECK.md",
             "STARTER-WALKTHROUGH.md",
             "../schemas/company-pack-next-steps.schema.json",
             "../tests/test_plan_company_pack_next_steps.py",
         ):
             with self.subTest(target=target):
                 self.assertIn(target, document)
+
+        ordered_markers = (
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)",
+            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+        )
+        positions = [document.index(marker) for marker in ordered_markers]
+        self.assertEqual(positions, sorted(positions))
 
 
 if __name__ == "__main__":

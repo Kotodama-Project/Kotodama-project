@@ -15,8 +15,9 @@
   [Governed Records](../templates/records/README.md) →
   [MOCs](../templates/mocs/README.md)の責任と読み順を確認します。
 - **Current:** [Company Pack Catalog](COMPANY-PACK-CATALOG.md)で公開starterの
-  構造を一覧し、[Starter Walkthrough](STARTER-WALKTHROUGH.md)で作業copyから
-  plannerへ進む現在の導線を確認します。
+  構造を一覧し、[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)で
+  read-only previewの現在地と境界を確認してから、[Starter Walkthrough](STARTER-WALKTHROUGH.md)で
+  作業copyからplannerへ進む現在の導線を確認します。
 - **Smoke:** `plan_company_pack_next_steps.py`のJSON/Markdown出力、
   [`company-pack-next-steps.schema.json`](../schemas/company-pack-next-steps.schema.json)、
   [`test_plan_company_pack_next_steps.py`](../tests/test_plan_company_pack_next_steps.py)
