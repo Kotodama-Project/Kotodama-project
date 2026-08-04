@@ -29,9 +29,10 @@ Discord/Voice接続、Human approval、Promotion、Current Truth、Public Beta G
 - **Ideal:** [Company Template](../company/README.md)で組織の境界を定め、
   [Blocks](../blocks/README.md)と[Governed Records](../records/README.md)で
   仕事と証拠の形を選んだ後、目的に合うMOCを選びます。
-- **Current:** [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)で、
-  公開starterに同梱された3つのMOCと対応するBlock・Record・flow位置を
-  read-onlyで一覧します。
+- **Current:** [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)と
+  [Company Pack Guided Next Steps](../../docs/COMPANY-PACK-NEXT-STEPS.md)で
+  現在地と次の一手、公開starterに同梱された3つのMOCと対応するBlock・
+  Record・flow位置をread-onlyで一覧します。
 - **Smoke:** [Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)の
   外部接続なしRunbook smokeと
   [MOC entry regression](../../tests/test_mocs_entry_navigation.py)で、

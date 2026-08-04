@@ -6,6 +6,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
+    def test_company_template_entry_exposes_guided_next_steps(self) -> None:
+        document_path = ROOT / "templates" / "company" / "README.md"
+        document = document_path.read_text(encoding="utf-8")
+
+        for marker in (
+            "[Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)",
+            "[Company Pack Guided Next Steps](../../docs/COMPANY-PACK-NEXT-STEPS.md)",
+            "[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, document)
+
+        self.assertTrue(
+            (ROOT / "docs" / "COMPANY-PACK-NEXT-STEPS.md").is_file()
+        )
+
     def test_document_map_exposes_ideal_layers_before_current_entrypoints(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         start = readme.index("### 最初に読む")

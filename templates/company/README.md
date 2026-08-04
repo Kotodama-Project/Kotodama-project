@@ -49,7 +49,7 @@ Company Templateの設計を読むときは、理想のpackage構造と現在の
 | 観点 | 理想の使い方 | 現在の公開previewでできること |
 |---|---|---|
 | 境界 | Vision、Mission、Human Intent、owner、privacy、stop条件を会社ごとに定義する | [公開starter](../../examples/company-starter/README.md)を別の作業copyへ複製し、候補値を編集する |
-| 仕事の流れ | 必要なBlocksとGoverned Recordsを選び、MOCで目的別の読み順を作る | [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)で9 Blocks・9 Records・3 MOCsを一覧する |
+| 仕事の流れ | 必要なBlocksとGoverned Recordsを選び、MOCで目的別の読み順を作る | [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)で9 Blocks・9 Records・3 MOCsを一覧し、[Company Pack Guided Next Steps](../../docs/COMPANY-PACK-NEXT-STEPS.md)で現在地と次の一手を確認する |
 | 検証 | profileを選び、Work Order、verification、rollback、restoreの証拠を束ねる | [Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)と[Public Preview Self-check](../../docs/PUBLIC-PREVIEW-SELF-CHECK.md)でlocal / synthetic候補を確認する |
 | 導入 | candidate-bound Decisionの後にexact targetへbounded applyし、失敗時に戻す | 必要な場合だけ[Installation Lifecycle](../../docs/INSTALLATION-LIFECYCLE.md)でsecret-freeなprofile契約を読む。live install、restart、deployは含まない |
 

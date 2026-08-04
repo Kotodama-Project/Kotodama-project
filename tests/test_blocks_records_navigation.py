@@ -14,6 +14,7 @@ class BlocksRecordsNavigationTests(unittest.TestCase):
         shared_markers = (
             "## Read next: ideal -> current -> smoke",
             "[Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)",
+            "[Company Pack Guided Next Steps](../../docs/COMPANY-PACK-NEXT-STEPS.md)",
             "[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)",
             "[Schema / Validator / Test Matrix](../../docs/SCHEMA-VALIDATOR-MATRIX.md)",
             "[MOCs](../mocs/README.md)",
@@ -37,6 +38,7 @@ class BlocksRecordsNavigationTests(unittest.TestCase):
     def test_navigation_targets_are_repository_files(self) -> None:
         targets = (
             "docs/COMPANY-PACK-CATALOG.md",
+            "docs/COMPANY-PACK-NEXT-STEPS.md",
             "docs/STARTER-WALKTHROUGH.md",
             "docs/SCHEMA-VALIDATOR-MATRIX.md",
             "templates/mocs/README.md",

@@ -90,7 +90,9 @@ Public Beta GOを作りません。
 - **Ideal:** [Company Template](../company/README.md)で組織の境界を確認し、
   [Governed Records](../records/README.md)でBlock出力の保存先を選ぶ。
 - **Current:** [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)と
-  [MOCs](../mocs/README.md)で、必要なBlockと目的別の読み順を確認する。
+  [Company Pack Guided Next Steps](../../docs/COMPANY-PACK-NEXT-STEPS.md)で
+  現在地と次の一手を確認し、[MOCs](../mocs/README.md)で必要なBlockと
+  目的別の読み順を確認する。
 - **Smoke:** [Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)から作業copyを
   作り、[Schema / Validator / Test Matrix](../../docs/SCHEMA-VALIDATOR-MATRIX.md)で
   schema・validator・focused testの対応を確認する。

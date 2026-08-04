@@ -18,6 +18,7 @@ class MocsEntryNavigationTests(unittest.TestCase):
             "../records/README.md",
             "**Current:**",
             "../../docs/COMPANY-PACK-CATALOG.md",
+            "[Company Pack Guided Next Steps](../../docs/COMPANY-PACK-NEXT-STEPS.md)",
             "**Smoke:**",
             "../../docs/STARTER-WALKTHROUGH.md",
             "../../tests/test_mocs_entry_navigation.py",
