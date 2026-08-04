@@ -27,18 +27,20 @@ company/
 
 1. Human Intentと停止条件を記録する。
 2. fact familyごとの正本ownerを一つにする。
-3. MinimumまたはSegmented runtime profileを選ぶ。
-4. 必要なBlockだけを追加する。
-5. synthetic dataで一つのvertical sliceを実行する。
-6. stop、replay、rollback、restoreを検証する。
-7. MOCを作り、人間が現在状態とreceiptへ到達できるようにする。
+3. 必要なBlockとGoverned Recordを選ぶ。
+4. MOCで目的別の読み順を作る。
+5. validator、customization checker、Review Bundleで候補を検証する。
+6. runtime profileは必要な場合だけ選び、Installation Lifecycleを読む。
+7. synthetic dataでvertical sliceを実行し、stop、replay、rollback、restoreを検証する。
 
-理想では、この順序をCompany Templateのcanonical flowとして組織の
-Human Intent、正本owner、runtime profileへ合わせます。現在の公開starterで
+理想では、この順序をCompany Templateのcanonical flowとして、組織の
+Human Intent、Blocks、Governed Records、MOCs、validator/reviewを先に
+確定し、必要な場合だけruntime profileへ進みます。現在の公開starterで
 できるのは、構造を作業copyへ複製し、synthetic/local候補をvalidatorと
-review bundleへ通すところまでです。review request、response、decision
-handoffは保存済みcandidateを再照合するread-only後段で、実行権限や承認を
-追加しません。
+review bundleへ通すところまでです。現在の公開経路は
+read-only/candidate-onlyで、状態は常に`NO_GO_UNPUBLISHED`です。review
+request、response、decision handoffは保存済みcandidateを再照合する
+read-only後段で、実行権限や承認を追加しません。
 
 ## 最初に読む: Company Templateからstarterへ
 

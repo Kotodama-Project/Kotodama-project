@@ -6,6 +6,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TemplateCatalogUsageTests(unittest.TestCase):
+    def test_company_template_recommended_order_matches_governed_layer_flow(self) -> None:
+        company = (ROOT / "templates" / "company" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        start = company.index("## Recommended order")
+        end = company.index("## 最初に読む: Company Templateからstarterへ", start)
+        section = company[start:end]
+        markers = (
+            "Human Intent",
+            "fact family",
+            "必要なBlock",
+            "Governed Record",
+            "MOC",
+            "validator",
+            "runtime profile",
+            "synthetic",
+        )
+        positions = [section.index(marker) for marker in markers]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("read-only/candidate-only", section)
+        self.assertIn("NO_GO_UNPUBLISHED", section)
+
     def test_runtime_profile_row_links_directly_to_installation_lifecycle(self) -> None:
         catalog = (ROOT / "templates" / "README.md").read_text(encoding="utf-8")
         row = next(
