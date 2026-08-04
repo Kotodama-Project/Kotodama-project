@@ -88,6 +88,30 @@ class SchemaValidatorMatrixDocumentationTests(unittest.TestCase):
         positions = [matrix.index(marker) for marker in ordered]
         self.assertEqual(positions, sorted(positions))
 
+    def test_matrix_runbook_smoke_links_back_to_catalog_entry(self) -> None:
+        matrix = MATRIX.read_text(encoding="utf-8")
+        start = matrix.index("## Runbook smoke")
+        end = matrix.index("## 1. Company Template", start)
+        smoke = matrix[start:end]
+        for marker in (
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[`test_company_pack_catalog_runbook_smoke_entry.py`](../tests/test_company_pack_catalog_runbook_smoke_entry.py)",
+            "CANDIDATE_FOR_GOVERNED_REVIEW",
+            "MATCH",
+            "CUSTOMIZATION_REQUIRED",
+            "BUNDLE_REFUSED",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, smoke)
+
+        for relative in (
+            "COMPANY-PACK-CATALOG.md",
+            "../tests/test_company_pack_catalog_runbook_smoke_entry.py",
+        ):
+            self.assertTrue((MATRIX.parent / relative).is_file())
+
     def test_matrix_links_are_present_and_entry_surfaces_link_back(self) -> None:
         matrix = MATRIX.read_text(encoding="utf-8")
         links = re.findall(r"\]\(([^)]+)\)", matrix)

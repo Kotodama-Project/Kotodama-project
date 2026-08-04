@@ -17,7 +17,9 @@ provider、Voice / Discord E2E、Promotion、Current Truth、Public Beta GOを�
 ## Runbook smoke
 
 公開starterの導入順を、外部接続なしの一時directoryで実際に通す回帰スモークを
-[`test_public_starter_runbook_smoke.py`](../tests/test_public_starter_runbook_smoke.py)
+[Company Pack Catalog](COMPANY-PACK-CATALOG.md)からも辿れます。対応する
+[`test_public_starter_runbook_smoke.py`](../tests/test_public_starter_runbook_smoke.py)と
+[`test_company_pack_catalog_runbook_smoke_entry.py`](../tests/test_company_pack_catalog_runbook_smoke_entry.py)
 が実行します。guided optionを使う候補では、initializer → validator → Catalog →
 customization → Public Preview → Next Steps → Review Bundleの順に進み、保存した
 bundleをverifyして`MATCH`になることを確認します。これはexact bytesの候補固定であり、
@@ -28,7 +30,7 @@ guided optionを指定しない通常の2引数initializerもスモーク対象�
 customizationが`CUSTOMIZATION_REQUIRED`のままなので、Review Bundle builderは
 `BUNDLE_REFUSED`として停止します。拒否を成功bundleとして保存したりverifyしたりせず、
 静的値を決めた新規Packでguided pathを使ってください。どちらの結果も
-`NO_GO_UNPUBLISHED`を維持します。
+read-only/candidate-onlyであり、`NO_GO_UNPUBLISHED`を維持します。
 
 ## 1. Company Template
 
