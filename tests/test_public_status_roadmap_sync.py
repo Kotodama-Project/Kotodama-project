@@ -73,6 +73,15 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
             status_flat,
         )
         self.assertIn(
+            "R80 clarified the ideal Company Template -> Blocks -> Governed Records -> MOCs",
+            status_flat,
+        )
+        self.assertIn(
+            "current local/synthetic, read-only/candidate-only starter path",
+            status_flat,
+        )
+        self.assertIn("Installation Lifecycle remains profile guidance only", status_flat)
+        self.assertIn(
             "target-bound runtime receipt",
             status_flat,
         )
@@ -95,6 +104,10 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         )
         self.assertIn(
             "R78 is the latest installation lifecycle usability synchronization",
+            roadmap_flat,
+        )
+        self.assertIn(
+            "R80 is the latest starter navigation usability synchronization",
             roadmap_flat,
         )
         self.assertIn("R62 remains the latest navigation synchronization", roadmap_flat)
@@ -122,6 +135,10 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         )
         self.assertIn(
             "[x] Installation lifecycle ideal/current and command/path clarity",
+            roadmap_flat,
+        )
+        self.assertIn(
+            "[x] Starter ideal/current navigation and Installation Lifecycle profile guidance",
             roadmap_flat,
         )
         self.assertIn("R58 remains the current Company Pack surface label", roadmap_flat)
