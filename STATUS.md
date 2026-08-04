@@ -44,11 +44,16 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R119 is the current public Company Pack Catalog Runbook smoke revision and the
-latest Template/Company/Blocks/Records/MOCs/starter navigation surface at public
-`main` commit `b878464eca0571fe293222d372cf417c9e9e1573`, tree
-`f5aa3a3fa405c0e5fed4d984921d6ad44dca0bd3`. The [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md)
-now links the [Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md)
+R122 is the current public Blocks/Records navigation revision and the latest
+Template/Company/Blocks/Records/MOCs/starter navigation surface at public
+`main` commit `677bd15bec0fdfd22410b237916d05be0d1ca02c`, tree
+`299a0248734daec3974b80ff174b4540995f4c47`. R122 adds ideal/current/smoke
+guidance and a stable Read next path in
+[`templates/blocks/README.md`](templates/blocks/README.md) and
+[`templates/records/README.md`](templates/records/README.md), with the
+[`test_blocks_records_navigation.py`](tests/test_blocks_records_navigation.py)
+regression. The [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) still
+links the [Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md)
 Runbook smoke, the [`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py)
 path, and the [`test_company_pack_catalog_runbook_smoke_entry.py`](tests/test_company_pack_catalog_runbook_smoke_entry.py)
 entry, while the README Quick Start and [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)
@@ -56,10 +61,15 @@ retain the same executable smoke. The guided path reaches bundle at
 `CANDIDATE_FOR_GOVERNED_REVIEW` -> `MATCH`, while
 the plain path remains `CUSTOMIZATION_REQUIRED` and fail-closed with
 `BUNDLE_REFUSED`. The published surface remains read-only/candidate-only and
-`NO_GO_UNPUBLISHED`; R118 remains historical as the Template Guide first-read
-smoke entry, R117 remains historical as the STATUS/ROADMAP provenance
-synchronization, R116 remains historical as the README Runbook smoke entry at
-public `main` commit `2a5a65cdbefc0e1fc33c88771a95443ed52d5960`, tree
+`NO_GO_UNPUBLISHED`; R121 remains historical as the Matrix-to-Catalog smoke
+entry, R120 remains historical as the STATUS/ROADMAP provenance
+synchronization to R119, and R119 remains historical as the Company Pack
+Catalog Runbook smoke entry at public `main` commit
+`b878464eca0571fe293222d372cf417c9e9e1573`, tree
+`f5aa3a3fa405c0e5fed4d984921d6ad44dca0bd3`. R118 remains historical as the
+Template Guide first-read smoke entry, R117 remains historical as the
+STATUS/ROADMAP provenance synchronization, R116 remains historical as the
+README Runbook smoke entry at public `main` commit `2a5a65cdbefc0e1fc33c88771a95443ed52d5960`, tree
 `456d5a990ae030699246959e12daf0a4a9cbb6d1`,
 R115 remains historical as the Starter Walkthrough smoke entry, R114 remains
 historical as the STATUS/ROADMAP provenance synchronization, R113 remains

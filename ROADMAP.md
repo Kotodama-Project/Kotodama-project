@@ -25,13 +25,18 @@
 
 ## Current public documentation revision
 
-R119 is the latest public documentation revision and the current public
-Template/Company/Blocks/Records/MOCs/starter surface. R119 added the Company
-Pack Catalog Runbook smoke entry with direct matrix/test links at public `main`
-commit `b878464eca0571fe293222d372cf417c9e9e1573` with tree
-`f5aa3a3fa405c0e5fed4d984921d6ad44dca0bd3`. The guided path reaches
+R122 is the latest public documentation revision and the current public
+Template/Company/Blocks/Records/MOCs/starter surface. R122 adds Blocks/Records
+navigation with ideal/current/smoke guidance and a stable Read next path at
+public `main` commit `677bd15bec0fdfd22410b237916d05be0d1ca02c` with tree
+`299a0248734daec3974b80ff174b4540995f4c47`. The guided path remains
 `CANDIDATE_FOR_GOVERNED_REVIEW` and `MATCH`; the plain path remains
-`CUSTOMIZATION_REQUIRED` and fail-closed as `BUNDLE_REFUSED`. R118 remains
+`CUSTOMIZATION_REQUIRED` and fail-closed as `BUNDLE_REFUSED`. R121 remains
+historical as the Matrix-to-Catalog smoke entry, R120 remains historical as
+the STATUS/ROADMAP provenance synchronization to R119, and R119 remains
+historical as the Company Pack Catalog Runbook smoke entry at public `main`
+commit `b878464eca0571fe293222d372cf417c9e9e1573` with tree
+`f5aa3a3fa405c0e5fed4d984921d6ad44dca0bd3`. R118 remains
 historical as the Template Guide first-read ideal/current/smoke entry, R117
 remains historical as the STATUS/ROADMAP provenance synchronization, and R116
 remains historical; R116 added the README Runbook smoke entry immediately
