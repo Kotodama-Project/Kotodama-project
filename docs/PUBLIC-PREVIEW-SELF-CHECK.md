@@ -24,6 +24,10 @@ python3 tools/check_company_pack_public_preview.py examples/company-starter
 python tools\check_company_pack_public_preview.py examples\company-starter --format markdown
 ```
 
+```bash
+python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown
+```
+
 Markdownもpack ID、path、manifest値、validation error本文を表示せず、JSONと同じ
 read-only・`NO_GO_UNPUBLISHED`境界を保ちます。`--format json`を明示した場合も
 既定と同じJSON契約です。
@@ -34,6 +38,15 @@ initializer で作業 copy を作った後も、同じ command の対象だけ�
 New-Item -ItemType Directory -Force work | Out-Null
 python tools\create_company_pack.py my-company work\my-company
 python tools\check_company_pack_public_preview.py work\my-company
+```
+
+POSIX shellでは、既存targetを上書きしない新しい作業copyを作ってから、同じ
+self-checkを実行します。
+
+```bash
+mkdir -p work
+python3 tools/create_company_pack.py my-company work/my-company
+python3 tools/check_company_pack_public_preview.py work/my-company
 ```
 
 JSON出力は標準出力の一行 JSON です。Markdownを選んだ場合は見出し・表形式の

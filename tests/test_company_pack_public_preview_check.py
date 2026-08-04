@@ -333,6 +333,42 @@ class PublicPreviewCheckTests(unittest.TestCase):
             with self.subTest(markdown_surface=path):
                 self.assertIn("--format markdown", path.read_text(encoding="utf-8"))
 
+    def test_public_preview_self_check_has_posix_working_copy_and_markdown_parity(self) -> None:
+        runbook = (ROOT / "docs" / "PUBLIC-PREVIEW-SELF-CHECK.md").read_text(
+            encoding="utf-8"
+        )
+        command_pairs = (
+            (
+                r"python tools\check_company_pack_public_preview.py examples\company-starter --format markdown",
+                "python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            ),
+            (
+                r"python tools\create_company_pack.py my-company work\my-company",
+                "python3 tools/create_company_pack.py my-company work/my-company",
+            ),
+            (
+                r"python tools\check_company_pack_public_preview.py work\my-company",
+                "python3 tools/check_company_pack_public_preview.py work/my-company",
+            ),
+        )
+        for powershell_command, posix_command in command_pairs:
+            with self.subTest(powershell_command=powershell_command):
+                self.assertIn(powershell_command, runbook)
+                self.assertIn(posix_command, runbook)
+
+        self.assertIn("New-Item -ItemType Directory -Force work | Out-Null", runbook)
+        self.assertIn("mkdir -p work", runbook)
+        self.assertIn("POSIX shell", runbook)
+        self.assertIn("NO_GO_UNPUBLISHED", runbook)
+
+        ordered_markers = (
+            "python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/check_company_pack_public_preview.py work/my-company",
+        )
+        positions = [runbook.index(marker) for marker in ordered_markers]
+        self.assertEqual(positions, sorted(positions))
+
 
 if __name__ == "__main__":
     unittest.main()
