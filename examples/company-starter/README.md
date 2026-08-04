@@ -2,6 +2,41 @@
 
 このdirectoryは、外部依存なしのvalidatorで検証できる最小Company Template packです。
 
+## 理想と現在の使い分け
+
+### 理想の使い方
+
+理想のCompany OSでは、会社の目的に合わせてCompany Templateを複製し、必要な
+Blocksを選び、Governed Recordsで証拠の形を揃え、MOCsで読み進める順番を示します。
+そのうえでvalidator、独立review、runtime candidateの順に進みます。
+
+```text
+Company Template → Blocks → Governed Records → MOCs
+    → validator → review → runtime candidate
+```
+
+この順番は、会話や文書などのSource Evidenceを、意図、仕事、成果、検証へ
+接続していくKotodamaの設計目標です。MOCは入口を案内し、BlockとRecordは
+それぞれの仕事と証拠の境界を示します。どの段階でも、validatorやreviewの
+構造結果だけをHuman approval、Promotion、Current Truthへ読み替えません。
+
+### 現在の公開candidate
+
+この公開starterで実際にできるのは、local・syntheticな作業copyを作り、
+read-only / candidate-onlyのCatalog、customization、validator、review bundleへ
+進むことです。公開example自体には実データ、secret、provider接続、稼働中の
+runtimeは含まれません。
+
+runtime candidateのprofileを比較したい場合だけ、次の
+[Installation Lifecycle](../../docs/INSTALLATION-LIFECYCLE.md)を読み、Composeまたは
+Proxmoxの候補を選びます。このリンクは導入前の契約と選択を示すものであり、
+install、deploy、restart、restore、Voice / Discord E2E、provider接続を実行済みとは
+主張しません。Promotion、Current Truth、Final Human GOも別のgateです。
+
+したがって、現在の公開状態は常に`NO_GO_UNPUBLISHED`です。理想のruntime flowと
+現在のlocal candidateを混同しないことが、このstarterを安全に使い始める最初の
+条件です。
+
 ## Included chain
 
 1. `source-intake.json`: 許可・保持条件付きの入力をSource Record候補へ正規化

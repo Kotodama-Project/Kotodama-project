@@ -293,6 +293,43 @@ class CompanyPackCatalogCliTests(unittest.TestCase):
         self.assertIn("Blocks", runbook)
         self.assertIn("MOCs", runbook)
 
+    def test_starter_explains_ideal_current_and_lifecycle_next_step(self) -> None:
+        starter_readme = (STARTER / "README.md").read_text(encoding="utf-8")
+
+        ideal_marker = "## 理想と現在の使い分け"
+        current_marker = "### 現在の公開candidate"
+        lifecycle_link = "../../docs/INSTALLATION-LIFECYCLE.md"
+        ideal_start = starter_readme.index(ideal_marker)
+        current_start = starter_readme.index(current_marker, ideal_start)
+        self.assertLess(ideal_start, current_start)
+
+        ideal = starter_readme[ideal_start:current_start]
+        current = starter_readme[current_start:]
+        for marker in (
+            "Company Template",
+            "Blocks",
+            "Governed Records",
+            "MOCs",
+            "validator",
+            "review",
+            "runtime candidate",
+        ):
+            with self.subTest(ideal_marker=marker):
+                self.assertIn(marker, ideal)
+
+        for marker in (
+            "local",
+            "synthetic",
+            "read-only",
+            "candidate-only",
+            "Voice / Discord",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(current_marker=marker):
+                self.assertIn(marker, current)
+
+        self.assertIn(f"[Installation Lifecycle]({lifecycle_link})", current)
+
 
 if __name__ == "__main__":
     unittest.main()
