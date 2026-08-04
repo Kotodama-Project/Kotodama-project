@@ -35,6 +35,13 @@ New-Item -ItemType Directory -Force work | Out-Null
 python tools\resolve_compose_candidate.py kotodama-local-r1 --output work\resolved-compose-candidate.json
 ```
 
+POSIX shellでは次の同等コマンドを使います。`mkdir -p`は既存の`work`をそのまま使い、`--output`は既存fileを上書きしません。
+
+```sh
+mkdir -p work
+python3 tools/resolve_compose_candidate.py kotodama-local-r1 --output work/resolved-compose-candidate.json
+```
+
 `>`はWindows PowerShellの版によってnative stdoutをUTF-16へ変換するため、JSON保存には使用しません。
 
 ## 2. local imageをread-onlyで照合する
@@ -43,6 +50,12 @@ Docker daemonが起動済みで、candidateのdigest-pinned imageが既にlocal 
 
 ```powershell
 python tools\preflight_compose_image_availability.py work\resolved-compose-candidate.json --output work\compose-image-availability.json
+```
+
+POSIX shellでのread-only preflightは次です。
+
+```sh
+python3 tools/preflight_compose_image_availability.py work/resolved-compose-candidate.json --output work/compose-image-availability.json
 ```
 
 実行するDocker commandは次の3種類だけです。
@@ -59,6 +72,12 @@ imageがない場合は`IMAGE_NOT_AVAILABLE`で停止します。自動pullへfa
 
 ```powershell
 python tools\verify_compose_image_availability_preflight.py work\compose-image-availability.json work\resolved-compose-candidate.json
+```
+
+保存したsnapshotをPOSIX shellから再束縛する場合は次を使います。
+
+```sh
+python3 tools/verify_compose_image_availability_preflight.py work/compose-image-availability.json work/resolved-compose-candidate.json
 ```
 
 saved verifier report v1.1の`HISTORICAL_BINDING_ONLY`は、snapshotのclosed structure、自己計算digest、read-only effects、candidate file hashと各bindingが一致することだけを示します。自己計算digestは署名やattestationではなく、任意のwriterが内容と一緒に再計算できます。そのためsaved verifierは`snapshot_authenticity_verified`、`observation_freshness_verified`、`observation_atomicity_verified`、`current_daemon_reachable_verified`、`current_local_image_available_verified`を常に`false`にします。
@@ -83,3 +102,5 @@ clean installへ進む前に、少なくとも次をexact Work Orderへ固定し
 - [`compose-image-availability-preflight.schema.json`](../schemas/compose-image-availability-preflight.schema.json)
 
 schema PASSも`HISTORICAL_BINDING_ONLY`も、真正性、freshness、atomicity、live clean install、Public Beta GOの証明ではありません。
+
+このrunbookで作るsnapshotはlocal/read-onlyの候補証拠に限られ、公開状態は`NO_GO_UNPUBLISHED`のままです。

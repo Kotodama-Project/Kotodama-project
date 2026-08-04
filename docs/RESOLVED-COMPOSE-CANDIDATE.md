@@ -23,6 +23,14 @@ $env:KOTODAMA_COMPANY_DB_PASSWORD = '<private-distinct-value>'
 $env:KOTODAMA_EVIDENCE_DB_PASSWORD = '<private-distinct-value>'
 ```
 
+POSIX shellでは`export`を使います。次も値を埋めないプレースホルダー例です。実際の値は対象hostのsecret mechanismからshell historyや公開logへ出さずに供給してください。
+
+```sh
+export KOTODAMA_POSTGRES_IMAGE='<registry>/<repository>@sha256:<64-hex-digest>'
+export KOTODAMA_COMPANY_DB_PASSWORD='<private-distinct-value>'
+export KOTODAMA_EVIDENCE_DB_PASSWORD='<private-distinct-value>'
+```
+
 `.env`やcredential値をrepositoryへ追加しません。2つのpasswordが空、同一、またはComposeの解決結果と一致しない場合、resolverは候補を作りません。
 
 ## 2. safe candidateを作る
@@ -32,6 +40,13 @@ repository rootから実行します。
 ```powershell
 New-Item -ItemType Directory -Force work | Out-Null
 python tools\resolve_compose_candidate.py kotodama-local-r1 --output work\resolved-compose-candidate.json
+```
+
+POSIX shellでの同じ順序は次です。
+
+```sh
+mkdir -p work
+python3 tools/resolve_compose_candidate.py kotodama-local-r1 --output work/resolved-compose-candidate.json
 ```
 
 project nameは小文字英数字から始まる2〜63文字の小文字英数字、`_`、`-`だけを受け付けます。
@@ -56,6 +71,12 @@ passwordを別の有効な値へ変えても出力とdigestは変わりません
 
 ```powershell
 python tools\validate_resolved_compose_candidate.py work\resolved-compose-candidate.json
+```
+
+POSIX shellでは次のように保存済みcandidateを再検査します。
+
+```sh
+python3 tools/validate_resolved_compose_candidate.py work/resolved-compose-candidate.json
 ```
 
 validatorはstrict JSON、closed field set、現在のshipped skeleton revision、role別binding、credential非開示contract、resolved digest、全claim、`NO_GO_UNPUBLISHED`を再検査します。成功は終了code `0`と`PASS`です。
