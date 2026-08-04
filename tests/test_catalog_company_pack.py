@@ -330,6 +330,61 @@ class CompanyPackCatalogCliTests(unittest.TestCase):
 
         self.assertIn(f"[Installation Lifecycle]({lifecycle_link})", current)
 
+    def test_starter_quick_start_keeps_baseline_and_generated_candidate_consistent(
+        self,
+    ) -> None:
+        starter_readme = (STARTER / "README.md").read_text(encoding="utf-8")
+        start = starter_readme.index(
+            "## Quick Start: immutable example -> generated candidate"
+        )
+        candidate_section = starter_readme[start:]
+
+        for marker in (
+            "immutable published baseline",
+            "python tools/catalog_company_pack.py examples/company-starter",
+            "python tools/check_company_pack_public_preview.py examples/company-starter",
+            "python tools/validate_template_pack.py examples/company-starter",
+            "python3 tools/catalog_company_pack.py examples/company-starter",
+            "python3 tools/check_company_pack_public_preview.py examples/company-starter",
+            "python3 tools/validate_template_pack.py examples/company-starter",
+            "python tools/create_company_pack.py my-company work/my-company",
+            "python tools/check_company_pack_customization.py work/my-company",
+            "python tools/validate_template_pack.py work/my-company",
+            "python tools/catalog_company_pack.py work/my-company --format markdown",
+            "python tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python3 tools/validate_template_pack.py work/my-company",
+            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+            "python3 tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            "read-only",
+            "candidate-only",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, starter_readme)
+
+        candidate_commands = (
+            "python tools/create_company_pack.py my-company work/my-company",
+            "python tools/check_company_pack_customization.py work/my-company",
+            "python tools/validate_template_pack.py work/my-company",
+            "python tools/catalog_company_pack.py work/my-company --format markdown",
+            "python tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+        )
+        positions = [candidate_section.index(command) for command in candidate_commands]
+        self.assertEqual(positions, sorted(positions))
+
+        for forbidden in (
+            "check_company_pack_customization.py examples/company-starter",
+            "validate_template_pack.py examples/company-starter --format",
+            "catalog_company_pack.py examples/company-starter --format markdown\npython tools/check_company_pack_public_preview.py work/my-company",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, candidate_section)
+
 
 if __name__ == "__main__":
     unittest.main()

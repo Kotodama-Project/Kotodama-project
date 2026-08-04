@@ -106,10 +106,20 @@ python3 tools/validate_template_pack.py examples/company-starter
 
 元exampleを変更せず、IDを再束縛した作業copyを作るには次を使います。既存targetは上書きしません。
 
+## Quick Start: immutable example -> generated candidate
+
+The shipped `examples/company-starter` directory is the **immutable published baseline**.
+Inspect it with the read-only Catalog, preview, and validator
+commands above; never edit it in place. The commands below create one generated
+candidate and keep every follow-up check on that same `work/my-company` path.
+
 ```powershell
 New-Item -ItemType Directory -Force work | Out-Null
 python tools/create_company_pack.py my-company work/my-company
 python tools/check_company_pack_customization.py work/my-company
+python tools/validate_template_pack.py work/my-company
+python tools/catalog_company_pack.py work/my-company --format markdown
+python tools/check_company_pack_public_preview.py work/my-company --format markdown
 python tools/plan_company_pack_next_steps.py work/my-company --format markdown
 ```
 
@@ -117,6 +127,9 @@ python tools/plan_company_pack_next_steps.py work/my-company --format markdown
 mkdir -p work
 python3 tools/create_company_pack.py my-company work/my-company
 python3 tools/check_company_pack_customization.py work/my-company
+python3 tools/validate_template_pack.py work/my-company
+python3 tools/catalog_company_pack.py work/my-company --format markdown
+python3 tools/check_company_pack_public_preview.py work/my-company --format markdown
 python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown
 ```
 
