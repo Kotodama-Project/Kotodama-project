@@ -31,6 +31,16 @@ This **full review-chain smoke** is external-free and candidate-only; it keeps
 `NO_GO_UNPUBLISHED` and does not create Human approval, runtime authority,
 Promotion, Current Truth, or Public Beta GO.
 
+repository rootから、追加依存なしのregressionを次で実行できます。
+
+```powershell
+python -m unittest tests.test_public_starter_runbook_smoke -v
+```
+
+```bash
+python3 -m unittest tests.test_public_starter_runbook_smoke -v
+```
+
 最初に導入順そのものを確認したい場合は、[Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md) の Runbook smoke と [test_public_starter_runbook_smoke.py](../tests/test_public_starter_runbook_smoke.py) を参照してください。外部接続なしの一時directoryで、initializer → validator → Catalog → customization → Public Preview → Next Steps → Review Bundle → Review Request → Review Response → Review Decision Handoff → verify を通せます。
 
 - guided path: 3つの静的値を指定した新規Packで `CANDIDATE_FOR_GOVERNED_REVIEW` と `MATCH` まで進む

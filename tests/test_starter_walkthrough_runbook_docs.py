@@ -13,6 +13,8 @@ class StarterWalkthroughRunbookDocumentationTests(unittest.TestCase):
             "## 実行確認: Runbook smoke",
             "[Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)",
             "[test_public_starter_runbook_smoke.py](../tests/test_public_starter_runbook_smoke.py)",
+            "python -m unittest tests.test_public_starter_runbook_smoke -v",
+            "python3 -m unittest tests.test_public_starter_runbook_smoke -v",
             "guided path",
             "CANDIDATE_FOR_GOVERNED_REVIEW",
             "MATCH",
@@ -34,6 +36,15 @@ class StarterWalkthroughRunbookDocumentationTests(unittest.TestCase):
         ):
             with self.subTest(link=relative):
                 self.assertTrue((WALKTHROUGH.parent / relative).is_file())
+
+        self.assertNotIn(
+            "python -m pytest tests/test_public_starter_runbook_smoke.py -q",
+            document,
+        )
+        self.assertNotIn(
+            "python3 -m pytest tests/test_public_starter_runbook_smoke.py -q",
+            document,
+        )
 
     def test_walkthrough_keeps_current_preview_boundary_explicit(self) -> None:
         document = WALKTHROUGH.read_text(encoding="utf-8")
