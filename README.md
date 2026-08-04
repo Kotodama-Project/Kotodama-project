@@ -9,6 +9,47 @@ Kotodama は、人間が普段どおり話し、相談し、アイデアを共�
 > [!IMPORTANT]
 > このリポジトリは **Incomplete Public Preview** です。公開している Company starter、schema、validator、runtime/evidence candidate は試せますが、Public Beta の利用受付、Discord 招待、公開 Voice Bot はまだ提供していません。公開アクセスを開くための Final Human GO も完了していません。最新の境界は [Project Status](STATUS.md) を確認してください。
 
+## この README の読み方
+
+Kotodama は Voice や Company starter の単機能プロジェクトではなく、会話から
+会社の学習までを一つの証拠鎖でつなぐ Company OS を目指しています。この長い
+README は、最初から最後まで一枚の壁として読む必要はありません。
+
+| 読み方 | ここで分かること | 入口 |
+|---|---|---|
+| **Vision** | なぜ作るのか、Human Intent を最上位に置く理由 | [North Star](#north-star) / [Founder Intent](#founder-intent-と開発原則) |
+| **Experience** | Discord、Voice、GrillU を通じて利用者が何を体験するか | [理想のユーザー体験](#理想のユーザー体験) / [Voice](#voice--最初に価値を体感する入口) |
+| **Architecture** | Evidence Chain、Company Pack、Context、AI workforce がどう接続するか | [Evidence Chain](#evidence-chain--会話から-current-truth-まで) / [Local-first architecture](#local-first-architecture) |
+| **Current Reality** | 公開済み、local candidate、未証明をどう分けているか | [現在地](#現在地--夢と実証範囲を分ける) / [Public Preview と Public Beta](#public-preview-と-public-beta) |
+| **Try it** | 約5分の安全な体験と、次に選べる bounded path | [最初に選ぶ](#最初に選ぶ) / [5-minute tour](docs/FIVE-MINUTE-TOUR.md) |
+
+## Company OS system map
+
+詳細へ入る前に、Kotodama 全体を八つの面として見ると位置関係が分かります。
+各行のリンク先に設計と境界を置き、この表では理想と現在を混ぜません。
+
+```text
+Office / Input -> Voice -> Intent -> Governance -> Company Pack
+                                              |-> Context
+                                              |-> Workforce / Runtime
+                                              `-> Business / Learning
+```
+
+| 面 | 理想の役割 | 現在の公開境界 |
+|---|---|---|
+| [Office / Input](#discord-の中に会社を作る) | Discord、Issue、文書、業務データを、人間と AI が働く共通入口にする | Discord は projection。public invite と public Voice Bot は未提供 |
+| [Voice Adapter](#voice--最初に価値を体感する入口) | 話者別 capture、local ASR、15分 rotation を Verified Handoff へつなぐ | 既存 local candidate はあるが、実 Voice E2E と public Voice Bot は未提供 |
+| [Intent / GrillU](#grillu--一度に一つだけ深掘りする) | 会話から意図候補を抽出し、重要な曖昧さだけを一問ずつ閉じる | contract / prototype は local candidate。公開サービスではない |
+| [Governance / Evidence](#evidence-chain--会話から-current-truth-まで) | Source から Decision、Work、Receipt、Promotion、Current Truth まで短絡せず追跡する | schema、validator、candidate-only review chain を公開。Human approval や Current Truth は作らない |
+| [Company Pack](#company-template--会社を再現できる部品) | Template、Blocks、Records、MOCs で会社の境界と仕事を再現する | 9 Blocks、9 Records、3 MOCs と local/static tooling を試せる |
+| [Context Platform](#context-platform--会社の共有記憶) | 権限付き query plane から People、Goal、ToDo、会話、文書、証拠へ到達する | TiDB は第一評価候補。adopted / deployed / Current Truth ではない |
+| [Workforce / Runtime](#agent-foundry-と-ai-workforce) | Resident Clone、専門 Agent、n8n、OpenClaw、Proxmox / Compose を bounded capability で動かす | 設計・local candidate・runtime candidate を含むが、公開稼働の証明ではない |
+| [Business / Learning](#ai-business-loop) | idea から市場検証、提供、finance、feedback、学習まで同じ証拠鎖で回す | 長期方向であり、収益・契約・入金・継続利益の実証ではない |
+
+したがって現在地は **Incomplete Public Preview** です。公開面は
+`read-only/candidate-only` かつ `NO_GO_UNPUBLISHED` であり、public Voice Bot は未提供、
+Public Beta access は未提供、Final Human GO は未完了です。
+
 ## North Star
 
 > 人間の意図を最上位の基準として、会話から意図を抽出し、監査可能な仕事・成果物・学習へ変換する。

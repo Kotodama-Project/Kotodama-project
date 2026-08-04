@@ -35,6 +35,7 @@ Updated: 2026-08-05
 | [Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) | Fourteen public entrypoints with fixed help boundaries and one candidate-only Smoke command |
 | One-command review-chain smoke | Published standard-library-only local smoke; exact thirteen steps in a temporary workspace, no retained artifacts or GO |
 | [5-minute tour](docs/FIVE-MINUTE-TOUR.md) | Clone-to-result first-visit path; external-free local smoke and bounded next choices only |
+| README Company OS story map | Vision-to-Try-it reader map and eight-surface ideal/current boundary; documentation only |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -50,7 +51,24 @@ Updated: 2026-08-05
 
 ## Latest public template result
 
-R178 is the current public documentation revision and the latest
+R179 is the current public documentation revision and the latest
+Company OS orientation surface, bound to the published R178 fixed point at
+public `main` commit `23e954d4f5bb0dbf4450d768d6b37c2895c97b0b`, tree
+`25986611496feeebfed1d58ddf4b008d7f965457`. README now gives a near-top
+`Vision -> Experience -> Architecture -> Current Reality -> Try it` reader map
+and an eight-surface Company OS map connecting Office/Input, Voice,
+Intent/GrillU, Governance/Evidence, Company Pack, Context Platform,
+Workforce/Runtime, and Business/Learning. Every surface separates ideal role
+from its current public boundary and links the existing detailed section
+instead of duplicating it. This is documentation/static-regression evidence
+only. It does not add public Voice, Discord access, runtime, provider,
+authority, Promotion, Current Truth, Final Human GO, or Public Beta access;
+`NO_GO_UNPUBLISHED` remains unchanged. The story-map regression is
+[`test_readme_company_os_story_map.py`](tests/test_readme_company_os_story_map.py),
+and the orientation regression remains
+[`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
+
+R178 remains historical as the first-visitor tour revision and the
 Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
 published R177 fixed point at public `main` commit
 `d5d6187c7e5e7b6c4fe44e4b60a8aa096d4e8dc0`, tree

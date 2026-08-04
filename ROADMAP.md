@@ -26,10 +26,28 @@
 - [x] Fourteen-entrypoint Company Pack CLI Reference with fixed cross-shell help boundaries
 - [x] Standard-library-only one-command review-chain smoke with temporary cleanup and closed report
 - [x] Clone-to-result five-minute tour with cross-shell commands, report interpretation, and bounded next choices
+- [x] README Company OS reader/story map from Vision through current reality to safe first use
 
 ## Current public documentation revision
 
-R178 is the latest public documentation revision and the current public
+R179 is the latest public documentation revision and the current public
+Company OS orientation surface, bound to the published R178 fixed point at
+public `main` commit `23e954d4f5bb0dbf4450d768d6b37c2895c97b0b` with tree
+`25986611496feeebfed1d58ddf4b008d7f965457`. README now gives a near-top
+`Vision -> Experience -> Architecture -> Current Reality -> Try it` reader map
+and an eight-surface Company OS map connecting Office/Input, Voice,
+Intent/GrillU, Governance/Evidence, Company Pack, Context Platform,
+Workforce/Runtime, and Business/Learning. Every surface separates ideal role
+from its current public boundary and links the existing detailed section
+instead of duplicating it. This is documentation/static-regression evidence
+only. It does not add public Voice, Discord access, runtime, provider,
+authority, Promotion, Current Truth, Final Human GO, or Public Beta access;
+`NO_GO_UNPUBLISHED` remains unchanged. The story-map regression is
+[`test_readme_company_os_story_map.py`](tests/test_readme_company_os_story_map.py),
+and the orientation regression remains
+[`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
+
+R178 remains historical as the first-visitor tour revision and the
 Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
 published R177 fixed point at public `main` commit
 `d5d6187c7e5e7b6c4fe44e4b60a8aa096d4e8dc0` with tree
