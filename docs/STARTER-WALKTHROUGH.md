@@ -2,6 +2,25 @@
 
 この手順は、公開starterを自分の会社・チーム用の**候補pack**として試すためのものです。約3分、Python標準ライブラリだけで構造検証できます。
 
+## 0. まず層を読む
+
+初めてstarterを試すときは、runtimeを起動せず、理想のCompany OSと現在の
+公開candidateを分けてからinitializerへ進みます。
+
+**理想**では、次の順に会社の境界から証拠の形へ進みます。
+
+[Company Template](../templates/company/README.md) →
+[Blocks](../templates/blocks/README.md) →
+[Governed Records](../templates/records/README.md) →
+[MOCs](../templates/mocs/company-operations-moc.md)
+
+**現在**の公開previewでは、[Company Pack Catalog](COMPANY-PACK-CATALOG.md)で
+shipped starterの対応を一覧し、[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)
+でlocal / synthetic候補の状態を確認してから、下のinitializerで新しい作業copyを
+作ります。Catalog、Self-check、initializerはすべてread-only/candidate-onlyの
+導線で、公開状態は`NO_GO_UNPUBLISHED`です。Human approval、runtime、Promotion、
+Current Truth、Voice / Discord E2Eはこの手順から導出されません。
+
 ## 1. initializerで作業copyを作る
 
 repository rootから実行します。

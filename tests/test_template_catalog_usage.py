@@ -555,3 +555,64 @@ class TemplateCatalogUsageTests(unittest.TestCase):
         ):
             with self.subTest(earlier=earlier, later=later):
                 self.assertLess(starter.index(earlier), starter.index(later))
+
+    def test_starter_walkthrough_exposes_layer_reading_entry_before_initializer(self) -> None:
+        walkthrough = (ROOT / "docs" / "STARTER-WALKTHROUGH.md").read_text(
+            encoding="utf-8"
+        )
+        reading = walkthrough.index("## 0. まず層を読む")
+        initializer = walkthrough.index("## 1. initializerで作業copyを作る", reading)
+        section = walkthrough[reading:initializer]
+
+        required = (
+            "[Company Template](../templates/company/README.md)",
+            "[Blocks](../templates/blocks/README.md)",
+            "[Governed Records](../templates/records/README.md)",
+            "[MOCs](../templates/mocs/company-operations-moc.md)",
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)",
+            "理想",
+            "現在",
+            "runtimeを起動せず",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        for relative_path in (
+            "../templates/company/README.md",
+            "../templates/blocks/README.md",
+            "../templates/records/README.md",
+            "../templates/mocs/company-operations-moc.md",
+            "COMPANY-PACK-CATALOG.md",
+            "PUBLIC-PREVIEW-SELF-CHECK.md",
+        ):
+            with self.subTest(relative_path=relative_path):
+                self.assertTrue((ROOT / "docs" / relative_path).exists())
+
+        for earlier, later in (
+            (
+                "[Company Template](../templates/company/README.md)",
+                "[Blocks](../templates/blocks/README.md)",
+            ),
+            (
+                "[Blocks](../templates/blocks/README.md)",
+                "[Governed Records](../templates/records/README.md)",
+            ),
+            (
+                "[Governed Records](../templates/records/README.md)",
+                "[MOCs](../templates/mocs/company-operations-moc.md)",
+            ),
+            (
+                "[MOCs](../templates/mocs/company-operations-moc.md)",
+                "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            ),
+            (
+                "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+                "[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)",
+            ),
+        ):
+            with self.subTest(earlier=earlier, later=later):
+                self.assertLess(section.index(earlier), section.index(later))
