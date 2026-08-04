@@ -28,6 +28,33 @@ Blockを単独で読んだときに、次の質問へ答えられるようにし
 
 最小形式は[Work Order Block](work-order-block.md)を参照してください。
 
+## 公開starterの9 Blocksを目的で選ぶ
+
+公開starterは、次の9 Blockを一つのcanonical flowとして出荷しています。
+表のJSONはBlock契約の入口なので、目的を選んだら入力・出力・authority・
+拒否条件・receiptの詳細を直接確認できます。
+
+| # | Block | shipped contract | 目的 |
+|---:|---|---|---|
+| 1 | Source Intake | [source-intake.json](../../examples/company-starter/blocks/source-intake.json) | Source、access/consent、retention候補を取り込む |
+| 2 | Intent Candidate | [intent-candidate.json](../../examples/company-starter/blocks/intent-candidate.json) | Sourceから未確定の意図候補を抽出する |
+| 3 | Human Decision | [human-decision.json](../../examples/company-starter/blocks/human-decision.json) | authorityを持つ人の判断候補を記録する |
+| 4 | Work Order | [work-order.json](../../examples/company-starter/blocks/work-order.json) | target、action、期限、rollbackを束縛する |
+| 5 | Capability Grant | [capability-grant.json](../../examples/company-starter/blocks/capability-grant.json) | exact Work Orderへ最小権限候補を結び付ける |
+| 6 | Change Execution | [change-execution.json](../../examples/company-starter/blocks/change-execution.json) | Work OrderとGrantに対応するChange Candidateを作る |
+| 7 | Verification Receipt | [verification-receipt.json](../../examples/company-starter/blocks/verification-receipt.json) | candidate、test、negative check、effectを記録する |
+| 8 | Promotion Gate | [promotion-gate.json](../../examples/company-starter/blocks/promotion-gate.json) | receipt群をPromotion Candidateへ集約する |
+| 9 | Promotion Decision | [promotion-decision.json](../../examples/company-starter/blocks/promotion-decision.json) | 人間のPromotion判断候補を記録する |
+
+この表は同じcanonical flowを読むためのnavigation mapであり、runtimeを実行する
+一覧ではありません。JSON SchemaやvalidatorのPASSは構造検証だけで、実行権限、
+Human approval、Promotion、Current Truth、Public Beta GOを作りません。公開starter
+は`read-only / candidate-only`で、状態は常に`NO_GO_UNPUBLISHED`です。
+
+上の9件以外のVoice transcription、speaker attribution、retention and deletion、
+incident stopなどは、将来のadapter / Block候補を考えるための概念例です。すべてが
+現在の公開starter JSONとして出荷されているわけではありません。
+
 ## Public starterで動くauthority chain
 
 - [`work-order.json`](../../examples/company-starter/blocks/work-order.json): 実行権限を含まない作業候補

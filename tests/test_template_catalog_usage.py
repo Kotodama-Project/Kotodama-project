@@ -146,6 +146,55 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             with self.subTest(earlier=earlier, later=later):
                 self.assertLess(section.index(earlier), section.index(later))
 
+    def test_blocks_catalog_exposes_all_shipped_blocks_in_canonical_order(self) -> None:
+        blocks = (ROOT / "templates" / "blocks" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        block_map = blocks.index("## 公開starterの9 Blocksを目的で選ぶ")
+        section_end = blocks.index("## 現在のstarterと後続review", block_map)
+        section = blocks[block_map:section_end]
+
+        required = (
+            "Source Intake",
+            "Intent Candidate",
+            "Human Decision",
+            "Work Order",
+            "Capability Grant",
+            "Change Execution",
+            "Verification Receipt",
+            "Promotion Gate",
+            "Promotion Decision",
+            "canonical flow",
+            "candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        paths = (
+            "source-intake.json",
+            "intent-candidate.json",
+            "human-decision.json",
+            "work-order.json",
+            "capability-grant.json",
+            "change-execution.json",
+            "verification-receipt.json",
+            "promotion-gate.json",
+            "promotion-decision.json",
+        )
+        for path in paths:
+            marker = f"../../examples/company-starter/blocks/{path}"
+            with self.subTest(path=path):
+                self.assertIn(marker, section)
+                self.assertTrue((ROOT / "examples" / "company-starter" / "blocks" / path).exists())
+
+        for earlier, later in zip(paths, paths[1:]):
+            earlier_marker = f"../../examples/company-starter/blocks/{earlier}"
+            later_marker = f"../../examples/company-starter/blocks/{later}"
+            with self.subTest(earlier=earlier, later=later):
+                self.assertLess(section.index(earlier_marker), section.index(later_marker))
+
     def test_template_guide_separates_ideal_mocs_from_shipped_current_mocs(self) -> None:
         guide = (ROOT / "docs" / "TEMPLATE-GUIDE.md").read_text(encoding="utf-8")
         ideal_marker = "Conceptual ideal/future MOC candidates (not shipped starter files)"
