@@ -145,7 +145,8 @@ without changing the Company Pack surface or runtime claims. R62 remains the
 latest navigation synchronization in that historical wave; R74 is the latest
 parity synchronization for the resolved Compose candidate in that wave. R68
 added the README Voice rotation ideal/current contract while preserving the
-runtime boundary. R107 remains the current Company Pack surface label.
+runtime boundary. R107 is historical provenance for the Company Pack surface
+label; it is not a current-state claim.
 
 R82 is the latest runbook usability synchronization in that historical wave.
 R83 is the latest Validation Guide usability synchronization in that wave. R84

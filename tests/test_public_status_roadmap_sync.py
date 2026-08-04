@@ -6,6 +6,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicStatusRoadmapSyncTests(unittest.TestCase):
+    def test_roadmap_labels_r107_as_historical_not_current(self) -> None:
+        roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        roadmap_flat = " ".join(roadmap.split())
+
+        self.assertIn(
+            "R107 is historical provenance for the Company Pack surface label",
+            roadmap_flat,
+        )
+        self.assertNotIn(
+            "R107 remains the current Company Pack surface label",
+            roadmap_flat,
+        )
+
     def test_public_status_and_roadmap_bind_r141_current_surface(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
@@ -486,7 +499,10 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
             "[x] Starter ideal/current navigation and Installation Lifecycle profile guidance",
             roadmap_flat,
         )
-        self.assertIn("R107 remains the current Company Pack surface label", roadmap_flat)
+        self.assertIn(
+            "R107 is historical provenance for the Company Pack surface label",
+            roadmap_flat,
+        )
         self.assertNotIn("R56 synchronizes this roadmap with the current public", roadmap_flat)
         self.assertNotIn("R52 synchronizes this roadmap with the current public Company Pack surface", roadmap_flat)
         self.assertNotIn("R49 synchronizes this roadmap with the R48 public Company Pack surface", roadmap_flat)
