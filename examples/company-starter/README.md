@@ -37,6 +37,22 @@ install、deploy、restart、restore、Voice / Discord E2E、provider接続を�
 現在のlocal candidateを混同しないことが、このstarterを安全に使い始める最初の
 条件です。
 
+## Read next: ideal -> current -> smoke
+
+- **Ideal:** [Company Template](../../templates/company/README.md)で会社の境界を
+  確認し、[Blocks](../../templates/blocks/README.md)、[Governed Records](../../templates/records/README.md)、
+  [MOCs](../../templates/mocs/README.md)の責任と読み順を選ぶ。
+- **Current:** [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)で、この
+  starterに実際に同梱されたBlock・Record・MOCを一覧し、[Schema / Validator / Test Matrix](../../docs/SCHEMA-VALIDATOR-MATRIX.md)
+  で契約と回帰testの対応を確認する。
+- **Smoke:** [Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)の作業copy手順と
+  [Public Preview Self-check](../../docs/PUBLIC-PREVIEW-SELF-CHECK.md)を外部接続なしで
+  実行する。
+
+この入口は`read-only/candidate-only`です。Catalog、validator、smokeのPASSやMATCHは
+承認、runtime activation、Promotion、Current Truthを作らず、公開状態は常に
+`NO_GO_UNPUBLISHED`です。
+
 ## Included chain
 
 1. `source-intake.json`: 許可・保持条件付きの入力をSource Record候補へ正規化
