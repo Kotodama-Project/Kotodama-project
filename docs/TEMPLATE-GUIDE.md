@@ -30,6 +30,19 @@ flowchart TD
   M -. navigation .-> B3
 ```
 
+## 最初に読む順番: ideal → current → smoke
+
+このガイドは、理想のCompany OSと現在の公開candidateを同じ順番で読み分ける
+`ideal/current`の入口です。
+
+1. ideal: [Company Template](../templates/company/README.md) → [Blocks](../templates/blocks/README.md) → [Governed Records](../templates/records/README.md) → [MOCs](../templates/mocs/README.md) の層と責任を読む。
+2. current: [Company Pack Catalog](COMPANY-PACK-CATALOG.md) で、公開starterに実際に含まれるBlock、Record、MOCを一覧する。
+3. smoke: [Starter Walkthrough](STARTER-WALKTHROUGH.md) のRunbook smoke、または [test_public_starter_runbook_smoke.py](../tests/test_public_starter_runbook_smoke.py) で、外部接続なしの導入順を確認する。
+
+- guided pathは `CANDIDATE_FOR_GOVERNED_REVIEW` から保存済みbundleの `MATCH` まで進む。
+- plain pathは `CUSTOMIZATION_REQUIRED` のまま `BUNDLE_REFUSED` で停止し、拒否JSONを成功bundleとして保存しない。
+- どちらも `read-only/candidate-only`、`NO_GO_UNPUBLISHED`。Human approval、runtime、Promotion、Current Truth、Public Beta GOは作らない。
+
 ## 理想としての使い方
 
 ### 1. Company Templateを選ぶ
