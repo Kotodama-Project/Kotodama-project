@@ -25,10 +25,21 @@
 
 ## Current public documentation revision
 
-R122 is the latest public documentation revision and the current public
-Template/Company/Blocks/Records/MOCs/starter surface. R122 adds Blocks/Records
-navigation with ideal/current/smoke guidance and a stable Read next path at
-public `main` commit `677bd15bec0fdfd22410b237916d05be0d1ca02c` with tree
+R125 is the latest public documentation revision and the current public
+Template/Company/Blocks/Records/MOCs/starter surface. R125 adds Company
+Starter entry navigation with a stable ideal/current/smoke first-stop at
+public `main` commit `a5d052d425c9236a5cdb118a796b936ba74232aa` with tree
+`bca093039d31b3b0f7c595ec91d8224f7419bd7c`. The changed surface is
+[`examples/company-starter/README.md`](examples/company-starter/README.md),
+covered by [`test_company_starter_entry_navigation.py`](tests/test_company_starter_entry_navigation.py),
+and links the Company Template layers, Company Pack Catalog, Schema /
+Validator / Test Matrix, Starter Walkthrough, and Public Preview Self-check.
+R124 remains historical as the root Template Catalog entry-navigation
+revision at public `main` commit `26946de5655835dfdff75a6aef2b8f344d7b7e78`
+with tree `2778816782efb41029657a9788463fbe1569f681`; R123 remains historical
+as the STATUS/ROADMAP synchronization to R122. R122 remains historical as the
+Blocks/Records navigation revision at public `main` commit
+`677bd15bec0fdfd22410b237916d05be0d1ca02c` with tree
 `299a0248734daec3974b80ff174b4540995f4c47`. The guided path remains
 `CANDIDATE_FOR_GOVERNED_REVIEW` and `MATCH`; the plain path remains
 `CUSTOMIZATION_REQUIRED` and fail-closed as `BUNDLE_REFUSED`. R121 remains

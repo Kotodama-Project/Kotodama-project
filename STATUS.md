@@ -44,10 +44,22 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R122 is the current public Blocks/Records navigation revision and the latest
-Template/Company/Blocks/Records/MOCs/starter navigation surface at public
-`main` commit `677bd15bec0fdfd22410b237916d05be0d1ca02c`, tree
-`299a0248734daec3974b80ff174b4540995f4c47`. R122 adds ideal/current/smoke
+R125 is the current public Company Starter entry-navigation revision and the
+latest Template/Company/Blocks/Records/MOCs/starter navigation surface at
+public `main` commit `a5d052d425c9236a5cdb118a796b936ba74232aa`, tree
+`bca093039d31b3b0f7c595ec91d8224f7419bd7c`. R125 adds a stable
+ideal/current/smoke first-stop in
+[`examples/company-starter/README.md`](examples/company-starter/README.md),
+covered by [`test_company_starter_entry_navigation.py`](tests/test_company_starter_entry_navigation.py),
+linking the Company Template layers, Company Pack Catalog, Schema / Validator /
+Test Matrix, Starter Walkthrough, and Public Preview Self-check. R124 remains
+historical as the root Template Catalog entry-navigation revision at public
+`main` commit `26946de5655835dfdff75a6aef2b8f344d7b7e78`, tree
+`2778816782efb41029657a9788463fbe1569f681`; R123 remains historical as the
+STATUS/ROADMAP synchronization to R122. R122 remains historical as the
+Blocks/Records navigation revision at public `main` commit
+`677bd15bec0fdfd22410b237916d05be0d1ca02c`, tree
+`299a0248734daec3974b80ff174b4540995f4c47`. R122 added ideal/current/smoke
 guidance and a stable Read next path in
 [`templates/blocks/README.md`](templates/blocks/README.md) and
 [`templates/records/README.md`](templates/records/README.md), with the
