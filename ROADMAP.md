@@ -25,8 +25,23 @@
 
 ## Current public documentation revision
 
-R147 is the latest public documentation revision and the current public
-Template/Company/Blocks/Records/MOCs/starter surface. R147 adds the **full
+R149 is the latest public documentation revision and the current public
+Template/Company/Blocks/Records/MOCs/starter surface at public `main` commit
+`ea23f3a31ae68025bf23889beea878d3062adefa` with tree
+`0fa942044a2140b243b4a03c831c511b9938332b`. R149 adds the **review-chain
+artifact map**: the Starter Walkthrough documents Review Bundle, Review
+Request, Review Response, and Decision Handoff artifact states and next
+handoffs, and the Company Pack Catalog links directly to it. Both entry
+surfaces say the map is usable before or after the external-free smoke. The
+regressions are
+[`test_starter_walkthrough_runbook_docs.py`](tests/test_starter_walkthrough_runbook_docs.py)
+and [`test_company_pack_catalog_entry_navigation.py`](tests/test_company_pack_catalog_entry_navigation.py).
+R149 is documentation/static-regression evidence only; the published surface
+remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R148 remains
+historical as the first-read review-chain entry wording revision at public
+`main` commit `a0c050aa6c7c7f40302e3cd9afffad65a61a3ae5` with tree
+`01e5183e3a0c63369afdc437dfb360bf2d070455`. R147 remains historical as the
+full review-chain smoke revision. R147 adds the **full
 review-chain smoke**: Review Request, Review Response, and Decision Handoff are
 saved and freshly verified after the starter Bundle in one temporary,
 external-free pack. The executable path is

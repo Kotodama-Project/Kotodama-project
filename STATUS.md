@@ -44,10 +44,25 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R147 is the current public documentation revision and the latest
+R149 is the current public documentation revision and the latest
 Template/Company/Blocks/Records/MOCs/starter navigation surface at public
-`main` commit `1abcfd8f835f7d52627c194aacd8a62efb87875b`, tree
-`2c8579fa242357dcc28a6d73c95011e1446b6846`. R147 adds the **full
+`main` commit `ea23f3a31ae68025bf23889beea878d3062adefa`, tree
+`0fa942044a2140b243b4a03c831c511b9938332b`. R149 adds the **Review-chain
+artifact map**: the Starter Walkthrough explains the saved Review Bundle,
+Review Request, Review Response, and Review Decision Handoff artifacts, their
+candidate-only states, and their next handoff; the Company Pack Catalog links
+directly to the map. Both entry surfaces say it is usable before or after the
+external-free smoke. The regressions are
+[`test_starter_walkthrough_runbook_docs.py`](tests/test_starter_walkthrough_runbook_docs.py)
+and [`test_company_pack_catalog_entry_navigation.py`](tests/test_company_pack_catalog_entry_navigation.py).
+R149 is documentation/static-regression evidence only; the published surface
+remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R148 remains
+historical as the first-read review-chain entry wording revision at public
+`main` commit `a0c050aa6c7c7f40302e3cd9afffad65a61a3ae5`, tree
+`01e5183e3a0c63369afdc437dfb360bf2d070455`. R147 remains historical as the
+full review-chain smoke revision at public
+`main` commit `ef3fb24451b1600fadfeb8f6405051d0bb00a676`, tree
+`dd413a232c9765f84f75bf8c06fe4e3b3ebcbb49`. R147 adds the **full
 review-chain smoke** after the starter Bundle: Review Request, Review Response,
 and Review Decision Handoff are saved and freshly verified in one temporary,
 external-free pack. The executable regression is
