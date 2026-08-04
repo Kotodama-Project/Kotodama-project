@@ -83,3 +83,61 @@ class TemplateCatalogUsageTests(unittest.TestCase):
         ):
             with self.subTest(shipped_moc=shipped_moc):
                 self.assertIn(shipped_moc, current)
+
+    def test_onboarding_surfaces_expose_power_shell_and_posix_command_parity(self) -> None:
+        starter = (ROOT / "docs" / "STARTER-WALKTHROUGH.md").read_text(
+            encoding="utf-8"
+        )
+        example = (ROOT / "examples" / "company-starter" / "README.md").read_text(
+            encoding="utf-8"
+        )
+
+        starter_markers = (
+            "python tools\\check_company_pack_customization.py work\\my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python tools\\plan_company_pack_next_steps.py work\\my-company --format markdown",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            "python tools\\check_company_pack_public_preview.py work\\my-company --format markdown",
+            "python3 tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python tools\\catalog_company_pack.py work\\my-company --format markdown",
+            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+            "python tools\\build_company_pack_review_bundle.py work\\my-company",
+            "python3 tools/build_company_pack_review_bundle.py work/my-company",
+            "NO_GO_UNPUBLISHED",
+        )
+        example_markers = (
+            "python tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "python tools/validate_template_pack.py examples/company-starter",
+            "python3 tools/validate_template_pack.py examples/company-starter",
+            "python tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python tools/check_company_pack_customization.py work/my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            "python tools/build_company_pack_review_bundle.py work/my-company",
+            "python3 tools/build_company_pack_review_bundle.py work/my-company",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in starter_markers:
+            with self.subTest(surface="starter", marker=marker):
+                self.assertIn(marker, starter)
+        for marker in example_markers:
+            with self.subTest(surface="example", marker=marker):
+                self.assertIn(marker, example)
+
+        for earlier, later in (
+            (
+                "python3 tools/check_company_pack_customization.py work/my-company",
+                "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+            ),
+            (
+                "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+                "python3 tools/build_company_pack_review_bundle.py work/my-company",
+            ),
+        ):
+            with self.subTest(earlier=earlier, later=later):
+                self.assertLess(starter.index(earlier), starter.index(later))

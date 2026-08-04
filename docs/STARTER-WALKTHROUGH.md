@@ -54,6 +54,15 @@ python tools\check_company_pack_public_preview.py work\my-company
 python tools\check_company_pack_public_preview.py work\my-company --format markdown
 ```
 
+POSIX shellでは同じ候補Packの現在地・次の一手・公開preview境界を確認できます。
+
+```bash
+python3 tools/check_company_pack_customization.py work/my-company
+python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown
+python3 tools/check_company_pack_public_preview.py work/my-company
+python3 tools/check_company_pack_public_preview.py work/my-company --format markdown
+```
+
 作成直後は`CUSTOMIZATION_REQUIRED`で終了し、公開starterでは19件を返します。これは失敗ではなく、組織固有のHuman Intent locator 1件、Block expiry 9件、Record retention policy 9件がまだexampleであることを示します。別のPackではcheckerが返した実際の件数が基準です。
 
 guided initializerで公開starterを作成した場合は`READY_FOR_GOVERNED_REVIEW`、`0/46/5`から始まります。0は静的placeholderだけで、46のgoverned reviewと5の外部evidenceは残ります。これはstarterの例であり、review request以降のbuilder/verifierは保存済みreportの実際の件数へ追従します。
@@ -69,6 +78,10 @@ checkerの一件ずつのJSONが長い場合、guided plannerは同じ結果を�
 python tools\catalog_company_pack.py work\my-company --format markdown
 ~~~
 
+```bash
+python3 tools/catalog_company_pack.py work/my-company --format markdown
+```
+
 Catalogは現在地を短く投影するだけで、placeholder完了、Human approval、
 runtime、Promotion、Current Truth、Public Beta GOを作りません。契約とJSON
 出力の詳細は[Company Pack Catalog](COMPANY-PACK-CATALOG.md)を参照してください。
@@ -79,6 +92,10 @@ runtime、Promotion、Current Truth、Public Beta GOを作りません。契約�
 
 ```powershell
 python tools\build_company_pack_review_bundle.py work\my-company
+```
+
+```bash
+python3 tools/build_company_pack_review_bundle.py work/my-company
 ```
 
 出力はmanifest、9 Blocks、3 MOCs、9 Recordsのpath、SHA-256、byte sizeと、binding全体のdigestを持ちます。同じbytesなら同じbundleになり、1 byteでも変わればdigestが変わります。これはreview対象を固定するだけで、Human approval、authority、Promotion、Current Truth、runtime readiness、Public Beta GOを作りません。詳しくは[Company Pack Review Bundle](REVIEW-BUNDLE.md)を参照してください。
