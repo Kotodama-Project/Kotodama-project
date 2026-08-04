@@ -259,6 +259,40 @@ builder成功statusは`SEGMENT_TRANSITION_CANDIDATE_CREATED`です。同じ入�
 
 R22 verifier成功statusは`SIGNED_KEY_ROTATION_SEGMENT_TRANSITION`または`SIGNED_SAME_POLICY_SEGMENT_TRANSITION`です。prior path全署名、prior headへのsuccessor parent link、detached successor signature digest、store ID、append-only reservation、supplied store exact match、mode別signer policyとOpenSSH key-blob集合、distinct reviewer policy、最大900秒window、pinned `ssh-keygen` exact bytesを検証し、検証したtransition/successor signature digestをreportへ返します。成功してもcanonical anchor authority、trusted clock、complete history、parallel branch不存在、旧鍵失効、鍵侵害不存在、segmentation policy採用、actual store continuity、backup/restore、protected runner、人物分離、Promotion、Current Truth、Final Human GO、Public Beta GOは証明しません。詳細は[Checkpoint Segment Transition](ATTESTATION-NONCE-STORE-CHECKPOINT-SEGMENT-TRANSITION.md)を参照してください。
 
+## Customization and bundle stop semantics
+
+新しく作ったplain candidateは、構造validatorを通過していても、組織固有の
+placeholderが残る間は`CUSTOMIZATION_REQUIRED`です。これは終了code `1`を返す
+想定された編集停止点であり、validatorの故障や成功bundleではありません。現在の
+candidateを確認するには次を実行します。
+
+```powershell
+python tools\check_company_pack_customization.py work\my-company
+```
+
+```bash
+python3 tools/check_company_pack_customization.py work/my-company
+```
+
+reportの `replacement_required` を読み、`work/my-company` 側だけを編集します。
+`replacement_required: 0`になった候補は`READY_FOR_GOVERNED_REVIEW`へ進めますが、
+これはまだcandidate stateです。編集前にbundle builderを呼ぶと
+`BUNDLE_REFUSED`として停止し、拒否JSONを成功bundleとして保存しません。編集後に
+再実行してから、次のexact-byte candidate bundleを作成します。
+
+```powershell
+python tools\build_company_pack_review_bundle.py work\my-company
+```
+
+```bash
+python3 tools/build_company_pack_review_bundle.py work/my-company
+```
+
+Catalog、validator、checker、Review BundleのPASS/MATCHは、構造とbytesを確認する
+`read-only/candidate-only` evidenceです。Human approval、execution authority、
+runtime activation、Promotion、Current Truth、Voice / Discord E2E、Public Beta GOを
+作らず、公開状態は`NO_GO_UNPUBLISHED`のままです。
+
 ## What it validates
 
 - `manifest.json`と必須governance fields

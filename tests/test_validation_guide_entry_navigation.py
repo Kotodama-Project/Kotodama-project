@@ -77,6 +77,47 @@ class ValidationGuideEntryNavigationTests(unittest.TestCase):
             section.index("python3 -m unittest discover -s tests -v"),
         )
 
+    def test_validation_guide_exposes_customization_and_bundle_stop_semantics(self) -> None:
+        document = (ROOT / "docs" / "VALIDATION.md").read_text(encoding="utf-8")
+        start = document.index("## Customization and bundle stop semantics")
+        end = document.index("## What it validates", start)
+        section = document[start:end]
+        required = (
+            "CUSTOMIZATION_REQUIRED",
+            "BUNDLE_REFUSED",
+            "replacement_required: 0",
+            "READY_FOR_GOVERNED_REVIEW",
+            "work/my-company",
+            "python tools\\check_company_pack_customization.py work\\my-company",
+            "python tools\\build_company_pack_review_bundle.py work\\my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python3 tools/build_company_pack_review_bundle.py work/my-company",
+            "編集",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+            "Human approval",
+            "Promotion",
+            "Current Truth",
+            "Public Beta GO",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        for prefix, separator in (("python", "\\"), ("python3", "/")):
+            customization = section.index(
+                f"{prefix} tools{separator}check_company_pack_customization.py work{separator}my-company"
+            )
+            bundle = section.index(
+                f"{prefix} tools{separator}build_company_pack_review_bundle.py work{separator}my-company"
+            )
+            with self.subTest(prefix=prefix):
+                self.assertLess(customization, bundle)
+        self.assertLess(
+            section.index("replacement_required: 0"),
+            section.index("build_company_pack_review_bundle.py"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
