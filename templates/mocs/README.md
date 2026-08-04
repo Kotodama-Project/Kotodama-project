@@ -36,8 +36,20 @@ Discord/Voice接続、Human approval、Promotion、Current Truth、Public Beta G
 - **Smoke:** [Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)の
   外部接続なしRunbook smokeと
   [MOC entry regression](../../tests/test_mocs_entry_navigation.py)で、
-  この導線と境界を確認します。repository rootから
-  `python -m pytest tests/test_mocs_entry_navigation.py -q`を実行できます。
+  この導線と境界を確認します。repository rootから、追加依存なしで次を
+  実行できます。
+
+  PowerShell:
+
+  ```powershell
+  python -m unittest tests.test_mocs_entry_navigation -v
+  ```
+
+  POSIX shell:
+
+  ```bash
+  python3 -m unittest tests.test_mocs_entry_navigation -v
+  ```
 
 この入口は`navigation-only`、`read-only/candidate-only`、
 `NO_GO_UNPUBLISHED`です。Catalog、validator、smokeのPASSは、runtime起動、
