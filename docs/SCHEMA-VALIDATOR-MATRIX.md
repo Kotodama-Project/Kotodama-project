@@ -14,6 +14,22 @@ provider、Voice / Discord E2E、Promotion、Current Truth、Public Beta GOを�
 4. `PASS`した範囲をreceiptやreview bundleへ束ねる。PASSの範囲をruntimeや承認へ
    拡張しない。
 
+## Runbook smoke
+
+公開starterの導入順を、外部接続なしの一時directoryで実際に通す回帰スモークを
+[`test_public_starter_runbook_smoke.py`](../tests/test_public_starter_runbook_smoke.py)
+が実行します。guided optionを使う候補では、initializer → validator → Catalog →
+customization → Public Preview → Next Steps → Review Bundleの順に進み、保存した
+bundleをverifyして`MATCH`になることを確認します。これはexact bytesの候補固定であり、
+承認・Promotion・Current Truth・runtime readiness・Public Beta GOではありません。
+生成側の状態は`CANDIDATE_FOR_GOVERNED_REVIEW`であり、Human Decisionではありません。
+
+guided optionを指定しない通常の2引数initializerもスモーク対象です。この場合は
+customizationが`CUSTOMIZATION_REQUIRED`のままなので、Review Bundle builderは
+`BUNDLE_REFUSED`として停止します。拒否を成功bundleとして保存したりverifyしたりせず、
+静的値を決めた新規Packでguided pathを使ってください。どちらの結果も
+`NO_GO_UNPUBLISHED`を維持します。
+
 ## 1. Company Template
 
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
@@ -76,7 +92,11 @@ provider、Voice / Discord E2E、Promotion、Current Truth、Public Beta GOを�
 
 ```powershell
 New-Item -ItemType Directory -Force work | Out-Null
-python tools\create_company_pack.py my-company work\my-company
+$ExpiresAt = (Get-Date).ToUniversalTime().AddDays(1).ToString("o").Replace("+00:00", "Z")
+python tools\create_company_pack.py my-company work\my-company `
+  --human-intent-ref human-intent:governed-alpha-v1 `
+  --authority-expires-at $ExpiresAt `
+  --retention-policy-ref retention-policy:governed-v1
 python tools\validate_template_pack.py work\my-company
 python tools\catalog_company_pack.py work\my-company --format markdown
 python tools\check_company_pack_customization.py work\my-company
@@ -94,7 +114,11 @@ python tools\verify_company_pack_review_bundle.py $BundlePath work\my-company
 
 ```bash
 mkdir -p work
-python3 tools/create_company_pack.py my-company work/my-company
+expires_at="$(python3 -c 'from datetime import datetime, timedelta, timezone; print((datetime.now(timezone.utc) + timedelta(days=1)).isoformat().replace("+00:00", "Z"))')"
+python3 tools/create_company_pack.py my-company work/my-company \
+  --human-intent-ref human-intent:governed-alpha-v1 \
+  --authority-expires-at "$expires_at" \
+  --retention-policy-ref retention-policy:governed-v1
 python3 tools/validate_template_pack.py work/my-company
 python3 tools/catalog_company_pack.py work/my-company --format markdown
 python3 tools/check_company_pack_customization.py work/my-company
