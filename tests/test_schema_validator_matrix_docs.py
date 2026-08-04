@@ -8,6 +8,50 @@ MATRIX = ROOT / "docs" / "SCHEMA-VALIDATOR-MATRIX.md"
 
 
 class SchemaValidatorMatrixDocumentationTests(unittest.TestCase):
+    def test_matrix_exposes_ideal_current_smoke_first_stop(self) -> None:
+        matrix = MATRIX.read_text(encoding="utf-8")
+        start = matrix.index("## Read next: ideal -> current -> smoke")
+        end = matrix.index("## 使い方", start)
+        section = matrix[start:end]
+
+        for marker in (
+            "**Ideal:**",
+            "[Company Template](../templates/company/README.md)",
+            "[Blocks](../templates/blocks/README.md)",
+            "[Governed Records](../templates/records/README.md)",
+            "[MOCs](../templates/mocs/README.md)",
+            "**Current:**",
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
+            "**Smoke:**",
+            "[Validation Guide](VALIDATION.md)",
+            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+            "[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)",
+            "[Public starter smoke regression](../tests/test_public_starter_runbook_smoke.py)",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        self.assertLess(section.index("Ideal"), section.index("Current"))
+        self.assertLess(section.index("Current"), section.index("Smoke"))
+
+        for relative in (
+            "../templates/company/README.md",
+            "../templates/blocks/README.md",
+            "../templates/records/README.md",
+            "../templates/mocs/README.md",
+            "COMPANY-PACK-CATALOG.md",
+            "COMPANY-PACK-NEXT-STEPS.md",
+            "VALIDATION.md",
+            "STARTER-WALKTHROUGH.md",
+            "PUBLIC-PREVIEW-SELF-CHECK.md",
+            "../tests/test_public_starter_runbook_smoke.py",
+        ):
+            with self.subTest(relative=relative):
+                self.assertTrue((MATRIX.parent / relative).is_file())
+
     def test_matrix_exposes_ordered_contract_tool_test_runbook_path(self) -> None:
         self.assertTrue(MATRIX.is_file())
         matrix = MATRIX.read_text(encoding="utf-8")

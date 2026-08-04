@@ -6,6 +6,22 @@ schema単体のPASS、validatorのPASS、testのPASSは、Human approval、runti
 provider、Voice / Discord E2E、Promotion、Current Truth、Public Beta GOを作りません。
 公開面は常にread-only / candidate-only、`NO_GO_UNPUBLISHED`です。
 
+## Read next: ideal -> current -> smoke
+
+- **Ideal:** [Company Template](../templates/company/README.md)、[Blocks](../templates/blocks/README.md)、
+  [Governed Records](../templates/records/README.md)、[MOCs](../templates/mocs/README.md)の順に、
+  会社の境界、仕事の単位、証拠の保存先、目的別の読み順を確認します。
+- **Current:** [Company Pack Catalog](COMPANY-PACK-CATALOG.md)でschema対応の全体を一覧し、
+  [Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)で現在地と次の一手を選びます。
+- **Smoke:** [Validation Guide](VALIDATION.md)、[Starter Walkthrough](STARTER-WALKTHROUGH.md)、
+  [Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)、および
+  [Public starter smoke regression](../tests/test_public_starter_runbook_smoke.py)で、
+  外部接続なしのcandidate pathと回帰契約を確認します。
+
+このfirst-stopはread-only/candidate-onlyの案内です。schema、validator、test、runbookの
+PASSはruntime、provider、Voice / Discord E2E、Human approval、Promotion、Current Truth、
+Final Human GOを作らず、公開状態は`NO_GO_UNPUBLISHED`のままです。
+
 ## 使い方
 
 1. Company Templateから始め、下表を上から順に読む。
