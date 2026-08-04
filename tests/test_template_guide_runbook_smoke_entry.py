@@ -16,6 +16,7 @@ class TemplateGuideRunbookSmokeEntryTests(unittest.TestCase):
             "[Governed Records](../templates/records/README.md)",
             "[MOCs](../templates/mocs/README.md)",
             "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
             "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
             "[test_public_starter_runbook_smoke.py](../tests/test_public_starter_runbook_smoke.py)",
             "ideal/current",
@@ -39,10 +40,19 @@ class TemplateGuideRunbookSmokeEntryTests(unittest.TestCase):
             "../templates/records/README.md",
             "../templates/mocs/README.md",
             "COMPANY-PACK-CATALOG.md",
+            "COMPANY-PACK-NEXT-STEPS.md",
             "STARTER-WALKTHROUGH.md",
             "../tests/test_public_starter_runbook_smoke.py",
         ):
             self.assertTrue((GUIDE.parent / relative).is_file())
+
+        ordered_markers = (
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
+            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+        )
+        positions = [document.index(marker) for marker in ordered_markers]
+        self.assertEqual(positions, sorted(positions))
 
     def test_template_guide_smoke_entry_keeps_candidate_boundary_explicit(self) -> None:
         document = GUIDE.read_text(encoding="utf-8")

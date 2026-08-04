@@ -333,6 +333,33 @@ class PublicPreviewCheckTests(unittest.TestCase):
             with self.subTest(markdown_surface=path):
                 self.assertIn("--format markdown", path.read_text(encoding="utf-8"))
 
+    def test_template_guide_and_self_check_expose_guided_next_steps(self) -> None:
+        expected = {
+            ROOT / "docs" / "TEMPLATE-GUIDE.md": "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
+            ROOT / "docs" / "PUBLIC-PREVIEW-SELF-CHECK.md": "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
+        }
+        for path, marker in expected.items():
+            with self.subTest(path=path):
+                document = path.read_text(encoding="utf-8")
+                self.assertIn(marker, document)
+                self.assertIn("read-only/candidate-only", document)
+                self.assertIn("NO_GO_UNPUBLISHED", document)
+                self.assertTrue((path.parent / "COMPANY-PACK-NEXT-STEPS.md").is_file())
+
+        guide = (ROOT / "docs" / "TEMPLATE-GUIDE.md").read_text(encoding="utf-8")
+        self_check = (ROOT / "docs" / "PUBLIC-PREVIEW-SELF-CHECK.md").read_text(
+            encoding="utf-8"
+        )
+        ordered_markers = (
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
+            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+        )
+        for name, document in (("template guide", guide), ("self-check", self_check)):
+            with self.subTest(surface=name):
+                positions = [document.index(marker) for marker in ordered_markers]
+                self.assertEqual(positions, sorted(positions))
+
     def test_public_preview_self_check_has_posix_working_copy_and_markdown_parity(self) -> None:
         runbook = (ROOT / "docs" / "PUBLIC-PREVIEW-SELF-CHECK.md").read_text(
             encoding="utf-8"

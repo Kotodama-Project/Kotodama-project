@@ -16,7 +16,8 @@ read-only CLI です。個別に validator、Catalog、customization checker を
 [MOCs](../templates/mocs/README.md)の順に辿ります。
 
 現在の候補を試すときは、[Company Pack Catalog](COMPANY-PACK-CATALOG.md)で
-shipped starterの構造を一覧し、[Starter Walkthrough](STARTER-WALKTHROUGH.md)で
+shipped starterの構造を一覧し、[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)で
+現在stageと次の候補作業を確認してから、[Starter Walkthrough](STARTER-WALKTHROUGH.md)で
 initializer前の境界と作業copyの作り方を確認します。runtime profileを読む必要が
 ある場合だけ、最後に[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)を参照します。
 これらはread-only/candidate-onlyのnavigationであり、公開状態は常に

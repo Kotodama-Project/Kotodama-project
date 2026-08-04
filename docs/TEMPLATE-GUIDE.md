@@ -36,7 +36,7 @@ flowchart TD
 `ideal/current`の入口です。
 
 1. ideal: [Company Template](../templates/company/README.md) → [Blocks](../templates/blocks/README.md) → [Governed Records](../templates/records/README.md) → [MOCs](../templates/mocs/README.md) の層と責任を読む。
-2. current: [Company Pack Catalog](COMPANY-PACK-CATALOG.md) で、公開starterに実際に含まれるBlock、Record、MOCを一覧する。
+2. current: [Company Pack Catalog](COMPANY-PACK-CATALOG.md) で、公開starterに実際に含まれるBlock、Record、MOCを一覧し、[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md) で現在stageから次の候補作業へ進む。
 3. smoke: [Starter Walkthrough](STARTER-WALKTHROUGH.md) のRunbook smoke、または [test_public_starter_runbook_smoke.py](../tests/test_public_starter_runbook_smoke.py) で、外部接続なしの導入順を確認する。
 
 - guided pathは `CANDIDATE_FOR_GOVERNED_REVIEW` から保存済みbundleの `MATCH` まで進む。
