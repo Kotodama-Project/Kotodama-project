@@ -103,36 +103,49 @@ starterやREADMEが新しいSSOT、実行権限、Promotion、Current Truthを�
 read-only/candidate-onlyの公開previewを案内し、状態は常に
 `NO_GO_UNPUBLISHED`です。
 
-## Quick start
+## Quick start: immutable example -> generated candidate
 
-repository rootから、公開exampleをそのまま表示します。
+The shipped `examples/company-starter` directory is the **immutable published
+baseline**. Inspect that baseline separately, then create one non-overwriting
+`work/my-company` candidate and keep every follow-up check on that same
+generated path. JSON is useful for automation and Markdown is the human-first
+summary; both are deterministic read-only projections of the selected pack.
 
 ~~~powershell
 python tools/catalog_company_pack.py examples/company-starter
 python tools/catalog_company_pack.py examples/company-starter --format markdown
+python tools/check_company_pack_public_preview.py examples/company-starter --format markdown
+python tools/validate_template_pack.py examples/company-starter
+New-Item -ItemType Directory -Force work | Out-Null
+python tools/create_company_pack.py my-company work/my-company
+python tools/check_company_pack_customization.py work/my-company
+python tools/validate_template_pack.py work/my-company
+python tools/catalog_company_pack.py work/my-company --format markdown
+python tools/check_company_pack_public_preview.py work/my-company --format markdown
+python tools/plan_company_pack_next_steps.py work/my-company --format markdown
 ~~~
 
 ~~~bash
 python3 tools/catalog_company_pack.py examples/company-starter
 python3 tools/catalog_company_pack.py examples/company-starter --format markdown
-~~~
-
-JSONが自動処理向け、Markdownが人間の最初の確認向けです。両方とも同じ
-pack bytesから決定的に生成され、pack自身へ書き込みません。
-
-作業copyを作った後は、対象を指定します。
-
-~~~powershell
-python tools/create_company_pack.py my-company work/my-company
-python tools/catalog_company_pack.py work/my-company --format markdown
-python tools/validate_template_pack.py work/my-company
-~~~
-
-~~~bash
+python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown
+python3 tools/validate_template_pack.py examples/company-starter
+mkdir -p work
 python3 tools/create_company_pack.py my-company work/my-company
-python3 tools/catalog_company_pack.py work/my-company --format markdown
+python3 tools/check_company_pack_customization.py work/my-company
 python3 tools/validate_template_pack.py work/my-company
+python3 tools/catalog_company_pack.py work/my-company --format markdown
+python3 tools/check_company_pack_public_preview.py work/my-company --format markdown
+python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown
 ~~~
+
+この手順は、baselineの観測とgenerated candidateの検査を混ぜません。
+`check_company_pack_customization.py` が未編集placeholderを見つけて終了code
+1になる場合も、その同じ `work/my-company` を編集してから再実行します。
+Catalog、validator、customization checker、Public Preview、plannerのPASSは
+Human approval、capability grant、runtime activation、Promotion、Current
+Truth、Voice/Discord E2E、Final Human GOを作りません。公開状態は常に
+`read-only/candidate-only` の `NO_GO_UNPUBLISHED` です。
 
 先にvalidatorを通す必要はありません。Catalogは内部で同じ構造validatorを
 実行し、PASSでないpackを安全に空のINVALID_PACKとして返します。privateな
