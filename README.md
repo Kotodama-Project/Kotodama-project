@@ -747,6 +747,18 @@ read-only/candidate-only公開導線であり、validatorやrunbookがPASSして
   Schema: `schemas/company-pack-protected-execution-request-handoff-candidate.schema.json`
   Read-only preflight: `tools/validate_company_pack_protected_execution_request_handoff.py`
 
+## Full review-chain smoke
+
+The public starter runbook can now reproduce the complete candidate-only review
+chain in one temporary, external-free pack: `Review Bundle` -> `Review Request`
+-> `Review Response` -> `Decision Handoff` -> verification. Run
+[`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py)
+to execute the initializer, validator, Catalog, customization, preview, next
+steps, five-artifact save, and fresh verification path. This **full
+review-chain smoke** keeps `selected_outcome: null`, `decision: null`, false
+claims, and `NO_GO_UNPUBLISHED`; it creates no Human approval, runtime,
+Promotion, Current Truth, or Public Beta GO.
+
 ## Evidence and provenance
 
 この README は、Founder Intent、現行 governance model、公開 Company starter の current bytes、Project Status、Roadmap を、人間が最初に読める projection としてまとめています。README 自体は Human Decision、runtime receipt、canonical Promotion、Current Truth の代替ではありません。

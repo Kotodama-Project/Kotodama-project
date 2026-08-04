@@ -25,21 +25,23 @@
 
 ## Current public documentation revision
 
-R146 is the latest public documentation revision and the current public
-Template/Company/Blocks/Records/MOCs/starter surface. R146 binds the Schema /
-Validator / Test Matrix Review Request, Review Response, and Review Decision
-Handoff documentation and regression links to public `main` commit
+R147 is the latest public documentation revision and the current public
+Template/Company/Blocks/Records/MOCs/starter surface. R147 adds the **full
+review-chain smoke**: Review Request, Review Response, and Decision Handoff are
+saved and freshly verified after the starter Bundle in one temporary,
+external-free pack. The executable path is
+[`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py),
+and the public runbook links are synchronized across README, Starter Walkthrough,
+Schema / Validator / Test Matrix, and Company Pack Next Steps at public `main`
+commit `1abcfd8f835f7d52627c194aacd8a62efb87875b` with tree
+`2c8579fa242357dcc28a6d73c95011e1446b6846`. R147 is
+documentation/static-regression evidence only; the published surface remains
+read-only/candidate-only and `NO_GO_UNPUBLISHED`. R146 remains historical as
+the STATUS/ROADMAP synchronization to the R145 schema review-chain revision at
+public `main` commit `1abcfd8f835f7d52627c194aacd8a62efb87875b` with tree
+`2c8579fa242357dcc28a6d73c95011e1446b6846`; R145 remains historical as the
+schema matrix review-chain revision at public `main` commit
 `21a4a23586ebfd653a56d7c4b82a778d3791d6ed` with tree
-`7a151d62026f4381c4c2734bcbc841797ee9f554`. The changed surfaces are
-[`STATUS.md`](STATUS.md), [`ROADMAP.md`](ROADMAP.md), and
-[`tests/test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py),
-which keep the matrix links in
-[`docs/SCHEMA-VALIDATOR-MATRIX.md`](docs/SCHEMA-VALIDATOR-MATRIX.md) and
-[`test_schema_validator_matrix_docs.py`](tests/test_schema_validator_matrix_docs.py)
-discoverable. R146 is documentation/static-regression evidence only; the
-published surface remains read-only/candidate-only and `NO_GO_UNPUBLISHED`.
-R145 remains historical as the schema matrix review-chain revision at public
-`main` commit `21a4a23586ebfd653a56d7c4b82a778d3791d6ed` with tree
 `7a151d62026f4381c4c2734bcbc841797ee9f554`; R144 remains historical as the
 Company Pack direct review-chain navigation revision at public `main` commit
 `a0ab89f6b5f09deedb695dd478cce9ef421fef77` with tree

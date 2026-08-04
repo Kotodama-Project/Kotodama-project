@@ -23,6 +23,14 @@ Current Truth、Voice / Discord E2Eはこの手順から導出されません。
 
 ## 実行確認: Runbook smoke
 
+The same public smoke continues beyond the Review Bundle: it saves and verifies
+Review Request, Review Response, and Decision Handoff artifacts in the same
+temporary pack. The executable regression is
+[`test_public_starter_runbook_smoke.py`](../tests/test_public_starter_runbook_smoke.py).
+This **full review-chain smoke** is external-free and candidate-only; it keeps
+`NO_GO_UNPUBLISHED` and does not create Human approval, runtime authority,
+Promotion, Current Truth, or Public Beta GO.
+
 最初に導入順そのものを確認したい場合は、[Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md) の Runbook smoke と [test_public_starter_runbook_smoke.py](../tests/test_public_starter_runbook_smoke.py) を参照してください。外部接続なしの一時directoryで、initializer → validator → Catalog → customization → Public Preview → Next Steps → Review Bundle → verify を通せます。
 
 - guided path: 3つの静的値を指定した新規Packで `CANDIDATE_FOR_GOVERNED_REVIEW` と `MATCH` まで進む

@@ -32,6 +32,16 @@
 `NO_GO_UNPUBLISHED`を維持します。Human approval、runtime、Promotion、
 Current Truth、Public Beta GOは作りません。
 
+### Full review-chain smoke
+
+The public starter's **full review-chain smoke** is the executable next step
+after the planner: [`test_public_starter_runbook_smoke.py`](../tests/test_public_starter_runbook_smoke.py)
+reproduces Review Bundle -> Review Request -> Review Response -> Decision
+Handoff in one temporary pack and verifies every saved artifact. It is an
+external-free, read-only/candidate-only check that preserves
+`NO_GO_UNPUBLISHED`; it does not create Human approval, runtime authority,
+Promotion, Current Truth, or Public Beta GO.
+
 ## Run
 
 initializerで作った作業copyに対して実行します。

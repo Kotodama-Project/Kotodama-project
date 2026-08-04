@@ -44,18 +44,22 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R146 is the current public documentation revision and the latest
+R147 is the current public documentation revision and the latest
 Template/Company/Blocks/Records/MOCs/starter navigation surface at public
-`main` commit `21a4a23586ebfd653a56d7c4b82a778d3791d6ed`, tree
-`7a151d62026f4381c4c2734bcbc841797ee9f554`. R146 completes the public
-Schema / Validator / Test Matrix review chain for Review Request, Review
-Response, and Review Decision Handoff, including schema, CLI, regression test,
-runbook, and PowerShell/POSIX command links in
-[`docs/SCHEMA-VALIDATOR-MATRIX.md`](docs/SCHEMA-VALIDATOR-MATRIX.md), covered by
-[`test_schema_validator_matrix_docs.py`](tests/test_schema_validator_matrix_docs.py).
-R146 is documentation/static-regression evidence only; the published surface
-remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R145 remains
-historical as the schema matrix review-chain revision at public `main` commit
+`main` commit `1abcfd8f835f7d52627c194aacd8a62efb87875b`, tree
+`2c8579fa242357dcc28a6d73c95011e1446b6846`. R147 adds the **full
+review-chain smoke** after the starter Bundle: Review Request, Review Response,
+and Review Decision Handoff are saved and freshly verified in one temporary,
+external-free pack. The executable regression is
+[`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py),
+with the runbook links in README, Starter Walkthrough, Schema / Validator / Test
+Matrix, and Company Pack Next Steps. R147 is documentation/static-regression
+evidence only; the published surface remains read-only/candidate-only and
+`NO_GO_UNPUBLISHED`. R146 remains historical as the STATUS/ROADMAP
+synchronization to the R145 schema review-chain revision at public `main`
+commit `1abcfd8f835f7d52627c194aacd8a62efb87875b`, tree
+`2c8579fa242357dcc28a6d73c95011e1446b6846`; R145 remains historical as the
+schema matrix review-chain revision at public `main` commit
 `21a4a23586ebfd653a56d7c4b82a778d3791d6ed`, tree
 `7a151d62026f4381c4c2734bcbc841797ee9f554`. R144 remains historical as the
 Company Pack direct review-chain navigation revision at public `main` commit

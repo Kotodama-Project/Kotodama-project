@@ -30,6 +30,56 @@ class PublicStarterRunbookSmokeTests(unittest.TestCase):
         self.assertIsInstance(value, dict)
         return value
 
+    def test_public_docs_expose_full_review_chain_smoke(self) -> None:
+        surfaces = {
+            "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
+            "docs/STARTER-WALKTHROUGH.md": (
+                ROOT / "docs" / "STARTER-WALKTHROUGH.md"
+            ).read_text(encoding="utf-8"),
+            "docs/SCHEMA-VALIDATOR-MATRIX.md": MATRIX.read_text(encoding="utf-8"),
+            "docs/COMPANY-PACK-NEXT-STEPS.md": (
+                ROOT / "docs" / "COMPANY-PACK-NEXT-STEPS.md"
+            ).read_text(encoding="utf-8"),
+        }
+        expected = {
+            "README.md": (
+                "test_public_starter_runbook_smoke.py",
+                "Review Request",
+                "Review Response",
+                "Decision Handoff",
+                "NO_GO_UNPUBLISHED",
+            ),
+            "docs/STARTER-WALKTHROUGH.md": (
+                "test_public_starter_runbook_smoke.py",
+                "Review Request",
+                "Review Response",
+                "Decision Handoff",
+                "NO_GO_UNPUBLISHED",
+            ),
+            "docs/SCHEMA-VALIDATOR-MATRIX.md": (
+                "## Full review-chain smoke",
+                "test_public_starter_runbook_smoke.py",
+                "Review Request",
+                "Review Response",
+                "Review Decision Handoff",
+                "NO_GO_UNPUBLISHED",
+            ),
+            "docs/COMPANY-PACK-NEXT-STEPS.md": (
+                "full review-chain smoke",
+                "test_public_starter_runbook_smoke.py",
+                "Review Request",
+                "Review Response",
+                "Decision Handoff",
+                "NO_GO_UNPUBLISHED",
+            ),
+        }
+        for path, markers in expected.items():
+            with self.subTest(path=path):
+                flattened = " ".join(surfaces[path].split())
+                for marker in markers:
+                    with self.subTest(marker=marker):
+                        self.assertIn(marker, flattened)
+
     def test_matrix_links_the_executable_smoke_and_expected_bundle_boundaries(self) -> None:
         matrix = MATRIX.read_text(encoding="utf-8")
         for marker in (
@@ -147,6 +197,125 @@ class PublicStarterRunbookSmokeTests(unittest.TestCase):
             self.assertEqual(verified["mismatched_paths"], [])
             self.assertFalse(any(verified["claims"].values()))  # type: ignore[union-attr]
             self.assertEqual(verified["public_beta"], "NO_GO_UNPUBLISHED")
+
+            bundle_verification_path = parent / "guided-company-review-bundle-verification.json"
+            bundle_verification_path.write_text(
+                json.dumps(verified, ensure_ascii=False, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            request_path = parent / "guided-company-review-request.json"
+            request_result = self.run_tool(
+                "build_company_pack_review_request.py",
+                str(bundle_path),
+                str(target),
+            )
+            self.assertEqual(request_result.returncode, 0, request_result.stderr)
+            request = self.json_output(request_result)
+            request_path.write_bytes(request_result.stdout.encode("utf-8"))
+            self.assertEqual(request["status"], "CANDIDATE_REVIEW_REQUEST")
+            self.assertEqual(
+                request["review_request"]["state"], "PENDING_AUTHORIZED_REVIEW"
+            )
+            self.assertIsNone(request["review_request"]["selected_outcome"])
+            self.assertFalse(any(request["claims"].values()))
+            self.assertEqual(request["public_beta"], "NO_GO_UNPUBLISHED")
+
+            response_result = self.run_tool(
+                "build_company_pack_review_response.py", str(request_path)
+            )
+            self.assertEqual(response_result.returncode, 0, response_result.stderr)
+            response = self.json_output(response_result)
+            for item in response["review_response"]["items"]:
+                item["outcome"] = "accept"
+            response_path = parent / "guided-company-review-response.json"
+            response_path.write_text(
+                json.dumps(response, ensure_ascii=False, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(response["status"], "REVIEW_RESPONSE_CANDIDATE")
+            self.assertEqual(
+                response["review_response"]["item_count"],
+                len(response["review_response"]["items"]),
+            )
+            self.assertIsNone(response["review_response"]["selected_outcome"])
+            self.assertFalse(any(response["claims"].values()))
+            self.assertEqual(response["public_beta"], "NO_GO_UNPUBLISHED")
+
+            response_verification_result = self.run_tool(
+                "verify_company_pack_review_response.py",
+                str(request_path),
+                str(response_path),
+            )
+            self.assertEqual(
+                response_verification_result.returncode,
+                0,
+                response_verification_result.stderr,
+            )
+            response_verification = self.json_output(response_verification_result)
+            response_verification_path = (
+                parent / "guided-company-review-response-verification.json"
+            )
+            response_verification_path.write_bytes(
+                response_verification_result.stdout.encode("utf-8")
+            )
+            self.assertEqual(
+                response_verification["status"], "ITEM_RESPONSES_MATCH_REQUEST"
+            )
+            self.assertFalse(any(response_verification["claims"].values()))
+            self.assertEqual(
+                response_verification["public_beta"], "NO_GO_UNPUBLISHED"
+            )
+
+            handoff_result = self.run_tool(
+                "build_company_pack_review_decision_handoff.py",
+                str(bundle_path),
+                str(target),
+                str(bundle_verification_path),
+                str(request_path),
+                str(response_path),
+                str(response_verification_path),
+            )
+            self.assertEqual(handoff_result.returncode, 0, handoff_result.stderr)
+            handoff = self.json_output(handoff_result)
+            handoff_path = parent / "guided-company-review-decision-handoff.json"
+            handoff_path.write_bytes(handoff_result.stdout.encode("utf-8"))
+            self.assertEqual(handoff["status"], "CANDIDATE_DECISION_HANDOFF")
+            self.assertEqual(
+                handoff["review_summary"]["completed_items"],
+                request["review_request"]["item_count"],
+            )
+            self.assertEqual(
+                handoff["decision_requirements"]["state"], "HUMAN_DECISION_REQUIRED"
+            )
+            self.assertIsNone(handoff["decision_requirements"]["decision"])
+            self.assertIsNone(handoff["decision_requirements"]["selected_outcome"])
+            self.assertFalse(any(handoff["claims"].values()))
+            self.assertEqual(handoff["public_beta"], "NO_GO_UNPUBLISHED")
+
+            handoff_verification_result = self.run_tool(
+                "verify_company_pack_review_decision_handoff.py",
+                str(bundle_path),
+                str(target),
+                str(bundle_verification_path),
+                str(request_path),
+                str(response_path),
+                str(response_verification_path),
+                str(handoff_path),
+            )
+            self.assertEqual(
+                handoff_verification_result.returncode,
+                0,
+                handoff_verification_result.stderr,
+            )
+            handoff_verification = self.json_output(handoff_verification_result)
+            self.assertEqual(
+                handoff_verification["status"], "DECISION_HANDOFF_MATCH"
+            )
+            self.assertFalse(any(handoff_verification["claims"].values()))
+            self.assertEqual(
+                handoff_verification["public_beta"], "NO_GO_UNPUBLISHED"
+            )
 
     def test_plain_starter_path_refuses_bundle_until_static_customization_is_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

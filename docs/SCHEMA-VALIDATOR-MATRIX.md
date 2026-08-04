@@ -255,6 +255,27 @@ bytesの順に候補を狭めます。保存したreportやbundleは、candidate
 渡すための入力であり、公開、deploy、restart、provider transfer、Voice / Discord
 E2E、Promotion、Current Truth、Public Beta GOを意味しません。
 
+## Full review-chain smoke
+
+After the starter bundle reaches `MATCH`, the public executable smoke continues
+through the complete candidate-only chain: Review Request -> Review Response ->
+Review Decision Handoff. Run the focused regression below from the repository
+root; it uses a temporary guided pack, saves every artifact, and re-verifies the
+chain from fresh bytes.
+
+```powershell
+python -m unittest tests.test_public_starter_runbook_smoke.PublicStarterRunbookSmokeTests.test_guided_starter_chain_reaches_bundle_match_in_a_temporary_pack -v
+```
+
+```bash
+python3 -m unittest tests.test_public_starter_runbook_smoke.PublicStarterRunbookSmokeTests.test_guided_starter_chain_reaches_bundle_match_in_a_temporary_pack -v
+```
+
+The smoke asserts pending request state, structural item response matching, and
+`decision: null` / `selected_outcome: null` in the handoff. All claims remain
+false and `NO_GO_UNPUBLISHED` remains in force; this does not create reviewer
+identity, Human approval, runtime, Promotion, Current Truth, or Public Beta GO.
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
