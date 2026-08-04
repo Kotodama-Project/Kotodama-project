@@ -92,6 +92,12 @@ python tools/check_company_pack_public_preview.py examples/company-starter
 python tools/check_company_pack_public_preview.py examples/company-starter --format markdown
 ~~~
 
+~~~bash
+python3 tools/catalog_company_pack.py examples/company-starter --format markdown
+python3 tools/check_company_pack_public_preview.py examples/company-starter
+python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown
+~~~
+
 CatalogとSelf-checkはread-onlyのnavigation / preview projectionです。出力のPASSは構造を読めた
 ことだけを示し、Human approval、Capability Grant、runtime、Promotion、
 Current Truth、Public Beta GOを作りません。JSON Schemaに対して機械処理する

@@ -54,6 +54,12 @@ python tools/catalog_company_pack.py work/my-company --format markdown
 python tools/validate_template_pack.py work/my-company
 ~~~
 
+~~~bash
+python3 tools/create_company_pack.py my-company work/my-company
+python3 tools/catalog_company_pack.py work/my-company --format markdown
+python3 tools/validate_template_pack.py work/my-company
+~~~
+
 先にvalidatorを通す必要はありません。Catalogは内部で同じ構造validatorを
 実行し、PASSでないpackを安全に空のINVALID_PACKとして返します。privateな
 manifest id、locator、エラー本文は無効出力へ再掲しません。

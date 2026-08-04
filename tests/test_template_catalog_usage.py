@@ -84,6 +84,50 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             with self.subTest(shipped_moc=shipped_moc):
                 self.assertIn(shipped_moc, current)
 
+    def test_template_guide_and_catalog_expose_work_copy_posix_parity(self) -> None:
+        guide = (ROOT / "docs" / "TEMPLATE-GUIDE.md").read_text(encoding="utf-8")
+        catalog = (ROOT / "docs" / "COMPANY-PACK-CATALOG.md").read_text(
+            encoding="utf-8"
+        )
+
+        guide_markers = (
+            "python tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python tools/check_company_pack_public_preview.py examples/company-starter",
+            "python3 tools/check_company_pack_public_preview.py examples/company-starter",
+        )
+        catalog_markers = (
+            "python tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python tools/catalog_company_pack.py work/my-company --format markdown",
+            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+            "python tools/validate_template_pack.py work/my-company",
+            "python3 tools/validate_template_pack.py work/my-company",
+        )
+        for marker in guide_markers:
+            with self.subTest(surface="guide", marker=marker):
+                self.assertIn(marker, guide)
+        for marker in catalog_markers:
+            with self.subTest(surface="catalog", marker=marker):
+                self.assertIn(marker, catalog)
+
+        for surface, text, earlier, later in (
+            (
+                "guide",
+                guide,
+                "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+                "python3 tools/check_company_pack_public_preview.py examples/company-starter",
+            ),
+            (
+                "catalog",
+                catalog,
+                "python3 tools/create_company_pack.py my-company work/my-company",
+                "python3 tools/validate_template_pack.py work/my-company",
+            ),
+        ):
+            with self.subTest(surface=surface, order=(earlier, later)):
+                self.assertLess(text.index(earlier), text.index(later))
+
     def test_onboarding_surfaces_expose_power_shell_and_posix_command_parity(self) -> None:
         starter = (ROOT / "docs" / "STARTER-WALKTHROUGH.md").read_text(
             encoding="utf-8"
