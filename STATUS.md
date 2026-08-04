@@ -44,18 +44,33 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R133 is the current public README Document Map layer-wording revision and the
-latest Template/Company/Blocks/Records/MOCs/starter navigation surface at
-public `main` commit `15a94c9f041c04994ab1ae00630ae0ea58387276`, tree
-`538badff2d305e7b567b312e1ae918579050b44c`. R133 clarifies that Status and
+R141 is the current public documentation revision and the latest
+Template/Company/Blocks/Records/MOCs/starter navigation surface at public
+`main` commit `ebcdd003d062c6bc90b5ea546da3d430911bda74`, tree
+`ec765b5f824a92d2efdc065b4a225d7779a6e9d2`. R141 connects the Company Pack
+Guided Next Steps and Installation Lifecycle entry surfaces in
+[`docs/COMPANY-PACK-NEXT-STEPS.md`](docs/COMPANY-PACK-NEXT-STEPS.md) and
+[`docs/INSTALLATION-LIFECYCLE.md`](docs/INSTALLATION-LIFECYCLE.md), covered by
+[`test_company_pack_next_steps_entry_navigation.py`](tests/test_company_pack_next_steps_entry_navigation.py)
+and [`test_installation_lifecycle_docs.py`](tests/test_installation_lifecycle_docs.py).
+R141 is documentation/static-regression evidence only; the published surface
+remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R140 remains
+historical as the Installation Lifecycle guided-next-steps revision at public
+`main` commit `2ad60c6eb24a33e125f658ff0be52a3d53b27fa3`, tree
+`55fc6ab347409ffb4444390c67b25fe9b548997f`. R139 remains historical as the
+Company Pack guided path revision at public `main` commit
+`f1bc6e79159fb175bbd8f575a9e09e8cb724245c`, tree
+`3fdd381b3902e6f57c271f8d5fa7a3932ad4adb0`. R133 remains historical as the
+README Document Map layer-wording revision at public `main` commit
+`15a94c9f041c04994ab1ae00630ae0ea58387276`, tree
+`538badff2d305e7b567b312e1ae918579050b44c`. R133 clarified that Status and
 Roadmap are orientation, followed by five ideal Company Template layers, while
-Catalog onward remains current read-only/candidate-only. The changed surface is
+Catalog onward remains current read-only/candidate-only. The changed surface was
 [`README.md`](README.md), covered by
 [`test_readme_company_template_usage.py`](tests/test_readme_company_template_usage.py).
-R133 is documentation/static-regression evidence only; the published surface
-remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R132 remains
-historical as the README Guided Next Steps entry-navigation revision at public
-`main` commit `9f1b3ee5556740abab803f49164bad02bdeda3ae`, tree
+R132 remains historical as the
+README Guided Next Steps entry-navigation revision at public `main` commit
+`9f1b3ee5556740abab803f49164bad02bdeda3ae`, tree
 `7f9d2ed059cd48e7240d9904e41221e219c47276`; R131 remains historical as the
 STATUS/ROADMAP synchronization to R130 at public `main` commit
 `0e772cdd4a4a95ad97fee3f60555fb52ebad3f8b`, tree
