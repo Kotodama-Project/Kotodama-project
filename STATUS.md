@@ -44,9 +44,23 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R128 is the current public Company Pack Catalog entry-navigation revision and
-the latest Template/Company/Blocks/Records/MOCs/starter navigation surface at
-public `main` commit `752fa4b46246110757f01294b559c39412a0b4be`, tree
+R130 is the current public Company Pack Next Steps entry-navigation revision
+and the latest Template/Company/Blocks/Records/MOCs/starter navigation surface
+at public `main` commit `1667007004f92ac65e0124355fda9b71d81d7e6b`, tree
+`aebd38c2012b745333e66348232dc88804181b65`. R130 adds a stable
+ideal/current/smoke first-stop in
+[`docs/COMPANY-PACK-NEXT-STEPS.md`](docs/COMPANY-PACK-NEXT-STEPS.md), covered by
+[`test_company_pack_next_steps_entry_navigation.py`](tests/test_company_pack_next_steps_entry_navigation.py),
+linking the ideal Company Template, Blocks, Governed Records, and MOCs layers
+to the current Company Pack Catalog / Starter Walkthrough and the planner
+schema/regression smoke path. R130 is documentation/static-regression evidence
+only; the published surface remains read-only/candidate-only and
+`NO_GO_UNPUBLISHED`. R129 remains historical as the STATUS/ROADMAP provenance
+synchronization to R128 at public `main` commit
+`4d29fca3f8005c9758b78889adab04b2f9614512`, tree
+`a178210e7356108a020edd7b9784e24735250105`. R128 remains historical as the
+Company Pack Catalog entry-navigation revision at public `main` commit
+`752fa4b46246110757f01294b559c39412a0b4be`, tree
 `60ee3062bcd472562e01f03708cb1fd58c32f7f7`. R128 adds a stable
 ideal/current/smoke first-stop in
 [`docs/COMPANY-PACK-CATALOG.md`](docs/COMPANY-PACK-CATALOG.md), covered by
