@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from check_company_pack_customization import check_customization
+from validate_template_pack import PUBLIC_PREVIEW_BOUNDARY
 
 
 ItemMatcher = Callable[[dict[str, str]], bool]
@@ -293,7 +294,8 @@ class SafeArgumentParser(argparse.ArgumentParser):
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = SafeArgumentParser(
-        description="Summarize Company Pack current state, ideal flow, and next action."
+        description="Summarize Company Pack current state, ideal flow, and next action.",
+        epilog=PUBLIC_PREVIEW_BOUNDARY,
     )
     parser.add_argument("pack_directory", type=Path)
     parser.add_argument(

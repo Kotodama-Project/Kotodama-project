@@ -608,8 +608,10 @@ Quick Startのコマンドを編集する前に、[Starter Walkthrough](docs/STA
 
 ### 先にCLIの境界を確認する
 
-最初の3つの検査CLIは、`-h`または`--help`で使い方を確認できます。helpは
-Packを読み書きしません。`read-only/candidate-only`であり、Public Betaは
+公開している13個のCompany Pack CLIは、`-h`または`--help`で使い方と共通境界を
+確認できます。helpはPackを読み書きしません。全コマンドの入力、結果状態、次の
+handoffは [Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) に
+まとめています。`read-only/candidate-only`であり、Public Betaは
 `NO_GO_UNPUBLISHED`のままです。
 
 ```powershell
@@ -840,6 +842,7 @@ MOCs）が理想のCompany Template層を読む順番です。
 - [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) — current read-only/candidate-onlyの最短体験
 - [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) — validator / Catalog / customization境界の一括read-only確認
 - [Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md) — current stage、理想flow、分類別件数、次コマンドを案内する
+- [Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) — 公開13 CLIの入力、状態、次handoff、共通helpを一覧する
 - [Review-chain artifact map](docs/STARTER-WALKTHROUGH.md#review-chain-artifact-map) — Review Bundle、Review Request、Review Response、Decision Handoffのartifact states and next handoffs
 - [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md) — runtime profileを選ぶ前のread-only導線
 

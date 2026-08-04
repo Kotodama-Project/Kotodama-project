@@ -14,7 +14,7 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from validate_template_pack import validate_pack
+from validate_template_pack import PUBLIC_PREVIEW_BOUNDARY, validate_pack
 
 
 CLAIMS = {
@@ -281,7 +281,8 @@ def write_stdout_utf8(value: str) -> None:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = SafeArgumentParser(
-        description="Print a deterministic read-only Company Pack catalog."
+        description="Print a deterministic read-only Company Pack catalog.",
+        epilog=PUBLIC_PREVIEW_BOUNDARY,
     )
     parser.add_argument("pack_directory", type=Path)
     parser.add_argument("--format", choices=("json", "markdown"), default="json")

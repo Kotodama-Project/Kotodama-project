@@ -17,7 +17,12 @@ from pathlib import Path
 from typing import Any
 
 from check_company_pack_customization import REFERENCE_PLACEHOLDER, check_customization
-from validate_template_pack import ID_PATTERN, SECRET_VALUE_PATTERNS, validate_pack
+from validate_template_pack import (
+    ID_PATTERN,
+    PUBLIC_PREVIEW_BOUNDARY,
+    SECRET_VALUE_PATTERNS,
+    validate_pack,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -260,6 +265,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = SafeArgumentParser(
         prog="create_company_pack.py",
         description="Create a validated working copy of the Company starter.",
+        epilog=PUBLIC_PREVIEW_BOUNDARY,
     )
     parser.add_argument("pack_id", metavar="PACK_ID")
     parser.add_argument("target", metavar="TARGET_DIRECTORY", type=Path)
