@@ -1,6 +1,6 @@
 # Template Pack Validation
 
-`tools/validate_template_pack.py`はPython標準ライブラリだけで動く、fail-closedな最小validatorです。
+`tools/validate_template_pack.py`はPython標準ライブラリだけで動く、fail-closedな最小validatorです。公開starterのschema・CLI・test・runbookの対応は[Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)にまとめています。
 
 ## 理想と現在の公開candidate
 

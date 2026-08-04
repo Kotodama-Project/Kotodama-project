@@ -123,7 +123,7 @@ Source Evidence
 
 ### 5. 検証できる状態で配布する
 
-完成したテンプレートは、READMEだけではなく、schema、validator、test、runbook、サンプル、rollback手順を一緒に配布します。秘密情報は値ではなく参照名やplaceholderに置き換えます。
+完成したテンプレートは、READMEだけではなく、schema、validator、test、runbook、サンプル、rollback手順を一緒に配布します。秘密情報は値ではなく参照名やplaceholderに置き換えます。公開starterの対応表は[Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)で確認できます。
 
 ## Voiceから仕事になるまでの例
 

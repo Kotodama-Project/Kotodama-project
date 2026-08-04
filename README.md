@@ -707,7 +707,7 @@ read-only/candidate-only公開導線であり、validatorやrunbookがPASSして
 - [Review Bundle](docs/REVIEW-BUNDLE.md)
 - [Review Workflow](docs/REVIEW-WORKFLOW.md)
 - [Review Evidence to Decision Handoff](docs/REVIEW-DECISION-HANDOFF.md)
-- [Validation Guide](docs/VALIDATION.md)
+- [Validation Guide](docs/VALIDATION.md) — schema / validator / testの対応は[Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md)
 - [Decision Record Candidate Contract](docs/DECISION-RECORD-CANDIDATE.md)
 - [Intent Candidate Instance Contract](docs/INTENT-CANDIDATE-INSTANCE.md)
 - [Source Record Instance Contract](docs/SOURCE-RECORD-INSTANCE.md)

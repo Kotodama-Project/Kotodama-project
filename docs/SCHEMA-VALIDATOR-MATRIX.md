@@ -1,0 +1,122 @@
+# Schema / Validator / Test Matrix
+
+このページは、公開Company starterを読む人が「どのschemaを、どのCLIで、どの
+testとrunbookで確認するか」を一つの順序で辿るためのnavigation projectionです。
+schema単体のPASS、validatorのPASS、testのPASSは、Human approval、runtime、
+provider、Voice / Discord E2E、Promotion、Current Truth、Public Beta GOを作りません。
+公開面は常にread-only / candidate-only、`NO_GO_UNPUBLISHED`です。
+
+## 使い方
+
+1. Company Templateから始め、下表を上から順に読む。
+2. schemaはportableな形、CLIはcross-fileと公開安全境界、testは回帰例を確認する。
+3. runbookのPowerShellまたはPOSIXコマンドを、自分の作業copyへ適用する。
+4. `PASS`した範囲をreceiptやreview bundleへ束ねる。PASSの範囲をruntimeや承認へ
+   拡張しない。
+
+## 1. Company Template
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-manifest.schema.json](../schemas/company-manifest.schema.json) | [`validate_template_pack.py`](../tools/validate_template_pack.py) | [`test_validate_template_pack.py`](../tests/test_validate_template_pack.py) | [Company Template](../templates/company/README.md)。manifestの形、参照、境界を検査する。runtimeやowner authorityは検証しない。 |
+
+## 2. Blocks
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [block.schema.json](../schemas/block.schema.json) | [`validate_template_pack.py`](../tools/validate_template_pack.py) | [`test_validate_template_pack.py`](../tests/test_validate_template_pack.py) | [Blocks](../templates/blocks/README.md)。入力・出力・authority・denial・verificationの候補構造を検査する。実行権限は付与しない。 |
+
+## 3. Governed Records
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [record.schema.json](../schemas/record.schema.json) | [`validate_template_pack.py`](../tools/validate_template_pack.py) | [`test_validate_template_pack.py`](../tests/test_validate_template_pack.py) | [Governed Records](../templates/records/README.md)。必須field、role分離、retention参照、denied claimsを候補として検査する。実データの真正性や保持実施は証明しない。 |
+
+## 4. MOCs
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [moc.schema.json](../schemas/moc.schema.json) | [`validate_template_pack.py`](../tools/validate_template_pack.py) | [`test_validate_template_pack.py`](../tests/test_validate_template_pack.py) | [MOC index](../templates/mocs/README.md)。`navigation_only`、未知ID拒否、primary全順序、secondary ordered subsequenceを検査する。MOCはSSOTや実行権限にならない。 |
+
+## 5. Company Pack Catalog
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-catalog.schema.json](../schemas/company-pack-catalog.schema.json) | [`catalog_company_pack.py`](../tools/catalog_company_pack.py) | [`test_catalog_company_pack.py`](../tests/test_catalog_company_pack.py) | [Company Pack Catalog](COMPANY-PACK-CATALOG.md)。PackのBlock / Record / MOC対応をread-onlyで一覧する。`INVALID_PACK`は安全な空出力を返すが、承認やCurrent Truthは作らない。 |
+
+## 6. Customization
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [customization-report.schema.json](../schemas/customization-report.schema.json) | [`check_company_pack_customization.py`](../tools/check_company_pack_customization.py) | [`test_check_company_pack_customization.py`](../tests/test_check_company_pack_customization.py) | [Customization Checklist](CUSTOMIZATION-CHECKLIST.md)。placeholder、governed review、external evidenceを分離して列挙する。`READY_FOR_GOVERNED_REVIEW`は承認ではない。 |
+
+## 7. Public Preview Self-check
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-public-preview-check.schema.json](../schemas/company-pack-public-preview-check.schema.json) | [`check_company_pack_public_preview.py`](../tools/check_company_pack_public_preview.py) | [`test_company_pack_public_preview_check.py`](../tests/test_company_pack_public_preview_check.py) | [Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)。validator、Catalog、customization、false-claim境界を一つのread-only reportへ集約する。Public Beta GOは常にfalse。 |
+
+## 8. Company Pack Next Steps
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-next-steps.schema.json](../schemas/company-pack-next-steps.schema.json) | [`plan_company_pack_next_steps.py`](../tools/plan_company_pack_next_steps.py) | [`test_plan_company_pack_next_steps.py`](../tests/test_plan_company_pack_next_steps.py) | [Company Pack Next Steps](COMPANY-PACK-NEXT-STEPS.md)。現在地、理想flow、分類別件数、次コマンドをread-onlyで案内する。file変更、review、authority、GOは作らない。 |
+
+## 9. Review Bundle
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-review-bundle.schema.json](../schemas/company-pack-review-bundle.schema.json) | [`build_company_pack_review_bundle.py`](../tools/build_company_pack_review_bundle.py) → [`verify_company_pack_review_bundle.py`](../tools/verify_company_pack_review_bundle.py) | [`test_build_company_pack_review_bundle.py`](../tests/test_build_company_pack_review_bundle.py)、[`test_verify_company_pack_review_bundle.py`](../tests/test_verify_company_pack_review_bundle.py) | [Review Bundle](REVIEW-BUNDLE.md)。manifest / Block / MOC / Recordのexact bytes、SHA-256、sizeを候補へ束縛する。MATCHはreviewer identity、Human Decision、Promotion、Current Truth、Final Human GOではない。 |
+
+## Public starterの同じ実行順
+
+既存exampleを変更せず、必ず新しい作業copyで実行します。
+
+### PowerShell
+
+```powershell
+New-Item -ItemType Directory -Force work | Out-Null
+python tools\create_company_pack.py my-company work\my-company
+python tools\validate_template_pack.py work\my-company
+python tools\catalog_company_pack.py work\my-company --format markdown
+python tools\check_company_pack_customization.py work\my-company
+python tools\check_company_pack_public_preview.py work\my-company --format markdown
+python tools\plan_company_pack_next_steps.py work\my-company --format markdown
+$BundlePath = 'work\my-company-review-bundle.json'
+if (Test-Path -LiteralPath $BundlePath) { throw 'bundle target already exists' }
+$BundleJson = python tools\build_company_pack_review_bundle.py work\my-company
+if ($LASTEXITCODE -ne 0) { throw 'bundle was refused' }
+[IO.File]::WriteAllText($BundlePath, ($BundleJson -join [Environment]::NewLine) + [Environment]::NewLine, (New-Object System.Text.UTF8Encoding($false)))
+python tools\verify_company_pack_review_bundle.py $BundlePath work\my-company
+```
+
+### POSIX
+
+```bash
+mkdir -p work
+python3 tools/create_company_pack.py my-company work/my-company
+python3 tools/validate_template_pack.py work/my-company
+python3 tools/catalog_company_pack.py work/my-company --format markdown
+python3 tools/check_company_pack_customization.py work/my-company
+python3 tools/check_company_pack_public_preview.py work/my-company --format markdown
+python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown
+bundle_path='work/my-company-review-bundle.json'
+if [ -e "$bundle_path" ]; then
+  printf '%s\n' 'bundle target already exists' >&2
+  exit 1
+fi
+python3 tools/build_company_pack_review_bundle.py work/my-company > "$bundle_path"
+python3 tools/verify_company_pack_review_bundle.py "$bundle_path" work/my-company
+```
+
+この順序は、構造 → 一覧 → customization → preview boundary → 次の一手 → exact
+bytesの順に候補を狭めます。保存したreportやbundleは、candidate-bound reviewへ
+渡すための入力であり、公開、deploy、restart、provider transfer、Voice / Discord
+E2E、Promotion、Current Truth、Public Beta GOを意味しません。
+
+## Related guidance
+
+- [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
+- [Validation Guide](VALIDATION.md) — fail-closed validatorとnegative tests
+- [Starter Walkthrough](STARTER-WALKTHROUGH.md) — 初回作業copyの歩き方
+- [Installation Lifecycle](INSTALLATION-LIFECYCLE.md) — runtime profileを読む場合の別境界
