@@ -52,6 +52,12 @@ Discord E2E、Promotion、Current Truth、Final Human GOを実行しません。
 
 ## Runbook smoke
 
+For the meaning of each saved review artifact and its next handoff, use the
+[Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)
+before running the smoke. It is a read-only/candidate-only map of Bundle,
+Request, Response, and Decision Handoff states; it does not create approval,
+Promotion, Current Truth, or Public Beta GO.
+
 Catalogから導入順そのものを確認したい場合は、外部接続なしの一時
 directoryで実行する [Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)
 のRunbook smokeと、対応する

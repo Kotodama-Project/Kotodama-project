@@ -47,3 +47,32 @@ class StarterWalkthroughRunbookDocumentationTests(unittest.TestCase):
         self.assertIn("Current Truth", section)
         self.assertIn("Public Beta", section)
         self.assertNotIn("Public Beta GO: true", section)
+
+    def test_walkthrough_exposes_review_chain_artifact_map(self) -> None:
+        document = WALKTHROUGH.read_text(encoding="utf-8")
+        required = (
+            "## Review-chain artifact map",
+            "Review Bundle",
+            "Review Request",
+            "Review Response",
+            "Review Decision Handoff",
+            "build_company_pack_review_bundle.py",
+            "verify_company_pack_review_bundle.py",
+            "build_company_pack_review_request.py",
+            "build_company_pack_review_response.py",
+            "verify_company_pack_review_response.py",
+            "build_company_pack_review_decision_handoff.py",
+            "verify_company_pack_review_decision_handoff.py",
+            "MATCH",
+            "PENDING_AUTHORIZED_REVIEW",
+            "ITEM_RESPONSES_MATCH_REQUEST",
+            "DECISION_HANDOFF_MATCH",
+            "decision: null",
+            "selected_outcome: null",
+            "Human Decision",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, document)

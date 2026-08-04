@@ -153,6 +153,25 @@ Sourceから抽出した意図候補をHuman確認前のprivate shapeへ閉じ�
 
 実Decisionを作る前に記録fieldと否定claimを確認するには[Company Pack Decision Record Candidate Contract](DECISION-RECORD-CANDIDATE.md)を使います。これはschema-only契約であり、Decision、承認、権限、Promotion、GOを生成しません。
 
+## Review-chain artifact map
+
+Use this map after the external-free smoke when you need to understand what is
+saved and where the next handoff begins. Each row is a candidate artifact or
+its fresh verification; none of these states is a Human Decision.
+
+| Artifact | Input / saved output | Builder / verifier | Expected candidate state | Next handoff |
+|---|---|---|---|---|
+| Review Bundle | current Pack → `work/my-company-review-bundle.json` | `build_company_pack_review_bundle.py` / `verify_company_pack_review_bundle.py` | `MATCH` | Review Request |
+| Review Request | saved Bundle + current Pack → `work/my-company-review-request.json` | `build_company_pack_review_request.py` | `PENDING_AUTHORIZED_REVIEW`, `selected_outcome: null` | Review Response |
+| Review Response | saved Request → `work/my-company-review-response.json` (edit outcomes/notes only) | `build_company_pack_review_response.py` / `verify_company_pack_review_response.py` | `ITEM_RESPONSES_MATCH_REQUEST` | Review Decision Handoff |
+| Review Decision Handoff | Bundle, Request, Response, verifications, current Pack → `work/my-company-review-decision-handoff.json` | `build_company_pack_review_decision_handoff.py` / `verify_company_pack_review_decision_handoff.py` | `DECISION_HANDOFF_MATCH`, `decision: null`, `selected_outcome: null` | separate Human Decision |
+
+The saved files preserve exact bindings and dynamic item counts. The map is
+`read-only/candidate-only`; all claims remain false and
+`NO_GO_UNPUBLISHED` remains in force. Human approval, reviewer identity,
+authority, Promotion, Current Truth, runtime, and Public Beta GO are separate
+gates and are not created by these builders or verifiers.
+
 ## 5. flow contractとMOC順にBlockを読む
 
 `manifest.json`の`flow`は、外部から入る`entry_inputs`、Block IDの`sequence`、読み順を示す`moc_ref`を宣言します。[`company-operations.json`](../examples/company-starter/mocs/company-operations.json)は、同じ順序を示すnavigation projectionです。

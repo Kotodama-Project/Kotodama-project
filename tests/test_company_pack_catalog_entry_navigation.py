@@ -35,6 +35,12 @@ class CompanyPackCatalogEntryNavigationTests(unittest.TestCase):
             text.index("## Runbook smoke"),
         )
 
+    def test_catalog_links_the_review_chain_artifact_map(self) -> None:
+        text = (ROOT / "docs" / "COMPANY-PACK-CATALOG.md").read_text(encoding="utf-8")
+        marker = "[Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)"
+        self.assertIn(marker, text)
+        self.assertTrue((ROOT / "docs" / "STARTER-WALKTHROUGH.md").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()
