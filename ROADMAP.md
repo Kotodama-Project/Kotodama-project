@@ -26,26 +26,38 @@
 
 ## Current public documentation revision
 
-R163 is the latest public documentation revision and the current public
+R166 is the latest public documentation revision and the current public
 Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
-published R162 candidate at public `main` commit
-`aca4d22772e84cf7da103b97872c94a04c67ac31` with tree
-`008f43ff3f929c990717799fd2bb1b1a52419485`. R163 synchronizes STATUS and
-ROADMAP with R162's dependency-free MOC smoke commands
-(`python -m unittest tests.test_mocs_entry_navigation -v` and
-`python3 -m unittest tests.test_mocs_entry_navigation -v`), Markdown-to-JSON
-link integrity regression, and exact `kind: moc`, `status: example`, and
-`authority: navigation_only` boundaries. The direct entry links to the Company
-Pack Catalog, Company Pack Guided Next Steps, and Schema / Validator / Test
-Matrix, the review-chain language, `read-only/candidate-only`, and
-`NO_GO_UNPUBLISHED` remain explicit. The regression is
+published R165 candidate at public `main` commit
+`b3db55ca241c18fd795a2c5b341ef3d629dcf477` with tree
+`036e8b1421c88e1e66fa3394c4f35e9d93ecf6b7`. R166 synchronizes STATUS and
+ROADMAP with R165's Validation full-suite cross-shell parity: PowerShell keeps
+`python -m pip install -r requirements-test.txt` ->
+`python -m unittest discover -s tests -v`, and POSIX uses
+`python3 -m pip install -r requirements-test.txt` ->
+`python3 -m unittest discover -s tests -v`. The test-only dependency wording,
+review-chain language, `read-only/candidate-only`, and `NO_GO_UNPUBLISHED`
+remain explicit. The regression is
 [`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
-R163 is documentation/static-regression evidence only; the published surface
-remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R162 remains
+R166 is documentation/static-regression evidence only; the published surface
+remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R165 remains
+historical as the Validation full-suite cross-shell parity revision at public
+`main` commit `b3db55ca241c18fd795a2c5b341ef3d629dcf477`, tree
+`036e8b1421c88e1e66fa3394c4f35e9d93ecf6b7`; its POSIX command was documented
+but not executed in the Windows validation environment. R164 remains
+historical as the Company Pack Catalog smoke-command parity revision at public
+`main` commit `02cf18e6696e61839ecb866ce8d720b1fba8c582`, tree
+`dff3c0b2e8990daa85650ef591158c94593c6b40`. R163 remains historical as the
+STATUS/ROADMAP orientation to R162's MOC surface at public `main` commit
+`b7979b2946a262ef6d024512606ecb80b4ab6845`, tree
+`f316557224384c2d7a7a51ac3b314cff0bc236c2`; its R162 provenance and
+navigation-only boundaries remain below. R162 remains
 historical as the MOC smoke command parity and Markdown-to-JSON link-integrity
 revision at public `main` commit
 `aca4d22772e84cf7da103b97872c94a04c67ac31` with tree
-`008f43ff3f929c990717799fd2bb1b1a52419485`; its POSIX `python3` command was
+`008f43ff3f929c990717799fd2bb1b1a52419485`; its commands were
+`python -m unittest tests.test_mocs_entry_navigation -v` and
+`python3 -m unittest tests.test_mocs_entry_navigation -v`; its POSIX `python3` command was
 documented but not executed in the Windows validation environment. R161
 remains historical as the Schema / Validator / Test Matrix full review-chain
 revision at public `main` commit
