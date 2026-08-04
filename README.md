@@ -497,6 +497,14 @@ Kotodama は、初期の言葉を消すのではなく、後続の指示、実�
 
 validatorやrunbookの`PASS`は、install、deploy、provider接続、Voice E2E、Promotion、Current Truth、Final Human GOを意味しません。公開面の既定は`NO_GO_UNPUBLISHED`です。迷った場合はruntime profileを選ばず、Catalogから読み始めます。
 
+### 実行確認: Runbook smoke
+
+Quick Startのコマンドを編集する前に、[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) のRunbook smokeと [test_public_starter_runbook_smoke.py](tests/test_public_starter_runbook_smoke.py) を先に確認できます。外部接続なしの一時directoryで、initializer → validator → Catalog → customization → Public Preview → Next Steps → Review Bundle → verify の導入順を再現します。
+
+- guided path: `CANDIDATE_FOR_GOVERNED_REVIEW` から `MATCH` まで進む
+- plain path: `CUSTOMIZATION_REQUIRED` のまま `BUNDLE_REFUSED` で停止し、拒否JSONを成功bundleとして保存しない
+- どちらも `read-only/candidate-only`、`NO_GO_UNPUBLISHED`。Human approval、runtime、Promotion、Current Truth、Public Beta GOは作らない
+
 ## Quick Start — Company starter を試す
 
 Python 以外の追加 dependency は不要です。repository root で次を実行します。
