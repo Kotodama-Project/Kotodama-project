@@ -598,7 +598,21 @@ validatorやrunbookの`PASS`は、install、deploy、provider接続、Voice E2E�
 
 ### 実行確認: Runbook smoke
 
-Quick Startのコマンドを編集する前に、[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) のRunbook smokeと [test_public_starter_runbook_smoke.py](tests/test_public_starter_runbook_smoke.py) を先に確認できます。外部接続なしの一時directoryで、initializer → validator → Catalog → customization → Public Preview → Next Steps → Review Bundle → Review Request → Review Response → Review Decision Handoff → verify の導入順を再現します。
+Quick Startのコマンドを編集する前に、標準ライブラリだけのone-command smokeを
+実行できます。外部接続なしのtemporary directoryで既存13 CLIを、initializer → validator → Catalog → customization → Public Preview → Next Steps → Review Bundle → Review Request → Review Response → Review Decision Handoff → verifyの順に実行します。
+temporary candidateとartifactを削除してから一行JSONを返します。
+
+```powershell
+python -S -B tools/smoke_company_pack_review_chain.py
+```
+
+```bash
+python3 -S -B tools/smoke_company_pack_review_chain.py
+```
+
+[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)には個別commandの説明、
+[test_public_starter_runbook_smoke.py](tests/test_public_starter_runbook_smoke.py)には
+同じ導線のregression interfaceがあります。
 
 - guided path: `CANDIDATE_FOR_GOVERNED_REVIEW` から `MATCH` まで進む
 - plain path: `CUSTOMIZATION_REQUIRED` のまま `BUNDLE_REFUSED` で停止し、拒否JSONを成功bundleとして保存しない
@@ -608,7 +622,7 @@ Quick Startのコマンドを編集する前に、[Starter Walkthrough](docs/STA
 
 ### 先にCLIの境界を確認する
 
-公開している13個のCompany Pack CLIは、`-h`または`--help`で使い方と共通境界を
+公開している14個のCompany Pack CLIは、`-h`または`--help`で使い方と共通境界を
 確認できます。helpはPackを読み書きしません。全コマンドの入力、結果状態、次の
 handoffは [Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) に
 まとめています。`read-only/candidate-only`であり、Public Betaは

@@ -23,8 +23,18 @@ TOOLS = (
     "verify_company_pack_review_response.py",
     "build_company_pack_review_decision_handoff.py",
     "verify_company_pack_review_decision_handoff.py",
+    "smoke_company_pack_review_chain.py",
 )
-GROUPS = ("Create", "Inspect", "Plan", "Bind", "Request", "Respond", "Handoff")
+GROUPS = (
+    "Create",
+    "Inspect",
+    "Plan",
+    "Bind",
+    "Request",
+    "Respond",
+    "Handoff",
+    "Smoke",
+)
 
 
 class CompanyPackCliReferenceTests(unittest.TestCase):
@@ -63,6 +73,11 @@ class CompanyPackCliReferenceTests(unittest.TestCase):
         self.assertIn("initializer is the only command", reference)
         self.assertIn("does not create Human approval", reference)
         self.assertIn("NO_GO_UNPUBLISHED", reference)
+        self.assertIn(
+            "`CUSTOMIZATION_REQUIRED` / `READY_FOR_GOVERNED_REVIEW` / `INVALID_PACK`",
+            reference,
+        )
+        self.assertIn("`STATIC_CUSTOMIZATION` / `CANDIDATE_BINDING`", reference)
 
     def test_readme_links_reference_from_quick_start_and_document_map(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

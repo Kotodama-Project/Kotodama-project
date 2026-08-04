@@ -23,15 +23,26 @@ Current Truth、Voice / Discord E2Eはこの手順から導出されません。
 
 ## 実行確認: Runbook smoke
 
-The same public smoke continues beyond the Review Bundle: it saves and verifies
-Review Request, Review Response, and Decision Handoff artifacts in the same
-temporary pack. The executable regression is
+The one-command smoke continues beyond the Review Bundle: it saves and verifies
+Review Request, Review Response, and Decision Handoff artifacts inside one OS
+temporary pack, runs all 13 existing Company Pack CLIs, deletes the temporary
+workspace, and only then emits its closed JSON report.
+
+```powershell
+python -S -B tools/smoke_company_pack_review_chain.py
+```
+
+```bash
+python3 -S -B tools/smoke_company_pack_review_chain.py
+```
+
+The separate regression interface is
 [`test_public_starter_runbook_smoke.py`](../tests/test_public_starter_runbook_smoke.py).
 This **full review-chain smoke** is external-free and candidate-only; it keeps
 `NO_GO_UNPUBLISHED` and does not create Human approval, runtime authority,
 Promotion, Current Truth, or Public Beta GO.
 
-repository rootから、追加依存なしのregressionを次で実行できます。
+repository rootから、追加依存なしのregression自体を確認する場合は次を実行します。
 
 ```powershell
 python -m unittest tests.test_public_starter_runbook_smoke -v

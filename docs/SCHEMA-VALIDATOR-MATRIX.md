@@ -272,9 +272,23 @@ E2E、Promotion、Current Truth、Public Beta GOを意味しません。
 
 After the starter bundle reaches `MATCH`, the public executable smoke continues
 through the complete candidate-only chain: Review Request -> Review Response ->
-Review Decision Handoff. Run the focused regression below from the repository
-root; it uses a temporary guided pack, saves every artifact, and re-verifies the
-chain from fresh bytes.
+Review Decision Handoff. It runs all 13 existing Company Pack CLIs in an OS
+temporary directory, removes the synthetic candidate and artifacts, and emits
+one closed report only after cleanup.
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-review-chain-smoke.schema.json](../schemas/company-pack-review-chain-smoke.schema.json) | [`smoke_company_pack_review_chain.py`](../tools/smoke_company_pack_review_chain.py) | [`test_company_pack_review_chain_smoke_cli.py`](../tests/test_company_pack_review_chain_smoke_cli.py) | [Starter Walkthrough](STARTER-WALKTHROUGH.md)。13 step、temporary cleanup、all-false claimsだけを閉じる。Human approval、runtime、Promotion、Current Truth、Public Beta GOではない。 |
+
+```powershell
+python -S -B tools/smoke_company_pack_review_chain.py
+```
+
+```bash
+python3 -S -B tools/smoke_company_pack_review_chain.py
+```
+
+The unittest remains the regression interface for the same flow:
 
 ```powershell
 python -m unittest tests.test_public_starter_runbook_smoke.PublicStarterRunbookSmokeTests.test_guided_starter_chain_reaches_bundle_match_in_a_temporary_pack -v

@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-chain-smoke.schema.json",
+  "title": "Kotodama Company Pack Review Chain Smoke",
+  "$comment": "A closed report for the temporary, synthetic, external-free execution of the thirteen public Company Pack entrypoints. PASS does not verify reviewer identity, Human approval, execution authority, runtime, Promotion, Current Truth, Final Human GO, or Public Beta GO.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "steps",
+    "failed_step",
+    "refusal_reason",
+    "temporary_workspace_deleted",
+    "artifacts_persisted",
+    "claims",
+    "public_beta"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "PASS"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "steps": {
+            "prefixItems": [
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}},
+              {"properties": {"status": {"const": "PASS"}}}
+            ]
+          },
+          "failed_step": {"type": "null"},
+          "refusal_reason": {"type": "null"},
+          "temporary_workspace_deleted": {"const": true}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "REFUSED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "steps": {
+            "contains": {
+              "properties": {
+                "status": {"enum": ["REFUSED", "NOT_RUN"]}
+              },
+              "required": ["status"]
+            },
+            "minContains": 1
+          },
+          "refusal_reason": {
+            "enum": [
+              "CHILD_REFUSED",
+              "CHILD_TIMEOUT",
+              "CHILD_OUTPUT_LIMIT",
+              "CHILD_OUTPUT_INVALID",
+              "CHILD_CONTRACT_MISMATCH",
+              "TEMPORARY_CLEANUP_UNVERIFIED",
+              "INTERNAL_REFUSAL"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "kind": {"const": "company_pack_review_chain_smoke"},
+    "version": {"const": "1.0"},
+    "status": {"enum": ["PASS", "REFUSED"]},
+    "steps": {
+      "type": "array",
+      "minItems": 13,
+      "maxItems": 13,
+      "prefixItems": [
+        {"$ref": "#/$defs/create"},
+        {"$ref": "#/$defs/validate"},
+        {"$ref": "#/$defs/catalog"},
+        {"$ref": "#/$defs/customization"},
+        {"$ref": "#/$defs/public_preview"},
+        {"$ref": "#/$defs/next_steps"},
+        {"$ref": "#/$defs/review_bundle"},
+        {"$ref": "#/$defs/review_bundle_verify"},
+        {"$ref": "#/$defs/review_request"},
+        {"$ref": "#/$defs/review_response"},
+        {"$ref": "#/$defs/review_response_verify"},
+        {"$ref": "#/$defs/decision_handoff"},
+        {"$ref": "#/$defs/decision_handoff_verify"}
+      ],
+      "items": false
+    },
+    "failed_step": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "enum": [
+            "create",
+            "validate",
+            "catalog",
+            "customization",
+            "public_preview",
+            "next_steps",
+            "review_bundle",
+            "review_bundle_verify",
+            "review_request",
+            "review_response",
+            "review_response_verify",
+            "decision_handoff",
+            "decision_handoff_verify"
+          ]
+        }
+      ]
+    },
+    "refusal_reason": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "enum": [
+            "CHILD_REFUSED",
+            "CHILD_TIMEOUT",
+            "CHILD_OUTPUT_LIMIT",
+            "CHILD_OUTPUT_INVALID",
+            "CHILD_CONTRACT_MISMATCH",
+            "TEMPORARY_CLEANUP_UNVERIFIED",
+            "INTERNAL_REFUSAL"
+          ]
+        }
+      ]
+    },
+    "temporary_workspace_deleted": {"type": "boolean"},
+    "artifacts_persisted": {"const": false},
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_approval_verified",
+        "reviewer_identity_verified",
+        "execution_authority_verified",
+        "runtime_verified",
+        "promotion_verified",
+        "current_truth_changed",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "human_approval_verified": {"const": false},
+        "reviewer_identity_verified": {"const": false},
+        "execution_authority_verified": {"const": false},
+        "runtime_verified": {"const": false},
+        "promotion_verified": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "step_status": {"enum": ["PASS", "REFUSED", "NOT_RUN"]},
+    "create": {"$ref": "#/$defs/create_step"},
+    "validate": {"$ref": "#/$defs/validate_step"},
+    "catalog": {"$ref": "#/$defs/catalog_step"},
+    "customization": {"$ref": "#/$defs/customization_step"},
+    "public_preview": {"$ref": "#/$defs/public_preview_step"},
+    "next_steps": {"$ref": "#/$defs/next_steps_step"},
+    "review_bundle": {"$ref": "#/$defs/review_bundle_step"},
+    "review_bundle_verify": {"$ref": "#/$defs/review_bundle_verify_step"},
+    "review_request": {"$ref": "#/$defs/review_request_step"},
+    "review_response": {"$ref": "#/$defs/review_response_step"},
+    "review_response_verify": {"$ref": "#/$defs/review_response_verify_step"},
+    "decision_handoff": {"$ref": "#/$defs/decision_handoff_step"},
+    "decision_handoff_verify": {"$ref": "#/$defs/decision_handoff_verify_step"},
+    "create_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "create"}}},
+    "validate_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "validate"}}},
+    "catalog_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "catalog"}}},
+    "customization_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "customization"}}},
+    "public_preview_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "public_preview"}}},
+    "next_steps_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "next_steps"}}},
+    "review_bundle_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "review_bundle"}}},
+    "review_bundle_verify_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "review_bundle_verify"}}},
+    "review_request_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "review_request"}}},
+    "review_response_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "review_response"}}},
+    "review_response_verify_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "review_response_verify"}}},
+    "decision_handoff_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "decision_handoff"}}},
+    "decision_handoff_verify_step": {"$ref": "#/$defs/step", "properties": {"id": {"const": "decision_handoff_verify"}}},
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status"],
+      "properties": {
+        "id": {"type": "string"},
+        "status": {"$ref": "#/$defs/step_status"}
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 # Company Pack CLI Reference
 
-このページは、公開Company Pack導線にある13個のCLI entrypointを、作成から
-Decision Handoff検証まで一つの順序で辿るための索引です。各CLIは
+このページは、公開Company Pack導線にある14個のCLI entrypointを、作成から
+Decision Handoff検証と一時smokeまで一つの順序で辿るための索引です。各CLIは
 `-h` / `--help`で共通境界を表示します。
 
 > Boundary: read-only/candidate-only; Public Beta remains NO_GO_UNPUBLISHED.
@@ -31,7 +31,7 @@ execution authority、Promotion、Current Truth、runtime verification、Public 
 
 | Tool | Input | Success / stop state | Next handoff |
 |---|---|---|---|
-| [`plan_company_pack_next_steps.py`](../tools/plan_company_pack_next_steps.py) | Pack directory、JSON/Markdown | `STATIC_CUSTOMIZATION` / `GOVERNED_REVIEW` / `INVALID_PACK` | report内のbounded next command |
+| [`plan_company_pack_next_steps.py`](../tools/plan_company_pack_next_steps.py) | Pack directory、JSON/Markdown | status: `CUSTOMIZATION_REQUIRED` / `READY_FOR_GOVERNED_REVIEW` / `INVALID_PACK`; stage: `STATIC_CUSTOMIZATION` / `CANDIDATE_BINDING` | report内のbounded next command |
 
 ## Bind
 
@@ -60,6 +60,17 @@ execution authority、Promotion、Current Truth、runtime verification、Public 
 | [`build_company_pack_review_decision_handoff.py`](../tools/build_company_pack_review_decision_handoff.py) | Pack、bundle、request、responseと各schema | `CANDIDATE_DECISION_HANDOFF` / refusal | saved handoffをverify |
 | [`verify_company_pack_review_decision_handoff.py`](../tools/verify_company_pack_review_decision_handoff.py) | 上記6入力とsaved handoff | `DECISION_HANDOFF_MATCH` / mismatch | 別のauthority-bound Human Decision |
 
+## Smoke
+
+| Tool | Input | Success / stop state | Next handoff |
+|---|---|---|---|
+| [`smoke_company_pack_review_chain.py`](../tools/smoke_company_pack_review_chain.py) | なし。OS temporary workspaceだけを使用 | `PASS` / `REFUSED` | reportを確認し、実Packでは上の個別commandを使う |
+
+このsmokeは既存13 CLIをsynthetic candidateで順に実行し、temporary directoryを
+削除してから一行JSONを返します。途中artifactやsynthetic `accept` outcomeは保存せず、
+reviewer identity、Human approval、execution authority、runtime、Promotion、Current
+Truth、Public Beta GOを作りません。
+
 ## Help inventory — PowerShell / Python
 
 ```powershell
@@ -76,6 +87,7 @@ python tools/build_company_pack_review_response.py --help
 python tools/verify_company_pack_review_response.py --help
 python tools/build_company_pack_review_decision_handoff.py --help
 python tools/verify_company_pack_review_decision_handoff.py --help
+python tools/smoke_company_pack_review_chain.py --help
 ```
 
 ## Help inventory — POSIX / Python 3
@@ -94,6 +106,7 @@ python3 tools/build_company_pack_review_response.py --help
 python3 tools/verify_company_pack_review_response.py --help
 python3 tools/build_company_pack_review_decision_handoff.py --help
 python3 tools/verify_company_pack_review_decision_handoff.py --help
+python3 tools/smoke_company_pack_review_chain.py --help
 ```
 
 実際のartifact引数と保存例は[Review Workflow](REVIEW-WORKFLOW.md)、最短の
