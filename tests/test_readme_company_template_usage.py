@@ -20,6 +20,7 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
             "[Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md)",
             "[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)",
             "[Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md)",
+            "[Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)",
             "[Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)",
             "理想のCompany Template層",
             "read-only/candidate-only",
@@ -29,7 +30,7 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, section)
 
-        links = required[:9]
+        links = required[:10]
         positions = [section.index(link) for link in links]
         self.assertEqual(positions, sorted(positions))
         for relative_path in (
@@ -41,6 +42,7 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
             "docs/COMPANY-PACK-CATALOG.md",
             "docs/STARTER-WALKTHROUGH.md",
             "docs/PUBLIC-PREVIEW-SELF-CHECK.md",
+            "docs/COMPANY-PACK-NEXT-STEPS.md",
             "docs/INSTALLATION-LIFECYCLE.md",
         ):
             with self.subTest(relative_path=relative_path):
