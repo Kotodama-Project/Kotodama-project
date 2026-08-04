@@ -52,6 +52,7 @@ class StarterWalkthroughRunbookDocumentationTests(unittest.TestCase):
         document = WALKTHROUGH.read_text(encoding="utf-8")
         required = (
             "## Review-chain artifact map",
+            "before or after the external-free smoke",
             "Review Bundle",
             "Review Request",
             "Review Response",

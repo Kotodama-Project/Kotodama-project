@@ -39,6 +39,7 @@ class CompanyPackCatalogEntryNavigationTests(unittest.TestCase):
         text = (ROOT / "docs" / "COMPANY-PACK-CATALOG.md").read_text(encoding="utf-8")
         marker = "[Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)"
         self.assertIn(marker, text)
+        self.assertIn("before or after the smoke", text)
         self.assertTrue((ROOT / "docs" / "STARTER-WALKTHROUGH.md").is_file())
 
 

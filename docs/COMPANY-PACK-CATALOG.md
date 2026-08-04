@@ -54,7 +54,7 @@ Discord E2E、Promotion、Current Truth、Final Human GOを実行しません。
 
 For the meaning of each saved review artifact and its next handoff, use the
 [Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)
-before running the smoke. It is a read-only/candidate-only map of Bundle,
+before or after the smoke. It is a read-only/candidate-only map of Bundle,
 Request, Response, and Decision Handoff states; it does not create approval,
 Promotion, Current Truth, or Public Beta GO.
 

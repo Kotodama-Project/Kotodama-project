@@ -155,7 +155,7 @@ Sourceから抽出した意図候補をHuman確認前のprivate shapeへ閉じ�
 
 ## Review-chain artifact map
 
-Use this map after the external-free smoke when you need to understand what is
+Use this map before or after the external-free smoke when you need to understand what is
 saved and where the next handoff begins. Each row is a candidate artifact or
 its fresh verification; none of these states is a Human Decision.
 
