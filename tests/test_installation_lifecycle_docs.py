@@ -155,6 +155,82 @@ class InstallationLifecycleDocumentationTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn(command, validation)
 
+    def test_validation_guide_core_public_paths_have_posix_parity(self) -> None:
+        validation = (ROOT / "docs" / "VALIDATION.md").read_text(encoding="utf-8")
+
+        command_pairs = (
+            (
+                "python tools/create_company_pack.py my-company work/my-company",
+                "python3 tools/create_company_pack.py my-company work/my-company",
+            ),
+            (
+                "python tools/check_company_pack_customization.py work/my-company",
+                "python3 tools/check_company_pack_customization.py work/my-company",
+            ),
+            (
+                "python tools/build_company_pack_review_bundle.py work/my-company",
+                "python3 tools/build_company_pack_review_bundle.py work/my-company",
+            ),
+            (
+                "python tools/verify_company_pack_review_bundle.py work/my-company-review-bundle.json work/my-company",
+                "python3 tools/verify_company_pack_review_bundle.py work/my-company-review-bundle.json work/my-company",
+            ),
+            (
+                "python tools\\build_company_pack_review_response.py work\\my-company-review-request.json",
+                "python3 tools/build_company_pack_review_response.py work/my-company-review-request.json",
+            ),
+            (
+                "python tools\\verify_company_pack_review_response.py work\\my-company-review-request.json work\\my-company-review-response.json",
+                "python3 tools/verify_company_pack_review_response.py work/my-company-review-request.json work/my-company-review-response.json",
+            ),
+            (
+                "python tools\\validate_compose_minimum_skeleton.py runtime\\compose-minimum",
+                "python3 tools/validate_compose_minimum_skeleton.py runtime/compose-minimum",
+            ),
+            (
+                "python tools\\resolve_compose_candidate.py <bounded-project-name> --output work\\resolved-compose-candidate.json",
+                "python3 tools/resolve_compose_candidate.py <bounded-project-name> --output work/resolved-compose-candidate.json",
+            ),
+            (
+                "python tools\\validate_resolved_compose_candidate.py work\\resolved-compose-candidate.json",
+                "python3 tools/validate_resolved_compose_candidate.py work/resolved-compose-candidate.json",
+            ),
+            (
+                "python tools\\preflight_compose_image_availability.py work\\resolved-compose-candidate.json --output work\\compose-image-availability.json",
+                "python3 tools/preflight_compose_image_availability.py work/resolved-compose-candidate.json --output work/compose-image-availability.json",
+            ),
+            (
+                "python tools\\verify_compose_image_availability_preflight.py work\\compose-image-availability.json work\\resolved-compose-candidate.json",
+                "python3 tools/verify_compose_image_availability_preflight.py work/compose-image-availability.json work/resolved-compose-candidate.json",
+            ),
+            (
+                "python tools\\verify_compose_clean_install_migration_evidence_candidate.py work\\private-evidence-candidate.json work\\resolved-compose-candidate.json work\\compose-image-availability.json",
+                "python3 tools/verify_compose_clean_install_migration_evidence_candidate.py work/private-evidence-candidate.json work/resolved-compose-candidate.json work/compose-image-availability.json",
+            ),
+        )
+        for powershell_command, posix_command in command_pairs:
+            with self.subTest(powershell_command=powershell_command):
+                self.assertIn(powershell_command, validation)
+                self.assertIn(posix_command, validation)
+
+        self.assertIn("POSIX shell", validation)
+        self.assertIn("private Source Binding", validation)
+        self.assertIn("NO_GO_UNPUBLISHED", validation)
+
+        ordered_markers = (
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python3 tools/build_company_pack_review_bundle.py work/my-company",
+            "python3 tools/verify_company_pack_review_bundle.py work/my-company-review-bundle.json work/my-company",
+            "python3 tools/validate_compose_minimum_skeleton.py runtime/compose-minimum",
+            "python3 tools/resolve_compose_candidate.py <bounded-project-name> --output work/resolved-compose-candidate.json",
+            "python3 tools/validate_resolved_compose_candidate.py work/resolved-compose-candidate.json",
+            "python3 tools/preflight_compose_image_availability.py work/resolved-compose-candidate.json --output work/compose-image-availability.json",
+            "python3 tools/verify_compose_image_availability_preflight.py work/compose-image-availability.json work/resolved-compose-candidate.json",
+        )
+        positions = [validation.index(marker) for marker in ordered_markers]
+        self.assertEqual(positions, sorted(positions))
+
 
 if __name__ == "__main__":
     unittest.main()

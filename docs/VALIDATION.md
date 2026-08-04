@@ -35,6 +35,11 @@ New-Item -ItemType Directory -Force work | Out-Null
 python tools/create_company_pack.py my-company work/my-company
 ```
 
+```bash
+mkdir -p work
+python3 tools/create_company_pack.py my-company work/my-company
+```
+
 initializerはshipped starterをpreflightし、既存targetを拒否し、manifest IDと全該当MOCを再束縛し、生成後にこのvalidatorを実行します。任意の既存packを更新・migrationするツールではありません。
 
 3つのguided optionをall-or-noneで渡すと、19静的placeholderも新規Pack内で一括反映し、validatorに加えてcustomization checkerの`READY_FOR_GOVERNED_REVIEW`をpost-checkします。入力、期限、非上書き、失敗reportの境界は[Guided Company Pack Initialization](GUIDED-COMPANY-PACK-INITIALIZATION.md)、出力contractは[`company-pack-creation-report.schema.json`](../schemas/company-pack-creation-report.schema.json)を参照してください。
@@ -45,12 +50,20 @@ initializerはshipped starterをpreflightし、既存targetを拒否し、manife
 python tools/check_company_pack_customization.py work/my-company
 ```
 
+```bash
+python3 tools/check_company_pack_customization.py work/my-company
+```
+
 このcheckerは構造validatorを先に実行し、構造PASS後だけcustomizationを評価します。`READY_FOR_GOVERNED_REVIEW`でもHuman Intent、authority、retention、Promotion、Current Truthを証明しません。詳しくは[Company Pack Customization Checklist](CUSTOMIZATION-CHECKLIST.md)を参照してください。
 
 `replacement_required`が0になった候補は、次のbuilderでexact bytesへ固定できます。
 
 ```powershell
 python tools/build_company_pack_review_bundle.py work/my-company
+```
+
+```bash
+python3 tools/build_company_pack_review_bundle.py work/my-company
 ```
 
 builderはmanifestと全参照JSONをSHA-256 / byte sizeへ束縛し、前後再checkでdriftを検出した場合はbindingなしで拒否します。詳しくは[Company Pack Review Bundle](REVIEW-BUNDLE.md)を参照してください。
@@ -61,6 +74,10 @@ builderはmanifestと全参照JSONをSHA-256 / byte sizeへ束縛し、前後再
 python tools/verify_company_pack_review_bundle.py work/my-company-review-bundle.json work/my-company
 ```
 
+```bash
+python3 tools/verify_company_pack_review_bundle.py work/my-company-review-bundle.json work/my-company
+```
+
 verifierはbundle構造・metadata・digestを信頼せず再検査し、Packからfresh bundleを再構築して比較します。`MATCH`はbytes同一性だけで、reviewer identity、Human Decision、Promotionを証明しません。運用手順は[Candidate-bound Review Workflow](REVIEW-WORKFLOW.md)を参照してください。
 
 MATCH済みbundle/Packからpending requestを保存した後、requestが束縛する実際の件数のoutcomeをID/path/reasonの再入力なしで編集・再照合するには次を使います（starterの例は46件、recordless fixtureは19件）。
@@ -68,6 +85,11 @@ MATCH済みbundle/Packからpending requestを保存した後、requestが束縛
 ```powershell
 python tools\build_company_pack_review_response.py work\my-company-review-request.json
 python tools\verify_company_pack_review_response.py work\my-company-review-request.json work\my-company-review-response.json
+```
+
+```bash
+python3 tools/build_company_pack_review_response.py work/my-company-review-request.json
+python3 tools/verify_company_pack_review_response.py work/my-company-review-request.json work/my-company-review-response.json
 ```
 
 response schemaとverifierはrequest file SHA-256/size、Pack candidate binding、request由来のimmutable item、unresolved evidence、全outcome入力をfail closedで確認します。成功reportは個別item/noteを反射しません。`ITEM_RESPONSES_MATCH_REQUEST`はidentity、authority、Human approval、selected overall outcome、Decision Record、evidence解決、Promotionを証明しません。詳細は[Company Pack Review Response Candidate](REVIEW-RESPONSE.md)を参照してください。
@@ -108,6 +130,10 @@ Compose minimum data-plane skeletonのexact bytesと安全契約は次で検査�
 python tools\validate_compose_minimum_skeleton.py runtime\compose-minimum
 ```
 
+```bash
+python3 tools/validate_compose_minimum_skeleton.py runtime/compose-minimum
+```
+
 このvalidatorはmanifestの4 file binding、追加file、path containment、2 service/network/volume分離、host port、digest-required image、private password environment、internal network、NOLOGIN roles、Company/Evidence core tables、destructive SQL、全live claimを検査します。stdlib validator自体はcontainerを起動しません。Compose構文はprocess-only synthetic値による`docker compose config --quiet` testを別に持ち、daemon、pull、起動を必要としません。
 
 private environmentから解決したCompose設定を、credential非開示candidateへ固定する場合は次を使います。
@@ -115,6 +141,11 @@ private environmentから解決したCompose設定を、credential非開示candi
 ```powershell
 python tools\resolve_compose_candidate.py <bounded-project-name> --output work\resolved-compose-candidate.json
 python tools\validate_resolved_compose_candidate.py work\resolved-compose-candidate.json
+```
+
+```bash
+python3 tools/resolve_compose_candidate.py <bounded-project-name> --output work/resolved-compose-candidate.json
+python3 tools/validate_resolved_compose_candidate.py work/resolved-compose-candidate.json
 ```
 
 resolverは生のCompose JSONを保存せず、passwordとhost絶対pathを除外したrole-bound projectionだけを出力します。passwordを別値へ変えてもcandidateとdigestが同一であることをnegative testで固定しています。validator PASSは設定解決済みcandidateのcurrent shipped revisionへのbindingであり、daemon、image availability、pull、起動、migration、healthの証明ではありません。
@@ -126,6 +157,11 @@ python tools\preflight_compose_image_availability.py work\resolved-compose-candi
 python tools\verify_compose_image_availability_preflight.py work\compose-image-availability.json work\resolved-compose-candidate.json
 ```
 
+```bash
+python3 tools/preflight_compose_image_availability.py work/resolved-compose-candidate.json --output work/compose-image-availability.json
+python3 tools/verify_compose_image_availability_preflight.py work/compose-image-availability.json work/resolved-compose-candidate.json
+```
+
 preflightだけが観測時刻と匿名化daemonに限定してavailabilityをtrueにできます。saved verifierの`HISTORICAL_BINDING_ONLY`はsnapshotの自己digestとcandidate bindingだけを確認します。自己digestは署名・attestationではなく、saved verifierはauthenticity、freshness、複数Docker queryのatomicity、current daemon/image stateをすべてfalseにします。どちらもpull、container、migration、health、Public Beta GOを証明しません。
 
 外部runnerがreportedしたclean-install/migration evidence candidateを保存後に再束縛する場合は次を使います。
@@ -133,6 +169,17 @@ preflightだけが観測時刻と匿名化daemonに限定してavailabilityをtr
 ```powershell
 python tools\verify_compose_clean_install_migration_evidence_candidate.py work\private-evidence-candidate.json work\resolved-compose-candidate.json work\compose-image-availability.json
 ```
+
+```bash
+python3 tools/verify_compose_clean_install_migration_evidence_candidate.py work/private-evidence-candidate.json work/resolved-compose-candidate.json work/compose-image-availability.json
+```
+
+ここまでのブロックがPOSIX shellから辿れるcore public candidate pathです。
+下に続くprivate Source Binding、protected attestation、nonce-store、
+restore-drillの例はoperator-onlyのため、別のonboarding laneへは拡張しません。
+どちらのshell形式もlocal / syntheticまたはcandidate-onlyであり、ここにある
+コマンドはruntime、provider、Voice、Discord、Promotion、Current Truth、
+Final Human GO、Public Beta accessを成立させません。
 
 `UNATTESTED_EVIDENCE_BINDING_ONLY`はcandidate/preflight/file digests、Work Order/target/before-stateのhash、異なるexecutor/reviewer hash、2 serviceのmigration binding、reported positive/negative check completenessだけを示します。自己digestもidentity hashの相違もattestationではありません。verifierはDocker/DBへ接続せず、authenticity、freshness、current state、clean install、migrationをtrueにしません。
 
