@@ -44,24 +44,30 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R116 is the current public README Runbook smoke revision and the latest
-Template/Company/Blocks/Records/MOCs/starter navigation surface at public
-`main` commit `2a5a65cdbefc0e1fc33c88771a95443ed52d5960`, tree
-`456d5a990ae030699246959e12daf0a4a9cbb6d1`. The README Quick Start now links
-the [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) Runbook smoke and the
-[`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py):
-the [Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md) remains
-the contract map for the same smoke;
-the guided path reaches bundle `MATCH`, while the plain path remains
-`CUSTOMIZATION_REQUIRED` and fail-closed with `BUNDLE_REFUSED`. The published
-surface remains read-only/candidate-only and `NO_GO_UNPUBLISHED`; R115 remains
-historical as the Starter Walkthrough smoke entry, R114 remains historical as
-the STATUS/ROADMAP provenance synchronization, R113 remains historical as the
-starter smoke matrix revision, R112 remains historical as the STATUS/ROADMAP
-provenance synchronization, R111 remains historical as the schema/validator
-test matrix revision, and R110 remains historical as the stable MOC index
-revision, R109 remains historical as the STATUS/ROADMAP label cleanup, R108
-remains historical provenance, and R107 remains historical provenance.
+R119 is the current public Company Pack Catalog Runbook smoke revision and the
+latest Template/Company/Blocks/Records/MOCs/starter navigation surface at public
+`main` commit `b878464eca0571fe293222d372cf417c9e9e1573`, tree
+`f5aa3a3fa405c0e5fed4d984921d6ad44dca0bd3`. The [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md)
+now links the [Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md)
+Runbook smoke, the [`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py)
+path, and the [`test_company_pack_catalog_runbook_smoke_entry.py`](tests/test_company_pack_catalog_runbook_smoke_entry.py)
+entry, while the README Quick Start and [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)
+retain the same executable smoke. The guided path reaches bundle at
+`CANDIDATE_FOR_GOVERNED_REVIEW` -> `MATCH`, while
+the plain path remains `CUSTOMIZATION_REQUIRED` and fail-closed with
+`BUNDLE_REFUSED`. The published surface remains read-only/candidate-only and
+`NO_GO_UNPUBLISHED`; R118 remains historical as the Template Guide first-read
+smoke entry, R117 remains historical as the STATUS/ROADMAP provenance
+synchronization, R116 remains historical as the README Runbook smoke entry at
+public `main` commit `2a5a65cdbefc0e1fc33c88771a95443ed52d5960`, tree
+`456d5a990ae030699246959e12daf0a4a9cbb6d1`,
+R115 remains historical as the Starter Walkthrough smoke entry, R114 remains
+historical as the STATUS/ROADMAP provenance synchronization, R113 remains
+historical as the starter smoke matrix revision, R112 remains historical as the
+STATUS/ROADMAP provenance synchronization, R111 remains historical as the
+schema/validator test matrix revision, and R110 remains historical as the stable
+MOC index revision, R109 remains historical as the STATUS/ROADMAP label cleanup,
+R108 remains historical provenance, and R107 remains historical provenance.
 R37 introduced
 the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a deterministic `--format markdown`
 summary. R45 added the saved-bundle to Review Request boundary, R46

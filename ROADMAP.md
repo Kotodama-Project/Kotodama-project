@@ -25,17 +25,21 @@
 
 ## Current public documentation revision
 
-R116 is the latest public documentation revision and the current public
-Template/Company/Blocks/Records/MOCs/starter surface. R116 added the README
-Runbook smoke entry immediately before Quick Start, linking the Starter
-Walkthrough and executable test at public `main` commit
-`2a5a65cdbefc0e1fc33c88771a95443ed52d5960` with tree
-`456d5a990ae030699246959e12daf0a4a9cbb6d1`. The guided path reaches
+R119 is the latest public documentation revision and the current public
+Template/Company/Blocks/Records/MOCs/starter surface. R119 added the Company
+Pack Catalog Runbook smoke entry with direct matrix/test links at public `main`
+commit `b878464eca0571fe293222d372cf417c9e9e1573` with tree
+`f5aa3a3fa405c0e5fed4d984921d6ad44dca0bd3`. The guided path reaches
 `CANDIDATE_FOR_GOVERNED_REVIEW` and `MATCH`; the plain path remains
-`CUSTOMIZATION_REQUIRED` and fail-closed as `BUNDLE_REFUSED`. R115 remains
-historical as the Starter Walkthrough smoke entry, R114 remains historical as
-the STATUS/ROADMAP provenance synchronization, and R113 remains historical as
-the executable public starter runbook smoke (`test_public_starter_runbook_smoke.py`)
+`CUSTOMIZATION_REQUIRED` and fail-closed as `BUNDLE_REFUSED`. R118 remains
+historical as the Template Guide first-read ideal/current/smoke entry, R117
+remains historical as the STATUS/ROADMAP provenance synchronization, and R116
+remains historical; R116 added the README Runbook smoke entry immediately
+before Quick Start at public `main` commit `2a5a65cdbefc0e1fc33c88771a95443ed52d5960`
+with tree `456d5a990ae030699246959e12daf0a4a9cbb6d1`. R115 remains historical
+as the Starter Walkthrough smoke entry, R114 remains historical as the
+STATUS/ROADMAP provenance synchronization, and R113 remains historical as the
+executable public starter runbook smoke (`test_public_starter_runbook_smoke.py`)
 and its matrix/test entry. R112 remains historical as the STATUS/ROADMAP
 provenance synchronization. R111 remains historical as the schema/validator/test
 matrix revision; R111 added the schema/validator/test matrix and its
