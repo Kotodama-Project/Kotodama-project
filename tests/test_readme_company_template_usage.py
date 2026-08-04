@@ -6,6 +6,46 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
+    def test_document_map_exposes_ideal_layers_before_current_entrypoints(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        start = readme.index("### 最初に読む")
+        end = readme.index("### Company pack を review する", start)
+        section = readme[start:end]
+        required = (
+            "[Template Guide](docs/TEMPLATE-GUIDE.md)",
+            "[Company Template](templates/company/README.md)",
+            "[Blocks](templates/blocks/README.md)",
+            "[Governed Records](templates/records/README.md)",
+            "[MOCs](templates/mocs/company-operations-moc.md)",
+            "[Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md)",
+            "[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)",
+            "[Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md)",
+            "[Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)",
+            "理想のCompany Template層",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        links = required[:9]
+        positions = [section.index(link) for link in links]
+        self.assertEqual(positions, sorted(positions))
+        for relative_path in (
+            "docs/TEMPLATE-GUIDE.md",
+            "templates/company/README.md",
+            "templates/blocks/README.md",
+            "templates/records/README.md",
+            "templates/mocs/company-operations-moc.md",
+            "docs/COMPANY-PACK-CATALOG.md",
+            "docs/STARTER-WALKTHROUGH.md",
+            "docs/PUBLIC-PREVIEW-SELF-CHECK.md",
+            "docs/INSTALLATION-LIFECYCLE.md",
+        ):
+            with self.subTest(relative_path=relative_path):
+                self.assertTrue((ROOT / relative_path).is_file())
+
     def test_readme_distinguishes_ideal_and_current_template_usage(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         required = (

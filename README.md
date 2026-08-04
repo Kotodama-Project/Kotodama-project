@@ -248,7 +248,7 @@ Source Evidence
 
 MOC は navigation projection です。MOC 自体が新しい SSOT や実行権限を作ることはありません。
 
-まず全体の対応を一覧したい場合は [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) を実行してください。詳しい編集方法は [Template Guide](docs/TEMPLATE-GUIDE.md)、最短の体験は [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)、candidate-bound review は [Review Workflow](docs/REVIEW-WORKFLOW.md) を参照してください。
+まず全体の対応を一覧したい場合は [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) で確認してください。詳しい編集方法は [Template Guide](docs/TEMPLATE-GUIDE.md)、最短の体験は [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)、candidate-bound review は [Review Workflow](docs/REVIEW-WORKFLOW.md) を参照してください。
 
 ### 理想の使い方と、現在の Public Preview でできること
 
@@ -687,11 +687,19 @@ machine-readable な完了境界ではありません。最新チェックリス
 
 - [Project Status](STATUS.md) — 現在公開しているものと未証明範囲
 - [Roadmap to Public Beta](ROADMAP.md) — access を開く前に必要な gate
-- [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) — Company Template / Blocks / Records / MOCsの対応
-- [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) — 最短の実行例
-- [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) — validator / Catalog / customization境界の一括read-only確認
 - [Template Guide](docs/TEMPLATE-GUIDE.md) — Blocks / Records / MOCs の編集
+- [Company Template](templates/company/README.md) — 会社の境界と目的を定義する理想の起点
+- [Blocks](templates/blocks/README.md) — 再利用する仕事の単位
+- [Governed Records](templates/records/README.md) — Block出力を追跡可能な記録へ残す契約
+- [MOCs](templates/mocs/company-operations-moc.md) — canonical flowを目的別に辿るnavigation map
+- [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) — current candidateの層と対応を一覧する
+- [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) — current read-only/candidate-onlyの最短体験
+- [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) — validator / Catalog / customization境界の一括read-only確認
 - [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md) — runtime profileを選ぶ前のread-only導線
+
+最初の5項目は理想のCompany Template層を読む順番です。Catalog以降は現在の
+read-only/candidate-only公開導線であり、validatorやrunbookがPASSしても
+`NO_GO_UNPUBLISHED`、runtime、Promotion、Current Truth、Public Beta GOの境界は変わりません。
 
 ### Company pack を review する
 
