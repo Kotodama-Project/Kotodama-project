@@ -1,0 +1,39 @@
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class CompanyPackCatalogEntryNavigationTests(unittest.TestCase):
+    def test_catalog_exposes_ideal_current_smoke_first_stop(self) -> None:
+        text = (ROOT / "docs" / "COMPANY-PACK-CATALOG.md").read_text(encoding="utf-8")
+        flat = " ".join(text.split())
+
+        for marker in (
+            "## Read next: ideal -> current -> smoke",
+            "**Ideal:**",
+            "../templates/company/README.md",
+            "../templates/blocks/README.md",
+            "../templates/records/README.md",
+            "../templates/mocs/README.md",
+            "**Current:**",
+            "../examples/company-starter/README.md",
+            "**Smoke:**",
+            "SCHEMA-VALIDATOR-MATRIX.md",
+            "STARTER-WALKTHROUGH.md",
+            "../tests/test_company_pack_catalog_entry_navigation.py",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, flat)
+
+        self.assertLess(
+            text.index("## Read next: ideal -> current -> smoke"),
+            text.index("## Runbook smoke"),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

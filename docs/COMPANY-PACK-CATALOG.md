@@ -12,6 +12,26 @@ Catalogは、テンプレートを使い始める人が次の3つを同じ順序
 3. Company Operations、Public Release Review、Incident / Recoveryの各MOCが
    canonical flowのどの位置を辿るか
 
+## Read next: ideal -> current -> smoke
+
+- **Ideal:** [Company Template](../templates/company/README.md)で会社の境界を
+  定め、[Blocks](../templates/blocks/README.md)と[Governed Records](../templates/records/README.md)
+  で仕事と証拠の形を選び、[MOCs](../templates/mocs/README.md)で目的に合う
+  読み順を選びます。
+- **Current:** [Company starter](../examples/company-starter/README.md)とこの
+  Catalogで、公開Packに実際に同梱されたBlock・Record・MOC・flow位置を
+  read-onlyで一覧します。
+- **Smoke:** [Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)と
+  [Starter Walkthrough](STARTER-WALKTHROUGH.md)の外部接続なしRunbook smoke、
+  および[Catalog entry regression](../tests/test_company_pack_catalog_entry_navigation.py)
+  で、この導線と構造境界を確認します。repository rootから
+  `python -m pytest tests/test_company_pack_catalog_entry_navigation.py -q`を
+  実行できます。
+
+この入口は`read-only/candidate-only`、`NO_GO_UNPUBLISHED`です。Catalog、
+validator、smokeのPASSは、runtime起動、Human approval、Promotion、Current
+Truth、Public Beta GOを作りません。
+
 ## 最初に選ぶ
 
 初めてCompany Templateを読む場合は、runtimeを起動せず、次の順番で
