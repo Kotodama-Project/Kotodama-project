@@ -90,6 +90,14 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, section)
 
+        for relative_path in (
+            "mocs/company-operations-moc.md",
+            "mocs/public-release-moc.md",
+            "mocs/incident-recovery-moc.md",
+        ):
+            with self.subTest(relative_path=relative_path):
+                self.assertTrue((ROOT / "templates" / relative_path).exists())
+
         for earlier, later in (
             (
                 "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
@@ -102,6 +110,37 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             (
                 "python3 tools/check_company_pack_customization.py work/my-company",
                 "python3 tools/validate_template_pack.py work/my-company",
+            ),
+        ):
+            with self.subTest(earlier=earlier, later=later):
+                self.assertLess(section.index(earlier), section.index(later))
+
+    def test_template_catalog_exposes_shipped_moc_map_by_purpose(self) -> None:
+        catalog = (ROOT / "templates" / "README.md").read_text(encoding="utf-8")
+        moc_map = catalog.index("## MOCを目的で選ぶ")
+        section_end = catalog.index("## 最短の確認手順", moc_map)
+        section = catalog[moc_map:section_end]
+
+        required = (
+            "[Company Operations MOC](mocs/company-operations-moc.md)",
+            "[Public Release Review MOC](mocs/public-release-moc.md)",
+            "[Incident / Recovery MOC](mocs/incident-recovery-moc.md)",
+            "same canonical flow",
+            "navigation-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        for earlier, later in (
+            (
+                "[Company Operations MOC](mocs/company-operations-moc.md)",
+                "[Public Release Review MOC](mocs/public-release-moc.md)",
+            ),
+            (
+                "[Public Release Review MOC](mocs/public-release-moc.md)",
+                "[Incident / Recovery MOC](mocs/incident-recovery-moc.md)",
             ),
         ):
             with self.subTest(earlier=earlier, later=later):

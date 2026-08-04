@@ -30,6 +30,23 @@
 順に候補を狭めます。`MATCH`やvalidator `PASS`は、Human Decision、権限付与、
 Promotion、Current Truth、runtime activation、Public Beta GOを意味しません。
 
+## MOCを目的で選ぶ
+
+MOCは、同じCompany governance chainを目的別に読み始めるための地図です。
+公開starterでは、次の3つのMarkdown例を用途で選べます。
+
+| MOC | 使うとき | shipped example |
+|---|---|---|
+| Company Operations | Source IntakeからPromotion Decisionまで全体を読む | [Company Operations MOC](mocs/company-operations-moc.md) |
+| Public Release Review | 公開候補のDecision、Work、検証、Promotion候補を確認する | [Public Release Review MOC](mocs/public-release-moc.md) |
+| Incident / Recovery | boundedな停止・変更・検証の部分列を読む | [Incident / Recovery MOC](mocs/incident-recovery-moc.md) |
+
+3つとも同じcanonical flow（same canonical flow）を辿る
+`navigation-only` projectionです。MOCが新しいSSOT、実行権限、Promotion、
+Current Truthを作ることはありません。`Voice Operations`や`Venture /
+Customer Discovery`は理想・将来候補であり、公開starterのshipped MOCでは
+ありません。公開previewの状態は常に`NO_GO_UNPUBLISHED`です。
+
 ## 最短の確認手順
 
 Template Catalogから初めて試す場合は、まず公開starterを変更せずに一覧し、
