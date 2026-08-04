@@ -4,6 +4,22 @@
 
 機械可読契約は[`compose-minimum.json`](../examples/installation-lifecycle/compose-minimum.json)です。
 
+## 理想と現在の公開candidate
+
+### 理想の導入ライフサイクル
+
+理想的には、Company Templateと必要なBlock、Governed Record、MOCを選び、
+`preflight -> stage_candidate -> apply -> verify -> rollback -> restore_rehearsal`
+の6フェーズを同じcandidateへ束縛します。各material effectはexact Work Order、
+fresh receipt、rollbackまたは停止判断まで揃って初めて検証対象になります。
+
+### 現在の公開candidate
+
+このrunbookに含まれるのは、local / syntheticなCompose契約、validator、data-plane
+skeleton、コマンド導線だけです。target-bound receipt、image取得、install、deploy、
+restart、restore、provider connection、Voice / Discord E2E、Promotion、Current Truth、
+Final Human GOは含まれず、公開状態は`NO_GO_UNPUBLISHED`です。
+
 ## 想定する最小境界
 
 - 専用のCompose project namespace
@@ -18,6 +34,11 @@
 ```powershell
 python tools\validate_installation_lifecycle.py examples\installation-lifecycle\compose-minimum.json
 python tools\validate_compose_minimum_skeleton.py runtime\compose-minimum
+```
+
+```bash
+python3 tools/validate_installation_lifecycle.py examples/installation-lifecycle/compose-minimum.json
+python3 tools/validate_compose_minimum_skeleton.py runtime/compose-minimum
 ```
 
 ここでの`PASS`は契約構造だけです。

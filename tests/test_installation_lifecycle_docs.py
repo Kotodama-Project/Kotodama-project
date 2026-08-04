@@ -96,6 +96,42 @@ class InstallationLifecycleDocumentationTests(unittest.TestCase):
                 self.assertIn(marker, compose_text)
         self.assertIn("tools\\validate_installation_lifecycle.py", proxmox_runbook.read_text(encoding="utf-8"))
 
+    def test_runbooks_separate_ideal_current_and_offer_posix_command_parity(self) -> None:
+        compose_runbook = (ROOT / "docs" / "COMPOSE-MINIMUM-RUNBOOK.md").read_text(encoding="utf-8")
+        proxmox_runbook = (ROOT / "docs" / "PROXMOX-SEGMENTED-RUNBOOK.md").read_text(encoding="utf-8")
+
+        for name, runbook in (("compose", compose_runbook), ("proxmox", proxmox_runbook)):
+            with self.subTest(runbook=name):
+                ideal_marker = "### 理想の導入ライフサイクル"
+                current_marker = "### 現在の公開candidate"
+                ideal_start = runbook.index(ideal_marker)
+                current_start = runbook.index(current_marker, ideal_start)
+                self.assertLess(ideal_start, current_start)
+                ideal = runbook[ideal_start:current_start]
+                current = runbook[current_start:]
+                self.assertIn("preflight", ideal)
+                self.assertIn("restore_rehearsal", ideal)
+                for marker in (
+                    "local / synthetic",
+                    "target-bound receipt",
+                    "provider connection",
+                    "NO_GO_UNPUBLISHED",
+                ):
+                    self.assertIn(marker, current)
+
+        self.assertIn(
+            "python3 tools/validate_installation_lifecycle.py examples/installation-lifecycle/compose-minimum.json",
+            compose_runbook,
+        )
+        self.assertIn(
+            "python3 tools/validate_compose_minimum_skeleton.py runtime/compose-minimum",
+            compose_runbook,
+        )
+        self.assertIn(
+            "python3 tools/validate_installation_lifecycle.py examples/installation-lifecycle/proxmox-segmented.json",
+            proxmox_runbook,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

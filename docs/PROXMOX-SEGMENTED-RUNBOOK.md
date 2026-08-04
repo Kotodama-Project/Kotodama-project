@@ -4,6 +4,22 @@
 
 機械可読契約は[`proxmox-segmented.json`](../examples/installation-lifecycle/proxmox-segmented.json)です。
 
+## 理想と現在の公開candidate
+
+### 理想の導入ライフサイクル
+
+理想的には、Company Templateと必要なBlock、Governed Record、MOCを選び、
+`preflight -> stage_candidate -> apply -> verify -> rollback -> restore_rehearsal`
+の6フェーズを同じcandidateへ束縛します。role、network、identity、backup、
+retentionの境界を含むmaterial effectは、exact Work Orderとfresh receiptで検証します。
+
+### 現在の公開candidate
+
+このrunbookに含まれるのは、local / syntheticなProxmox role/evidence契約、validator、
+sanitized inventory導線だけです。target-bound receipt、guest変更、install、deploy、
+restart、restore、provider connection、Voice / Discord E2E、Promotion、Current Truth、
+Final Human GOは含まれず、公開状態は`NO_GO_UNPUBLISHED`です。
+
 ## Reference role model
 
 環境固有のguestではなく、次のroleで設計します。
@@ -22,6 +38,10 @@
 
 ```powershell
 python tools\validate_installation_lifecycle.py examples\installation-lifecycle\proxmox-segmented.json
+```
+
+```bash
+python3 tools/validate_installation_lifecycle.py examples/installation-lifecycle/proxmox-segmented.json
 ```
 
 ここでの`PASS`はrole/evidence契約だけです。
