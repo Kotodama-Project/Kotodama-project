@@ -25,8 +25,24 @@
 
 ## Current public documentation revision
 
-R125 is the latest public documentation revision and the current public
-Template/Company/Blocks/Records/MOCs/starter surface. R125 adds Company
+R128 is the latest public documentation revision and the current public
+Template/Company/Blocks/Records/MOCs/starter surface. R128 adds Company Pack
+Catalog entry navigation with a stable ideal/current/smoke first-stop at
+public `main` commit `752fa4b46246110757f01294b559c39412a0b4be` with tree
+`60ee3062bcd472562e01f03708cb1fd58c32f7f7`. The changed surface is
+[`docs/COMPANY-PACK-CATALOG.md`](docs/COMPANY-PACK-CATALOG.md), covered by
+[`test_company_pack_catalog_entry_navigation.py`](tests/test_company_pack_catalog_entry_navigation.py),
+and links the ideal Company Template, Blocks, Governed Records, and MOCs
+layers to the current Company starter/Catalog and Matrix/Walkthrough/regression
+smoke path. R128 is documentation/static-regression evidence only; the
+published surface remains read-only/candidate-only and `NO_GO_UNPUBLISHED`.
+R127 remains historical as the MOC entry-navigation revision at public `main`
+commit `b05db80ec979129d176408870a4f4e4857e43ded` with tree
+`ac02e58afb505e8ae4be15c5ad5eda80ae57f318`; R126 remains historical as the
+STATUS/ROADMAP synchronization to R125. R125 remains historical as the
+Company Starter entry-navigation revision at public `main` commit
+`a5d052d425c9236a5cdb118a796b936ba74232aa` with tree
+`bca093039d31b3b0f7c595ec91d8224f7419bd7c`. R125 adds Company
 Starter entry navigation with a stable ideal/current/smoke first-stop at
 public `main` commit `a5d052d425c9236a5cdb118a796b936ba74232aa` with tree
 `bca093039d31b3b0f7c595ec91d8224f7419bd7c`. The changed surface is
