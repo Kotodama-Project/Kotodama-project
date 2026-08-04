@@ -178,6 +178,43 @@ class SchemaValidatorMatrixDocumentationTests(unittest.TestCase):
         ):
             self.assertTrue((MATRIX.parent / relative).is_file())
 
+    def test_matrix_runbook_smoke_names_complete_review_chain(self) -> None:
+        matrix = MATRIX.read_text(encoding="utf-8")
+        start = matrix.index("## Runbook smoke")
+        end = matrix.index("## 1. Company Template", start)
+        smoke = matrix[start:end]
+        chain = (
+            "initializer -> validator -> Catalog -> customization -> Public Preview -> "
+            "Next Steps -> Review Bundle -> Review Request -> Review Response -> "
+            "Review Decision Handoff -> verify"
+        )
+        self.assertIn(chain, smoke)
+        for marker in (
+            "Review Request",
+            "Review Response",
+            "Review Decision Handoff",
+            "exact bytes",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+            "Human Decision",
+            "Promotion",
+            "Current Truth",
+            "Public Beta GO",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, smoke)
+
+        self.assertNotIn("Review Bundleの順に進み", smoke)
+        self.assertNotIn("Review Bundle → verify", smoke)
+        self.assertLess(smoke.index("Review Bundle"), smoke.index("Review Request"))
+        self.assertLess(smoke.index("Review Request"), smoke.index("Review Response"))
+        self.assertLess(
+            smoke.index("Review Response"), smoke.index("Review Decision Handoff")
+        )
+        self.assertLess(
+            smoke.index("Review Decision Handoff"), smoke.index("verify")
+        )
+
     def test_matrix_exposes_the_complete_review_chain_contracts(self) -> None:
         matrix = MATRIX.read_text(encoding="utf-8")
         required = (

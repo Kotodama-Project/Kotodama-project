@@ -42,9 +42,17 @@ Final Human GOを作らず、公開状態は`NO_GO_UNPUBLISHED`のままです�
 [`test_public_starter_runbook_smoke.py`](../tests/test_public_starter_runbook_smoke.py)と
 [`test_company_pack_catalog_runbook_smoke_entry.py`](../tests/test_company_pack_catalog_runbook_smoke_entry.py)
 が実行します。guided optionを使う候補では、initializer → validator → Catalog →
-customization → Public Preview → Next Steps → Review Bundleの順に進み、保存した
-bundleをverifyして`MATCH`になることを確認します。これはexact bytesの候補固定であり、
-承認・Promotion・Current Truth・runtime readiness・Public Beta GOではありません。
+customization → Public Preview → Next Steps → Review Bundle → Review Request →
+Review Response → Review Decision Handoff → verifyの順に進み、保存した
+bundle、request、response、handoffをそれぞれ照合します。実行順を一行で
+再確認する場合は、次の完全chainを使います。
+
+`initializer -> validator -> Catalog -> customization -> Public Preview -> Next Steps -> Review Bundle -> Review Request -> Review Response -> Review Decision Handoff -> verify`
+
+これはexact bytesの候補固定であり、承認・Promotion・Current Truth・runtime
+readiness・Public Beta GOではありません。
+各verificationの結果が`MATCH`になることは、現在bytesと保存metadataが一致した
+という意味だけで、Human DecisionやPromotionを意味しません。
 生成側の状態は`CANDIDATE_FOR_GOVERNED_REVIEW`であり、Human Decisionではありません。
 
 guided optionを指定しない通常の2引数initializerもスモーク対象です。この場合は
