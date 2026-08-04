@@ -44,9 +44,24 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R130 is the current public Company Pack Next Steps entry-navigation revision
-and the latest Template/Company/Blocks/Records/MOCs/starter navigation surface
-at public `main` commit `1667007004f92ac65e0124355fda9b71d81d7e6b`, tree
+R133 is the current public README Document Map layer-wording revision and the
+latest Template/Company/Blocks/Records/MOCs/starter navigation surface at
+public `main` commit `15a94c9f041c04994ab1ae00630ae0ea58387276`, tree
+`538badff2d305e7b567b312e1ae918579050b44c`. R133 clarifies that Status and
+Roadmap are orientation, followed by five ideal Company Template layers, while
+Catalog onward remains current read-only/candidate-only. The changed surface is
+[`README.md`](README.md), covered by
+[`test_readme_company_template_usage.py`](tests/test_readme_company_template_usage.py).
+R133 is documentation/static-regression evidence only; the published surface
+remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R132 remains
+historical as the README Guided Next Steps entry-navigation revision at public
+`main` commit `9f1b3ee5556740abab803f49164bad02bdeda3ae`, tree
+`7f9d2ed059cd48e7240d9904e41221e219c47276`; R131 remains historical as the
+STATUS/ROADMAP synchronization to R130 at public `main` commit
+`0e772cdd4a4a95ad97fee3f60555fb52ebad3f8b`, tree
+`b6ffb79781c50bbc07ba7e22405d31e12148be28`. R130 remains historical as the
+Company Pack Next Steps entry-navigation revision at public `main` commit
+`1667007004f92ac65e0124355fda9b71d81d7e6b`, tree
 `aebd38c2012b745333e66348232dc88804181b65`. R130 adds a stable
 ideal/current/smoke first-stop in
 [`docs/COMPANY-PACK-NEXT-STEPS.md`](docs/COMPANY-PACK-NEXT-STEPS.md), covered by
