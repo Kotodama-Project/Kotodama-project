@@ -606,6 +606,26 @@ Quick Startのコマンドを編集する前に、[Starter Walkthrough](docs/STA
 
 ## Quick Start — Company starter を試す
 
+### 先にCLIの境界を確認する
+
+最初の3つの検査CLIは、`-h`または`--help`で使い方を確認できます。helpは
+Packを読み書きしません。`read-only/candidate-only`であり、Public Betaは
+`NO_GO_UNPUBLISHED`のままです。
+
+```powershell
+python tools/validate_template_pack.py --help
+python tools/check_company_pack_customization.py --help
+python tools/check_company_pack_public_preview.py --help
+```
+
+```bash
+python3 tools/validate_template_pack.py --help
+python3 tools/check_company_pack_customization.py --help
+python3 tools/check_company_pack_public_preview.py --help
+```
+
+### 作業copyを作って確認する
+
 Python 以外の追加 dependency は不要です。repository root で次を実行します。
 このQuick Startでは、生成した `work/my-company` を一貫して検査します。
 

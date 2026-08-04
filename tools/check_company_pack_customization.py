@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from validate_template_pack import validate_pack
+from validate_template_pack import emit_help_if_requested, validate_pack
 
 
 STARTER_PACK_ID = "kotodama-company-starter"
@@ -242,6 +242,14 @@ def check_customization(pack_dir: Path) -> dict[str, Any]:
 
 
 def main(argv: list[str]) -> int:
+    if emit_help_if_requested(
+        argv,
+        usage="usage: check_company_pack_customization.py PACK_DIRECTORY",
+        purpose=(
+            "Inspect Company Pack customization without changing its files."
+        ),
+    ):
+        return 0
     if len(argv) != 2:
         print(
             "usage: check_company_pack_customization.py PACK_DIRECTORY",

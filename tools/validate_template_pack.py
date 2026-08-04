@@ -10,7 +10,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
 FORBIDDEN_SECRET_KEY_MARKERS = {
     "apikey",
     "accesskey",
@@ -137,6 +136,22 @@ MANDATORY_RECORD_DENIED_CLAIMS = {
     "current_truth_without_promotion",
 }
 ARTIFACT_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,62}$")
+HELP_FLAGS = frozenset({"-h", "--help"})
+PUBLIC_PREVIEW_BOUNDARY = (
+    "Boundary: read-only/candidate-only; Public Beta remains "
+    "NO_GO_UNPUBLISHED."
+)
+
+
+def emit_help_if_requested(
+    argv: list[str], *, usage: str, purpose: str
+) -> bool:
+    """Emit fixed help without inspecting a Pack or reflecting other argv."""
+
+    if len(argv) != 2 or argv[1] not in HELP_FLAGS:
+        return False
+    sys.stdout.write(f"{usage}\n\n{purpose}\n\n{PUBLIC_PREVIEW_BOUNDARY}\n")
+    return True
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -767,6 +782,12 @@ def validate_pack(pack_dir: Path) -> dict[str, Any]:
 
 
 def main(argv: list[str]) -> int:
+    if emit_help_if_requested(
+        argv,
+        usage="usage: validate_template_pack.py PACK_DIRECTORY",
+        purpose="Validate a Company Pack without changing its files.",
+    ):
+        return 0
     if len(argv) != 2:
         print("usage: validate_template_pack.py PACK_DIRECTORY", file=sys.stderr)
         return 2

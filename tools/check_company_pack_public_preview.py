@@ -15,7 +15,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 from catalog_company_pack import build_catalog
 from check_company_pack_customization import check_customization
-from validate_template_pack import validate_pack
+from validate_template_pack import emit_help_if_requested, validate_pack
 
 
 CLAIMS = {
@@ -220,6 +220,17 @@ def parse_invocation(argv: list[str]) -> tuple[str, str] | None:
 
 
 def main(argv: list[str]) -> int:
+    if emit_help_if_requested(
+        argv,
+        usage=(
+            "usage: check_company_pack_public_preview.py PACK_DIRECTORY "
+            "[--format json|markdown]"
+        ),
+        purpose=(
+            "Summarize the Public Preview boundary without changing Pack files."
+        ),
+    ):
+        return 0
     invocation = parse_invocation(argv)
     if invocation is None:
         print(
