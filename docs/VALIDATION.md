@@ -2,6 +2,22 @@
 
 `tools/validate_template_pack.py`はPython標準ライブラリだけで動く、fail-closedな最小validatorです。公開starterのschema・CLI・test・runbookの対応は[Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)にまとめています。
 
+## Read next: ideal -> current -> smoke
+
+- **Ideal:** [Company Template](../templates/company/README.md)、[Blocks](../templates/blocks/README.md)、
+  [Governed Records](../templates/records/README.md)、[MOCs](../templates/mocs/README.md)の順に、
+  会社の境界、仕事の単位、証拠の保存先、目的別の読み順を確認します。
+- **Current:** [Company Pack Catalog](COMPANY-PACK-CATALOG.md)でshipped Packの対応を一覧し、
+  [Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)で現在地と次の一手を選びます。
+- **Smoke:** [Starter Walkthrough](STARTER-WALKTHROUGH.md)、[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)、
+  [Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)、および
+  [Public starter smoke regression](../tests/test_public_starter_runbook_smoke.py)で、外部接続なしの
+  candidate pathと回帰契約を確認します。
+
+このfirst-stopはread-only/candidate-onlyの案内です。validatorやsmokeのPASSはruntime、
+provider、Voice / Discord E2E、Human approval、Promotion、Current Truth、Final Human GOを
+作らず、公開状態は`NO_GO_UNPUBLISHED`のままです。
+
 ## 理想と現在の公開candidate
 
 ### 理想の検証フロー
