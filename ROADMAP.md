@@ -26,20 +26,26 @@
 
 ## Current public documentation revision
 
-R153 is the latest public documentation revision and the current public
+R155 is the latest public documentation revision and the current public
 Template/Company/Blocks/Records/MOCs/starter surface at public `main` commit
+`97dca324e28777d4618abf53804f47db995e5abc` with tree
+`9e4ad41d7f79ef6d2d9096ebccaad276ff03615c`. R155 adds direct first-read
+STATUS links to the Company Pack Catalog, Company Pack Guided Next Steps, and
+Schema / Validator / Test Matrix, with explicit read-only/candidate-only and
+`NO_GO_UNPUBLISHED` boundaries. `ROADMAP.md` records the same published entry
+navigation. The regression is
+[`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
+R155 is documentation/static-regression evidence only; the published surface
+remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R154 remains
+historical as the STATUS/ROADMAP synchronization to R153 at public `main`
+commit `f12246af5954735c393108d42b8d2ce873d51406` with tree
+`ae1319d42dc1d68fe860d5fbb7aed503e4db63df`. R153 remains historical as the
+README Document Map **Review-chain artifact map** entry at public `main` commit
 `92b574129ada8d9af2fc2a95e29cdd92590a5dd8` with tree
-`b8d981464e18c31e448b3b57d3bb758ad6f67ae2`. R153 adds a direct README
-Document Map **Review-chain artifact map** entry after Company Pack Guided
-Next Steps and before Installation Lifecycle. It points to
+`b8d981464e18c31e448b3b57d3bb758ad6f67ae2`; it points to
 `STARTER-WALKTHROUGH.md#review-chain-artifact-map` and documents Review Bundle,
 Review Request, Review Response, and Decision Handoff artifact states and next
-handoffs. It keeps the read-only/candidate-only, `NO_GO_UNPUBLISHED`, Human
-Decision, Promotion, Current Truth, runtime, and Public Beta GO boundaries.
-The regression is
-[`test_readme_company_template_usage.py`](tests/test_readme_company_template_usage.py).
-R153 is documentation/static-regression evidence only; the published surface
-remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R152 remains
+handoffs. R152 remains
 historical as the STATUS/ROADMAP synchronization to R151 at public `main`
 commit `371641e16b3857115be3a52ee32a12117c3bd7f1` with tree
 `a6acc28e2455275d294463591f8ffece13ce542f`. R151 remains historical as the

@@ -6,6 +6,47 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicStatusRoadmapSyncTests(unittest.TestCase):
+    def test_public_status_and_roadmap_bind_r155_current_surface(self) -> None:
+        status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
+        roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        status_flat = " ".join(status.split())
+        roadmap_flat = " ".join(roadmap.split())
+
+        for marker in (
+            "R155 is the current public documentation revision",
+            "97dca324e28777d4618abf53804f47db995e5abc",
+            "9e4ad41d7f79ef6d2d9096ebccaad276ff03615c",
+            "Company Pack Catalog",
+            "Company Pack Guided Next Steps",
+            "Schema / Validator / Test Matrix",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(surface="status", marker=marker):
+                self.assertIn(marker, status_flat)
+
+        for marker in (
+            "R155 is the latest public documentation revision",
+            "97dca324e28777d4618abf53804f47db995e5abc",
+            "9e4ad41d7f79ef6d2d9096ebccaad276ff03615c",
+            "Company Pack Catalog",
+            "Company Pack Guided Next Steps",
+            "Schema / Validator / Test Matrix",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(surface="roadmap", marker=marker):
+                self.assertIn(marker, roadmap_flat)
+
+        self.assertIn("R154 remains historical", status_flat)
+        self.assertIn("R154 remains historical", roadmap_flat)
+        self.assertIn("R153 remains historical", status_flat)
+        self.assertIn("R153 remains historical", roadmap_flat)
+        self.assertNotIn("R154 is the current public documentation revision", status_flat)
+        self.assertNotIn("R154 is the latest public documentation revision", roadmap_flat)
+        self.assertNotIn("R153 is the current public documentation revision", status_flat)
+        self.assertNotIn("R153 is the latest public documentation revision", roadmap_flat)
+
     def test_public_status_surface_exposes_pack_entry_links(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
@@ -35,7 +76,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         for marker in (
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             "92b574129ada8d9af2fc2a95e29cdd92590a5dd8",
             "b8d981464e18c31e448b3b57d3bb758ad6f67ae2",
             "README Document Map",
@@ -51,7 +92,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 self.assertIn(marker, status_flat)
 
         for marker in (
-            "R153 is the latest public documentation revision",
+            "R155 is the latest public documentation revision",
             "92b574129ada8d9af2fc2a95e29cdd92590a5dd8",
             "b8d981464e18c31e448b3b57d3bb758ad6f67ae2",
             "README Document Map",
@@ -78,7 +119,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         for marker in (
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             "7633f0d4996c1bd210fb68b65fb12ff81c7fe4b7",
             "5bcb3b231e1377b3505e51385b57feb04f607361",
             "Company Pack Guided Next Steps",
@@ -93,7 +134,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 self.assertIn(marker, status_flat)
 
         for marker in (
-            "R153 is the latest public documentation revision",
+            "R155 is the latest public documentation revision",
             "7633f0d4996c1bd210fb68b65fb12ff81c7fe4b7",
             "5bcb3b231e1377b3505e51385b57feb04f607361",
             "Company Pack Guided Next Steps",
@@ -121,7 +162,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         for marker in (
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             "ea23f3a31ae68025bf23889beea878d3062adefa",
             "0fa942044a2140b243b4a03c831c511b9938332b",
             "Review-chain artifact map",
@@ -135,7 +176,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 self.assertIn(marker, status_flat)
 
         for marker in (
-            "R153 is the latest public documentation revision",
+            "R155 is the latest public documentation revision",
             "ea23f3a31ae68025bf23889beea878d3062adefa",
             "0fa942044a2140b243b4a03c831c511b9938332b",
             "review-chain artifact map",
@@ -179,7 +220,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         for marker in (
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             "1abcfd8f835f7d52627c194aacd8a62efb87875b",
             "2c8579fa242357dcc28a6d73c95011e1446b6846",
             "test_public_starter_runbook_smoke.py",
@@ -196,7 +237,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 self.assertIn(marker, status_flat)
 
         for marker in (
-            "R153 is the latest public documentation revision",
+            "R155 is the latest public documentation revision",
             "Review Request, Review Response, and Decision Handoff",
             "1abcfd8f835f7d52627c194aacd8a62efb87875b",
             "2c8579fa242357dcc28a6d73c95011e1446b6846",
@@ -221,7 +262,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         for marker in (
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             "ebcdd003d062c6bc90b5ea546da3d430911bda74",
             "ec765b5f824a92d2efdc065b4a225d7779a6e9d2",
             "docs/COMPANY-PACK-NEXT-STEPS.md",
@@ -237,7 +278,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 self.assertIn(marker, status_flat)
 
         for marker in (
-            "R153 is the latest public documentation revision",
+            "R155 is the latest public documentation revision",
             "Company Pack Guided Next Steps and Installation Lifecycle",
             "ebcdd003d062c6bc90b5ea546da3d430911bda74",
             "ec765b5f824a92d2efdc065b4a225d7779a6e9d2",
@@ -262,7 +303,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         for marker in (
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             "15a94c9f041c04994ab1ae00630ae0ea58387276",
             "538badff2d305e7b567b312e1ae918579050b44c",
             "README.md",
@@ -276,7 +317,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 self.assertIn(marker, status_flat)
 
         for marker in (
-            "R153 is the latest public documentation revision",
+            "R155 is the latest public documentation revision",
             "15a94c9f041c04994ab1ae00630ae0ea58387276",
             "538badff2d305e7b567b312e1ae918579050b44c",
             "README Document Map layer-wording",
@@ -301,7 +342,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         for marker in (
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             "1667007004f92ac65e0124355fda9b71d81d7e6b",
             "aebd38c2012b745333e66348232dc88804181b65",
             "docs/COMPANY-PACK-NEXT-STEPS.md",
@@ -314,7 +355,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 self.assertIn(marker, status_flat)
 
         for marker in (
-            "R153 is the latest public documentation revision",
+            "R155 is the latest public documentation revision",
             "Company Pack Next Steps entry navigation",
             "1667007004f92ac65e0124355fda9b71d81d7e6b",
             "aebd38c2012b745333e66348232dc88804181b65",
@@ -339,7 +380,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         for marker in (
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             "677bd15bec0fdfd22410b237916d05be0d1ca02c",
             "299a0248734daec3974b80ff174b4540995f4c47",
             "templates/blocks/README.md",
@@ -353,7 +394,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 self.assertIn(marker, status_flat)
 
         for marker in (
-            "R153 is the latest public documentation revision",
+            "R155 is the latest public documentation revision",
             "Blocks/Records navigation",
             "677bd15bec0fdfd22410b237916d05be0d1ca02c",
             "299a0248734daec3974b80ff174b4540995f4c47",
@@ -378,7 +419,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         for marker in (
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             "b878464eca0571fe293222d372cf417c9e9e1573",
             "f5aa3a3fa405c0e5fed4d984921d6ad44dca0bd3",
             "COMPANY-PACK-CATALOG.md",
@@ -395,7 +436,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 self.assertIn(marker, status_flat)
 
         for marker in (
-            "R153 is the latest public documentation revision",
+            "R155 is the latest public documentation revision",
             "Company Pack Catalog Runbook smoke entry",
             "b878464eca0571fe293222d372cf417c9e9e1573",
             "f5aa3a3fa405c0e5fed4d984921d6ad44dca0bd3",
@@ -418,7 +459,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         self.assertIn(
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             status_flat,
         )
         self.assertIn("2a5a65cdbefc0e1fc33c88771a95443ed52d5960", status_flat)
@@ -435,7 +476,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("R109 remains historical", status_flat)
         self.assertIn("NO_GO_UNPUBLISHED", status_flat)
         self.assertIn(
-            "R153 is the latest public documentation revision",
+            "R155 is the latest public documentation revision",
             roadmap_flat,
         )
         self.assertIn("R111 added the schema/validator/test matrix", roadmap_flat)
@@ -462,7 +503,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         self.assertIn(
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             status_flat,
         )
         self.assertIn("de163c060006d50545229fd8ef092f97c583074d", status_flat)
@@ -477,7 +518,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("R107 remains historical provenance", status_flat)
         self.assertIn("NO_GO_UNPUBLISHED", status_flat)
 
-        self.assertIn("R153 is the latest public documentation revision", roadmap_flat)
+        self.assertIn("R155 is the latest public documentation revision", roadmap_flat)
         self.assertIn("R107 remains historical provenance", roadmap_flat)
         self.assertIn("R107 aligned the Company Template ideal order", roadmap_flat)
         self.assertIn("de163c060006d50545229fd8ef092f97c583074d", roadmap_flat)
@@ -500,7 +541,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("NO_GO_UNPUBLISHED", status_flat)
         self.assertIn("real Voice rotation remains unproven", status_flat)
 
-        self.assertIn("R153 is the latest public documentation revision", roadmap_flat)
+        self.assertIn("R155 is the latest public documentation revision", roadmap_flat)
         self.assertIn("R107 remains historical provenance", roadmap_flat)
         self.assertIn("R103 remains the historical README/documentation revision", roadmap_flat)
         self.assertIn("R103 added the README ideal/current layer map", roadmap_flat)
@@ -518,7 +559,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         self.assertIn(
-            "R153 is the current public documentation revision",
+            "R155 is the current public documentation revision",
             status_flat,
         )
         self.assertIn("R92 synchronizes the public STATUS/ROADMAP provenance", status_flat)
@@ -622,7 +663,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("Final Human GO", status_flat)
         self.assertIn("Not completed", status_flat)
 
-        self.assertIn("R153 is the latest public documentation revision", roadmap_flat)
+        self.assertIn("R155 is the latest public documentation revision", roadmap_flat)
         self.assertIn("R107 remains historical provenance", roadmap_flat)
         self.assertIn("R100 is the latest Public Preview Self-check POSIX parity", roadmap_flat)
         self.assertIn("R89 is the latest Validation Guide core POSIX parity", roadmap_flat)
