@@ -6,6 +6,22 @@ read-only CLI です。個別に validator、Catalog、customization checker を
 呼び出す順序を覚えなくても、公開 preview の現在地を決定的な JSON へ
 まとめられます。
 
+## 0. 読み始める場所
+
+このSelf-checkを単独で開いた場合も、まず理想と現在の公開candidateを分けて
+読みます。理想の層は[Template Guide](TEMPLATE-GUIDE.md)から、
+[Company Template](../templates/company/README.md) →
+[Blocks](../templates/blocks/README.md) →
+[Governed Records](../templates/records/README.md) →
+[MOCs](../templates/mocs/company-operations-moc.md)の順に辿ります。
+
+現在の候補を試すときは、[Company Pack Catalog](COMPANY-PACK-CATALOG.md)で
+shipped starterの構造を一覧し、[Starter Walkthrough](STARTER-WALKTHROUGH.md)で
+initializer前の境界と作業copyの作り方を確認します。runtime profileを読む必要が
+ある場合だけ、最後に[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)を参照します。
+これらはread-only/candidate-onlyのnavigationであり、公開状態は常に
+`NO_GO_UNPUBLISHED`です。
+
 ## Quick start
 
 repository root から、公開 example を確認します。

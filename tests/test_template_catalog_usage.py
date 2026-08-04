@@ -616,3 +616,75 @@ class TemplateCatalogUsageTests(unittest.TestCase):
         ):
             with self.subTest(earlier=earlier, later=later):
                 self.assertLess(section.index(earlier), section.index(later))
+
+    def test_public_preview_self_check_exposes_cross_navigation_entry(self) -> None:
+        self_check = (ROOT / "docs" / "PUBLIC-PREVIEW-SELF-CHECK.md").read_text(
+            encoding="utf-8"
+        )
+        reading = self_check.index("## 0. 読み始める場所")
+        quick_start = self_check.index("## Quick start", reading)
+        section = self_check[reading:quick_start]
+
+        required = (
+            "[Template Guide](TEMPLATE-GUIDE.md)",
+            "[Company Template](../templates/company/README.md)",
+            "[Blocks](../templates/blocks/README.md)",
+            "[Governed Records](../templates/records/README.md)",
+            "[MOCs](../templates/mocs/company-operations-moc.md)",
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+            "[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)",
+            "理想",
+            "現在",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        for relative_path in (
+            "TEMPLATE-GUIDE.md",
+            "../templates/company/README.md",
+            "../templates/blocks/README.md",
+            "../templates/records/README.md",
+            "../templates/mocs/company-operations-moc.md",
+            "COMPANY-PACK-CATALOG.md",
+            "STARTER-WALKTHROUGH.md",
+            "INSTALLATION-LIFECYCLE.md",
+        ):
+            with self.subTest(relative_path=relative_path):
+                self.assertTrue((ROOT / "docs" / relative_path).exists())
+
+        for earlier, later in (
+            (
+                "[Template Guide](TEMPLATE-GUIDE.md)",
+                "[Company Template](../templates/company/README.md)",
+            ),
+            (
+                "[Company Template](../templates/company/README.md)",
+                "[Blocks](../templates/blocks/README.md)",
+            ),
+            (
+                "[Blocks](../templates/blocks/README.md)",
+                "[Governed Records](../templates/records/README.md)",
+            ),
+            (
+                "[Governed Records](../templates/records/README.md)",
+                "[MOCs](../templates/mocs/company-operations-moc.md)",
+            ),
+            (
+                "[MOCs](../templates/mocs/company-operations-moc.md)",
+                "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            ),
+            (
+                "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+                "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+            ),
+            (
+                "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+                "[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)",
+            ),
+        ):
+            with self.subTest(earlier=earlier, later=later):
+                self.assertLess(section.index(earlier), section.index(later))
