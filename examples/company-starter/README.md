@@ -44,7 +44,8 @@ install、deploy、restart、restore、Voice / Discord E2E、provider接続を�
   [MOCs](../../templates/mocs/README.md)の責任と読み順を選ぶ。
 - **Current:** [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)で、この
   starterに実際に同梱されたBlock・Record・MOCを一覧し、[Schema / Validator / Test Matrix](../../docs/SCHEMA-VALIDATOR-MATRIX.md)
-  で契約と回帰testの対応を確認する。
+  で契約と回帰testの対応を確認する。[Company Pack Guided Next Steps](../../docs/COMPANY-PACK-NEXT-STEPS.md)
+  で現在地と次の一手も確認する。
 - **Smoke:** [Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)の作業copy手順と
   [Public Preview Self-check](../../docs/PUBLIC-PREVIEW-SELF-CHECK.md)を外部接続なしで
   実行する。

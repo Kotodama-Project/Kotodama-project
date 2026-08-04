@@ -20,7 +20,8 @@ Catalogは、テンプレートを使い始める人が次の3つを同じ順序
   読み順を選びます。
 - **Current:** [Company starter](../examples/company-starter/README.md)とこの
   Catalogで、公開Packに実際に同梱されたBlock・Record・MOC・flow位置を
-  read-onlyで一覧します。
+  read-onlyで一覧し、[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)で
+  現在地と次の一手を確認します。
 - **Smoke:** [Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)と
   [Starter Walkthrough](STARTER-WALKTHROUGH.md)の外部接続なしRunbook smoke、
   および[Catalog entry regression](../tests/test_company_pack_catalog_entry_navigation.py)

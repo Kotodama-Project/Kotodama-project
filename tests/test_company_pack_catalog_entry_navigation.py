@@ -19,6 +19,7 @@ class CompanyPackCatalogEntryNavigationTests(unittest.TestCase):
             "../templates/mocs/README.md",
             "**Current:**",
             "../examples/company-starter/README.md",
+            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
             "**Smoke:**",
             "SCHEMA-VALIDATOR-MATRIX.md",
             "STARTER-WALKTHROUGH.md",

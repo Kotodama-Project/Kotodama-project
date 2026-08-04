@@ -37,6 +37,8 @@ Promotion、Current Truth、runtime activation、Public Beta GOを意味しま�
   [MOCs](mocs/README.md)の役割と読み順を確認する。
 - **Current:** [Company Pack Catalog](../docs/COMPANY-PACK-CATALOG.md)で
   公開starterの実際のBlock・Record・MOC対応を一覧し、
+  [Company Pack Guided Next Steps](../docs/COMPANY-PACK-NEXT-STEPS.md)で
+  現在地と次の一手を確認してから、
   [Schema / Validator / Test Matrix](../docs/SCHEMA-VALIDATOR-MATRIX.md)で
   契約・validator・回帰testの対応を確認する。
 - **Smoke:** [Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)の作業copy手順と
