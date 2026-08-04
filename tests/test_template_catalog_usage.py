@@ -6,6 +6,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TemplateCatalogUsageTests(unittest.TestCase):
+    def test_runtime_profile_row_links_directly_to_installation_lifecycle(self) -> None:
+        catalog = (ROOT / "templates" / "README.md").read_text(encoding="utf-8")
+        row = next(
+            line for line in catalog.splitlines() if "[Runtime profiles]" in line
+        )
+        self.assertIn(
+            "[Installation Lifecycle](../docs/INSTALLATION-LIFECYCLE.md)",
+            row,
+        )
+        self.assertTrue((ROOT / "docs" / "INSTALLATION-LIFECYCLE.md").is_file())
+        self.assertIn("read-only/candidate-only", " ".join(catalog.split()))
+        self.assertIn("NO_GO_UNPUBLISHED", catalog)
+
     def test_template_catalog_explains_layer_order_and_current_preview_boundary(self) -> None:
         catalog = (ROOT / "templates" / "README.md").read_text(encoding="utf-8")
         flat = " ".join(catalog.split())
