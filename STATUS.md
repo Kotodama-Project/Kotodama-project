@@ -44,8 +44,10 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R105 is the current public Template Catalog/Installation Lifecycle candidate
-and the latest Template/Company/Blocks/Records/MOCs/starter navigation surface.
+R107 is the current public Company Template layer-order candidate and the latest
+Template/Company/Blocks/Records/MOCs/starter navigation surface at public
+`main` commit `de163c060006d50545229fd8ef092f97c583074d`, tree
+`a9679c8f2ff04146b8ddaf1803ee094b56b5d4bc`.
 R37 introduced
 the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a deterministic `--format markdown`
 summary. R45 added the saved-bundle to Review Request boundary, R46
@@ -157,6 +159,13 @@ candidate at commit `615fdbab66ed1ad3fa779fb762dc8a27eca857d1`, tree
 `3b881f999704e1c3e3c3f4c0929fd019c6f163ed`. These are documentation/test
 changes only; `read-only/candidate-only` and `NO_GO_UNPUBLISHED` remain in
 force, and real Voice rotation remains unproven.
+
+R106 synchronized STATUS/ROADMAP provenance to R105, which remains historical.
+R107 aligned the Company Template ideal order to Human Intent -> Blocks ->
+Governed Records -> MOCs -> validator/review before optional runtime profile
+selection. This is documentation/test hardening only; the public path remains
+read-only/candidate-only and `NO_GO_UNPUBLISHED`, with no runtime, Voice,
+provider, Promotion, Current Truth, or Final Human GO claim.
 
 公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Review Request、Response、Decision Handoffは保存済みchainを再入力なしで運びますが、すべてread-only/candidate-onlyです。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。
 

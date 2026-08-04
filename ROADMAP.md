@@ -25,9 +25,9 @@
 
 ## Current public documentation revision
 
-R106 is the latest STATUS/ROADMAP provenance synchronization. R105 is the
-latest public Template Catalog/Installation Lifecycle revision and the current
-public Template/Company/Blocks/Records/MOCs/starter surface. R103 remains the
+R108 is the latest STATUS/ROADMAP provenance synchronization. R107 is the
+latest public Company Template layer-order revision and the current public
+Template/Company/Blocks/Records/MOCs/starter surface. R103 remains the
 historical README/documentation revision. R100 is the latest Public Preview
 Self-check POSIX parity, R89 is the latest Validation Guide core POSIX parity,
 R88 is the latest guided onboarding POSIX parity, R87 is the latest Template
@@ -53,7 +53,7 @@ without changing the Company Pack surface or runtime claims. R62 remains the
 latest navigation synchronization in that historical wave; R74 is the latest
 parity synchronization for the resolved Compose candidate in that wave. R68
 added the README Voice rotation ideal/current contract while preserving the
-runtime boundary. R105 remains the current Company Pack surface label.
+runtime boundary. R107 remains the current Company Pack surface label.
 
 R82 is the latest runbook usability synchronization in that historical wave.
 R83 is the latest Validation Guide usability synchronization in that wave. R84
@@ -81,6 +81,16 @@ Template Catalog Runtime profiles row and is public `main` commit
 test hardening only; they retain read-only/candidate-only,
 `NO_GO_UNPUBLISHED`, and no runtime/Voice/provider/Promotion/Current Truth/
 Final Human GO claim.
+
+R106 synchronized STATUS/ROADMAP provenance to R105, which remains historical.
+R107 aligned the Company Template ideal order to Human Intent -> Blocks ->
+Governed Records -> MOCs -> validator/review before optional runtime profile
+selection and is public `main` commit
+`de163c060006d50545229fd8ef092f97c583074d` with tree
+`a9679c8f2ff04146b8ddaf1803ee094b56b5d4bc`. R108 synchronizes this provenance
+surface. These are documentation/test hardening only; read-only/candidate-only
+and `NO_GO_UNPUBLISHED` remain in force, and runtime, Voice, provider,
+Promotion, Current Truth, and Final Human GO remain outside scope.
 
 - [x] Template/Company/Blocks/Records/MOCs/starter navigation synchronization
       with ideal/current usage, dynamic Pack-count guidance, and the
