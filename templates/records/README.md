@@ -38,6 +38,30 @@ Source Record
 
 公開validatorは、Recordの必須field、snake_case、作成roleと検証roleの分離、retention参照、自己承認/自己Promotion禁止、および全Block出力との一対一対応を検査します。サンプルは値の入った本番Recordではなく、`required_fields`を示すテンプレートです。
 
+## 公開starterの9 Governed Recordsを目的で選ぶ
+
+公開starterのRecord契約は、同じcanonical flowの各段階で「何を残すか」を
+選ぶための一覧です。以下の9件はすべて`examples/company-starter/records/`に
+同梱されたshipped JSONで、順序はSourceからPromotion Decisionまでの標準鎖に
+一致します。
+
+| 段階 | 目的 | shipped contract |
+|---|---|---|
+| Source Record | 出典、同意/アクセス、digest、保持方針を束ねる | [source-record.json](../../examples/company-starter/records/source-record.json) |
+| Intent Candidate | Sourceから抽出した確認待ちの意図を残す | [intent-candidate.json](../../examples/company-starter/records/intent-candidate.json) |
+| Decision Record | 人間またはpolicyの判断と根拠を残す | [decision-record.json](../../examples/company-starter/records/decision-record.json) |
+| Work Order Candidate | target、action、revision、effects、rollback、期限を束ねる | [work-order-candidate.json](../../examples/company-starter/records/work-order-candidate.json) |
+| Capability Grant Candidate | subjectと最小actionをWork Orderへ期限付きで束ねる | [capability-grant-candidate.json](../../examples/company-starter/records/capability-grant-candidate.json) |
+| Change Candidate | Work Order下で作った差分・成果物を残す | [change-candidate.json](../../examples/company-starter/records/change-candidate.json) |
+| Verification Receipt | exact candidateのcheck、negative test、effectを残す | [verification-receipt.json](../../examples/company-starter/records/verification-receipt.json) |
+| Promotion Candidate | Promotion審査へ渡すreceiptの集合を残す | [promotion-candidate.json](../../examples/company-starter/records/promotion-candidate.json) |
+| Promotion Decision Record | 人間のPromotion判断を残す（Promotion自体は実行しない） | [promotion-decision-record.json](../../examples/company-starter/records/promotion-decision-record.json) |
+
+この表はRecordの目的と参照先を案内するnavigationです。9件とも構造候補であり、
+`candidate-only`、`read-only`、`NO_GO_UNPUBLISHED`の境界を保ちます。Voiceのraw
+audio、transcript、speaker attribution、retention/delete receipt、実際のPromotionや
+Current Truthは、この公開Record catalogが生成・保存・証明するものではありません。
+
 Recordを実際のcandidate chainへ渡すときは、まずreview bundleでBlock・Record・
 MOCのbytesを固定し、[Review Request](../../docs/REVIEW-REQUEST.md)、[Review Response](../../docs/REVIEW-RESPONSE.md)、
 [Decision Handoff](../../docs/REVIEW-DECISION-HANDOFF.md)で保存済み件数と参照を

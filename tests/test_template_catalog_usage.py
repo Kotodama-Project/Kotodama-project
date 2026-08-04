@@ -287,6 +287,57 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             with self.subTest(shipped_moc=shipped_moc):
                 self.assertIn(shipped_moc, current)
 
+    def test_records_catalog_exposes_all_shipped_records_in_canonical_order(self) -> None:
+        records = (ROOT / "templates" / "records" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        record_map = records.index("## 公開starterの9 Governed Recordsを目的で選ぶ")
+        section_end = records.index("## まだ証明しないこと", record_map)
+        section = records[record_map:section_end]
+
+        required = (
+            "Source Record",
+            "Intent Candidate",
+            "Decision Record",
+            "Work Order Candidate",
+            "Capability Grant Candidate",
+            "Change Candidate",
+            "Verification Receipt",
+            "Promotion Candidate",
+            "Promotion Decision Record",
+            "canonical flow",
+            "candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        paths = (
+            "source-record.json",
+            "intent-candidate.json",
+            "decision-record.json",
+            "work-order-candidate.json",
+            "capability-grant-candidate.json",
+            "change-candidate.json",
+            "verification-receipt.json",
+            "promotion-candidate.json",
+            "promotion-decision-record.json",
+        )
+        for path in paths:
+            marker = f"../../examples/company-starter/records/{path}"
+            with self.subTest(path=path):
+                self.assertIn(marker, section)
+                self.assertTrue(
+                    (ROOT / "examples" / "company-starter" / "records" / path).exists()
+                )
+
+        for earlier, later in zip(paths, paths[1:]):
+            earlier_marker = f"../../examples/company-starter/records/{earlier}"
+            later_marker = f"../../examples/company-starter/records/{later}"
+            with self.subTest(earlier=earlier, later=later):
+                self.assertLess(section.index(earlier_marker), section.index(later_marker))
+
     def test_template_guide_and_catalog_expose_work_copy_posix_parity(self) -> None:
         guide = (ROOT / "docs" / "TEMPLATE-GUIDE.md").read_text(encoding="utf-8")
         catalog = (ROOT / "docs" / "COMPANY-PACK-CATALOG.md").read_text(
