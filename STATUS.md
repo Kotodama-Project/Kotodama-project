@@ -44,7 +44,7 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R91 is the current public Template/Company/Blocks/Records/MOCs/starter
+R101 is the current public Template/Company/Blocks/Records/MOCs/starter
 documentation surface. R37 introduced the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a deterministic `--format markdown`
 summary. R45 added the saved-bundle to Review Request boundary, R46
 added the dynamic Review Response boundary, R47 added the dynamic Decision
@@ -135,6 +135,17 @@ R92 synchronizes the public STATUS/ROADMAP provenance to the R91 public
 candidate (`b071ce9b2fd4167c8ac199bcd1983b64224fba43`, tree
 `c6c7bafebd9cca6bdc37365af560b2f11f9fc7e8`). This synchronization is itself
 documentation-only; `NO_GO_UNPUBLISHED` remains unchanged.
+
+R100 added the standalone Public Preview Self-check cross-navigation from the
+ideal Company Template layers through the current Catalog, Starter Walkthrough,
+and Installation Lifecycle path. R101 added the standalone Installation
+Lifecycle reading entry from Template Guide -> Company Template -> Blocks ->
+Governed Records -> MOCs, then Catalog -> Starter Walkthrough before profile
+selection. The current public documentation candidate is R101 at commit
+`78369d2e3575989a4da98979d835a8e8c7806af1`, tree
+`0ac21454fa66d8d4eba217ef755e631b58909172`. These are documentation/test
+changes only; `read-only/candidate-only` and `NO_GO_UNPUBLISHED` remain in
+force, and real Voice rotation remains unproven.
 
 公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Review Request、Response、Decision Handoffは保存済みchainを再入力なしで運びますが、すべてread-only/candidate-onlyです。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。
 

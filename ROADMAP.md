@@ -25,9 +25,9 @@
 
 ## Current public documentation revision
 
-R92 is the latest STATUS/ROADMAP provenance synchronization. R91 is the latest
+R102 is the latest STATUS/ROADMAP provenance synchronization. R101 is the latest
 public documentation/test revision and the current public Template/Company/
-Blocks/Records/MOCs/starter surface. R90 is the latest Public Preview
+Blocks/Records/MOCs/starter surface. R100 is the latest Public Preview
 Self-check POSIX parity, R89 is the latest Validation Guide core POSIX parity,
 R88 is the latest guided onboarding POSIX parity, R87 is the latest Template
 Guide and Catalog POSIX parity, and R86 is the latest STATUS/ROADMAP
@@ -52,7 +52,7 @@ without changing the Company Pack surface or runtime claims. R62 remains the
 latest navigation synchronization in that historical wave; R74 is the latest
 parity synchronization for the resolved Compose candidate in that wave. R68
 added the README Voice rotation ideal/current contract while preserving the
-runtime boundary. R91 remains the current Company Pack surface label.
+runtime boundary. R101 remains the current Company Pack surface label.
 
 R82 is the latest runbook usability synchronization in that historical wave.
 R83 is the latest Validation Guide usability synchronization in that wave. R84
@@ -62,6 +62,16 @@ extend the public documentation/test surface with provenance and POSIX parity;
 each revision keeps the ideal/current distinction and the read-only/
 candidate-only boundary explicit. None adds runtime, Voice, Discord, provider,
 authority, Promotion, Current Truth, Final Human GO, or Public Beta access.
+
+R100 added the standalone Public Preview Self-check cross-navigation. R101 added
+the Installation Lifecycle standalone reading entry from Template Guide ->
+Company Template -> Blocks -> Governed Records -> MOCs, then Catalog -> Starter
+Walkthrough before profile selection. R101 is public `main` commit
+`78369d2e3575989a4da98979d835a8e8c7806af1` with tree
+`0ac21454fa66d8d4eba217ef755e631b58909172`. These revisions are documentation/
+test hardening only; they retain read-only/candidate-only,
+`NO_GO_UNPUBLISHED`, and no runtime/Voice/provider/Promotion/Current Truth/
+Final Human GO claim.
 
 - [x] Template/Company/Blocks/Records/MOCs/starter navigation synchronization
       with ideal/current usage, dynamic Pack-count guidance, and the
