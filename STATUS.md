@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-08-04
+Updated: 2026-08-05
 
 | Surface | Status |
 |---|---|
@@ -47,19 +47,39 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R167 is the current public documentation revision and the latest
+R172 is the current public documentation revision and the latest
 Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
-published R166 candidate at public `main` commit
-`030a2e14aa15ca3f201b96105743c48eeeee54cb`, tree
-`08c4f8b9a784b1a30d82bf68b7316b5e3b32e6b9`. R167 synchronizes STATUS and
-ROADMAP with R166's Starter Walkthrough full review-chain smoke commands:
-`python -m unittest tests.test_public_starter_runbook_smoke -v` and
-`python3 -m unittest tests.test_public_starter_runbook_smoke -v`. The direct
-test link, guided/plain boundaries, review-chain language,
-`read-only/candidate-only`, and `NO_GO_UNPUBLISHED` remain explicit. The
-regression is [`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
-R167 is documentation/static-regression evidence only; the published surface
-remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R166 remains
+published R171 candidate at public `main` commit
+`c4a15b0e91a3bacd9125a24e1111521b467c174c`, tree
+`ec7b2f200b427b2f4ff6dc3cf228fe4a19c8dd08`. R172 synchronizes STATUS and
+ROADMAP with R171's [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md)
+post-PASS path: [Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)
+then Review Bundle -> Review Request -> Review Response -> Decision Handoff.
+The external-free smoke is
+[`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py),
+run as `python -m unittest tests.test_public_starter_runbook_smoke -v` or
+`python3 -m unittest tests.test_public_starter_runbook_smoke -v`. This remains
+`read-only/candidate-only`; `NO_GO_UNPUBLISHED`, runtime, Voice/Discord,
+provider, Promotion, Current Truth, Final Human GO, and Public Beta boundaries
+remain unchanged. The orientation regression is
+[`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
+R172 is documentation/static-regression evidence only.
+
+R171 remains historical as the Self-check review-chain next-step revision at
+public `main` commit `c4a15b0e91a3bacd9125a24e1111521b467c174c`, tree
+`ec7b2f200b427b2f4ff6dc3cf228fe4a19c8dd08`. R170 remains historical as the
+Validation Guide customization/bundle stop-semantics revision at commit
+`05a5292a129192b4c0524000f9497af7cdb7e28f`, tree
+`fd614bc1fd958b3b7a57fddec0492ceb2897c9c0`. R169 remains historical as the
+Template Guide candidate-runbook revision at commit
+`e6db0ac14a5defd4649cb16e0331eb01c797fa3c`, tree
+`167637f9d64f06164358d8ea80575a7b4bc2e6cd`. R168 remains historical as the
+README Company Template/Blocks/MOCs usage-map revision at commit
+`9a3eb71f6d77212c1a0dad0c851b2ebccbd613f6`, tree
+`20a3a0e83612ac24bd97ef5ed72ebb6c24615649`. R167 remains historical as the
+Starter Walkthrough smoke-command and STATUS/ROADMAP orientation revision at
+commit `f84aaf8c91bddee858a320ba7e2629b5381c793c`, tree
+`0b700d4a73d975377a705fd3d0a0b7678f34e893`. R166 remains
 historical as the Starter Walkthrough and STATUS/ROADMAP orientation revision
 at public `main` commit `030a2e14aa15ca3f201b96105743c48eeeee54cb`, tree
 `08c4f8b9a784b1a30d82bf68b7316b5e3b32e6b9`; its R165 Validation parity and
