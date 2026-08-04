@@ -109,6 +109,17 @@ deploy, restart, restore, Voice/Discord E2E, provider connection, Promotion,
 Current Truth, Final Human GO, or Public Beta access. This is documentation/test
 hardening only; `NO_GO_UNPUBLISHED` remains unchanged.
 
+R82 clarified the ideal six-phase installation lifecycle against the current
+sanitized public candidate and added PowerShell/POSIX runbook and validator
+command parity. R83 aligned the Validation Guide ideal/current boundary and its
+lifecycle command paths. R84 added README PowerShell/POSIX command parity for
+Quick Start, Review Bundle, and runtime-candidate validation. R85 added
+onboarding PowerShell/POSIX command parity for customization, planning,
+Catalog/self-check, validator, and review-bundle preparation. These are
+documentation/test hardening only; they do not add runtime, Voice, Discord,
+provider, authority, Promotion, Current Truth, Final Human GO, or Public Beta
+access, and `NO_GO_UNPUBLISHED` remains unchanged.
+
 公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Review Request、Response、Decision Handoffは保存済みchainを再入力なしで運びますが、すべてread-only/candidate-onlyです。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。
 
 Source binding verification candidateは、privateなR31 record、Source Content、aggregate access evidenceをbounded no-link readerで照合し、strict parse、exact raw-byte binding、lossless R30 source-binding projection digest、二回のterminal rereadを報告します。reportは常に`CANDIDATE_ONLY`で、成功しても`STABLE_POSTCHECK_UNVERIFIED` / `ELIGIBLE_UNVERIFIED`です。full R31 schema、cross-file atomic snapshot、locator resolution、origin、authenticity、consent authority、retention enforcement、trusted time、Intent builder、runtime、GOは未証明です。populated inputとprivate projectionはrepositoryへ含めていません。

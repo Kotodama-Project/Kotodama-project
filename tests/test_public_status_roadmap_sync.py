@@ -80,6 +80,22 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
             "current local/synthetic, read-only/candidate-only starter path",
             status_flat,
         )
+        self.assertIn(
+            "R82 clarified the ideal six-phase installation lifecycle",
+            status_flat,
+        )
+        self.assertIn(
+            "R83 aligned the Validation Guide ideal/current boundary",
+            status_flat,
+        )
+        self.assertIn(
+            "R84 added README PowerShell/POSIX command parity",
+            status_flat,
+        )
+        self.assertIn(
+            "R85 added onboarding PowerShell/POSIX command parity",
+            status_flat,
+        )
         self.assertIn("Installation Lifecycle remains profile guidance only", status_flat)
         self.assertIn(
             "target-bound runtime receipt",
@@ -108,6 +124,22 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         )
         self.assertIn(
             "R80 is the latest starter navigation usability synchronization",
+            roadmap_flat,
+        )
+        self.assertIn(
+            "R82 is the latest runbook usability synchronization",
+            roadmap_flat,
+        )
+        self.assertIn(
+            "R83 is the latest Validation Guide usability synchronization",
+            roadmap_flat,
+        )
+        self.assertIn(
+            "R84 is the latest README command parity synchronization",
+            roadmap_flat,
+        )
+        self.assertIn(
+            "R85 is the latest onboarding command parity synchronization",
             roadmap_flat,
         )
         self.assertIn("R62 remains the latest navigation synchronization", roadmap_flat)

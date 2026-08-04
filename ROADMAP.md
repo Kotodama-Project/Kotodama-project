@@ -43,6 +43,14 @@ for the resolved Compose candidate. R68 added the README Voice rotation
 ideal/current contract while preserving the runtime boundary. R58 remains the
 current Company Pack surface label.
 
+R82 is the latest runbook usability synchronization. R83 is the latest
+Validation Guide usability synchronization. R84 is the latest README command
+parity synchronization. R85 is the latest onboarding command parity
+synchronization. Each revision keeps the ideal/current distinction and the
+read-only/candidate-only boundary explicit; none adds runtime, Voice, Discord,
+provider, authority, Promotion, Current Truth, Final Human GO, or Public Beta
+access.
+
 - [x] Template/Company/Blocks/Records/MOCs/starter navigation synchronization
       with ideal/current usage, dynamic Pack-count guidance, and the
       read-only Review Request -> Review Response -> Decision Handoff path
@@ -65,6 +73,10 @@ current Company Pack surface label.
 - [x] Starter ideal/current navigation and Installation Lifecycle profile guidance
 - [x] README Voice rotation ideal/current contract synchronization with an
       explicit no-runtime and no-Public-Beta boundary
+- [x] Runbook ideal/current and PowerShell/POSIX command parity synchronization
+- [x] Validation Guide ideal/current and PowerShell/POSIX command parity synchronization
+- [x] README Quick Start, Review Bundle, and runtime-candidate command parity synchronization
+- [x] Starter onboarding customization, planning, Catalog, validator, and review-bundle command parity synchronization
 
 - [x] Sanitized Compose minimum and Proxmox segmented lifecycle contracts
 - [x] Machine-checked preflight/apply/verify/rollback/isolated-restore evidence requirements
