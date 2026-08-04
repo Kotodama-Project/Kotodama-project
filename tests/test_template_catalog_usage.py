@@ -61,6 +61,66 @@ class TemplateCatalogUsageTests(unittest.TestCase):
         )
         self.assertLess(starter, lifecycle)
 
+    def test_company_pack_catalog_exposes_direct_links_to_each_template_layer(self) -> None:
+        catalog = (ROOT / "docs" / "COMPANY-PACK-CATALOG.md").read_text(
+            encoding="utf-8"
+        )
+        layer_map = catalog.index("## Template層への直接リンク")
+        section_end = catalog.index("## Quick start", layer_map)
+        section = catalog[layer_map:section_end]
+
+        required = (
+            "[Company Template](../templates/company/README.md)",
+            "[Blocks](../templates/blocks/README.md)",
+            "[Governed Records](../templates/records/README.md)",
+            "[MOCs](../templates/mocs/company-operations-moc.md)",
+            "[Company starter](../examples/company-starter/README.md)",
+            "[Template Guide](TEMPLATE-GUIDE.md)",
+            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+            "[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)",
+            "[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)",
+            "navigation-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        for relative_path in (
+            "../templates/company/README.md",
+            "../templates/blocks/README.md",
+            "../templates/records/README.md",
+            "../templates/mocs/company-operations-moc.md",
+            "../examples/company-starter/README.md",
+            "TEMPLATE-GUIDE.md",
+            "STARTER-WALKTHROUGH.md",
+            "PUBLIC-PREVIEW-SELF-CHECK.md",
+            "INSTALLATION-LIFECYCLE.md",
+        ):
+            with self.subTest(relative_path=relative_path):
+                self.assertTrue((ROOT / "docs" / relative_path).exists())
+
+        for earlier, later in (
+            (
+                "[Company Template](../templates/company/README.md)",
+                "[Blocks](../templates/blocks/README.md)",
+            ),
+            (
+                "[Blocks](../templates/blocks/README.md)",
+                "[Governed Records](../templates/records/README.md)",
+            ),
+            (
+                "[Governed Records](../templates/records/README.md)",
+                "[MOCs](../templates/mocs/company-operations-moc.md)",
+            ),
+            (
+                "[MOCs](../templates/mocs/company-operations-moc.md)",
+                "[Company starter](../examples/company-starter/README.md)",
+            ),
+        ):
+            with self.subTest(earlier=earlier, later=later):
+                self.assertLess(section.index(earlier), section.index(later))
+
     def test_template_catalog_exposes_copy_paste_first_use_path(self) -> None:
         catalog = (ROOT / "templates" / "README.md").read_text(encoding="utf-8")
         first_use = catalog.index("## 最短の確認手順")

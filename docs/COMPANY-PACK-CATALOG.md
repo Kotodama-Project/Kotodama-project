@@ -29,6 +29,28 @@ Discord E2E、Promotion、Current Truth、Final Human GOを実行しません。
 やvalidatorのPASSは構造を読めたという意味だけで、公開アクセスは常に
 `NO_GO_UNPUBLISHED`です。
 
+## Template層への直接リンク
+
+Catalogから詳細へ移動するときは、次の順で層を辿ります。これは同じ
+Company governance chainを読むためのnavigation-only導線であり、各リンク先の
+starterやREADMEが新しいSSOT、実行権限、Promotion、Current Truthを作ることは
+ありません。
+
+| 層 | 何を読むか | 直接リンク |
+|---|---|---|
+| Company Template | 会社の境界、owner、profile、導入順 | [Company Template](../templates/company/README.md) |
+| Blocks | 入力・出力・authority・verificationの小さな部品 | [Blocks](../templates/blocks/README.md) |
+| Governed Records | Block出力を証拠鎖へ残すRecord契約 | [Governed Records](../templates/records/README.md) |
+| MOCs | 目的別の読み順と入口 | [MOCs](../templates/mocs/company-operations-moc.md) |
+| 実例 | 9 Blocks・9 Records・3 MOCsのJSON starter | [Company starter](../examples/company-starter/README.md) |
+
+詳細な使い方と現在の境界は、[Template Guide](TEMPLATE-GUIDE.md) →
+[Starter Walkthrough](STARTER-WALKTHROUGH.md) → [Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)
+の順に確認します。runtime profileを比較する必要がある場合だけ、最後に
+[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)を読みます。全リンクは
+read-only/candidate-onlyの公開previewを案内し、状態は常に
+`NO_GO_UNPUBLISHED`です。
+
 ## Quick start
 
 repository rootから、公開exampleをそのまま表示します。
