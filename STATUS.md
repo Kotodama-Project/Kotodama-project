@@ -34,6 +34,7 @@ Updated: 2026-08-05
 | [Template Guide / Starter Walkthrough](docs/TEMPLATE-GUIDE.md) | Published ideal/current usage docs; starter counts are examples, not universal Pack invariants |
 | [Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) | Fourteen public entrypoints with fixed help boundaries and one candidate-only Smoke command |
 | One-command review-chain smoke | Published standard-library-only local smoke; exact thirteen steps in a temporary workspace, no retained artifacts or GO |
+| [5-minute tour](docs/FIVE-MINUTE-TOUR.md) | Clone-to-result first-visit path; external-free local smoke and bounded next choices only |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -49,7 +50,28 @@ Updated: 2026-08-05
 
 ## Latest public template result
 
-R177 is the current public documentation revision and the latest
+R178 is the current public documentation revision and the latest
+Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
+published R177 fixed point at public `main` commit
+`d5d6187c7e5e7b6c4fe44e4b60a8aa096d4e8dc0`, tree
+`efeffdaa7147fd83d763398c1c205f3708a67630`. The new
+[5-minute tour](docs/FIVE-MINUTE-TOUR.md) gives a first-time visitor exact
+PowerShell/POSIX `git clone` -> repository root -> one-command smoke steps,
+explains the PASS/REFUSED report contract, and routes only to bounded public
+next choices. It does not install packages, persist review artifacts, or route
+the reader into runtime/provider/Discord/deploy mutation. The actual smoke
+still runs the exact thirteen existing Company Pack steps, deletes its
+temporary workspace, and keeps every authority/runtime/GO claim false. This
+remains `read-only/candidate-only`; `NO_GO_UNPUBLISHED`, consent/privacy,
+protected review, identity/authority/approval, runtime, Voice/Discord,
+provider, Promotion, Current Truth, Final Human GO, and Public Beta boundaries
+remain unchanged. The reader regression is
+[`test_five_minute_tour.py`](tests/test_five_minute_tour.py), and the
+orientation regression remains
+[`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
+R178 is documentation/static-regression evidence only.
+
+R177 remains historical as the latest
 Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
 published R176 candidate at public `main` commit
 `722345885b8767ee89a28e10f06db2de1ee73ace`, tree

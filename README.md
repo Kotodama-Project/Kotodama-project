@@ -590,6 +590,7 @@ Kotodama は、初期の言葉を消すのではなく、後続の指示、実�
 
 | 目的 | 最初に読む | 次にできること |
 |---|---|---|
+| cloneから最短で安全な動作確認をする | [5-minute tour](docs/FIVE-MINUTE-TOUR.md) | clone → 1 command → 結果を読むまでを外部接続なしで試す |
 | Company Template、Blocks、Records、MOCsの関係だけを確認する | [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) | [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)で理想/currentの差分を読む |
 | starterを自分の候補へ複製し、localで検査する | [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) | initializer、customization checker、validator、Review Bundleをread-only/candidate-onlyで実行する |
 | runtime候補のprofileを選ぶ | [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md) | `compose_minimum`または`proxmox_segmented`を選び、preflightから始める |
@@ -847,6 +848,7 @@ MOCs）が理想のCompany Template層を読む順番です。
 
 - [Project Status](STATUS.md) — 現在公開しているものと未証明範囲
 - [Roadmap to Public Beta](ROADMAP.md) — access を開く前に必要な gate
+- [5-minute tour](docs/FIVE-MINUTE-TOUR.md) — cloneから一行JSONの読み方までを約5分で確認する
 - [Template Guide](docs/TEMPLATE-GUIDE.md) — Blocks / Records / MOCs の編集
 - [Company Template](templates/company/README.md) — 会社の境界と目的を定義する理想の起点
 - [Blocks](templates/blocks/README.md) — 再利用する仕事の単位
@@ -856,7 +858,7 @@ MOCs）が理想のCompany Template層を読む順番です。
 - [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) — current read-only/candidate-onlyの最短体験
 - [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) — validator / Catalog / customization境界の一括read-only確認
 - [Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md) — current stage、理想flow、分類別件数、次コマンドを案内する
-- [Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) — 公開13 CLIの入力、状態、次handoff、共通helpを一覧する
+- [Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) — 公開14 CLIの入力、状態、次handoff、共通helpを一覧する
 - [Review-chain artifact map](docs/STARTER-WALKTHROUGH.md#review-chain-artifact-map) — Review Bundle、Review Request、Review Response、Decision Handoffのartifact states and next handoffs
 - [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md) — runtime profileを選ぶ前のread-only導線
 
