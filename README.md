@@ -637,6 +637,14 @@ python -m pip install -r requirements-test.txt
 python -m unittest discover -s tests -v
 ```
 
+POSIX shellでは、同じtest-only dependencyとfull contract suiteを次で実行
+できます。
+
+```bash
+python3 -m pip install -r requirements-test.txt
+python3 -m unittest discover -s tests -v
+```
+
 個別の構造検査、negative case、JSON の安全な出力規則は [Validation Guide](docs/VALIDATION.md) を参照してください。test PASS は、対象になった local bytes と契約の証拠です。Discord、provider、Proxmox、Docker daemon、本番 DB、実 Voice、Public Beta の E2E 証明へ拡張しません。
 
 ## Example Company の作り方

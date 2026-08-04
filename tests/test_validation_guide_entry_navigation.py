@@ -52,6 +52,31 @@ class ValidationGuideEntryNavigationTests(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertTrue((ROOT / target).is_file())
 
+    def test_validation_guide_tests_expose_cross_shell_full_suite_commands(self) -> None:
+        document = (ROOT / "docs" / "VALIDATION.md").read_text(encoding="utf-8")
+        start = document.index("## Tests")
+        end = document.index("## Boundary", start)
+        section = document[start:end]
+        required = (
+            "python -m pip install -r requirements-test.txt",
+            "python -m unittest discover -s tests -v",
+            "python3 -m pip install -r requirements-test.txt",
+            "python3 -m unittest discover -s tests -v",
+            "test-only",
+            "Draft202012Validator",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+        self.assertLess(
+            section.index("python -m pip install -r requirements-test.txt"),
+            section.index("python -m unittest discover -s tests -v"),
+        )
+        self.assertLess(
+            section.index("python3 -m pip install -r requirements-test.txt"),
+            section.index("python3 -m unittest discover -s tests -v"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -215,6 +215,31 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, readme)
 
+    def test_readme_validation_exposes_cross_shell_full_suite_commands(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        start = readme.index("## Validation")
+        end = readme.index("## Example Company の作り方", start)
+        section = readme[start:end]
+        required = (
+            "python -m pip install -r requirements-test.txt",
+            "python -m unittest discover -s tests -v",
+            "python3 -m pip install -r requirements-test.txt",
+            "python3 -m unittest discover -s tests -v",
+            "test-only dependency",
+            "Public Beta の E2E 証明へ拡張しません",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+        self.assertLess(
+            section.index("python -m pip install -r requirements-test.txt"),
+            section.index("python -m unittest discover -s tests -v"),
+        )
+        self.assertLess(
+            section.index("python3 -m pip install -r requirements-test.txt"),
+            section.index("python3 -m unittest discover -s tests -v"),
+        )
+
     def test_readme_keeps_posix_candidate_commands_in_governance_order(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         quick_start = readme.index("## Quick Start — Company starter を試す")
