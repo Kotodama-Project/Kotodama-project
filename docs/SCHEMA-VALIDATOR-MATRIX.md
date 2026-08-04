@@ -13,6 +13,11 @@ provider、Voice / Discord E2E、Promotion、Current Truth、Public Beta GOを�
   会社の境界、仕事の単位、証拠の保存先、目的別の読み順を確認します。
 - **Current:** [Company Pack Catalog](COMPANY-PACK-CATALOG.md)でschema対応の全体を一覧し、
   [Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)で現在地と次の一手を選びます。
+- **Artifact map:** [Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)
+  はReview Bundle, Review Request, Review Response, and Decision Handoffの保存物、
+  candidate state、次のhandoffを一覧します。It is usable before or after the external-free smoke;
+  read-only/candidate-onlyの案内であり、Human Decision、Promotion、Current Truth、
+  runtime、Public Beta GOを作りません。
 - **Smoke:** [Validation Guide](VALIDATION.md)、[Starter Walkthrough](STARTER-WALKTHROUGH.md)、
   [Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)、および
   [Public starter smoke regression](../tests/test_public_starter_runbook_smoke.py)で、

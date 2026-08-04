@@ -97,6 +97,30 @@ class CompanyPackNextStepsEntryNavigationTests(unittest.TestCase):
         positions = [entry.index(marker) for marker in ordered_markers]
         self.assertEqual(positions, sorted(positions))
 
+    def test_next_steps_links_review_chain_artifact_map(self) -> None:
+        document = (ROOT / "docs/COMPANY-PACK-NEXT-STEPS.md").read_text(
+            encoding="utf-8"
+        )
+        start = document.index("## Read next: ideal -> current -> smoke")
+        run = document.index("## Run", start)
+        entry = document[start:run]
+
+        for marker in (
+            "[Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)",
+            "Review Bundle, Review Request, Review Response, and Decision Handoff",
+            "before or after the external-free smoke",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+            "Human Decision",
+            "Promotion",
+            "Current Truth",
+            "Public Beta GO",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, entry)
+
+        self.assertTrue((ROOT / "docs/STARTER-WALKTHROUGH.md").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -52,6 +52,28 @@ class SchemaValidatorMatrixDocumentationTests(unittest.TestCase):
             with self.subTest(relative=relative):
                 self.assertTrue((MATRIX.parent / relative).is_file())
 
+    def test_matrix_links_review_chain_artifact_map(self) -> None:
+        matrix = MATRIX.read_text(encoding="utf-8")
+        start = matrix.index("## Read next: ideal -> current -> smoke")
+        end = matrix.index("## 使い方", start)
+        section = matrix[start:end]
+
+        for marker in (
+            "[Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)",
+            "Review Bundle, Review Request, Review Response, and Decision Handoff",
+            "before or after the external-free smoke",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+            "Human Decision",
+            "Promotion",
+            "Current Truth",
+            "Public Beta GO",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        self.assertTrue((ROOT / "docs" / "STARTER-WALKTHROUGH.md").is_file())
+
     def test_matrix_exposes_ordered_contract_tool_test_runbook_path(self) -> None:
         self.assertTrue(MATRIX.is_file())
         matrix = MATRIX.read_text(encoding="utf-8")

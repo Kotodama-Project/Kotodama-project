@@ -27,6 +27,11 @@
   [Review Response](REVIEW-RESPONSE.md)、5成果物をまとめて渡す[Decision Handoff](REVIEW-DECISION-HANDOFF.md)
   の順に進みます。このchainはseparate Human Decisionへ渡すcandidate-onlyの導線であり、
   Promotion、Current Truth、runtime、Public Beta GOを自動生成しません。
+- **Artifact map:** [Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)
+  はReview Bundle, Review Request, Review Response, and Decision Handoffの保存物、
+  candidate state、次のhandoffを一覧します。It is usable before or after the external-free smoke;
+  read-only/candidate-onlyの案内であり、Human Decision、Promotion、Current Truth、
+  runtime、Public Beta GOを作りません。
 
 このentry navigationとplannerのPASSは`read-only/candidate-only`であり、
 `NO_GO_UNPUBLISHED`を維持します。Human approval、runtime、Promotion、
