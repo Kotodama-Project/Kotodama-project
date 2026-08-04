@@ -132,6 +132,29 @@ class InstallationLifecycleDocumentationTests(unittest.TestCase):
             proxmox_runbook,
         )
 
+    def test_validation_guide_separates_ideal_current_and_offers_posix_parity(self) -> None:
+        validation = (ROOT / "docs" / "VALIDATION.md").read_text(encoding="utf-8")
+        ideal_marker = "## 理想と現在の公開candidate"
+        current_marker = "### 現在の公開candidate"
+        ideal_start = validation.index(ideal_marker)
+        current_start = validation.index(current_marker, ideal_start)
+        self.assertLess(ideal_start, current_start)
+        ideal = validation[ideal_start:current_start]
+        current = validation[current_start:]
+        for marker in ("schema", "cross-file", "negative", "review"):
+            self.assertIn(marker, ideal)
+        for marker in ("local / synthetic", "runtime", "provider", "Voice / Discord", "NO_GO_UNPUBLISHED"):
+            self.assertIn(marker, current)
+
+        for command in (
+            "python tools\\validate_installation_lifecycle.py examples\\installation-lifecycle\\compose-minimum.json",
+            "python tools\\validate_installation_lifecycle.py examples\\installation-lifecycle\\proxmox-segmented.json",
+            "python3 tools/validate_installation_lifecycle.py examples/installation-lifecycle/compose-minimum.json",
+            "python3 tools/validate_installation_lifecycle.py examples/installation-lifecycle/proxmox-segmented.json",
+        ):
+            with self.subTest(command=command):
+                self.assertIn(command, validation)
+
 
 if __name__ == "__main__":
     unittest.main()

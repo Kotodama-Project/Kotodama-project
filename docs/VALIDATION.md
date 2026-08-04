@@ -2,6 +2,20 @@
 
 `tools/validate_template_pack.py`はPython標準ライブラリだけで動く、fail-closedな最小validatorです。
 
+## 理想と現在の公開candidate
+
+### 理想の検証フロー
+
+理想的には、Company Template、Blocks、Governed Records、MOCsを選び、schema、
+cross-file参照、negative check、exact bytes、独立reviewへ順に進みます。validatorは
+その候補を壊れた参照や禁止された自己昇格から守る基礎レイヤーです。
+
+### 現在の公開candidate
+
+このGuideとCLIが扱うのは、local / syntheticなJSONと作業copyの構造検証です。
+validator PASSはruntime、provider、Voice / Discord E2E、Human approval、Promotion、
+Current Truth、Final Human GOを認証せず、公開状態は`NO_GO_UNPUBLISHED`です。
+
 ## Run
 
 ```powershell
@@ -79,6 +93,11 @@ Compose / Proxmoxのinstallation lifecycle契約は、別のstdlib validatorで�
 ```powershell
 python tools\validate_installation_lifecycle.py examples\installation-lifecycle\compose-minimum.json
 python tools\validate_installation_lifecycle.py examples\installation-lifecycle\proxmox-segmented.json
+```
+
+```bash
+python3 tools/validate_installation_lifecycle.py examples/installation-lifecycle/compose-minimum.json
+python3 tools/validate_installation_lifecycle.py examples/installation-lifecycle/proxmox-segmented.json
 ```
 
 このvalidatorは6フェーズ順序、material phaseのWork Order、apply-to-rollback binding、profile固有evidence、秘密値・private infrastructure literal、live claim拒否を検査します。詳細は[Installation Lifecycle Profiles](INSTALLATION-LIFECYCLE.md)を参照してください。PASSはlive install / deploy / restart / restore receiptではありません。
