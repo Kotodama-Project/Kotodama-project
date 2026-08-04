@@ -508,30 +508,35 @@ Quick Startのコマンドを編集する前に、[Starter Walkthrough](docs/STA
 ## Quick Start — Company starter を試す
 
 Python 以外の追加 dependency は不要です。repository root で次を実行します。
+このQuick Startでは、生成した `work/my-company` を一貫して検査します。
 
 ```powershell
 New-Item -ItemType Directory -Force work | Out-Null
 python tools/create_company_pack.py my-company work/my-company
 python tools/check_company_pack_customization.py work/my-company
-python tools/validate_template_pack.py examples/company-starter
-python tools/catalog_company_pack.py examples/company-starter --format markdown
-python tools/check_company_pack_public_preview.py examples/company-starter
-python tools/check_company_pack_public_preview.py examples/company-starter --format markdown
+python tools/validate_template_pack.py work/my-company
+python tools/catalog_company_pack.py work/my-company --format markdown
+python tools/check_company_pack_public_preview.py work/my-company
+python tools/check_company_pack_public_preview.py work/my-company --format markdown
+python tools/plan_company_pack_next_steps.py work/my-company --format markdown
 ```
 
-POSIX shellでは同じ公開candidate確認を次で実行できます。
+POSIX shellでは同じ生成candidate確認を次で実行できます。
 
 ```bash
 mkdir -p work
 python3 tools/create_company_pack.py my-company work/my-company
 python3 tools/check_company_pack_customization.py work/my-company
-python3 tools/validate_template_pack.py examples/company-starter
-python3 tools/catalog_company_pack.py examples/company-starter --format markdown
-python3 tools/check_company_pack_public_preview.py examples/company-starter
-python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown
+python3 tools/validate_template_pack.py work/my-company
+python3 tools/catalog_company_pack.py work/my-company --format markdown
+python3 tools/check_company_pack_public_preview.py work/my-company
+python3 tools/check_company_pack_public_preview.py work/my-company --format markdown
+python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown
 ```
 
 initializer は元 example や既存 target を上書きしません。pack ID と 3 MOC の参照を再束縛し、22 JSON 文書を `draft` に戻してから validator を実行します。
+
+`examples/company-starter` は変更しない公開exampleそのもの、`work/my-company` はそこから生成した候補です。公開exampleだけを再確認したい場合は、上記Quick Startとは別に各コマンドへ `examples/company-starter` を渡します。生成candidateのCatalog、Preview、Guided Next Stepsはすべて `work/my-company` を対象にし、結果はread-only / candidate-only、`NO_GO_UNPUBLISHED`です。
 
 次に [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) に沿って Human Intent reference、canonical owner、role、expiry、retention、profile を自分の候補へ置き換えます。
 

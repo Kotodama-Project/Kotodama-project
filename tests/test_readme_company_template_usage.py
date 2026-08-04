@@ -6,6 +6,46 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
+    def test_readme_quick_start_keeps_generated_candidate_as_target(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        start = readme.index("## Quick Start — Company starter を試す")
+        end = readme.index("## Runtime candidate を検査する", start)
+        section = readme[start:end]
+
+        for marker in (
+            "examples/company-starter",
+            "公開example",
+            "work/my-company",
+            "生成した候補",
+            "plan_company_pack_next_steps.py",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        candidate_commands = (
+            "python tools/validate_template_pack.py work/my-company",
+            "python tools/catalog_company_pack.py work/my-company --format markdown",
+            "python tools/check_company_pack_public_preview.py work/my-company",
+            "python tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            "python3 tools/validate_template_pack.py work/my-company",
+            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+            "python3 tools/check_company_pack_public_preview.py work/my-company",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+        )
+        for command in candidate_commands:
+            with self.subTest(command=command):
+                self.assertIn(command, section)
+
+        for command in (
+            "validate_template_pack.py examples/company-starter",
+            "catalog_company_pack.py examples/company-starter",
+            "check_company_pack_public_preview.py examples/company-starter",
+            "plan_company_pack_next_steps.py examples/company-starter",
+        ):
+            with self.subTest(command=command):
+                self.assertNotIn(command, section)
+
     def test_company_template_entry_exposes_guided_next_steps(self) -> None:
         document_path = ROOT / "templates" / "company" / "README.md"
         document = document_path.read_text(encoding="utf-8")
@@ -159,9 +199,10 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
             "```bash\nmkdir -p work",
             "python3 tools/create_company_pack.py my-company work/my-company",
             "python3 tools/check_company_pack_customization.py work/my-company",
-            "python3 tools/validate_template_pack.py examples/company-starter",
-            "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
-            "python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "python3 tools/validate_template_pack.py work/my-company",
+            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+            "python3 tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
             "bundle_path='work/my-company-review-bundle.json'",
             "python3 tools/build_company_pack_review_bundle.py work/my-company",
             "python3 tools/verify_company_pack_review_bundle.py \"$bundle_path\" work/my-company",
