@@ -70,3 +70,52 @@ class TemplateGuideRunbookSmokeEntryTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, section)
         self.assertNotIn("Public Beta GO: true", section)
+
+    def test_template_guide_exposes_cross_shell_candidate_runbook_and_stop(self) -> None:
+        document = GUIDE.read_text(encoding="utf-8")
+        start = document.index("## Current candidate runbook smoke")
+        end = document.index("## 理想としての使い方", start)
+        section = document[start:end]
+        required = (
+            "examples/company-starter",
+            "work/my-company",
+            "python tools\\create_company_pack.py my-company work\\my-company",
+            "python tools\\check_company_pack_customization.py work\\my-company",
+            "python tools\\catalog_company_pack.py work\\my-company --format markdown",
+            "python tools\\validate_template_pack.py work\\my-company",
+            "python tools\\check_company_pack_public_preview.py work\\my-company --format markdown",
+            "python tools\\build_company_pack_review_bundle.py work\\my-company",
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+            "python3 tools/validate_template_pack.py work/my-company",
+            "python3 tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python3 tools/build_company_pack_review_bundle.py work/my-company",
+            "CUSTOMIZATION_REQUIRED",
+            "BUNDLE_REFUSED",
+            "replacement_required: 0",
+            "編集後に再実行",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        for prefix, separator in (("python", "\\"), ("python3", "/")):
+            commands = (
+                f"{prefix} tools{separator}create_company_pack.py my-company work{separator}my-company",
+                f"{prefix} tools{separator}check_company_pack_customization.py work{separator}my-company",
+                f"{prefix} tools{separator}catalog_company_pack.py work{separator}my-company --format markdown",
+                f"{prefix} tools{separator}validate_template_pack.py work{separator}my-company",
+                f"{prefix} tools{separator}check_company_pack_public_preview.py work{separator}my-company --format markdown",
+                f"{prefix} tools{separator}build_company_pack_review_bundle.py work{separator}my-company",
+            )
+            positions = [section.index(command) for command in commands]
+            with self.subTest(prefix=prefix):
+                self.assertEqual(positions, sorted(positions))
+
+        self.assertLess(
+            section.index("replacement_required: 0"),
+            section.index("build_company_pack_review_bundle.py"),
+        )

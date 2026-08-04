@@ -43,6 +43,52 @@ flowchart TD
 - plain pathは `CUSTOMIZATION_REQUIRED` のまま `BUNDLE_REFUSED` で停止し、拒否JSONを成功bundleとして保存しない。
 - どちらも `read-only/candidate-only`、`NO_GO_UNPUBLISHED`。Human approval、runtime、Promotion、Current Truth、Public Beta GOは作らない。
 
+## Current candidate runbook smoke
+
+公開starterを実際に試すときは、`examples/company-starter`をimmutableな基準として
+読み、生成した`work/my-company`だけを編集します。次の最初のcheckerは、未編集の
+placeholderが残るため通常`CUSTOMIZATION_REQUIRED`で停止します。これは想定された
+候補の停止点であり、成功bundleではありません。plain pathをそのままbundleへ渡すと
+`BUNDLE_REFUSED`になります。
+
+PowerShellでは、まず作業copyを作って停止点を確認します。
+
+~~~powershell
+python tools\create_company_pack.py my-company work\my-company
+python tools\check_company_pack_customization.py work\my-company
+~~~
+
+POSIX shellでも同じcandidate pathを使います。
+
+~~~bash
+python3 tools/create_company_pack.py my-company work/my-company
+python3 tools/check_company_pack_customization.py work/my-company
+~~~
+
+checkerのreportを読み、組織固有のplaceholderを`work/my-company`側だけで置き換え、
+`replacement_required: 0`になったことを確認して**編集後に再実行**します。その後の
+Catalog、validator、Public Preview Self-check、Review Bundleの順番は次のとおりです。
+
+~~~powershell
+python tools\catalog_company_pack.py work\my-company --format markdown
+python tools\validate_template_pack.py work\my-company
+python tools\check_company_pack_public_preview.py work\my-company --format markdown
+python tools\build_company_pack_review_bundle.py work\my-company
+~~~
+
+~~~bash
+python3 tools/catalog_company_pack.py work/my-company --format markdown
+python3 tools/validate_template_pack.py work/my-company
+python3 tools/check_company_pack_public_preview.py work/my-company --format markdown
+python3 tools/build_company_pack_review_bundle.py work/my-company
+~~~
+
+このrunbookは、ideal/current/smokeを一つのcandidateで追跡するためのものです。
+Catalog、validator、Self-check、Review BundleのPASS/MATCHは、bytesと構造を確認する
+local evidenceであり、Human approval、execution authority、runtime activation、
+Promotion、Current Truth、Voice/Discord E2E、Public Beta GOを作りません。公開経路は
+常に`read-only/candidate-only`、状態は`NO_GO_UNPUBLISHED`です。
+
 ## 理想としての使い方
 
 ### 1. Company Templateを選ぶ
