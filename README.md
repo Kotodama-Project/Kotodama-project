@@ -280,6 +280,105 @@ Company Template を複製
 
 この区別により、理想の Company OS の設計を先に試しながら、現在実際に動く local candidate と、まだ証明されていない runtime / authority を混同しません。
 
+## Company Template・Blocks・MOCsの使い方
+
+### 理想の会社づくり
+
+Company Template、Blocks、MOCsは、同じものを三つの名前で呼んでいるのでは
+ありません。会社の境界、仕事の処理単位、仕事を辿る順番を分離しながら、
+一つの governed flow として組み合わせます。最初に [Company Template](templates/company/README.md)
+で、誰のどの目的を扱う会社なのか、Vision / Mission、対象範囲、canonical
+owner、停止条件を決めます。次に [Blocks](templates/blocks/README.md) から、
+必要な仕事の処理単位だけを選びます。Blockは単なるプロンプトではなく、入力、
+出力、authority、禁止action、verification、rollback、stop conditionを持つ
+bounded work unitです。
+
+その仕事を誰がどの順番で読むかを [MOCs](templates/mocs/README.md) で決めます。
+MOCは新しい記録を勝手に作る実行器ではなく、同じcanonical recordsを目的別に
+辿るnavigation mapです。Company Operationsは通常の仕事、Public Release Reviewは
+公開前の確認、Incident & Recoveryは失敗時の復旧というように、同じBlockと
+Governed Recordを違う入口から参照します。Blockの出力は [Governed Records](templates/records/README.md)
+へ接続し、Source、Intent、Decision、Work、Verification、Promotionの境界を
+後から追えるようにします。
+
+理想では、次の順番で新しい会社環境を作ります。
+
+```text
+Company Template を選ぶ
+→ Vision / Mission / Boundary と canonical owner を編集する
+→ 必要な Blocks と human role を選ぶ
+→ MOC で目的別の導線を定義する
+→ Block 出力を Governed Records へ対応付ける
+→ validator / customization checker で構造を検査する
+→ exact-byte Review Bundle を作る
+→ protected evaluation と candidate-bound Decision へ渡す
+```
+
+### 現在の Public Previewで実際に行う順番
+
+現在の Public Preview では、公開exampleは変更しない方針です。公開exampleそのものを
+直接編集せず、まず
+`examples/company-starter`を読み取り専用の基準として確認し、作業用の
+`work/my-company`へ新しい候補を作ります。手元で次を実行すると、Company
+Template、Blocks、MOCs、Recordsの対応を一覧しながら進められます。
+
+PowerShell:
+
+```powershell
+python tools/create_company_pack.py my-company work/my-company
+python tools/check_company_pack_customization.py work/my-company
+python tools/catalog_company_pack.py work/my-company --format markdown
+python tools/validate_template_pack.py work/my-company
+python tools/build_company_pack_review_bundle.py work/my-company
+```
+
+POSIX shell:
+
+```bash
+python3 tools/create_company_pack.py my-company work/my-company
+python3 tools/check_company_pack_customization.py work/my-company
+python3 tools/catalog_company_pack.py work/my-company --format markdown
+python3 tools/validate_template_pack.py work/my-company
+python3 tools/build_company_pack_review_bundle.py work/my-company
+```
+
+作成直後の `check_company_pack_customization.py` は、未編集placeholderが残るため
+通常 `CUSTOMIZATION_REQUIRED` になります。これは失敗ではなく、次に編集すべき
+候補を示す停止点です。報告された項目を `work/my-company` 側だけで置き換えてから、
+Catalog、validator、Review Bundleを順に実行します。この順番で、まずPackの層と
+flowを読み、次にBlockの入力・出力とRecordのrequired fieldを確認し、最後にMOCの
+順序と参照がmanifestへ対応しているかを検査します。編集が必要なplaceholderは
+[Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md)
+と [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) の説明に従って、候補側だけ
+へ反映します。schema、validator、testの対応を一覧したい場合は
+[Validation Guide](docs/VALIDATION.md) を使います。
+
+`catalog_company_pack.py`の出力は現在地を読むためのread-only projection、
+`validate_template_pack.py`のPASSは候補の構造・参照・禁止経路が通ったという
+意味です。Review Bundleはその時点のexact bytesを固定しますが、Human approval、
+execution authority、runtime activation、Promotion、Current Truthを自動で作り
+ません。したがって、このPublic Previewの到達点は
+`read-only/candidate-only` と `NO_GO_UNPUBLISHED` のままです。
+
+会社固有の値を反映した後は、[Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md)で
+current candidateを再確認し、[Validation Guide](docs/VALIDATION.md)と
+[Review-chain artifact map](docs/STARTER-WALKTHROUGH.md#review-chain-artifact-map)で
+次のhandoffを選びます。runtime profile、Voice、Discord、provider、公開招待へ進む
+場合は、別のWork Order、scope-matched verification receipt、candidate-bound
+Human Decisionが必要です。このドキュメントの手順だけでPublic Beta GOや権限付与が
+成立したとは扱いません。
+
+この区別を保つことは、使いにくくするためではありません。理想の flow を先に
+眺められるので、利用者は自分の会社でどの仕事を組み替えたいのかを考えられます。
+一方で、現在の candidate は exact path、source revision、validator result、
+review handoff を小さく確認できるため、実際に変更した箇所を後から説明できます。
+Template は境界を、Block は一つの仕事を、MOC は読み進める目的を、Record は
+後から確かめる証拠を担当します。どれか一つだけを増やして会社全体が完成したと
+見なさず、4層が同じ manifest と evidence chain に接続しているかを確認します。
+その読み方を守れば、最初は一つの Blockだけを試し、次に MOCを追加し、最後に
+review candidateへ進む小さな導入も可能です。公開starterの価値は、未証明の
+runtimeを隠すことではなく、次に何を証明すべきかを明確にすることにあります。
+
 ## Context Platform — 会社の共有記憶
 
 人物、Goal、ToDo、会話、ファイル、Issue、判断、証拠、エージェント状態を、許可された範囲で横断できる共有文脈が必要です。
