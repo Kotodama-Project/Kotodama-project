@@ -44,19 +44,34 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R141 is the current public documentation revision and the latest
+R146 is the current public documentation revision and the latest
 Template/Company/Blocks/Records/MOCs/starter navigation surface at public
-`main` commit `ebcdd003d062c6bc90b5ea546da3d430911bda74`, tree
-`ec765b5f824a92d2efdc065b4a225d7779a6e9d2`. R141 connects the Company Pack
-Guided Next Steps and Installation Lifecycle entry surfaces in
+`main` commit `21a4a23586ebfd653a56d7c4b82a778d3791d6ed`, tree
+`7a151d62026f4381c4c2734bcbc841797ee9f554`. R146 completes the public
+Schema / Validator / Test Matrix review chain for Review Request, Review
+Response, and Review Decision Handoff, including schema, CLI, regression test,
+runbook, and PowerShell/POSIX command links in
+[`docs/SCHEMA-VALIDATOR-MATRIX.md`](docs/SCHEMA-VALIDATOR-MATRIX.md), covered by
+[`test_schema_validator_matrix_docs.py`](tests/test_schema_validator_matrix_docs.py).
+R146 is documentation/static-regression evidence only; the published surface
+remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R145 remains
+historical as the schema matrix review-chain revision at public `main` commit
+`21a4a23586ebfd653a56d7c4b82a778d3791d6ed`, tree
+`7a151d62026f4381c4c2734bcbc841797ee9f554`. R144 remains historical as the
+Company Pack direct review-chain navigation revision at public `main` commit
+`a0ab89f6b5f09deedb695dd478cce9ef421fef77`, tree
+`9ed3f7e1cb5884893044e9d5a464c21f758f77ac`. R143 remains historical as the
+Company Pack review-chain documentation revision. R141 remains historical as
+the Company Pack Guided Next Steps and Installation Lifecycle revision at
+public `main` commit `ebcdd003d062c6bc90b5ea546da3d430911bda74`, tree
+`ec765b5f824a92d2efdc065b4a225d7779a6e9d2`, with
 [`docs/COMPANY-PACK-NEXT-STEPS.md`](docs/COMPANY-PACK-NEXT-STEPS.md) and
-[`docs/INSTALLATION-LIFECYCLE.md`](docs/INSTALLATION-LIFECYCLE.md), covered by
+[`docs/INSTALLATION-LIFECYCLE.md`](docs/INSTALLATION-LIFECYCLE.md) covered by
 [`test_company_pack_next_steps_entry_navigation.py`](tests/test_company_pack_next_steps_entry_navigation.py)
 and [`test_installation_lifecycle_docs.py`](tests/test_installation_lifecycle_docs.py).
-R141 is documentation/static-regression evidence only; the published surface
-remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R140 remains
-historical as the Installation Lifecycle guided-next-steps revision at public
-`main` commit `2ad60c6eb24a33e125f658ff0be52a3d53b27fa3`, tree
+R140 remains historical as the
+Installation Lifecycle guided-next-steps revision at public `main` commit
+`2ad60c6eb24a33e125f658ff0be52a3d53b27fa3`, tree
 `55fc6ab347409ffb4444390c67b25fe9b548997f`. R139 remains historical as the
 Company Pack guided path revision at public `main` commit
 `f1bc6e79159fb175bbd8f575a9e09e8cb724245c`, tree
