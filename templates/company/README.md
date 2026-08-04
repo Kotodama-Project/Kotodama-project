@@ -55,22 +55,36 @@ Company Templateの設計を読むときは、理想のpackage構造と現在の
 
 初めて試す場合はrepository rootから、次の順に実行します。すべて既存の公開exampleを変更せず、新しいtargetへ候補を作る操作です。既存のtargetを上書きしません。
 
+## Quick Start: immutable example -> generated candidate
+
+The shipped `examples/company-starter` directory is the **immutable published baseline**.
+Inspect that baseline separately, then keep every follow-up check on the
+generated `work/my-company` candidate.
+
 ~~~powershell
-python tools\catalog_company_pack.py examples\company-starter --format markdown
+python tools/catalog_company_pack.py examples/company-starter --format markdown
+python tools/check_company_pack_public_preview.py examples/company-starter --format markdown
+python tools/validate_template_pack.py examples/company-starter
 New-Item -ItemType Directory -Force work | Out-Null
-python tools\create_company_pack.py my-company work\my-company
-python tools\check_company_pack_customization.py work\my-company
-python tools\validate_template_pack.py work\my-company
-python tools\check_company_pack_public_preview.py work\my-company --format markdown
+python tools/create_company_pack.py my-company work/my-company
+python tools/check_company_pack_customization.py work/my-company
+python tools/validate_template_pack.py work/my-company
+python tools/catalog_company_pack.py work/my-company --format markdown
+python tools/check_company_pack_public_preview.py work/my-company --format markdown
+python tools/plan_company_pack_next_steps.py work/my-company --format markdown
 ~~~
 
 ~~~bash
 python3 tools/catalog_company_pack.py examples/company-starter --format markdown
+python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown
+python3 tools/validate_template_pack.py examples/company-starter
 mkdir -p work
 python3 tools/create_company_pack.py my-company work/my-company
 python3 tools/check_company_pack_customization.py work/my-company
 python3 tools/validate_template_pack.py work/my-company
+python3 tools/catalog_company_pack.py work/my-company --format markdown
 python3 tools/check_company_pack_public_preview.py work/my-company --format markdown
+python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown
 ~~~
 
 この手順はread-only/candidate-onlyの確認です。validator、Catalog、customization checker、self-checkの`PASS`は、Human Decision、capability grant、Promotion、Current Truth、runtime activation、Voice/Discord E2E、Public Beta GOを意味しません。公開状態は`NO_GO_UNPUBLISHED`のままです。

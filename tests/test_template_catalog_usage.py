@@ -189,18 +189,26 @@ class TemplateCatalogUsageTests(unittest.TestCase):
 
         required = (
             "~~~powershell",
-            "python tools\\catalog_company_pack.py examples/company-starter --format markdown",
+            "python tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "python tools/validate_template_pack.py examples/company-starter",
             "New-Item -ItemType Directory -Force work | Out-Null",
-            "python tools\\create_company_pack.py my-company work\\my-company",
-            "python tools\\check_company_pack_customization.py work\\my-company",
-            "python tools\\catalog_company_pack.py work\\my-company --format markdown",
-            "python tools\\validate_template_pack.py work\\my-company",
+            "python tools/create_company_pack.py my-company work/my-company",
+            "python tools/check_company_pack_customization.py work/my-company",
+            "python tools/validate_template_pack.py work/my-company",
+            "python tools/catalog_company_pack.py work/my-company --format markdown",
+            "python tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python tools/plan_company_pack_next_steps.py work/my-company --format markdown",
             "~~~bash",
             "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "python3 tools/validate_template_pack.py examples/company-starter",
             "python3 tools/create_company_pack.py my-company work/my-company",
             "python3 tools/check_company_pack_customization.py work/my-company",
-            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
             "python3 tools/validate_template_pack.py work/my-company",
+            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+            "python3 tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
             "既存のtargetを上書きしません",
             "[Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)",
             "[Public Preview Self-check](../docs/PUBLIC-PREVIEW-SELF-CHECK.md)",
@@ -330,19 +338,27 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             "[Installation Lifecycle](../../docs/INSTALLATION-LIFECYCLE.md)",
             "[公開starter](../../examples/company-starter/README.md)",
             "~~~powershell",
-            "python tools\\catalog_company_pack.py examples\\company-starter --format markdown",
+            "python tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "python tools/validate_template_pack.py examples/company-starter",
             "New-Item -ItemType Directory -Force work | Out-Null",
-            "python tools\\create_company_pack.py my-company work\\my-company",
-            "python tools\\check_company_pack_customization.py work\\my-company",
-            "python tools\\validate_template_pack.py work\\my-company",
-            "python tools\\check_company_pack_public_preview.py work\\my-company --format markdown",
+            "python tools/create_company_pack.py my-company work/my-company",
+            "python tools/check_company_pack_customization.py work/my-company",
+            "python tools/validate_template_pack.py work/my-company",
+            "python tools/catalog_company_pack.py work/my-company --format markdown",
+            "python tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python tools/plan_company_pack_next_steps.py work/my-company --format markdown",
             "~~~bash",
             "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "python3 tools/validate_template_pack.py examples/company-starter",
             "mkdir -p work",
             "python3 tools/create_company_pack.py my-company work/my-company",
             "python3 tools/check_company_pack_customization.py work/my-company",
             "python3 tools/validate_template_pack.py work/my-company",
+            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
             "python3 tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
             "既存のtargetを上書きしません",
             "read-only/candidate-only",
             "NO_GO_UNPUBLISHED",
@@ -748,3 +764,51 @@ class TemplateCatalogUsageTests(unittest.TestCase):
         ):
             with self.subTest(earlier=earlier, later=later):
                 self.assertLess(section.index(earlier), section.index(later))
+
+    def test_template_entry_quickstarts_keep_baseline_and_candidate_chains_separate(self) -> None:
+        markers = (
+            "Quick Start: immutable example -> generated candidate",
+            "immutable published baseline",
+            "python tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "python tools/validate_template_pack.py examples/company-starter",
+            "python tools/create_company_pack.py my-company work/my-company",
+            "python tools/check_company_pack_customization.py work/my-company",
+            "python tools/validate_template_pack.py work/my-company",
+            "python tools/catalog_company_pack.py work/my-company --format markdown",
+            "python tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "python3 tools/validate_template_pack.py examples/company-starter",
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python3 tools/validate_template_pack.py work/my-company",
+            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+            "python3 tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+        )
+        for path in ("templates/README.md", "templates/company/README.md"):
+            with self.subTest(path=path):
+                text = (ROOT / path).read_text(encoding="utf-8")
+                start = text.index("Quick Start: immutable example -> generated candidate")
+                section = text[start:]
+                for marker in markers:
+                    with self.subTest(marker=marker):
+                        self.assertIn(marker, text)
+                self.assertIn("read-only/candidate-only", section)
+                self.assertIn("NO_GO_UNPUBLISHED", section)
+                self.assertLess(
+                    section.index("examples/company-starter --format markdown"),
+                    section.index("python tools/create_company_pack.py my-company work/my-company"),
+                )
+                ordered = (
+                    "python tools/create_company_pack.py my-company work/my-company",
+                    "python tools/check_company_pack_customization.py work/my-company",
+                    "python tools/validate_template_pack.py work/my-company",
+                    "python tools/catalog_company_pack.py work/my-company --format markdown",
+                    "python tools/check_company_pack_public_preview.py work/my-company --format markdown",
+                    "python tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+                )
+                positions = [section.index(marker) for marker in ordered]
+                self.assertEqual(positions, sorted(positions))
