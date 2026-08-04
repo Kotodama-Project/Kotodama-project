@@ -80,6 +80,34 @@ class PublicStarterRunbookSmokeTests(unittest.TestCase):
                     with self.subTest(marker=marker):
                         self.assertIn(marker, flattened)
 
+    def test_first_read_runbook_entries_name_the_complete_review_chain(self) -> None:
+        surfaces = {
+            "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
+            "docs/STARTER-WALKTHROUGH.md": (
+                ROOT / "docs" / "STARTER-WALKTHROUGH.md"
+            ).read_text(encoding="utf-8"),
+        }
+        for path, text in surfaces.items():
+            entry_lines = [
+                line
+                for line in text.splitlines()
+                if "外部接続なし" in line and "Review Bundle" in line
+            ]
+            with self.subTest(path=path):
+                self.assertEqual(len(entry_lines), 1)
+                entry = entry_lines[0]
+                for marker in (
+                    "Review Bundle",
+                    "Review Request",
+                    "Review Response",
+                    "Review Decision Handoff",
+                    "verify",
+                ):
+                    with self.subTest(marker=marker):
+                        self.assertIn(marker, entry)
+                self.assertNotIn("Review Bundle → verify", entry)
+                self.assertNotIn("Review Bundle -> verify", entry)
+
     def test_matrix_links_the_executable_smoke_and_expected_bundle_boundaries(self) -> None:
         matrix = MATRIX.read_text(encoding="utf-8")
         for marker in (

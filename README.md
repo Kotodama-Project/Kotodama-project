@@ -499,7 +499,7 @@ validatorやrunbookの`PASS`は、install、deploy、provider接続、Voice E2E�
 
 ### 実行確認: Runbook smoke
 
-Quick Startのコマンドを編集する前に、[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) のRunbook smokeと [test_public_starter_runbook_smoke.py](tests/test_public_starter_runbook_smoke.py) を先に確認できます。外部接続なしの一時directoryで、initializer → validator → Catalog → customization → Public Preview → Next Steps → Review Bundle → verify の導入順を再現します。
+Quick Startのコマンドを編集する前に、[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) のRunbook smokeと [test_public_starter_runbook_smoke.py](tests/test_public_starter_runbook_smoke.py) を先に確認できます。外部接続なしの一時directoryで、initializer → validator → Catalog → customization → Public Preview → Next Steps → Review Bundle → Review Request → Review Response → Review Decision Handoff → verify の導入順を再現します。
 
 - guided path: `CANDIDATE_FOR_GOVERNED_REVIEW` から `MATCH` まで進む
 - plain path: `CUSTOMIZATION_REQUIRED` のまま `BUNDLE_REFUSED` で停止し、拒否JSONを成功bundleとして保存しない
