@@ -156,6 +156,61 @@ class SchemaValidatorMatrixDocumentationTests(unittest.TestCase):
         ):
             self.assertTrue((MATRIX.parent / relative).is_file())
 
+    def test_matrix_exposes_the_complete_review_chain_contracts(self) -> None:
+        matrix = MATRIX.read_text(encoding="utf-8")
+        required = (
+            "## 10. Review Request",
+            "## 11. Review Response",
+            "## 12. Review Decision Handoff",
+            "company-pack-review-request.schema.json",
+            "company-pack-review-response.schema.json",
+            "company-pack-review-response-verification.schema.json",
+            "company-pack-review-decision-handoff.schema.json",
+            "company-pack-review-decision-handoff-verification.schema.json",
+            "build_company_pack_review_request.py",
+            "build_company_pack_review_response.py",
+            "verify_company_pack_review_response.py",
+            "build_company_pack_review_decision_handoff.py",
+            "verify_company_pack_review_decision_handoff.py",
+            "test_build_company_pack_review_request.py",
+            "test_company_pack_review_response.py",
+            "test_company_pack_review_decision_handoff.py",
+            "REVIEW-REQUEST.md",
+            "REVIEW-RESPONSE.md",
+            "REVIEW-DECISION-HANDOFF.md",
+            "PENDING_AUTHORIZED_REVIEW",
+            "ITEM_RESPONSES_MATCH_REQUEST",
+            "DECISION_HANDOFF_MATCH",
+            "decision: null",
+            "selected_outcome: null",
+            "candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, matrix)
+
+        ordered = (
+            "## 9. Review Bundle",
+            "## 10. Review Request",
+            "## 11. Review Response",
+            "## 12. Review Decision Handoff",
+        )
+        positions = [matrix.index(marker) for marker in ordered]
+        self.assertEqual(positions, sorted(positions))
+
+        command_pairs = (
+            ("python tools\\build_company_pack_review_request.py", "python3 tools/build_company_pack_review_request.py"),
+            ("python tools\\build_company_pack_review_response.py", "python3 tools/build_company_pack_review_response.py"),
+            ("python tools\\verify_company_pack_review_response.py", "python3 tools/verify_company_pack_review_response.py"),
+            ("python tools\\build_company_pack_review_decision_handoff.py", "python3 tools/build_company_pack_review_decision_handoff.py"),
+            ("python tools\\verify_company_pack_review_decision_handoff.py", "python3 tools/verify_company_pack_review_decision_handoff.py"),
+        )
+        for powershell, posix in command_pairs:
+            with self.subTest(powershell=powershell, posix=posix):
+                self.assertIn(powershell, matrix)
+                self.assertIn(posix, matrix)
+
     def test_matrix_links_are_present_and_entry_surfaces_link_back(self) -> None:
         matrix = MATRIX.read_text(encoding="utf-8")
         links = re.findall(r"\]\(([^)]+)\)", matrix)

@@ -102,6 +102,105 @@ read-only/candidate-onlyであり、`NO_GO_UNPUBLISHED`を維持します。
 |---|---|---|---|
 | [company-pack-review-bundle.schema.json](../schemas/company-pack-review-bundle.schema.json) | [`build_company_pack_review_bundle.py`](../tools/build_company_pack_review_bundle.py) → [`verify_company_pack_review_bundle.py`](../tools/verify_company_pack_review_bundle.py) | [`test_build_company_pack_review_bundle.py`](../tests/test_build_company_pack_review_bundle.py)、[`test_verify_company_pack_review_bundle.py`](../tests/test_verify_company_pack_review_bundle.py) | [Review Bundle](REVIEW-BUNDLE.md)。manifest / Block / MOC / Recordのexact bytes、SHA-256、sizeを候補へ束縛する。MATCHはreviewer identity、Human Decision、Promotion、Current Truth、Final Human GOではない。 |
 
+## 10. Review Request
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-review-request.schema.json](../schemas/company-pack-review-request.schema.json) | [`build_company_pack_review_request.py`](../tools/build_company_pack_review_request.py) | [`test_build_company_pack_review_request.py`](../tests/test_build_company_pack_review_request.py) | [Review Request](REVIEW-REQUEST.md)。保存済みbundleと現在Packの`MATCH`から、実際のreview itemとexternal evidence gapを手転記なしで束ねる。成功状態は`PENDING_AUTHORIZED_REVIEW`、`selected_outcome: null`で、承認を作らない。 |
+
+PowerShell:
+
+```powershell
+python tools\build_company_pack_review_request.py `
+  work\my-company-review-bundle.json `
+  work\my-company
+```
+
+POSIX:
+
+```bash
+python3 tools/build_company_pack_review_request.py \
+  work/my-company-review-bundle.json \
+  work/my-company
+```
+
+## 11. Review Response
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-review-response.schema.json](../schemas/company-pack-review-response.schema.json)、[company-pack-review-response-verification.schema.json](../schemas/company-pack-review-response-verification.schema.json) | [`build_company_pack_review_response.py`](../tools/build_company_pack_review_response.py) → [`verify_company_pack_review_response.py`](../tools/verify_company_pack_review_response.py) | [`test_company_pack_review_response.py`](../tests/test_company_pack_review_response.py) | [Review Response](REVIEW-RESPONSE.md)。saved requestのimmutable itemを保持したまま、各outcome/noteだけを編集・照合する。`ITEM_RESPONSES_MATCH_REQUEST`は構造一致だけで、identity、authority、全体Decision、evidence解決を作らない。 |
+
+PowerShell:
+
+```powershell
+python tools\build_company_pack_review_response.py `
+  work\my-company-review-request.json
+python tools\verify_company_pack_review_response.py `
+  work\my-company-review-request.json `
+  work\my-company-review-response.json
+```
+
+POSIX:
+
+```bash
+python3 tools/build_company_pack_review_response.py \
+  work/my-company-review-request.json
+python3 tools/verify_company_pack_review_response.py \
+  work/my-company-review-request.json \
+  work/my-company-review-response.json
+```
+
+## 12. Review Decision Handoff
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-review-decision-handoff.schema.json](../schemas/company-pack-review-decision-handoff.schema.json)、[company-pack-review-decision-handoff-verification.schema.json](../schemas/company-pack-review-decision-handoff-verification.schema.json) | [`build_company_pack_review_decision_handoff.py`](../tools/build_company_pack_review_decision_handoff.py) → [`verify_company_pack_review_decision_handoff.py`](../tools/verify_company_pack_review_decision_handoff.py) | [`test_company_pack_review_decision_handoff.py`](../tests/test_company_pack_review_decision_handoff.py) | [Review Evidence to Decision Handoff](REVIEW-DECISION-HANDOFF.md)。bundle、request、response、各verification、現在Packを再束縛する。`DECISION_HANDOFF_MATCH`でも`decision: null`、`selected_outcome: null`を維持し、Human DecisionやPromotionを作らない。 |
+
+PowerShell:
+
+```powershell
+python tools\build_company_pack_review_decision_handoff.py `
+  work\my-company-review-bundle.json `
+  work\my-company `
+  work\my-company-review-bundle-verification.json `
+  work\my-company-review-request.json `
+  work\my-company-review-response.json `
+  work\my-company-review-response-verification.json
+python tools\verify_company_pack_review_decision_handoff.py `
+  work\my-company-review-bundle.json `
+  work\my-company `
+  work\my-company-review-bundle-verification.json `
+  work\my-company-review-request.json `
+  work\my-company-review-response.json `
+  work\my-company-review-response-verification.json `
+  work\my-company-review-decision-handoff.json
+```
+
+POSIX:
+
+```bash
+python3 tools/build_company_pack_review_decision_handoff.py \
+  work/my-company-review-bundle.json \
+  work/my-company \
+  work/my-company-review-bundle-verification.json \
+  work/my-company-review-request.json \
+  work/my-company-review-response.json \
+  work/my-company-review-response-verification.json
+python3 tools/verify_company_pack_review_decision_handoff.py \
+  work/my-company-review-bundle.json \
+  work/my-company \
+  work/my-company-review-bundle-verification.json \
+  work/my-company-review-request.json \
+  work/my-company-review-response.json \
+  work/my-company-review-response-verification.json \
+  work/my-company-review-decision-handoff.json
+```
+
+この10〜12のPASSは、review chainをcandidate bytesへ束縛するlocal / synthetic
+証拠です。reviewer identity、authority、Human approval、trusted time、外部evidence
+解決、runtime、Promotion、Current Truth、Final Human GOを作らず、公開状態は
+`NO_GO_UNPUBLISHED`のままです。
+
 ## Public starterの同じ実行順
 
 既存exampleを変更せず、必ず新しい作業copyで実行します。
