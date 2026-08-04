@@ -29,6 +29,31 @@ Discord E2E、Promotion、Current Truth、Final Human GOを実行しません。
 やvalidatorのPASSは構造を読めたという意味だけで、公開アクセスは常に
 `NO_GO_UNPUBLISHED`です。
 
+## Runbook smoke
+
+Catalogから導入順そのものを確認したい場合は、外部接続なしの一時
+directoryで実行する [Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)
+のRunbook smokeと、対応する
+[test_public_starter_runbook_smoke.py](../tests/test_public_starter_runbook_smoke.py)
+を使います。
+
+repository rootから次を実行できます。
+
+~~~powershell
+python -m pytest tests/test_public_starter_runbook_smoke.py -q
+~~~
+
+~~~bash
+python3 -m pytest tests/test_public_starter_runbook_smoke.py -q
+~~~
+
+このsmokeは、guided pathでは
+`CANDIDATE_FOR_GOVERNED_REVIEW`から保存済みbundleの`MATCH`までを、plain
+pathでは`CUSTOMIZATION_REQUIRED`を`BUNDLE_REFUSED`として停止する境界を
+確認します。plain pathの拒否結果を成功bundleとして保存したり、Human approval、
+runtime、Promotion、Current Truthを作ったりしません。どちらも
+`read-only/candidate-only`であり、公開状態は`NO_GO_UNPUBLISHED`です。
+
 ## Template層への直接リンク
 
 Catalogから詳細へ移動するときは、次の順で層を辿ります。これは同じ
