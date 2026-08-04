@@ -70,6 +70,41 @@ JSON出力は標準出力の一行 JSON です。Markdownを選んだ場合は�
 固定サマリーになります。どちらもファイルへ保存する場合にpackやprivate
 locatorの値を出力へ追加しません。
 
+## Next after PASS: full review-chain smoke
+
+`PASS` は公開previewの構造と境界を確認したチェックポイントです。ここで
+承認やruntimeへ進んだとは扱わず、次のcandidate-only導線へ進みます。公開された
+`examples/company-starter` はimmutableな基準、`work/my-company` は編集する作業
+copyです。作業copyの現在地を先に [Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)
+で読み、その後に [Starter Walkthroughのreview-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)
+で Review Bundle → Review Request → Review Response → Decision Handoff の保存物と
+次のhandoffを確認します。実行する回帰は
+[test_public_starter_runbook_smoke.py](../tests/test_public_starter_runbook_smoke.py)です。
+
+PowerShellでは、candidateの案内と外部接続なしのfull review-chain smokeを次の順で
+実行できます。
+
+```powershell
+python tools\plan_company_pack_next_steps.py work\my-company --format markdown
+python -m unittest tests.test_public_starter_runbook_smoke -v
+```
+
+POSIX shellでは同じ順序を次で再現できます。
+
+```bash
+python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown
+python3 -m unittest tests.test_public_starter_runbook_smoke -v
+```
+
+2つ目のテストはtemporary directoryにguided candidateを作り、external-freeな
+initializer → validator →
+Catalog → customization → Public Preview → Next Steps → Review Bundle → Review
+Request → Review Response → Decision Handoff → verifyを外部接続なしで通します。
+`work/my-company`や公開exampleは変更しません。full review-chain smokeのPASSと
+保存artifactのMATCHも `read-only/candidate-only` であり、Human approval、runtime authority、
+Promotion、Current Truth、Public Beta GOを作りません。公開状態は
+引き続き `NO_GO_UNPUBLISHED` です。
+
 ## 成功時の意味
 
 `status: PASS` は、次の4面が同じ pack bytes で確認できたことを示します。
