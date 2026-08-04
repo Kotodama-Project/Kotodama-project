@@ -13,6 +13,8 @@ class CompanyPackCatalogRunbookSmokeEntryTests(unittest.TestCase):
             "## Runbook smoke",
             "[Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)",
             "[test_public_starter_runbook_smoke.py](../tests/test_public_starter_runbook_smoke.py)",
+            "python -m unittest tests.test_public_starter_runbook_smoke -v",
+            "python3 -m unittest tests.test_public_starter_runbook_smoke -v",
             "CANDIDATE_FOR_GOVERNED_REVIEW",
             "MATCH",
             "CUSTOMIZATION_REQUIRED",
@@ -47,3 +49,11 @@ class CompanyPackCatalogRunbookSmokeEntryTests(unittest.TestCase):
             section.index("BUNDLE_REFUSED"),
         )
         self.assertNotIn("Public Beta GO: true", section)
+        self.assertNotIn(
+            "python -m pytest tests/test_public_starter_runbook_smoke.py -q",
+            section,
+        )
+        self.assertNotIn(
+            "python3 -m pytest tests/test_public_starter_runbook_smoke.py -q",
+            section,
+        )

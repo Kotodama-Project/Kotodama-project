@@ -25,9 +25,14 @@ Catalogは、テンプレートを使い始める人が次の3つを同じ順序
 - **Smoke:** [Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md)と
   [Starter Walkthrough](STARTER-WALKTHROUGH.md)の外部接続なしRunbook smoke、
   および[Catalog entry regression](../tests/test_company_pack_catalog_entry_navigation.py)
-  で、この導線と構造境界を確認します。repository rootから
-  `python -m pytest tests/test_company_pack_catalog_entry_navigation.py -q`を
-  実行できます。
+  で、この導線と構造境界を確認します。repository rootから、追加依存なしで
+  次のコマンドを実行できます。
+
+  PowerShell:
+  `python -m unittest tests.test_company_pack_catalog_entry_navigation -v`
+
+  POSIX shell:
+  `python3 -m unittest tests.test_company_pack_catalog_entry_navigation -v`
 
 この入口は`read-only/candidate-only`、`NO_GO_UNPUBLISHED`です。Catalog、
 validator、smokeのPASSは、runtime起動、Human approval、Promotion、Current
@@ -67,11 +72,11 @@ directoryで実行する [Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MAT
 repository rootから次を実行できます。
 
 ~~~powershell
-python -m pytest tests/test_public_starter_runbook_smoke.py -q
+python -m unittest tests.test_public_starter_runbook_smoke -v
 ~~~
 
 ~~~bash
-python3 -m pytest tests/test_public_starter_runbook_smoke.py -q
+python3 -m unittest tests.test_public_starter_runbook_smoke -v
 ~~~
 
 このsmokeは、guided pathでは

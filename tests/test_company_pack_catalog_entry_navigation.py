@@ -24,6 +24,8 @@ class CompanyPackCatalogEntryNavigationTests(unittest.TestCase):
             "SCHEMA-VALIDATOR-MATRIX.md",
             "STARTER-WALKTHROUGH.md",
             "../tests/test_company_pack_catalog_entry_navigation.py",
+            "python -m unittest tests.test_company_pack_catalog_entry_navigation -v",
+            "python3 -m unittest tests.test_company_pack_catalog_entry_navigation -v",
             "read-only/candidate-only",
             "NO_GO_UNPUBLISHED",
         ):
@@ -33,6 +35,14 @@ class CompanyPackCatalogEntryNavigationTests(unittest.TestCase):
         self.assertLess(
             text.index("## Read next: ideal -> current -> smoke"),
             text.index("## Runbook smoke"),
+        )
+        self.assertNotIn(
+            "python -m pytest tests/test_company_pack_catalog_entry_navigation.py -q",
+            text,
+        )
+        self.assertNotIn(
+            "python3 -m pytest tests/test_company_pack_catalog_entry_navigation.py -q",
+            text,
         )
 
     def test_catalog_links_the_review_chain_artifact_map(self) -> None:
