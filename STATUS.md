@@ -44,19 +44,33 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R149 is the current public documentation revision and the latest
+R151 is the current public documentation revision and the latest
 Template/Company/Blocks/Records/MOCs/starter navigation surface at public
-`main` commit `ea23f3a31ae68025bf23889beea878d3062adefa`, tree
-`0fa942044a2140b243b4a03c831c511b9938332b`. R149 adds the **Review-chain
-artifact map**: the Starter Walkthrough explains the saved Review Bundle,
-Review Request, Review Response, and Review Decision Handoff artifacts, their
-candidate-only states, and their next handoff; the Company Pack Catalog links
-directly to the map. Both entry surfaces say it is usable before or after the
-external-free smoke. The regressions are
+`main` commit `7633f0d4996c1bd210fb68b65fb12ff81c7fe4b7`, tree
+`5bcb3b231e1377b3505e51385b57feb04f607361`. R151 adds direct links to the
+**Review-chain artifact map** from Company Pack Guided Next Steps and Schema /
+Validator / Test Matrix. These entry surfaces list Review Bundle, Review
+Request, Review Response, and Decision Handoff states/next handoffs; the
+stable map target is `STARTER-WALKTHROUGH.md#review-chain-artifact-map`. They
+keep the before or after the external-free smoke, read-only/candidate-only, Human
+Decision, Promotion, Current Truth, runtime, and Public Beta GO boundaries.
+The regressions are
+[`test_company_pack_next_steps_entry_navigation.py`](tests/test_company_pack_next_steps_entry_navigation.py)
+and [`test_schema_validator_matrix_docs.py`](tests/test_schema_validator_matrix_docs.py).
+R151 is documentation/static-regression evidence only; the published surface
+remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R150 remains
+historical as the R149 STATUS/ROADMAP synchronization at public `main`
+commit `e15655db50da8106eeb9976f2b2d6c92f4884b43`, tree
+`476d36bf3faaf8b9ccb9f8b11e5e6a56680b358a`; R149 remains historical as the
+artifact-map publication at public `main` commit
+`ea23f3a31ae68025bf23889beea878d3062adefa`, tree
+`0fa942044a2140b243b4a03c831c511b9938332b`. It introduced the Review-chain
+artifact map for Review Bundle, Review Request, Review Response, and Review
+Decision Handoff, with the Company Pack Catalog entry and before or after the
+external-free smoke guidance. The R149 regressions are
 [`test_starter_walkthrough_runbook_docs.py`](tests/test_starter_walkthrough_runbook_docs.py)
 and [`test_company_pack_catalog_entry_navigation.py`](tests/test_company_pack_catalog_entry_navigation.py).
-R149 is documentation/static-regression evidence only; the published surface
-remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R148 remains
+R148 remains
 historical as the first-read review-chain entry wording revision at public
 `main` commit `a0c050aa6c7c7f40302e3cd9afffad65a61a3ae5`, tree
 `01e5183e3a0c63369afdc437dfb360bf2d070455`. R147 remains historical as the
