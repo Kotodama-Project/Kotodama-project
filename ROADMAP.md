@@ -25,12 +25,18 @@
 
 ## Current public documentation revision
 
-R111 is the latest public documentation revision and the current public
-Template/Company/Blocks/Records/MOCs/starter surface. R111 added the
+R113 is the latest public documentation revision and the current public
+Template/Company/Blocks/Records/MOCs/starter surface. R113 added the
+executable public starter runbook smoke (`test_public_starter_runbook_smoke.py`)
+and its matrix/test entry at public `main` commit
+`6361a9a95df767a109ba864f7938177b4059e7fc` with tree
+`d5ac35d0f68163663f3e45416141439c02ac771c`. The guided path reaches
+`CANDIDATE_FOR_GOVERNED_REVIEW` and `MATCH`; the plain path remains
+`CUSTOMIZATION_REQUIRED` and fail-closed. R112 remains historical as the
+STATUS/ROADMAP provenance synchronization. R111 remains historical as the
+schema/validator/test matrix revision; R111 added the
 schema/validator/test matrix and its README/Template Guide/Validation entry
-links at public `main` commit
-`04b1565e86aeeb920617b7f2d68eade782c11951` with tree
-`fce4505362d1d4ddcaf2d9ac01f617caa14fda00`. R110 remains historical as the
+links. R110 remains historical as the
 stable MOC index and entry-point routing revision, R109 remains historical as
 the STATUS/ROADMAP label cleanup, R108 remains historical provenance, and R107
 remains historical provenance.

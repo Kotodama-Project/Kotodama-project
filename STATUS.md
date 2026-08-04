@@ -44,15 +44,17 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R111 is the current public documentation and schema/validator/test matrix
-revision and the latest Template/Company/Blocks/Records/MOCs/starter
-navigation surface at public `main` commit
-`04b1565e86aeeb920617b7f2d68eade782c11951`, tree
-`fce4505362d1d4ddcaf2d9ac01f617caa14fda00`. The
-[Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md) maps each
-starter schema to its CLI, regression test, runbook, and narrow PASS meaning.
-The published surface remains read-only/candidate-only and
-`NO_GO_UNPUBLISHED`; R110 remains historical as the stable MOC index
+R113 is the current public starter runbook smoke revision and the latest
+Template/Company/Blocks/Records/MOCs/starter navigation surface at public
+`main` commit `6361a9a95df767a109ba864f7938177b4059e7fc`, tree
+`d5ac35d0f68163663f3e45416141439c02ac771c`. The
+[Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md) now links
+[`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py):
+the guided path reaches bundle `MATCH`, while the plain path remains
+`CUSTOMIZATION_REQUIRED` and fail-closed. The published surface remains
+read-only/candidate-only and `NO_GO_UNPUBLISHED`; R112 remains historical as
+the STATUS/ROADMAP provenance synchronization, R111 remains historical as the
+schema/validator/test matrix revision, and R110 remains historical as the stable MOC index
 revision, R109 remains historical as the STATUS/ROADMAP label cleanup, R108
 remains historical provenance, and R107 remains historical provenance.
 R37 introduced
