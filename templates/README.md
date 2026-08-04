@@ -30,6 +30,36 @@
 順に候補を狭めます。`MATCH`やvalidator `PASS`は、Human Decision、権限付与、
 Promotion、Current Truth、runtime activation、Public Beta GOを意味しません。
 
+## 最短の確認手順
+
+Template Catalogから初めて試す場合は、まず公開starterを変更せずに一覧し、
+次に上書きしない作業copyを作ってから、customization、Catalog、validatorの
+順で確認します。すべてlocal / syntheticな候補操作です。既存のtargetを上書きしません。
+
+~~~powershell
+python tools\catalog_company_pack.py examples/company-starter --format markdown
+New-Item -ItemType Directory -Force work | Out-Null
+python tools\create_company_pack.py my-company work\my-company
+python tools\check_company_pack_customization.py work\my-company
+python tools\catalog_company_pack.py work\my-company --format markdown
+python tools\validate_template_pack.py work\my-company
+~~~
+
+~~~bash
+python3 tools/catalog_company_pack.py examples/company-starter --format markdown
+mkdir -p work
+python3 tools/create_company_pack.py my-company work/my-company
+python3 tools/check_company_pack_customization.py work/my-company
+python3 tools/catalog_company_pack.py work/my-company --format markdown
+python3 tools/validate_template_pack.py work/my-company
+~~~
+
+各コマンドの詳しい入力・出力と、次のreview候補は [Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md) を参照してください。
+[Public Preview Self-check](../docs/PUBLIC-PREVIEW-SELF-CHECK.md) は同じ候補を
+validator、Catalog、customization、false-claim境界の一つのread-only結果へ
+まとめます。`PASS`や`MATCH`は承認、runtime activation、Promotion、Current
+Truth、Final Human GOを作らず、公開状態は常に`NO_GO_UNPUBLISHED`です。
+
 ## Planned catalog
 
 ```text

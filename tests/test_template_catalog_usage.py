@@ -61,6 +61,52 @@ class TemplateCatalogUsageTests(unittest.TestCase):
         )
         self.assertLess(starter, lifecycle)
 
+    def test_template_catalog_exposes_copy_paste_first_use_path(self) -> None:
+        catalog = (ROOT / "templates" / "README.md").read_text(encoding="utf-8")
+        first_use = catalog.index("## 最短の確認手順")
+        section_end = catalog.index("## Planned catalog", first_use)
+        section = catalog[first_use:section_end]
+
+        required = (
+            "~~~powershell",
+            "python tools\\catalog_company_pack.py examples/company-starter --format markdown",
+            "New-Item -ItemType Directory -Force work | Out-Null",
+            "python tools\\create_company_pack.py my-company work\\my-company",
+            "python tools\\check_company_pack_customization.py work\\my-company",
+            "python tools\\catalog_company_pack.py work\\my-company --format markdown",
+            "python tools\\validate_template_pack.py work\\my-company",
+            "~~~bash",
+            "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
+            "python3 tools/validate_template_pack.py work/my-company",
+            "既存のtargetを上書きしません",
+            "[Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)",
+            "[Public Preview Self-check](../docs/PUBLIC-PREVIEW-SELF-CHECK.md)",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        for earlier, later in (
+            (
+                "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+                "python3 tools/create_company_pack.py my-company work/my-company",
+            ),
+            (
+                "python3 tools/create_company_pack.py my-company work/my-company",
+                "python3 tools/check_company_pack_customization.py work/my-company",
+            ),
+            (
+                "python3 tools/check_company_pack_customization.py work/my-company",
+                "python3 tools/validate_template_pack.py work/my-company",
+            ),
+        ):
+            with self.subTest(earlier=earlier, later=later):
+                self.assertLess(section.index(earlier), section.index(later))
+
     def test_template_guide_separates_ideal_mocs_from_shipped_current_mocs(self) -> None:
         guide = (ROOT / "docs" / "TEMPLATE-GUIDE.md").read_text(encoding="utf-8")
         ideal_marker = "Conceptual ideal/future MOC candidates (not shipped starter files)"
