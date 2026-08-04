@@ -6,16 +6,25 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicStatusRoadmapSyncTests(unittest.TestCase):
-    def test_public_status_and_roadmap_name_r76_documentation_surface(self) -> None:
+    def test_public_status_and_roadmap_name_r91_documentation_surface(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
         status_flat = " ".join(status.split())
         roadmap_flat = " ".join(roadmap.split())
 
         self.assertIn(
-            "R58 is the current public Template/Company/Blocks/Records/MOCs/starter",
+            "R91 is the current public Template/Company/Blocks/Records/MOCs/starter",
             status_flat,
         )
+        self.assertIn("R92 synchronizes the public STATUS/ROADMAP provenance", status_flat)
+        self.assertIn("b071ce9b2fd4167c8ac199bcd1983b64224fba43", status_flat)
+        self.assertIn("c6c7bafebd9cca6bdc37365af560b2f11f9fc7e8", status_flat)
+        self.assertIn("R91 added Compose candidate runbook POSIX parity", status_flat)
+        self.assertIn("R90 added Public Preview Self-check POSIX parity", status_flat)
+        self.assertIn("R89 added Validation Guide core POSIX parity", status_flat)
+        self.assertIn("R88 added guided onboarding POSIX parity", status_flat)
+        self.assertIn("R87 added Template Guide and Catalog POSIX parity", status_flat)
+        self.assertIn("R86 synchronized STATUS and ROADMAP provenance", status_flat)
         self.assertNotIn(
             "R56 is the current public Template/Company/Blocks/Records/MOCs/starter",
             status_flat,
@@ -108,8 +117,15 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("Final Human GO", status_flat)
         self.assertIn("Not completed", status_flat)
 
+        self.assertIn("R92 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
+        self.assertIn("R91 is the latest public documentation/test revision", roadmap_flat)
+        self.assertIn("R90 is the latest Public Preview Self-check POSIX parity", roadmap_flat)
+        self.assertIn("R89 is the latest Validation Guide core POSIX parity", roadmap_flat)
+        self.assertIn("R88 is the latest guided onboarding POSIX parity", roadmap_flat)
+        self.assertIn("R87 is the latest Template Guide and Catalog POSIX parity", roadmap_flat)
+        self.assertIn("R86 is the latest STATUS/ROADMAP provenance before R92", roadmap_flat)
         self.assertIn("R58 synchronizes this roadmap with the current public", roadmap_flat)
-        self.assertIn("R68 is the latest README contract synchronization", roadmap_flat)
+        self.assertIn("R68 is the historical README contract synchronization", roadmap_flat)
         self.assertIn(
             "R74 is the latest documentation synchronization for schema/validator parity",
             roadmap_flat,
@@ -173,7 +189,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
             "[x] Starter ideal/current navigation and Installation Lifecycle profile guidance",
             roadmap_flat,
         )
-        self.assertIn("R58 remains the current Company Pack surface label", roadmap_flat)
+        self.assertIn("R91 remains the current Company Pack surface label", roadmap_flat)
         self.assertNotIn("R56 synchronizes this roadmap with the current public", roadmap_flat)
         self.assertNotIn("R52 synchronizes this roadmap with the current public Company Pack surface", roadmap_flat)
         self.assertNotIn("R49 synchronizes this roadmap with the R48 public Company Pack surface", roadmap_flat)

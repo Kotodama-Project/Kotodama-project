@@ -25,12 +25,23 @@
 
 ## Current public documentation revision
 
-R68 is the latest README contract synchronization. R80 is the latest starter
-navigation usability synchronization. R78 is the latest
-installation lifecycle usability synchronization. R76 is the latest
-Template Guide usability synchronization. R74 is the latest documentation
-synchronization for schema/validator parity. R58 synchronizes
-this roadmap with the current public Company Pack surface.
+R92 is the latest STATUS/ROADMAP provenance synchronization. R91 is the latest
+public documentation/test revision and the current public Template/Company/
+Blocks/Records/MOCs/starter surface. R90 is the latest Public Preview
+Self-check POSIX parity, R89 is the latest Validation Guide core POSIX parity,
+R88 is the latest guided onboarding POSIX parity, R87 is the latest Template
+Guide and Catalog POSIX parity, and R86 is the latest STATUS/ROADMAP
+provenance before R92. The published R91 candidate is public `main` commit
+`b071ce9b2fd4167c8ac199bcd1983b64224fba43` with tree
+`c6c7bafebd9cca6bdc37365af560b2f11f9fc7e8`.
+
+R68 is the historical README contract synchronization. R80 is the latest
+starter navigation usability synchronization in that historical wave. R78 is
+the latest installation lifecycle usability synchronization in that wave. R76
+is the latest Template Guide usability synchronization in that wave. R74 is
+the latest documentation synchronization for schema/validator parity. R58
+synchronizes this roadmap with the current public Company Pack surface at that
+historical checkpoint.
 The published review chain remains read-only/candidate-only: it binds exact
 bytes, saved Pack-specific counts, and false claims, but it does not create
 Human approval, runtime authority, Promotion, Current Truth, or Public Beta
@@ -38,18 +49,19 @@ access. R54, R55, R56, R57, R58, and R62 extend the public documentation/test
 surface only. R64, R65, R66, R70, R72, R73, and R74 extend local
 schema/validator parity checks
 without changing the Company Pack surface or runtime claims. R62 remains the
-latest navigation synchronization; R74 is the latest parity synchronization
-for the resolved Compose candidate. R68 added the README Voice rotation
-ideal/current contract while preserving the runtime boundary. R58 remains the
-current Company Pack surface label.
+latest navigation synchronization in that historical wave; R74 is the latest
+parity synchronization for the resolved Compose candidate in that wave. R68
+added the README Voice rotation ideal/current contract while preserving the
+runtime boundary. R91 remains the current Company Pack surface label.
 
-R82 is the latest runbook usability synchronization. R83 is the latest
-Validation Guide usability synchronization. R84 is the latest README command
-parity synchronization. R85 is the latest onboarding command parity
-synchronization. Each revision keeps the ideal/current distinction and the
-read-only/candidate-only boundary explicit; none adds runtime, Voice, Discord,
-provider, authority, Promotion, Current Truth, Final Human GO, or Public Beta
-access.
+R82 is the latest runbook usability synchronization in that historical wave.
+R83 is the latest Validation Guide usability synchronization in that wave. R84
+is the latest README command parity synchronization in that wave. R85 is the
+latest onboarding command parity synchronization in that wave. R86 through R91
+extend the public documentation/test surface with provenance and POSIX parity;
+each revision keeps the ideal/current distinction and the read-only/
+candidate-only boundary explicit. None adds runtime, Voice, Discord, provider,
+authority, Promotion, Current Truth, Final Human GO, or Public Beta access.
 
 - [x] Template/Company/Blocks/Records/MOCs/starter navigation synchronization
       with ideal/current usage, dynamic Pack-count guidance, and the

@@ -22,6 +22,8 @@ Updated: 2026-08-04
 | [Protected Source binding receipt candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md) | Included as an unpopulated schema-only private receipt contract; no protected runner or verified receipt |
 | [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) | Included as an opaque schema-only request shape; no execution accepted, executed, or private handoff |
 | [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) | Included as a read-only aggregate of starter validator, Catalog, customization, and false-claim checks |
+| [Compose candidate runbooks](docs/RESOLVED-COMPOSE-CANDIDATE.md) | Published read-only candidate guidance with PowerShell/POSIX parity; no live image or runtime receipt |
+| [Image availability preflight](docs/IMAGE-AVAILABILITY-PREFLIGHT.md) | Published read-only historical-binding guidance with PowerShell/POSIX parity; current-host availability remains unverified |
 | [Company Pack review bundle](docs/REVIEW-BUNDLE.md) | Published candidate-only exact-byte binding and drift verifier; no approval or Promotion |
 | [Company Pack Review Request](docs/REVIEW-REQUEST.md) | Published read-only request candidate; counts follow the saved Pack report |
 | [Company Pack Review Response](docs/REVIEW-RESPONSE.md) | Published read-only response candidate; saved-request binding and item counts are dynamic |
@@ -42,7 +44,7 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R58 is the current public Template/Company/Blocks/Records/MOCs/starter
+R91 is the current public Template/Company/Blocks/Records/MOCs/starter
 documentation surface. R37 introduced the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a deterministic `--format markdown`
 summary. R45 added the saved-bundle to Review Request boundary, R46
 added the dynamic Review Response boundary, R47 added the dynamic Decision
@@ -119,6 +121,20 @@ Catalog/self-check, validator, and review-bundle preparation. These are
 documentation/test hardening only; they do not add runtime, Voice, Discord,
 provider, authority, Promotion, Current Truth, Final Human GO, or Public Beta
 access, and `NO_GO_UNPUBLISHED` remains unchanged.
+
+R86 synchronized STATUS and ROADMAP provenance through the R85 onboarding
+surface. R87 added Template Guide and Catalog POSIX parity, R88 added guided
+onboarding POSIX parity, R89 added Validation Guide core POSIX parity, R90
+added Public Preview Self-check POSIX parity, and R91 added Compose candidate
+runbook POSIX parity. Each revision was published with focused regression
+coverage and exact remote readback; each remains documentation/test hardening
+only and does not add runtime, Voice, Discord, provider, authority, Promotion,
+Current Truth, Final Human GO, or Public Beta access.
+
+R92 synchronizes the public STATUS/ROADMAP provenance to the R91 public
+candidate (`b071ce9b2fd4167c8ac199bcd1983b64224fba43`, tree
+`c6c7bafebd9cca6bdc37365af560b2f11f9fc7e8`). This synchronization is itself
+documentation-only; `NO_GO_UNPUBLISHED` remains unchanged.
 
 公開Company starterは、Source IntakeからPromotion Decision Recordまでの9 Block、全出力を受ける9種のGoverned Record契約、Company Operations / Public Release Review / Incident & Recoveryの3 MOC、manifestを含みます。目的別MOCは同じcanonical flowの順序を保ったnavigation projectionです。依存なしinitializerは元exampleや既存targetを上書きせず、pack IDとMOC参照を再束縛し、22文書を`draft`にして生成packを検証します。customization checkerはplaceholder 0でも`READY_FOR_GOVERNED_REVIEW`までに限定し、review/evidenceを残します。review bundle builderは、その状態だけをmanifest・Blocks・MOCs・Recordsのexact SHA-256 / byte sizeへ束縛し、途中driftを拒否します。saved-bundle verifierはbundle metadata/digestと現在bytesを再照合し、duplicate keyや1-byte driftをfail closedで`MISMATCH`にします。Review Request、Response、Decision Handoffは保存済みchainを再入力なしで運びますが、すべてread-only/candidate-onlyです。Work Order、Capability Grant、Change Executionを分離し、Promotion Candidateと人間のPromotion Decisionも分離しています。標準ライブラリvalidatorでflow、MOC、Record coverageを検査できますが、実権限付与、Human approval、incident runtime、recovery execution、runtime deployment、Promotion、Current Truthを作るものではありません。
 
