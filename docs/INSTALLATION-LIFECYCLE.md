@@ -2,6 +2,27 @@
 
 Kotodamaのruntime profileは、構成ファイルだけではなく、**何を確認してから変更し、何を証拠として残し、失敗時にどう戻すか**を一つのライフサイクルとして扱います。
 
+## 0. 読み始める場所
+
+runtimeを起動する前に、まず会社の仕事の型と、現在の公開candidateの境界を
+読みます。理想の層を読む順番は次のとおりです。
+
+1. [Template Guide](TEMPLATE-GUIDE.md)で、Company Template、Block、
+   Governed Record、MOCの役割を確認する。
+2. [Company Template](../templates/company/README.md)を会社の境界と目的の
+   起点として読む。
+3. [Blocks](../templates/blocks/README.md)で、再利用する仕事の単位を選ぶ。
+4. [Governed Records](../templates/records/README.md)で、Blockの出力をどの
+   記録へ残すかを確認する。
+5. [MOCs](../templates/mocs/company-operations-moc.md)で、仕事を辿る順番を
+   決める。
+
+現在の公開candidateを試す場合だけ、[Company Pack Catalog](COMPANY-PACK-CATALOG.md)
+と[Starter Walkthrough](STARTER-WALKTHROUGH.md)へ進みます。ここで確認できるのは
+read-only/candidate-onlyの構造と導線であり、実環境へのinstall、deploy、runtime
+起動を意味しません。profileを選んでも公開状態は`NO_GO_UNPUBLISHED`のままで、
+Promotion、Current Truth、Public Beta GOは別のcandidate-bound decisionです。
+
 この公開リポジトリには、次の2つのsecret-freeな契約例があります。
 
 | Profile | 想定用途 | 公開されているもの | 公開されていないもの |

@@ -8,6 +8,42 @@ LIFECYCLE = ROOT / "docs" / "INSTALLATION-LIFECYCLE.md"
 
 
 class InstallationLifecycleDocumentationTests(unittest.TestCase):
+    def test_standalone_entry_exposes_layer_then_profile_reading_path(self) -> None:
+        document = LIFECYCLE.read_text(encoding="utf-8")
+
+        entry = document.index("## 0. 読み始める場所")
+        profile_table = document.index("## 理想の導入ライフサイクルと現在の公開candidate")
+        self.assertLess(entry, profile_table)
+        section = document[entry:profile_table]
+        required = (
+            "[Template Guide](TEMPLATE-GUIDE.md)",
+            "[Company Template](../templates/company/README.md)",
+            "[Blocks](../templates/blocks/README.md)",
+            "[Governed Records](../templates/records/README.md)",
+            "[MOCs](../templates/mocs/company-operations-moc.md)",
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        positions = [section.index(marker) for marker in required[:7]]
+        self.assertEqual(positions, sorted(positions))
+        for relative_path in (
+            "TEMPLATE-GUIDE.md",
+            "../templates/company/README.md",
+            "../templates/blocks/README.md",
+            "../templates/records/README.md",
+            "../templates/mocs/company-operations-moc.md",
+            "COMPANY-PACK-CATALOG.md",
+            "STARTER-WALKTHROUGH.md",
+        ):
+            with self.subTest(relative_path=relative_path):
+                self.assertTrue((LIFECYCLE.parent / relative_path).is_file())
+
     def test_first_read_order_and_profile_selection_are_explicit(self) -> None:
         document = LIFECYCLE.read_text(encoding="utf-8")
 
