@@ -64,6 +64,39 @@ class CompanyPackNextStepsEntryNavigationTests(unittest.TestCase):
         positions = [document.index(marker) for marker in ordered_markers]
         self.assertEqual(positions, sorted(positions))
 
+    def test_next_steps_exposes_review_chain_after_smoke(self) -> None:
+        document = (ROOT / "docs/COMPANY-PACK-NEXT-STEPS.md").read_text(
+            encoding="utf-8"
+        )
+        start = document.index("## Read next: ideal -> current -> smoke")
+        run = document.index("## Run", start)
+        entry = document[start:run]
+
+        for marker in (
+            "**Review chain:**",
+            "[Review Bundle](REVIEW-BUNDLE.md)",
+            "[Review Request](REVIEW-REQUEST.md)",
+            "[Review Response](REVIEW-RESPONSE.md)",
+            "[Decision Handoff](REVIEW-DECISION-HANDOFF.md)",
+            "separate Human Decision",
+            "Promotion",
+            "Current Truth",
+            "Public Beta GO",
+            "candidate-only",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, entry)
+
+        ordered_markers = (
+            "[Review Bundle](REVIEW-BUNDLE.md)",
+            "[Review Request](REVIEW-REQUEST.md)",
+            "[Review Response](REVIEW-RESPONSE.md)",
+            "[Decision Handoff](REVIEW-DECISION-HANDOFF.md)",
+        )
+        positions = [entry.index(marker) for marker in ordered_markers]
+        self.assertEqual(positions, sorted(positions))
+
 
 if __name__ == "__main__":
     unittest.main()

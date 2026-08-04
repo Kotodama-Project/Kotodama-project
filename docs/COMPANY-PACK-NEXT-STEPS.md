@@ -22,6 +22,11 @@
   [`company-pack-next-steps.schema.json`](../schemas/company-pack-next-steps.schema.json)、
   [`test_plan_company_pack_next_steps.py`](../tests/test_plan_company_pack_next_steps.py)
   を外部接続なしで確認します。
+- **Review chain:** smokeの後は、候補bytesを固定する[Review Bundle](REVIEW-BUNDLE.md)から、
+  個別項目を依頼へ束ねる[Review Request](REVIEW-REQUEST.md)、項目ごとの回答候補を照合する
+  [Review Response](REVIEW-RESPONSE.md)、5成果物をまとめて渡す[Decision Handoff](REVIEW-DECISION-HANDOFF.md)
+  の順に進みます。このchainはseparate Human Decisionへ渡すcandidate-onlyの導線であり、
+  Promotion、Current Truth、runtime、Public Beta GOを自動生成しません。
 
 このentry navigationとplannerのPASSは`read-only/candidate-only`であり、
 `NO_GO_UNPUBLISHED`を維持します。Human approval、runtime、Promotion、
