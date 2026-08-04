@@ -32,6 +32,8 @@ Updated: 2026-08-05
 | [Company Pack Review Response](docs/REVIEW-RESPONSE.md) | Published read-only response candidate; saved-request binding and item counts are dynamic |
 | [Company Pack Decision Handoff](docs/REVIEW-DECISION-HANDOFF.md) | Published read-only handoff candidate; decision and selected outcome remain null |
 | [Template Guide / Starter Walkthrough](docs/TEMPLATE-GUIDE.md) | Published ideal/current usage docs; starter counts are examples, not universal Pack invariants |
+| [Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) | Fourteen public entrypoints with fixed help boundaries and one candidate-only Smoke command |
+| One-command review-chain smoke | Published standard-library-only local smoke; exact thirteen steps in a temporary workspace, no retained artifacts or GO |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -47,23 +49,46 @@ Updated: 2026-08-05
 
 ## Latest public template result
 
-R172 is the current public documentation revision and the latest
+R177 is the current public documentation revision and the latest
+Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
+published R176 candidate at public `main` commit
+`722345885b8767ee89a28e10f06db2de1ee73ace`, tree
+`4282baf4efc394ffa786720f3bfca68d3caf78c0`. The
+[Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) now indexes
+fourteen public entrypoints. Its Smoke entry runs the exact thirteen existing
+Company Pack CLI steps inside a temporary workspace, removes that workspace,
+persists no intermediate artifacts, and emits one closed candidate-only JSON
+report. Run it with
+`python -S -B tools/smoke_company_pack_review_chain.py` or
+`python3 -S -B tools/smoke_company_pack_review_chain.py`. This remains
+`read-only/candidate-only`; `NO_GO_UNPUBLISHED`, protected review,
+identity/authority/approval, runtime, Voice/Discord, provider, Promotion,
+Current Truth, Final Human GO, and Public Beta boundaries remain unchanged.
+The orientation regression is
+[`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
+R177 is documentation/static-regression evidence only.
+
+R176 remains historical as the one-command review-chain smoke revision at
+public `main` commit `722345885b8767ee89a28e10f06db2de1ee73ace`, tree
+`4282baf4efc394ffa786720f3bfca68d3caf78c0`. R175 remains historical as the
+fourteen-entrypoint Company Pack CLI Reference revision. R174 remains
+historical as the review-chain help-boundary revision. R173 remains historical
+as the core Company Pack help-boundary revision. R172 remains historical as the
 Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
 published R171 candidate at public `main` commit
 `c4a15b0e91a3bacd9125a24e1111521b467c174c`, tree
-`ec7b2f200b427b2f4ff6dc3cf228fe4a19c8dd08`. R172 synchronizes STATUS and
+`ec7b2f200b427b2f4ff6dc3cf228fe4a19c8dd08`. R172 synchronized STATUS and
 ROADMAP with R171's [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md)
 post-PASS path: [Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)
 then Review Bundle -> Review Request -> Review Response -> Decision Handoff.
-The external-free smoke is
+Its external-free smoke is
 [`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py),
 run as `python -m unittest tests.test_public_starter_runbook_smoke -v` or
-`python3 -m unittest tests.test_public_starter_runbook_smoke -v`. This remains
-`read-only/candidate-only`; `NO_GO_UNPUBLISHED`, runtime, Voice/Discord,
-provider, Promotion, Current Truth, Final Human GO, and Public Beta boundaries
-remain unchanged. The orientation regression is
-[`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
-R172 is documentation/static-regression evidence only.
+`python3 -m unittest tests.test_public_starter_runbook_smoke -v`. That revision
+remains `read-only/candidate-only`; `NO_GO_UNPUBLISHED`, runtime,
+Voice/Discord, provider, Promotion, Current Truth, Final Human GO, and Public
+Beta boundaries remain unchanged. R172 is historical
+documentation/static-regression evidence only.
 
 R171 remains historical as the Self-check review-chain next-step revision at
 public `main` commit `c4a15b0e91a3bacd9125a24e1111521b467c174c`, tree
