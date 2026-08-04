@@ -18,7 +18,8 @@ runtimeを起動する前に、まず会社の仕事の型と、現在の公開c
    決める。
 
 現在の公開candidateを試す場合だけ、[Company Pack Catalog](COMPANY-PACK-CATALOG.md)
-と[Starter Walkthrough](STARTER-WALKTHROUGH.md)へ進みます。ここで確認できるのは
+で構造を一覧し、[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)で
+現在stageと次の候補作業を確認してから、[Starter Walkthrough](STARTER-WALKTHROUGH.md)へ進みます。ここで確認できるのは
 read-only/candidate-onlyの構造と導線であり、実環境へのinstall、deploy、runtime
 起動を意味しません。profileを選んでも公開状態は`NO_GO_UNPUBLISHED`のままで、
 Promotion、Current Truth、Public Beta GOは別のcandidate-bound decisionです。
@@ -69,6 +70,7 @@ fresh receiptが揃うまで`NO_GO_UNPUBLISHED`を維持します。
 
 最初からruntimeを起動する必要はありません。Companyの仕事の型だけを
 確認したい場合は、まず [Company Pack Catalog](COMPANY-PACK-CATALOG.md) と
+ [Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)、
  [Starter Walkthrough](STARTER-WALKTHROUGH.md) を読み、必要なBlock、Governed
  Record、MOCを選びます。runtime候補まで進める場合は、目的に応じて次の一つを
  選びます。
@@ -82,9 +84,10 @@ fresh receiptが揃うまで`NO_GO_UNPUBLISHED`を維持します。
 最短の読み順は次のとおりです。
 
 1. [Company Pack Catalog](COMPANY-PACK-CATALOG.md)で、Company Template → Blocks → Governed Records → MOCsの順に候補を選ぶ。
-2. [Starter Walkthrough](STARTER-WALKTHROUGH.md)で、理想の使い方と現在のread-only/candidate-only境界を確認する。
-3. runtime候補が必要な場合だけ、下のvalidatorで`compose_minimum`または`proxmox_segmented`の公開契約を確認する。
-4. 実環境を扱う場合は、選んだprofileのrunbookでpreflightを行い、material effectの前にexact Work Orderを作る。
+2. [Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)で、現在stageと次の候補作業を確認する。
+3. [Starter Walkthrough](STARTER-WALKTHROUGH.md)で、理想の使い方と現在のread-only/candidate-only境界を確認する。
+4. runtime候補が必要な場合だけ、下のvalidatorで`compose_minimum`または`proxmox_segmented`の公開契約を確認する。
+5. 実環境を扱う場合は、選んだprofileのrunbookでpreflightを行い、material effectの前にexact Work Orderを作る。
 
 validatorの`PASS`やrunbookの存在は、実行済み、稼働中、デプロイ済み、または公開可能という意味ではありません。迷った場合はruntime profileを選ばず、Company Packのread-only導線から始めます。
 

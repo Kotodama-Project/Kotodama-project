@@ -22,6 +22,7 @@ class InstallationLifecycleDocumentationTests(unittest.TestCase):
             "[Governed Records](../templates/records/README.md)",
             "[MOCs](../templates/mocs/README.md)",
             "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
             "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
             "read-only/candidate-only",
             "NO_GO_UNPUBLISHED",
@@ -30,7 +31,7 @@ class InstallationLifecycleDocumentationTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, section)
 
-        positions = [section.index(marker) for marker in required[:7]]
+        positions = [section.index(marker) for marker in required[:8]]
         self.assertEqual(positions, sorted(positions))
         for relative_path in (
             "TEMPLATE-GUIDE.md",
@@ -39,6 +40,7 @@ class InstallationLifecycleDocumentationTests(unittest.TestCase):
             "../templates/records/README.md",
             "../templates/mocs/README.md",
             "COMPANY-PACK-CATALOG.md",
+            "COMPANY-PACK-NEXT-STEPS.md",
             "STARTER-WALKTHROUGH.md",
         ):
             with self.subTest(relative_path=relative_path):
@@ -58,9 +60,21 @@ class InstallationLifecycleDocumentationTests(unittest.TestCase):
         )
         self.assertIn("COMPANY-PACK-CATALOG.md", document)
         self.assertIn("STARTER-WALKTHROUGH.md", document)
+        self.assertIn("COMPANY-PACK-NEXT-STEPS.md", document)
         self.assertIn("read-only", document)
         self.assertIn("NO_GO_UNPUBLISHED", document)
         self.assertIn("Public Beta GO", document)
+
+        start = document.index("## 最初に選ぶ")
+        end = document.index("## 共通の6フェーズ", start)
+        selection = document[start:end]
+        ordered_markers = (
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
+            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+        )
+        positions = [selection.index(marker) for marker in ordered_markers]
+        self.assertEqual(positions, sorted(positions))
 
     def test_docs_separate_ideal_lifecycle_from_current_public_candidate(self) -> None:
         document = LIFECYCLE.read_text(encoding="utf-8")
