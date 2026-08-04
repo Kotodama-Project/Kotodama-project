@@ -511,6 +511,18 @@ python tools/check_company_pack_public_preview.py examples/company-starter
 python tools/check_company_pack_public_preview.py examples/company-starter --format markdown
 ```
 
+POSIX shellでは同じ公開candidate確認を次で実行できます。
+
+```bash
+mkdir -p work
+python3 tools/create_company_pack.py my-company work/my-company
+python3 tools/check_company_pack_customization.py work/my-company
+python3 tools/validate_template_pack.py examples/company-starter
+python3 tools/catalog_company_pack.py examples/company-starter --format markdown
+python3 tools/check_company_pack_public_preview.py examples/company-starter
+python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown
+```
+
 initializer は元 example や既存 target を上書きしません。pack ID と 3 MOC の参照を再束縛し、22 JSON 文書を `draft` に戻してから validator を実行します。
 
 次に [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) に沿って Human Intent reference、canonical owner、role、expiry、retention、profile を自分の候補へ置き換えます。
@@ -533,6 +545,20 @@ python tools/verify_company_pack_review_bundle.py `
   work/my-company
 ```
 
+POSIX shellでReview Bundleの候補bytesを保存する場合も、既存targetを先に拒否します。
+
+```bash
+python3 tools/check_company_pack_customization.py work/my-company
+bundle_path='work/my-company-review-bundle.json'
+if [ -e "$bundle_path" ]; then
+  printf '%s\n' 'bundle target already exists' >&2
+  exit 1
+fi
+bundle_json="$(python3 tools/build_company_pack_review_bundle.py work/my-company)"
+printf '%s\n' "$bundle_json" > "$bundle_path"
+python3 tools/verify_company_pack_review_bundle.py "$bundle_path" work/my-company
+```
+
 `READY_FOR_GOVERNED_REVIEW` や bundle `MATCH` は、Human approval、execution authority、Promotion、Current Truth、Public Beta GO を意味しません。詳細は [Customization Checklist](docs/CUSTOMIZATION-CHECKLIST.md)、[Review Bundle](docs/REVIEW-BUNDLE.md)、[Review Workflow](docs/REVIEW-WORKFLOW.md) を参照してください。
 
 ## Runtime candidate を検査する
@@ -545,6 +571,16 @@ python tools/validate_installation_lifecycle.py `
 python tools/validate_installation_lifecycle.py `
   examples/installation-lifecycle/proxmox-segmented.json
 python tools/validate_compose_minimum_skeleton.py runtime/compose-minimum
+```
+
+POSIX shellでは同じprofileとskeletonのlocal validationを実行できます。
+
+```bash
+python3 tools/validate_installation_lifecycle.py \
+  examples/installation-lifecycle/compose-minimum.json
+python3 tools/validate_installation_lifecycle.py \
+  examples/installation-lifecycle/proxmox-segmented.json
+python3 tools/validate_compose_minimum_skeleton.py runtime/compose-minimum
 ```
 
 これらは plan/schema/current shipped bytes の検査です。image pull、container 起動、migration、health、restart、backup、restore を実行せず、live receipt も作りません。

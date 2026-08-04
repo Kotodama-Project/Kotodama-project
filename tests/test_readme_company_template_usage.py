@@ -53,6 +53,49 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
         self.assertLess(catalog, starter)
         self.assertLess(starter, lifecycle)
 
+    def test_readme_exposes_posix_examples_for_the_same_public_candidate_path(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        required = (
+            "```bash\nmkdir -p work",
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python3 tools/validate_template_pack.py examples/company-starter",
+            "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "python3 tools/check_company_pack_public_preview.py examples/company-starter --format markdown",
+            "bundle_path='work/my-company-review-bundle.json'",
+            "python3 tools/build_company_pack_review_bundle.py work/my-company",
+            "python3 tools/verify_company_pack_review_bundle.py \"$bundle_path\" work/my-company",
+            "python3 tools/validate_installation_lifecycle.py \\\n  examples/installation-lifecycle/compose-minimum.json",
+            "python3 tools/validate_installation_lifecycle.py \\\n  examples/installation-lifecycle/proxmox-segmented.json",
+            "python3 tools/validate_compose_minimum_skeleton.py runtime/compose-minimum",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, readme)
+
+    def test_readme_keeps_posix_candidate_commands_in_governance_order(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        quick_start = readme.index("## Quick Start — Company starter を試す")
+        runtime = readme.index("## Runtime candidate を検査する", quick_start)
+        section = readme[quick_start:runtime]
+        for earlier, later in (
+            (
+                "python3 tools/create_company_pack.py my-company work/my-company",
+                "python3 tools/check_company_pack_customization.py work/my-company",
+            ),
+            (
+                "python3 tools/check_company_pack_customization.py work/my-company",
+                "python3 tools/build_company_pack_review_bundle.py work/my-company",
+            ),
+            (
+                "python3 tools/build_company_pack_review_bundle.py work/my-company",
+                "python3 tools/verify_company_pack_review_bundle.py \"$bundle_path\" work/my-company",
+            ),
+        ):
+            with self.subTest(earlier=earlier, later=later):
+                self.assertLess(section.index(earlier), section.index(later))
+
 
 if __name__ == "__main__":
     unittest.main()
