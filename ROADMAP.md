@@ -25,18 +25,21 @@
 
 ## Current public documentation revision
 
-R113 is the latest public documentation revision and the current public
-Template/Company/Blocks/Records/MOCs/starter surface. R113 added the
-executable public starter runbook smoke (`test_public_starter_runbook_smoke.py`)
-and its matrix/test entry at public `main` commit
-`6361a9a95df767a109ba864f7938177b4059e7fc` with tree
-`d5ac35d0f68163663f3e45416141439c02ac771c`. The guided path reaches
+R116 is the latest public documentation revision and the current public
+Template/Company/Blocks/Records/MOCs/starter surface. R116 added the README
+Runbook smoke entry immediately before Quick Start, linking the Starter
+Walkthrough and executable test at public `main` commit
+`2a5a65cdbefc0e1fc33c88771a95443ed52d5960` with tree
+`456d5a990ae030699246959e12daf0a4a9cbb6d1`. The guided path reaches
 `CANDIDATE_FOR_GOVERNED_REVIEW` and `MATCH`; the plain path remains
-`CUSTOMIZATION_REQUIRED` and fail-closed. R112 remains historical as the
-STATUS/ROADMAP provenance synchronization. R111 remains historical as the
-schema/validator/test matrix revision; R111 added the
-schema/validator/test matrix and its README/Template Guide/Validation entry
-links. R110 remains historical as the
+`CUSTOMIZATION_REQUIRED` and fail-closed as `BUNDLE_REFUSED`. R115 remains
+historical as the Starter Walkthrough smoke entry, R114 remains historical as
+the STATUS/ROADMAP provenance synchronization, and R113 remains historical as
+the executable public starter runbook smoke (`test_public_starter_runbook_smoke.py`)
+and its matrix/test entry. R112 remains historical as the STATUS/ROADMAP
+provenance synchronization. R111 remains historical as the schema/validator/test
+matrix revision; R111 added the schema/validator/test matrix and its
+README/Template Guide/Validation entry links. R110 remains historical as the
 stable MOC index and entry-point routing revision, R109 remains historical as
 the STATUS/ROADMAP label cleanup, R108 remains historical provenance, and R107
 remains historical provenance.

@@ -6,18 +6,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicStatusRoadmapSyncTests(unittest.TestCase):
-    def test_public_status_and_roadmap_bind_r111_current_fixed_point(self) -> None:
+    def test_public_status_and_roadmap_bind_r116_current_fixed_point(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
         status_flat = " ".join(status.split())
         roadmap_flat = " ".join(roadmap.split())
 
         self.assertIn(
-            "R113 is the current public starter runbook smoke revision",
+            "R116 is the current public README Runbook smoke revision",
             status_flat,
         )
-        self.assertIn("6361a9a95df767a109ba864f7938177b4059e7fc", status_flat)
-        self.assertIn("d5ac35d0f68163663f3e45416141439c02ac771c", status_flat)
+        self.assertIn("2a5a65cdbefc0e1fc33c88771a95443ed52d5960", status_flat)
+        self.assertIn("456d5a990ae030699246959e12daf0a4a9cbb6d1", status_flat)
+        self.assertIn("README Quick Start", status_flat)
+        self.assertIn("STARTER-WALKTHROUGH.md", status_flat)
+        self.assertIn("test_public_starter_runbook_smoke.py", status_flat)
         self.assertIn("SCHEMA-VALIDATOR-MATRIX.md", status_flat)
         self.assertIn("test_public_starter_runbook_smoke.py", status_flat)
         self.assertIn("guided path reaches bundle", status_flat)
@@ -27,13 +30,14 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("R109 remains historical", status_flat)
         self.assertIn("NO_GO_UNPUBLISHED", status_flat)
         self.assertIn(
-            "R113 is the latest public documentation revision",
+            "R116 is the latest public documentation revision",
             roadmap_flat,
         )
         self.assertIn("R111 added the schema/validator/test matrix", roadmap_flat)
-        self.assertIn("R113 added the executable public starter runbook smoke", roadmap_flat)
-        self.assertIn("6361a9a95df767a109ba864f7938177b4059e7fc", roadmap_flat)
-        self.assertIn("d5ac35d0f68163663f3e45416141439c02ac771c", roadmap_flat)
+        self.assertIn("R116 added the README Runbook smoke entry", roadmap_flat)
+        self.assertIn("2a5a65cdbefc0e1fc33c88771a95443ed52d5960", roadmap_flat)
+        self.assertIn("456d5a990ae030699246959e12daf0a4a9cbb6d1", roadmap_flat)
+        self.assertIn("R115 remains historical", roadmap_flat)
         self.assertIn("test_public_starter_runbook_smoke.py", roadmap_flat)
         self.assertIn("CANDIDATE_FOR_GOVERNED_REVIEW", roadmap_flat)
         self.assertIn("MATCH", roadmap_flat)
@@ -53,7 +57,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         self.assertIn(
-            "R113 is the current public starter runbook smoke revision",
+            "R116 is the current public README Runbook smoke revision",
             status_flat,
         )
         self.assertIn("de163c060006d50545229fd8ef092f97c583074d", status_flat)
@@ -68,7 +72,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("R107 remains historical provenance", status_flat)
         self.assertIn("NO_GO_UNPUBLISHED", status_flat)
 
-        self.assertIn("R113 is the latest public documentation revision", roadmap_flat)
+        self.assertIn("R116 is the latest public documentation revision", roadmap_flat)
         self.assertIn("R107 remains historical provenance", roadmap_flat)
         self.assertIn("R107 aligned the Company Template ideal order", roadmap_flat)
         self.assertIn("de163c060006d50545229fd8ef092f97c583074d", roadmap_flat)
@@ -91,7 +95,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("NO_GO_UNPUBLISHED", status_flat)
         self.assertIn("real Voice rotation remains unproven", status_flat)
 
-        self.assertIn("R113 is the latest public documentation revision", roadmap_flat)
+        self.assertIn("R116 is the latest public documentation revision", roadmap_flat)
         self.assertIn("R107 remains historical provenance", roadmap_flat)
         self.assertIn("R103 remains the historical README/documentation revision", roadmap_flat)
         self.assertIn("R103 added the README ideal/current layer map", roadmap_flat)
@@ -109,7 +113,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         self.assertIn(
-            "R113 is the current public starter runbook smoke revision",
+            "R116 is the current public README Runbook smoke revision",
             status_flat,
         )
         self.assertIn("R92 synchronizes the public STATUS/ROADMAP provenance", status_flat)
@@ -213,7 +217,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("Final Human GO", status_flat)
         self.assertIn("Not completed", status_flat)
 
-        self.assertIn("R113 is the latest public documentation revision", roadmap_flat)
+        self.assertIn("R116 is the latest public documentation revision", roadmap_flat)
         self.assertIn("R107 remains historical provenance", roadmap_flat)
         self.assertIn("R100 is the latest Public Preview Self-check POSIX parity", roadmap_flat)
         self.assertIn("R89 is the latest Validation Guide core POSIX parity", roadmap_flat)

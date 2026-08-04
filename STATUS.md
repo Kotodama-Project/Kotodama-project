@@ -44,17 +44,22 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R113 is the current public starter runbook smoke revision and the latest
+R116 is the current public README Runbook smoke revision and the latest
 Template/Company/Blocks/Records/MOCs/starter navigation surface at public
-`main` commit `6361a9a95df767a109ba864f7938177b4059e7fc`, tree
-`d5ac35d0f68163663f3e45416141439c02ac771c`. The
-[Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md) now links
+`main` commit `2a5a65cdbefc0e1fc33c88771a95443ed52d5960`, tree
+`456d5a990ae030699246959e12daf0a4a9cbb6d1`. The README Quick Start now links
+the [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) Runbook smoke and the
 [`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py):
+the [Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md) remains
+the contract map for the same smoke;
 the guided path reaches bundle `MATCH`, while the plain path remains
-`CUSTOMIZATION_REQUIRED` and fail-closed. The published surface remains
-read-only/candidate-only and `NO_GO_UNPUBLISHED`; R112 remains historical as
-the STATUS/ROADMAP provenance synchronization, R111 remains historical as the
-schema/validator/test matrix revision, and R110 remains historical as the stable MOC index
+`CUSTOMIZATION_REQUIRED` and fail-closed with `BUNDLE_REFUSED`. The published
+surface remains read-only/candidate-only and `NO_GO_UNPUBLISHED`; R115 remains
+historical as the Starter Walkthrough smoke entry, R114 remains historical as
+the STATUS/ROADMAP provenance synchronization, R113 remains historical as the
+starter smoke matrix revision, R112 remains historical as the STATUS/ROADMAP
+provenance synchronization, R111 remains historical as the schema/validator
+test matrix revision, and R110 remains historical as the stable MOC index
 revision, R109 remains historical as the STATUS/ROADMAP label cleanup, R108
 remains historical provenance, and R107 remains historical provenance.
 R37 introduced
