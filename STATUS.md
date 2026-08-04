@@ -44,21 +44,26 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R151 is the current public documentation revision and the latest
+R153 is the current public documentation revision and the latest
 Template/Company/Blocks/Records/MOCs/starter navigation surface at public
-`main` commit `7633f0d4996c1bd210fb68b65fb12ff81c7fe4b7`, tree
-`5bcb3b231e1377b3505e51385b57feb04f607361`. R151 adds direct links to the
-**Review-chain artifact map** from Company Pack Guided Next Steps and Schema /
-Validator / Test Matrix. These entry surfaces list Review Bundle, Review
-Request, Review Response, and Decision Handoff states/next handoffs; the
-stable map target is `STARTER-WALKTHROUGH.md#review-chain-artifact-map`. They
-keep the before or after the external-free smoke, read-only/candidate-only, Human
-Decision, Promotion, Current Truth, runtime, and Public Beta GO boundaries.
-The regressions are
-[`test_company_pack_next_steps_entry_navigation.py`](tests/test_company_pack_next_steps_entry_navigation.py)
-and [`test_schema_validator_matrix_docs.py`](tests/test_schema_validator_matrix_docs.py).
-R151 is documentation/static-regression evidence only; the published surface
-remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R150 remains
+`main` commit `92b574129ada8d9af2fc2a95e29cdd92590a5dd8`, tree
+`b8d981464e18c31e448b3b57d3bb758ad6f67ae2`. R153 adds a direct README
+Document Map **Review-chain artifact map** entry after Company Pack Guided
+Next Steps and before Installation Lifecycle. It points to
+`STARTER-WALKTHROUGH.md#review-chain-artifact-map` and exposes the Review
+Bundle, Review Request, Review Response, and Decision Handoff artifact states
+and next handoffs. It keeps the read-only/candidate-only, `NO_GO_UNPUBLISHED`,
+Human Decision, Promotion, Current Truth, runtime, and Public Beta GO
+boundaries. The regression is
+[`test_readme_company_template_usage.py`](tests/test_readme_company_template_usage.py).
+R153 is documentation/static-regression evidence only; the published surface
+remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R152 remains
+historical as the STATUS/ROADMAP synchronization to R151 at public `main`
+commit `371641e16b3857115be3a52ee32a12117c3bd7f1`, tree
+`a6acc28e2455275d294463591f8ffece13ce542f`. R151 remains historical as the
+artifact-map entry-surface revision at public `main` commit
+`7633f0d4996c1bd210fb68b65fb12ff81c7fe4b7`, tree
+`5bcb3b231e1377b3505e51385b57feb04f607361`. R150 remains
 historical as the R149 STATUS/ROADMAP synchronization at public `main`
 commit `e15655db50da8106eeb9976f2b2d6c92f4884b43`, tree
 `476d36bf3faaf8b9ccb9f8b11e5e6a56680b358a`; R149 remains historical as the
