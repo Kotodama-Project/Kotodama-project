@@ -128,6 +128,62 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             with self.subTest(surface=surface, order=(earlier, later)):
                 self.assertLess(text.index(earlier), text.index(later))
 
+    def test_guided_onboarding_surfaces_expose_remaining_posix_paths(self) -> None:
+        checklist = (ROOT / "docs" / "CUSTOMIZATION-CHECKLIST.md").read_text(
+            encoding="utf-8"
+        )
+        initializer = (
+            ROOT / "docs" / "GUIDED-COMPANY-PACK-INITIALIZATION.md"
+        ).read_text(encoding="utf-8")
+        next_steps = (ROOT / "docs" / "COMPANY-PACK-NEXT-STEPS.md").read_text(
+            encoding="utf-8"
+        )
+
+        checklist_markers = (
+            "python tools\\plan_company_pack_next_steps.py work\\my-company --format markdown",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            "NO_GO_UNPUBLISHED",
+        )
+        initializer_markers = (
+            "python tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python tools/check_company_pack_customization.py work/my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            "NO_GO_UNPUBLISHED",
+        )
+        next_steps_markers = (
+            "python tools\\plan_company_pack_next_steps.py work\\my-company",
+            "python3 tools/plan_company_pack_next_steps.py work/my-company",
+            "NO_GO_UNPUBLISHED",
+        )
+        for surface, text, markers in (
+            ("checklist", checklist, checklist_markers),
+            ("initializer", initializer, initializer_markers),
+            ("next_steps", next_steps, next_steps_markers),
+        ):
+            for marker in markers:
+                with self.subTest(surface=surface, marker=marker):
+                    self.assertIn(marker, text)
+
+        for surface, text, earlier, later in (
+            (
+                "initializer",
+                initializer,
+                "python3 tools/create_company_pack.py my-company work/my-company",
+                "python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown",
+            ),
+            (
+                "next_steps",
+                next_steps,
+                "python3 tools/plan_company_pack_next_steps.py work/my-company",
+                "## 現在地の読み方",
+            ),
+        ):
+            with self.subTest(surface=surface, order=(earlier, later)):
+                self.assertLess(text.index(earlier), text.index(later))
+
     def test_onboarding_surfaces_expose_power_shell_and_posix_command_parity(self) -> None:
         starter = (ROOT / "docs" / "STARTER-WALKTHROUGH.md").read_text(
             encoding="utf-8"

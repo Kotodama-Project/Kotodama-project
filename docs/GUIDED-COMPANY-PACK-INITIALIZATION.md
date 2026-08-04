@@ -83,6 +83,12 @@ python tools/check_company_pack_customization.py work/my-company
 python tools/plan_company_pack_next_steps.py work/my-company --format markdown
 ```
 
+```bash
+python3 tools/create_company_pack.py my-company work/my-company
+python3 tools/check_company_pack_customization.py work/my-company
+python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown
+```
+
 このpathは`19/46/5`を返し、guided plannerで現在地を確認してから組織内で値を決められます。既存targetをguided modeで更新する機能ではありません。guided modeを使う場合は、別の未使用target名へ新規生成し、必要ならexact bytesをreviewしてください。
 
 ## Ideal flow and current boundary

@@ -24,6 +24,10 @@ defaultはautomation向けのdeterministic JSONです。
 python tools\plan_company_pack_next_steps.py work\my-company
 ```
 
+```bash
+python3 tools/plan_company_pack_next_steps.py work/my-company
+```
+
 同じPack bytesと同じtool bytesからは、同じUTF-8の1行JSONを返します。Markdownもconsole localeへ依存せずUTF-8で出力します。JSON schemaは[`company-pack-next-steps.schema.json`](../schemas/company-pack-next-steps.schema.json)です。
 
 ## 現在地の読み方

@@ -55,6 +55,10 @@ exact itemを一件ずつ読む前に現在地と優先順を把握したい場�
 python tools\plan_company_pack_next_steps.py work\my-company --format markdown
 ```
 
+```bash
+python3 tools/plan_company_pack_next_steps.py work/my-company --format markdown
+```
+
 plannerは元reportのcategory別countをgroup合計へ集約し、各categoryの合計が元countと一致することを確認して、現在stage、理想の7段階、recommended next commandを表示します。個別`id/path/reason`は出力しません。default JSONのschemaは[`company-pack-next-steps.schema.json`](../schemas/company-pack-next-steps.schema.json)です。plannerのexit code `0`はplan生成成功を表すため、`CUSTOMIZATION_REQUIRED`でも`0`です。詳細は[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)を参照してください。
 
 ## Ideal use
