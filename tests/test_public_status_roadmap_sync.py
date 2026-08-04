@@ -16,6 +16,12 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("de163c060006d50545229fd8ef092f97c583074d", status_flat)
         self.assertIn("a9679c8f2ff04146b8ddaf1803ee094b56b5d4bc", status_flat)
         self.assertIn("R107 aligned the Company Template ideal order", status_flat)
+        self.assertIn("R105 added the direct Installation Lifecycle link", status_flat)
+        self.assertNotIn(
+            "R105 added the direct Installation Lifecycle link in the Template Catalog Runtime profiles row and is the current public",
+            status_flat,
+        )
+        self.assertIn("R105 remains historical", status_flat)
         self.assertIn("NO_GO_UNPUBLISHED", status_flat)
 
         self.assertIn("R108 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
