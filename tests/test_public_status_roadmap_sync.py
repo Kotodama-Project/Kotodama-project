@@ -6,13 +6,46 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicStatusRoadmapSyncTests(unittest.TestCase):
-    def test_public_status_and_roadmap_bind_r107_current_fixed_point(self) -> None:
+    def test_public_status_and_roadmap_bind_r111_current_fixed_point(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
         status_flat = " ".join(status.split())
         roadmap_flat = " ".join(roadmap.split())
 
-        self.assertIn("R107 is the current public Company Template layer-order candidate", status_flat)
+        self.assertIn(
+            "R111 is the current public documentation and schema/validator/test matrix revision",
+            status_flat,
+        )
+        self.assertIn("04b1565e86aeeb920617b7f2d68eade782c11951", status_flat)
+        self.assertIn("fce4505362d1d4ddcaf2d9ac01f617caa14fda00", status_flat)
+        self.assertIn("SCHEMA-VALIDATOR-MATRIX.md", status_flat)
+        self.assertIn("R110 remains historical", status_flat)
+        self.assertIn("R109 remains historical", status_flat)
+        self.assertIn("NO_GO_UNPUBLISHED", status_flat)
+        self.assertIn(
+            "R111 is the latest public documentation revision",
+            roadmap_flat,
+        )
+        self.assertIn("R111 added the schema/validator/test matrix", roadmap_flat)
+        self.assertIn("04b1565e86aeeb920617b7f2d68eade782c11951", roadmap_flat)
+        self.assertIn("fce4505362d1d4ddcaf2d9ac01f617caa14fda00", roadmap_flat)
+        self.assertIn("R110 remains historical", roadmap_flat)
+        self.assertIn("R109 remains historical", roadmap_flat)
+        self.assertIn("read-only/candidate-only", roadmap_flat)
+        self.assertIn("NO_GO_UNPUBLISHED", roadmap_flat)
+        self.assertIn("Public Beta access", status_flat)
+        self.assertIn("Not open", status_flat)
+
+    def test_public_status_and_roadmap_preserve_r107_fixed_point_history(self) -> None:
+        status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
+        roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        status_flat = " ".join(status.split())
+        roadmap_flat = " ".join(roadmap.split())
+
+        self.assertIn(
+            "R111 is the current public documentation and schema/validator/test matrix revision",
+            status_flat,
+        )
         self.assertIn("de163c060006d50545229fd8ef092f97c583074d", status_flat)
         self.assertIn("a9679c8f2ff04146b8ddaf1803ee094b56b5d4bc", status_flat)
         self.assertIn("R107 aligned the Company Template ideal order", status_flat)
@@ -22,10 +55,11 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
             status_flat,
         )
         self.assertIn("R105 remains historical", status_flat)
+        self.assertIn("R107 remains historical provenance", status_flat)
         self.assertIn("NO_GO_UNPUBLISHED", status_flat)
 
-        self.assertIn("R108 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
-        self.assertIn("R107 is the latest public Company Template layer-order revision", roadmap_flat)
+        self.assertIn("R111 is the latest public documentation revision", roadmap_flat)
+        self.assertIn("R107 remains historical provenance", roadmap_flat)
         self.assertIn("R107 aligned the Company Template ideal order", roadmap_flat)
         self.assertIn("de163c060006d50545229fd8ef092f97c583074d", roadmap_flat)
         self.assertIn("a9679c8f2ff04146b8ddaf1803ee094b56b5d4bc", roadmap_flat)
@@ -47,8 +81,8 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("NO_GO_UNPUBLISHED", status_flat)
         self.assertIn("real Voice rotation remains unproven", status_flat)
 
-        self.assertIn("R108 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
-        self.assertIn("R107 is the latest public Company Template layer-order revision", roadmap_flat)
+        self.assertIn("R111 is the latest public documentation revision", roadmap_flat)
+        self.assertIn("R107 remains historical provenance", roadmap_flat)
         self.assertIn("R103 remains the historical README/documentation revision", roadmap_flat)
         self.assertIn("R103 added the README ideal/current layer map", roadmap_flat)
         self.assertIn("92a67b1bd0b450b549590d915b24dd983bb3eb7a", roadmap_flat)
@@ -65,7 +99,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         self.assertIn(
-            "R107 is the current public Company Template layer-order candidate",
+            "R111 is the current public documentation and schema/validator/test matrix revision",
             status_flat,
         )
         self.assertIn("R92 synchronizes the public STATUS/ROADMAP provenance", status_flat)
@@ -169,8 +203,8 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("Final Human GO", status_flat)
         self.assertIn("Not completed", status_flat)
 
-        self.assertIn("R108 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
-        self.assertIn("R107 is the latest public Company Template layer-order revision", roadmap_flat)
+        self.assertIn("R111 is the latest public documentation revision", roadmap_flat)
+        self.assertIn("R107 remains historical provenance", roadmap_flat)
         self.assertIn("R100 is the latest Public Preview Self-check POSIX parity", roadmap_flat)
         self.assertIn("R89 is the latest Validation Guide core POSIX parity", roadmap_flat)
         self.assertIn("R88 is the latest guided onboarding POSIX parity", roadmap_flat)

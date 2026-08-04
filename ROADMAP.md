@@ -25,15 +25,21 @@
 
 ## Current public documentation revision
 
-R108 is the latest STATUS/ROADMAP provenance synchronization. R107 is the
-latest public Company Template layer-order revision and the current public
-Template/Company/Blocks/Records/MOCs/starter surface. R103 remains the
-historical README/documentation revision. R100 is the latest Public Preview
-Self-check POSIX parity, R89 is the latest Validation Guide core POSIX parity,
-R88 is the latest guided onboarding POSIX parity, R87 is the latest Template
-Guide and Catalog POSIX parity, and R86 is the latest STATUS/ROADMAP
-provenance before R92. The published R91 candidate is public `main` commit
-`b071ce9b2fd4167c8ac199bcd1983b64224fba43` with tree
+R111 is the latest public documentation revision and the current public
+Template/Company/Blocks/Records/MOCs/starter surface. R111 added the
+schema/validator/test matrix and its README/Template Guide/Validation entry
+links at public `main` commit
+`04b1565e86aeeb920617b7f2d68eade782c11951` with tree
+`fce4505362d1d4ddcaf2d9ac01f617caa14fda00`. R110 remains historical as the
+stable MOC index and entry-point routing revision, R109 remains historical as
+the STATUS/ROADMAP label cleanup, R108 remains historical provenance, and R107
+remains historical provenance.
+R103 remains the historical README/documentation revision. R100 is the latest
+Public Preview Self-check POSIX parity, R89 is the latest Validation Guide
+core POSIX parity, R88 is the latest guided onboarding POSIX parity, R87 is
+the latest Template Guide and Catalog POSIX parity, and R86 is the latest
+STATUS/ROADMAP provenance before R92. The published R91 candidate is public
+`main` commit `b071ce9b2fd4167c8ac199bcd1983b64224fba43` with tree
 `c6c7bafebd9cca6bdc37365af560b2f11f9fc7e8`.
 
 R68 is the historical README contract synchronization. R80 is the latest

@@ -44,10 +44,17 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R107 is the current public Company Template layer-order candidate and the latest
-Template/Company/Blocks/Records/MOCs/starter navigation surface at public
-`main` commit `de163c060006d50545229fd8ef092f97c583074d`, tree
-`a9679c8f2ff04146b8ddaf1803ee094b56b5d4bc`.
+R111 is the current public documentation and schema/validator/test matrix
+revision and the latest Template/Company/Blocks/Records/MOCs/starter
+navigation surface at public `main` commit
+`04b1565e86aeeb920617b7f2d68eade782c11951`, tree
+`fce4505362d1d4ddcaf2d9ac01f617caa14fda00`. The
+[Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md) maps each
+starter schema to its CLI, regression test, runbook, and narrow PASS meaning.
+The published surface remains read-only/candidate-only and
+`NO_GO_UNPUBLISHED`; R110 remains historical as the stable MOC index
+revision, R109 remains historical as the STATUS/ROADMAP label cleanup, R108
+remains historical provenance, and R107 remains historical provenance.
 R37 introduced
 the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a deterministic `--format markdown`
 summary. R45 added the saved-bundle to Review Request boundary, R46
@@ -163,7 +170,10 @@ force, and real Voice rotation remains unproven.
 R106 synchronized STATUS/ROADMAP provenance to R105; R105 remains historical.
 R107 aligned the Company Template ideal order to Human Intent -> Blocks ->
 Governed Records -> MOCs -> validator/review before optional runtime profile
-selection. This is documentation/test hardening only; the public path remains
+selection. Its historical public candidate was commit
+`de163c060006d50545229fd8ef092f97c583074d`, tree
+`a9679c8f2ff04146b8ddaf1803ee094b56b5d4bc`. This is
+documentation/test hardening only; the public path remains
 read-only/candidate-only and `NO_GO_UNPUBLISHED`, with no runtime, Voice,
 provider, Promotion, Current Truth, or Final Human GO claim.
 
