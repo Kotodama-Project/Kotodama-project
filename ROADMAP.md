@@ -22,6 +22,7 @@
 - [x] Dynamic Review Response contract bound to the saved request
 - [x] Dynamic Decision Handoff contract bound to the saved review chain
 - [x] Public Template Guide, Starter Walkthrough, Status, and Roadmap current-state sync
+- [x] Company Pack Catalog, Guided Next Steps, and Schema / Validator / Test Matrix entry navigation
 
 ## Current public documentation revision
 

@@ -6,6 +6,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicStatusRoadmapSyncTests(unittest.TestCase):
+    def test_public_status_surface_exposes_pack_entry_links(self) -> None:
+        status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
+        roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        status_table = status.split("## Latest runtime result", 1)[0]
+        roadmap_published = roadmap.split("## Current public documentation revision", 1)[0]
+
+        for marker in (
+            "[Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md)",
+            "[Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)",
+            "[Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md)",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        ):
+            with self.subTest(surface="status", marker=marker):
+                self.assertIn(marker, status_table)
+
+        self.assertIn(
+            "[x] Company Pack Catalog, Guided Next Steps, and Schema / Validator / Test Matrix entry navigation",
+            roadmap_published,
+        )
+        self.assertIn("NO_GO_UNPUBLISHED", roadmap)
+
     def test_public_status_and_roadmap_bind_r153_readme_artifact_map_current(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
