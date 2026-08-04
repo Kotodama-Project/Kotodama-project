@@ -44,8 +44,9 @@ Updated: 2026-08-04
 
 ## Latest public template result
 
-R101 is the current public Template/Company/Blocks/Records/MOCs/starter
-documentation surface. R37 introduced the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a deterministic `--format markdown`
+R103 is the current public README/documentation candidate and the latest
+Template/Company/Blocks/Records/MOCs/starter navigation surface. R37 introduced
+the read-only [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) with a deterministic `--format markdown`
 summary. R45 added the saved-bundle to Review Request boundary, R46
 added the dynamic Review Response boundary, R47 added the dynamic Decision
 Handoff boundary, and R48 clarified that the starter's `19/46/5` values are
@@ -141,9 +142,13 @@ ideal Company Template layers through the current Catalog, Starter Walkthrough,
 and Installation Lifecycle path. R101 added the standalone Installation
 Lifecycle reading entry from Template Guide -> Company Template -> Blocks ->
 Governed Records -> MOCs, then Catalog -> Starter Walkthrough before profile
-selection. The current public documentation candidate is R101 at commit
-`78369d2e3575989a4da98979d835a8e8c7806af1`, tree
-`0ac21454fa66d8d4eba217ef755e631b58909172`. These are documentation/test
+selection. R102 synchronized STATUS/ROADMAP provenance to that surface. R103
+added the README ideal/current layer map: Template Guide -> Company Template ->
+Blocks -> Governed Records -> MOCs before Catalog -> Starter Walkthrough ->
+Public Preview Self-check -> Installation Lifecycle. The current public
+documentation candidate is R103 at commit
+`92a67b1bd0b450b549590d915b24dd983bb3eb7a`, tree
+`a8437da05a2688e64129458eb604a6f604deb59c`. These are documentation/test
 changes only; `read-only/candidate-only` and `NO_GO_UNPUBLISHED` remain in
 force, and real Voice rotation remains unproven.
 
