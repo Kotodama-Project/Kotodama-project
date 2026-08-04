@@ -18,6 +18,40 @@
 
 小さなチームで同じ人が複数roleを担当する場合も、artifactと時刻、どのauthorityで行ったかを分けて記録します。独立性が必須のlaneでは、同一人物を別role名で書くだけでは要件を満たしません。
 
+## CLI help preflight
+
+artifactを作る前に、review chainの各CLIを`-h`または`--help`で確認できます。
+helpはartifactやPackを読み書きしません。すべて`read-only/candidate-only`で、
+公開状態は`NO_GO_UNPUBLISHED`のままです。
+
+PowerShell / Python:
+
+```powershell
+python tools/build_company_pack_review_bundle.py --help
+python tools/verify_company_pack_review_bundle.py --help
+python tools/build_company_pack_review_request.py --help
+python tools/build_company_pack_review_response.py --help
+python tools/verify_company_pack_review_response.py --help
+python tools/build_company_pack_review_decision_handoff.py --help
+python tools/verify_company_pack_review_decision_handoff.py --help
+```
+
+POSIX / Python 3:
+
+```bash
+python3 tools/build_company_pack_review_bundle.py --help
+python3 tools/verify_company_pack_review_bundle.py --help
+python3 tools/build_company_pack_review_request.py --help
+python3 tools/build_company_pack_review_response.py --help
+python3 tools/verify_company_pack_review_response.py --help
+python3 tools/build_company_pack_review_decision_handoff.py --help
+python3 tools/verify_company_pack_review_decision_handoff.py --help
+```
+
+helpの成功はreviewer identity、authority、Human approval、external evidence
+resolution、runtime、Promotion、Current Truth、Final Human GO、Public Beta GOを
+作りません。次のartifact作成・保存・照合stepは、各入力を固定して別に実行します。
+
 ## 1. Build and save an exact candidate
 
 構造validatorとcustomization checkerを通し、`replacement_required`を0にします。その後、bundle JSONを保存します。

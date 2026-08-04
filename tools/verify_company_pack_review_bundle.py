@@ -15,7 +15,11 @@ from build_company_pack_review_bundle import (
     build_review_bundle,
     empty_claims,
 )
-from validate_template_pack import ID_PATTERN, is_safe_relative_json_path
+from validate_template_pack import (
+    ID_PATTERN,
+    emit_help_if_requested,
+    is_safe_relative_json_path,
+)
 
 
 HEX_SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -344,6 +348,17 @@ def verify_saved_bundle(bundle_path: Path, pack_dir: Path) -> dict[str, Any]:
 
 
 def main(argv: list[str]) -> int:
+    if emit_help_if_requested(
+        argv,
+        usage=(
+            "usage: verify_company_pack_review_bundle.py "
+            "BUNDLE_JSON PACK_DIRECTORY"
+        ),
+        purpose=(
+            "Verify saved Company Pack bindings without approving or promoting them."
+        ),
+    ):
+        return 0
     if len(argv) != 3:
         print(
             "usage: verify_company_pack_review_bundle.py BUNDLE_JSON PACK_DIRECTORY",

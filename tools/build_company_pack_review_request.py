@@ -21,6 +21,7 @@ from verify_company_pack_review_bundle import (
     validate_saved_bundle,
     verify_saved_bundle,
 )
+from validate_template_pack import emit_help_if_requested
 
 
 def empty_counts() -> dict[str, int]:
@@ -192,6 +193,15 @@ def write_stdout_utf8(payload: dict[str, Any]) -> None:
 
 
 def main(argv: list[str]) -> int:
+    if emit_help_if_requested(
+        argv,
+        usage=(
+            "usage: build_company_pack_review_request.py "
+            "BUNDLE_JSON PACK_DIRECTORY"
+        ),
+        purpose="Prepare an exact, non-authorizing Company Pack review request.",
+    ):
+        return 0
     if len(argv) != 3:
         print(
             "usage: build_company_pack_review_request.py BUNDLE_JSON PACK_DIRECTORY",

@@ -17,6 +17,7 @@ from verify_company_pack_review_bundle import (
     reject_duplicate_keys,
     reject_non_finite_constant,
 )
+from validate_template_pack import emit_help_if_requested
 
 
 PERMITTED_OUTCOMES = ["accept", "request_changes", "reject"]
@@ -339,6 +340,15 @@ def write_stdout_utf8(payload: dict[str, Any]) -> None:
 
 
 def main(argv: list[str]) -> int:
+    if emit_help_if_requested(
+        argv,
+        usage="usage: build_company_pack_review_response.py REQUEST_JSON",
+        purpose=(
+            "Create an editable, non-authorizing response for one saved "
+            "review request."
+        ),
+    ):
+        return 0
     if len(argv) != 2:
         print(
             "usage: build_company_pack_review_response.py REQUEST_JSON",

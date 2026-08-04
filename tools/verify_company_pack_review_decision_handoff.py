@@ -19,6 +19,7 @@ from build_company_pack_review_decision_handoff import (
 )
 from build_company_pack_review_response import read_limited_bytes, write_stdout_utf8
 from verify_company_pack_review_response import exact_json_equal
+from validate_template_pack import emit_help_if_requested
 
 
 def mismatch(reason: str) -> dict[str, Any]:
@@ -126,6 +127,18 @@ def verify_decision_handoff(
 
 
 def main(argv: list[str]) -> int:
+    if emit_help_if_requested(
+        argv,
+        usage=(
+            "usage: verify_company_pack_review_decision_handoff.py "
+            "BUNDLE_JSON PACK_DIRECTORY BUNDLE_VERIFICATION_JSON "
+            "REQUEST_JSON RESPONSE_JSON RESPONSE_VERIFICATION_JSON HANDOFF_JSON"
+        ),
+        purpose=(
+            "Verify a review-to-Decision handoff without verifying a Human Decision."
+        ),
+    ):
+        return 0
     if len(argv) != 8:
         print(
             "usage: verify_company_pack_review_decision_handoff.py "

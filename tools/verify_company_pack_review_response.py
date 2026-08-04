@@ -27,6 +27,7 @@ from build_company_pack_review_response import (
     valid_text,
     write_stdout_utf8,
 )
+from validate_template_pack import emit_help_if_requested
 
 
 RESPONSE_KEYS = {
@@ -304,6 +305,18 @@ def verify_response(request_path: Path, response_path: Path) -> dict[str, Any]:
 
 
 def main(argv: list[str]) -> int:
+    if emit_help_if_requested(
+        argv,
+        usage=(
+            "usage: verify_company_pack_review_response.py "
+            "REQUEST_JSON RESPONSE_JSON"
+        ),
+        purpose=(
+            "Verify item-response structure without verifying reviewer "
+            "authority or approval."
+        ),
+    ):
+        return 0
     if len(argv) != 3:
         print(
             "usage: verify_company_pack_review_response.py REQUEST_JSON RESPONSE_JSON",

@@ -26,6 +26,7 @@ from verify_company_pack_review_bundle import (
     verify_saved_bundle,
 )
 from verify_company_pack_review_response import exact_json_equal, verify_response
+from validate_template_pack import emit_help_if_requested
 
 
 ARTIFACT_NAMES = (
@@ -269,6 +270,18 @@ def build_decision_handoff(
 
 
 def main(argv: list[str]) -> int:
+    if emit_help_if_requested(
+        argv,
+        usage=(
+            "usage: build_company_pack_review_decision_handoff.py "
+            "BUNDLE_JSON PACK_DIRECTORY BUNDLE_VERIFICATION_JSON "
+            "REQUEST_JSON RESPONSE_JSON RESPONSE_VERIFICATION_JSON"
+        ),
+        purpose=(
+            "Bind a complete review chain for a separate Human Decision step."
+        ),
+    ):
+        return 0
     if len(argv) != 7:
         print(
             "usage: build_company_pack_review_decision_handoff.py "

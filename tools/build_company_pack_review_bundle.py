@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from check_company_pack_customization import check_customization
-from validate_template_pack import validate_pack
+from validate_template_pack import emit_help_if_requested, validate_pack
 
 
 CANONICALIZATION = "utf8-json-sort-keys-no-whitespace-v1"
@@ -237,6 +237,14 @@ def build_review_bundle(pack_dir: Path) -> dict[str, Any]:
 
 
 def main(argv: list[str]) -> int:
+    if emit_help_if_requested(
+        argv,
+        usage="usage: build_company_pack_review_bundle.py PACK_DIRECTORY",
+        purpose=(
+            "Bind a review-ready Company Pack to exact bytes without approving it."
+        ),
+    ):
+        return 0
     if len(argv) != 2:
         print(
             "usage: build_company_pack_review_bundle.py PACK_DIRECTORY",
