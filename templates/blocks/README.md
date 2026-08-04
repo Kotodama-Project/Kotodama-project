@@ -28,6 +28,19 @@ Blockを単独で読んだときに、次の質問へ答えられるようにし
 
 最小形式は[Work Order Block](work-order-block.md)を参照してください。
 
+## Ideal / current / smoke
+
+**Ideal:** Company Templateで会社の境界とownerを定め、必要なBlockだけを選び、
+対応するGoverned RecordとMOCを同じcanonical flowへ接続します。
+
+**Current:** 公開starterでは9つのBlock契約をJSONで読み、入力・出力・authority・
+拒否条件・verificationの候補構造をvalidatorで確認できます。runtimeの実行権限や
+Promotionは含みません。
+
+**Smoke:** [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)でPack全体を
+一覧し、[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)の作業copy手順と
+[Schema / Validator / Test Matrix](../../docs/SCHEMA-VALIDATOR-MATRIX.md)の対応テストへ進みます。
+
 ## 公開starterの9 Blocksを目的で選ぶ
 
 公開starterは、次の9 Blockを一つのcanonical flowとして出荷しています。
@@ -71,3 +84,17 @@ incident stopなどは、将来のadapter / Block候補を考えるための概�
 へ進めます。starterの`19/46/5`は例示値で、別Packでは保存済みreportとchainの
 実数を使います。いずれもHuman approval、Promotion、Current Truth、runtime、
 Public Beta GOを作りません。
+
+## Read next: ideal -> current -> smoke
+
+- **Ideal:** [Company Template](../company/README.md)で組織の境界を確認し、
+  [Governed Records](../records/README.md)でBlock出力の保存先を選ぶ。
+- **Current:** [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)と
+  [MOCs](../mocs/README.md)で、必要なBlockと目的別の読み順を確認する。
+- **Smoke:** [Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)から作業copyを
+  作り、[Schema / Validator / Test Matrix](../../docs/SCHEMA-VALIDATOR-MATRIX.md)で
+  schema・validator・focused testの対応を確認する。
+
+この導線は`read-only/candidate-only`です。リンク先のPASSやMATCHは承認、
+runtime activation、Promotion、Current Truthを作らず、公開状態は常に
+`NO_GO_UNPUBLISHED`です。

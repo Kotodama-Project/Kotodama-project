@@ -79,3 +79,17 @@ MOCのbytesを固定し、[Review Request](../../docs/REVIEW-REQUEST.md)、[Revi
 - Public Beta GO
 
 構造の詳細は[`schemas/record.schema.json`](../../schemas/record.schema.json)、動く例は[`examples/company-starter/records/`](../../examples/company-starter/records/)、検証方法は[Template Pack Validation](../../docs/VALIDATION.md)を参照してください。
+
+## Read next: ideal -> current -> smoke
+
+- **Ideal:** [Company Template](../company/README.md)で組織の境界を確認し、
+  [Blocks](../blocks/README.md)でRecordへ渡る入力・出力を選ぶ。
+- **Current:** [Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)と
+  [MOCs](../mocs/README.md)で、9種のRecordと目的別の読み順を確認する。
+- **Smoke:** [Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)から作業copyを
+  作り、[Schema / Validator / Test Matrix](../../docs/SCHEMA-VALIDATOR-MATRIX.md)で
+  schema・validator・focused testの対応を確認する。
+
+この導線は`read-only/candidate-only`です。リンク先のPASSやMATCHは承認、
+runtime activation、Promotion、Current Truthを作らず、公開状態は常に
+`NO_GO_UNPUBLISHED`です。
