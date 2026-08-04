@@ -26,9 +26,26 @@
 
 迷ったら、まずCompany Templateの境界を編集し、次に必要なBlockだけを
 選び、対応するRecordを確認し、MOCで目的に合う読み順を選びます。その後、
- [Catalog](../docs/COMPANY-PACK-CATALOG.md)、validator、customization checker、guided planner、Review Bundleの
+  [Catalog](../docs/COMPANY-PACK-CATALOG.md)、validator、customization checker、guided planner、Review Bundleの
 順に候補を狭めます。`MATCH`やvalidator `PASS`は、Human Decision、権限付与、
 Promotion、Current Truth、runtime activation、Public Beta GOを意味しません。
+
+## Read next: ideal -> current -> smoke
+
+- **Ideal:** [Company Template](company/README.md)で会社の境界を決め、
+  [Blocks](blocks/README.md)、[Governed Records](records/README.md)、
+  [MOCs](mocs/README.md)の役割と読み順を確認する。
+- **Current:** [Company Pack Catalog](../docs/COMPANY-PACK-CATALOG.md)で
+  公開starterの実際のBlock・Record・MOC対応を一覧し、
+  [Schema / Validator / Test Matrix](../docs/SCHEMA-VALIDATOR-MATRIX.md)で
+  契約・validator・回帰testの対応を確認する。
+- **Smoke:** [Starter Walkthrough](../docs/STARTER-WALKTHROUGH.md)の作業copy手順と
+  [Public Preview Self-check](../docs/PUBLIC-PREVIEW-SELF-CHECK.md)を外部接続なしで
+  実行する。
+
+この入口は`read-only/candidate-only`です。Catalog、validator、smokeのPASSや
+MATCHは承認、runtime activation、Promotion、Current Truthを作らず、公開状態は
+常に`NO_GO_UNPUBLISHED`です。
 
 ## MOCを目的で選ぶ
 
