@@ -4,6 +4,28 @@
 
 このplannerはcheckerを置き換えません。値を書き換えず、reviewを完了扱いにせず、authorityやGOを作りません。
 
+## Read next: ideal -> current -> smoke
+
+このplannerを単独で開いた場合も、理想の会社構造、現在の公開candidate、
+外部接続なしの確認手順を同じ順番で辿れます。
+
+- **Ideal:** [Template Guide](../docs/TEMPLATE-GUIDE.md)から
+  [Company Template](../templates/company/README.md) →
+  [Blocks](../templates/blocks/README.md) →
+  [Governed Records](../templates/records/README.md) →
+  [MOCs](../templates/mocs/README.md)の責任と読み順を確認します。
+- **Current:** [Company Pack Catalog](COMPANY-PACK-CATALOG.md)で公開starterの
+  構造を一覧し、[Starter Walkthrough](STARTER-WALKTHROUGH.md)で作業copyから
+  plannerへ進む現在の導線を確認します。
+- **Smoke:** `plan_company_pack_next_steps.py`のJSON/Markdown出力、
+  [`company-pack-next-steps.schema.json`](../schemas/company-pack-next-steps.schema.json)、
+  [`test_plan_company_pack_next_steps.py`](../tests/test_plan_company_pack_next_steps.py)
+  を外部接続なしで確認します。
+
+このentry navigationとplannerのPASSは`read-only/candidate-only`であり、
+`NO_GO_UNPUBLISHED`を維持します。Human approval、runtime、Promotion、
+Current Truth、Public Beta GOは作りません。
+
 ## Run
 
 initializerで作った作業copyに対して実行します。
