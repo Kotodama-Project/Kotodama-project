@@ -21,6 +21,14 @@ shipped starterの対応を一覧し、[Public Preview Self-check](PUBLIC-PREVIE
 導線で、公開状態は`NO_GO_UNPUBLISHED`です。Human approval、runtime、Promotion、
 Current Truth、Voice / Discord E2Eはこの手順から導出されません。
 
+## 実行確認: Runbook smoke
+
+最初に導入順そのものを確認したい場合は、[Schema / Validator / Test Matrix](SCHEMA-VALIDATOR-MATRIX.md) の Runbook smoke と [test_public_starter_runbook_smoke.py](../tests/test_public_starter_runbook_smoke.py) を参照してください。外部接続なしの一時directoryで、initializer → validator → Catalog → customization → Public Preview → Next Steps → Review Bundle → verify を通せます。
+
+- guided path: 3つの静的値を指定した新規Packで `CANDIDATE_FOR_GOVERNED_REVIEW` と `MATCH` まで進む
+- plain path: 2引数initializerは `CUSTOMIZATION_REQUIRED` のまま `BUNDLE_REFUSED` で止まる。拒否JSONを成功bundleとして保存しない
+- どちらも `read-only/candidate-only`、`NO_GO_UNPUBLISHED`。Human approval、runtime、Promotion、Current Truth、Public Beta GOは作らない
+
 ## 1. initializerで作業copyを作る
 
 repository rootから実行します。
