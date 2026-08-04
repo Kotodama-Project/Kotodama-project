@@ -195,6 +195,75 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             with self.subTest(earlier=earlier, later=later):
                 self.assertLess(section.index(earlier_marker), section.index(later_marker))
 
+    def test_company_template_entry_exposes_first_use_navigation_and_command_parity(self) -> None:
+        company = (ROOT / "templates" / "company" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        first_use = company.index("## 最初に読む: Company Templateからstarterへ")
+        section_end = company.index("## Current status", first_use)
+        section = company[first_use:section_end]
+
+        required = (
+            "[Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)",
+            "[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)",
+            "[Public Preview Self-check](../../docs/PUBLIC-PREVIEW-SELF-CHECK.md)",
+            "[Installation Lifecycle](../../docs/INSTALLATION-LIFECYCLE.md)",
+            "[公開starter](../../examples/company-starter/README.md)",
+            "~~~powershell",
+            "python tools\\catalog_company_pack.py examples\\company-starter --format markdown",
+            "New-Item -ItemType Directory -Force work | Out-Null",
+            "python tools\\create_company_pack.py my-company work\\my-company",
+            "python tools\\check_company_pack_customization.py work\\my-company",
+            "python tools\\validate_template_pack.py work\\my-company",
+            "python tools\\check_company_pack_public_preview.py work\\my-company --format markdown",
+            "~~~bash",
+            "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+            "mkdir -p work",
+            "python3 tools/create_company_pack.py my-company work/my-company",
+            "python3 tools/check_company_pack_customization.py work/my-company",
+            "python3 tools/validate_template_pack.py work/my-company",
+            "python3 tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            "既存のtargetを上書きしません",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        for earlier, later in (
+            (
+                "[Company Pack Catalog](../../docs/COMPANY-PACK-CATALOG.md)",
+                "[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)",
+            ),
+            (
+                "[Starter Walkthrough](../../docs/STARTER-WALKTHROUGH.md)",
+                "[Public Preview Self-check](../../docs/PUBLIC-PREVIEW-SELF-CHECK.md)",
+            ),
+            (
+                "[Public Preview Self-check](../../docs/PUBLIC-PREVIEW-SELF-CHECK.md)",
+                "[Installation Lifecycle](../../docs/INSTALLATION-LIFECYCLE.md)",
+            ),
+            (
+                "python3 tools/catalog_company_pack.py examples/company-starter --format markdown",
+                "python3 tools/create_company_pack.py my-company work/my-company",
+            ),
+            (
+                "python3 tools/create_company_pack.py my-company work/my-company",
+                "python3 tools/check_company_pack_customization.py work/my-company",
+            ),
+            (
+                "python3 tools/check_company_pack_customization.py work/my-company",
+                "python3 tools/validate_template_pack.py work/my-company",
+            ),
+            (
+                "python3 tools/validate_template_pack.py work/my-company",
+                "python3 tools/check_company_pack_public_preview.py work/my-company --format markdown",
+            ),
+        ):
+            with self.subTest(earlier=earlier, later=later):
+                self.assertLess(section.index(earlier), section.index(later))
+
     def test_template_guide_separates_ideal_mocs_from_shipped_current_mocs(self) -> None:
         guide = (ROOT / "docs" / "TEMPLATE-GUIDE.md").read_text(encoding="utf-8")
         ideal_marker = "Conceptual ideal/future MOC candidates (not shipped starter files)"
