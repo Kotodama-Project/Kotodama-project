@@ -6,28 +6,51 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PublicStatusRoadmapSyncTests(unittest.TestCase):
-    def test_public_status_and_roadmap_bind_r103_current_fixed_point(self) -> None:
+    def test_public_status_and_roadmap_bind_r105_current_fixed_point(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
         status_flat = " ".join(status.split())
         roadmap_flat = " ".join(roadmap.split())
 
-        self.assertIn("R103 is the current public README/documentation candidate", status_flat)
+        self.assertIn("R105 is the current public Template Catalog/Installation Lifecycle candidate", status_flat)
+        self.assertIn("615fdbab66ed1ad3fa779fb762dc8a27eca857d1", status_flat)
+        self.assertIn("3b881f999704e1c3e3c3f4c0929fd019c6f163ed", status_flat)
+        self.assertIn("R105 added the direct Installation Lifecycle link", status_flat)
+        self.assertIn("NO_GO_UNPUBLISHED", status_flat)
+
+        self.assertIn("R106 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
+        self.assertIn("R105 is the latest public Template Catalog/Installation Lifecycle revision", roadmap_flat)
+        self.assertIn("R105 added the direct Installation Lifecycle link", roadmap_flat)
+        self.assertIn("615fdbab66ed1ad3fa779fb762dc8a27eca857d1", roadmap_flat)
+        self.assertIn("3b881f999704e1c3e3c3f4c0929fd019c6f163ed", roadmap_flat)
+        self.assertIn("read-only/candidate-only", roadmap_flat)
+        self.assertIn("NO_GO_UNPUBLISHED", roadmap_flat)
+        self.assertNotIn("R104 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
+
+    def test_public_status_and_roadmap_preserve_r104_r103_history(self) -> None:
+        status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
+        roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
+        status_flat = " ".join(status.split())
+        roadmap_flat = " ".join(roadmap.split())
+
+        self.assertIn("R104 synchronized STATUS/ROADMAP provenance to R103", status_flat)
+        self.assertIn("R103 remains the historical README/documentation layer-map candidate", status_flat)
         self.assertIn("92a67b1bd0b450b549590d915b24dd983bb3eb7a", status_flat)
         self.assertIn("a8437da05a2688e64129458eb604a6f604deb59c", status_flat)
         self.assertIn("R103 added the README ideal/current layer map", status_flat)
         self.assertIn("NO_GO_UNPUBLISHED", status_flat)
         self.assertIn("real Voice rotation remains unproven", status_flat)
 
-        self.assertIn("R104 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
-        self.assertIn("R103 is the latest public README/documentation revision", roadmap_flat)
+        self.assertIn("R106 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
+        self.assertIn("R105 is the latest public Template Catalog/Installation Lifecycle revision", roadmap_flat)
+        self.assertIn("R103 remains the historical README/documentation revision", roadmap_flat)
         self.assertIn("R103 added the README ideal/current layer map", roadmap_flat)
         self.assertIn("92a67b1bd0b450b549590d915b24dd983bb3eb7a", roadmap_flat)
         self.assertIn("a8437da05a2688e64129458eb604a6f604deb59c", roadmap_flat)
         self.assertIn("read-only/candidate-only", roadmap_flat)
         self.assertIn("NO_GO_UNPUBLISHED", roadmap_flat)
         self.assertNotIn("R101 is the current public Template/Company/Blocks/Records/MOCs/starter", status_flat)
-        self.assertNotIn("R102 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
+        self.assertNotIn("R104 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
 
     def test_public_status_and_roadmap_name_r91_documentation_surface(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
@@ -36,7 +59,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         roadmap_flat = " ".join(roadmap.split())
 
         self.assertIn(
-            "R103 is the current public README/documentation candidate",
+            "R105 is the current public Template Catalog/Installation Lifecycle candidate",
             status_flat,
         )
         self.assertIn("R92 synchronizes the public STATUS/ROADMAP provenance", status_flat)
@@ -140,8 +163,8 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("Final Human GO", status_flat)
         self.assertIn("Not completed", status_flat)
 
-        self.assertIn("R104 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
-        self.assertIn("R103 is the latest public README/documentation revision", roadmap_flat)
+        self.assertIn("R106 is the latest STATUS/ROADMAP provenance synchronization", roadmap_flat)
+        self.assertIn("R105 is the latest public Template Catalog/Installation Lifecycle revision", roadmap_flat)
         self.assertIn("R100 is the latest Public Preview Self-check POSIX parity", roadmap_flat)
         self.assertIn("R89 is the latest Validation Guide core POSIX parity", roadmap_flat)
         self.assertIn("R88 is the latest guided onboarding POSIX parity", roadmap_flat)
@@ -212,7 +235,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
             "[x] Starter ideal/current navigation and Installation Lifecycle profile guidance",
             roadmap_flat,
         )
-        self.assertIn("R103 remains the current Company Pack surface label", roadmap_flat)
+        self.assertIn("R105 remains the current Company Pack surface label", roadmap_flat)
         self.assertNotIn("R56 synchronizes this roadmap with the current public", roadmap_flat)
         self.assertNotIn("R52 synchronizes this roadmap with the current public Company Pack surface", roadmap_flat)
         self.assertNotIn("R49 synchronizes this roadmap with the R48 public Company Pack surface", roadmap_flat)

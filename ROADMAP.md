@@ -25,9 +25,10 @@
 
 ## Current public documentation revision
 
-R104 is the latest STATUS/ROADMAP provenance synchronization. R103 is the latest
-public README/documentation revision and the current public Template/Company/
-Blocks/Records/MOCs/starter surface. R100 is the latest Public Preview
+R106 is the latest STATUS/ROADMAP provenance synchronization. R105 is the
+latest public Template Catalog/Installation Lifecycle revision and the current
+public Template/Company/Blocks/Records/MOCs/starter surface. R103 remains the
+historical README/documentation revision. R100 is the latest Public Preview
 Self-check POSIX parity, R89 is the latest Validation Guide core POSIX parity,
 R88 is the latest guided onboarding POSIX parity, R87 is the latest Template
 Guide and Catalog POSIX parity, and R86 is the latest STATUS/ROADMAP
@@ -52,7 +53,7 @@ without changing the Company Pack surface or runtime claims. R62 remains the
 latest navigation synchronization in that historical wave; R74 is the latest
 parity synchronization for the resolved Compose candidate in that wave. R68
 added the README Voice rotation ideal/current contract while preserving the
-runtime boundary. R103 remains the current Company Pack surface label.
+runtime boundary. R105 remains the current Company Pack surface label.
 
 R82 is the latest runbook usability synchronization in that historical wave.
 R83 is the latest Validation Guide usability synchronization in that wave. R84
@@ -70,9 +71,13 @@ Walkthrough before profile selection. R102 synchronized STATUS/ROADMAP
 provenance. R103 added the README ideal/current layer map from Template Guide ->
 Company Template -> Blocks -> Governed Records -> MOCs before Catalog -> Starter
 Walkthrough -> Public Preview Self-check -> Installation Lifecycle. R103 is
-public `main` commit
+the historical README layer-map candidate at public `main` commit
 `92a67b1bd0b450b549590d915b24dd983bb3eb7a` with tree
-`a8437da05a2688e64129458eb604a6f604deb59c`. These revisions are documentation/
+`a8437da05a2688e64129458eb604a6f604deb59c`. R104 synchronized STATUS/ROADMAP
+provenance to R103. R105 added the direct Installation Lifecycle link in the
+Template Catalog Runtime profiles row and is public `main` commit
+`615fdbab66ed1ad3fa779fb762dc8a27eca857d1` with tree
+`3b881f999704e1c3e3c3f4c0929fd019c6f163ed`. These revisions are documentation/
 test hardening only; they retain read-only/candidate-only,
 `NO_GO_UNPUBLISHED`, and no runtime/Voice/provider/Promotion/Current Truth/
 Final Human GO claim.
