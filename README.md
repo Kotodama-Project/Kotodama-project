@@ -708,6 +708,7 @@ MOCs）が理想のCompany Template層を読む順番です。
 - [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) — current read-only/candidate-onlyの最短体験
 - [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) — validator / Catalog / customization境界の一括read-only確認
 - [Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md) — current stage、理想flow、分類別件数、次コマンドを案内する
+- [Review-chain artifact map](docs/STARTER-WALKTHROUGH.md#review-chain-artifact-map) — Review Bundle、Review Request、Review Response、Decision Handoffのartifact states and next handoffs
 - [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md) — runtime profileを選ぶ前のread-only導線
 
 Catalog以降は現在の

@@ -74,6 +74,38 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
             with self.subTest(relative_path=relative_path):
                 self.assertTrue((ROOT / relative_path).is_file())
 
+    def test_document_map_links_review_chain_artifact_map_after_guided_next_steps(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        start = readme.index("### 最初に読む")
+        end = readme.index("### Company pack を review する", start)
+        section = readme[start:end]
+
+        required = (
+            "[Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)",
+            "[Review-chain artifact map](docs/STARTER-WALKTHROUGH.md#review-chain-artifact-map)",
+            "artifact states and next handoffs",
+            "read-only/candidate-only",
+            "NO_GO_UNPUBLISHED",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, section)
+
+        guided = section.index(
+            "[Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)"
+        )
+        artifact_map = section.find(
+            "[Review-chain artifact map](docs/STARTER-WALKTHROUGH.md#review-chain-artifact-map)"
+        )
+        if artifact_map < 0:
+            return
+        lifecycle = section.index("[Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)")
+        self.assertLess(guided, artifact_map)
+        self.assertLess(artifact_map, lifecycle)
+        self.assertTrue(
+            (ROOT / "docs" / "STARTER-WALKTHROUGH.md").is_file()
+        )
+
     def test_readme_distinguishes_ideal_and_current_template_usage(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         required = (
