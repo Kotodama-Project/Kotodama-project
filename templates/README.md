@@ -6,7 +6,7 @@
 |---|---|---|
 | [Company](company/README.md) | 会社・チーム全体の構造と導入順 | validated JSON governance starter available |
 | [Blocks](blocks/README.md) | 小さな実行・判断・検証部品 | Markdown design example |
-| [MOCs](mocs/company-operations-moc.md) | 目的別の入口と読み順 | Company / Public Release / Incident & Recovery examples |
+| [MOCs](mocs/README.md) | 目的別の入口と読み順 | Company / Public Release / Incident & Recovery examples |
 | [Records](records/README.md) | Block出力を証拠鎖へ残す記録契約 | 9種のJSON schema-backed starter available |
 | [Runtime profiles](company/README.md#runtime-profile-contracts) | Compose minimum / Proxmox segmentedの導入・検証・復旧境界 | [Installation Lifecycle](../docs/INSTALLATION-LIFECYCLE.md)でprofile選択と境界を確認し、sanitized lifecycle contracts and runbooksへ進む |
 | [Runtime candidates](../runtime/README.md) | profileをsecret-freeな実行候補へ接続する | Compose data-plane skeleton available; live receipt absent |

@@ -12,7 +12,7 @@
 [Company Template](../templates/company/README.md) →
 [Blocks](../templates/blocks/README.md) →
 [Governed Records](../templates/records/README.md) →
-[MOCs](../templates/mocs/company-operations-moc.md)
+[MOCs](../templates/mocs/README.md)
 
 **現在**の公開previewでは、[Company Pack Catalog](COMPANY-PACK-CATALOG.md)で
 shipped starterの対応を一覧し、[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)

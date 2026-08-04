@@ -691,7 +691,7 @@ machine-readable な完了境界ではありません。最新チェックリス
 - [Company Template](templates/company/README.md) — 会社の境界と目的を定義する理想の起点
 - [Blocks](templates/blocks/README.md) — 再利用する仕事の単位
 - [Governed Records](templates/records/README.md) — Block出力を追跡可能な記録へ残す契約
-- [MOCs](templates/mocs/company-operations-moc.md) — canonical flowを目的別に辿るnavigation map
+- [MOCs](templates/mocs/README.md) — canonical flowを目的別に辿るnavigation map
 - [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) — current candidateの層と対応を一覧する
 - [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md) — current read-only/candidate-onlyの最短体験
 - [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) — validator / Catalog / customization境界の一括read-only確認

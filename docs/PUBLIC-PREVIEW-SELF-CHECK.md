@@ -13,7 +13,7 @@ read-only CLI です。個別に validator、Catalog、customization checker を
 [Company Template](../templates/company/README.md) →
 [Blocks](../templates/blocks/README.md) →
 [Governed Records](../templates/records/README.md) →
-[MOCs](../templates/mocs/company-operations-moc.md)の順に辿ります。
+[MOCs](../templates/mocs/README.md)の順に辿ります。
 
 現在の候補を試すときは、[Company Pack Catalog](COMPANY-PACK-CATALOG.md)で
 shipped starterの構造を一覧し、[Starter Walkthrough](STARTER-WALKTHROUGH.md)で

@@ -6,6 +6,31 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TemplateCatalogUsageTests(unittest.TestCase):
+    def test_moc_index_is_stable_entry_for_shipped_navigation_maps(self) -> None:
+        index_path = ROOT / "templates" / "mocs" / "README.md"
+        self.assertTrue(index_path.is_file())
+        index = index_path.read_text(encoding="utf-8")
+        self.assertIn("# MOCs", index)
+        self.assertIn("currently ships exactly three", index)
+        self.assertIn("navigation-only", index)
+        self.assertIn("candidate-only", index)
+        self.assertIn("NO_GO_UNPUBLISHED", index)
+        for marker in (
+            "[Company Operations MOC](company-operations-moc.md)",
+            "[Public Release Review MOC](public-release-moc.md)",
+            "[Incident / Recovery MOC](incident-recovery-moc.md)",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, index)
+        self.assertLess(
+            index.index("[Company Operations MOC](company-operations-moc.md)"),
+            index.index("[Public Release Review MOC](public-release-moc.md)"),
+        )
+        self.assertLess(
+            index.index("[Public Release Review MOC](public-release-moc.md)"),
+            index.index("[Incident / Recovery MOC](incident-recovery-moc.md)"),
+        )
+
     def test_company_template_recommended_order_matches_governed_layer_flow(self) -> None:
         company = (ROOT / "templates" / "company" / "README.md").read_text(
             encoding="utf-8"
@@ -108,7 +133,7 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             "[Company Template](../templates/company/README.md)",
             "[Blocks](../templates/blocks/README.md)",
             "[Governed Records](../templates/records/README.md)",
-            "[MOCs](../templates/mocs/company-operations-moc.md)",
+            "[MOCs](../templates/mocs/README.md)",
             "[Company starter](../examples/company-starter/README.md)",
             "[Template Guide](TEMPLATE-GUIDE.md)",
             "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
@@ -125,7 +150,7 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             "../templates/company/README.md",
             "../templates/blocks/README.md",
             "../templates/records/README.md",
-            "../templates/mocs/company-operations-moc.md",
+            "../templates/mocs/README.md",
             "../examples/company-starter/README.md",
             "TEMPLATE-GUIDE.md",
             "STARTER-WALKTHROUGH.md",
@@ -146,10 +171,10 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             ),
             (
                 "[Governed Records](../templates/records/README.md)",
-                "[MOCs](../templates/mocs/company-operations-moc.md)",
+                "[MOCs](../templates/mocs/README.md)",
             ),
             (
-                "[MOCs](../templates/mocs/company-operations-moc.md)",
+                "[MOCs](../templates/mocs/README.md)",
                 "[Company starter](../examples/company-starter/README.md)",
             ),
         ):
@@ -603,7 +628,7 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             "[Company Template](../templates/company/README.md)",
             "[Blocks](../templates/blocks/README.md)",
             "[Governed Records](../templates/records/README.md)",
-            "[MOCs](../templates/mocs/company-operations-moc.md)",
+            "[MOCs](../templates/mocs/README.md)",
             "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
             "[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)",
             "理想",
@@ -620,7 +645,7 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             "../templates/company/README.md",
             "../templates/blocks/README.md",
             "../templates/records/README.md",
-            "../templates/mocs/company-operations-moc.md",
+            "../templates/mocs/README.md",
             "COMPANY-PACK-CATALOG.md",
             "PUBLIC-PREVIEW-SELF-CHECK.md",
         ):
@@ -638,10 +663,10 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             ),
             (
                 "[Governed Records](../templates/records/README.md)",
-                "[MOCs](../templates/mocs/company-operations-moc.md)",
+                "[MOCs](../templates/mocs/README.md)",
             ),
             (
-                "[MOCs](../templates/mocs/company-operations-moc.md)",
+                "[MOCs](../templates/mocs/README.md)",
                 "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
             ),
             (
@@ -665,7 +690,7 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             "[Company Template](../templates/company/README.md)",
             "[Blocks](../templates/blocks/README.md)",
             "[Governed Records](../templates/records/README.md)",
-            "[MOCs](../templates/mocs/company-operations-moc.md)",
+            "[MOCs](../templates/mocs/README.md)",
             "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
             "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
             "[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)",
@@ -683,7 +708,7 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             "../templates/company/README.md",
             "../templates/blocks/README.md",
             "../templates/records/README.md",
-            "../templates/mocs/company-operations-moc.md",
+            "../templates/mocs/README.md",
             "COMPANY-PACK-CATALOG.md",
             "STARTER-WALKTHROUGH.md",
             "INSTALLATION-LIFECYCLE.md",
@@ -706,10 +731,10 @@ class TemplateCatalogUsageTests(unittest.TestCase):
             ),
             (
                 "[Governed Records](../templates/records/README.md)",
-                "[MOCs](../templates/mocs/company-operations-moc.md)",
+                "[MOCs](../templates/mocs/README.md)",
             ),
             (
-                "[MOCs](../templates/mocs/company-operations-moc.md)",
+                "[MOCs](../templates/mocs/README.md)",
                 "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
             ),
             (

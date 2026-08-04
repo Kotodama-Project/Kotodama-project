@@ -14,7 +14,7 @@ runtimeを起動する前に、まず会社の仕事の型と、現在の公開c
 3. [Blocks](../templates/blocks/README.md)で、再利用する仕事の単位を選ぶ。
 4. [Governed Records](../templates/records/README.md)で、Blockの出力をどの
    記録へ残すかを確認する。
-5. [MOCs](../templates/mocs/company-operations-moc.md)で、仕事を辿る順番を
+5. [MOCs](../templates/mocs/README.md)で、仕事を辿る順番を
    決める。
 
 現在の公開candidateを試す場合だけ、[Company Pack Catalog](COMPANY-PACK-CATALOG.md)

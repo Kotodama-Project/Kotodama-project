@@ -41,7 +41,7 @@ starterやREADMEが新しいSSOT、実行権限、Promotion、Current Truthを�
 | Company Template | 会社の境界、owner、profile、導入順 | [Company Template](../templates/company/README.md) |
 | Blocks | 入力・出力・authority・verificationの小さな部品 | [Blocks](../templates/blocks/README.md) |
 | Governed Records | Block出力を証拠鎖へ残すRecord契約 | [Governed Records](../templates/records/README.md) |
-| MOCs | 目的別の読み順と入口 | [MOCs](../templates/mocs/company-operations-moc.md) |
+| MOCs | 目的別の読み順と入口 | [MOCs](../templates/mocs/README.md) |
 | 実例 | 9 Blocks・9 Records・3 MOCsのJSON starter | [Company starter](../examples/company-starter/README.md) |
 
 詳細な使い方と現在の境界は、[Template Guide](TEMPLATE-GUIDE.md) →

@@ -20,7 +20,7 @@ class InstallationLifecycleDocumentationTests(unittest.TestCase):
             "[Company Template](../templates/company/README.md)",
             "[Blocks](../templates/blocks/README.md)",
             "[Governed Records](../templates/records/README.md)",
-            "[MOCs](../templates/mocs/company-operations-moc.md)",
+            "[MOCs](../templates/mocs/README.md)",
             "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
             "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
             "read-only/candidate-only",
@@ -37,7 +37,7 @@ class InstallationLifecycleDocumentationTests(unittest.TestCase):
             "../templates/company/README.md",
             "../templates/blocks/README.md",
             "../templates/records/README.md",
-            "../templates/mocs/company-operations-moc.md",
+            "../templates/mocs/README.md",
             "COMPANY-PACK-CATALOG.md",
             "STARTER-WALKTHROUGH.md",
         ):
