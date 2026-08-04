@@ -26,17 +26,49 @@
 
 ## Current public documentation revision
 
-R155 is the latest public documentation revision and the current public
-Template/Company/Blocks/Records/MOCs/starter surface at public `main` commit
-`97dca324e28777d4618abf53804f47db995e5abc` with tree
-`9e4ad41d7f79ef6d2d9096ebccaad276ff03615c`. R155 adds direct first-read
-STATUS links to the Company Pack Catalog, Company Pack Guided Next Steps, and
-Schema / Validator / Test Matrix, with explicit read-only/candidate-only and
-`NO_GO_UNPUBLISHED` boundaries. `ROADMAP.md` records the same published entry
-navigation. The regression is
+R163 is the latest public documentation revision and the current public
+Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
+published R162 candidate at public `main` commit
+`aca4d22772e84cf7da103b97872c94a04c67ac31` with tree
+`008f43ff3f929c990717799fd2bb1b1a52419485`. R163 synchronizes STATUS and
+ROADMAP with R162's dependency-free MOC smoke commands
+(`python -m unittest tests.test_mocs_entry_navigation -v` and
+`python3 -m unittest tests.test_mocs_entry_navigation -v`), Markdown-to-JSON
+link integrity regression, and exact `kind: moc`, `status: example`, and
+`authority: navigation_only` boundaries. The direct entry links to the Company
+Pack Catalog, Company Pack Guided Next Steps, and Schema / Validator / Test
+Matrix, the review-chain language, `read-only/candidate-only`, and
+`NO_GO_UNPUBLISHED` remain explicit. The regression is
 [`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
-R155 is documentation/static-regression evidence only; the published surface
-remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R154 remains
+R163 is documentation/static-regression evidence only; the published surface
+remains read-only/candidate-only and `NO_GO_UNPUBLISHED`. R162 remains
+historical as the MOC smoke command parity and Markdown-to-JSON link-integrity
+revision at public `main` commit
+`aca4d22772e84cf7da103b97872c94a04c67ac31` with tree
+`008f43ff3f929c990717799fd2bb1b1a52419485`; its POSIX `python3` command was
+documented but not executed in the Windows validation environment. R161
+remains historical as the Schema / Validator / Test Matrix full review-chain
+revision at public `main` commit
+`106173b689870be06bb83ed23a144c76ad850b33` with tree
+`042c28d389881884af1e8bcde65eca521036db22`. R160 remains historical as the
+Company Pack Catalog Quick start revision at public `main` commit
+`c70ce092d2303321380bd411410baefd40dfd4fb` with tree
+`be9514b9ed1664ef18ed365e40edfdccd96a6e0f`. R159 remains historical as the
+Template entry full-chain revision at public `main` commit
+`5639e25eb6458733db0687d605496f747939f944` with tree
+`fe3a0dfb66e687060cb23efc39d9db68216aee24`. R158 remains historical as the
+Company starter full-chain revision at public `main` commit
+`eb7f52220eb6e17005a985473dec4b8f62216f46` with tree
+`dbf9ccfb47c59b79a865151144cd83f85e065dff`. R157 remains historical as the
+README candidate-path revision at public `main` commit
+`9107637fa25681ffc3c144aa09a10496ee644a2c` with tree
+`116d23e1679b8e8d25ad84a0a0865423f698263b`. R156 remains historical as the
+STATUS/ROADMAP provenance revision at public `main` commit
+`b9baa3df9d982f9e2a24ea4c0612afba4043acae` with tree
+`6649d86fab5018c0812de3197220899d8bb3c5bf`. R155 remains historical as the
+first-read Catalog/Next Steps/Matrix entry-navigation revision at public
+`main` commit `97dca324e28777d4618abf53804f47db995e5abc` with tree
+`9e4ad41d7f79ef6d2d9096ebccaad276ff03615c`. R154 remains
 historical as the STATUS/ROADMAP synchronization to R153 at public `main`
 commit `f12246af5954735c393108d42b8d2ce873d51406` with tree
 `ae1319d42dc1d68fe860d5fbb7aed503e4db63df`. R153 remains historical as the
