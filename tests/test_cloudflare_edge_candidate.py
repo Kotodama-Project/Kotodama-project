@@ -57,6 +57,49 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         ):
             self.assertIn(guard, workflow)
 
+    def test_workflow_refuses_historical_allowed_branch_ancestors(self) -> None:
+        workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
+        self.assertEqual(
+            2,
+            workflow.count(
+                'test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation)" '
+                '= "$CANDIDATE_SHA"',
+            ),
+        )
+        validation_job, upload_job = workflow.split("  upload-preview-version:", 1)
+        self.assertEqual(1, validation_job.count("git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation"))
+        self.assertEqual(1, upload_job.count("git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation"))
+        self.assertNotIn("git merge-base --is-ancestor", workflow)
+
+    def test_validator_refuses_ancestor_only_branch_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            workflow_path = candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
+            workflow = workflow_path.read_text(encoding="utf-8")
+            exact_tip_guard = (
+                'test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation)" '
+                '= "$CANDIDATE_SHA"'
+            )
+            workflow_path.write_text(
+                workflow.replace(exact_tip_guard, "git merge-base --is-ancestor", 1),
+                encoding="utf-8",
+            )
+            errors = MODULE.validate(candidate)
+            self.assertIn(
+                "workflow must bind both validation and upload jobs to the exact allowed branch tip",
+                errors,
+            )
+            self.assertIn(
+                "workflow must place one exact allowed-branch-tip guard in each validation and upload job",
+                errors,
+            )
+            self.assertIn(
+                "workflow contains forbidden automatic/production action: git merge-base --is-ancestor",
+                errors,
+            )
+
     def test_validator_refuses_future_compatibility_date(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)

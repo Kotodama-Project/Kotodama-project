@@ -29,12 +29,15 @@ python3 tools/validate_cloudflare_edge_candidate.py
 python3 -m unittest tests.test_cloudflare_edge_candidate -v
 ```
 
-The GitHub workflow first checks a lowercase 40-hex commit on the allowed
-`codex/cloudflare-os-foundation` branch with validator code checked out from
+The GitHub workflow first checks a lowercase 40-hex commit and requires it to
+equal the current remote tip of the allowed `codex/cloudflare-os-foundation`
+branch; a historical ancestor is refused. Validator code is checked out from
 trusted `main`. Candidate Python or tests are not executed in that unprivileged
-validation job. A separate job can upload a preview version only after a manual
-dispatch from `main` and approval by the `cloudflare-preview` GitHub
-Environment. It does not deploy a production route.
+validation job. After Environment approval, the upload job repeats the exact
+remote-tip check before Wrangler runs, closing branch-advance drift during the
+approval wait. It can upload a preview version only after a manual dispatch
+from `main` and approval by the `cloudflare-preview` GitHub Environment. It
+does not deploy a production route.
 
 Before any run, configure that Environment with required reviewers, prevent
 self-review where available, restrict deployment branches to `main`, and add
