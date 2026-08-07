@@ -29,10 +29,23 @@ python3 tools/validate_cloudflare_edge_candidate.py
 python3 -m unittest tests.test_cloudflare_edge_candidate -v
 ```
 
-The GitHub workflow uploads a preview version only after a manual dispatch to
-the `cloudflare-preview` GitHub Environment. It does not deploy a production
-route. The environment must contain `CLOUDFLARE_API_TOKEN` and
-`CLOUDFLARE_ACCOUNT_ID`; values must never be committed.
+The GitHub workflow first checks a lowercase 40-hex commit on the allowed
+`codex/cloudflare-os-foundation` branch with validator code checked out from
+trusted `main`. Candidate Python or tests are not executed in that unprivileged
+validation job. A separate job can upload a preview version only after a manual
+dispatch from `main` and approval by the `cloudflare-preview` GitHub
+Environment. It does not deploy a production route.
+
+Before any run, configure that Environment with required reviewers, prevent
+self-review where available, restrict deployment branches to `main`, and add
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as Environment secrets.
+Those protections and secrets are not configured or verified by this public
+candidate. Values must never be committed.
+
+Wrangler is fixed to `4.120.0`. Its npm integrity and SLSA subject are bound in
+[`wrangler-integrity.json`](wrangler-integrity.json). Observability and logs are
+disabled by default until provider retention and content-free readback have a
+separate receipt.
 
 Before running the workflow, bind an exact commit to a Work Order and verify:
 
