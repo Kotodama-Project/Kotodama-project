@@ -1,0 +1,48 @@
+name: Cloudflare edge preview candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact commit SHA bound by the deployment Work Order
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-edge-preview
+  cancel-in-progress: false
+
+jobs:
+  upload-preview-version:
+    environment: cloudflare-preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          persist-credentials: false
+
+      - name: Refuse candidate mismatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.candidate_sha }}"
+
+      - name: Validate the secret-free candidate
+        run: |
+          python tools/validate_cloudflare_edge_candidate.py
+          python -m unittest tests.test_cloudflare_edge_candidate -v
+
+      - name: Upload preview version without production promotion
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.115.0"
+          workingDirectory: runtime/cloudflare-edge
+          command: versions upload --env preview --message "candidate ${{ inputs.candidate_sha }}"
