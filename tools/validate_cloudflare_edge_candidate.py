@@ -129,7 +129,28 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
     for required in required_workflow:
         if required not in workflow:
             errors.append(f"workflow missing required guard: {required}")
-    for forbidden in ("wrangler deploy", "versions deploy", "pull_request:", "push:"):
+    exact_tip_guard = (
+        'test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation)" '
+        '= "$CANDIDATE_SHA"'
+    )
+    upload_job_marker = "  upload-preview-version:"
+    if workflow.count(upload_job_marker) != 1:
+        errors.append("workflow must contain exactly one upload-preview-version job")
+    else:
+        validation_job, upload_job = workflow.split(upload_job_marker, 1)
+        if validation_job.count(exact_tip_guard) != 1 or upload_job.count(exact_tip_guard) != 1:
+            errors.append(
+                "workflow must place one exact allowed-branch-tip guard in each validation and upload job"
+            )
+    if workflow.count(exact_tip_guard) != 2:
+        errors.append("workflow must bind both validation and upload jobs to the exact allowed branch tip")
+    for forbidden in (
+        "git merge-base --is-ancestor",
+        "wrangler deploy",
+        "versions deploy",
+        "pull_request:",
+        "push:",
+    ):
         if forbidden in workflow:
             errors.append(f"workflow contains forbidden automatic/production action: {forbidden}")
     return errors
