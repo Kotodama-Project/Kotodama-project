@@ -1,0 +1,52 @@
+# Cloudflare Edge Profile Candidate
+
+This directory is a secret-free deployment candidate for the Cloudflare-facing
+edge of Kotodama. It is not the Kotodama data plane and it does not replace the
+Proxmox segmented profile.
+
+## Boundary
+
+- Cloudflare: public edge routing, a minimal health/status response, later
+  Access/Tunnel policy enforcement, and deployment metadata.
+- Proxmox: search runtime, Context Gateway, databases, Evidence Store, n8n,
+  OpenClaw, and private administration.
+- Tailscale or an equivalent private path: operator access while the
+  Cloudflare Access/Tunnel candidate is not independently verified.
+
+The Worker exposes only `/healthz` and `/version`. It has no origin binding,
+storage binding, AI binding, route, custom domain, or secret. Every other path
+fails closed with `404`.
+
+## Candidate checks
+
+```powershell
+python tools\validate_cloudflare_edge_candidate.py
+python -m unittest tests.test_cloudflare_edge_candidate -v
+```
+
+```bash
+python3 tools/validate_cloudflare_edge_candidate.py
+python3 -m unittest tests.test_cloudflare_edge_candidate -v
+```
+
+The GitHub workflow uploads a preview version only after a manual dispatch to
+the `cloudflare-preview` GitHub Environment. It does not deploy a production
+route. The environment must contain `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID`; values must never be committed.
+
+Before running the workflow, bind an exact commit to a Work Order and verify:
+
+1. the API token is limited to the intended Cloudflare account and Worker;
+2. the account remains within the approved plan and cost ceiling;
+3. the preview URL is protected by Cloudflare Access before private data is
+   introduced;
+4. logs contain no request body, authorization header, personal identifier, or
+   private source content;
+5. rollback is the previous known-good Worker version;
+6. Public Beta remains `NO_GO_UNPUBLISHED`.
+
+## Non-claims
+
+The files here do not prove Cloudflare account ownership, Access/Tunnel/DNS
+configuration, preview deployment, production deployment, origin reachability,
+provider E2E, rollback, Promotion, Current Truth, or Public Beta GO.
