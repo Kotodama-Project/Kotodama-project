@@ -16,7 +16,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-candidate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Refuse malformed candidate input
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Check out trusted validator from the default branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: trusted
+          persist-credentials: false
+
+      - name: Check out the exact candidate without executing its code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Refuse candidate outside the allowed branch
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          cd candidate
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git fetch --no-tags origin \
+            +refs/heads/codex/cloudflare-os-foundation:refs/remotes/origin/codex/cloudflare-os-foundation
+          git merge-base --is-ancestor \
+            "$CANDIDATE_SHA" refs/remotes/origin/codex/cloudflare-os-foundation
+
+      - name: Validate candidate bytes with trusted code
+        run: |
+          python trusted/tools/validate_cloudflare_edge_candidate.py --root candidate
+
   upload-preview-version:
+    needs: validate-candidate
+    if: github.ref == 'refs/heads/main'
     environment: cloudflare-preview
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -25,24 +72,22 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ inputs.candidate_sha }}
+          path: candidate
           persist-credentials: false
 
       - name: Refuse candidate mismatch
         shell: bash
         run: |
           set -euo pipefail
+          cd candidate
+          test "${{ inputs.candidate_sha }}" != ""
           test "$(git rev-parse HEAD)" = "${{ inputs.candidate_sha }}"
-
-      - name: Validate the secret-free candidate
-        run: |
-          python tools/validate_cloudflare_edge_candidate.py
-          python -m unittest tests.test_cloudflare_edge_candidate -v
 
       - name: Upload preview version without production promotion
         uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.115.0"
-          workingDirectory: runtime/cloudflare-edge
+          wranglerVersion: "4.120.0"
+          workingDirectory: candidate/runtime/cloudflare-edge
           command: versions upload --env preview --message "candidate ${{ inputs.candidate_sha }}"
