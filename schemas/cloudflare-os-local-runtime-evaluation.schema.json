@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/cloudflare-os-local-runtime-evaluation.schema.json",
+  "title": "Cloudflare OS local runtime evaluation receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "observed_at",
+    "status",
+    "public_beta",
+    "content_policy",
+    "source",
+    "integrity",
+    "toolchain",
+    "verification",
+    "findings",
+    "decision",
+    "effects",
+    "non_claims"
+  ],
+  "properties": {
+    "$schema": { "const": "../../schemas/cloudflare-os-local-runtime-evaluation.schema.json" },
+    "schema_version": { "const": "1.0.0" },
+    "observed_at": { "type": "string", "format": "date-time" },
+    "status": { "const": "PASS_LOCAL_RUNTIME_WITH_GAPS" },
+    "public_beta": { "const": "NO_GO_UNPUBLISHED" },
+    "content_policy": { "const": "CONTENT_FREE_SYNTHETIC_ONLY" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["starter", "pinned_core", "observed_current_core", "drift"],
+      "properties": {
+        "starter": { "$ref": "#/$defs/gitObject" },
+        "pinned_core": { "$ref": "#/$defs/gitObject" },
+        "observed_current_core": { "$ref": "#/$defs/gitObject" },
+        "drift": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["files_changed", "insertions", "deletions", "independent_review"],
+          "properties": {
+            "files_changed": { "type": "integer", "minimum": 0 },
+            "insertions": { "type": "integer", "minimum": 0 },
+            "deletions": { "type": "integer", "minimum": 0 },
+            "independent_review": { "enum": ["PENDING", "PASS"] }
+          }
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "license_sha256",
+        "starter_lock_sha256",
+        "starter_lock_integrity_entries",
+        "core_lock_sha256",
+        "core_lock_integrity_entries",
+        "pnpm_tarball",
+        "source_symlinks",
+        "escaping_symlinks"
+      ],
+      "properties": {
+        "license_sha256": { "$ref": "#/$defs/sha256" },
+        "starter_lock_sha256": { "$ref": "#/$defs/sha256" },
+        "starter_lock_integrity_entries": { "type": "integer", "minimum": 1 },
+        "core_lock_sha256": { "$ref": "#/$defs/sha256" },
+        "core_lock_integrity_entries": { "type": "integer", "minimum": 1 },
+        "pnpm_tarball": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "sha1",
+            "sha512",
+            "archive_entries",
+            "traversal_entries",
+            "unpacked_bytes",
+            "attestation_url_present",
+            "attestation_signature_verified"
+          ],
+          "properties": {
+            "version": { "type": "string", "minLength": 1 },
+            "sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+            "sha512": { "type": "string", "pattern": "^[0-9a-f]{128}$" },
+            "archive_entries": { "type": "integer", "minimum": 1 },
+            "traversal_entries": { "type": "integer", "minimum": 0 },
+            "unpacked_bytes": { "type": "integer", "minimum": 1 },
+            "attestation_url_present": { "type": "boolean" },
+            "attestation_signature_verified": { "type": "boolean" }
+          }
+        },
+        "source_symlinks": { "type": "integer", "minimum": 0 },
+        "escaping_symlinks": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "pnpm", "wrangler", "workerd", "windows_adapter"],
+      "properties": {
+        "node": { "type": "string", "minLength": 1 },
+        "pnpm": { "type": "string", "minLength": 1 },
+        "wrangler": { "type": "string", "minLength": 1 },
+        "workerd": { "type": "string", "minLength": 1 },
+        "windows_adapter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "source_sha256",
+            "evaluated_binary_sha256",
+            "install_exit",
+            "remote_wrangler_exit",
+            "scope"
+          ],
+          "properties": {
+            "source": { "const": "tools/cfos_pnpm_runtime_windows_shim.cs" },
+            "source_sha256": { "$ref": "#/$defs/sha256" },
+            "evaluated_binary_sha256": { "$ref": "#/$defs/sha256" },
+            "install_exit": { "type": "integer", "minimum": 1 },
+            "remote_wrangler_exit": { "type": "integer", "minimum": 1 },
+            "scope": { "const": "WINDOWS_LOCAL_EVALUATION_ONLY" }
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["installation", "tests", "build", "lint", "production_audit", "runtime"],
+      "properties": {
+        "installation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["starter_packages", "core_packages", "frozen_lockfile", "ignore_scripts", "credential_scrubbed"],
+          "properties": {
+            "starter_packages": { "type": "integer", "minimum": 0 },
+            "core_packages": { "type": "integer", "minimum": 0 },
+            "frozen_lockfile": { "type": "boolean" },
+            "ignore_scripts": { "type": "boolean" },
+            "credential_scrubbed": { "type": "boolean" }
+          }
+        },
+        "tests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["passed", "failed", "skipped", "packages_with_test_scripts", "lf_root_tests"],
+          "properties": {
+            "passed": { "type": "integer", "minimum": 0 },
+            "failed": { "type": "integer", "minimum": 0 },
+            "skipped": { "type": "integer", "minimum": 0 },
+            "packages_with_test_scripts": { "type": "integer", "minimum": 0 },
+            "lf_root_tests": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "build": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["workspace_packages", "official_recursive_passed", "windows_adapter_passed", "failed", "provider_mutation_commands", "frontend_modules"],
+          "properties": {
+            "workspace_packages": { "type": "integer", "minimum": 0 },
+            "official_recursive_passed": { "type": "integer", "minimum": 0 },
+            "windows_adapter_passed": { "type": "integer", "minimum": 0 },
+            "failed": { "type": "integer", "minimum": 0 },
+            "provider_mutation_commands": { "type": "integer", "minimum": 0 },
+            "frontend_modules": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "lint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["errors", "warnings", "unique_rules"],
+          "properties": {
+            "errors": { "type": "integer", "minimum": 0 },
+            "warnings": { "type": "integer", "minimum": 0 },
+            "unique_rules": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "production_audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "starter_high",
+            "starter_critical",
+            "core_high",
+            "core_critical",
+            "affected_package",
+            "installed_version",
+            "patched_versions",
+            "affected_paths"
+          ],
+          "properties": {
+            "starter_high": { "type": "integer", "minimum": 0 },
+            "starter_critical": { "type": "integer", "minimum": 0 },
+            "core_high": { "type": "integer", "minimum": 0 },
+            "core_critical": { "type": "integer", "minimum": 0 },
+            "affected_package": { "type": "string", "minLength": 1 },
+            "installed_version": { "type": "string", "minLength": 1 },
+            "patched_versions": { "type": "string", "minLength": 1 },
+            "affected_paths": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "network_scope",
+            "stable_headers_only_http_200",
+            "response_body_read",
+            "dev_vars_absent",
+            "credentials_scrubbed",
+            "generated_configs",
+            "generated_config_set_sha256",
+            "workerd_binary_sha256",
+            "cleanup"
+          ],
+          "properties": {
+            "network_scope": { "const": "LOOPBACK_ONLY" },
+            "stable_headers_only_http_200": { "type": "integer", "minimum": 1 },
+            "response_body_read": { "type": "boolean" },
+            "dev_vars_absent": { "type": "boolean" },
+            "credentials_scrubbed": { "type": "boolean" },
+            "generated_configs": { "type": "integer", "minimum": 1 },
+            "generated_config_set_sha256": { "$ref": "#/$defs/sha256" },
+            "workerd_binary_sha256": { "$ref": "#/$defs/sha256" },
+            "cleanup": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["stopped_processes", "remaining_processes", "remaining_listeners"],
+              "properties": {
+                "stopped_processes": { "type": "integer", "minimum": 0 },
+                "remaining_processes": { "type": "integer", "minimum": 0 },
+                "remaining_listeners": { "type": "integer", "minimum": 0 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p0", "p1", "p2", "items"],
+      "properties": {
+        "p0": { "type": "integer", "minimum": 0 },
+        "p1": { "type": "integer", "minimum": 0 },
+        "p2": { "type": "integer", "minimum": 0 },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "severity", "status"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^CFOS-[A-Z0-9-]+$" },
+              "severity": { "enum": ["P0", "P1", "P2"] },
+              "status": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adoption", "local_runtime_candidate", "provider_preview_ready", "production_ready"],
+      "properties": {
+        "adoption": { "const": "ADOPT_BOUNDED" },
+        "local_runtime_candidate": { "const": "PASS_WITH_GAPS" },
+        "provider_preview_ready": { "type": "boolean" },
+        "production_ready": { "type": "boolean" }
+      }
+    },
+    "effects": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "non_claims": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "gitObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree"],
+      "properties": {
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "tree": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    }
+  }
+}

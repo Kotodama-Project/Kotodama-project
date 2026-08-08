@@ -543,6 +543,12 @@ Verification Receipt Candidate へ投影する local adapter を追加してい�
 Cloudflare 側の approval や applied event だけで Kotodama の Human Decision、
 Promotion、Current Truth は作りません。
 
+[content-free local runtime evaluation](docs/CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md)
+では、固定ソース／toolchain で 1060 tests、26 workspace package builds、
+`LOOPBACK_ONLY` headers-only readback、process/listener cleanup まで検証しました。
+結果は `PASS_LOCAL_RUNTIME_WITH_GAPS` であり、independent drift review、高い
+`nanoid` advisory、retention/readback、provider E2E 等は未完です。
+
 設計、費用境界、未証明事項、再現コマンドは
 [Cloudflare edge and official Cloudflare OS](docs/CLOUDFLARE-OS-ADOPTION.md) を参照してください。
 Dynamic Workers は Workers Paid が必要なため、採用決定は billing activation や
