@@ -1,0 +1,154 @@
+{
+  "$schema": "../../schemas/cloudflare-os-local-runtime-evaluation.schema.json",
+  "schema_version": "1.0.0",
+  "observed_at": "2026-08-09T05:17:12+09:00",
+  "status": "PASS_LOCAL_RUNTIME_WITH_GAPS",
+  "public_beta": "NO_GO_UNPUBLISHED",
+  "content_policy": "CONTENT_FREE_SYNTHETIC_ONLY",
+  "source": {
+    "starter": {
+      "commit": "9c18a2e8b0c3741e5f4813546bbf24be5bbb98ee",
+      "tree": "9d34f65f4f34b98febc57f8da86cfc045da0736e"
+    },
+    "pinned_core": {
+      "commit": "bf7f762d7fa73553284d731ab6a978d3ea17be24",
+      "tree": "023da57719fa9744a4ca909f9c3863c93cb614fa"
+    },
+    "observed_current_core": {
+      "commit": "1cb5e3d9096589e38f3fcfaf3f2191aa95a4c592",
+      "tree": "2f1eb7b69cf6cbc0e0da159bf2cd09ef9a2ce7e7"
+    },
+    "drift": {
+      "files_changed": 99,
+      "insertions": 19090,
+      "deletions": 1627,
+      "independent_review": "PENDING"
+    }
+  },
+  "integrity": {
+    "license_sha256": "eb3d7b5485466acbd81f2b496f595ab637d2792e268206b27d99e793bdb67549",
+    "starter_lock_sha256": "6e094ba13ed141b7e0d6527aad7b4c7c6b0b8143d271ef5b84552f9d35d719b7",
+    "starter_lock_integrity_entries": 198,
+    "core_lock_sha256": "fa228e078135ebd38170f3dd071bf3e15edaa5de3a99a5677873d0341ea08301",
+    "core_lock_integrity_entries": 802,
+    "pnpm_tarball": {
+      "version": "11.9.0",
+      "sha1": "10da06e30a629cc94ecf7ca009c6ce696f55fbf1",
+      "sha512": "bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b",
+      "archive_entries": 450,
+      "traversal_entries": 0,
+      "unpacked_bytes": 18742792,
+      "attestation_url_present": true,
+      "attestation_signature_verified": false
+    },
+    "source_symlinks": 23,
+    "escaping_symlinks": 0
+  },
+  "toolchain": {
+    "node": "24.14.0",
+    "pnpm": "11.9.0",
+    "wrangler": "4.115.0",
+    "workerd": "1.20260731.1",
+    "windows_adapter": {
+      "source": "tools/cfos_pnpm_runtime_windows_shim.cs",
+      "source_sha256": "8bf25dc08215faa5ac64d357298f5e80d6163d623877f2cd85cfc4b1980181ba",
+      "evaluated_binary_sha256": "c6b20406161052664200a0332c03eea2e45afb505bc66643661aa6d666670ebe",
+      "install_exit": 64,
+      "remote_wrangler_exit": 64,
+      "scope": "WINDOWS_LOCAL_EVALUATION_ONLY"
+    }
+  },
+  "verification": {
+    "installation": {
+      "starter_packages": 97,
+      "core_packages": 663,
+      "frozen_lockfile": true,
+      "ignore_scripts": true,
+      "credential_scrubbed": true
+    },
+    "tests": {
+      "passed": 1060,
+      "failed": 0,
+      "skipped": 7,
+      "packages_with_test_scripts": 15,
+      "lf_root_tests": 33
+    },
+    "build": {
+      "workspace_packages": 26,
+      "official_recursive_passed": 24,
+      "windows_adapter_passed": 2,
+      "failed": 0,
+      "provider_mutation_commands": 0,
+      "frontend_modules": 5896
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 64,
+      "unique_rules": 4
+    },
+    "production_audit": {
+      "starter_high": 0,
+      "starter_critical": 0,
+      "core_high": 1,
+      "core_critical": 0,
+      "affected_package": "nanoid",
+      "installed_version": "3.3.16",
+      "patched_versions": ">=3.3.17",
+      "affected_paths": 19
+    },
+    "runtime": {
+      "network_scope": "LOOPBACK_ONLY",
+      "stable_headers_only_http_200": 3,
+      "response_body_read": false,
+      "dev_vars_absent": true,
+      "credentials_scrubbed": true,
+      "generated_configs": 18,
+      "generated_config_set_sha256": "00417409810ff4e3746ddceda9392c16290b62fb974fc1607b282f7b8aee4b20",
+      "workerd_binary_sha256": "960149b677bf4405a3e4c53b8acfc5e34989e9f5168a96d3e29a9e95de7bfab3",
+      "cleanup": {
+        "stopped_processes": 27,
+        "remaining_processes": 0,
+        "remaining_listeners": 0
+      }
+    }
+  },
+  "findings": {
+    "p0": 0,
+    "p1": 6,
+    "p2": 2,
+    "items": [
+      { "id": "CFOS-DRIFT-REVIEW", "severity": "P1", "status": "PENDING_INDEPENDENT_REVIEW" },
+      { "id": "CFOS-AUDIT-NANOID", "severity": "P1", "status": "OPEN" },
+      { "id": "CFOS-WINDOWS-LAUNCHER", "severity": "P1", "status": "MITIGATED_LOCAL_ONLY" },
+      { "id": "CFOS-OBSERVABILITY-DEFAULT", "severity": "P1", "status": "OPEN" },
+      { "id": "CFOS-PROVIDER-E2E", "severity": "P1", "status": "OPEN" },
+      { "id": "CFOS-SUPPLY-ATTESTATION", "severity": "P1", "status": "OPEN" },
+      { "id": "CFOS-FRONTEND-SIZE", "severity": "P2", "status": "OPEN" },
+      { "id": "CFOS-LINT-WARNINGS", "severity": "P2", "status": "OPEN" }
+    ]
+  },
+  "decision": {
+    "adoption": "ADOPT_BOUNDED",
+    "local_runtime_candidate": "PASS_WITH_GAPS",
+    "provider_preview_ready": false,
+    "production_ready": false
+  },
+  "effects": {
+    "provider_api_mutations": 0,
+    "deployments": 0,
+    "uploads": 0,
+    "dns_changes": 0,
+    "access_changes": 0,
+    "credential_changes": 0,
+    "billing_changes": 0,
+    "external_posts": 0,
+    "merges": 0
+  },
+  "non_claims": [
+    "Local workerd is not a Cloudflare account deployment or production receipt.",
+    "Synthetic tests do not prove private Context safety, data residency, retention, backup, or restore.",
+    "The Windows adapter is an evaluation boundary, not an upstream-supported production launcher.",
+    "No provider preview, Discord publication, Promotion, Current Truth, or Final Human GO occurred.",
+    "Public Beta remains NO_GO_UNPUBLISHED."
+  ]
+}

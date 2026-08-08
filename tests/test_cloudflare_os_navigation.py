@@ -14,6 +14,8 @@ class CloudflareOsNavigationTests(unittest.TestCase):
             "STATUS.md": "docs/CLOUDFLARE-OS-ADOPTION.md",
             "runtime/README.md": "cloudflare-os/README.md",
             "docs/SCHEMA-VALIDATOR-MATRIX.md": "cloudflare-os-upstream-pin.schema.json",
+            "runtime/cloudflare-os/README.md": "local-runtime-evaluation.json",
+            "docs/CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md": "1060",
         }
         for relative, marker in expected.items():
             with self.subTest(relative=relative):
@@ -30,6 +32,8 @@ class CloudflareOsNavigationTests(unittest.TestCase):
             "BecomeOne / Human Intent",
             "Context Gateway",
             "Workers Paid",
+            "1060",
+            "independent review",
             "NO_GO_UNPUBLISHED",
         ):
             self.assertIn(marker, text)

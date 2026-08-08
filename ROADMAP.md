@@ -29,6 +29,7 @@
 - [x] README Company OS reader/story map from Vision through current reality to safe first use
 - [x] Draft Cloudflare edge candidate with exact Wrangler supply-chain binding and manual-only preview upload guard
 - [x] Draft official Cloudflare OS source pin and content-free Gatekeeper-to-Kotodama adapter contract
+- [x] Content-free official Cloudflare OS local runtime receipt with exact integrity, 1060 passing tests, loopback readback, and cleanup evidence
 
 ## Current Cloudflare candidate
 
@@ -42,9 +43,20 @@ independent drift review is required before re-pinning.
 The local adapter covers observation, protected observation, submitted,
 simulated, rejected, and applied Gatekeeper events. It emits Kotodama candidate
 records only and cannot authorize execution, Promotion, or Current Truth.
-Cloudflare OS remains uninstalled and undeployed. Exact dependency integrity,
-paid-plan budget, provider entitlement, logging/retention, private Context,
-backup/restore, and production behavior remain open gates.
+
+The bounded local runtime evaluation is now complete: exact lock/toolchain
+integrity is recorded, 1060 tests pass with 7 explicit skips, all 26 workspace
+package projects have build coverage, three stable headers-only HTTP 200
+readbacks were observed in `LOOPBACK_ONLY` mode, and cleanup left no evaluation
+process or listener. This is local evidence only; provider deployment remains
+`not_deployed`.
+
+The next dependency-ordered gates are independent review of the 99-file drift,
+remediation or explicit re-pin of the high `nanoid` advisory, default-deny
+observability retention/readback, package-manager attestation verification,
+paid-plan budget and entitlement, and provider readback/rollback/deletion.
+Private Context, backup/restore, production behavior, Discord publication,
+Promotion, Current Truth, and Final Human GO remain open.
 `NO_GO_UNPUBLISHED` remains unchanged.
 
 ## Current public documentation revision

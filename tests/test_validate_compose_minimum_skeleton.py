@@ -32,6 +32,7 @@ class ComposeMinimumSkeletonValidatorCliTests(unittest.TestCase):
                 "runtime/compose-minimum/compose.yaml text eol=lf",
                 "runtime/compose-minimum/company-db/001-company-core.sql text eol=lf",
                 "runtime/compose-minimum/evidence-store/001-evidence-core.sql text eol=lf",
+                "tools/cfos_pnpm_runtime_windows_shim.cs text eol=lf",
             },
         )
 

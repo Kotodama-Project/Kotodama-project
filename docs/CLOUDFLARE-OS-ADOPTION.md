@@ -5,7 +5,7 @@ Kotodama adopts two related but distinct Cloudflare planes.
 | Plane | Adopted role | Current public evidence | Not proven |
 |---|---|---|---|
 | Cloudflare edge | Bounded public ingress and application delivery through Workers and Access | content-free `/healthz` and `/version` candidate, exact Wrangler binding, manual preview-upload workflow candidate | upload, route, origin, production traffic, provider log retention, independent review, Public Beta |
-| Official Cloudflare OS | AI workspace, sandboxed Gadget application, Blueprint, and capability-based Gatekeeper foundation | exact official starter/core source pin plus metadata-only Gatekeeper projection tests | dependency integrity, installed runtime, provider entitlement, Dynamic Worker execution, private Context, backup/restore, production |
+| Official Cloudflare OS | AI workspace, sandboxed Gadget application, Blueprint, and capability-based Gatekeeper foundation | exact official starter/core source pin, metadata-only Gatekeeper projections, and a content-free local runtime receipt with 1060 passing tests | independent drift review, open high advisory, provider entitlement, Dynamic Worker provider execution, private Context, backup/restore, production |
 | Proxmox | Protected local compute, storage, search and service runtime | lifecycle/profile documentation and historical local evidence outside this public candidate | current live topology and deployment parity in this repository |
 | BecomeOne / Human Intent | Decision, Work Order, Promotion and Current Truth authority | public Company governance contracts | canonical adoption or live authority execution |
 | Context Gateway | Default-deny Authorized Corpus query authority | architecture and adapter contract | real provider-to-local search E2E |
@@ -47,17 +47,25 @@ The adapter is stateless. Request digests make event binding visible, but a
 durable replay cache, trusted clock, production Gatekeeper parity and independent
 observer are later gates.
 
-## First runtime evaluation gate
+## First runtime evaluation result
 
-Before any dependency install or provider evaluation:
+The first local evaluation is complete and recorded in
+[Official Cloudflare OS local runtime evaluation](CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md).
+It used frozen lockfiles, ignored lifecycle scripts, scrubbed credentials, read
+no response bodies, bound runtime to `LOOPBACK_ONLY`, and cleaned up all observed
+evaluation processes and listeners. The accepted matrix passed 1060 tests with
+7 explicit skips and covered all 26 workspace package projects.
+
+The following gates remain before provider evaluation:
 
 1. independently review the starter-to-core drift and license/dependency policy;
-2. resolve package ranges to an exact lock/integrity set and bind the toolchain;
-3. set an exact paid-plan budget, quota, billing owner and automatic stop;
-4. keep data public/synthetic/content-free and telemetry disabled or content-free;
-5. prove local build and negative tests without treating local Wrangler/workerd
-   as supported Proxmox production hosting;
-6. produce a candidate-bound receipt and separate Human promotion decision.
+2. remediate or explicitly re-pin the open high `nanoid` advisory;
+3. make telemetry and error-report retention default-deny and prove readback;
+4. independently verify the exact package-manager archive attestation signature;
+5. set an exact paid-plan budget, quota, billing owner and automatic stop;
+6. keep data public/synthetic/content-free and produce provider readback,
+   rollback, and deletion evidence under a separate Work Order.
 
-No provider deployment, private Context transfer, production Promotion or
-Public Beta GO is included in this revision. `NO_GO_UNPUBLISHED` remains.
+Local Wrangler/workerd is not supported Proxmox production-hosting evidence.
+No provider deployment, private Context transfer, production Promotion or Public
+Beta GO is included in this revision. `NO_GO_UNPUBLISHED` remains.

@@ -9,7 +9,7 @@ Updated: 2026-08-09
 | Company governance starter | Published and locally validated |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
 | [Cloudflare edge preview candidate](runtime/cloudflare-edge/README.md) | Draft PR candidate; content-free local validation only, no version upload or deployment |
-| [Official Cloudflare OS source / adapter candidate](docs/CLOUDFLARE-OS-ADOPTION.md) | Draft PR candidate; exact source pin and six synthetic metadata projections, no install or provider execution |
+| [Official Cloudflare OS bounded runtime candidate](docs/CLOUDFLARE-OS-ADOPTION.md) | Draft PR candidate; exact source pin, six synthetic metadata projections, and content-free local runtime receipt; no provider execution |
 | Compose minimum data-plane skeleton | Published candidate; offline config only |
 | Resolved Compose candidate | Published credential-free configuration candidate |
 | Local image availability preflight | Published read-only tool; saved verification is historical binding only |
@@ -49,14 +49,23 @@ Updated: 2026-08-09
 
 The official Cloudflare OS candidate pins the current official starter and the
 core gitlink that starter actually uses. The separately observed current core
-head differs and remains a mandatory review boundary. The local validator
-passes six content-free synthetic Gatekeeper projection cases and keeps
-provider, execution, Promotion, Current Truth, and Public Beta authority false.
+head differs by 99 files and remains a mandatory independent-review boundary.
+The Gatekeeper validator passes six content-free synthetic projections and
+keeps provider, execution, Promotion, Current Truth, and Public Beta authority
+false.
 
-This is source/static/synthetic evidence only. Cloudflare OS dependencies were
-not installed or executed; Dynamic Workers, Workers Paid, KV, R2, Browser
-Rendering, Access, provider logs, private Context, backup, restore, and Discord
-integration remain unproven. The edge Worker was not uploaded or deployed.
+The saved [local runtime evaluation](docs/CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md)
+adds exact dependency/toolchain integrity, 1060 passing tests with 7 explicit
+skips, all 26 workspace package projects covered by build checks, three stable
+headers-only HTTP 200 responses in `LOOPBACK_ONLY` mode, and zero remaining
+evaluation processes/listeners. The result is `PASS_LOCAL_RUNTIME_WITH_GAPS`.
+
+P0/P1/P2 is 0/6/2. The open P1 set includes the independent drift review, one
+high `nanoid` advisory, Windows-only compatibility mitigation, unproven
+observability retention/readback, provider E2E, and package-manager attestation
+signature. Dynamic Workers, Workers Paid entitlement, KV, R2, Browser Rendering,
+Access, provider logs, private Context, backup, restore, Discord integration,
+and production remain unproven. The edge Worker was not uploaded or deployed.
 `NO_GO_UNPUBLISHED` remains unchanged.
 
 ## Latest runtime result
