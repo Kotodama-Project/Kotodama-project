@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-08-05
+Updated: 2026-08-09
 
 | Surface | Status |
 |---|---|
@@ -8,6 +8,8 @@ Updated: 2026-08-05
 | Product direction and roadmap | Public |
 | Company governance starter | Published and locally validated |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
+| [Cloudflare edge preview candidate](runtime/cloudflare-edge/README.md) | Draft PR candidate; content-free local validation only, no version upload or deployment |
+| [Official Cloudflare OS source / adapter candidate](docs/CLOUDFLARE-OS-ADOPTION.md) | Draft PR candidate; exact source pin and six synthetic metadata projections, no install or provider execution |
 | Compose minimum data-plane skeleton | Published candidate; offline config only |
 | Resolved Compose candidate | Published credential-free configuration candidate |
 | Local image availability preflight | Published read-only tool; saved verification is historical binding only |
@@ -42,6 +44,20 @@ Updated: 2026-08-05
 | Public Voice Bot | Inactive |
 | Raw audio or transcript corpus | Not published |
 | Final Human GO | Not completed |
+
+## Latest Cloudflare candidate result
+
+The official Cloudflare OS candidate pins the current official starter and the
+core gitlink that starter actually uses. The separately observed current core
+head differs and remains a mandatory review boundary. The local validator
+passes six content-free synthetic Gatekeeper projection cases and keeps
+provider, execution, Promotion, Current Truth, and Public Beta authority false.
+
+This is source/static/synthetic evidence only. Cloudflare OS dependencies were
+not installed or executed; Dynamic Workers, Workers Paid, KV, R2, Browser
+Rendering, Access, provider logs, private Context, backup, restore, and Discord
+integration remain unproven. The edge Worker was not uploaded or deployed.
+`NO_GO_UNPUBLISHED` remains unchanged.
 
 ## Latest runtime result
 

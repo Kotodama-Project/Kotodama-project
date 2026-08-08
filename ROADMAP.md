@@ -27,6 +27,25 @@
 - [x] Standard-library-only one-command review-chain smoke with temporary cleanup and closed report
 - [x] Clone-to-result five-minute tour with cross-shell commands, report interpretation, and bounded next choices
 - [x] README Company OS reader/story map from Vision through current reality to safe first use
+- [x] Draft Cloudflare edge candidate with exact Wrangler supply-chain binding and manual-only preview upload guard
+- [x] Draft official Cloudflare OS source pin and content-free Gatekeeper-to-Kotodama adapter contract
+
+## Current Cloudflare candidate
+
+The draft Cloudflare candidate now separates Cloudflare edge from the official
+Cloudflare OS project. The edge side remains a content-free Worker candidate;
+no preview version has been uploaded. The Cloudflare OS side pins the exact
+official starter, the core gitlink used by that starter, and the separately
+observed current core head. Because the gitlink and current head differ, an
+independent drift review is required before re-pinning.
+
+The local adapter covers observation, protected observation, submitted,
+simulated, rejected, and applied Gatekeeper events. It emits Kotodama candidate
+records only and cannot authorize execution, Promotion, or Current Truth.
+Cloudflare OS remains uninstalled and undeployed. Exact dependency integrity,
+paid-plan budget, provider entitlement, logging/retention, private Context,
+backup/restore, and production behavior remain open gates.
+`NO_GO_UNPUBLISHED` remains unchanged.
 
 ## Current public documentation revision
 
