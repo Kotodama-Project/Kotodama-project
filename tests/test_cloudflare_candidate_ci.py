@@ -21,6 +21,7 @@ class CloudflareCandidateCIContractTests(unittest.TestCase):
         self.assertNotIn("pull_request_target", workflow)
         self.assertIn("contents: read", workflow)
         self.assertIn("ubuntu-24.04", workflow)
+        self.assertIn("name: Trusted Cloudflare candidate validation", workflow)
         self.assertIn("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", workflow)
         self.assertIn("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97", workflow)
         self.assertIn('python-version: "3.12.10"', workflow)
