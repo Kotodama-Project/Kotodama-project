@@ -57,6 +57,11 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         ):
             self.assertIn(guard, workflow)
 
+    def test_trusted_validator_is_bound_to_the_dispatch_revision(self) -> None:
+        workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("ref: ${{ github.sha }}", workflow)
+        self.assertNotIn("github.event.repository.default_branch", workflow)
+
     def test_workflow_refuses_historical_allowed_branch_ancestors(self) -> None:
         workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
         self.assertEqual(
@@ -126,6 +131,44 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             self.assertIn(
                 "Wrangler supply-chain binding does not match verified 4.120.0 metadata",
                 MODULE.validate(candidate),
+            )
+
+    def test_validator_refuses_preview_environment_provider_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            config_path = candidate / "runtime" / "cloudflare-edge" / "wrangler.jsonc"
+            config = MODULE.load_jsonc(config_path)
+            config["env"]["preview"]["r2_buckets"] = [
+                {"binding": "PRIVATE_DATA", "bucket_name": "private-data"}
+            ]
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            self.assertIn(
+                "preview environment contains forbidden provider/data bindings: ['r2_buckets']",
+                MODULE.validate(candidate),
+            )
+
+    def test_validator_refuses_preview_environment_observability_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            config_path = candidate / "runtime" / "cloudflare-edge" / "wrangler.jsonc"
+            config = MODULE.load_jsonc(config_path)
+            config["env"]["preview"]["observability"] = {
+                "enabled": True,
+                "logs": {"enabled": True},
+            }
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            errors = MODULE.validate(candidate)
+            self.assertIn(
+                "preview observability must remain disabled until provider retention is verified",
+                errors,
+            )
+            self.assertIn(
+                "preview logs must remain disabled until content-free readback is verified",
+                errors,
             )
 
 

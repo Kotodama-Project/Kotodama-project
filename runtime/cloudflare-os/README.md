@@ -43,6 +43,8 @@ computer operating system. Kotodama adopts it as a bounded workspace/Gadget/
 Gatekeeper foundation. BecomeOne and Human Intent retain governed meaning;
 Proxmox retains the protected local runtime/data plane; Context Gateway retains
 query authority. A Gatekeeper result enters Kotodama as a candidate and cannot
-promote Current Truth by itself.
+promote Current Truth by itself. Its metadata-only projection preserves the
+public/protected data class and refuses Context admission/corpus binding
+mismatches.
 
 `NO_GO_UNPUBLISHED` remains in force.

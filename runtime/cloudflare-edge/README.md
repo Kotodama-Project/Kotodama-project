@@ -32,12 +32,19 @@ python3 -m unittest tests.test_cloudflare_edge_candidate -v
 The GitHub workflow first checks a lowercase 40-hex commit and requires it to
 equal the current remote tip of the allowed `codex/cloudflare-os-foundation`
 branch; a historical ancestor is refused. Validator code is checked out from
-trusted `main`. Candidate Python or tests are not executed in that unprivileged
-validation job. After Environment approval, the upload job repeats the exact
-remote-tip check before Wrangler runs, closing branch-advance drift during the
-approval wait. It can upload a preview version only after a manual dispatch
-from `main` and approval by the `cloudflare-preview` GitHub Environment. It
-does not deploy a production route.
+the exact `github.sha` dispatch revision on `main`, rather than re-resolving a
+mutable default-branch name during the run. Candidate Python or tests are not
+executed in that unprivileged validation job. After Environment approval, the
+upload job repeats the exact remote-tip check before Wrangler runs, closing
+branch-advance drift during the approval wait. It can upload a preview version
+only after a manual dispatch from `main` and approval by the
+`cloudflare-preview` GitHub Environment. It does not deploy a production route.
+
+The trusted validator checks the default configuration and every named
+environment for forbidden provider/data bindings. A preview-only R2, KV, AI,
+service, route, or similar binding is refused, and an environment-specific
+observability/logging override must remain disabled until provider retention
+has separate evidence.
 
 Before any run, configure that Environment with required reviewers, prevent
 self-review where available, restrict deployment branches to `main`, and add

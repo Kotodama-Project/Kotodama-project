@@ -55,6 +55,7 @@ PROJECTION_KEYS = {
     "record_kind",
     "source_event_sha256",
     "event_kind",
+    "data_class",
     "gatekeeper_revision",
     "actor_binding_sha256",
     "resource_scope_sha256",
@@ -249,6 +250,7 @@ def project_event(event: object, *, expected_gatekeeper_revision: str) -> dict[s
         "record_kind": RECORD_KIND_BY_EVENT[kind],
         "source_event_sha256": _sha_object(envelope),
         "event_kind": kind,
+        "data_class": envelope["data_class"],
         "gatekeeper_revision": envelope["gatekeeper_revision"],
         "actor_binding_sha256": envelope["actor_binding_sha256"],
         "resource_scope_sha256": envelope["resource_scope_sha256"],
@@ -282,6 +284,8 @@ def validate_projection(projection: object) -> dict[str, Any]:
     kind = current["event_kind"]
     if kind not in EVENT_KINDS:
         raise GatekeeperAdapterViolation("invalid_projection_event_kind")
+    if current["data_class"] not in DATA_CLASSES:
+        raise GatekeeperAdapterViolation("invalid_projection_data_class")
     if current["record_kind"] != RECORD_KIND_BY_EVENT[kind]:
         raise GatekeeperAdapterViolation("invalid_projection_record_kind")
     if not isinstance(current["gatekeeper_revision"], str) or not REVISION_RE.fullmatch(
@@ -337,6 +341,16 @@ def validate_projection(projection: object) -> dict[str, Any]:
     if (current["effect_state"], current["effect_count"]) != expected_effect:
         raise GatekeeperAdapterViolation("invalid_projection_effect_state")
     context_bindings = ("context_admission_sha256", "corpus_scope_sha256")
+    if current["data_class"] == "protected_context_metadata":
+        try:
+            _require_present(current, context_bindings)
+        except GatekeeperAdapterViolation as exc:
+            raise GatekeeperAdapterViolation("invalid_projection_context_binding") from exc
+    else:
+        try:
+            _require_absent(current, context_bindings)
+        except GatekeeperAdapterViolation as exc:
+            raise GatekeeperAdapterViolation("invalid_projection_context_binding") from exc
     context_presence = tuple(current[field] is not None for field in context_bindings)
     if context_presence not in {(False, False), (True, True)}:
         raise GatekeeperAdapterViolation("invalid_projection_context_binding")

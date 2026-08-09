@@ -41,7 +41,9 @@ An applied event must bind the exact candidate, Work Order, Capability Grant,
 Human Decision and external action receipt. Even then, the adapter keeps
 execution authorization, Promotion and Current Truth mutation false. Protected
 Context metadata additionally requires admission and corpus digests. Private
-result bodies are rejected.
+result bodies are rejected. The projection preserves the closed `data_class`
+enum so independent projection validation can reject public metadata carrying
+protected Context bindings and protected metadata missing those bindings.
 
 The adapter is stateless. Request digests make event binding visible, but a
 durable replay cache, trusted clock, production Gatekeeper parity and independent
