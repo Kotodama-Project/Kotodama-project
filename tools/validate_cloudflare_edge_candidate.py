@@ -99,8 +99,8 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
             )
 
     preview = environments.get("preview", {})
-    if preview.get("workers_dev") is not True or preview.get("preview_urls") is not True:
-        errors.append("preview environment must be the only workers.dev/preview URL surface")
+    if preview.get("workers_dev") is not False or preview.get("preview_urls") is not True:
+        errors.append("preview must disable the base workers.dev route and explicitly enable preview URLs")
     if preview.get("vars", {}).get("PUBLIC_BETA_STATUS") != "NO_GO_UNPUBLISHED":
         errors.append("preview environment must preserve NO_GO_UNPUBLISHED")
     preview_observability = preview.get("observability", observability)
@@ -141,6 +141,8 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         '"cf-access-jwt-assertion"',
         "/cdn-cgi/access/certs",
         '"RSASSA-PKCS1-v1_5"',
+        "normalizedHostname(env?.PREVIEW_HOST)",
+        '"direct_origin_denied"',
         "normalizedHttpsOrigin(env?.CONTEXT_GATEWAY_ORIGIN)",
         "/v1/voice/handoffs",
         "hasForbiddenGatewayKey",
@@ -167,6 +169,7 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "environment: cloudflare-preview",
         "persist-credentials: false",
         "versions upload --env preview",
+        "--preview-alias voice-review",
         'wranglerVersion: "4.120.0"',
         "candidate_sha",
         "CLOUDFLARE_API_TOKEN",

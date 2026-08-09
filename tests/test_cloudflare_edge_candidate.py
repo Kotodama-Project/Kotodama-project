@@ -25,6 +25,8 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         self.assertEqual("2026-08-07", config["compatibility_date"])
         self.assertFalse(config["observability"]["enabled"])
         self.assertFalse(config["observability"]["logs"]["enabled"])
+        self.assertFalse(config["env"]["preview"]["workers_dev"])
+        self.assertTrue(config["env"]["preview"]["preview_urls"])
 
     def test_wrangler_supply_chain_binding_is_exact(self) -> None:
         integrity = json.loads(MODULE.WRANGLER_INTEGRITY.read_text(encoding="utf-8"))
@@ -39,6 +41,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("versions upload --env preview", workflow)
+        self.assertIn("--preview-alias voice-review", workflow)
         self.assertIn('wranglerVersion: "4.120.0"', workflow)
         self.assertNotIn("wrangler deploy", workflow)
         self.assertNotIn("versions deploy", workflow)
@@ -50,6 +53,8 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             '"cf-access-jwt-assertion"',
             "/cdn-cgi/access/certs",
             '"RSASSA-PKCS1-v1_5"',
+            "PREVIEW_HOST",
+            '"direct_origin_denied"',
             "CONTEXT_GATEWAY_ORIGIN",
             "/v1/voice/handoffs",
             "raw_audio_transferred",
