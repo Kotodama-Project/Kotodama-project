@@ -6,27 +6,60 @@ Proxmox segmented profile.
 
 ## Boundary
 
-- Cloudflare: public edge routing, a minimal health/status response, later
-  Access/Tunnel policy enforcement, and deployment metadata.
+- Cloudflare: public edge routing, Access JWT verification, a bounded Voice
+  review projection, and deployment metadata.
 - Proxmox: search runtime, Context Gateway, databases, Evidence Store, n8n,
   OpenClaw, and private administration.
 - Tailscale or an equivalent private path: operator access while the
   Cloudflare Access/Tunnel candidate is not independently verified.
 
-The Worker exposes only `/healthz` and `/version`. It has no origin binding,
-storage binding, AI binding, route, custom domain, or secret. Every other path
-fails closed with `404`.
+The Worker exposes `/healthz`, `/version`, `GET /voice/review`, and
+`POST /voice/review/{safe-document-id}`. Voice routes require a valid RS256
+Cloudflare Access JWT with an exact issuer and audience. Missing, malformed,
+forged, expired, not-yet-valid, or wrong-audience JWTs fail closed.
+
+The Voice route can call only the configured HTTPS Context Gateway origin:
+
+- `GET /voice/review?q=...` maps to `GET /v1/voice/handoffs?q=...`;
+- `POST /voice/review/{id}` maps to
+  `POST /v1/voice/handoffs/{id}/review`;
+- review actions are limited to `accept`, `edit`, and `reject`;
+- the Gateway response is reconstructed through an allowlist;
+- raw audio, transcript, credential, source body, and private corpus keys are
+  rejected, not silently forwarded;
+- evidence is digest-URN only and authority remains `candidate_only`.
+
+The Worker has no search, storage, AI, Voice, ASR, database, or canonical-state
+binding. Context Gateway remains mandatory; direct search access is absent.
+Every other path fails closed.
+
+## Runtime bindings
+
+The preview requires the following values to be supplied through the protected
+deployment environment. Values must not be committed or printed:
+
+- `ACCESS_ISSUER`: exact HTTPS Cloudflare Access issuer origin;
+- `ACCESS_AUD`: exact Access application audience;
+- `CONTEXT_GATEWAY_ORIGIN`: exact HTTPS Context Gateway origin;
+- `CONTEXT_GATEWAY_CLIENT_ID`: Access service-token client identifier;
+- `CONTEXT_GATEWAY_CLIENT_SECRET`: Access service-token secret.
+
+If any value is absent or malformed, Voice routes return `503`. Uploading code
+does not by itself configure Access, Tunnel, the Context Gateway, or these
+runtime values.
 
 ## Candidate checks
 
 ```powershell
 python tools\validate_cloudflare_edge_candidate.py
 python -m unittest tests.test_cloudflare_edge_candidate -v
+C:\path\to\node.exe --test tests\node\test_cloudflare_voice_review.mjs
 ```
 
 ```bash
 python3 tools/validate_cloudflare_edge_candidate.py
 python3 -m unittest tests.test_cloudflare_edge_candidate -v
+node --test tests/node/test_cloudflare_voice_review.mjs
 ```
 
 The GitHub workflow first checks a lowercase 40-hex commit and requires it to
@@ -44,7 +77,9 @@ The trusted validator checks the default configuration and every named
 environment for forbidden provider/data bindings. A preview-only R2, KV, AI,
 service, route, or similar binding is refused, and an environment-specific
 observability/logging override must remain disabled until provider retention
-has separate evidence.
+has separate evidence. It also requires the Access verification, exact two
+bounded fetch sites (Access JWKS and Context Gateway), Voice projection denial,
+and no direct search/provider endpoint markers.
 
 Before any run, configure that Environment with required reviewers, prevent
 self-review where available, restrict deployment branches to `main`, and add
@@ -71,5 +106,6 @@ Before running the workflow, bind an exact commit to a Work Order and verify:
 ## Non-claims
 
 The files here do not prove Cloudflare account ownership, Access/Tunnel/DNS
-configuration, preview deployment, production deployment, origin reachability,
-provider E2E, rollback, Promotion, Current Truth, or Public Beta GO.
+configuration, runtime secret binding, preview deployment, production
+deployment, Context Gateway origin reachability, real Voice data, provider E2E,
+rollback, Promotion, Current Truth, or Public Beta GO.

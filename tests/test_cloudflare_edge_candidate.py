@@ -43,6 +43,23 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         self.assertNotIn("wrangler deploy", workflow)
         self.assertNotIn("versions deploy", workflow)
 
+    def test_voice_review_is_access_verified_and_context_gateway_only(self) -> None:
+        worker = MODULE.WORKER.read_text(encoding="utf-8")
+        for marker in (
+            '"/voice/review"',
+            '"cf-access-jwt-assertion"',
+            "/cdn-cgi/access/certs",
+            '"RSASSA-PKCS1-v1_5"',
+            "CONTEXT_GATEWAY_ORIGIN",
+            "/v1/voice/handoffs",
+            "raw_audio_transferred",
+            "private_transcript_transferred",
+            "context_gateway_bypass",
+        ):
+            self.assertIn(marker, worker)
+        self.assertNotIn("SEARCH_ORIGIN", worker)
+        self.assertNotIn("VECTORIZE", worker)
+
     def test_workflow_uses_trusted_validation_before_environment_upload(self) -> None:
         workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
         for guard in (
