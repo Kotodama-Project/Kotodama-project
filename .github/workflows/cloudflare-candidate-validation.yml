@@ -34,6 +34,12 @@ jobs:
           python-version: "3.12.10"
           check-latest: false
 
+      - name: Set up exact Node runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.14.0"
+          check-latest: false
+
       - name: Install hash-locked validator dependencies
         run: python -m pip install --require-hashes -r requirements-ci.txt
 
@@ -46,6 +52,9 @@ jobs:
           tests.test_cloudflare_os_local_runtime_evaluation
           tests.test_cloudflare_os_security_overlay
           -v
+
+      - name: Run Worker Voice review contract
+        run: node --test tests/node/test_cloudflare_voice_review.mjs
 
       - name: Run fail-closed candidate validators
         shell: bash

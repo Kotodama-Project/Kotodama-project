@@ -126,12 +126,32 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "console.log",
         "await fetch(",
         "return fetch(",
+        "SEARCH_ORIGIN",
+        "VECTORIZE",
+        "api.openai.com",
     ):
         if forbidden in worker:
             errors.append(f"worker contains forbidden content/origin operation: {forbidden}")
-    for required in ('"/healthz"', '"/version"', '"not_found"', '"no-store"'):
+    for required in (
+        '"/healthz"',
+        '"/version"',
+        '"not_found"',
+        '"no-store"',
+        '"/voice/review"',
+        '"cf-access-jwt-assertion"',
+        "/cdn-cgi/access/certs",
+        '"RSASSA-PKCS1-v1_5"',
+        "normalizedHttpsOrigin(env?.CONTEXT_GATEWAY_ORIGIN)",
+        "/v1/voice/handoffs",
+        "hasForbiddenGatewayKey",
+        "raw_audio_transferred: false",
+        "private_transcript_transferred: false",
+        "context_gateway_bypass: false",
+    ):
         if required not in worker:
             errors.append(f"worker missing fail-closed marker: {required}")
+    if worker.count("await fetchImpl(new Request(") != 2:
+        errors.append("worker must have exactly two bounded fetch sites: Access JWKS and Context Gateway")
 
     workflow = workflow_path.read_text(encoding="utf-8")
     required_workflow = (

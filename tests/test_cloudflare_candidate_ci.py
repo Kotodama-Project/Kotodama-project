@@ -25,6 +25,8 @@ class CloudflareCandidateCIContractTests(unittest.TestCase):
         self.assertIn("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", workflow)
         self.assertIn("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97", workflow)
         self.assertIn('python-version: "3.12.10"', workflow)
+        self.assertIn("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", workflow)
+        self.assertIn('node-version: "24.14.0"', workflow)
         self.assertIn("--require-hashes -r requirements-ci.txt", workflow)
         self.assertIn("tests.test_cloudflare_candidate_ci", workflow)
         self.assertIn("tests.test_cloudflare_edge_candidate", workflow)
@@ -36,6 +38,7 @@ class CloudflareCandidateCIContractTests(unittest.TestCase):
         self.assertIn("validate_cloudflare_os_local_runtime_evaluation.py --json", workflow)
         self.assertIn("validate_cloudflare_os_security_candidate.py", workflow)
         self.assertIn("git status --porcelain", workflow)
+        self.assertIn("node --test tests/node/test_cloudflare_voice_review.mjs", workflow)
 
         forbidden = (
             "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "secrets.",
