@@ -1,7 +1,7 @@
 {
   "kind": "kotodama/cloudflare-os-security-overlay/v1",
   "status": "CANDIDATE_NOT_MATERIALIZED_NOT_REMEDIATED",
-  "observed_at": "2026-08-09T02:45:00Z",
+  "observed_at": "2026-08-09T04:54:56Z",
   "source": {
     "pinned_core": {
       "commit": "bf7f762d7fa73553284d731ab6a978d3ea17be24",
@@ -66,15 +66,24 @@
       "vulnerable_lock_markers": 4,
       "target_lock_markers": 0
     },
-    "expected_output": {
+    "expected_workspace_output": {
       "workspace_override": 1,
+      "canonical_sha256": "2394064336fd20e2bfa43b9d2c23010d67534b346c8db153f40144f0603bf46e",
+      "canonical_bytes": 1100
+    },
+    "observed_generated_lock": {
+      "evidence_status": "EXACT_PNPM_OUTPUT_BOUND_NOT_PROVEN_BY_BYTES_ALONE",
+      "package_manager": "pnpm@11.9.0",
+      "generation_mode": "LOCKFILE_ONLY_PREFER_OFFLINE_FIXED_PUBLIC_REGISTRY_IGNORE_SCRIPTS_NO_RUNTIME",
       "lock_override": 1,
       "vulnerable_lock_markers": 0,
-      "target_lock_markers": 4,
-      "workspace_canonical_sha256": "2394064336fd20e2bfa43b9d2c23010d67534b346c8db153f40144f0603bf46e",
-      "workspace_bytes": 1100,
-      "lock_canonical_sha256": "31d60679f37363626c78668ad25136854f4f31d63ec5e30c8d4c85d070b966e7",
-      "lock_bytes": 285809
+      "target_lock_markers": 5,
+      "new_package_key_markers": 2,
+      "new_dependency_edge_markers": 2,
+      "new_integrity_markers": 1,
+      "canonical_sha256": "886f021255826478913707e43f00e3df8327baca5c0cc9eca5193fcdb6701001",
+      "canonical_bytes": 281638,
+      "canonical_lines": 8461
     }
   },
   "gates": {
@@ -99,7 +108,7 @@
     "current_truth_change": 0
   },
   "unproven": [
-    "generated lock parity under pinned pnpm 11.9.0",
+    "fresh package-manager regeneration and provenance receipt for the bound lock",
     "frozen-lock install with lifecycle scripts disabled",
     "production dependency audit with zero high findings",
     "Cloudflare OS tests and build after materialization",

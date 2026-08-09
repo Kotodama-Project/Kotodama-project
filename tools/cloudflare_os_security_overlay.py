@@ -2,9 +2,11 @@
 """Fail-closed, byte-bound Cloudflare OS security overlay preflight.
 
 This module does not modify an upstream checkout.  It proves only that one
-reviewable parent-scoped pnpm override has a deterministic byte transform for
-the pinned upstream Git blobs.  Package-manager materialization, install,
-audit, tests, review, deployment, and remediation remain separate gates.
+reviewable parent-scoped pnpm override has a deterministic workspace transform
+for the pinned upstream Git blobs, and can verify separately supplied bytes
+against one observed exact-pnpm lock binding.  It never synthesizes or edits a
+lockfile.  Package-manager provenance, install, audit, tests, review,
+deployment, and remediation remain separate gates.
 """
 
 from __future__ import annotations
@@ -37,8 +39,9 @@ LOCK_SHA256 = "efd6eb15379a2d02b1bdf0db776c50d421193ef78199baa043f93d99a1307258"
 LOCK_BYTES = 285775
 WORKSPACE_OUTPUT_SHA256 = "2394064336fd20e2bfa43b9d2c23010d67534b346c8db153f40144f0603bf46e"
 WORKSPACE_OUTPUT_BYTES = 1100
-LOCK_OUTPUT_SHA256 = "31d60679f37363626c78668ad25136854f4f31d63ec5e30c8d4c85d070b966e7"
-LOCK_OUTPUT_BYTES = 285809
+LOCK_OUTPUT_SHA256 = "886f021255826478913707e43f00e3df8327baca5c0cc9eca5193fcdb6701001"
+LOCK_OUTPUT_BYTES = 281638
+LOCK_OUTPUT_LINES = 8461
 GRAPH_MULTISET_SHA256 = "1d4a74b72bd8d7decd26c2a7c1fbb7786017ad35a385f4360f0762618b25d326"
 REFERENCE_COMMIT = "9c18a2e8b0c3741e5f4813546bbf24be5bbb98ee"
 REFERENCE_TREE = "9d34f65f4f34b98febc57f8da86cfc045da0736e"
@@ -51,7 +54,7 @@ PACKAGE_MANAGER = "pnpm@11.9.0"
 OLD_INTEGRITY = "sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q=="
 NEW_INTEGRITY = "sha512-xQLf0A3HOMlgHq0n247/LRuAOYmB7dXJ/DvAxGvsSBij45XtBSmQycu+F8ODbHwns/XyFZagyL1+J0Offw1E0g=="
 UNPROVEN = [
-    "generated lock parity under pinned pnpm 11.9.0",
+    "fresh package-manager regeneration and provenance receipt for the bound lock",
     "frozen-lock install with lifecycle scripts disabled",
     "production dependency audit with zero high findings",
     "Cloudflare OS tests and build after materialization",
@@ -252,7 +255,8 @@ def _validate_spec(spec: dict[str, Any], *, bind_exact_bytes: bool) -> None:
             "ambient_latest_allowed",
             "manual_lock_edit_accepted",
             "expected_input",
-            "expected_output",
+            "expected_workspace_output",
+            "observed_generated_lock",
         },
         "remediation",
     )
@@ -276,40 +280,78 @@ def _validate_spec(spec: dict[str, Any], *, bind_exact_bytes: bool) -> None:
         },
         "expected input counts drifted",
     )
-    expected_output = _require_mapping(remediation.get("expected_output"), "expected_output")
+    expected_workspace = _require_mapping(
+        remediation.get("expected_workspace_output"), "expected_workspace_output"
+    )
     _require_exact_keys(
-        expected_output,
+        expected_workspace,
         {
             "workspace_override",
+            "canonical_sha256",
+            "canonical_bytes",
+        },
+        "expected_workspace_output",
+    )
+    _require(expected_workspace.get("workspace_override") == 1, "workspace output override count drifted")
+    _require_hex(expected_workspace.get("canonical_sha256"), HEX64, "expected workspace output hash")
+    _require(
+        type(expected_workspace.get("canonical_bytes")) is int
+        and expected_workspace["canonical_bytes"] > 0,
+        "invalid expected workspace output byte count",
+    )
+
+    generated = _require_mapping(
+        remediation.get("observed_generated_lock"), "observed_generated_lock"
+    )
+    _require_exact_keys(
+        generated,
+        {
+            "evidence_status",
+            "package_manager",
+            "generation_mode",
             "lock_override",
             "vulnerable_lock_markers",
             "target_lock_markers",
-            "workspace_canonical_sha256",
-            "workspace_bytes",
-            "lock_canonical_sha256",
-            "lock_bytes",
+            "new_package_key_markers",
+            "new_dependency_edge_markers",
+            "new_integrity_markers",
+            "canonical_sha256",
+            "canonical_bytes",
+            "canonical_lines",
         },
-        "expected_output",
+        "observed_generated_lock",
     )
-    for field in ("workspace_canonical_sha256", "lock_canonical_sha256"):
-        _require_hex(expected_output.get(field), HEX64, f"expected_output.{field}")
-    for field in ("workspace_bytes", "lock_bytes"):
-        _require(type(expected_output.get(field)) is int and expected_output[field] > 0, f"invalid expected output {field}")
+    _require(
+        generated.get("evidence_status") == "EXACT_PNPM_OUTPUT_BOUND_NOT_PROVEN_BY_BYTES_ALONE",
+        "generated lock evidence status drifted",
+    )
+    _require(generated.get("package_manager") == PACKAGE_MANAGER, "generated lock package manager drifted")
+    _require(
+        generated.get("generation_mode")
+        == "LOCKFILE_ONLY_PREFER_OFFLINE_FIXED_PUBLIC_REGISTRY_IGNORE_SCRIPTS_NO_RUNTIME",
+        "generated lock mode drifted",
+    )
     for field, value in {
-        "workspace_override": 1,
         "lock_override": 1,
         "vulnerable_lock_markers": 0,
-        "target_lock_markers": 4,
+        "target_lock_markers": 5,
+        "new_package_key_markers": 2,
+        "new_dependency_edge_markers": 2,
+        "new_integrity_markers": 1,
     }.items():
-        _require(expected_output.get(field) == value, f"expected output count drifted: {field}")
+        _require(generated.get(field) == value, f"generated lock count drifted: {field}")
+    _require_hex(generated.get("canonical_sha256"), HEX64, "observed generated lock hash")
+    for field in ("canonical_bytes", "canonical_lines"):
+        _require(type(generated.get(field)) is int and generated[field] > 0, f"invalid generated lock {field}")
     if bind_exact_bytes:
         _require(
-            expected_output["workspace_canonical_sha256"] == WORKSPACE_OUTPUT_SHA256,
+            expected_workspace["canonical_sha256"] == WORKSPACE_OUTPUT_SHA256,
             "expected workspace output hash drifted",
         )
-        _require(expected_output["workspace_bytes"] == WORKSPACE_OUTPUT_BYTES, "expected workspace output bytes drifted")
-        _require(expected_output["lock_canonical_sha256"] == LOCK_OUTPUT_SHA256, "expected lock output hash drifted")
-        _require(expected_output["lock_bytes"] == LOCK_OUTPUT_BYTES, "expected lock output bytes drifted")
+        _require(expected_workspace["canonical_bytes"] == WORKSPACE_OUTPUT_BYTES, "expected workspace output bytes drifted")
+        _require(generated["canonical_sha256"] == LOCK_OUTPUT_SHA256, "observed generated lock hash drifted")
+        _require(generated["canonical_bytes"] == LOCK_OUTPUT_BYTES, "observed generated lock bytes drifted")
+        _require(generated["canonical_lines"] == LOCK_OUTPUT_LINES, "observed generated lock lines drifted")
 
     gates = _require_mapping(spec["gates"], "gates")
     _require_exact_keys(
@@ -379,10 +421,10 @@ def _markers(lock_bytes: bytes, spec: dict[str, Any]) -> dict[str, int]:
     }
 
 
-def apply_overlay(
+def apply_workspace_overlay(
     workspace_bytes: bytes, lock_bytes: bytes, spec: dict[str, Any]
-) -> tuple[bytes, bytes, dict[str, Any]]:
-    """Return transformed bytes without reading or writing an upstream checkout."""
+) -> tuple[bytes, dict[str, Any]]:
+    """Return only transformed workspace bytes; never synthesize a lockfile."""
 
     _validate_spec(spec, bind_exact_bytes=False)
     _require(isinstance(workspace_bytes, bytes) and isinstance(lock_bytes, bytes), "inputs must be bytes")
@@ -401,31 +443,9 @@ def apply_overlay(
     _require(before_markers["target_lock_markers"] == expected_before["target_lock_markers"], "target marker precondition drifted")
 
     workspace_out = workspace_bytes.replace(OVERRIDES_ANCHOR, OVERRIDES_ANCHOR + OVERRIDE_LINE, 1)
-    lock_out = lock_bytes.replace(OVERRIDES_ANCHOR, OVERRIDES_ANCHOR + OVERRIDE_LINE, 1)
-    lock_out = lock_out.replace(
-        f"nanoid@{INSTALLED_VERSION}:".encode("ascii"),
-        f"nanoid@{TARGET_VERSION}:".encode("ascii"),
-    )
-    lock_out = lock_out.replace(
-        f"nanoid: {INSTALLED_VERSION}".encode("ascii"),
-        f"nanoid: {TARGET_VERSION}".encode("ascii"),
-    )
-    lock_out = lock_out.replace(
-        spec["remediation"]["old_integrity"].encode("ascii"),
-        spec["remediation"]["new_integrity"].encode("ascii"),
-    )
-
-    after_markers = _markers(lock_out, spec)
-    expected_after = spec["remediation"]["expected_output"]
+    expected_after = spec["remediation"]["expected_workspace_output"]
     workspace_override = workspace_out.count(SELECTOR.encode("ascii"))
-    lock_override = lock_out.count(SELECTOR.encode("ascii"))
     _require(workspace_override == expected_after["workspace_override"], "workspace output override count drifted")
-    _require(lock_override == expected_after["lock_override"], "lock output override count drifted")
-    _require(after_markers["vulnerable_lock_markers"] == expected_after["vulnerable_lock_markers"], "vulnerable markers remain")
-    _require(after_markers["target_lock_markers"] == expected_after["target_lock_markers"], "target marker count drifted")
-    _require(after_markers["new_key"] == 2, "target package-key count drifted")
-    _require(after_markers["new_edge"] == 1, "target dependency-edge count drifted")
-    _require(after_markers["new_integrity"] == 1, "target integrity count drifted")
 
     report = {
         "before": {
@@ -436,12 +456,52 @@ def apply_overlay(
         },
         "after": {
             "workspace_override": workspace_override,
-            "lock_override": lock_override,
-            "vulnerable_lock_markers": after_markers["vulnerable_lock_markers"],
-            "target_lock_markers": after_markers["target_lock_markers"],
+            "lock_writes": 0,
+            "source_lock_sha256": _sha256(lock_bytes),
         },
     }
-    return workspace_out, lock_out, report
+    return workspace_out, report
+
+
+def verify_observed_generated_lock(
+    workspace_bytes: bytes, lock_bytes: bytes, spec: dict[str, Any]
+) -> dict[str, Any]:
+    """Verify exact bound output bytes without asserting who generated them."""
+
+    _validate_spec(spec, bind_exact_bytes=False)
+    _require(isinstance(workspace_bytes, bytes) and isinstance(lock_bytes, bytes), "inputs must be bytes")
+    _require(b"\r" not in workspace_bytes and b"\r" not in lock_bytes, "only canonical LF bytes are accepted")
+    workspace = spec["remediation"]["expected_workspace_output"]
+    generated = spec["remediation"]["observed_generated_lock"]
+    _require(len(workspace_bytes) == workspace["canonical_bytes"], "workspace output byte count drifted")
+    _require(_sha256(workspace_bytes) == workspace["canonical_sha256"], "workspace output hash drifted")
+    _require(len(lock_bytes) == generated["canonical_bytes"], "generated lock byte count drifted")
+    _require(_sha256(lock_bytes) == generated["canonical_sha256"], "generated lock hash drifted")
+    _require(lock_bytes.count(b"\n") == generated["canonical_lines"], "generated lock line count drifted")
+    _require(workspace_bytes.count(SELECTOR.encode("ascii")) == 1, "workspace selector count drifted")
+    _require(lock_bytes.count(SELECTOR.encode("ascii")) == generated["lock_override"], "lock selector count drifted")
+    markers = _markers(lock_bytes, spec)
+    _require(
+        markers["vulnerable_lock_markers"] == generated["vulnerable_lock_markers"],
+        "generated lock retains vulnerable markers",
+    )
+    _require(
+        markers["target_lock_markers"] == generated["target_lock_markers"],
+        "generated lock target marker count drifted",
+    )
+    _require(markers["new_key"] == generated["new_package_key_markers"], "generated package-key count drifted")
+    _require(markers["new_edge"] == generated["new_dependency_edge_markers"], "generated dependency-edge count drifted")
+    _require(markers["new_integrity"] == generated["new_integrity_markers"], "generated integrity count drifted")
+    return {
+        "status": "PASS_BOUND_GENERATED_LOCK_BYTES_NO_PROVENANCE",
+        "workspace_sha256": _sha256(workspace_bytes),
+        "lock_sha256": _sha256(lock_bytes),
+        "vulnerable_lock_markers": markers["vulnerable_lock_markers"],
+        "target_lock_markers": markers["target_lock_markers"],
+        "package_manager_provenance_verified": False,
+        "remediation_proven": False,
+        "public_beta": PUBLIC_BETA,
+    }
 
 
 def evaluate_source_bytes(workspace_bytes: bytes, lock_bytes: bytes, spec: dict[str, Any]) -> dict[str, Any]:
@@ -453,19 +513,18 @@ def evaluate_source_bytes(workspace_bytes: bytes, lock_bytes: bytes, spec: dict[
         _require(len(value) == source["canonical_bytes"], f"{label} input byte count drifted")
         _require(_sha256(value) == source["canonical_sha256"], f"{label} input hash drifted")
 
-    workspace_out, lock_out, report = apply_overlay(workspace_bytes, lock_bytes, spec)
-    expected = spec["remediation"]["expected_output"]
-    _require(len(workspace_out) == expected["workspace_bytes"], "workspace output byte count drifted")
-    _require(_sha256(workspace_out) == expected["workspace_canonical_sha256"], "workspace output hash drifted")
-    _require(len(lock_out) == expected["lock_bytes"], "lock output byte count drifted")
-    _require(_sha256(lock_out) == expected["lock_canonical_sha256"], "lock output hash drifted")
+    workspace_out, report = apply_workspace_overlay(workspace_bytes, lock_bytes, spec)
+    expected = spec["remediation"]["expected_workspace_output"]
+    _require(len(workspace_out) == expected["canonical_bytes"], "workspace output byte count drifted")
+    _require(_sha256(workspace_out) == expected["canonical_sha256"], "workspace output hash drifted")
     report.update(
         {
-            "status": "PASS_DETERMINISTIC_OVERLAY_BYTES_ONLY",
+            "status": "PASS_WORKSPACE_OVERLAY_PREFLIGHT",
             "materialized": False,
             "remediation_proven": False,
             "workspace_output_sha256": _sha256(workspace_out),
-            "lock_output_sha256": _sha256(lock_out),
+            "observed_generated_lock_sha256": spec["remediation"]["observed_generated_lock"]["canonical_sha256"],
+            "manual_lock_bytes_generated": 0,
             "effects": dict(spec["effects"]),
             "public_beta": PUBLIC_BETA,
         }
