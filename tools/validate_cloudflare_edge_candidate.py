@@ -83,11 +83,36 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
     if config.get("vars", {}).get("PUBLIC_BETA_STATUS") != "NO_GO_UNPUBLISHED":
         errors.append("default environment must preserve NO_GO_UNPUBLISHED")
 
-    preview = config.get("env", {}).get("preview", {})
+    environments = config.get("env", {})
+    if not isinstance(environments, dict):
+        errors.append("env must be an object")
+        environments = {}
+    for environment_name, environment in environments.items():
+        if not isinstance(environment_name, str) or not isinstance(environment, dict):
+            errors.append("each named environment must be an object")
+            continue
+        environment_bindings = sorted(forbidden_bindings.intersection(environment))
+        if environment_bindings:
+            errors.append(
+                f"{environment_name} environment contains forbidden provider/data bindings: "
+                f"{environment_bindings}"
+            )
+
+    preview = environments.get("preview", {})
     if preview.get("workers_dev") is not True or preview.get("preview_urls") is not True:
         errors.append("preview environment must be the only workers.dev/preview URL surface")
     if preview.get("vars", {}).get("PUBLIC_BETA_STATUS") != "NO_GO_UNPUBLISHED":
         errors.append("preview environment must preserve NO_GO_UNPUBLISHED")
+    preview_observability = preview.get("observability", observability)
+    if not isinstance(preview_observability, dict) or preview_observability.get("enabled") is not False:
+        errors.append("preview observability must remain disabled until provider retention is verified")
+    preview_logs = (
+        preview_observability.get("logs", {})
+        if isinstance(preview_observability, dict)
+        else {}
+    )
+    if not isinstance(preview_logs, dict) or preview_logs.get("enabled") is not False:
+        errors.append("preview logs must remain disabled until content-free readback is verified")
 
     integrity = json.loads(integrity_path.read_text(encoding="utf-8"))
     if integrity != VERIFIED_WRANGLER:
@@ -116,6 +141,7 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "refs/remotes/origin/codex/cloudflare-os-foundation",
         "path: trusted",
         "path: candidate",
+        "ref: ${{ github.sha }}",
         "trusted/tools/validate_cloudflare_edge_candidate.py --root candidate",
         "needs: validate-candidate",
         "environment: cloudflare-preview",
@@ -150,6 +176,7 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "versions deploy",
         "pull_request:",
         "push:",
+        "github.event.repository.default_branch",
     ):
         if forbidden in workflow:
             errors.append(f"workflow contains forbidden automatic/production action: {forbidden}")

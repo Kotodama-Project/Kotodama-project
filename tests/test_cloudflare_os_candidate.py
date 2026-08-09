@@ -77,6 +77,18 @@ class CloudflareOsCandidateTests(unittest.TestCase):
         with self.assertRaisesRegex(ADAPTER.GatekeeperAdapterViolation, "missing_context"):
             ADAPTER.project_event(event, expected_gatekeeper_revision=MODULE.PINNED_CORE_COMMIT)
 
+    def test_projection_preserves_data_class_and_rejects_context_mismatch(self) -> None:
+        protected = ADAPTER.project_event(
+            MODULE.make_event("observation", protected=True),
+            expected_gatekeeper_revision=MODULE.PINNED_CORE_COMMIT,
+        )
+        self.assertEqual("protected_context_metadata", protected["data_class"])
+
+        mislabeled = copy.deepcopy(protected)
+        mislabeled["data_class"] = "public_metadata"
+        with self.assertRaisesRegex(ADAPTER.GatekeeperAdapterViolation, "projection_context"):
+            ADAPTER.validate_projection(mislabeled)
+
     def test_private_body_is_rejected(self) -> None:
         event = MODULE.make_event("observation")
         event["private_body_included"] = True
