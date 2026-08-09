@@ -5,7 +5,7 @@ Kotodama adopts two related but distinct Cloudflare planes.
 | Plane | Adopted role | Current public evidence | Not proven |
 |---|---|---|---|
 | Cloudflare edge | Bounded public ingress and application delivery through Workers and Access | content-free `/healthz` and `/version` candidate, exact Wrangler binding, manual preview-upload workflow candidate | upload, route, origin, production traffic, provider log retention, independent review, Public Beta |
-| Official Cloudflare OS | AI workspace, sandboxed Gadget application, Blueprint, and capability-based Gatekeeper foundation | exact official starter/core source pin, metadata-only Gatekeeper projections, a content-free local runtime receipt with 1060 passing tests, and a deterministic security-overlay preflight | materialized high-advisory remediation, independent drift review, provider entitlement, Dynamic Worker provider execution, private Context, backup/restore, production |
+| Official Cloudflare OS | AI workspace, sandboxed Gadget application, Blueprint, and capability-based Gatekeeper foundation | exact official starter/core source pin, metadata-only Gatekeeper projections, a content-free local runtime receipt with 1060 passing tests, and a workspace-only security-overlay preflight with an observed generated-lock byte binding | frozen install and zero-high remediation proof, independent drift review, provider entitlement, Dynamic Worker provider execution, private Context, backup/restore, production |
 | Proxmox | Protected local compute, storage, search and service runtime | lifecycle/profile documentation and historical local evidence outside this public candidate | current live topology and deployment parity in this repository |
 | BecomeOne / Human Intent | Decision, Work Order, Promotion and Current Truth authority | public Company governance contracts | canonical adoption or live authority execution |
 | Context Gateway | Default-deny Authorized Corpus query authority | architecture and adapter contract | real provider-to-local search E2E |
@@ -73,8 +73,11 @@ The following gates remain before provider evaluation:
 [`runtime/cloudflare-os/security-overlay.json`](../runtime/cloudflare-os/security-overlay.json)
 binds the vulnerable production graph to the pinned core Git tree and two exact
 Git blobs. It proposes only the parent-scoped root override
-`postcss@8.5.25>nanoid: 3.3.17`, an exact `pnpm@11.9.0`, and a generated frozen
-lock. The byte transformer reads canonical LF bytes and refuses CRLF,
+`postcss@8.5.25>nanoid: 3.3.17` and exact `pnpm@11.9.0` generation. The
+transformer writes workspace bytes only and never synthesizes a lockfile. A
+separate verifier binds an observed package-manager output at 281,638 LF bytes,
+8,461 lines, five target markers, and zero vulnerable markers. Byte equivalence
+does not prove package-manager provenance. The contract refuses CRLF,
 already-applied overlays, marker drift, integrity drift, global overrides,
 ambient latest, manual-lock acceptance, or any effect/Public GO overclaim.
 
@@ -85,16 +88,19 @@ python -m unittest tests.test_cloudflare_os_security_overlay -v
 python tools/validate_cloudflare_os_security_candidate.py
 ```
 
-The first command covers the deterministic transform and negative cases. The
-second validates the public spec only. A local reviewer may additionally pass a
-trusted official core checkout with `--core-repo`; the validator reads the
-pinned objects with Git and never reads authoritative bytes from the dirty
-worktree.
+The first command covers the workspace-only transform, observed-lock byte
+verification, rejection of the old four-marker manual prediction, and other
+negative cases. The second validates the public spec only. A local reviewer may
+additionally pass a trusted official core checkout with `--core-repo`; the
+validator reads the pinned objects with Git and never reads authoritative bytes
+from the dirty worktree.
 
 This is `CANDIDATE_NOT_MATERIALIZED_NOT_REMEDIATED`. No upstream source or
-dependency has been changed. Pinned-package-manager lock generation, a
-scripts-disabled frozen install, a production audit with zero high findings,
-tests/build, and independent review remain closed gates.
+dependency has been changed by this public candidate. The observed lock binding
+is not accepted as provenance or remediation by static byte validation.
+Fresh pinned-package-manager regeneration, a scripts-disabled frozen install,
+a production audit with zero high findings, tests/build, and independent review
+remain closed gates.
 
 Local Wrangler/workerd is not supported Proxmox production-hosting evidence.
 No provider deployment, private Context transfer, production Promotion or Public
