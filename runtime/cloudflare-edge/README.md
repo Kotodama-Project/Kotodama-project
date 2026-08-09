@@ -14,9 +14,11 @@ Proxmox segmented profile.
   Cloudflare Access/Tunnel candidate is not independently verified.
 
 The Worker exposes `/healthz`, `/version`, `GET /voice/review`, and
-`POST /voice/review/{safe-document-id}`. Voice routes require a valid RS256
-Cloudflare Access JWT with an exact issuer and audience. Missing, malformed,
-forged, expired, not-yet-valid, or wrong-audience JWTs fail closed.
+`POST /voice/review/{safe-document-id}`. Every route requires both the exact
+bound preview hostname and a valid RS256 Cloudflare Access JWT with an exact
+issuer and audience. Missing, malformed, forged, expired, not-yet-valid, or
+wrong-audience JWTs fail closed. A different host, including a base
+`workers.dev` or version-origin hostname, is denied before any upstream fetch.
 
 The Voice route can call only the configured HTTPS Context Gateway origin:
 
@@ -40,11 +42,14 @@ deployment environment. Values must not be committed or printed:
 
 - `ACCESS_ISSUER`: exact HTTPS Cloudflare Access issuer origin;
 - `ACCESS_AUD`: exact Access application audience;
+- `PREVIEW_HOST`: exact Access-protected aliased preview hostname, without a
+  scheme or path;
 - `CONTEXT_GATEWAY_ORIGIN`: exact HTTPS Context Gateway origin;
 - `CONTEXT_GATEWAY_CLIENT_ID`: Access service-token client identifier;
 - `CONTEXT_GATEWAY_CLIENT_SECRET`: Access service-token secret.
 
-If any value is absent or malformed, Voice routes return `503`. Uploading code
+If any value is absent or malformed, all routes return `503`; a host mismatch
+returns `403`, and an invalid Access assertion returns `401`. Uploading code
 does not by itself configure Access, Tunnel, the Context Gateway, or these
 runtime values.
 
@@ -70,11 +75,14 @@ mutable default-branch name during the run. Candidate Python or tests are not
 executed in that unprivileged validation job. After Environment approval, the
 upload job repeats the exact remote-tip check before Wrangler runs, closing
 branch-advance drift during the approval wait. It can upload a preview version
-only after a manual dispatch from `main` and approval by the
+with the deterministic `voice-review` preview alias only after a manual
+dispatch from `main` and approval by the
 `cloudflare-preview` GitHub Environment. It does not deploy a production route.
 
 The trusted validator checks the default configuration and every named
-environment for forbidden provider/data bindings. A preview-only R2, KV, AI,
+environment for forbidden provider/data bindings. The default and preview
+environments disable the base `workers.dev` route; only preview URLs are
+explicitly enabled for the preview environment. A preview-only R2, KV, AI,
 service, route, or similar binding is refused, and an environment-specific
 observability/logging override must remain disabled until provider retention
 has separate evidence. It also requires the Access verification, exact two

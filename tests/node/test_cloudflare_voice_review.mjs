@@ -89,6 +89,7 @@ function env() {
     PUBLIC_BETA_STATUS: "NO_GO_UNPUBLISHED",
     ACCESS_ISSUER: ISSUER,
     ACCESS_AUD: AUDIENCE,
+    PREVIEW_HOST: "preview.example.test",
     CONTEXT_GATEWAY_ORIGIN: GATEWAY,
     CONTEXT_GATEWAY_CLIENT_ID: "synthetic-client-id",
     CONTEXT_GATEWAY_CLIENT_SECRET: "synthetic-client-secret",
@@ -147,19 +148,50 @@ test("missing, forged, and expired Access JWTs deny direct origin access", async
     return Response.json(projection());
   });
 
-  const missing = await worker.fetch(new Request("https://direct.example/voice/review"), env());
+  const missing = await worker.fetch(new Request("https://preview.example.test/voice/review"), env());
   assert.equal(missing.status, 401);
   const forged = await worker.fetch(
-    withJwt("https://direct.example/voice/review", "a.b.c"),
+    withJwt("https://preview.example.test/voice/review", "a.b.c"),
     env(),
   );
   assert.equal(forged.status, 401);
   const expired = await worker.fetch(
-    withJwt("https://direct.example/voice/review", await token({ exp: 1 })),
+    withJwt("https://preview.example.test/voice/review", await token({ exp: 1 })),
     env(),
   );
   assert.equal(expired.status, 401);
+  const direct = await worker.fetch(
+    withJwt("https://worker-version.workers.dev/voice/review", await token()),
+    env(),
+  );
+  assert.equal(direct.status, 403);
   assert.equal(gatewayCalls, 0);
+});
+
+test("health and version surfaces require Access and exact preview host", async () => {
+  __testing.reset();
+  const { jwk, token } = await signingFixture();
+  __testing.setFetch(async (request) => {
+    const value = request instanceof Request ? request : new Request(request);
+    assert.equal(value.url, `${ISSUER}/cdn-cgi/access/certs`);
+    return Response.json({ keys: [jwk] });
+  });
+
+  const unauthenticated = await worker.fetch(
+    new Request("https://preview.example.test/healthz"),
+    env(),
+  );
+  assert.equal(unauthenticated.status, 401);
+  const direct = await worker.fetch(
+    withJwt("https://worker-version.workers.dev/version", await token()),
+    env(),
+  );
+  assert.equal(direct.status, 403);
+  const authorized = await worker.fetch(
+    withJwt("https://preview.example.test/healthz", await token()),
+    env(),
+  );
+  assert.equal(authorized.status, 200);
 });
 
 test("review actions are bounded and forwarded only to the Context Gateway", async () => {
@@ -207,6 +239,30 @@ test("raw Voice, transcript, credential, and corpus fields fail closed", async (
     );
     assert.equal(response.status, 502, forbidden);
     assert.equal(JSON.stringify(await response.json()).includes("must-not-cross"), false);
+  }
+});
+
+test("schema drift and empty required sections fail closed", async () => {
+  for (const invalid of [
+    { schema_version: "2.0.0" },
+    { route: "cloudflare_os->search" },
+    { decisions: [] },
+    { todos: [] },
+    { open_questions: [] },
+    { speaker_highlights: [] },
+  ]) {
+    __testing.reset();
+    const { jwk, token } = await signingFixture();
+    __testing.setFetch(async (request) => {
+      const value = request instanceof Request ? request : new Request(request);
+      if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
+      return Response.json(projection(invalid));
+    });
+    const response = await worker.fetch(
+      withJwt("https://preview.example.test/voice/review", await token()),
+      env(),
+    );
+    assert.equal(response.status, 502, JSON.stringify(invalid));
   }
 });
 

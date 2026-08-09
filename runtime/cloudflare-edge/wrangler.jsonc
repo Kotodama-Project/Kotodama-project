@@ -20,7 +20,7 @@
   "env": {
     "preview": {
       "name": "kotodama-edge-preview-candidate",
-      "workers_dev": true,
+      "workers_dev": false,
       "preview_urls": true,
       "vars": {
         "DEPLOYMENT_STAGE": "preview-candidate",

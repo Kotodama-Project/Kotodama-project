@@ -65,9 +65,23 @@ function normalizedHttpsOrigin(value) {
   }
 }
 
+function normalizedHostname(value) {
+  if (typeof value !== "string" || value.length > 253) return null;
+  const candidate = value.trim().toLowerCase();
+  if (!candidate || candidate !== value || candidate.includes(":")) return null;
+  try {
+    const url = new URL(`https://${candidate}`);
+    if (url.hostname !== candidate || url.port || url.pathname !== "/") return null;
+    return candidate;
+  } catch {
+    return null;
+  }
+}
+
 function runtimeConfig(env) {
   const issuer = normalizedHttpsOrigin(env?.ACCESS_ISSUER);
   const gateway = normalizedHttpsOrigin(env?.CONTEXT_GATEWAY_ORIGIN);
+  const previewHost = normalizedHostname(env?.PREVIEW_HOST);
   const audience = typeof env?.ACCESS_AUD === "string" ? env.ACCESS_AUD.trim() : "";
   const clientId = typeof env?.CONTEXT_GATEWAY_CLIENT_ID === "string"
     ? env.CONTEXT_GATEWAY_CLIENT_ID.trim()
@@ -78,6 +92,7 @@ function runtimeConfig(env) {
   if (
     !issuer
     || !gateway
+    || !previewHost
     || !audience
     || audience.length > 1024
     || !clientId
@@ -85,7 +100,7 @@ function runtimeConfig(env) {
     || clientId.length > 4096
     || clientSecret.length > 4096
   ) return null;
-  return { issuer, gateway, audience, clientId, clientSecret };
+  return { issuer, gateway, previewHost, audience, clientId, clientSecret };
 }
 
 function decodeBase64url(value) {
@@ -201,7 +216,7 @@ function hasForbiddenGatewayKey(value) {
 }
 
 function projectItems(value) {
-  if (!Array.isArray(value) || value.length > 100) return null;
+  if (!Array.isArray(value) || !value.length || value.length > 100) return null;
   const result = [];
   for (const item of value) {
     if (!item || typeof item !== "object" || typeof item.summary !== "string") return null;
@@ -226,6 +241,8 @@ function sanitizeProjection(value) {
   if (!value || typeof value !== "object" || hasForbiddenGatewayKey(value)) return null;
   if (
     value.schema !== "kotodama.cloudflare_os.authorized_voice_projection"
+    || value.schema_version !== "1.0.0"
+    || value.route !== "cloudflare_os->context_gateway"
     || value.authority !== "candidate_only"
     || value.data_class !== "authorized_voice_handoff_projection"
     || value.raw_audio_transferred !== false
@@ -357,7 +374,15 @@ async function gatewayReadback(request, config, pathname) {
 }
 
 async function evaluate(request, env) {
-  const { pathname } = new URL(request.url);
+  const url = new URL(request.url);
+  const { pathname } = url;
+  const config = runtimeConfig(env);
+  if (!config) return deny("runtime_configuration_denied", 503);
+  if (url.hostname.toLowerCase() !== config.previewHost) {
+    return deny("direct_origin_denied", 403);
+  }
+  const identity = await accessIdentity(request, config);
+  if (!identity) return deny("access_denied", 401);
   if (pathname === "/healthz" || pathname === "/version") {
     if (request.method !== "GET" && request.method !== "HEAD") {
       return deny("method_not_allowed", 405);
@@ -368,10 +393,6 @@ async function evaluate(request, env) {
     return request.method === "HEAD" ? new Response(null, { status: 200, headers: JSON_HEADERS }) : json(body);
   }
   if (!pathname.startsWith("/voice/review")) return deny("not_found", 404);
-  const config = runtimeConfig(env);
-  if (!config) return deny("runtime_configuration_denied", 503);
-  const identity = await accessIdentity(request, config);
-  if (!identity) return deny("access_denied", 401);
   return gatewayReadback(request, config, pathname);
 }
 
