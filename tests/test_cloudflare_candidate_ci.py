@@ -30,9 +30,11 @@ class CloudflareCandidateCIContractTests(unittest.TestCase):
         self.assertIn("tests.test_cloudflare_edge_candidate", workflow)
         self.assertIn("tests.test_cloudflare_os_candidate", workflow)
         self.assertIn("tests.test_cloudflare_os_local_runtime_evaluation", workflow)
+        self.assertIn("tests.test_cloudflare_os_security_overlay", workflow)
         self.assertIn("validate_cloudflare_edge_candidate.py --root .", workflow)
         self.assertIn("validate_cloudflare_os_candidate.py", workflow)
         self.assertIn("validate_cloudflare_os_local_runtime_evaluation.py --json", workflow)
+        self.assertIn("validate_cloudflare_os_security_candidate.py", workflow)
         self.assertIn("git status --porcelain", workflow)
 
         forbidden = (

@@ -18,6 +18,8 @@ python tools/validate_cloudflare_os_candidate.py
 python -m unittest tests.test_cloudflare_os_candidate -v
 python tools/validate_cloudflare_os_local_runtime_evaluation.py
 python -m unittest tests.test_cloudflare_os_local_runtime_evaluation -v
+python tools/validate_cloudflare_os_security_candidate.py
+python -m unittest tests.test_cloudflare_os_security_overlay -v
 ```
 
 These validation commands read local candidate files and run synthetic
@@ -37,6 +39,9 @@ This is `PASS_LOCAL_RUNTIME_WITH_GAPS`, not provider or production readiness.
 Six P1 findings remain, including the pending independent upstream drift review,
 one high `nanoid` advisory, Windows-only compatibility mitigation, unproven
 observability retention/readback, provider E2E, and supply attestation signature.
+The security-overlay candidate deterministically maps the pinned Git blobs to a
+parent-scoped `nanoid` 3.3.17 override and expected lock bytes, but it has not
+been materialized with the pinned package manager and is not remediation proof.
 
 Cloudflare OS is an early-access AI productivity environment, not a traditional
 computer operating system. Kotodama adopts it as a bounded workspace/Gadget/

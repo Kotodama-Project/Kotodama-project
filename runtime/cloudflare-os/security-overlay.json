@@ -1,0 +1,110 @@
+{
+  "kind": "kotodama/cloudflare-os-security-overlay/v1",
+  "status": "CANDIDATE_NOT_MATERIALIZED_NOT_REMEDIATED",
+  "observed_at": "2026-08-09T02:45:00Z",
+  "source": {
+    "pinned_core": {
+      "commit": "bf7f762d7fa73553284d731ab6a978d3ea17be24",
+      "tree": "023da57719fa9744a4ca909f9c3863c93cb614fa"
+    },
+    "current_core_observation": {
+      "commit": "1cb5e3d9096589e38f3fcfaf3f2191aa95a4c592",
+      "tree": "2f1eb7b69cf6cbc0e0da159bf2cd09ef9a2ce7e7",
+      "still_vulnerable": true
+    },
+    "workspace": {
+      "path": "pnpm-workspace.yaml",
+      "blob_oid": "a6d915454aad18b607cd5242b7c8e31369cd248d",
+      "canonical_sha256": "ce7204ec08398d097c98b3b4f953d5a80e6d0572ffd848b77c70def1e2976843",
+      "canonical_bytes": 1066,
+      "line_endings": "LF"
+    },
+    "lock": {
+      "path": "pnpm-lock.yaml",
+      "blob_oid": "df0720a64cbda3efbc598fcbfdef2c7bf8977edc",
+      "canonical_sha256": "efd6eb15379a2d02b1bdf0db776c50d421193ef78199baa043f93d99a1307258",
+      "canonical_bytes": 285775,
+      "line_endings": "LF"
+    },
+    "target_integrity_reference": {
+      "repository": "cloudflare/cloudflare-os-starter",
+      "commit": "9c18a2e8b0c3741e5f4813546bbf24be5bbb98ee",
+      "tree": "9d34f65f4f34b98febc57f8da86cfc045da0736e",
+      "path": "pnpm-lock.yaml",
+      "blob_oid": "784ad17e03f89902eaaf611eba10635ba941933d",
+      "canonical_sha256": "48154f079d3710a518878a29a1a149c037f39a15e0fd03f4dd325c508fefecfc"
+    }
+  },
+  "graph": {
+    "package": "nanoid",
+    "installed_version": "3.3.16",
+    "parent_package": "postcss",
+    "parent_version": "8.5.25",
+    "route_tail": "vite",
+    "affected_paths": 19,
+    "unique_projects": 18,
+    "package_path_multiset_sha256": "1d4a74b72bd8d7decd26c2a7c1fbb7786017ad35a385f4360f0762618b25d326",
+    "advisory": {
+      "id": "GHSA-2v37-7h3g-55p8",
+      "severity": "high",
+      "vulnerable_range": "<3.3.17",
+      "url": "https://github.com/advisories/GHSA-2v37-7h3g-55p8"
+    }
+  },
+  "remediation": {
+    "strategy": "ROOT_PARENT_SCOPED_PNPM_OVERRIDE_AND_GENERATED_FROZEN_LOCK",
+    "selector": "postcss@8.5.25>nanoid",
+    "target_version": "3.3.17",
+    "package_manager": "pnpm@11.9.0",
+    "old_integrity": "sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==",
+    "new_integrity": "sha512-xQLf0A3HOMlgHq0n247/LRuAOYmB7dXJ/DvAxGvsSBij45XtBSmQycu+F8ODbHwns/XyFZagyL1+J0Offw1E0g==",
+    "ambient_latest_allowed": false,
+    "manual_lock_edit_accepted": false,
+    "expected_input": {
+      "workspace_override": 0,
+      "lock_override": 0,
+      "vulnerable_lock_markers": 4,
+      "target_lock_markers": 0
+    },
+    "expected_output": {
+      "workspace_override": 1,
+      "lock_override": 1,
+      "vulnerable_lock_markers": 0,
+      "target_lock_markers": 4,
+      "workspace_canonical_sha256": "2394064336fd20e2bfa43b9d2c23010d67534b346c8db153f40144f0603bf46e",
+      "workspace_bytes": 1100,
+      "lock_canonical_sha256": "31d60679f37363626c78668ad25136854f4f31d63ec5e30c8d4c85d070b966e7",
+      "lock_bytes": 285809
+    }
+  },
+  "gates": {
+    "preflight": true,
+    "materialized": false,
+    "pinned_pnpm_11_9": false,
+    "generated_lock_verified": false,
+    "frozen_lock_install_ignore_scripts": false,
+    "production_audit_zero_high": false,
+    "focused_tests_and_build": false,
+    "independent_review": false
+  },
+  "effects": {
+    "dependency_update": 0,
+    "source_write": 0,
+    "install": 0,
+    "provider_call": 0,
+    "workflow_run": 0,
+    "deploy": 0,
+    "merge": 0,
+    "promotion": 0,
+    "current_truth_change": 0
+  },
+  "unproven": [
+    "generated lock parity under pinned pnpm 11.9.0",
+    "frozen-lock install with lifecycle scripts disabled",
+    "production dependency audit with zero high findings",
+    "Cloudflare OS tests and build after materialization",
+    "independent review of exact candidate bytes",
+    "provider deployment or production remediation"
+  ],
+  "public_beta": "NO_GO_UNPUBLISHED"
+}

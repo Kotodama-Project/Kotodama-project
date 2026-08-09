@@ -44,6 +44,7 @@ jobs:
           tests.test_cloudflare_edge_candidate
           tests.test_cloudflare_os_candidate
           tests.test_cloudflare_os_local_runtime_evaluation
+          tests.test_cloudflare_os_security_overlay
           -v
 
       - name: Run fail-closed candidate validators
@@ -53,6 +54,7 @@ jobs:
           python tools/validate_cloudflare_edge_candidate.py --root .
           python tools/validate_cloudflare_os_candidate.py
           python tools/validate_cloudflare_os_local_runtime_evaluation.py --json
+          python tools/validate_cloudflare_os_security_candidate.py
 
       - name: Refuse validator side effects
         shell: bash

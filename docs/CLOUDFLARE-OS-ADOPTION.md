@@ -5,7 +5,7 @@ Kotodama adopts two related but distinct Cloudflare planes.
 | Plane | Adopted role | Current public evidence | Not proven |
 |---|---|---|---|
 | Cloudflare edge | Bounded public ingress and application delivery through Workers and Access | content-free `/healthz` and `/version` candidate, exact Wrangler binding, manual preview-upload workflow candidate | upload, route, origin, production traffic, provider log retention, independent review, Public Beta |
-| Official Cloudflare OS | AI workspace, sandboxed Gadget application, Blueprint, and capability-based Gatekeeper foundation | exact official starter/core source pin, metadata-only Gatekeeper projections, and a content-free local runtime receipt with 1060 passing tests | independent drift review, open high advisory, provider entitlement, Dynamic Worker provider execution, private Context, backup/restore, production |
+| Official Cloudflare OS | AI workspace, sandboxed Gadget application, Blueprint, and capability-based Gatekeeper foundation | exact official starter/core source pin, metadata-only Gatekeeper projections, a content-free local runtime receipt with 1060 passing tests, and a deterministic security-overlay preflight | materialized high-advisory remediation, independent drift review, provider entitlement, Dynamic Worker provider execution, private Context, backup/restore, production |
 | Proxmox | Protected local compute, storage, search and service runtime | lifecycle/profile documentation and historical local evidence outside this public candidate | current live topology and deployment parity in this repository |
 | BecomeOne / Human Intent | Decision, Work Order, Promotion and Current Truth authority | public Company governance contracts | canonical adoption or live authority execution |
 | Context Gateway | Default-deny Authorized Corpus query authority | architecture and adapter contract | real provider-to-local search E2E |
@@ -67,6 +67,34 @@ The following gates remain before provider evaluation:
 5. set an exact paid-plan budget, quota, billing owner and automatic stop;
 6. keep data public/synthetic/content-free and produce provider readback,
    rollback, and deletion evidence under a separate Work Order.
+
+## High-advisory remediation preflight
+
+[`runtime/cloudflare-os/security-overlay.json`](../runtime/cloudflare-os/security-overlay.json)
+binds the vulnerable production graph to the pinned core Git tree and two exact
+Git blobs. It proposes only the parent-scoped root override
+`postcss@8.5.25>nanoid: 3.3.17`, an exact `pnpm@11.9.0`, and a generated frozen
+lock. The byte transformer reads canonical LF bytes and refuses CRLF,
+already-applied overlays, marker drift, integrity drift, global overrides,
+ambient latest, manual-lock acceptance, or any effect/Public GO overclaim.
+
+Validate the public contract:
+
+```powershell
+python -m unittest tests.test_cloudflare_os_security_overlay -v
+python tools/validate_cloudflare_os_security_candidate.py
+```
+
+The first command covers the deterministic transform and negative cases. The
+second validates the public spec only. A local reviewer may additionally pass a
+trusted official core checkout with `--core-repo`; the validator reads the
+pinned objects with Git and never reads authoritative bytes from the dirty
+worktree.
+
+This is `CANDIDATE_NOT_MATERIALIZED_NOT_REMEDIATED`. No upstream source or
+dependency has been changed. Pinned-package-manager lock generation, a
+scripts-disabled frozen install, a production audit with zero high findings,
+tests/build, and independent review remain closed gates.
 
 Local Wrangler/workerd is not supported Proxmox production-hosting evidence.
 No provider deployment, private Context transfer, production Promotion or Public
