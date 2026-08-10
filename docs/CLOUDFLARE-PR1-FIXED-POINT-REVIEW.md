@@ -103,7 +103,10 @@ The following checks were run against the local successor working tree:
 
 - 19 focused Python tests for the trusted validator and CI contract: PASS;
 - direct trusted-validator execution: PASS;
-- 5 Node Worker contract tests with local Node `v25.5.0`: PASS;
+- 5 Node Worker contract tests with exact Node `v24.14.0`: PASS; the official
+  Windows x64 archive SHA-256
+  `313fa40c0d7b18575821de8cb17483031fe07d95de5994f6f435f3b345f85c66`
+  matched Node's published `SHASUMS256.txt` before execution;
 - complete Python suite, 584 tests: PASS with one Windows symlink-privilege
   skip;
 - exact Wrangler `4.120.0` npm tarball: recorded SHA-512 integrity and SHA-1
@@ -111,12 +114,12 @@ The following checks were run against the local successor working tree:
   strict, provisioning, and auto-create options used by the workflow;
 - Python compilation and `git diff --check`: PASS.
 
-The local Node result is compatibility evidence, not exact hosted Node 24
-evidence. The first full-suite run exposed a stale closed `.gitattributes`
-expectation; the allowed set was updated without weakening the exact-set check,
-and the complete suite then passed. The final handoff must bind these results to
-the exact successor commit and tree before this local candidate is proposed for
-the public PR.
+The exact local Node result matches the hosted runtime pin but does not replace
+an exact-head hosted check. The first full-suite run exposed a stale closed
+`.gitattributes` expectation; the allowed set was updated without weakening the
+exact-set check, and the complete suite then passed. The final handoff must bind
+these results to the exact successor commit and tree before this local candidate
+is proposed for the public PR.
 
 ## Remaining gates
 
