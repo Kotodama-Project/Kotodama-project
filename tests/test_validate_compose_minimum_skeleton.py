@@ -28,11 +28,22 @@ class ComposeMinimumSkeletonValidatorCliTests(unittest.TestCase):
         self.assertEqual(
             rules,
             {
+                ".gitattributes text eol=lf",
+                ".github/workflows/cloudflare-candidate-validation.yml text eol=lf",
+                ".github/workflows/cloudflare-edge-preview.yml text eol=lf",
+                "docs/CLOUDFLARE-PR1-FIXED-POINT-REVIEW.md text eol=lf",
                 "runtime/compose-minimum/README.md text eol=lf",
                 "runtime/compose-minimum/compose.yaml text eol=lf",
                 "runtime/compose-minimum/company-db/001-company-core.sql text eol=lf",
                 "runtime/compose-minimum/evidence-store/001-evidence-core.sql text eol=lf",
+                "runtime/cloudflare-edge/README.md text eol=lf",
+                "runtime/cloudflare-edge/src/index.js text eol=lf",
+                "runtime/cloudflare-edge/wrangler-integrity.json text eol=lf",
+                "runtime/cloudflare-edge/wrangler.jsonc text eol=lf",
+                "tests/node/test_cloudflare_voice_review.mjs text eol=lf",
+                "tests/test_cloudflare_edge_candidate.py text eol=lf",
                 "tools/cfos_pnpm_runtime_windows_shim.cs text eol=lf",
+                "tools/validate_cloudflare_edge_candidate.py text eol=lf",
             },
         )
 

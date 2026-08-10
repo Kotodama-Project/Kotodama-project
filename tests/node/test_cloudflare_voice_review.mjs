@@ -1,285 +1,105 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import test from "node:test";
 
-import worker, { __testing } from "../../runtime/cloudflare-edge/src/index.js";
+import worker from "../../runtime/cloudflare-edge/src/index.js";
 
+const ENV = {
+  DEPLOYMENT_STAGE: "preview-candidate",
+  PUBLIC_BETA_STATUS: "NO_GO_UNPUBLISHED",
+};
 
-const ISSUER = "https://team.cloudflareaccess.com";
-const AUDIENCE = "audience-test";
-const GATEWAY = "https://gateway.example.test";
-
-async function signingFixture() {
-  const keyPair = await crypto.subtle.generateKey(
-    {
-      name: "RSASSA-PKCS1-v1_5",
-      modulusLength: 2048,
-      publicExponent: new Uint8Array([1, 0, 1]),
-      hash: "SHA-256",
-    },
-    true,
-    ["sign", "verify"],
-  );
-  const jwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-  jwk.kid = "kid-test";
-  jwk.alg = "RS256";
-  jwk.use = "sig";
-
-  async function token(overrides = {}) {
-    const now = Math.floor(Date.now() / 1000);
-    const header = { alg: "RS256", kid: "kid-test", typ: "JWT" };
-    const payload = {
-      iss: ISSUER,
-      aud: AUDIENCE,
-      sub: "reviewer-synthetic",
-      email: "reviewer@example.test",
-      iat: now - 1,
-      nbf: now - 1,
-      exp: now + 300,
-      ...overrides,
-    };
-    const encoded = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`;
-    const signature = await crypto.subtle.sign(
-      "RSASSA-PKCS1-v1_5",
-      keyPair.privateKey,
-      new TextEncoder().encode(encoded),
-    );
-    return `${encoded}.${base64url(new Uint8Array(signature))}`;
-  }
-  return { jwk, token };
+async function body(response) {
+  return JSON.parse(await response.text());
 }
 
-function base64url(value) {
-  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-}
-
-function projection(extra = {}) {
-  return {
-    schema: "kotodama.cloudflare_os.authorized_voice_projection",
-    schema_version: "1.0.0",
-    route: "cloudflare_os->context_gateway",
-    data_class: "authorized_voice_handoff_projection",
-    authority: "candidate_only",
-    overview: "Synthetic overview.",
-    speaker_highlights: [{ summary: "A highlight.", speaker_ref: "speaker-a" }],
-    decisions: [{ summary: "Keep preview private." }],
-    todos: [{ summary: "Run checks.", owner: "speaker-a", due: "2026-08-10" }],
-    open_questions: [{ summary: "Who gives Final GO?" }],
-    evidence_pointers: [`urn:kotodama:evidence:sha256:${"a".repeat(64)}`],
-    human_review: {
-      required: true,
-      state: "pending",
-      actions: ["accept", "edit", "reject"],
-    },
-    raw_audio_transferred: false,
-    private_transcript_transferred: false,
-    context_gateway_bypass: false,
-    promotion: false,
-    current_truth_mutation: false,
-    public_beta: "NO_GO_UNPUBLISHED",
-    ...extra,
-  };
-}
-
-function env() {
-  return {
-    DEPLOYMENT_STAGE: "preview-candidate",
-    PUBLIC_BETA_STATUS: "NO_GO_UNPUBLISHED",
-    ACCESS_ISSUER: ISSUER,
-    ACCESS_AUD: AUDIENCE,
-    PREVIEW_HOST: "preview.example.test",
-    CONTEXT_GATEWAY_ORIGIN: GATEWAY,
-    CONTEXT_GATEWAY_CLIENT_ID: "synthetic-client-id",
-    CONTEXT_GATEWAY_CLIENT_SECRET: "synthetic-client-secret",
-  };
-}
-
-function withJwt(url, jwt, init = {}) {
-  return new Request(url, {
-    ...init,
-    headers: {
-      ...(init.headers ?? {}),
-      "cf-access-jwt-assertion": jwt,
-    },
-  });
-}
-
-test("Access-verified review readback can only come through Context Gateway", async () => {
-  __testing.reset();
-  const { jwk, token } = await signingFixture();
-  const jwt = await token();
-  const calls = [];
-  __testing.setFetch(async (request) => {
-    const value = request instanceof Request ? request : new Request(request);
-    calls.push(value);
-    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) {
-      return Response.json({ keys: [jwk] });
-    }
-    assert.equal(value.url, `${GATEWAY}/v1/voice/handoffs?q=synthetic`);
-    assert.equal(value.headers.get("cf-access-client-id"), "synthetic-client-id");
-    assert.equal(value.headers.get("cf-access-client-secret"), "synthetic-client-secret");
-    return Response.json(projection());
-  });
-
-  const response = await worker.fetch(
-    withJwt("https://preview.example.test/voice/review?q=synthetic", jwt),
-    env(),
-  );
-  const body = await response.json();
-  assert.equal(response.status, 200);
-  assert.equal(calls.length, 2);
-  assert.equal(body.authority, "candidate_only");
-  assert.equal(body.context_gateway_bypass, false);
-  assert.equal(body.raw_audio_transferred, false);
-  assert.equal(body.private_transcript_transferred, false);
-  assert.equal(JSON.stringify(body).includes("synthetic-client-secret"), false);
-});
-
-test("missing, forged, and expired Access JWTs deny direct origin access", async () => {
-  __testing.reset();
-  const { jwk, token } = await signingFixture();
-  let gatewayCalls = 0;
-  __testing.setFetch(async (request) => {
-    const value = request instanceof Request ? request : new Request(request);
-    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
-    gatewayCalls += 1;
-    return Response.json(projection());
-  });
-
-  const missing = await worker.fetch(new Request("https://preview.example.test/voice/review"), env());
-  assert.equal(missing.status, 401);
-  const forged = await worker.fetch(
-    withJwt("https://preview.example.test/voice/review", "a.b.c"),
-    env(),
-  );
-  assert.equal(forged.status, 401);
-  const expired = await worker.fetch(
-    withJwt("https://preview.example.test/voice/review", await token({ exp: 1 })),
-    env(),
-  );
-  assert.equal(expired.status, 401);
-  const direct = await worker.fetch(
-    withJwt("https://worker-version.workers.dev/voice/review", await token()),
-    env(),
-  );
-  assert.equal(direct.status, 403);
-  assert.equal(gatewayCalls, 0);
-});
-
-test("health and version surfaces require Access and exact preview host", async () => {
-  __testing.reset();
-  const { jwk, token } = await signingFixture();
-  __testing.setFetch(async (request) => {
-    const value = request instanceof Request ? request : new Request(request);
-    assert.equal(value.url, `${ISSUER}/cdn-cgi/access/certs`);
-    return Response.json({ keys: [jwk] });
-  });
-
-  const unauthenticated = await worker.fetch(
+test("the content-free preview exposes only health and version", async () => {
+  const health = await worker.fetch(
     new Request("https://preview.example.test/healthz"),
-    env(),
+    ENV,
   );
-  assert.equal(unauthenticated.status, 401);
-  const direct = await worker.fetch(
-    withJwt("https://worker-version.workers.dev/version", await token()),
-    env(),
-  );
-  assert.equal(direct.status, 403);
-  const authorized = await worker.fetch(
-    withJwt("https://preview.example.test/healthz", await token()),
-    env(),
-  );
-  assert.equal(authorized.status, 200);
-});
-
-test("review actions are bounded and forwarded only to the Context Gateway", async () => {
-  __testing.reset();
-  const { jwk, token } = await signingFixture();
-  const jwt = await token();
-  let observed;
-  __testing.setFetch(async (request) => {
-    const value = request instanceof Request ? request : new Request(request);
-    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
-    observed = value;
-    return Response.json(projection({ human_review: {
-      required: true,
-      state: "accepted",
-      actions: ["accept", "edit", "reject"],
-    } }));
+  assert.equal(health.status, 200);
+  assert.deepEqual(await body(health), {
+    ok: true,
+    surface: "cloudflare-edge-candidate",
+    public_beta: "NO_GO_UNPUBLISHED",
   });
 
-  const response = await worker.fetch(
-    withJwt("https://preview.example.test/voice/review/doc-safe-1", jwt, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "accept" }),
-    }),
-    env(),
+  const version = await worker.fetch(
+    new Request("https://preview.example.test/version"),
+    ENV,
   );
-  assert.equal(response.status, 200);
-  assert.equal(observed.url, `${GATEWAY}/v1/voice/handoffs/doc-safe-1/review`);
-  assert.equal(observed.method, "POST");
-  assert.deepEqual(await observed.clone().json(), { action: "accept" });
+  assert.equal(version.status, 200);
+  assert.deepEqual(await body(version), {
+    ok: true,
+    stage: "preview-candidate",
+    public_beta: "NO_GO_UNPUBLISHED",
+  });
+
+  const head = await worker.fetch(
+    new Request("https://preview.example.test/healthz", { method: "HEAD" }),
+    ENV,
+  );
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "");
 });
 
-test("raw Voice, transcript, credential, and corpus fields fail closed", async () => {
-  for (const forbidden of ["raw_audio", "private_transcript", "credential", "private_corpus"]) {
-    __testing.reset();
-    const { jwk, token } = await signingFixture();
-    __testing.setFetch(async (request) => {
-      const value = request instanceof Request ? request : new Request(request);
-      if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
-      return Response.json(projection({ [forbidden]: "must-not-cross" }));
-    });
-    const response = await worker.fetch(
-      withJwt("https://preview.example.test/voice/review", await token()),
-      env(),
-    );
-    assert.equal(response.status, 502, forbidden);
-    assert.equal(JSON.stringify(await response.json()).includes("must-not-cross"), false);
-  }
-});
-
-test("schema drift and empty required sections fail closed", async () => {
-  for (const invalid of [
-    { schema_version: "2.0.0" },
-    { route: "cloudflare_os->search" },
-    { decisions: [] },
-    { todos: [] },
-    { open_questions: [] },
-    { speaker_highlights: [] },
+test("Voice, Context Gateway, and unknown paths remain unavailable", async () => {
+  for (const path of [
+    "/voice/review",
+    "/voice/review/doc-safe-1",
+    "/context",
+    "/search",
   ]) {
-    __testing.reset();
-    const { jwk, token } = await signingFixture();
-    __testing.setFetch(async (request) => {
-      const value = request instanceof Request ? request : new Request(request);
-      if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
-      return Response.json(projection(invalid));
-    });
     const response = await worker.fetch(
-      withJwt("https://preview.example.test/voice/review", await token()),
-      env(),
+      new Request(`https://preview.example.test${path}`),
+      ENV,
     );
-    assert.equal(response.status, 502, JSON.stringify(invalid));
+    assert.equal(response.status, 404, path);
+    const value = await body(response);
+    assert.equal(value.error, "not_found", path);
+    assert.equal(value.public_beta, "NO_GO_UNPUBLISHED", path);
   }
 });
 
-test("unsafe gateway origin and invalid review input are denied before fetch", async () => {
-  __testing.reset();
-  const { token } = await signingFixture();
-  let calls = 0;
-  __testing.setFetch(async () => {
-    calls += 1;
-    throw new Error("must not fetch");
-  });
-  const unsafe = env();
-  unsafe.CONTEXT_GATEWAY_ORIGIN = "http://search.example.test";
+test("request bodies and mutation methods fail before route handling", async () => {
+  for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+    const response = await worker.fetch(
+      new Request("https://preview.example.test/healthz", {
+        method,
+        body: method === "DELETE" ? undefined : "synthetic-body",
+      }),
+      ENV,
+    );
+    assert.equal(response.status, 405, method);
+    assert.equal((await body(response)).error, "method_not_allowed", method);
+  }
+});
+
+test("missing or widened runtime claims fail closed", async () => {
+  for (const candidate of [
+    {},
+    { ...ENV, DEPLOYMENT_STAGE: "production" },
+    { ...ENV, PUBLIC_BETA_STATUS: "PUBLIC_BETA" },
+  ]) {
+    const response = await worker.fetch(
+      new Request("https://preview.example.test/version"),
+      candidate,
+    );
+    assert.equal(response.status, 503);
+    const value = await body(response);
+    assert.equal(value.error, "runtime_configuration_denied");
+    assert.equal(value.public_beta, "NO_GO_UNPUBLISHED");
+  }
+});
+
+test("all responses retain content-free browser safety headers", async () => {
   const response = await worker.fetch(
-    withJwt("https://preview.example.test/voice/review", await token()),
-    unsafe,
+    new Request("https://preview.example.test/not-found"),
+    ENV,
   );
-  assert.equal(response.status, 503);
-  assert.equal(calls, 0);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("content-type"), "application/json; charset=utf-8");
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.match(response.headers.get("content-security-policy"), /default-src 'none'/);
 });

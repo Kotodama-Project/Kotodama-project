@@ -53,7 +53,7 @@ jobs:
           tests.test_cloudflare_os_security_overlay
           -v
 
-      - name: Run Worker Voice review contract
+      - name: Run closed Worker surface contract
         run: node --test tests/node/test_cloudflare_voice_review.mjs
 
       - name: Run fail-closed candidate validators

@@ -4,10 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import pathlib
 import re
 import sys
+from typing import Any
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -30,15 +33,142 @@ VERIFIED_WRANGLER = {
     "slsa_predicate_type": "https://slsa.dev/provenance/v1",
     "observed_utc": "2026-08-07",
 }
+VERIFIED_CONFIG = {
+    "$schema": "../../node_modules/wrangler/config-schema.json",
+    "name": "kotodama-edge-candidate",
+    "main": "src/index.js",
+    "compatibility_date": VERIFIED_COMPATIBILITY_DATE,
+    "workers_dev": False,
+    "preview_urls": False,
+    "send_metrics": False,
+    "observability": {
+        "enabled": False,
+        "logs": {"enabled": False, "invocation_logs": False},
+    },
+    "vars": {
+        "DEPLOYMENT_STAGE": "production-disabled",
+        "PUBLIC_BETA_STATUS": "NO_GO_UNPUBLISHED",
+    },
+    "env": {
+        "preview": {
+            "name": "kotodama-edge-preview-candidate",
+            "workers_dev": False,
+            "preview_urls": True,
+            "vars": {
+                "DEPLOYMENT_STAGE": "preview-candidate",
+                "PUBLIC_BETA_STATUS": "NO_GO_UNPUBLISHED",
+            },
+        }
+    },
+}
+VERIFIED_CANONICAL_SHA256 = {
+    "runtime/cloudflare-edge/src/index.js": "c79d25133bc15826e8a9122482da2e3447cd5e487b88febdce0cab329ee9a49c",
+    "runtime/cloudflare-edge/wrangler.jsonc": "a75caf3b6cf486acdfc1d7a11dbce0734ac0473797a3c538906a0aff1c609bac",
+    "runtime/cloudflare-edge/wrangler-integrity.json": "336c93afdbc206dbe531ddd6753c9b6ca27c84484d44a61df68403c48d3b870b",
+    ".github/workflows/cloudflare-edge-preview.yml": "cdc76d861ddbc9bd02920757a14ece195dbf6ee13a7cfc6c60c0eac62cdc3f19",
+}
+PROFILE_ENTRIES = {"README.md", "src", "wrangler-integrity.json", "wrangler.jsonc"}
+SOURCE_ENTRIES = {"index.js"}
+MAX_DIRECTORY_ENTRIES = 16
+MAX_TEXT_BYTES = 131_072
+DEPLOY_CONTROL_PATHS = (
+    ".wrangler",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+    "npm-shrinkwrap.json",
+    "node_modules",
+    ".npmrc",
+)
 
 
-def load_jsonc(path: pathlib.Path) -> dict:
-    text = path.read_text(encoding="utf-8")
+class CandidateInputError(ValueError):
+    """Candidate bytes or layout could not be inspected safely."""
+
+
+def _closed_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise CandidateInputError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _bounded_canonical_text(path: pathlib.Path, limit: int = MAX_TEXT_BYTES) -> str:
+    if path.is_symlink() or not path.is_file():
+        raise CandidateInputError(f"required regular file is missing: {path.name}")
+    try:
+        with path.open("rb") as handle:
+            raw = handle.read(limit + 1)
+    except OSError as exc:
+        raise CandidateInputError(f"cannot read candidate file: {path.name}") from exc
+    if len(raw) > limit:
+        raise CandidateInputError(f"candidate file exceeds {limit} bytes: {path.name}")
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise CandidateInputError(f"candidate file is not strict UTF-8: {path.name}") from exc
+    canonical = text.replace("\r\n", "\n")
+    if "\r" in canonical:
+        raise CandidateInputError(f"candidate file contains a bare CR: {path.name}")
+    return canonical
+
+
+def _canonical_sha256(path: pathlib.Path) -> str:
+    return hashlib.sha256(_bounded_canonical_text(path).encode("utf-8")).hexdigest()
+
+
+def load_jsonc(path: pathlib.Path) -> dict[str, Any]:
+    text = _bounded_canonical_text(path, 65_536)
     text = re.sub(r"//.*$", "", text, flags=re.MULTILINE)
-    return json.loads(text)
+    try:
+        value = json.loads(text, object_pairs_hook=_closed_object)
+    except json.JSONDecodeError as exc:
+        raise CandidateInputError("cannot parse closed Wrangler JSONC") from exc
+    if not isinstance(value, dict):
+        raise CandidateInputError("Wrangler JSONC root must be an object")
+    return value
 
 
-def candidate_paths(root: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path]:
+def _load_json(path: pathlib.Path) -> dict[str, Any]:
+    try:
+        value = json.loads(
+            _bounded_canonical_text(path, 32_768),
+            object_pairs_hook=_closed_object,
+        )
+    except json.JSONDecodeError as exc:
+        raise CandidateInputError(f"cannot parse closed JSON: {path.name}") from exc
+    if not isinstance(value, dict):
+        raise CandidateInputError(f"JSON root must be an object: {path.name}")
+    return value
+
+
+def _bounded_directory_names(path: pathlib.Path) -> set[str]:
+    if path.is_symlink() or not path.is_dir():
+        raise CandidateInputError(f"required directory is missing or linked: {path.name}")
+    names: set[str] = set()
+    try:
+        with os.scandir(path) as entries:
+            for index, entry in enumerate(entries, start=1):
+                if index > MAX_DIRECTORY_ENTRIES:
+                    raise CandidateInputError(
+                        f"candidate directory exceeds {MAX_DIRECTORY_ENTRIES} entries: {path.name}"
+                    )
+                if entry.is_symlink():
+                    raise CandidateInputError(f"candidate deploy surface contains a symlink: {entry.name}")
+                names.add(entry.name)
+    except OSError as exc:
+        raise CandidateInputError(f"cannot inspect candidate directory: {path.name}") from exc
+    return names
+
+
+def candidate_paths(
+    root: pathlib.Path,
+) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path]:
     profile = root / "runtime" / "cloudflare-edge"
     return (
         profile,
@@ -49,24 +179,102 @@ def candidate_paths(root: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path, pat
     )
 
 
+def _validate_layout(root: pathlib.Path, profile: pathlib.Path) -> list[str]:
+    errors: list[str] = []
+    try:
+        if (root / "runtime").is_symlink():
+            raise CandidateInputError("runtime directory must not be a symlink")
+        profile_names = _bounded_directory_names(profile)
+        if profile_names != PROFILE_ENTRIES:
+            errors.append(
+                "Cloudflare edge profile layout drifted: "
+                f"{sorted(profile_names ^ PROFILE_ENTRIES)}"
+            )
+        source_names = _bounded_directory_names(profile / "src")
+        if source_names != SOURCE_ENTRIES:
+            errors.append(
+                "Cloudflare edge source layout drifted: "
+                f"{sorted(source_names ^ SOURCE_ENTRIES)}"
+            )
+    except CandidateInputError as exc:
+        errors.append(str(exc))
+
+    for parent in (root, root / "runtime"):
+        for relative in DEPLOY_CONTROL_PATHS:
+            path = parent / relative
+            if path.exists() or path.is_symlink():
+                errors.append(
+                    "candidate-controlled Wrangler/build path is forbidden: "
+                    f"{path.relative_to(root).as_posix()}"
+                )
+    return errors
+
+
 def validate(root: pathlib.Path = ROOT) -> list[str]:
     root = root.resolve()
     profile, config_path, worker_path, workflow_path, integrity_path = candidate_paths(root)
-    errors: list[str] = []
+    errors = _validate_layout(root, profile)
     for path in (config_path, worker_path, workflow_path, integrity_path, profile / "README.md"):
-        if not path.is_file():
-            errors.append(f"missing required file: {path.relative_to(root)}")
+        if path.is_symlink() or not path.is_file():
+            errors.append(f"missing regular required file: {path.relative_to(root)}")
     if errors:
         return errors
 
-    config = load_jsonc(config_path)
+    bound_paths = {
+        "runtime/cloudflare-edge/src/index.js": worker_path,
+        "runtime/cloudflare-edge/wrangler.jsonc": config_path,
+        "runtime/cloudflare-edge/wrangler-integrity.json": integrity_path,
+        ".github/workflows/cloudflare-edge-preview.yml": workflow_path,
+    }
+    for relative, path in bound_paths.items():
+        try:
+            observed = _canonical_sha256(path)
+        except CandidateInputError as exc:
+            errors.append(str(exc))
+            continue
+        if observed != VERIFIED_CANONICAL_SHA256[relative]:
+            errors.append(f"trusted deployment byte binding drifted: {relative}")
+
+    try:
+        config = load_jsonc(config_path)
+    except CandidateInputError as exc:
+        errors.append(str(exc))
+        config = {}
+    if config != VERIFIED_CONFIG:
+        errors.append("Wrangler config must match the closed content-free preview shape")
+
     forbidden_bindings = {
-        "ai", "ai_search", "d1_databases", "durable_objects", "kv_namespaces",
-        "queues", "r2_buckets", "routes", "services", "vectorize",
+        "ai",
+        "ai_search",
+        "analytics_engine_datasets",
+        "assets",
+        "browser",
+        "build",
+        "containers",
+        "d1_databases",
+        "dispatch_namespaces",
+        "durable_objects",
+        "hyperdrive",
+        "images",
+        "kv_namespaces",
+        "logfwdr",
+        "mtls_certificates",
+        "pipelines",
+        "queues",
+        "r2_buckets",
+        "route",
+        "routes",
+        "secrets_store_secrets",
+        "send_email",
+        "services",
+        "tail_consumers",
+        "triggers",
+        "unsafe",
+        "vectorize",
     }
     present = sorted(forbidden_bindings.intersection(config))
     if present:
-        errors.append(f"top-level provider/data bindings are forbidden: {present}")
+        errors.append(f"top-level provider/data/build bindings are forbidden: {present}")
     if config.get("workers_dev") is not False or config.get("preview_urls") is not False:
         errors.append("production/default environment must have workers_dev and preview_urls disabled")
     if config.get("send_metrics") is not False:
@@ -76,11 +284,13 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
             f"compatibility_date must equal the verified UTC-safe date {VERIFIED_COMPATIBILITY_DATE}"
         )
     observability = config.get("observability", {})
-    if observability.get("enabled") is not False:
+    if not isinstance(observability, dict) or observability.get("enabled") is not False:
         errors.append("observability must remain disabled until provider retention is verified")
-    if observability.get("logs", {}).get("enabled") is not False:
+    logs = observability.get("logs", {}) if isinstance(observability, dict) else {}
+    if not isinstance(logs, dict) or logs.get("enabled") is not False:
         errors.append("Workers logs must remain disabled until content-free readback is verified")
-    if config.get("vars", {}).get("PUBLIC_BETA_STATUS") != "NO_GO_UNPUBLISHED":
+    variables = config.get("vars", {})
+    if not isinstance(variables, dict) or variables.get("PUBLIC_BETA_STATUS") != "NO_GO_UNPUBLISHED":
         errors.append("default environment must preserve NO_GO_UNPUBLISHED")
 
     environments = config.get("env", {})
@@ -94,14 +304,18 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         environment_bindings = sorted(forbidden_bindings.intersection(environment))
         if environment_bindings:
             errors.append(
-                f"{environment_name} environment contains forbidden provider/data bindings: "
+                f"{environment_name} environment contains forbidden provider/data/build bindings: "
                 f"{environment_bindings}"
             )
 
     preview = environments.get("preview", {})
+    if not isinstance(preview, dict):
+        errors.append("preview environment must be an object")
+        preview = {}
     if preview.get("workers_dev") is not False or preview.get("preview_urls") is not True:
         errors.append("preview must disable the base workers.dev route and explicitly enable preview URLs")
-    if preview.get("vars", {}).get("PUBLIC_BETA_STATUS") != "NO_GO_UNPUBLISHED":
+    preview_vars = preview.get("vars", {})
+    if not isinstance(preview_vars, dict) or preview_vars.get("PUBLIC_BETA_STATUS") != "NO_GO_UNPUBLISHED":
         errors.append("preview environment must preserve NO_GO_UNPUBLISHED")
     preview_observability = preview.get("observability", observability)
     if not isinstance(preview_observability, dict) or preview_observability.get("enabled") is not False:
@@ -114,18 +328,29 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
     if not isinstance(preview_logs, dict) or preview_logs.get("enabled") is not False:
         errors.append("preview logs must remain disabled until content-free readback is verified")
 
-    integrity = json.loads(integrity_path.read_text(encoding="utf-8"))
+    try:
+        integrity = _load_json(integrity_path)
+    except CandidateInputError as exc:
+        errors.append(str(exc))
+        integrity = {}
     if integrity != VERIFIED_WRANGLER:
         errors.append("Wrangler supply-chain binding does not match verified 4.120.0 metadata")
 
-    worker = worker_path.read_text(encoding="utf-8")
+    try:
+        worker = _bounded_canonical_text(worker_path, 65_536)
+    except CandidateInputError as exc:
+        errors.append(str(exc))
+        worker = ""
     for forbidden in (
-        "Authorization",
+        '"/voice/review"',
+        "ACCESS_ISSUER",
+        "CONTEXT_GATEWAY",
+        "cf-access-jwt-assertion",
+        "request.arrayBuffer(",
         "request.text(",
         "request.json(",
-        "console.log",
-        "await fetch(",
-        "return fetch(",
+        "console.",
+        "fetch(",
         "SEARCH_ORIGIN",
         "VECTORIZE",
         "api.openai.com",
@@ -135,27 +360,25 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
     for required in (
         '"/healthz"',
         '"/version"',
+        '"method_not_allowed"',
+        '"runtime_configuration_denied"',
         '"not_found"',
         '"no-store"',
-        '"/voice/review"',
-        '"cf-access-jwt-assertion"',
-        "/cdn-cgi/access/certs",
-        '"RSASSA-PKCS1-v1_5"',
-        "normalizedHostname(env?.PREVIEW_HOST)",
-        '"direct_origin_denied"',
-        "normalizedHttpsOrigin(env?.CONTEXT_GATEWAY_ORIGIN)",
-        "/v1/voice/handoffs",
-        "hasForbiddenGatewayKey",
-        "raw_audio_transferred: false",
-        "private_transcript_transferred: false",
-        "context_gateway_bypass: false",
+        '"NO_GO_UNPUBLISHED"',
+        "current_truth_mutation: false",
     ):
         if required not in worker:
             errors.append(f"worker missing fail-closed marker: {required}")
-    if worker.count("await fetchImpl(new Request(") != 2:
-        errors.append("worker must have exactly two bounded fetch sites: Access JWKS and Context Gateway")
 
-    workflow = workflow_path.read_text(encoding="utf-8")
+    try:
+        workflow = _bounded_canonical_text(workflow_path)
+    except CandidateInputError as exc:
+        errors.append(str(exc))
+        workflow = ""
+    hardened_upload_command = (
+        "versions upload --config wrangler.jsonc --env preview --no-bundle --strict "
+        "--x-provision=false --x-auto-create=false"
+    )
     required_workflow = (
         "workflow_dispatch:",
         "refs/heads/main",
@@ -168,9 +391,9 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "needs: validate-candidate",
         "environment: cloudflare-preview",
         "persist-credentials: false",
-        "versions upload --env preview",
-        "--preview-alias voice-review",
+        hardened_upload_command,
         'wranglerVersion: "4.120.0"',
+        "packageManager: npm",
         "candidate_sha",
         "CLOUDFLARE_API_TOKEN",
         "CLOUDFLARE_ACCOUNT_ID",
@@ -197,6 +420,9 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "git merge-base --is-ancestor",
         "wrangler deploy",
         "versions deploy",
+        "--preview-alias",
+        "--assets",
+        "--secrets-file",
         "pull_request:",
         "push:",
         "github.event.repository.default_branch",
@@ -219,7 +445,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    errors = validate(args.root)
+    try:
+        errors = validate(args.root)
+    except (OSError, ValueError) as exc:
+        errors = [f"candidate inspection failed closed: {type(exc).__name__}"]
     report = {
         "kind": "cloudflare_edge_candidate_validation",
         "status": "PASS" if not errors else "REFUSED",
