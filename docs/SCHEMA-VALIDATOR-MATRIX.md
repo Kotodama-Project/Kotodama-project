@@ -347,6 +347,36 @@ session、host、cwd、credentialは解決・出力せず、複数candidate間�
 `jsonschema`が必要で、未導入時は`VALIDATOR_UNAVAILABLE`にfail-closedします。成功・拒否の
 どちらも `CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED`を維持します。
 
+## 14. Agent swarm execution candidate
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-agent-swarm-execution-candidate.schema.json](../schemas/company-pack-agent-swarm-execution-candidate.schema.json) | [`validate_company_pack_agent_swarm_execution_candidate.py`](../tools/validate_company_pack_agent_swarm_execution_candidate.py) | [`test_company_pack_agent_swarm_execution_candidate_contract.py`](../tests/test_company_pack_agent_swarm_execution_candidate_contract.py) | [Agent Swarm × Kotodama Adoption Candidate](AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md)。root / worker / verifier、N/C/W/V budget、parent edge、assignment identity、workspace / revision、handoff binding、lease / TTL、stop conditions の opaque plan を read-only で検査する。`PRECONDITIONS_MATCH_UNVERIFIED` は候補 bytes の構造と内部比較が整ったという意味だけで、Codex transport、subagent spawn、runtime model verification、provider / device / public effect、Human approval、Promotion、Current Truth、Public Beta GOではない。 |
+
+PowerShell:
+
+```powershell
+python tools\validate_company_pack_agent_swarm_execution_candidate.py `
+  path\to\agent-swarm-execution-candidate.json
+```
+
+POSIX:
+
+```bash
+python3 tools/validate_company_pack_agent_swarm_execution_candidate.py \
+  path/to/agent-swarm-execution-candidate.json
+```
+
+この contract は既存 v1 / route-binding schema を変更せず、public preview に bounded
+swarm の比較項目を追加します。opaque ref から thread、host、cwd、credential、raw
+prompt、private content を解決せず、複数candidate間の replay reservation、実際の child
+起動、モデル identity、handoff の送達、lease fencing を証明しません。`V` は verifier の
+予約数として記録するだけで、独立検証が実行済みという意味ではありません。schema の
+`REFUSED_UNVERIFIED` は構造上の拒否候補であり、CLI は `CANDIDATE_MARKED_REFUSED` で
+拒否します。Draft 2020-12 検証には `requirements-test.txt` の `jsonschema` が必要で、
+未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。成功・拒否のどちらも
+`CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED` を維持します。
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計

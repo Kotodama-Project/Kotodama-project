@@ -714,6 +714,7 @@ Kotodama は、初期の言葉を消すのではなく、後続の指示、実�
 - R31 record / Source Content / access evidence を照合する read-only [Source Binding Verification Candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md)
 - 将来の protected runner receipt の field を固定する unpopulated [Protected Source Binding Receipt Candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)
 - 誤送信の対照項目（source / target、workspace / revision、route、preview / confirmation）を opaque に固定する read-only [Agent Orchestration Route-Binding Candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md)。Codex transport、subagent spawn、provider / device / public send は含まない
+- 言霊の evidence chain に bounded root / worker / verifier を対応づける read-only [Agent Swarm × Kotodama Adoption Candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md)。parent edge、assignment、workspace / revision、handoff、lease、停止条件、N/C/W/V budget を比較するが、Codex spawn、subagent runtime、provider / device / public send は含まない
 
 ### 既存実装または local candidate だが、公開保証ではないもの
 
@@ -1072,6 +1073,9 @@ read-only/candidate-only公開導線であり、validatorやrunbookがPASSして
 - [Agent Orchestration Route-Binding Candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md) — source / target / resource / route / preview comparison only; no runner or send
   Schema: `schemas/company-pack-agent-orchestration-route-binding-candidate.schema.json`
   Read-only preflight: `tools/validate_company_pack_agent_orchestration_route_binding_candidate.py`
+- [Agent Swarm × Kotodama Adoption Candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) — bounded root / worker / verifier plan only; no runner or dispatch
+  Schema: `schemas/company-pack-agent-swarm-execution-candidate.schema.json`
+  Read-only preflight: `tools/validate_company_pack_agent_swarm_execution_candidate.py`
 
 ## Full review-chain smoke
 
