@@ -584,6 +584,7 @@ Kotodama は、初期の言葉を消すのではなく、後続の指示、実�
 - Human Decision 前の [Decision Record Candidate](docs/DECISION-RECORD-CANDIDATE.md)、private な [Intent Candidate Instance](docs/INTENT-CANDIDATE-INSTANCE.md)、[Source Record Instance](docs/SOURCE-RECORD-INSTANCE.md) の closed schema 契約
 - R31 record / Source Content / access evidence を照合する read-only [Source Binding Verification Candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md)
 - 将来の protected runner receipt の field を固定する unpopulated [Protected Source Binding Receipt Candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)
+- 誤送信の対照項目（source / target、workspace / revision、route、preview / confirmation）を opaque に固定する read-only [Agent Orchestration Route-Binding Candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md)。Codex transport、subagent spawn、provider / device / public send は含まない
 
 ### 既存実装または local candidate だが、公開保証ではないもの
 
@@ -939,6 +940,9 @@ read-only/candidate-only公開導線であり、validatorやrunbookがPASSして
 - [Protected Execution Request / Handoff Candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) — opaque request shape only; no runner or private evidence
   Schema: `schemas/company-pack-protected-execution-request-handoff-candidate.schema.json`
   Read-only preflight: `tools/validate_company_pack_protected_execution_request_handoff.py`
+- [Agent Orchestration Route-Binding Candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md) — source / target / resource / route / preview comparison only; no runner or send
+  Schema: `schemas/company-pack-agent-orchestration-route-binding-candidate.schema.json`
+  Read-only preflight: `tools/validate_company_pack_agent_orchestration_route_binding_candidate.py`
 
 ## Full review-chain smoke
 

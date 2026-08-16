@@ -303,6 +303,34 @@ The smoke asserts pending request state, structural item response matching, and
 false and `NO_GO_UNPUBLISHED` remains in force; this does not create reviewer
 identity, Human approval, runtime, Promotion, Current Truth, or Public Beta GO.
 
+## 13. Agent orchestration route-binding candidate
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-agent-orchestration-route-binding-candidate.schema.json](../schemas/company-pack-agent-orchestration-route-binding-candidate.schema.json) | [`validate_company_pack_agent_orchestration_route_binding_candidate.py`](../tools/validate_company_pack_agent_orchestration_route_binding_candidate.py) | [`test_company_pack_agent_orchestration_route_binding_candidate_contract.py`](../tests/test_company_pack_agent_orchestration_route_binding_candidate_contract.py) | [Agent Orchestration Route-Binding Candidate](AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md)。source / target、workspace / revision、route、preview / confirmation、rollback の opaque comparison と順序だけを read-only で検査する。`PRECONDITIONS_MATCH_UNVERIFIED` は構造・時間窓の候補一致であり、Codex transport、subagent spawn、task send、provider / device / public effect、Human approval、Promotion、Current Truth、Public Beta GOではない。 |
+
+PowerShell:
+
+```powershell
+python tools\validate_company_pack_agent_orchestration_route_binding_candidate.py `
+  path\to\route-binding-candidate.json
+```
+
+POSIX:
+
+```bash
+python3 tools/validate_company_pack_agent_orchestration_route_binding_candidate.py \
+  path/to/route-binding-candidate.json
+```
+
+この candidate は既存の Protected Execution Request / Handoff Candidate schemaを
+変更せず、public previewの opaque contractとして追加されます。入力値、private path、
+session、host、cwd、credentialは解決・出力せず、複数candidate間のreplay reservationも
+証明しません。schemaの`REFUSED_UNVERIFIED`は構造上の拒否候補であり、CLIは
+`CANDIDATE_MARKED_REFUSED`で拒否します。Draft 2020-12検証には`requirements-test.txt`の
+`jsonschema`が必要で、未導入時は`VALIDATOR_UNAVAILABLE`にfail-closedします。成功・拒否の
+どちらも `CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED`を維持します。
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
