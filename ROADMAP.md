@@ -28,6 +28,7 @@
 - [x] Clone-to-result five-minute tour with cross-shell commands, report interpretation, and bounded next choices
 - [x] README Company OS reader/story map from Vision through current reality to safe first use
 - [x] Agent orchestration route-binding candidate with opaque source / target / workspace / revision / route comparison, read-only preflight, and negative tests; no runner or dispatch
+- [x] Agent Swarm × Kotodama bounded root / worker / verifier candidate with parent-edge, assignment, workspace / revision, handoff, lease, stop-condition, and N/C/W/V budget contracts; schema / preflight / tests only, no runtime swarm or dispatch
 
 ## Current public documentation revision
 
@@ -430,6 +431,7 @@ Promotion, Current Truth, and Final Human GO remain outside scope.
 - [x] [Protected Source binding receipt candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md) schema with private snapshot, clock, locator, evidence, replay, retention/deletion, and detached-attestation roles. This is an unpopulated schema contract, not protected execution or a verified receipt.
 - [x] [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) with opaque runner/input refs, bounded evaluation window, fixed stop/rollback shape, expected receipt, and independent-verification handoff. This is schema-only; no execution is requested or accepted.
 - [x] [Agent orchestration route-binding candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md) with opaque source / target identity, workspace / revision, route, preview, confirmation, and rollback comparison. This is schema / preflight / test documentation only; no Codex transport, subagent spawn, external effect, Promotion, or Current Truth.
+- [x] [Agent Swarm × Kotodama adoption candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) with bounded root / worker / verifier assignments, explicit parent edges, handoffs, leases, stop conditions, and N/C/W/V budgets. This is schema / preflight / test documentation only; no Codex transport, subagent spawn, external effect, Promotion, or Current Truth.
 
 ## Runtime profiles still requiring live evidence
 

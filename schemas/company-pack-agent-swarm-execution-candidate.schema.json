@@ -1,0 +1,693 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-agent-swarm-execution-candidate.schema.json",
+  "title": "Company Pack Agent Swarm Execution Candidate",
+  "description": "Opaque public-preview candidate for a bounded root/worker swarm plan. It records parent edges, assignments, handoffs, budgets, leases, and stop conditions without spawning or authorizing execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "swarm_state",
+    "swarm_id_ref",
+    "root_task_ref",
+    "root_operation_ref",
+    "orchestrator",
+    "budget",
+    "root_policy",
+    "assignments",
+    "recorded_at",
+    "expires_at",
+    "review_trigger",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {
+      "const": "company_pack_agent_swarm_execution_candidate"
+    },
+    "version": {
+      "const": "1.0"
+    },
+    "status": {
+      "const": "CANDIDATE_ONLY"
+    },
+    "swarm_state": {
+      "enum": [
+        "PLAN_DEFINED_UNVERIFIED",
+        "REFUSED_UNVERIFIED"
+      ]
+    },
+    "swarm_id_ref": {
+      "$ref": "#/$defs/opaque_ref"
+    },
+    "root_task_ref": {
+      "$ref": "#/$defs/opaque_ref"
+    },
+    "root_operation_ref": {
+      "$ref": "#/$defs/opaque_ref"
+    },
+    "orchestrator": {
+      "$ref": "#/$defs/orchestrator"
+    },
+    "budget": {
+      "$ref": "#/$defs/budget"
+    },
+    "root_policy": {
+      "$ref": "#/$defs/root_policy"
+    },
+    "assignments": {
+      "$ref": "#/$defs/assignments"
+    },
+    "recorded_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "expires_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "review_trigger": {
+      "$ref": "#/$defs/review_triggers"
+    },
+    "claims": {
+      "$ref": "#/$defs/claims"
+    },
+    "public_beta": {
+      "const": "NO_GO_UNPUBLISHED"
+    }
+  },
+  "$defs": {
+    "opaque_ref": {
+      "type": "string",
+      "minLength": 6,
+      "maxLength": 512,
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "bytes"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        }
+      }
+    },
+    "orchestrator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent_ref",
+        "role_ref",
+        "task_ref",
+        "thread_ref",
+        "workspace_ref",
+        "workspace_binding",
+        "model_ref",
+        "model_verification_status"
+      ],
+      "properties": {
+        "agent_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "role_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "task_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "thread_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "workspace_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "workspace_binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "model_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "model_verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_budget_N",
+        "concurrency_cap_C",
+        "wave_width_W",
+        "max_workflow_depth",
+        "verifier_reserve_V",
+        "external_effects_allowed",
+        "provider_effects_allowed",
+        "device_effects_allowed",
+        "public_effects_allowed",
+        "verification_status"
+      ],
+      "properties": {
+        "attempt_budget_N": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "concurrency_cap_C": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 40
+        },
+        "wave_width_W": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "max_workflow_depth": {
+          "const": 2
+        },
+        "verifier_reserve_V": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "external_effects_allowed": {
+          "const": false
+        },
+        "provider_effects_allowed": {
+          "const": false
+        },
+        "device_effects_allowed": {
+          "const": false
+        },
+        "public_effects_allowed": {
+          "const": false
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "root_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "orchestration_pattern",
+        "final_integrator",
+        "shared_writer",
+        "allowed_action",
+        "expected_effects",
+        "human_gate",
+        "verification_status"
+      ],
+      "properties": {
+        "orchestration_pattern": {
+          "enum": [
+            "MANAGER_AS_TOOLS",
+            "HANDOFF",
+            "CODE_BOUNDED_PARALLEL"
+          ]
+        },
+        "final_integrator": {
+          "const": "ROOT_ORCHESTRATOR_ONLY"
+        },
+        "shared_writer": {
+          "const": "ROOT_ONLY"
+        },
+        "allowed_action": {
+          "const": "INTERNAL_AGENT_HANDOFF"
+        },
+        "expected_effects": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "INTERNAL_CANDIDATE_RECORD_ONLY"
+            }
+          ],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "human_gate": {
+          "const": false
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_ref",
+        "parent_attempt_ref",
+        "parent_edge_ref",
+        "role_ref",
+        "kind",
+        "objective_ref",
+        "ownership_ref",
+        "source_task_ref",
+        "target_task_ref",
+        "workspace_ref",
+        "workspace_binding",
+        "public_revision",
+        "candidate_binding",
+        "depth",
+        "wave",
+        "dependencies",
+        "planned_child_attempt_refs",
+        "may_spawn_descendants",
+        "descendant_budget",
+        "handoff",
+        "lease",
+        "stop_conditions",
+        "expected_output",
+        "assignment_state",
+        "external_effects_allowed",
+        "provider_effects_allowed",
+        "device_effects_allowed",
+        "public_effects_allowed",
+        "verification_status"
+      ],
+      "properties": {
+        "attempt_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "parent_attempt_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/opaque_ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parent_edge_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "role_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "kind": {
+          "enum": [
+            "BUILDER",
+            "EVIDENCE_LANE",
+            "REVIEWER",
+            "VERIFIER",
+            "OPERATOR"
+          ]
+        },
+        "objective_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "ownership_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "source_task_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "target_task_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "workspace_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "workspace_binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "public_revision": {
+          "$ref": "#/$defs/sha1"
+        },
+        "candidate_binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "wave": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/opaque_ref"
+          },
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "planned_child_attempt_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/opaque_ref"
+          },
+          "maxItems": 16,
+          "uniqueItems": true
+        },
+        "may_spawn_descendants": {
+          "const": false
+        },
+        "descendant_budget": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "handoff": {
+          "$ref": "#/$defs/handoff"
+        },
+        "lease": {
+          "$ref": "#/$defs/lease"
+        },
+        "stop_conditions": {
+          "$ref": "#/$defs/stop_conditions"
+        },
+        "expected_output": {
+          "$ref": "#/$defs/expected_output"
+        },
+        "assignment_state": {
+          "const": "PLANNED_UNVERIFIED"
+        },
+        "external_effects_allowed": {
+          "const": false
+        },
+        "provider_effects_allowed": {
+          "const": false
+        },
+        "device_effects_allowed": {
+          "const": false
+        },
+        "public_effects_allowed": {
+          "const": false
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "assignments": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/assignment"
+      }
+    },
+    "handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "handoff_ref",
+        "source_attempt_ref",
+        "target_attempt_ref",
+        "input_binding",
+        "expected_output_binding",
+        "handoff_state",
+        "confirmation",
+        "verification_status"
+      ],
+      "properties": {
+        "handoff_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "source_attempt_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "target_attempt_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "input_binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "expected_output_binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "handoff_state": {
+          "const": "HANDOFF_DEFINED_UNVERIFIED"
+        },
+        "confirmation": {
+          "const": false
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "lease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ttl_seconds",
+        "epoch",
+        "dedup_key_ref",
+        "retry_owner_ref",
+        "cancel_reason_ref",
+        "verification_status"
+      ],
+      "properties": {
+        "ttl_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "dedup_key_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "retry_owner_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "cancel_reason_ref": {
+          "const": null
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "stop_conditions": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "parent_edge_mismatch"
+        },
+        {
+          "const": "assignment_identity_mismatch"
+        },
+        {
+          "const": "workspace_or_revision_drift"
+        },
+        {
+          "const": "handoff_binding_mismatch"
+        },
+        {
+          "const": "lease_expired_or_epoch_drift"
+        },
+        {
+          "const": "child_timeout_or_cancel"
+        },
+        {
+          "const": "output_binding_missing"
+        },
+        {
+          "const": "external_effect_detected"
+        }
+      ],
+      "items": false,
+      "minItems": 8,
+      "maxItems": 8
+    },
+    "expected_output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output_kind",
+        "expected_output_ref",
+        "result_ref",
+        "receipt_binding",
+        "acceptance_status",
+        "verification_status"
+      ],
+      "properties": {
+        "output_kind": {
+          "enum": [
+            "CHANGE_CANDIDATE",
+            "EVIDENCE_PACKET",
+            "REVIEW_REPORT"
+          ]
+        },
+        "expected_output_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "result_ref": {
+          "const": null
+        },
+        "receipt_binding": {
+          "const": null
+        },
+        "acceptance_status": {
+          "const": "PENDING_UNVERIFIED"
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "review_triggers": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "root_orchestrator_identity_change"
+        },
+        {
+          "const": "budget_or_wave_change"
+        },
+        {
+          "const": "assignment_role_objective_or_ownership_change"
+        },
+        {
+          "const": "parent_edge_or_handoff_change"
+        },
+        {
+          "const": "workspace_or_revision_change"
+        },
+        {
+          "const": "lease_ttl_epoch_or_dedup_change"
+        },
+        {
+          "const": "stop_condition_or_expected_output_change"
+        },
+        {
+          "const": "verifier_reserve_or_acceptance_change"
+        },
+        {
+          "const": "schema_change"
+        },
+        {
+          "const": "request_expiry"
+        }
+      ],
+      "items": false,
+      "minItems": 10,
+      "maxItems": 10
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_verified",
+        "budget_verified",
+        "orchestrator_identity_verified",
+        "parent_edges_verified",
+        "assignment_identity_verified",
+        "workspace_binding_verified",
+        "revision_current_verified",
+        "handoff_verified",
+        "lease_fencing_verified",
+        "replay_prevented",
+        "all_assignments_completed",
+        "swarm_runtime_verified",
+        "dispatch_executed",
+        "external_effect_authorized",
+        "external_effect_executed",
+        "human_decision_verified",
+        "promotion_verified",
+        "current_truth_changed",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "plan_verified": {
+          "const": false
+        },
+        "budget_verified": {
+          "const": false
+        },
+        "orchestrator_identity_verified": {
+          "const": false
+        },
+        "parent_edges_verified": {
+          "const": false
+        },
+        "assignment_identity_verified": {
+          "const": false
+        },
+        "workspace_binding_verified": {
+          "const": false
+        },
+        "revision_current_verified": {
+          "const": false
+        },
+        "handoff_verified": {
+          "const": false
+        },
+        "lease_fencing_verified": {
+          "const": false
+        },
+        "replay_prevented": {
+          "const": false
+        },
+        "all_assignments_completed": {
+          "const": false
+        },
+        "swarm_runtime_verified": {
+          "const": false
+        },
+        "dispatch_executed": {
+          "const": false
+        },
+        "external_effect_authorized": {
+          "const": false
+        },
+        "external_effect_executed": {
+          "const": false
+        },
+        "human_decision_verified": {
+          "const": false
+        },
+        "promotion_verified": {
+          "const": false
+        },
+        "current_truth_changed": {
+          "const": false
+        },
+        "final_human_go": {
+          "const": false
+        },
+        "public_beta_go": {
+          "const": false
+        }
+      }
+    }
+  }
+}
