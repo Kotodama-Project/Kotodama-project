@@ -271,19 +271,25 @@ class A019MigrationBatchTests(unittest.TestCase):
         )
         self.assertIn("duplicate capability IDs", catalog_errors)
 
-        mutation_catalog = copy.deepcopy(
-            positives["schemas/worker-capability-catalog.schema.json"]
-        )
-        mutation_capability = mutation_catalog["workers"][0]["capabilities"][0]
-        mutation_capability["risk_class"] = "reversible_change"
-        mutation_capability["evidence_required"] = False
-        mutation_errors = VALIDATOR.validate_instance(
-            "schemas/worker-capability-catalog.schema.json",
-            mutation_catalog,
-            schemas,
-            validators,
-        )
-        self.assertIn("mutation capability must require evidence", mutation_errors)
+        for risk_class in ("reversible_change", "privileged_change"):
+            with self.subTest(risk_class=risk_class):
+                mutation_catalog = copy.deepcopy(
+                    positives["schemas/worker-capability-catalog.schema.json"]
+                )
+                mutation_capability = mutation_catalog["workers"][0][
+                    "capabilities"
+                ][0]
+                mutation_capability["risk_class"] = risk_class
+                mutation_capability["evidence_required"] = False
+                mutation_errors = VALIDATOR.validate_instance(
+                    "schemas/worker-capability-catalog.schema.json",
+                    mutation_catalog,
+                    schemas,
+                    validators,
+                )
+                self.assertIn(
+                    "mutation capability must require evidence", mutation_errors
+                )
 
         result = positives["schemas/worker-result.schema.json"]
         mutations = []
@@ -295,6 +301,12 @@ class A019MigrationBatchTests(unittest.TestCase):
         failed_check["checks"][0]["status"] = "fail"
         mutations.append(
             (failed_check, "succeeded result requires every check to pass")
+        )
+        not_run_check = copy.deepcopy(result)
+        not_run_check["checks"][0]["status"] = "not_run"
+        not_run_check["checks"][0].pop("evidence_ref")
+        mutations.append(
+            (not_run_check, "succeeded result requires every check to pass")
         )
         omitted_success = copy.deepcopy(result)
         omitted_success["omitted_work"] = ["One bounded check was not performed."]
@@ -329,17 +341,31 @@ class A019MigrationBatchTests(unittest.TestCase):
                 "failed or blocked result requires an error category",
             )
         )
-        authority_claim = copy.deepcopy(result)
-        authority_claim["authority_claims"]["promotion"] = True
+        blocked_without_detail = copy.deepcopy(result)
+        blocked_without_detail["status"] = "blocked"
+        blocked_without_detail["error_category"] = "authority"
+        blocked_without_detail["evidence_refs"] = []
+        blocked_without_detail["checks"] = []
+        blocked_without_detail["omitted_work"] = []
         mutations.append(
-            (authority_claim, "result authority claims must all remain false")
+            (
+                blocked_without_detail,
+                "failed or blocked result requires omitted work or a failed check",
+            )
         )
-        missing_rollback_receipt = copy.deepcopy(result)
-        missing_rollback_receipt["rollback"]["status"] = "available"
-        missing_rollback_receipt["rollback"]["receipt_refs"] = []
-        mutations.append(
-            (missing_rollback_receipt, "rollback status requires a receipt")
-        )
+        for claim in ("promotion", "current_truth", "release"):
+            authority_claim = copy.deepcopy(result)
+            authority_claim["authority_claims"][claim] = True
+            mutations.append(
+                (authority_claim, "result authority claims must all remain false")
+            )
+        for rollback_status in ("available", "executed", "failed"):
+            missing_rollback_receipt = copy.deepcopy(result)
+            missing_rollback_receipt["rollback"]["status"] = rollback_status
+            missing_rollback_receipt["rollback"]["receipt_refs"] = []
+            mutations.append(
+                (missing_rollback_receipt, "rollback status requires a receipt")
+            )
         unexpected_rollback_receipt = copy.deepcopy(result)
         unexpected_rollback_receipt["rollback"]["status"] = "not_required"
         unexpected_rollback_receipt["rollback"]["receipt_refs"] = [
