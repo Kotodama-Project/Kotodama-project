@@ -153,9 +153,21 @@ class CompanyPackDecisionRecordCandidateContractTests(unittest.TestCase):
             with self.subTest(invalid=name):
                 self.assertNotEqual(list(validator.iter_errors(instance)), [])
 
-    def test_real_validator_is_a_declared_test_only_dependency(self) -> None:
-        requirement = (ROOT / "requirements-test.txt").read_text(encoding="utf-8")
-        self.assertEqual(requirement.strip(), "jsonschema[format-nongpl]==4.26.0")
+    def test_real_validators_are_declared_pinned_test_only_dependencies(self) -> None:
+        requirements = {
+            line.strip()
+            for line in (ROOT / "requirements-test.txt")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        self.assertEqual(
+            requirements,
+            {
+                "jsonschema[format-nongpl]==4.26.0",
+                "PyYAML==6.0.3",
+            },
+        )
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("python -m pip install -r requirements-test.txt", readme)
 

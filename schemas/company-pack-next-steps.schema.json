@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-next-steps.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-next-steps.schema.json",
   "title": "Kotodama Company Pack Next Steps Plan",
   "$comment": "This plan summarizes static checklist state. It does not prove Human approval, authority, external evidence, Promotion, Current Truth, runtime readiness, or Public Beta GO.",
   "type": "object",

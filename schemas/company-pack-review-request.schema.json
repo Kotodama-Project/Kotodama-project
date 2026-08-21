@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-request.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-review-request.schema.json",
   "title": "Kotodama Company Pack Review Request",
   "$comment": "A request binds open review questions to a saved Company Pack bundle. It is never an approval, authority assignment, Promotion, Current Truth change, or Public Beta GO.",
   "type": "object",
