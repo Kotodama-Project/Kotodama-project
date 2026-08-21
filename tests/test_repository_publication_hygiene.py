@@ -69,11 +69,15 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/repository-validation.yml").read_text(
             encoding="utf-8"
         )
+        smoke_command = "python -S -B tools/smoke_company_pack_review_chain.py"
+        install_command = (
+            "python -m pip install --require-hashes -r requirements-ci.txt"
+        )
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("persist-credentials: false", workflow)
-        self.assertIn(
-            "python -m pip install --require-hashes -r requirements-ci.txt", workflow
-        )
+        self.assertIn(smoke_command, workflow)
+        self.assertIn(install_command, workflow)
+        self.assertLess(workflow.index(smoke_command), workflow.index(install_command))
         self.assertIn("python -m unittest discover -s tests -v", workflow)
         self.assertIn(
             "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", workflow
