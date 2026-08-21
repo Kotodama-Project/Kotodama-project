@@ -1,0 +1,167 @@
+{
+  "schema_version": "kotodama.public-migration-batch.v1",
+  "batch_id": "A019",
+  "status": "CANDIDATE_ONLY",
+  "publication_state": "NO_GO_UNPUBLISHED",
+  "source": {
+    "fixed_commit": "2fc1bf60b0dc8721c96875788447e34adc4c7216",
+    "expected_entries": 6,
+    "source_mapping_digest_sha256": "7318109686fa29ebacc2804b69c135a4e7621606d49a2b632a9a96982f65aa87",
+    "git_history_imported": false,
+    "source_bodies_copied_unchanged": false,
+    "license_expression": "MIT",
+    "license_blob_sha": "8294a2a3706f3fd652b8c1bae22a1024ade9406c",
+    "package_metadata_blob_sha": "39804f52b523024c8b62eae678f897166ae0a47a"
+  },
+  "component_license": {
+    "expression": "MIT",
+    "notice": "Copyright (c) 2026 Kotodama Project",
+    "license_file": "LICENSES/MIT.txt",
+    "license_blob_sha": "8294a2a3706f3fd652b8c1bae22a1024ade9406c",
+    "source_derived_scope": [
+      "schemas/task-contract.schema.json",
+      "schemas/task-decomposition.schema.json",
+      "schemas/worker-capability-catalog.schema.json",
+      "schemas/worker-result.schema.json"
+    ],
+    "license_and_provenance_gate": "BLOCKED_ISSUE_25",
+    "apache_pr18_relicenses_component": false
+  },
+  "decision_contract": {
+    "PUBLIC_REAUTHOR": 4,
+    "PRIVATE_RETAIN": 2,
+    "SUPERSEDED": 0,
+    "unique_reauthored_destinations": 4
+  },
+  "destination_contract": [
+    {
+      "path": "schemas/task-contract.schema.json",
+      "blob_sha": "fe7343cc134554bd93eeb8654f0cbcdb22aad82b",
+      "schema_id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/task-contract.schema.json",
+      "candidate_status": "candidate_only"
+    },
+    {
+      "path": "schemas/task-decomposition.schema.json",
+      "blob_sha": "24da61da50dda406bdba3da6c20f669a313077a4",
+      "schema_id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/task-decomposition.schema.json",
+      "candidate_status": "candidate_only"
+    },
+    {
+      "path": "schemas/worker-capability-catalog.schema.json",
+      "blob_sha": "192449aaf49d43a16753b597cfc396e4cd3d16b2",
+      "schema_id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/worker-capability-catalog.schema.json",
+      "candidate_status": "candidate_only"
+    },
+    {
+      "path": "schemas/worker-result.schema.json",
+      "blob_sha": "c060bfba428d41515f1a87087c34d593f532ff83",
+      "schema_id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/worker-result.schema.json",
+      "candidate_status": "candidate_only"
+    }
+  ],
+  "admission_gates": {
+    "license_and_provenance": "BLOCKED_ISSUE_25",
+    "applicable_source_history_secret_pii": "BLOCKED_MISSING_A019_PRIVATE_RECEIPT_ISSUE_251_OR_257",
+    "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
+    "independent_review": "PENDING_LATEST_PUSH",
+    "public_governance": "BLOCKED_PR_18_AND_ISSUE_19",
+    "sibling_integration": "BLOCKED_ISSUE_30",
+    "dependency_review": "BLOCKED_UNTIL_RETARGET_TO_MAIN"
+  },
+  "entries": [
+    {
+      "source_path": "registry/INDEX.md",
+      "source_blob_sha": "d96bc760b22eaa06a0729b6a1e1cd915b160dbf3",
+      "source_mode": "100644",
+      "decision": "PRIVATE_RETAIN",
+      "destination_path": null,
+      "destination_blob_sha": null,
+      "body_exported": false,
+      "semantic_coverage": [
+        "operational_resource_references_excluded",
+        "repository_authority_index_excluded"
+      ],
+      "rationale": "Repository-specific authority and operational resource references stay behind the private boundary."
+    },
+    {
+      "source_path": "registry/intent-issue.schema.json",
+      "source_blob_sha": "f682d97d07ea6d3cf87d776d226e32921fdb2306",
+      "source_mode": "100644",
+      "decision": "PRIVATE_RETAIN",
+      "destination_path": null,
+      "destination_blob_sha": null,
+      "body_exported": false,
+      "semantic_coverage": [
+        "identity_bearing_fields_excluded",
+        "repository_specific_routing_excluded"
+      ],
+      "rationale": "Identity-bearing collaboration semantics and repository-specific routing remain private."
+    },
+    {
+      "source_path": "registry/schemas/atomic-task.schema.json",
+      "source_blob_sha": "3529f688fb222135a5c352d73b5c5117e4a7ef87",
+      "source_mode": "100644",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "schemas/task-contract.schema.json",
+      "destination_blob_sha": "fe7343cc134554bd93eeb8654f0cbcdb22aad82b",
+      "body_exported": false,
+      "semantic_coverage": [
+        "bounded_acceptance_checks",
+        "candidate_only_authority_boundary",
+        "explicit_lifecycle",
+        "rollback_plan",
+        "scope_and_budget_limits"
+      ],
+      "rationale": "A provider-neutral task contract is independently authored with bounded scope, evidence, and rollback constraints."
+    },
+    {
+      "source_path": "registry/schemas/decomposition-result.schema.json",
+      "source_blob_sha": "2ae3797052c82cbf67d5c720603476557dee4ff9",
+      "source_mode": "100644",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "schemas/task-decomposition.schema.json",
+      "destination_blob_sha": "24da61da50dda406bdba3da6c20f669a313077a4",
+      "body_exported": false,
+      "semantic_coverage": [
+        "acyclic_dependency_graph",
+        "bounded_task_set",
+        "closed_world_task_references",
+        "deterministic_dependency_consistency"
+      ],
+      "rationale": "A closed decomposition graph is independently authored with offline references and deterministic semantic checks."
+    },
+    {
+      "source_path": "registry/schemas/skill-catalog.schema.json",
+      "source_blob_sha": "5275c648c1a87dc8b1b5e0bac5216003c38f4ff7",
+      "source_mode": "100644",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "schemas/worker-capability-catalog.schema.json",
+      "destination_blob_sha": "192449aaf49d43a16753b597cfc396e4cd3d16b2",
+      "body_exported": false,
+      "semantic_coverage": [
+        "bounded_capability_descriptors",
+        "candidate_only_declarations",
+        "evidence_expectation",
+        "provider_neutral_risk_classes"
+      ],
+      "rationale": "A provider-neutral candidate catalog is independently authored without connection, deployment, or runtime-availability fields."
+    },
+    {
+      "source_path": "registry/schemas/worker-result.schema.json",
+      "source_blob_sha": "f38733322c79be02f5a75a7709fa932eaa9a4afa",
+      "source_mode": "100644",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "schemas/worker-result.schema.json",
+      "destination_blob_sha": "c060bfba428d41515f1a87087c34d593f532ff83",
+      "body_exported": false,
+      "semantic_coverage": [
+        "candidate_and_evidence_receipts",
+        "explicit_omitted_work",
+        "nonpromotion_authority_claims",
+        "rollback_receipt",
+        "status_bound_validation"
+      ],
+      "rationale": "A result envelope is independently authored so success requires evidence and never claims promotion, current truth, or release authority."
+    }
+  ]
+}
