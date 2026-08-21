@@ -64,16 +64,17 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         ordered = self.roadmap.split("## Safe integration order", 1)[1].split(
             "## Evidence required at every stage", 1
         )[0]
-        positions = [
-            ordered.index("PR #18"),
-            ordered.index("issue #19"),
-            ordered.index("PR #17"),
-            ordered.index("PR #1"),
-            ordered.index("runtime lifecycle"),
-            ordered.index("Voice and privacy"),
-            ordered.index("Final Human GO"),
-            ordered.index("Limited Public Beta"),
-        ]
+        exact_steps = (
+            "1. **Validate PR #18 exactly.**",
+            "2. **Complete issue #19.**",
+            "4. **Rebase and validate PR #17.**",
+            "5. **Reconcile and validate PR #1.**",
+            "6. **Prove runtime lifecycle.**",
+            "7. **Prove Voice and privacy boundaries.**",
+            "9. **Final Human GO.**",
+            "10. **Limited Public Beta.**",
+        )
+        positions = [ordered.index(step) for step in exact_steps]
         self.assertEqual(sorted(positions), positions)
 
     def test_historical_revision_detail_is_preserved_outside_the_ssot(self) -> None:
