@@ -40,6 +40,15 @@ All three remain Draft, `read-only/candidate-only`, and `NO_GO_UNPUBLISHED`.
 
 No lane substitutes for another. In particular, a candidate-owned hosted check is not independent review, and a schema-valid artifact is not proof of live execution.
 
+## Current candidate entry points
+
+- [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md): `python -S -B tools/check_company_pack_public_preview.py examples/company-starter --format markdown`
+- [Source Binding Verifier Candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md)
+- [Protected Source Binding Receipt Candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)
+- [Protected Execution Request Handoff Candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md)
+
+These remain deterministic, read-only candidate tools. Discoverability is not proof of source authenticity, protected execution, provider state, deployment, or human approval.
+
 ## Milestones
 
 ### M0 — Published incomplete preview
