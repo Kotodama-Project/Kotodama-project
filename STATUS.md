@@ -45,7 +45,7 @@ Updated: 2026-08-05
 
 ## Latest runtime result
 
-最新の CT200 Voice cutover attempt は、read-only reconciliation 後に `BLOCKED_NO_EFFECT` と判定されました。候補ファイルの deploy は 0、外部 provider API の作用も 0 でした。
+最新の private Voice runtime cutover attempt は、read-only reconciliation 後に `BLOCKED_NO_EFFECT` と判定されました。候補ファイルの deploy は 0、外部 provider API の作用も 0 でした。
 
 これは安全に停止したことの証拠であり、Voice runtime が公開稼働していることの証明ではありません。
 

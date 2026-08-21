@@ -862,7 +862,7 @@ machine-readable な完了境界ではありません。最新チェックリス
 - local PASS を live / deployed / production / Public GO と表現していないか
 - 新しい SSOT を増やさず、既存の canonical owner を尊重しているか
 
-公開 repository の contribution policy と license は整備途中です。大きな導入や再配布を前提にしないでください。
+公開 repository への変更は [Contributing](CONTRIBUTING.md) を確認してください。再利用・改変・再配布には、下記の Apache-2.0 の条件が適用されます。
 
 ## 用語
 
@@ -972,6 +972,13 @@ Promotion, Current Truth, or Public Beta GO.
 - independent protected reconciliation と candidate-bound Final Human GO は未完了です
 - Public Beta は **NO-GO / unpublished** のままです
 
+## Community and security
+
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Support](SUPPORT.md)
+- [Community conduct](CODE_OF_CONDUCT.md)
+
 ## License
 
-ライセンスはまだ決定していません。明示的な license が追加されるまで、閲覧可能であることは再利用・改変・再配布の許諾を意味しません。
+この repository は [Apache License 2.0](LICENSE)（SPDX identifier: `Apache-2.0`）で提供します。

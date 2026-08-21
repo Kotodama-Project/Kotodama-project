@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-source-binding-verification-candidate.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-source-binding-verification-candidate.schema.json",
   "title": "Kotodama Company Pack Source Binding Verification Candidate",
   "$comment": "Read-only point-in-time candidate report. A match is not a protected verification, atomic multi-file snapshot, Source authenticity, consent authority, retention enforcement, Promotion, Current Truth, or Public Beta GO.",
   "type": "object",

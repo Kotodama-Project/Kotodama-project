@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 from pathlib import Path
 
@@ -22,6 +23,9 @@ BUNDLE_BUILDER = ROOT / "tools" / "build_company_pack_review_bundle.py"
 CREATOR = ROOT / "tools" / "create_company_pack.py"
 REQUEST_SCHEMA = ROOT / "schemas" / "company-pack-review-request.schema.json"
 REVIEW_REQUEST_DOC = ROOT / "docs" / "REVIEW-REQUEST.md"
+AUTHORITY_EXPIRES_AT = (
+    datetime.now(timezone.utc) + timedelta(days=7)
+).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 class CompanyPackReviewRequestCliTests(unittest.TestCase):
@@ -47,7 +51,7 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
                 path = pack / relative
                 document = json.loads(path.read_text(encoding="utf-8"))
                 if collection == "blocks":
-                    document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+                    document["authority"]["expires_at"] = AUTHORITY_EXPIRES_AT
                 else:
                     document["retention"]["policy_ref"] = retention_policy_ref
                 path.write_text(json.dumps(document), encoding="utf-8")
@@ -73,7 +77,7 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         for relative in manifest["blocks"]:
             path = pack / relative
             document = json.loads(path.read_text(encoding="utf-8"))
-            document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+            document["authority"]["expires_at"] = AUTHORITY_EXPIRES_AT
             path.write_text(json.dumps(document), encoding="utf-8")
         return pack, human_intent_ref
 

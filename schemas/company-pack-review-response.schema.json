@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-response.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-review-response.schema.json",
   "title": "Kotodama Company Pack Review Response Candidate",
   "$comment": "An editable item-response candidate is not reviewer authentication, Human approval, an overall Decision, evidence resolution, Promotion, Current Truth, or Public Beta GO.",
   "type": "object",
