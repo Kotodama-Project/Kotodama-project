@@ -1,4 +1,5 @@
 import hashlib
+import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -70,12 +71,24 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             encoding="utf-8"
         )
         smoke_command = "python -S -B tools/smoke_company_pack_review_chain.py"
+        runtime_commands = (
+            "python -S -B tools/validate_installation_lifecycle.py "
+            "examples/installation-lifecycle/compose-minimum.json",
+            "python -S -B tools/validate_installation_lifecycle.py "
+            "examples/installation-lifecycle/proxmox-segmented.json",
+            "python -S -B tools/validate_compose_minimum_skeleton.py "
+            "runtime/compose-minimum",
+        )
         install_command = (
             "python -m pip install --require-hashes -r requirements-ci.txt"
         )
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn(smoke_command, workflow)
+        for runtime_command in runtime_commands:
+            with self.subTest(runtime_command=runtime_command):
+                self.assertIn(runtime_command, workflow)
+                self.assertLess(workflow.index(runtime_command), workflow.index(install_command))
         self.assertIn(install_command, workflow)
         self.assertLess(workflow.index(smoke_command), workflow.index(install_command))
         self.assertIn("python -m unittest discover -s tests -v", workflow)
@@ -86,6 +99,40 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
             workflow,
         )
+
+    def test_actionlint_is_checksum_verified_outside_the_worktree(self) -> None:
+        workflow = (ROOT / ".github/workflows/repository-validation.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('ACTIONLINT_VERSION: "1.7.12"', workflow)
+        self.assertIn(
+            'ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"',
+            workflow,
+        )
+        self.assertIn('${RUNNER_TEMP}/actionlint.tar.gz', workflow)
+        self.assertIn('${RUNNER_TEMP}/actionlint', workflow)
+        self.assertIn("sha256sum -c -", workflow)
+        self.assertIn('"$install_dir/actionlint" .github/workflows/*.yml', workflow)
+
+    def test_all_external_actions_are_pinned_to_immutable_shas(self) -> None:
+        uses_pattern = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)")
+        immutable_pattern = re.compile(r"^[^@\s]+@[0-9a-fA-F]{40}$")
+        violations = []
+
+        for path in sorted((ROOT / ".github/workflows").glob("*.y*ml")):
+            for line_number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                match = uses_pattern.match(line)
+                if not match:
+                    continue
+                reference = match.group(1).strip("'\"")
+                if reference.startswith(("./", "docker://")):
+                    continue
+                if not immutable_pattern.fullmatch(reference):
+                    violations.append(f"{path.relative_to(ROOT)}:{line_number}: {reference}")
+
+        self.assertEqual([], violations)
 
     def test_ci_dependency_lock_is_hashed_current_and_public_safe(self) -> None:
         lock = (ROOT / "requirements-ci.txt").read_text(encoding="utf-8")
