@@ -43,6 +43,7 @@ class A022MigrationBatchTests(unittest.TestCase):
 
     def test_exact_candidate_passes_but_admission_remains_blocked(self) -> None:
         result = VALIDATOR.validate(ROOT)
+        manifest = self._manifest(ROOT)
 
         self.assertEqual(result["status"], "PASS", result["errors"])
         self.assertFalse(result["changed"])
@@ -56,6 +57,10 @@ class A022MigrationBatchTests(unittest.TestCase):
         self.assertEqual(result["private_source_path_leakage"], 0)
         self.assertEqual(result["candidate_scan_findings"], 0)
         self.assertEqual(result["admission_status"], "BLOCKED")
+        self.assertEqual(
+            manifest["component_license"]["source_derived_scope"],
+            sorted(VALIDATOR.DESTINATIONS),
+        )
         self.assertIn(
             "MISSING_APPLICABLE_A022_PRIVATE_SOURCE_HISTORY_RECEIPT",
             result["no_go_reasons"],

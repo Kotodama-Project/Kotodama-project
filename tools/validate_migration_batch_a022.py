@@ -210,7 +210,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "notice": "Copyright (c) 2026 Kotodama Project",
         "license_file": "LICENSES/MIT.txt",
         "license_blob_sha": SOURCE_LICENSE_BLOB,
-        "source_derived_scope": ["docs/architecture/**"],
+        "source_derived_scope": sorted(DESTINATIONS),
         "license_and_provenance_gate": "BLOCKED_ISSUE_25",
         "apache_pr18_relicenses_component": False,
     }:

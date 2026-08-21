@@ -18,7 +18,10 @@
     "license_file": "LICENSES/MIT.txt",
     "license_blob_sha": "8294a2a3706f3fd652b8c1bae22a1024ade9406c",
     "source_derived_scope": [
-      "docs/architecture/**"
+      "docs/architecture/README.md",
+      "docs/architecture/multi-agent-coordination.md",
+      "docs/architecture/plan-runtime.md",
+      "docs/architecture/supervision-contract.md"
     ],
     "license_and_provenance_gate": "BLOCKED_ISSUE_25",
     "apache_pr18_relicenses_component": false
