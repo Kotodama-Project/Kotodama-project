@@ -1,3 +1,21 @@
 __pycache__/
 *.py[cod]
+.pytest_cache/
 /work/
+
+# Local secret and environment material
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+credentials.*.json
+service-account*.json
+service_account*.json
+id_rsa
+id_ed25519

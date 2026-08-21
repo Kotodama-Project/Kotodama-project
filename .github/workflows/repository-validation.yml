@@ -36,6 +36,9 @@ jobs:
           python-version: "3.12.10"
           check-latest: false
 
+      - name: Check tracked credential hygiene
+        run: python -S -B tools/check_tracked_secret_hygiene.py
+
       - name: Run the README one-command smoke
         run: python -S -B tools/smoke_company_pack_review_chain.py
 

@@ -15,12 +15,19 @@ project's evidence and authority boundaries.
 
 ## Local checks
 
-Use Python 3.12 and install the test dependency:
+Use Python 3.12 and run the tracked credential gate before installing
+dependencies:
 
 ```text
+python -S -B tools/check_tracked_secret_hygiene.py
 python -m pip install --require-hashes -r requirements-ci.txt
 python -m unittest discover -s tests -v
 ```
+
+The credential gate examines the current Git-tracked tree and reports only a
+path, line number, and detector name. It does not print a detected value. A
+passing result does not replace provider-side secret scanning, push protection,
+or a historical repository scan.
 
 `requirements-test.txt` is the small human-edited input. The generated
 `requirements-ci.txt` locks its complete transitive graph and hashes for
