@@ -72,14 +72,19 @@ The following gates remain before provider evaluation:
 
 [`runtime/cloudflare-os/security-overlay.json`](../runtime/cloudflare-os/security-overlay.json)
 binds the vulnerable production graph to the pinned core Git tree and two exact
-Git blobs. It proposes only the parent-scoped root override
-`postcss@8.5.25>nanoid: 3.3.17` and exact `pnpm@11.9.0` generation. The
-transformer writes workspace bytes only and never synthesizes a lockfile. A
-separate verifier binds an observed package-manager output at 281,638 LF bytes,
-8,461 lines, five target markers, and zero vulnerable markers. Byte equivalence
-does not prove package-manager provenance. The contract refuses CRLF,
-already-applied overlays, marker drift, integrity drift, global overrides,
-ambient latest, manual-lock acceptance, or any effect/Public GO overclaim.
+Git blobs. It applies two parent-scoped root overrides: `nanoid` 3.3.18 for
+`GHSA-2v37-7h3g-55p8`, and `@puppeteer/browsers` 3.0.4 under
+`@cloudflare/puppeteer` for `GHSA-jmr9-qjv8-65gv`. The latter advisory has no
+patched direct `extract-zip` release, so the candidate does not invent the
+non-existent 2.0.2 suggested by one audit view; browsers 3.0.4 replaces the
+archive path with integrity-bound `modern-tar` 0.7.7. Exact `pnpm@11.9.0`
+generated a 268,881-byte, 8,040-line LF lock with five nanoid target markers,
+the bound browser/archive markers, and no vulnerable nanoid or extract-zip
+markers. The transformer itself still writes workspace bytes only and never
+synthesizes a lockfile. Byte equivalence alone does not prove package-manager
+provenance. The contract refuses CRLF, already-applied overlays, marker or
+integrity drift, global overrides, ambient latest, manual-lock acceptance, or
+any provider/Public GO overclaim.
 
 Validate the public contract:
 
@@ -93,14 +98,18 @@ verification, rejection of the old four-marker manual prediction, and other
 negative cases. The second validates the public spec only. A local reviewer may
 additionally pass a trusted official core checkout with `--core-repo`; the
 validator reads the pinned objects with Git and never reads authoritative bytes
-from the dirty worktree.
+from the dirty worktree. To reverify materialization instead of only validating
+the recorded receipt, pass both `--generated-workspace` and `--generated-lock`;
+omitting either fails closed, while omitting both reports the materialization as
+recorded but not reverified by that run.
 
-This is `CANDIDATE_NOT_MATERIALIZED_NOT_REMEDIATED`. No upstream source or
-dependency has been changed by this public candidate. The observed lock binding
-is not accepted as provenance or remediation by static byte validation.
-Fresh pinned-package-manager regeneration, a scripts-disabled frozen install,
-a production audit with zero high findings, tests/build, and independent review
-remain closed gates.
+This is `LOCAL_MATERIALIZATION_VERIFIED_NOT_DEPLOYED`. The exact pnpm archive
+matched its recorded SHA-1/SHA-512 values and reported 11.9.0; regeneration,
+scripts-disabled frozen install, zero-High production audit, all 26 workspace
+builds, and 279 focused Workshop backend tests passed (4 provider-dependent
+integration tests skipped). No upstream source, provider deployment, or
+production dependency has been changed. Independent review and provider
+deployment/remediation remain closed gates.
 
 Local Wrangler/workerd is not supported Proxmox production-hosting evidence.
 No provider deployment, private Context transfer, production Promotion or Public

@@ -36,16 +36,17 @@ zero evaluation processes and listeners. See
 [human-readable evaluation report](../../docs/CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md).
 
 This is `PASS_LOCAL_RUNTIME_WITH_GAPS`, not provider or production readiness.
-Six P1 findings remain, including the pending independent upstream drift review,
-one high `nanoid` advisory, Windows-only compatibility mitigation, unproven
-observability retention/readback, provider E2E, and supply attestation signature.
-The security-overlay candidate deterministically maps the pinned Git workspace
-blob to a parent-scoped `nanoid` 3.3.17 override. It deliberately does not
-synthesize or edit a lockfile. Instead it binds one observed exact-`pnpm@11.9.0`
-lock hash, byte/line counts, and five dependency markers for separate
-verification. Matching those bytes alone does not prove package-manager
-provenance. A fresh bounded regeneration, frozen install, audit, build, tests,
-and independent review remain required, so this is not remediation proof.
+The original local-runtime receipt retains six P1 findings, including its
+observed upstream `nanoid` High and pending independent drift review. Its
+successor security-overlay candidate now maps the pinned Git workspace blob to
+two parent-scoped overrides: `nanoid` 3.3.18 and
+`@puppeteer/browsers` 3.0.4, which removes the newly reviewed vulnerable
+`extract-zip` path in favor of integrity-bound `modern-tar` 0.7.7. Exact
+`pnpm@11.9.0` regeneration, scripts-disabled frozen install, zero-High
+production audit, all 26 builds, and 279 focused tests passed locally (4
+provider-dependent tests skipped). The transformer does not synthesize or edit
+a lockfile, and matching bytes alone cannot establish who generated them.
+Independent review and provider deployment/remediation remain required.
 
 Cloudflare OS is an early-access AI productivity environment, not a traditional
 computer operating system. Kotodama adopts it as a bounded workspace/Gadget/
