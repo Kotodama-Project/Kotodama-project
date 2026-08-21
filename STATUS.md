@@ -10,7 +10,7 @@ This file answers **what is true now** for the public repository. It is not a de
 | Surface | Exact state | Required next gate |
 |---|---|---|
 | Published `main` | Incomplete Public Preview at `be71f424689648b3ab1b1db15adbaddea374586b`; `read-only/candidate-only` | Do not treat open PR content as published |
-| Publication and governance baseline | Draft PR #18 at `ec76f48d2623476e6433ec8673d2586ee51f9aa1`; exact-head README smoke, runtime-candidate checks, immutable-Action validation, dependency review, 513 tests, and clean-tree check passed | Complete issue #19 control-plane readback, obtain independent latest-push review, and record the repository owner's Apache-2.0 decision |
+| Publication and governance baseline | Draft PR #18 at `01297f5d77ec51956c4bdc368b4a322d0954c33a`; Repository validation run `32465302741` and Dependency review run `32465302780` passed on that exact head. README smoke, three runtime-candidate validators, immutable-Action validation, tracked credential hygiene over the current Git-tracked tree, 521 tests, and clean-tree refusal succeeded | Complete issue #19 control-plane readback, obtain independent latest-push review, and record the repository owner's Apache-2.0 decision |
 | Public skill operating contract | Draft PR #17 at `704ced6a4b8be6465849646c7d2c1ba95f4fd7af`; based on the old published `main` | Rebase after the accepted governance baseline, rerun neutral checks, and obtain independent review |
 | Cloudflare candidate | Draft PR #1 at `4963801bd17deee30623171199a54c6c8ee9e5c3`; scope-specific hosted validation exists | Keep Cloudflare evidence scope-specific; reconcile only after neutral repository gates |
 | `main` protection | Protected for everyone, but the sole required context is `Trusted Cloudflare candidate validation` | Rebind generic repository checks and read back the final rule under issue #19 |
@@ -23,22 +23,27 @@ A private Voice runtime cutover attempt is not public runtime evidence and does 
 
 | Lane | What is currently available | What is still missing |
 |---|---|---|
-| Code evidence / Local evidence | Published preview plus exact candidate commits and deterministic validators | Accepted integration fixed point |
-| Hosted evidence | PR #18 neutral validation and dependency review passed on its exact head; PR #1 has Cloudflare-specific validation | Neutral required-check binding on `main`, then exact-head reruns after reconciliation |
-| Admin evidence | Public branch readback confirms protection and the current required context | Sanitized readback for final branch/ruleset, CodeQL, vulnerability reporting, dependency alerts, secret scanning, and push protection |
+| Code evidence / Local evidence | Published preview plus exact candidate commits, deterministic validators, negative tests, and a current-tree tracked credential gate | Accepted integration fixed point; historical and provider-side credential evidence |
+| Hosted evidence | PR #18 Repository validation run `32465302741` and Dependency review run `32465302780` passed on exact head `01297f5d77ec51956c4bdc368b4a322d0954c33a`; PR #1 has Cloudflare-specific validation | Neutral required-check binding on `main`, then exact-head reruns after reconciliation |
+| Admin evidence | Public branch readback confirms protection and the current required context | Sanitized readback for final branch/ruleset, CodeQL, vulnerability reporting, dependency alerts, secret scanning, push protection, and provider secret state |
 | Human evidence | No independent latest-push approval and no Final Human GO are represented here | Independent review, explicit Apache-2.0 owner decision, provider/runtime decisions, and Final Human GO |
 
 A passing candidate-owned workflow is hosted evidence, not independent human approval.
 
+## Credential evidence boundary
+
+`python -S -B tools/check_tracked_secret_hygiene.py` deterministically scans the current Git-tracked tree and does not print detected values. It does not scan Git history, untracked files, forks, GitHub or provider secret stores, or security settings. A pass is current-tree code evidence only. Any credential that may previously have been committed must be revoked or rotated first and handled through separately reviewed history remediation.
+
 ## Safe integration order
 
-1. Keep PR #18 Draft while its exact-head evidence remains bound to `ec76f48d2623476e6433ec8673d2586ee51f9aa1`.
+1. Keep PR #18 Draft while its exact-head evidence remains bound to `01297f5d77ec51956c4bdc368b4a322d0954c33a`.
 2. Complete and read back issue #19 controls; obtain independent latest-push review and the explicit Apache-2.0 owner decision.
 3. Merge PR #18 only if those gates pass; no merge is authorized by this document.
-4. Rebase PR #17 onto the accepted baseline, resolve overlaps, rerun all neutral checks, and obtain independent review.
-5. Reconcile PR #1 after the neutral baseline; retain its Cloudflare checks as scope-specific evidence.
-6. Produce clean-install, migration, restart, rollback/restore, privacy, and provider evidence for any proposed runtime or Voice surface.
-7. Perform independent reconciliation and Final Human GO before any limited Public Beta decision.
+4. Merge the operational status/roadmap change only after PR #18, rerun its exact-head checks, and preserve the historical snapshots byte-for-byte.
+5. Rebase PR #17 onto the accepted baseline, resolve overlaps, rerun all neutral checks, and obtain independent review.
+6. Reconcile PR #1 after the neutral baseline; retain its Cloudflare checks as scope-specific evidence.
+7. Produce clean-install, migration, restart, rollback/restore, privacy, and provider evidence for any proposed runtime or Voice surface.
+8. Perform independent reconciliation and Final Human GO before any limited Public Beta decision.
 
 ## Current entry points
 

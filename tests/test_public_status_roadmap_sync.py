@@ -7,11 +7,17 @@ ROOT = Path(__file__).resolve().parents[1]
 CURRENT_DATE = "2026-08-21"
 PUBLISHED_MAIN = "be71f424689648b3ab1b1db15adbaddea374586b"
 ACTIVE_CANDIDATES = {
-    "PR #18": "ec76f48d2623476e6433ec8673d2586ee51f9aa1",
+    "PR #18": "01297f5d77ec51956c4bdc368b4a322d0954c33a",
     "PR #17": "704ced6a4b8be6465849646c7d2c1ba95f4fd7af",
     "PR #1": "4963801bd17deee30623171199a54c6c8ee9e5c3",
 }
+GOVERNANCE_EVIDENCE = {
+    "repository validation run": "32465302741",
+    "dependency review run": "32465302780",
+    "public test count": "521 tests",
+}
 HISTORICAL_GIT_BLOBS = {
+    "README.md": "9a591992b1d74681fe8b011222625c6a0525c0c8",
     "STATUS-R179-AND-EARLIER.md": "71877969c3eae7f32d928884a9e7766a6945a0ea",
     "ROADMAP-R179-AND-EARLIER.md": "96bb07e5dff7612368b03943c6c0c6c5faaa51d9",
 }
@@ -43,6 +49,9 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 with self.subTest(surface=surface, candidate=candidate):
                     self.assertIn(candidate, text)
                     self.assertIn(sha, text)
+            for evidence, marker in GOVERNANCE_EVIDENCE.items():
+                with self.subTest(surface=surface, evidence=evidence):
+                    self.assertIn(marker, text)
 
     def test_current_documents_require_refresh_after_fixed_point_drift(self) -> None:
         for surface, text in (("status", self.status), ("roadmap", self.roadmap)):
@@ -60,6 +69,17 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 "Human evidence",
                 "independent",
                 "Final Human GO",
+            ):
+                with self.subTest(surface=surface, marker=marker):
+                    self.assertIn(marker, text)
+
+    def test_current_documents_bound_credential_evidence(self) -> None:
+        for surface, text in (("status", self.status), ("roadmap", self.roadmap)):
+            for marker in (
+                "current-tree",
+                "Git history",
+                "provider",
+                "credential",
             ):
                 with self.subTest(surface=surface, marker=marker):
                     self.assertIn(marker, text)
@@ -83,12 +103,13 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         exact_steps = (
             "1. **Validate PR #18 exactly.**",
             "2. **Complete issue #19.**",
-            "4. **Rebase and validate PR #17.**",
-            "5. **Reconcile and validate PR #1.**",
-            "6. **Prove runtime lifecycle.**",
-            "7. **Prove Voice and privacy boundaries.**",
-            "9. **Final Human GO.**",
-            "10. **Limited Public Beta.**",
+            "4. **Publish the operational status safely.**",
+            "5. **Rebase and validate PR #17.**",
+            "6. **Reconcile and validate PR #1.**",
+            "7. **Prove runtime lifecycle.**",
+            "8. **Prove Voice and privacy boundaries.**",
+            "10. **Final Human GO.**",
+            "11. **Limited Public Beta.**",
         )
         positions = [ordered.index(step) for step in exact_steps]
         self.assertEqual(sorted(positions), positions)
