@@ -172,7 +172,31 @@
           "minimum": 1,
           "maximum": 64
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "risk_class": {
+                "enum": [
+                  "reversible_change",
+                  "privileged_change"
+                ]
+              }
+            },
+            "required": [
+              "risk_class"
+            ]
+          },
+          "then": {
+            "properties": {
+              "evidence_required": {
+                "const": true
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

@@ -6,7 +6,7 @@
   "source": {
     "fixed_commit": "2fc1bf60b0dc8721c96875788447e34adc4c7216",
     "expected_entries": 6,
-    "source_mapping_digest_sha256": "7318109686fa29ebacc2804b69c135a4e7621606d49a2b632a9a96982f65aa87",
+    "source_mapping_digest_sha256": "6042ed4eb73f673aeac7964d5855e23a3067617c8cefad71efe32f1c4e15a702",
     "git_history_imported": false,
     "source_bodies_copied_unchanged": false,
     "license_expression": "MIT",
@@ -36,7 +36,7 @@
   "destination_contract": [
     {
       "path": "schemas/task-contract.schema.json",
-      "blob_sha": "fe7343cc134554bd93eeb8654f0cbcdb22aad82b",
+      "blob_sha": "efbf457f8d71581525250f0a187bfb102e059342",
       "schema_id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/task-contract.schema.json",
       "candidate_status": "candidate_only"
     },
@@ -48,13 +48,13 @@
     },
     {
       "path": "schemas/worker-capability-catalog.schema.json",
-      "blob_sha": "192449aaf49d43a16753b597cfc396e4cd3d16b2",
+      "blob_sha": "e3d7dc72a46196354f58e140a63e4d437c37b6fd",
       "schema_id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/worker-capability-catalog.schema.json",
       "candidate_status": "candidate_only"
     },
     {
       "path": "schemas/worker-result.schema.json",
-      "blob_sha": "c060bfba428d41515f1a87087c34d593f532ff83",
+      "blob_sha": "48d482e9a00e2af49a648cf1888020210d61f07b",
       "schema_id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/worker-result.schema.json",
       "candidate_status": "candidate_only"
     }
@@ -103,7 +103,7 @@
       "source_mode": "100644",
       "decision": "PUBLIC_REAUTHOR",
       "destination_path": "schemas/task-contract.schema.json",
-      "destination_blob_sha": "fe7343cc134554bd93eeb8654f0cbcdb22aad82b",
+      "destination_blob_sha": "efbf457f8d71581525250f0a187bfb102e059342",
       "body_exported": false,
       "semantic_coverage": [
         "bounded_acceptance_checks",
@@ -136,7 +136,7 @@
       "source_mode": "100644",
       "decision": "PUBLIC_REAUTHOR",
       "destination_path": "schemas/worker-capability-catalog.schema.json",
-      "destination_blob_sha": "192449aaf49d43a16753b597cfc396e4cd3d16b2",
+      "destination_blob_sha": "e3d7dc72a46196354f58e140a63e4d437c37b6fd",
       "body_exported": false,
       "semantic_coverage": [
         "bounded_capability_descriptors",
@@ -152,7 +152,7 @@
       "source_mode": "100644",
       "decision": "PUBLIC_REAUTHOR",
       "destination_path": "schemas/worker-result.schema.json",
-      "destination_blob_sha": "c060bfba428d41515f1a87087c34d593f532ff83",
+      "destination_blob_sha": "48d482e9a00e2af49a648cf1888020210d61f07b",
       "body_exported": false,
       "semantic_coverage": [
         "candidate_and_evidence_receipts",

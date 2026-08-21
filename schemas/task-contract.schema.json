@@ -299,8 +299,23 @@
           },
           "then": {
             "properties": {
+              "strategy": {
+                "not": {
+                  "const": "not_applicable"
+                }
+              },
               "steps": {
                 "minItems": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "strategy": {
+                "const": "not_applicable"
+              },
+              "steps": {
+                "maxItems": 0
               }
             }
           }

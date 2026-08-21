@@ -120,11 +120,17 @@
         ]
       },
       "then": {
+        "not": {
+          "required": [
+            "error_category"
+          ]
+        },
         "properties": {
           "evidence_refs": {
             "minItems": 1
           },
           "checks": {
+            "minItems": 1,
             "contains": {
               "type": "object",
               "properties": {
@@ -137,6 +143,9 @@
               ]
             },
             "minContains": 1
+          },
+          "omitted_work": {
+            "maxItems": 0
           }
         }
       }
@@ -158,6 +167,33 @@
       "then": {
         "required": [
           "error_category"
+        ],
+        "anyOf": [
+          {
+            "properties": {
+              "omitted_work": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "checks": {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "fail"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                },
+                "minContains": 1
+              }
+            }
+          }
         ]
       }
     }
@@ -271,6 +307,7 @@
             "properties": {
               "status": {
                 "enum": [
+                  "available",
                   "executed",
                   "failed"
                 ]
@@ -284,6 +321,25 @@
             "properties": {
               "receipt_refs": {
                 "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "not_required"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "receipt_refs": {
+                "maxItems": 0
               }
             }
           }

@@ -161,6 +161,55 @@ class A019MigrationBatchTests(unittest.TestCase):
             )
         )
 
+        task_mutations = []
+        duplicate_check = copy.deepcopy(
+            positives["schemas/task-contract.schema.json"]
+        )
+        duplicate_check["acceptance_checks"].append(
+            copy.deepcopy(duplicate_check["acceptance_checks"][0])
+        )
+        task_mutations.append((duplicate_check, "duplicate acceptance check IDs"))
+
+        invalid_irreversible = copy.deepcopy(
+            positives["schemas/task-contract.schema.json"]
+        )
+        invalid_irreversible["rollback"] = {
+            "reversible": False,
+            "strategy": "restore_previous",
+            "steps": ["Restore the candidate."],
+        }
+        task_mutations.append(
+            (
+                invalid_irreversible,
+                "irreversible task must use not_applicable with no rollback steps",
+            )
+        )
+
+        invalid_reversible = copy.deepcopy(
+            positives["schemas/task-contract.schema.json"]
+        )
+        invalid_reversible["rollback"] = {
+            "reversible": True,
+            "strategy": "not_applicable",
+            "steps": [],
+        }
+        task_mutations.append(
+            (
+                invalid_reversible,
+                "reversible task must define a rollback strategy and steps",
+            )
+        )
+
+        for instance, expected in task_mutations:
+            with self.subTest(expected=expected):
+                errors = VALIDATOR.validate_instance(
+                    "schemas/task-contract.schema.json",
+                    instance,
+                    schemas,
+                    validators,
+                )
+                self.assertIn(expected, errors, errors)
+
         base = positives["schemas/task-decomposition.schema.json"]
         mutations = []
 
@@ -222,30 +271,96 @@ class A019MigrationBatchTests(unittest.TestCase):
         )
         self.assertIn("duplicate capability IDs", catalog_errors)
 
+        mutation_catalog = copy.deepcopy(
+            positives["schemas/worker-capability-catalog.schema.json"]
+        )
+        mutation_capability = mutation_catalog["workers"][0]["capabilities"][0]
+        mutation_capability["risk_class"] = "reversible_change"
+        mutation_capability["evidence_required"] = False
+        mutation_errors = VALIDATOR.validate_instance(
+            "schemas/worker-capability-catalog.schema.json",
+            mutation_catalog,
+            schemas,
+            validators,
+        )
+        self.assertIn("mutation capability must require evidence", mutation_errors)
+
         result = positives["schemas/worker-result.schema.json"]
         mutations = []
         no_evidence = copy.deepcopy(result)
         no_evidence["evidence_refs"] = []
         no_evidence["checks"] = []
-        mutations.append(no_evidence)
+        mutations.append((no_evidence, "succeeded result must bind evidence"))
+        failed_check = copy.deepcopy(result)
+        failed_check["checks"][0]["status"] = "fail"
+        mutations.append(
+            (failed_check, "succeeded result requires every check to pass")
+        )
+        omitted_success = copy.deepcopy(result)
+        omitted_success["omitted_work"] = ["One bounded check was not performed."]
+        mutations.append((omitted_success, "succeeded result cannot omit work"))
+        error_success = copy.deepcopy(result)
+        error_success["error_category"] = "unknown"
+        mutations.append(
+            (error_success, "succeeded result cannot include an error category")
+        )
+        duplicate_check = copy.deepcopy(result)
+        duplicate_check["checks"].append(copy.deepcopy(duplicate_check["checks"][0]))
+        mutations.append((duplicate_check, "duplicate result check IDs"))
+        failed_without_detail = copy.deepcopy(result)
+        failed_without_detail["status"] = "failed"
+        failed_without_detail["error_category"] = "tool_failure"
+        failed_without_detail["evidence_refs"] = []
+        failed_without_detail["checks"] = []
+        mutations.append(
+            (
+                failed_without_detail,
+                "failed or blocked result requires omitted work or a failed check",
+            )
+        )
+        blocked_without_error = copy.deepcopy(result)
+        blocked_without_error["status"] = "blocked"
+        blocked_without_error["evidence_refs"] = []
+        blocked_without_error["checks"] = []
+        blocked_without_error["omitted_work"] = ["Await bounded input."]
+        mutations.append(
+            (
+                blocked_without_error,
+                "failed or blocked result requires an error category",
+            )
+        )
         authority_claim = copy.deepcopy(result)
         authority_claim["authority_claims"]["promotion"] = True
-        mutations.append(authority_claim)
+        mutations.append(
+            (authority_claim, "result authority claims must all remain false")
+        )
         missing_rollback_receipt = copy.deepcopy(result)
-        missing_rollback_receipt["rollback"]["status"] = "executed"
+        missing_rollback_receipt["rollback"]["status"] = "available"
         missing_rollback_receipt["rollback"]["receipt_refs"] = []
-        mutations.append(missing_rollback_receipt)
+        mutations.append(
+            (missing_rollback_receipt, "rollback status requires a receipt")
+        )
+        unexpected_rollback_receipt = copy.deepcopy(result)
+        unexpected_rollback_receipt["rollback"]["status"] = "not_required"
+        unexpected_rollback_receipt["rollback"]["receipt_refs"] = [
+            "urn:evidence/rollback"
+        ]
+        mutations.append(
+            (
+                unexpected_rollback_receipt,
+                "not_required rollback cannot bind receipts",
+            )
+        )
 
-        for instance in mutations:
-            with self.subTest(instance=instance):
-                self.assertTrue(
-                    VALIDATOR.validate_instance(
-                        "schemas/worker-result.schema.json",
-                        instance,
-                        schemas,
-                        validators,
-                    )
+        for instance, expected in mutations:
+            with self.subTest(expected=expected):
+                errors = VALIDATOR.validate_instance(
+                    "schemas/worker-result.schema.json",
+                    instance,
+                    schemas,
+                    validators,
                 )
+                self.assertIn(expected, errors, errors)
 
     def test_blob_reuse_source_path_and_candidate_scan_fail_closed(self) -> None:
         temporary, root = self._fixture()

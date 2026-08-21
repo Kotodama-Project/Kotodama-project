@@ -27,7 +27,7 @@ LICENSE_PATH = Path("LICENSES/MIT.txt")
 SOURCE_COMMIT = "2fc1bf60b0dc8721c96875788447e34adc4c7216"
 SOURCE_LICENSE_BLOB = "8294a2a3706f3fd652b8c1bae22a1024ade9406c"
 SOURCE_PACKAGE_BLOB = "39804f52b523024c8b62eae678f897166ae0a47a"
-SOURCE_MAPPING_DIGEST = "7318109686fa29ebacc2804b69c135a4e7621606d49a2b632a9a96982f65aa87"
+SOURCE_MAPPING_DIGEST = "6042ed4eb73f673aeac7964d5855e23a3067617c8cefad71efe32f1c4e15a702"
 SOURCE_BLOBS = {
     "d96bc760b22eaa06a0729b6a1e1cd915b160dbf3",
     "f682d97d07ea6d3cf87d776d226e32921fdb2306",
@@ -38,10 +38,10 @@ SOURCE_BLOBS = {
 }
 
 DESTINATIONS = {
-    "schemas/task-contract.schema.json": "fe7343cc134554bd93eeb8654f0cbcdb22aad82b",
+    "schemas/task-contract.schema.json": "efbf457f8d71581525250f0a187bfb102e059342",
     "schemas/task-decomposition.schema.json": "24da61da50dda406bdba3da6c20f669a313077a4",
-    "schemas/worker-capability-catalog.schema.json": "192449aaf49d43a16753b597cfc396e4cd3d16b2",
-    "schemas/worker-result.schema.json": "c060bfba428d41515f1a87087c34d593f532ff83",
+    "schemas/worker-capability-catalog.schema.json": "e3d7dc72a46196354f58e140a63e4d437c37b6fd",
+    "schemas/worker-result.schema.json": "48d482e9a00e2af49a648cf1888020210d61f07b",
 }
 SCHEMA_IDS = {
     path: f"https://github.com/Kotodama-Project/Kotodama-project/{path}"
@@ -306,6 +306,21 @@ def _task_semantic_errors(task: dict[str, Any]) -> list[str]:
     scope = task.get("scope", {})
     if set(scope.get("resources", [])) & set(scope.get("excluded_resources", [])):
         errors.append("included and excluded resources overlap")
+    check_ids = [
+        check.get("check_id")
+        for check in task.get("acceptance_checks", [])
+        if isinstance(check, dict)
+    ]
+    if len(check_ids) != len(set(check_ids)):
+        errors.append("duplicate acceptance check IDs")
+    rollback = task.get("rollback", {})
+    reversible = rollback.get("reversible")
+    strategy = rollback.get("strategy")
+    steps = rollback.get("steps", [])
+    if reversible is False and (strategy != "not_applicable" or steps):
+        errors.append("irreversible task must use not_applicable with no rollback steps")
+    if reversible is True and (strategy == "not_applicable" or not steps):
+        errors.append("reversible task must define a rollback strategy and steps")
     return errors
 
 
@@ -381,6 +396,65 @@ def _catalog_semantic_errors(instance: dict[str, Any]) -> list[str]:
     ]
     if len(capability_ids) != len(set(capability_ids)):
         errors.append("duplicate capability IDs")
+    for worker in workers:
+        if not isinstance(worker, dict):
+            continue
+        for capability in worker.get("capabilities", []):
+            if not isinstance(capability, dict):
+                continue
+            if (
+                capability.get("risk_class") != "inspect"
+                and capability.get("evidence_required") is not True
+            ):
+                errors.append("mutation capability must require evidence")
+    return errors
+
+
+def _result_semantic_errors(instance: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    checks = instance.get("checks", [])
+    check_ids = [
+        check.get("check_id") for check in checks if isinstance(check, dict)
+    ]
+    if len(check_ids) != len(set(check_ids)):
+        errors.append("duplicate result check IDs")
+
+    status = instance.get("status")
+    evidence = instance.get("evidence_refs", [])
+    omitted = instance.get("omitted_work", [])
+    if status == "succeeded":
+        if not evidence:
+            errors.append("succeeded result must bind evidence")
+        if not checks or any(
+            not isinstance(check, dict) or check.get("status") != "pass"
+            for check in checks
+        ):
+            errors.append("succeeded result requires every check to pass")
+        if omitted:
+            errors.append("succeeded result cannot omit work")
+        if "error_category" in instance:
+            errors.append("succeeded result cannot include an error category")
+    elif status in {"failed", "blocked"}:
+        if "error_category" not in instance:
+            errors.append("failed or blocked result requires an error category")
+        failed_check = any(
+            isinstance(check, dict) and check.get("status") == "fail"
+            for check in checks
+        )
+        if not omitted and not failed_check:
+            errors.append("failed or blocked result requires omitted work or a failed check")
+
+    claims = instance.get("authority_claims")
+    if claims != {"promotion": False, "current_truth": False, "release": False}:
+        errors.append("result authority claims must all remain false")
+
+    rollback = instance.get("rollback", {})
+    rollback_status = rollback.get("status")
+    receipts = rollback.get("receipt_refs", [])
+    if rollback_status in {"available", "executed", "failed"} and not receipts:
+        errors.append("rollback status requires a receipt")
+    if rollback_status == "not_required" and receipts:
+        errors.append("not_required rollback cannot bind receipts")
     return errors
 
 
@@ -404,6 +478,8 @@ def validate_instance(
         errors.extend(_decomposition_semantic_errors(instance))
     elif schema_path == "schemas/worker-capability-catalog.schema.json":
         errors.extend(_catalog_semantic_errors(instance))
+    elif schema_path == "schemas/worker-result.schema.json":
+        errors.extend(_result_semantic_errors(instance))
     return sorted(set(errors))
 
 
@@ -516,7 +592,7 @@ def positive_instances() -> dict[str, dict[str, Any]]:
             "current_truth": False,
             "release": False,
         },
-        "rollback": {"status": "available", "receipt_refs": []},
+        "rollback": {"status": "not_required", "receipt_refs": []},
     }
     return {
         "schemas/task-contract.schema.json": child,
