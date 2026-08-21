@@ -1,6 +1,6 @@
 ---
 name: kotodama-validate
-description: Validate a declared Kotodama candidate read-only and emit deterministic status, digest, evidence-tier, and no-go receipt fields.
+description: Use only for the Kotodama public repository to validate one declared candidate read-only and emit fail-closed receipt fields.
 ---
 
 # Kotodama validation
@@ -24,14 +24,17 @@ only.
 ## Procedure
 
 1. Resolve and verify the allowlisted root and target digest; refuse path escape,
-   missing ownership, or dirty-baseline ambiguity.
+   missing ownership, or dirty-baseline ambiguity. Done when: the exact candidate
+   and read boundary are fixed.
 2. Run only declared read-only checks with bounded bytes, time, recursion, and
    output. Decode text as UTF-8 and report binary or replacement-character
-   counts.
+   counts. Done when: every attempted check has an exit or explicit unknown.
 3. Record check names, commands or test identifiers, exit codes, timestamps,
    before/after digests, changed/no-op state, and skipped/unknown reasons.
+   Done when: the receipt can reproduce the declared validation boundary.
 4. Keep evidence at the tier actually observed; do not infer `DEVICE`,
-   `PROVIDER`, `PUBLIC`, or `HUMAN_GO` from local output.
+   `PROVIDER`, `PUBLIC`, or `HUMAN_GO` from local output. Done when: every
+   missing higher gate is listed in `no_go_reasons`.
 
 ## Completion
 

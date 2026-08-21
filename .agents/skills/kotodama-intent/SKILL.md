@@ -1,6 +1,6 @@
 ---
 name: kotodama-intent
-description: Turn a natural-language request into a bounded Kotodama intent candidate with explicit beneficiaries, non-goals, scope, and stop conditions.
+description: Use only for the Kotodama public repository when turning an ambiguous request into a bounded, non-authorizing intent candidate.
 ---
 
 # Kotodama intent
@@ -26,13 +26,15 @@ truth. Do not collect secrets or raw private conversation into the candidate.
 ## Procedure
 
 1. Capture purpose, beneficiary, desired outcome, constraints, non-goals, and
-   the smallest useful scope.
+   the smallest useful scope. Done when: each intent field is present or unknown.
 2. Separate `confirmed`, `proposed`, and `unknown` fields. Preserve source
-   locators and revision/time instead of quoting private bodies.
+   locators and revision/time instead of quoting private bodies. Done when:
+   every statement has one evidence status and a source locator or gap.
 3. Write measurable acceptance criteria, stop conditions, rollback intent, and
-   the evidence tier that would be sufficient.
+   the evidence tier that would be sufficient. Done when: success and refusal
+   can both be evaluated without inference.
 4. Identify missing decisions and return one bounded clarification list; do not
-   silently expand scope.
+   silently expand scope. Done when: every blocker has one owner or question.
 
 ## Completion
 

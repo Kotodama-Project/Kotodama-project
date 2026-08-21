@@ -1,6 +1,6 @@
 ---
 name: kotodama-public-review
-description: Review a Kotodama candidate for public readiness while keeping local, device, provider, public, and human-go evidence strictly separate.
+description: Use only for the Kotodama public repository when reviewing a candidate for public readiness across distinct evidence gates.
 ---
 
 # Kotodama public review
@@ -25,14 +25,18 @@ their own candidate-bound Work Order.
 ## Procedure
 
 1. Bind the candidate to repository, branch/ref, exact tree digest, file list,
-   license/privacy review, and rollback owner.
+   license/privacy review, and rollback owner. Done when: one immutable candidate
+   identity and rollback owner are recorded.
 2. Run local structural/tests and secret/PII scans; record failures rather
    than filtering them out. Keep private runtime, credentials, raw transcripts,
-   and host-specific commands outside the public candidate.
+   and host-specific commands outside the public candidate. Done when: every
+   declared local check has a result and privacy classification.
 3. Use a draft PR or equivalent review surface. Record provider/public checks
-   only when an independent receipt actually observed them.
+   only when an independent receipt actually observed them. Done when: each
+   hosted claim points to candidate-bound readback or remains unknown.
 4. State every missing gate and retain `NO_GO_UNPUBLISHED` until the exact
-   candidate has technical evidence and an identified human decision.
+   candidate has technical evidence and an identified human decision. Done when:
+   all higher-tier gaps appear in `no_go_reasons`.
 
 ## Completion
 

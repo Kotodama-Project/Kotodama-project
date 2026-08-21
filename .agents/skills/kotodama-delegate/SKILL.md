@@ -1,6 +1,6 @@
 ---
 name: kotodama-delegate
-description: Decompose a Kotodama task into bounded subagent work with explicit ownership, depth, fan-out, isolation, retries, and acceptance receipts.
+description: Use only for the Kotodama public repository to decompose independent work into bounded agent lanes with explicit ownership and receipts.
 ---
 
 # Kotodama delegation
@@ -25,13 +25,16 @@ infer a child model from a task name, nickname, or static configuration.
 
 1. Create a stable parent-to-child edge ID and record child owner, target paths,
    read/write mode, maximum depth, cumulative fan-out budget, timeout, and
-   retry/cancel policy.
+   retry/cancel policy. Done when: every child edge has all required bounds.
 2. Default children to read-only isolated artifacts. Give each writer an
    exclusive lane or worktree; never let two children edit the same file.
+   Done when: each writable path has exactly one recorded owner.
 3. Confirm the callable runtime schema before spawning. Record observed model
    metadata or `MODEL_UNVERIFIED`; never auto-fallback to an unrequested model.
+   Done when: runtime identity is observed or explicitly marked unverified.
 4. Require each child to return the same receipt shape, acceptance result, and
    unresolved risks. Aggregate failures as `PARTIAL` or `BLOCKED`.
+   Done when: every started child has a receipt or an explicit missing status.
 
 ## Completion
 
