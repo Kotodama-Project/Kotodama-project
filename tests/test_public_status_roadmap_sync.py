@@ -7,14 +7,14 @@ ROOT = Path(__file__).resolve().parents[1]
 CURRENT_DATE = "2026-08-21"
 PUBLISHED_MAIN = "be71f424689648b3ab1b1db15adbaddea374586b"
 ACTIVE_CANDIDATES = {
-    "PR #18": "01297f5d77ec51956c4bdc368b4a322d0954c33a",
+    "PR #18": "fbb6da377edd2b726a854912eb17c964a1ec01e9",
     "PR #17": "704ced6a4b8be6465849646c7d2c1ba95f4fd7af",
-    "PR #1": "4963801bd17deee30623171199a54c6c8ee9e5c3",
+    "PR #1": "83e7b9e0789f941f993fd2c43a938dd872b12581",
 }
 GOVERNANCE_EVIDENCE = {
-    "repository validation run": "32465302741",
-    "dependency review run": "32465302734",
-    "public test count": "521 tests",
+    "repository validation run": "32488194816",
+    "dependency review run": "32488194768",
+    "public test count": "529 tests",
 }
 HISTORICAL_GIT_BLOBS = {
     "README.md": "9a591992b1d74681fe8b011222625c6a0525c0c8",

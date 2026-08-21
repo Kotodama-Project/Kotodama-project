@@ -6,14 +6,16 @@ source bodies, or exploit details in a public issue or pull request.
 
 ## Reporting a vulnerability
 
-Use GitHub's private vulnerability reporting flow when the repository exposes
-the **Security → Report a vulnerability** action. If that action is not
-available, open a minimal issue that contains no sensitive details and asks a
-maintainer to establish a private reporting channel.
+Use a private GitHub Security Advisory through the repository's
+**Security → Report a vulnerability** action. Do not open a public issue with
+vulnerability details. If private vulnerability reporting is unavailable, open
+only a minimal issue that contains no sensitive details and asks a maintainer
+to establish a private reporting channel.
 
-Include only the affected revision, component, impact category, and a safe way
-to reproduce the problem. Maintainers may request additional evidence through
-the private channel. Never paste a live secret; revoke or rotate it first.
+Include only the affected revision, component, impact category, a safe way to
+reproduce the problem, and sanitized logs or screenshots. Maintainers may
+request additional evidence through the private channel. Never paste a live
+secret; revoke or rotate the secret before history cleanup.
 
 ## Credential hygiene
 
@@ -32,8 +34,8 @@ The command scans the current tracked tree with deterministic high-confidence
 detectors and never prints a detected value. It does not scan Git history,
 untracked files, provider configuration, or GitHub security settings. If a
 secret has ever been committed, revoke or rotate it first and treat historical
-removal as a separately reviewed incident-response change; deleting the current
-file is not sufficient.
+removal as a separately reviewed incident-response change.
+A deleted file or rewritten commit does not invalidate a credential.
 
 ## Supported surface
 

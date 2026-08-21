@@ -10,15 +10,15 @@ This roadmap describes the **safe order of work from the current public state**.
 | Surface | Exact commit | Current role |
 |---|---|---|
 | Published `main` | `be71f424689648b3ab1b1db15adbaddea374586b` | Incomplete Public Preview; open PR content is not published |
-| PR #18 | `01297f5d77ec51956c4bdc368b4a322d0954c33a` | Publication, license, policy, neutral CI, dependency baseline, and current-tree tracked credential hygiene |
+| PR #18 | `fbb6da377edd2b726a854912eb17c964a1ec01e9` | Publication, license, policy, neutral CI, dependency baseline, and current-tree tracked credential hygiene |
 | PR #17 | `704ced6a4b8be6465849646c7d2c1ba95f4fd7af` | Bounded public skill operating contract |
-| PR #1 | `4963801bd17deee30623171199a54c6c8ee9e5c3` | Cloudflare edge and official OS integration candidate |
+| PR #1 | `83e7b9e0789f941f993fd2c43a938dd872b12581` | Cloudflare edge and official OS integration candidate |
 
 All three remain Draft, `read-only/candidate-only`, and `NO_GO_UNPUBLISHED`.
 
 ## Safe integration order
 
-1. **Validate PR #18 exactly.** Keep the tracked credential gate, README smoke, three runtime-candidate validators, immutable GitHub Action references, dependency review, full tests, and clean-tree refusal green on `01297f5d77ec51956c4bdc368b4a322d0954c33a`.
+1. **Validate PR #18 exactly.** Keep the tracked credential gate, README smoke, three runtime-candidate validators, immutable GitHub Action references, dependency review, full tests, and clean-tree refusal green on `fbb6da377edd2b726a854912eb17c964a1ec01e9`.
 2. **Complete issue #19.** Replace the Cloudflare-only generic required-check binding with neutral repository checks, configure review/force-push/deletion controls, inspect security settings, and record a sanitized readback.
 3. **Complete human gates for PR #18.** Obtain independent approval of the latest push and an explicit repository-owner decision accepting Apache-2.0. Merge only after all gates pass.
 4. **Publish the operational status safely.** Merge the status/roadmap change only after PR #18, rerun exact-head checks, and preserve the historical snapshots byte-for-byte.
@@ -62,7 +62,7 @@ These remain deterministic, read-only candidate tools. Discoverability is not pr
 ### M1 — Neutral public governance baseline
 
 - [x] PR #18 candidate contains public policy documents, proposed Apache-2.0 text, neutral validation, dependency review, immutable Action pins, current-tree credential hygiene, and regression coverage
-- [x] Repository validation run `32465302741` and Dependency review run `32465302734` passed on exact head `01297f5d77ec51956c4bdc368b4a322d0954c33a`; the public suite ran 521 tests and left no generated drift
+- [x] Repository validation run `32488194816` and Dependency review run `32488194768` passed on exact head `fbb6da377edd2b726a854912eb17c964a1ec01e9`; the public suite ran 529 tests and left no generated drift
 - [ ] Issue #19 control-plane changes and readback
 - [ ] Independent latest-push approval
 - [ ] Explicit Apache-2.0 repository-owner decision
