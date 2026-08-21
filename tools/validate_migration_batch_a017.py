@@ -119,11 +119,13 @@ CONTEXT_PATH = Path("templates/hierarchy/session-context.json")
 SCHEMA_PATH = Path("schemas/hierarchy-session-context.schema.json")
 README_PATH = Path("templates/hierarchy/README.md")
 CATALOG_PATH = Path("templates/README.md")
+GUIDE_PATH = Path("docs/TEMPLATE-GUIDE.md")
 REQUIRED_PATHS = {
     MANIFEST_PATH,
     LICENSE_PATH,
     README_PATH,
     CATALOG_PATH,
+    GUIDE_PATH,
     CONTEXT_PATH,
     SCHEMA_PATH,
     *(Path(path) for path in TEMPLATE_SPECS),
@@ -429,6 +431,16 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
             errors.append("template catalog does not link hierarchy candidate")
         if "Issue #25の解決まではadmission不可" not in catalog:
             errors.append("template catalog omits hierarchy admission blocker")
+
+    guide_data = _read_bounded(root, GUIDE_PATH, errors)
+    if guide_data is not None:
+        guide = guide_data.decode("utf-8", errors="replace")
+        if "[A017階層テンプレート候補](../templates/hierarchy/README.md)" not in guide:
+            errors.append("template guide does not link the A017 hierarchy candidate")
+        if "private source-history receipt、独立reviewが閉じるまではadmission不可" not in guide:
+            errors.append("template guide omits the A017 admission blockers")
+        if "session、requirement、plan、taskといった階層テンプレート" in guide:
+            errors.append("template guide still classifies the hierarchy as local-only")
 
     license_data = _read_bounded(root, LICENSE_PATH, errors)
     if license_data is not None and git_blob_sha(license_data) != SOURCE_LICENSE_BLOB:

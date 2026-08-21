@@ -212,6 +212,7 @@ flowchart LR
 - Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
 - Compose minimum / Proxmox segmentedの6フェーズinstallation lifecycle契約、validator、公開runbook
 - Compose minimumのCompany DB / Evidence metadata Store data-plane skeletonとexact-byte validator
+- [A017階層テンプレート候補](../templates/hierarchy/README.md): project、phase、requirement、plan、task、session contextを8つの公開safeなdestinationへ再構成し、exact 10-source manifestと標準ライブラリvalidatorで検査。Issue #25、private source-history receipt、独立reviewが閉じるまではadmission不可
 
 これらは構造検証できるstarterです。Compose data-planeはofflineで解決できる実行候補まで進みましたが、image取得・起動・migration・restart・restoreのlive receiptやCompany OS一式ではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)、runtime境界は[Installation Lifecycle Profiles](INSTALLATION-LIFECYCLE.md)を参照してください。
 
@@ -220,7 +221,6 @@ flowchart LR
 - 合成Discord textまたは正規化済みの合成voice transcriptを入力にしたCompany OSの垂直スライス
 - Source RecordからIntent Candidate、idea、review、Work Order candidate、zero-effect preview、Verification Receiptまでの処理
 - 保存済みR31/Source Content/access evidenceをstrictに読み、non-emitted R30 projection digestまでを照合するread-only candidate
-- session、requirement、plan、taskといった階層テンプレート
 - Discord onboarding、Voice Adapter、Clone Birth、Agent Foundry、activity projectionの候補実装
 - 同じ入力のreplay、改ざん検出、明示stop、外部通信0の安全検証
 
@@ -236,7 +236,7 @@ flowchart LR
 - Human Intent、Decision、Capability Grant、Verification Receipt、Promotionなどplanned catalog全体のschema・validator・test
 - 実音声の15分rotation、投稿、保持、削除の公開可能な証明
 
-Company manifest、Block、MOCに限定した最小validatorとnegative testは現在公開済みです。これはplanned catalog全体の完成を意味しません。
+Company manifest、Block、MOCのvalidatorとnegative testに加え、A017階層候補にはexact-source manifest、component MIT notice、candidate scan、fail-closed回帰testがあります。いずれのPASSもIssue #25、private source-history receipt、独立reviewを置き換えず、planned catalog全体の完成を意味しません。
 
 ## 現時点での使い方
 
@@ -274,3 +274,4 @@ Company manifest、Block、MOCに限定した最小validatorとnegative testは�
 | `promoted` | 定められた承認と検証を経てCurrent Truthへ反映済み |
 
 名前に`full`、`complete`、`all`が含まれていても、scopeとreceiptがなければ完成の証明にはしません。
+
