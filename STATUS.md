@@ -3,7 +3,7 @@
 Current state checked: 2026-08-21  
 Published fixed point: `main@be71f424689648b3ab1b1db15adbaddea374586b`
 
-This file answers **what is true now** for the public repository. It is not a deployment, Promotion, Current Truth, Final Human GO, or Public Beta receipt. The detailed R179-and-earlier revision record is preserved in [the historical status snapshot](docs/history/STATUS-R179-AND-EARLIER.md).
+This file answers **what is true now** for the public repository. It is not a deployment, Promotion, Current Truth, Final Human GO, or Public Beta receipt. If published `main` or any active candidate head changes, this dated snapshot is stale and must be refreshed before it is used for integration or merge decisions. The detailed R179-and-earlier revision record is preserved in [the historical status snapshot](docs/history/STATUS-R179-AND-EARLIER.md).
 
 ## Current public state
 

@@ -28,6 +28,12 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                     self.assertIn(candidate, text)
                     self.assertIn(sha, text)
 
+    def test_current_documents_require_refresh_after_fixed_point_drift(self) -> None:
+        for surface, text in (("status", self.status), ("roadmap", self.roadmap)):
+            with self.subTest(surface=surface):
+                self.assertIn("## Current public state", text)
+                self.assertIn("must be refreshed", text)
+
     def test_current_documents_separate_evidence_lanes(self) -> None:
         for surface, text in (("status", self.status), ("roadmap", self.roadmap)):
             for marker in (
