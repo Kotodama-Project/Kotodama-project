@@ -11,6 +11,7 @@ This file answers **what is true now** for the public repository. It is not a de
 |---|---|---|
 | Published `main` | Incomplete Public Preview at `be71f424689648b3ab1b1db15adbaddea374586b`; `read-only/candidate-only` | Do not treat open PR content as published |
 | Publication and governance baseline | Draft PR #18 at `fbb6da377edd2b726a854912eb17c964a1ec01e9`; Repository validation run `32488194816` and Dependency review run `32488194768` passed on that exact head. README smoke, three runtime-candidate validators, immutable-Action validation, tracked credential hygiene over the current Git-tracked tree, 529 tests, and clean-tree refusal succeeded | Complete issue #19 control-plane readback, obtain independent latest-push review, and record the repository owner's Apache-2.0 decision |
+| BecomeOne migration SSOT | Public [issue #24](https://github.com/Kotodama-Project/Kotodama-project/issues/24) coordinates an allowlist-only, no-history dual-repository migration; no batch, repository rename, or archive is accepted yet | Classify and receipt every item, prove zero unclassified items and zero residual consumers, then verify pinned one-way dependency, compatibility, canary, and rollback evidence |
 | Public skill operating contract | Draft PR #17 at `704ced6a4b8be6465849646c7d2c1ba95f4fd7af`; based on the old published `main` | Rebase after the accepted governance baseline, rerun neutral checks, and obtain independent review |
 | Cloudflare candidate | Draft PR #1 at `83e7b9e0789f941f993fd2c43a938dd872b12581`; scope-specific validation run `32488235678` passed | Keep Cloudflare evidence scope-specific; reconcile only after neutral repository gates |
 | `main` protection | Protected for everyone, but the sole required context is `Trusted Cloudflare candidate validation` | Rebind generic repository checks and read back the final rule under issue #19 |
@@ -40,10 +41,11 @@ A passing candidate-owned workflow is hosted evidence, not independent human app
 2. Complete and read back issue #19 controls; obtain independent latest-push review and the explicit Apache-2.0 owner decision.
 3. Merge PR #18 only if those gates pass; no merge is authorized by this document.
 4. Merge the operational status/roadmap change only after PR #18, rerun its exact-head checks, and preserve the historical snapshots byte-for-byte.
-5. Rebase PR #17 onto the accepted baseline, resolve overlaps, rerun all neutral checks, and obtain independent review.
-6. Reconcile PR #1 after the neutral baseline; retain its Cloudflare checks as scope-specific evidence.
-7. Produce clean-install, migration, restart, rollback/restore, privacy, and provider evidence for any proposed runtime or Voice surface.
-8. Perform independent reconciliation and Final Human GO before any limited Public Beta decision.
+5. Run issue #24 migration batches from one canonical ledger: allowlist-only, no-history public extracts; private retention or regeneration for everything else; immutable receipts; and no rename or archive until zero unclassified items and zero residual consumers are proven.
+6. Rebase PR #17 onto the accepted baseline, resolve overlaps, rerun all neutral checks, and obtain independent review.
+7. Reconcile PR #1 after the neutral baseline; retain its Cloudflare checks as scope-specific evidence.
+8. Produce clean-install, migration, restart, rollback/restore, privacy, and provider evidence for any proposed runtime or Voice surface.
+9. Perform independent reconciliation and Final Human GO before any limited Public Beta decision.
 
 ## Current entry points
 
@@ -62,6 +64,7 @@ A passing candidate-owned workflow is hosted evidence, not independent human app
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Governance control-plane issue #19](https://github.com/Kotodama-Project/Kotodama-project/issues/19)
 - [Current-state synchronization issue #20](https://github.com/Kotodama-Project/Kotodama-project/issues/20)
+- [BecomeOne migration SSOT issue #24](https://github.com/Kotodama-Project/Kotodama-project/issues/24)
 
 ## Boundary
 
