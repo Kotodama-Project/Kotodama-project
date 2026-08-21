@@ -131,7 +131,7 @@ REQUIRED_PATHS = {
 
 SECRET_PATTERNS = {
     "aws_access_key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    "github_token": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
+    "scm_access_token": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
     "openai_key": re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
     "private_key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     "assigned_secret": re.compile(
