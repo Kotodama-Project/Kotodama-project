@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 import unittest
 
 
@@ -10,6 +11,21 @@ ACTIVE_CANDIDATES = {
     "PR #17": "704ced6a4b8be6465849646c7d2c1ba95f4fd7af",
     "PR #1": "4963801bd17deee30623171199a54c6c8ee9e5c3",
 }
+HISTORICAL_GIT_BLOBS = {
+    "STATUS-R179-AND-EARLIER.md": "71877969c3eae7f32d928884a9e7766a6945a0ea",
+    "ROADMAP-R179-AND-EARLIER.md": "96bb07e5dff7612368b03943c6c0c6c5faaa51d9",
+}
+
+
+def git_blob_sha(path: Path) -> str:
+    result = subprocess.run(
+        ["git", "hash-object", str(path)],
+        cwd=ROOT,
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return result.stdout.strip()
 
 
 class PublicStatusRoadmapSyncTests(unittest.TestCase):
@@ -78,16 +94,19 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertEqual(sorted(positions), positions)
 
     def test_historical_revision_detail_is_preserved_outside_the_ssot(self) -> None:
-        status_history = ROOT / "docs/history/STATUS-R179-AND-EARLIER.md"
-        roadmap_history = ROOT / "docs/history/ROADMAP-R179-AND-EARLIER.md"
-        history_index = ROOT / "docs/history/README.md"
+        history_dir = ROOT / "docs/history"
+        status_history = history_dir / "STATUS-R179-AND-EARLIER.md"
+        roadmap_history = history_dir / "ROADMAP-R179-AND-EARLIER.md"
+        history_index = history_dir / "README.md"
 
         for path in (status_history, roadmap_history, history_index):
             with self.subTest(path=path):
                 self.assertTrue(path.is_file())
 
-        self.assertGreater(len(status_history.read_text(encoding="utf-8")), 10_000)
-        self.assertGreater(len(roadmap_history.read_text(encoding="utf-8")), 10_000)
+        for name, expected_blob in HISTORICAL_GIT_BLOBS.items():
+            with self.subTest(history_blob=name):
+                self.assertEqual(git_blob_sha(history_dir / name), expected_blob)
+
         self.assertIn(
             "R179 is the current public documentation revision",
             status_history.read_text(encoding="utf-8"),
