@@ -93,7 +93,7 @@
       "core_critical": 0,
       "affected_package": "nanoid",
       "installed_version": "3.3.16",
-      "patched_versions": ">=3.3.17",
+      "patched_versions": ">=3.3.18",
       "affected_paths": 19
     },
     "runtime": {

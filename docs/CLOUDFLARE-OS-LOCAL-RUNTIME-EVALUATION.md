@@ -57,7 +57,7 @@ the 1060 upstream tests or establish freshness on another machine.
 
 1. The 99-file starter-pinned-to-current-core drift has no independent review.
 2. The pinned production graph contains `nanoid` 3.3.16 with one high advisory;
-   the patched line begins at 3.3.17.
+   the current patched line begins at 3.3.18.
 3. Windows needs the local launcher adapter and an LF checkout for byte-stable
    fixture tests; this is only a local mitigation.
 4. Observability and explicit error-reporting defaults lack a Kotodama retention
