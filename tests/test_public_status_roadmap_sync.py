@@ -16,6 +16,13 @@ GOVERNANCE_EVIDENCE = {
     "dependency review run": "32488194768",
     "public test count": "529 tests",
 }
+MIGRATION_SSOT_MARKERS = (
+    "issue #24",
+    "allowlist-only",
+    "no-history",
+    "zero unclassified items",
+    "zero residual consumers",
+)
 HISTORICAL_GIT_BLOBS = {
     "README.md": "9a591992b1d74681fe8b011222625c6a0525c0c8",
     "STATUS-R179-AND-EARLIER.md": "71877969c3eae7f32d928884a9e7766a6945a0ea",
@@ -51,6 +58,12 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                     self.assertIn(sha, text)
             for evidence, marker in GOVERNANCE_EVIDENCE.items():
                 with self.subTest(surface=surface, evidence=evidence):
+                    self.assertIn(marker, text)
+
+    def test_current_documents_bind_the_migration_ssot_and_terminal_gates(self) -> None:
+        for surface, text in (("status", self.status), ("roadmap", self.roadmap)):
+            for marker in MIGRATION_SSOT_MARKERS:
+                with self.subTest(surface=surface, marker=marker):
                     self.assertIn(marker, text)
 
     def test_current_documents_require_refresh_after_fixed_point_drift(self) -> None:
@@ -104,12 +117,13 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
             "1. **Validate PR #18 exactly.**",
             "2. **Complete issue #19.**",
             "4. **Publish the operational status safely.**",
-            "5. **Rebase and validate PR #17.**",
-            "6. **Reconcile and validate PR #1.**",
-            "7. **Prove runtime lifecycle.**",
-            "8. **Prove Voice and privacy boundaries.**",
-            "10. **Final Human GO.**",
-            "11. **Limited Public Beta.**",
+            "5. **Run migration batches under issue #24.**",
+            "6. **Rebase and validate PR #17.**",
+            "7. **Reconcile and validate PR #1.**",
+            "8. **Prove runtime lifecycle.**",
+            "9. **Prove Voice and privacy boundaries.**",
+            "11. **Final Human GO.**",
+            "12. **Limited Public Beta.**",
         )
         positions = [ordered.index(step) for step in exact_steps]
         self.assertEqual(sorted(positions), positions)
