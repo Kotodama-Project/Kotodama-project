@@ -1,6 +1,6 @@
 ---
 name: kotodama-plan
-description: Build a bounded Kotodama plan or dry-run from an intent candidate, including ownership, acceptance, rollback, and explicit stop conditions.
+description: Use only for the Kotodama public repository to turn an intent candidate into a bounded plan or dry-run without applying changes.
 ---
 
 # Kotodama plan
@@ -25,13 +25,15 @@ that is not present in the selected checkout.
 ## Procedure
 
 1. Bind the plan to an intent revision, repository/ref, target paths, owner,
-   dirty baseline, and source digests.
+   dirty baseline, and source digests. Done when: the plan has one exact input set.
 2. Select `plan` or `dry-run`; enumerate reads, writes, network calls, sends,
-   and expected effect counts separately.
+   and expected effect counts separately. Done when: every effect lane has a ceiling.
 3. Define acceptance tests, no-op behavior, timeout, retry/cancel policy,
-   backup/pre-state, rollback locator, and terminal states.
+   backup/pre-state, rollback locator, and terminal states. Done when: each
+   terminal state has a deterministic receipt rule.
 4. Mark every promotion boundary (`LOCAL`, `DEVICE`, `PROVIDER`, `PUBLIC`,
-   `HUMAN_GO`) and list the receipt required to cross it.
+   `HUMAN_GO`) and list the receipt required to cross it. Done when: no gate can
+   be crossed by wording or a lower-tier result.
 
 ## Completion
 

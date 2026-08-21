@@ -1,6 +1,6 @@
 ---
 name: kotodama-research
-description: Perform bounded, source-backed Kotodama research and report claim-level provenance, freshness, uncertainty, and a safe next action.
+description: Use only for the Kotodama public repository when current primary-source research must update a bounded project claim.
 ---
 
 # Kotodama research
@@ -24,12 +24,15 @@ private source bodies, credentials, or personal identifiers into notes.
 ## Procedure
 
 1. State the question, date window, allowed sources, and excluded actions.
+   Done when: the research boundary is answerable and time-bounded.
 2. Prefer official documentation, source code, standards, and the selected
    repository's current bytes. Record URL/path, revision, accessed time, and
-   content digest for each claim.
+   content digest for each claim. Done when: every factual claim has provenance.
 3. Label `FACT`, `INFERENCE`, `PROPOSAL`, and `UNKNOWN`; record contradictions
-   and stale-source risk instead of averaging them away.
+   and stale-source risk instead of averaging them away. Done when: conflicting
+   evidence and freshness gaps remain visible.
 4. End with the smallest local next step and the evidence tier it can reach.
+   Done when: the recommendation cannot imply an unauthorized external effect.
 
 ## Completion
 

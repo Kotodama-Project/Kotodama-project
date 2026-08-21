@@ -7,7 +7,9 @@ hosts, credentials, raw conversations, provider commands, or deployment
 recipes.
 
 Each skill has a standard `SKILL.md` frontmatter manifest (`name` and
-`description`) and is safe to inspect or plan by default. The skills do not
+`description`), scopes model invocation to the Kotodama public repository, and
+gives every numbered procedure step its own `Done when:` criterion. The skills
+are safe to inspect or plan by default. They do not
 grant permission to write, publish, send, delete, rotate credentials, or
 promote a candidate. The public project remains `NO_GO_UNPUBLISHED` until its
 own evidence and human-governance gates are satisfied.
@@ -29,3 +31,7 @@ own evidence and human-governance gates are satisfied.
 The normative shared contract is [SKILL-OPERATING-CONTRACT.md](../../docs/SKILL-OPERATING-CONTRACT.md).
 Use the public repository's existing Company Pack validators and review-chain
 docs for executable checks; this pack does not invent a second runtime CLI.
+
+Run the local audit with `python tools/audit_public_skills.py`. To check known
+catalog collisions too, repeat `--external-skill-root <declared-root>` for each
+catalog. The resulting claim covers only those declared roots.

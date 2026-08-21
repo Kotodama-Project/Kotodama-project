@@ -1,6 +1,6 @@
 ---
 name: kotodama-handoff
-description: Create or resume a compact, redacted Kotodama handoff bound to exact state, evidence, ownership, blockers, and the next safe action.
+description: Use only for the Kotodama public repository when creating or resuming a redacted handoff bound to exact state and evidence.
 ---
 
 # Kotodama handoff
@@ -24,12 +24,16 @@ blocker, or copy raw private conversation and credentials into a new session.
 
 1. Record task/intent revision, owner, repository/ref, exact target file list,
    baseline/HEAD digests, completed checks, current status, and unknowns.
+   Done when: the handoff names one exact restart fixed point.
 2. Separate `done`, `partial`, `blocked`, and `not started`; attach paths,
    line ranges, logs, or URLs rather than broad claims.
+   Done when: every work item has one explicit lifecycle status and evidence.
 3. State the next safe action, its stop conditions, expiry, rollback locator,
    and the evidence tier it can reach.
+   Done when: one bounded next action and all stop conditions are recorded.
 4. On resume, re-read current bytes and compare digests before continuing; mark
    stale or missing evidence as `UNKNOWN`.
+   Done when: current bytes have been compared and all drift is classified.
 
 ## Completion
 

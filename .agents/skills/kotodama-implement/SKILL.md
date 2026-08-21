@@ -1,6 +1,6 @@
 ---
 name: kotodama-implement
-description: Apply an approved, bounded Kotodama local change with a clean baseline, atomic writes, focused tests, and a rollback-bound receipt.
+description: Use only for the Kotodama public repository to apply an approved local candidate with bounded files, tests, and rollback evidence.
 ---
 
 # Kotodama implementation
@@ -24,14 +24,15 @@ separated. Do not hide partial work behind “single pass” language.
 ## Procedure
 
 1. Re-read the plan and compare the target digest and dirty baseline; stop on
-   drift.
+   drift. Done when: the candidate and pre-existing changes are byte-bound.
 2. Work only inside the allowlisted scope. Use UTF-8, atomic replacement,
    backup/pre-state digest, and an exclusive lock where concurrent writers are
-   possible.
+   possible. Done when: all writes remain in the allowlist and have one owner.
 3. Run focused tests and static checks, capture the exact diff and effect count,
    and classify incomplete work as `PARTIAL` or `BLOCKED`.
+   Done when: the exact diff and every declared acceptance result are recorded.
 4. Leave public/provider/promotion actions for their own Work Order and
-   evidence gates.
+   evidence gates. Done when: the local candidate contains no wider effect.
 
 ## Completion
 

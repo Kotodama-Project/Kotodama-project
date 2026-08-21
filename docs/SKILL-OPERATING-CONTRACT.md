@@ -54,7 +54,17 @@ description: One sentence describing the action and when to use it.
 Triggers are positive and bounded. Non-triggers are explicit. Generic words
 such as `update`, `research`, or `session` are not sufficient on their own;
 use a namespaced skill name and a target-specific description to avoid silent
-collisions.
+collisions. Every skill in this pack starts its description with
+`Use only for the Kotodama public repository ...`; a generic research,
+implementation, validation, planning, delegation, or handoff request outside
+that repository is not a trigger.
+
+Every numbered procedure step ends with a checkable `Done when:` condition.
+Overall completion cannot substitute for an incomplete intermediate step. The
+surface auditor can also compare explicitly declared external catalogs with
+repeatable `--external-skill-root <path>` arguments. It reads only bounded
+`*/SKILL.md` files and fails on duplicate names or exact descriptions; it does
+not discover or widen to undeclared roots.
 
 Model names, task names, nicknames, static TOML, and historical receipts do
 not prove which model ran. If runtime metadata is unavailable, record
@@ -176,6 +186,10 @@ project policy.
 ## 10. Refresh checklist
 
 - [ ] `name` and `description` parse; triggers and non-triggers are distinct.
+- [ ] Description begins with the Kotodama public-repository scope phrase, and
+      every procedure step has its own `Done when:` criterion.
+- [ ] Declared external skill catalogs have no duplicate public name or exact
+      description; undeclared catalogs are explicitly outside the audit claim.
 - [ ] Every command, if any, exists in the target checkout and has UTF-8 and
       Windows guidance; otherwise the skill is explicitly explanatory.
 - [ ] Scope, mode, owner, approval, effect ceiling, and dirty baseline are
