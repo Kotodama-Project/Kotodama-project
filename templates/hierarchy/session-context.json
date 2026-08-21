@@ -1,0 +1,13 @@
+{
+  "$schema": "../../schemas/hierarchy-session-context.schema.json",
+  "schema_version": "1.0",
+  "kind": "session_context",
+  "session_id": "{{SESSION_ID}}",
+  "intent_ref": "{{INTENT_REF}}",
+  "owner_role": "{{OWNER_ROLE}}",
+  "created_at": "{{ISO8601}}",
+  "status": "draft",
+  "worktree_enabled": false,
+  "parent_refs": [],
+  "evidence_refs": []
+}

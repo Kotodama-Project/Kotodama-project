@@ -1,0 +1,137 @@
+{
+  "schema_version": "kotodama.public-migration-batch.v1",
+  "batch_id": "A017",
+  "status": "CANDIDATE_ONLY",
+  "publication_state": "NO_GO_UNPUBLISHED",
+  "source": {
+    "fixed_commit": "2fc1bf60b0dc8721c96875788447e34adc4c7216",
+    "allowlisted_prefix": "forest/_templates/",
+    "expected_entries": 10,
+    "git_history_imported": false,
+    "license_expression": "MIT",
+    "license_blob_sha": "8294a2a3706f3fd652b8c1bae22a1024ade9406c",
+    "package_metadata_blob_sha": "39804f52b523024c8b62eae678f897166ae0a47a"
+  },
+  "component_license": {
+    "expression": "MIT",
+    "notice": "Copyright (c) 2026 Kotodama Project",
+    "license_file": "LICENSES/MIT.txt",
+    "source_derived_scope": [
+      "templates/hierarchy/**",
+      "schemas/hierarchy-session-context.schema.json"
+    ]
+  },
+  "admission_gates": {
+    "license_and_provenance": "BLOCKED_ISSUE_25",
+    "source_history_secret_pii": "BLOCKED_MISSING_PRIVATE_RECEIPT",
+    "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
+    "independent_review": "PENDING"
+  },
+  "entries": [
+    {
+      "source_path": "forest/_templates/INDEX_TEMPLATE.md",
+      "source_blob_sha": "1aecf8880cbda4453d003bff45e386474680be74",
+      "source_mode": "100644",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/index.md",
+      "destination_blob_sha": "59d6ad3e0e23f678c2274a31989e38cf358926ed",
+      "semantic_coverage": ["purpose", "canonical_entries", "change_boundary", "validation", "rollback", "projection_rule"],
+      "rationale": "Keep navigation and change-boundary semantics without project-specific approval levels or executable placeholders."
+    },
+    {
+      "source_path": "forest/_templates/layers/L3_project_template.md",
+      "source_blob_sha": "4d56c1702657e1c5fb352efbf7021ea233980f41",
+      "source_mode": "100644",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/project.md",
+      "destination_blob_sha": "55e9def37558da2c1ebe558372c932ffab0f693e",
+      "semantic_coverage": ["id", "status", "owner_role", "outcome", "scope", "acceptance_criteria", "phases", "dependencies", "risks", "evidence", "rollback"],
+      "rationale": "Retain the project contract while replacing names, paths, and automatic-completion implications with public-safe references and evidence gates."
+    },
+    {
+      "source_path": "forest/_templates/layers/L4_phase_template.md",
+      "source_blob_sha": "14d352bc870e4663dbb1111c42d1885ba8901ddf",
+      "source_mode": "100644",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/phase.md",
+      "destination_blob_sha": "41ad19ea040d7e7aa19cf94bf7cc53ecd98e9770",
+      "semantic_coverage": ["id", "parent_ref", "status", "owner_role", "outcome", "entry_criteria", "exit_criteria", "scope", "non_goals", "requirements", "deliverables", "evidence", "rollback"],
+      "rationale": "Preserve entry, exit, scope, requirement, and deliverable semantics as a provider-neutral candidate contract."
+    },
+    {
+      "source_path": "forest/_templates/layers/L5_requirement_template.md",
+      "source_blob_sha": "4ef237072365495538028e832f75c2d6fd53163d",
+      "source_mode": "100644",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/requirement.md",
+      "destination_blob_sha": "f49b9f4008eb7cc9dd69825bc5387866e8c7ca16",
+      "semantic_coverage": ["id", "kind", "type", "priority", "status", "parent_ref", "dependencies", "acceptance_criteria", "owner_role", "effort", "blocking", "created_at", "updated_at", "background", "scope", "verification", "history", "rollback"],
+      "rationale": "Create the single public requirement contract with valid frontmatter, unchecked criteria, evidence, and rollback fields."
+    },
+    {
+      "source_path": "forest/_templates/layers/L6_plan_template.md",
+      "source_blob_sha": "d5b35bd67dc59fab509c64aff1ee97956f060d92",
+      "source_mode": "100644",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/plan.md",
+      "destination_blob_sha": "80d3a3945e223f3f28bbcda0ce8f92eb0d54151a",
+      "semantic_coverage": ["id", "parent_ref", "status", "owner_role", "outcome", "preconditions", "ordered_steps", "dependencies", "completion_criteria", "stop_conditions", "rollback"],
+      "rationale": "Replace private context paths and role assumptions with bounded effects, opaque evidence references, stop conditions, and rollback."
+    },
+    {
+      "source_path": "forest/_templates/layers/L7_task_template.md",
+      "source_blob_sha": "57bab30bcd42bf3cc3eab517d6028ba9b45a7e86",
+      "source_mode": "100644",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/task.md",
+      "destination_blob_sha": "6667a1db455ebd0eee3d8cf75bfa6a97dae6e4ce",
+      "semantic_coverage": ["id", "kind", "status", "parent_ref", "session_ref", "context_refs", "evidence_refs", "work_log", "stop_conditions", "rollback", "handoff"],
+      "rationale": "Consolidate reusable task semantics and remove transcript, run-log, private knowledge, and repository-path coupling."
+    },
+    {
+      "source_path": "forest/_templates/project/README.md",
+      "source_blob_sha": "c2d5cd8036cc4f75d4c53ce3a37a05645ceec11e",
+      "source_mode": "100644",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/README.md",
+      "destination_blob_sha": "55c80c0aa494dfff638d8e843b34ad5b981ce57b",
+      "semantic_coverage": ["hierarchy", "usage", "canonical_boundary", "validation", "migration_boundary", "license_boundary"],
+      "rationale": "Replace private CLI, generated bridge, local-state, and tool-specific instructions with a portable catalog and safety contract."
+    },
+    {
+      "source_path": "forest/_templates/session/CONTEXT.json",
+      "source_blob_sha": "74963410019e8dd3ace9c38e5464fff72770e710",
+      "source_mode": "100644",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/session-context.json",
+      "destination_blob_sha": "0af2d77c2c70b88df96486e432152ee274bfd4d1",
+      "semantic_coverage": ["session_id", "intent_ref", "created_at", "status", "worktree_enabled", "owner_role", "parent_refs", "evidence_refs"],
+      "rationale": "Retain the minimal context stub and add a public schema, owner role, and bounded reference arrays."
+    },
+    {
+      "source_path": "forest/_templates/session/REQUIREMENT.md",
+      "source_blob_sha": "e1b975d7e6b450d9cbed93438a89ecd276e5d898",
+      "source_mode": "100644",
+      "decision": "SUPERSEDED",
+      "destination_path": "templates/hierarchy/requirement.md",
+      "destination_blob_sha": "f49b9f4008eb7cc9dd69825bc5387866e8c7ca16",
+      "semantic_coverage": ["id", "kind", "type", "priority", "status", "parent_ref", "dependencies", "acceptance_criteria", "owner_role", "effort", "blocking", "created_at", "updated_at", "background", "scope", "verification", "history", "rollback"],
+      "rationale": "The source is a malformed duplicate; the single re-authored requirement contract covers its valid semantics and adds rollback."
+    },
+    {
+      "source_path": "forest/_templates/session/TASK.md",
+      "source_blob_sha": "07872b0190fdf6df6eea6455b02c1d4aff659569",
+      "source_mode": "100644",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/task.md",
+      "destination_blob_sha": "6667a1db455ebd0eee3d8cf75bfa6a97dae6e4ce",
+      "semantic_coverage": ["session_ref", "intent_ref", "status", "created_at", "outcome", "acceptance_criteria", "evidence_refs", "notes", "handoff"],
+      "rationale": "Consolidate the session task stub with the layer task into one public task contract while preserving intent and session references."
+    }
+  ],
+  "rollback": {
+    "strategy": "REMOVE_EXACT_CANDIDATE_COMMIT_BEFORE_MERGE",
+    "verification": "RESTORE_PR18_BASE_TREE_AND_RERUN_VALIDATION",
+    "source_retention": "PRIVATE_SOURCE_FIXED_POINT_UNCHANGED"
+  }
+}
