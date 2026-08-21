@@ -47,6 +47,10 @@ A passing candidate-owned workflow is hosted evidence, not independent human app
 - [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md)
 - [Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)
 - [Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md)
+- [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md): `python -S -B tools/check_company_pack_public_preview.py examples/company-starter --format markdown`
+- [Source Binding Verifier Candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md)
+- [Protected Source Binding Receipt Candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)
+- [Protected Execution Request Handoff Candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security](SECURITY.md)
 - [Support](SUPPORT.md)
