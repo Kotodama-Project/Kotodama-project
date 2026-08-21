@@ -10,6 +10,8 @@ const MAX_JWT_BYTES = 16_384;
 const MAX_QUERY_BYTES = 256;
 const MAX_REVIEW_BODY_BYTES = 16_384;
 const MAX_GATEWAY_BODY_BYTES = 1_048_576;
+const MAX_GATEWAY_JSON_DEPTH = 32;
+const MAX_GATEWAY_JSON_NODES = 10_000;
 const SAFE_DOCUMENT_ID = /^[a-z0-9][a-z0-9-]{0,127}$/;
 const SAFE_SPEAKER_REF = /^speaker-[a-z0-9-]{1,32}$/;
 const EVIDENCE_URN = /^urn:kotodama:evidence:sha256:[0-9a-f]{64}$/;
@@ -205,11 +207,24 @@ async function accessIdentity(request, config) {
 }
 
 function hasForbiddenGatewayKey(value) {
-  if (Array.isArray(value)) return value.some(hasForbiddenGatewayKey);
-  if (!value || typeof value !== "object") return false;
-  for (const [key, nested] of Object.entries(value)) {
-    if (FORBIDDEN_GATEWAY_KEYS.has(key.toLowerCase()) || hasForbiddenGatewayKey(nested)) {
+  const pending = [{ value, depth: 0 }];
+  let visited = 0;
+  while (pending.length) {
+    const current = pending.pop();
+    visited += 1;
+    if (visited > MAX_GATEWAY_JSON_NODES || current.depth > MAX_GATEWAY_JSON_DEPTH) {
       return true;
+    }
+    if (!current.value || typeof current.value !== "object") continue;
+    if (Array.isArray(current.value)) {
+      for (const nested of current.value) {
+        pending.push({ value: nested, depth: current.depth + 1 });
+      }
+      continue;
+    }
+    for (const [key, nested] of Object.entries(current.value)) {
+      if (FORBIDDEN_GATEWAY_KEYS.has(key.toLowerCase())) return true;
+      pending.push({ value: nested, depth: current.depth + 1 });
     }
   }
   return false;

@@ -242,6 +242,35 @@ test("raw Voice, transcript, credential, and corpus fields fail closed", async (
   }
 });
 
+test("excessively deep or wide gateway JSON fails closed without recursion", async () => {
+  const deeplyNested = {};
+  let cursor = deeplyNested;
+  for (let depth = 0; depth < 64; depth += 1) {
+    cursor.next = {};
+    cursor = cursor.next;
+  }
+
+  for (const invalid of [
+    { nested: deeplyNested },
+    { nested: Array.from({ length: 10_001 }, () => null) },
+  ]) {
+    __testing.reset();
+    const { jwk, token } = await signingFixture();
+    __testing.setFetch(async (request) => {
+      const value = request instanceof Request ? request : new Request(request);
+      if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
+      return Response.json(projection(invalid));
+    });
+
+    const response = await worker.fetch(
+      withJwt("https://preview.example.test/voice/review", await token()),
+      env(),
+    );
+    assert.equal(response.status, 502);
+    assert.equal((await response.json()).error, "context_gateway_projection_denied");
+  }
+});
+
 test("schema drift and empty required sections fail closed", async () => {
   for (const invalid of [
     { schema_version: "2.0.0" },
