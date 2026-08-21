@@ -62,7 +62,7 @@ These remain deterministic, read-only candidate tools. Discoverability is not pr
 ### M1 — Neutral public governance baseline
 
 - [x] PR #18 candidate contains public policy documents, proposed Apache-2.0 text, neutral validation, dependency review, immutable Action pins, current-tree credential hygiene, and regression coverage
-- [x] Repository validation run `32465302741` and Dependency review run `32465302780` passed on exact head `01297f5d77ec51956c4bdc368b4a322d0954c33a`; the public suite ran 521 tests and left no generated drift
+- [x] Repository validation run `32465302741` and Dependency review run `32465302734` passed on exact head `01297f5d77ec51956c4bdc368b4a322d0954c33a`; the public suite ran 521 tests and left no generated drift
 - [ ] Issue #19 control-plane changes and readback
 - [ ] Independent latest-push approval
 - [ ] Explicit Apache-2.0 repository-owner decision

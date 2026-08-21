@@ -13,7 +13,7 @@ ACTIVE_CANDIDATES = {
 }
 GOVERNANCE_EVIDENCE = {
     "repository validation run": "32465302741",
-    "dependency review run": "32465302780",
+    "dependency review run": "32465302734",
     "public test count": "521 tests",
 }
 HISTORICAL_GIT_BLOBS = {
