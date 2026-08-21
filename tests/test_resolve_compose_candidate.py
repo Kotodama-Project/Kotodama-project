@@ -75,6 +75,18 @@ def synthetic_candidate() -> dict:
 
 
 class ResolvedComposeCandidateCliTests(unittest.TestCase):
+    def test_strict_json_has_a_platform_independent_nesting_limit(self) -> None:
+        at_limit = (b'{"nested":' * 64) + b"0" + (b"}" * 64)
+        beyond_limit = (b'{"nested":' * 65) + b"0" + (b"}" * 65)
+
+        self.assertIsInstance(candidate_validator.load_strict_json_bytes(at_limit), dict)
+        with self.assertRaises(candidate_validator.StrictJsonError):
+            candidate_validator.load_strict_json_bytes(beyond_limit)
+        quoted_delimiters = candidate_validator.load_strict_json_bytes(
+            b'{"value":"[[{{escaped delimiters}}]]"}'
+        )
+        self.assertEqual(quoted_delimiters["value"], "[[{{escaped delimiters}}]]")
+
     def compose_available(self) -> bool:
         docker = shutil.which("docker")
         if docker is None:
