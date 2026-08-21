@@ -11,10 +11,11 @@ This roadmap describes the **safe order of work from the current public state**.
 |---|---|---|
 | Published `main` | `be71f424689648b3ab1b1db15adbaddea374586b` | Incomplete Public Preview; open PR content is not published |
 | PR #18 | `fbb6da377edd2b726a854912eb17c964a1ec01e9` | Publication, license, policy, neutral CI, dependency baseline, and current-tree tracked credential hygiene |
+| BecomeOne migration SSOT | [issue #24](https://github.com/Kotodama-Project/Kotodama-project/issues/24) | Allowlist-only, no-history dual-repository migration; every item remains blocked until classified and receipted |
 | PR #17 | `704ced6a4b8be6465849646c7d2c1ba95f4fd7af` | Bounded public skill operating contract |
 | PR #1 | `83e7b9e0789f941f993fd2c43a938dd872b12581` | Cloudflare edge and official OS integration candidate |
 
-All three remain Draft, `read-only/candidate-only`, and `NO_GO_UNPUBLISHED`.
+All three pull requests remain Draft, `read-only/candidate-only`, and `NO_GO_UNPUBLISHED`. Issue #24 is coordination evidence only and grants no publication, rename, archive, or deployment authority.
 
 ## Safe integration order
 
@@ -22,13 +23,14 @@ All three remain Draft, `read-only/candidate-only`, and `NO_GO_UNPUBLISHED`.
 2. **Complete issue #19.** Replace the Cloudflare-only generic required-check binding with neutral repository checks, configure review/force-push/deletion controls, inspect security settings, and record a sanitized readback.
 3. **Complete human gates for PR #18.** Obtain independent approval of the latest push and an explicit repository-owner decision accepting Apache-2.0. Merge only after all gates pass.
 4. **Publish the operational status safely.** Merge the status/roadmap change only after PR #18, rerun exact-head checks, and preserve the historical snapshots byte-for-byte.
-5. **Rebase and validate PR #17.** Resolve overlapping review-chain files against the accepted baseline; rerun neutral hosted checks and the public-skill audit; obtain independent review.
-6. **Reconcile and validate PR #1.** Retain Cloudflare-specific checks without making them the generic repository gate; resolve dependency, provenance, privacy, billing, provider, and production-boundary issues.
-7. **Prove runtime lifecycle.** Bind clean install, migration, health, restart, rollback, backup, and restore evidence to one exact candidate and environment.
-8. **Prove Voice and privacy boundaries.** Bind consent, participant notification, speaker attribution, retention/deletion, access control, error handling, and rollback evidence. A private Voice runtime cutover attempt is not public runtime evidence.
-9. **Reconcile independently.** Separate builder, verifier, administrator, and human decision roles; resolve drift and contradictions.
-10. **Final Human GO.** Record a candidate-bound decision before any limited Public Beta access.
-11. **Limited Public Beta.** Only after all earlier gates; publish scope, support boundary, rollback, stop conditions, and durable receipts.
+5. **Run migration batches under issue #24.** Maintain one canonical ledger; use allowlist-only, no-history public extracts; retain or regenerate everything else; record immutable receipts; and prove zero unclassified items and zero residual consumers before any rename or archive.
+6. **Rebase and validate PR #17.** Resolve overlapping review-chain files against the accepted baseline; rerun neutral hosted checks and the public-skill audit; obtain independent review.
+7. **Reconcile and validate PR #1.** Retain Cloudflare-specific checks without making them the generic repository gate; resolve dependency, provenance, privacy, billing, provider, and production-boundary issues.
+8. **Prove runtime lifecycle.** Bind clean install, migration, health, restart, rollback, backup, and restore evidence to one exact candidate and environment.
+9. **Prove Voice and privacy boundaries.** Bind consent, participant notification, speaker attribution, retention/deletion, access control, error handling, and rollback evidence. A private Voice runtime cutover attempt is not public runtime evidence.
+10. **Reconcile independently.** Separate builder, verifier, administrator, and human decision roles; resolve drift and contradictions.
+11. **Final Human GO.** Record a candidate-bound decision before any limited Public Beta access.
+12. **Limited Public Beta.** Only after all earlier gates; publish scope, support boundary, rollback, stop conditions, and durable receipts.
 
 ## Evidence required at every stage
 
@@ -77,14 +79,23 @@ These remain deterministic, read-only candidate tools. Discoverability is not pr
 - [ ] Exact-head hosted checks after reconciliation
 - [ ] Close issue #20 only after the accepted merge and readback
 
-### M3 — Bounded public agent skills
+### M3 — Ledger-backed BecomeOne migration
+
+- [ ] One canonical ledger assigns exactly one terminal classification and receipt to every in-scope item
+- [ ] Every public extract is allowlist-only and no-history, with license, provenance, secret/history, privacy, and independent-review gates
+- [ ] The private control plane consumes an immutable, digest-verified public ref in one direction only
+- [ ] Compatibility, bounded canary, and rollback evidence pass for every accepted batch
+- [ ] Final source/destination re-inventory proves zero unclassified items and zero residual consumers before any rename, archive, or deprecation
+- [ ] `NO_GO_UNPUBLISHED` remains until each separate publication and human gate passes
+
+### M4 — Bounded public agent skills
 
 - [ ] Rebase PR #17 after M1
 - [ ] Resolve overlapping review-chain files
 - [ ] Run neutral hosted validation and public-skill audit on the exact reconciled head
 - [ ] Independent latest-push approval
 
-### M4 — Cloudflare candidate reconciliation
+### M5 — Cloudflare candidate reconciliation
 
 - [ ] Reconcile PR #1 after M1
 - [ ] Resolve issues #9–#16 and the remaining provider/billing/privacy gates
@@ -92,7 +103,7 @@ These remain deterministic, read-only candidate tools. Discoverability is not pr
 - [ ] Independent latest-push approval
 - [ ] No provider deployment or production traffic implied
 
-### M5 — Runtime and Voice evidence
+### M6 — Runtime and Voice evidence
 
 - [ ] Supported environment and identity boundary
 - [ ] Clean-install and migration evidence
@@ -100,7 +111,7 @@ These remain deterministic, read-only candidate tools. Discoverability is not pr
 - [ ] Consent, speaker attribution, retention/deletion, access-control, and incident evidence
 - [ ] Independent verification and contradiction reconciliation
 
-### M6 — Human decision and limited Beta
+### M7 — Human decision and limited Beta
 
 - [ ] Final Human GO bound to an exact candidate, evidence set, scope, expiry, rollback, and stop conditions
 - [ ] Limited Public Beta plan with support and incident boundaries
@@ -108,4 +119,4 @@ These remain deterministic, read-only candidate tools. Discoverability is not pr
 
 ## Non-goals before Final Human GO
 
-Do not publish credentials, raw conversations, personal data, private host identifiers, Discord access, Voice access, production routes, billing changes, provider mutations, Promotion, Current Truth, or Public Beta access. This roadmap creates no authority to merge, deploy, release, or invite users.
+Do not publish credentials, raw conversations, personal data, private host identifiers, Discord access, Voice access, production routes, billing changes, provider mutations, Promotion, Current Truth, or Public Beta access. Do not rename, archive, or deprecate either repository before issue #24 proves zero unclassified items, zero residual consumers, and a tested rollback. This roadmap creates no authority to merge, deploy, release, or invite users.
