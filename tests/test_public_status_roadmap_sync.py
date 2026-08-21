@@ -38,6 +38,7 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         for surface, text in (("status", self.status), ("roadmap", self.roadmap)):
             for marker in (
                 "Code evidence",
+                "Local evidence",
                 "Hosted evidence",
                 "Admin evidence",
                 "Human evidence",

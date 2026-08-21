@@ -23,7 +23,7 @@ A private Voice runtime cutover attempt is not public runtime evidence and does 
 
 | Lane | What is currently available | What is still missing |
 |---|---|---|
-| Code evidence | Published preview plus exact candidate commits and deterministic validators | Accepted integration fixed point |
+| Code evidence / Local evidence | Published preview plus exact candidate commits and deterministic validators | Accepted integration fixed point |
 | Hosted evidence | PR #18 neutral validation and dependency review passed on its exact head; PR #1 has Cloudflare-specific validation | Neutral required-check binding on `main`, then exact-head reruns after reconciliation |
 | Admin evidence | Public branch readback confirms protection and the current required context | Sanitized readback for final branch/ruleset, CodeQL, vulnerability reporting, dependency alerts, secret scanning, and push protection |
 | Human evidence | No independent latest-push approval and no Final Human GO are represented here | Independent review, explicit Apache-2.0 owner decision, provider/runtime decisions, and Final Human GO |

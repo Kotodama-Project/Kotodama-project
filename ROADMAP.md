@@ -33,7 +33,7 @@ All three remain Draft, `read-only/candidate-only`, and `NO_GO_UNPUBLISHED`.
 
 | Evidence lane | Minimum requirement |
 |---|---|
-| Code evidence | Exact commit/tree, deterministic commands, bounded outputs, negative tests, and no generated drift |
+| Code evidence / Local evidence | Exact commit/tree, deterministic commands, bounded outputs, negative tests, and no generated drift |
 | Hosted evidence | Checks run on the exact proposed head with least privilege and immutable dependencies |
 | Admin evidence | Readback of branch/ruleset, security settings, identities, permissions, provider state, quotas, and stop controls |
 | Human evidence | Independent latest-push review, explicit owner decisions, reconciled evidence, and candidate-bound Final Human GO |
