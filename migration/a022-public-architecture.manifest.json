@@ -1,0 +1,331 @@
+{
+  "schema_version": "kotodama.public-migration-batch.v1",
+  "batch_id": "A022",
+  "status": "CANDIDATE_ONLY",
+  "publication_state": "NO_GO_UNPUBLISHED",
+  "source": {
+    "fixed_commit": "2fc1bf60b0dc8721c96875788447e34adc4c7216",
+    "expected_entries": 16,
+    "git_history_imported": false,
+    "source_bodies_copied_unchanged": false,
+    "license_expression": "MIT",
+    "license_blob_sha": "8294a2a3706f3fd652b8c1bae22a1024ade9406c",
+    "package_metadata_blob_sha": "39804f52b523024c8b62eae678f897166ae0a47a"
+  },
+  "component_license": {
+    "expression": "MIT",
+    "notice": "Copyright (c) 2026 Kotodama Project",
+    "license_file": "LICENSES/MIT.txt",
+    "license_blob_sha": "8294a2a3706f3fd652b8c1bae22a1024ade9406c",
+    "source_derived_scope": [
+      "docs/architecture/**"
+    ],
+    "license_and_provenance_gate": "BLOCKED_ISSUE_25",
+    "apache_pr18_relicenses_component": false
+  },
+  "decision_contract": {
+    "PUBLIC_REAUTHOR": 6,
+    "PRIVATE_RETAIN": 8,
+    "SUPERSEDED": 2,
+    "unique_reauthored_destinations": 4
+  },
+  "consolidations": [
+    {
+      "group": "coordination",
+      "destination_path": "docs/architecture/multi-agent-coordination.md",
+      "destination_blob_sha": "a6adf2717798dc742e627e3e35226c2695ec206e",
+      "source_count": 2,
+      "coverage_rule": "DISTINCT_PER_SOURCE"
+    },
+    {
+      "group": "plan-lifecycle",
+      "destination_path": "docs/architecture/plan-runtime.md",
+      "destination_blob_sha": "25f7484d6c17e50dfcfb690dedf51d9383748748",
+      "source_count": 1,
+      "coverage_rule": "DISTINCT_PER_SOURCE"
+    },
+    {
+      "group": "principles-boundaries",
+      "destination_path": "docs/architecture/README.md",
+      "destination_blob_sha": "f7e40d2803a97c151a338ff5c52b7d2a78ae854f",
+      "source_count": 2,
+      "coverage_rule": "DISTINCT_PER_SOURCE"
+    },
+    {
+      "group": "supervision",
+      "destination_path": "docs/architecture/supervision-contract.md",
+      "destination_blob_sha": "f7ca884b5cd34fb890842f668ca2af4d57f4edff",
+      "source_count": 1,
+      "coverage_rule": "DISTINCT_PER_SOURCE"
+    }
+  ],
+  "admission_gates": {
+    "license_and_provenance": "BLOCKED_ISSUE_25",
+    "applicable_source_history_secret_pii": "BLOCKED_MISSING_A022_PRIVATE_RECEIPT",
+    "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
+    "independent_review": "PENDING",
+    "public_governance": "BLOCKED_PR_18_AND_ISSUE_19",
+    "dependency_review": "BLOCKED_UNTIL_RETARGET_TO_MAIN"
+  },
+  "entries": [
+    {
+      "source_path": "architecture/PROJECT_CANON.md",
+      "source_blob_sha": "f2c50641bc617ed772b2234eaa947064ce27b32f",
+      "source_mode": "100644",
+      "decision": "PRIVATE_RETAIN",
+      "destination_path": null,
+      "destination_blob_sha": null,
+      "consolidation_group": null,
+      "body_exported": false,
+      "semantic_coverage": [
+        "private_authority_boundary",
+        "private_canon_state_excluded"
+      ],
+      "rationale": "Repository-specific authority and mutable private canon remain behind the private boundary."
+    },
+    {
+      "source_path": "architecture/cognitive-constitution.md",
+      "source_blob_sha": "0cfe1f6bf7588867b0f06601e05fae481ef49fcf",
+      "source_mode": "100644",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/README.md",
+      "destination_blob_sha": "f7e40d2803a97c151a338ff5c52b7d2a78ae854f",
+      "consolidation_group": "principles-boundaries",
+      "body_exported": false,
+      "semantic_coverage": [
+        "authority_separation",
+        "data_minimization",
+        "deterministic_evidence",
+        "fail_closed_boundaries"
+      ],
+      "rationale": "Only provider-neutral decision and evidence invariants are independently re-authored."
+    },
+    {
+      "source_path": "architecture/directory-restructuring-and-routing.md",
+      "source_blob_sha": "160d1b02fc79d58cf81ef1042a75c98109ac0887",
+      "source_mode": "100644",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/README.md",
+      "destination_blob_sha": "f7e40d2803a97c151a338ff5c52b7d2a78ae854f",
+      "consolidation_group": "principles-boundaries",
+      "body_exported": false,
+      "semantic_coverage": [
+        "dependency_direction",
+        "projection_boundary",
+        "repository_placement",
+        "single_owner_ssot"
+      ],
+      "rationale": "Generic ownership and dependency direction are re-authored without private layout or routing details."
+    },
+    {
+      "source_path": "architecture/future-improvements.md",
+      "source_blob_sha": "1fc4d23b79f654a08f6a52805f97327eb4c495e9",
+      "source_mode": "100644",
+      "decision": "SUPERSEDED",
+      "destination_path": "STATUS.md",
+      "destination_blob_sha": "71877969c3eae7f32d928884a9e7766a6945a0ea",
+      "consolidation_group": null,
+      "body_exported": false,
+      "superseded_ref": "fbb6da377edd2b726a854912eb17c964a1ec01e9:STATUS.md",
+      "semantic_coverage": [
+        "current_candidate_status",
+        "remaining_public_gates",
+        "time_bound_work_tracking"
+      ],
+      "rationale": "A stale improvement backlog is not architecture; the exact PR18 status SSOT and current issues own public work state."
+    },
+    {
+      "source_path": "architecture/github-operations-design.md",
+      "source_blob_sha": "5144c97baef065891cf529fc16685470e776bfda",
+      "source_mode": "100644",
+      "decision": "SUPERSEDED",
+      "destination_path": "CONTRIBUTING.md",
+      "destination_blob_sha": "173a73643f5273b0a7bc104b66b0caa6b7e67286",
+      "consolidation_group": null,
+      "body_exported": false,
+      "superseded_ref": "fbb6da377edd2b726a854912eb17c964a1ec01e9:CONTRIBUTING.md",
+      "semantic_coverage": [
+        "public_contribution_boundary",
+        "review_and_validation_expectations",
+        "security_reporting_separation"
+      ],
+      "rationale": "PR18 governance, contribution policy, security policy, and workflows are the current public controls."
+    },
+    {
+      "source_path": "architecture/kotodama-implementation-trace-map.index.json",
+      "source_blob_sha": "6c9867d13e58e5df8ae4221dbd7b14b369076e84",
+      "source_mode": "100644",
+      "decision": "PRIVATE_RETAIN",
+      "destination_path": null,
+      "destination_blob_sha": null,
+      "consolidation_group": null,
+      "body_exported": false,
+      "semantic_coverage": [
+        "implementation_index_excluded",
+        "private_trace_boundary"
+      ],
+      "rationale": "Machine-readable implementation trace and repository mapping remain private evidence."
+    },
+    {
+      "source_path": "architecture/kotodama-implementation-trace-map.md",
+      "source_blob_sha": "9d7b567cd33aeec122d19fbcec1763f2375302bd",
+      "source_mode": "100644",
+      "decision": "PRIVATE_RETAIN",
+      "destination_path": null,
+      "destination_blob_sha": null,
+      "consolidation_group": null,
+      "body_exported": false,
+      "semantic_coverage": [
+        "implementation_trace_excluded",
+        "private_repository_mapping_boundary"
+      ],
+      "rationale": "Implementation trace details and private repository mappings are not public architecture."
+    },
+    {
+      "source_path": "architecture/multi-agent-coordination.md",
+      "source_blob_sha": "8171cceaace774d05f30f3d8dd52f686ba2f40c1",
+      "source_mode": "100644",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/multi-agent-coordination.md",
+      "destination_blob_sha": "a6adf2717798dc742e627e3e35226c2695ec206e",
+      "consolidation_group": "coordination",
+      "body_exported": false,
+      "semantic_coverage": [
+        "handoff_evidence",
+        "idempotent_messages",
+        "lease_ownership",
+        "role_separation",
+        "work_item_envelope"
+      ],
+      "rationale": "Provider-neutral ownership, messaging, and handoff semantics are independently re-authored."
+    },
+    {
+      "source_path": "architecture/openclaw-contract-mapping.md",
+      "source_blob_sha": "b2425f48668bc3f6410fb4b668e7977ffc9d5c8e",
+      "source_mode": "100644",
+      "decision": "PRIVATE_RETAIN",
+      "destination_path": null,
+      "destination_blob_sha": null,
+      "consolidation_group": null,
+      "body_exported": false,
+      "semantic_coverage": [
+        "provider_contract_mapping_excluded",
+        "provider_neutral_public_boundary"
+      ],
+      "rationale": "Provider-specific contract mappings remain private and are not generalized by copying."
+    },
+    {
+      "source_path": "architecture/openclaw-integration-design.md",
+      "source_blob_sha": "4c25379c0175db32fcb17270b93be862604c307f",
+      "source_mode": "100644",
+      "decision": "PRIVATE_RETAIN",
+      "destination_path": null,
+      "destination_blob_sha": null,
+      "consolidation_group": null,
+      "body_exported": false,
+      "semantic_coverage": [
+        "provider_integration_excluded",
+        "provider_neutral_public_boundary"
+      ],
+      "rationale": "Provider integration and deployment detail remain private."
+    },
+    {
+      "source_path": "architecture/openclaw-kernel-api.md",
+      "source_blob_sha": "8f9e7381a46e6e87f970607c4fa7f8754695188c",
+      "source_mode": "100644",
+      "decision": "PRIVATE_RETAIN",
+      "destination_path": null,
+      "destination_blob_sha": null,
+      "consolidation_group": null,
+      "body_exported": false,
+      "semantic_coverage": [
+        "provider_api_excluded",
+        "provider_neutral_public_boundary"
+      ],
+      "rationale": "A provider-specific API surface is not part of the provider-neutral public contract."
+    },
+    {
+      "source_path": "architecture/repo-os-improvement-ledger.md",
+      "source_blob_sha": "a56422a08bbee692a937a1762bbe49477f5510a6",
+      "source_mode": "100644",
+      "decision": "PRIVATE_RETAIN",
+      "destination_path": null,
+      "destination_blob_sha": null,
+      "consolidation_group": null,
+      "body_exported": false,
+      "semantic_coverage": [
+        "operational_ledger_excluded",
+        "time_bound_private_state_boundary"
+      ],
+      "rationale": "Operational ledgers and historical backlog state remain private."
+    },
+    {
+      "source_path": "architecture/repo-os-v2.md",
+      "source_blob_sha": "a08b3d6074d40803b95a5fdc3686dbf8035f3efe",
+      "source_mode": "100644",
+      "decision": "PRIVATE_RETAIN",
+      "destination_path": null,
+      "destination_blob_sha": null,
+      "consolidation_group": null,
+      "body_exported": false,
+      "semantic_coverage": [
+        "private_runtime_design_excluded",
+        "repository_specific_implementation_boundary"
+      ],
+      "rationale": "Repository-specific runtime design remains private rather than becoming a public implementation promise."
+    },
+    {
+      "source_path": "architecture/swarms-migration-prep.md",
+      "source_blob_sha": "dd37dc6896b362778aa990efd94da7d40c70e0b8",
+      "source_mode": "100644",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/multi-agent-coordination.md",
+      "destination_blob_sha": "a6adf2717798dc742e627e3e35226c2695ec206e",
+      "consolidation_group": "coordination",
+      "body_exported": false,
+      "semantic_coverage": [
+        "bounded_concurrency",
+        "dependency_scheduling",
+        "independent_review",
+        "retry_and_cancellation"
+      ],
+      "rationale": "Only generic bounded-concurrency and recovery semantics are re-authored; migration history is omitted."
+    },
+    {
+      "source_path": "architecture/tool-based-supervisor-design.md",
+      "source_blob_sha": "d79b3095672edc69429daf137288d35491c8237e",
+      "source_mode": "100644",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/supervision-contract.md",
+      "destination_blob_sha": "f7ca884b5cd34fb890842f668ca2af4d57f4edff",
+      "consolidation_group": "supervision",
+      "body_exported": false,
+      "semantic_coverage": [
+        "capability_gate",
+        "failure_isolation",
+        "human_gate",
+        "side_effect_classification",
+        "typed_tool_contract"
+      ],
+      "rationale": "A provider-neutral typed tool and supervision boundary is independently re-authored."
+    },
+    {
+      "source_path": "architecture/universal-plan-runtime-v2.md",
+      "source_blob_sha": "b00c71e7541be570625a6a169f68b9cec5c4012e",
+      "source_mode": "100644",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/plan-runtime.md",
+      "destination_blob_sha": "25f7484d6c17e50dfcfb690dedf51d9383748748",
+      "consolidation_group": "plan-lifecycle",
+      "body_exported": false,
+      "semantic_coverage": [
+        "checkpoint_recovery",
+        "dag_validation",
+        "event_replay",
+        "plan_state_machine",
+        "revision_bound_review"
+      ],
+      "rationale": "A minimal deterministic plan lifecycle is re-authored without implementation or deployment detail."
+    }
+  ]
+}
