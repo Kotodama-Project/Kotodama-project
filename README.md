@@ -889,6 +889,7 @@ MOCs）が理想のCompany Template層を読む順番です。
 
 - [Project Status](STATUS.md) — 現在公開しているものと未証明範囲
 - [Roadmap to Public Beta](ROADMAP.md) — access を開く前に必要な gate
+- [Repository Topology](docs/REPOSITORY-TOPOLOGY.md) — Public Core、Private Control Plane、Local Operational Workspaceの権限と依存方向
 - [5-minute tour](docs/FIVE-MINUTE-TOUR.md) — cloneから一行JSONの読み方までを約5分で確認する
 - [Template Guide](docs/TEMPLATE-GUIDE.md) — Blocks / Records / MOCs の編集
 - [Company Template](templates/company/README.md) — 会社の境界と目的を定義する理想の起点
