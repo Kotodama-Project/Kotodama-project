@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/public-agent-lifecycle-registry.schema.json",
+  "title": "Kotodama Public Agent Lifecycle Registry Record",
+  "description": "One append-only, provider-neutral record in the agent lifecycle registry. Six record kinds share one envelope: agent_spec, agent_instance, agent_run, worker_lease, run_event, and evidence_receipt. Every identifier is opaque; no provider handle, thread identifier, host, credential, prompt, or private path may appear. A record describes lifecycle state, never the material an agent handled.",
+  "type": "object",
+  "unevaluatedProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "record_id",
+    "sequence",
+    "recorded_at",
+    "prev_hash",
+    "content_hash",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {
+      "enum": [
+        "agent_spec",
+        "agent_instance",
+        "agent_run",
+        "worker_lease",
+        "run_event",
+        "evidence_receipt"
+      ]
+    },
+    "version": {
+      "const": "v1"
+    },
+    "record_id": {
+      "$ref": "#/$defs/opaque_ref"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "recorded_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "prev_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "content_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent_runtime_verified",
+        "dispatch_executed",
+        "provider_instance_reused",
+        "continuity_verified",
+        "evidence_independently_verified",
+        "promotion_verified",
+        "current_truth_changed",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "agent_runtime_verified": { "const": false },
+        "dispatch_executed": { "const": false },
+        "provider_instance_reused": { "const": false },
+        "continuity_verified": { "const": false },
+        "evidence_independently_verified": { "const": false },
+        "promotion_verified": { "const": false },
+        "current_truth_changed": { "const": false },
+        "final_human_go": { "const": false },
+        "public_beta_go": { "const": false }
+      }
+    },
+    "public_beta": {
+      "const": "NO_GO_UNPUBLISHED"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "agent_spec" } } },
+      "then": { "$ref": "#/$defs/agent_spec" }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "agent_instance" } } },
+      "then": { "$ref": "#/$defs/agent_instance" }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "agent_run" } } },
+      "then": { "$ref": "#/$defs/agent_run" }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "worker_lease" } } },
+      "then": { "$ref": "#/$defs/worker_lease" }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "run_event" } } },
+      "then": { "$ref": "#/$defs/run_event" }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "evidence_receipt" } } },
+      "then": { "$ref": "#/$defs/evidence_receipt" }
+    }
+  ],
+  "$defs": {
+    "opaque_ref": {
+      "type": "string",
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "agent_spec": {
+      "required": ["spec_ref", "spec_digest", "policy_version", "capability_refs", "max_depth", "max_fan_out"],
+      "properties": {
+        "spec_ref": { "$ref": "#/$defs/opaque_ref" },
+        "spec_digest": { "$ref": "#/$defs/sha256" },
+        "policy_version": { "type": "string", "pattern": "^v[0-9]+$" },
+        "capability_refs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/opaque_ref" }
+        },
+        "max_depth": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "max_fan_out": { "type": "integer", "minimum": 1, "maximum": 256 }
+      }
+    },
+    "agent_instance": {
+      "required": [
+        "instance_ref",
+        "spec_ref",
+        "spec_digest",
+        "policy_version",
+        "backend",
+        "provider_locator_ref",
+        "context_capsule_digest",
+        "repository_ref",
+        "revision"
+      ],
+      "properties": {
+        "instance_ref": { "$ref": "#/$defs/opaque_ref" },
+        "spec_ref": { "$ref": "#/$defs/opaque_ref" },
+        "spec_digest": { "$ref": "#/$defs/sha256" },
+        "policy_version": { "type": "string", "pattern": "^v[0-9]+$" },
+        "backend": { "enum": ["PROVIDER_NEUTRAL_CANDIDATE"] },
+        "provider_locator_ref": {
+          "$ref": "#/$defs/opaque_ref",
+          "description": "Opaque locator standing in for a provider-side handle. Resolving it needs private authority this registry does not carry."
+        },
+        "context_capsule_digest": { "$ref": "#/$defs/sha256" },
+        "repository_ref": { "$ref": "#/$defs/opaque_ref" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "agent_run": {
+      "required": [
+        "run_ref",
+        "instance_ref",
+        "session_ref",
+        "attempt",
+        "idempotency_key_ref",
+        "depth",
+        "state",
+        "degraded",
+        "termination_reason",
+        "evidence_receipt_refs"
+      ],
+      "properties": {
+        "run_ref": { "$ref": "#/$defs/opaque_ref" },
+        "instance_ref": { "$ref": "#/$defs/opaque_ref" },
+        "session_ref": { "$ref": "#/$defs/opaque_ref" },
+        "parent_run_ref": { "$ref": "#/$defs/opaque_ref" },
+        "parent_edge_ref": { "$ref": "#/$defs/opaque_ref" },
+        "attempt": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "idempotency_key_ref": { "$ref": "#/$defs/opaque_ref" },
+        "depth": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "state": {
+          "enum": ["prepared", "dispatched", "running", "completed", "failed", "cancelled", "expired"],
+          "description": "The only lifecycle states. Payload construction alone ends at prepared; an acknowledged delegation ends at dispatched."
+        },
+        "degraded": {
+          "type": "boolean",
+          "description": "A quality or transport attribute, never a successful terminal state."
+        },
+        "termination_reason": {
+          "oneOf": [
+            {
+              "enum": [
+                "EVIDENCE_COMPLETE",
+                "WORKER_ERROR",
+                "EMPTY_RESULT",
+                "TIMEOUT",
+                "UNKNOWN_STATE",
+                "MISSING_EVIDENCE",
+                "CANCELLED_BY_PARENT",
+                "LEASE_EXPIRED"
+              ]
+            },
+            { "type": "null" }
+          ]
+        },
+        "evidence_receipt_refs": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/opaque_ref" }
+        }
+      }
+    },
+    "worker_lease": {
+      "required": ["lease_ref", "run_ref", "owner_ref", "epoch", "heartbeat_at", "expires_at"],
+      "properties": {
+        "lease_ref": { "$ref": "#/$defs/opaque_ref" },
+        "run_ref": { "$ref": "#/$defs/opaque_ref" },
+        "owner_ref": { "$ref": "#/$defs/opaque_ref" },
+        "epoch": { "type": "integer", "minimum": 1 },
+        "heartbeat_at": { "$ref": "#/$defs/timestamp" },
+        "expires_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "run_event": {
+      "required": ["event_ref", "run_ref", "subject_sequence", "from_state", "to_state"],
+      "properties": {
+        "event_ref": { "$ref": "#/$defs/opaque_ref" },
+        "run_ref": { "$ref": "#/$defs/opaque_ref" },
+        "subject_sequence": { "type": "integer", "minimum": 1 },
+        "from_state": {
+          "oneOf": [
+            { "enum": ["prepared", "dispatched", "running"] },
+            { "type": "null" }
+          ]
+        },
+        "to_state": {
+          "enum": ["prepared", "dispatched", "running", "completed", "failed", "cancelled", "expired"]
+        }
+      }
+    },
+    "evidence_receipt": {
+      "required": ["receipt_ref", "run_ref", "artifact_digest", "private_receipt_ref"],
+      "properties": {
+        "receipt_ref": { "$ref": "#/$defs/opaque_ref" },
+        "run_ref": { "$ref": "#/$defs/opaque_ref" },
+        "artifact_digest": { "$ref": "#/$defs/sha256" },
+        "private_receipt_ref": { "$ref": "#/$defs/opaque_ref" }
+      }
+    }
+  }
+}

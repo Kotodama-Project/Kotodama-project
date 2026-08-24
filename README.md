@@ -716,6 +716,7 @@ Kotodama は、初期の言葉を消すのではなく、後続の指示、実�
 - 誤送信の対照項目（source / target、workspace / revision、route、preview / confirmation）を opaque に固定する read-only [Agent Orchestration Route-Binding Candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md)。Codex transport、subagent spawn、provider / device / public send は含まない
 - 言霊の evidence chain に bounded root / worker / verifier を対応づける read-only [Agent Swarm × Kotodama Adoption Candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md)。parent edge、assignment、workspace / revision、handoff、lease、停止条件、N/C/W/V budget を比較するが、Codex spawn、subagent runtime、provider / device / public send は含まない
 - 移行対象ごとの処遇を追記専用・改竄検知可能に記録する read-only [Public Migration Ledger](docs/PUBLIC-MIGRATION-LEDGER.md)。終端分類と移送機構を別フィールドに分け、opaque 参照と digest と gate 結果だけを持つ。移行の実行、素材の複製、公開、private 継続性の証明は含まない
+- agent の spec / instance / run / lease / event / 証跡を provider 非依存で追記専用に記録する read-only [Public Agent Lifecycle Registry](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md)。成功は保存せず導出し、継続性は前提条件が全一致しても `PRECONDITIONS_MATCH_UNVERIFIED` に留まる。agent 起動、dispatch、provider 接続は含まない
 
 ### 既存実装または local candidate だが、公開保証ではないもの
 
@@ -1080,6 +1081,9 @@ read-only/candidate-only公開導線であり、validatorやrunbookがPASSして
 - [Public Migration Ledger](docs/PUBLIC-MIGRATION-LEDGER.md) — append-only disposition records only; no migration, copy, or publication
   Schema: `schemas/public-migration-ledger.schema.json`
   Read-only verifier: `tools/validate_public_migration_ledger.py`
+- [Public Agent Lifecycle Registry](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md) — append-only spec / instance / run / lease / event / receipt records only; no spawn, dispatch, or provider call
+  Schema: `schemas/public-agent-lifecycle-registry.schema.json`
+  Read-only verifier: `tools/validate_public_agent_lifecycle_registry.py`
 
 ## Full review-chain smoke
 
