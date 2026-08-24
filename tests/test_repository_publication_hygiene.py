@@ -322,6 +322,64 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             self.assertEqual("actions/local/action.yml", violations[0][0])
             self.assertIn("full commit SHA", violations[0][2])
 
+    def test_workflow_gate_rejects_unpinned_local_docker_actions(self) -> None:
+        digest = "docker://vendor/tool@sha256:" + ("b" * 64)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            actions = root / "actions"
+            workflows.mkdir(parents=True)
+            actions.mkdir()
+            action_ids = ("dockerfile", "missing", "nonscalar", "pinned")
+            (workflows / "candidate.yml").write_text(
+                "name: Candidate\n"
+                "on: push\n"
+                "jobs:\n"
+                "  verify:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                + "".join(
+                    f"      - uses: ./actions/{action_id}\n"
+                    for action_id in action_ids
+                ),
+                encoding="utf-8",
+            )
+            definitions = {
+                "dockerfile": "  image: Dockerfile\n",
+                "missing": "",
+                "nonscalar": "  image: [Dockerfile]\n",
+                "pinned": f"  image: {digest}\n",
+            }
+            for action_id, image in definitions.items():
+                directory = actions / action_id
+                directory.mkdir()
+                (directory / "action.yml").write_text(
+                    "name: Local\n"
+                    "runs:\n"
+                    "  using: docker\n"
+                    + image,
+                    encoding="utf-8",
+                )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(3, len(violations), violations)
+            self.assertEqual(
+                {
+                    "actions/dockerfile/action.yml",
+                    "actions/missing/action.yml",
+                    "actions/nonscalar/action.yml",
+                },
+                {path for path, _line, _violation in violations},
+            )
+            self.assertTrue(
+                all(
+                    "Docker action image" in violation
+                    for _, _, violation in violations
+                ),
+                violations,
+            )
+
     def test_workflow_reference_gate_rejects_invalid_local_reusable_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

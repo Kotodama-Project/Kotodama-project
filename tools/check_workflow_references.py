@@ -42,6 +42,12 @@ def container_image_violation(reference: str) -> str | None:
     return "workflow container image is not pinned to a sha256 digest"
 
 
+def action_image_violation(reference: str) -> str | None:
+    if not reference.startswith("docker://"):
+        return "Docker action image must use a digest-pinned docker:// reference"
+    return reference_violation(reference)
+
+
 def mapping_values(node: Node, key: str) -> list[tuple[int, Node]]:
     if not isinstance(node, MappingNode):
         return []
@@ -117,23 +123,34 @@ def action_references(text: str) -> list[tuple[int, str | None, str]]:
         return []
 
     references: list[tuple[int, str | None, str]] = []
-    for _runs_line, runs in mapping_values(root, "runs"):
+    for runs_line, runs in mapping_values(root, "runs"):
         if not isinstance(runs, MappingNode):
             continue
         using = [
             scalar_value(value) for _line, value in mapping_values(runs, "using")
         ]
-        if any(value and value.lower() == "composite" for value in using):
+        is_composite = any(
+            value and value.lower() == "composite" for value in using
+        )
+        is_docker = any(value and value.lower() == "docker" for value in using)
+        if is_composite:
             for _steps_line, steps in mapping_values(runs, "steps"):
                 if not isinstance(steps, SequenceNode):
                     continue
                 for step in steps.value:
                     for line, reference in mapping_values(step, "uses"):
                         references.append((line, scalar_value(reference), "step"))
-        for line, image in mapping_values(runs, "image"):
-            reference = scalar_value(image)
-            if reference is not None and reference.lower().startswith("docker://"):
-                references.append((line, reference, "image"))
+        images = mapping_values(runs, "image")
+        if is_docker:
+            if not images:
+                references.append((runs_line, None, "image"))
+            for line, image in images:
+                references.append((line, scalar_value(image), "image"))
+        else:
+            for line, image in images:
+                reference = scalar_value(image)
+                if reference is not None and reference.startswith("docker://"):
+                    references.append((line, reference, "image"))
     return references
 
 
@@ -300,6 +317,8 @@ def scan_workflows(root: Path) -> list[tuple[str, int, str]]:
                 noun = (
                     "container image"
                     if kind in {"container", "service"}
+                    else "Docker action image"
+                    if kind == "image"
                     else "uses reference"
                 )
                 violations.append((
@@ -308,11 +327,12 @@ def scan_workflows(root: Path) -> list[tuple[str, int, str]]:
                     f"workflow {noun} must be a scalar literal [{source}]",
                 ))
                 continue
-            violation = (
-                container_image_violation(reference)
-                if kind in {"container", "service"}
-                else reference_violation(reference)
-            )
+            if kind in {"container", "service"}:
+                violation = container_image_violation(reference)
+            elif kind == "image":
+                violation = action_image_violation(reference)
+            else:
+                violation = reference_violation(reference)
             if violation is not None:
                 violations.append((
                     relative_path, line_number, f"{violation} [{source}]"
