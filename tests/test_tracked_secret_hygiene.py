@@ -453,6 +453,13 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             "multiline-flow-reverse.yaml": (
                 "- {name: " + name + ",\n  value: " + value + "}\n"
             ),
+            "multiline-flow-comment.yaml": (
+                "- {name: "
+                + name
+                + ", # ignored } brace\n  value: "
+                + value
+                + "}\n"
+            ),
             "settings.json": (
                 '{"name":"' + name + '","value":"' + value + '"}\n'
             ),
@@ -545,6 +552,13 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual(
             [], SCANNER.scan_text(Path("settings.yaml"), separate_flow_records)
+        )
+
+        commented_flow_record = (
+            "# {name: " + name + ", value: " + value + "}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), commented_flow_record)
         )
 
         nested_unrelated_value = (

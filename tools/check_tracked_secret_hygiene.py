@@ -887,12 +887,22 @@ def multiline_assignments(
 def flow_mapping_bodies(text: str) -> list[tuple[str, int]]:
     bodies: list[tuple[str, int]] = []
     stack: list[tuple[int, int]] = []
+    sanitized = list(text)
     quote: str | None = None
+    comment = False
     escaped = False
     line_number = 1
     index = 0
     while index < len(text):
         character = text[index]
+        if comment:
+            if character == "\n":
+                comment = False
+                line_number += 1
+            else:
+                sanitized[index] = " "
+            index += 1
+            continue
         if quote is not None:
             if escaped:
                 escaped = False
@@ -907,13 +917,18 @@ def flow_mapping_bodies(text: str) -> list[tuple[str, int]]:
                 line_number += 1
             index += 1
             continue
-        if character in {"'", '"'}:
+        if character == "#" and (
+            index == 0 or text[index - 1].isspace()
+        ):
+            sanitized[index] = " "
+            comment = True
+        elif character in {"'", '"'}:
             quote = character
         elif character == "{":
             stack.append((index, line_number))
         elif character == "}" and stack:
             start, start_line = stack.pop()
-            bodies.append((text[start + 1:index], start_line))
+            bodies.append(("".join(sanitized[start + 1:index]), start_line))
         if character == "\n":
             line_number += 1
         index += 1
