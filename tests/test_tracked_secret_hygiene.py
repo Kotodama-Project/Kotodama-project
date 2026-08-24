@@ -63,6 +63,13 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     SCANNER.scan_text(Path(filename), non_comment_suffix),
                 )
 
+        for suffix in ("// runtime", "/* runtime */"):
+            with self.subTest(hcl_comment=suffix):
+                hcl = name + ' = "<injected-at-runtime>" ' + suffix + "\n"
+                self.assertEqual(
+                    [], SCANNER.scan_text(Path("settings.hcl"), hcl)
+                )
+
     def test_sensitive_filenames_are_blocked_but_templates_are_allowed(self) -> None:
         for name in (
             ".env",
@@ -325,6 +332,11 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             [], SCANNER.scan_text(Path("settings.yaml"), safe_block)
         )
 
+        empty_block = name + ": >-\nOTHER_SETTING: ordinary\n"
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), empty_block)
+        )
+
         value = "SyntheticSecretValue2026"
         next_item = (
             "- name: "
@@ -356,6 +368,18 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(value, repr(findings))
 
+        block_hash_literal = (
+            name + ": >-\n  ${" + name + "} # " + value + "\n"
+        )
+        hash_findings = SCANNER.scan_text(
+            Path("settings.yaml"), block_hash_literal
+        )
+        self.assertEqual(
+            [("settings.yaml", 1, f"live-looking value assigned to {name}")],
+            hash_findings,
+        )
+        self.assertNotIn(value, repr(hash_findings))
+
     def test_multiline_scheme_relative_url_is_not_treated_as_a_comment(self) -> None:
         name = "DATABASE" + "_URL"
         value = "//user:SyntheticSecretValue2026@example.invalid/database"
@@ -380,6 +404,54 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             "flow.yaml": "- {name: " + name + ", value: " + value + "}\n",
             "reverse-flow.yaml": (
                 "- {value: " + value + ", name: " + name + "}\n"
+            ),
+            "flow-extra-before-name.yaml": (
+                "- {value: "
+                + value
+                + ", other: ordinary, name: "
+                + name
+                + "}\n"
+            ),
+            "flow-extra-before-value.yaml": (
+                "- {name: "
+                + name
+                + ", other: ordinary, value: "
+                + value
+                + "}\n"
+            ),
+            "flow-nested-extra-before-name.yaml": (
+                "- {value: "
+                + value
+                + ", metadata: {enabled: true}, name: "
+                + name
+                + "}\n"
+            ),
+            "flow-nested-extra-before-value.yaml": (
+                "- {name: "
+                + name
+                + ", metadata: {enabled: true}, value: "
+                + value
+                + "}\n"
+            ),
+            "flow-quoted-brace-extra.yaml": (
+                '- {name: '
+                + name
+                + ', description: "closing } brace", value: '
+                + value
+                + "}\n"
+            ),
+            "flow-escaped-field-keys.yaml": (
+                '- {"na\\u006de": "'
+                + name
+                + '", "val\\u0075e": "'
+                + value
+                + '"}\n'
+            ),
+            "multiline-flow.yaml": (
+                "- {value: " + value + ",\n  name: " + name + "}\n"
+            ),
+            "multiline-flow-reverse.yaml": (
+                "- {name: " + name + ",\n  value: " + value + "}\n"
             ),
             "settings.json": (
                 '{"name":"' + name + '","value":"' + value + '"}\n'
@@ -445,6 +517,54 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual(
             [], SCANNER.scan_text(Path("settings.yaml"), safe_block)
+        )
+
+        empty_structured_block = (
+            "- name: "
+            + name
+            + "\n  value: >-\n- name: OTHER_SETTING\n  value: ordinary\n"
+        )
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(Path("settings.yaml"), empty_structured_block),
+        )
+
+        safe_flow = (
+            "- {name: "
+            + name
+            + ", metadata: {enabled: true}, value: ${{ secrets."
+            + name
+            + " }}}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), safe_flow)
+        )
+
+        separate_flow_records = (
+            "- {name: " + name + "}\n- {value: " + value + "}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), separate_flow_records)
+        )
+
+        nested_unrelated_value = (
+            "- {name: "
+            + name
+            + ", metadata: {other: ordinary, value: "
+            + value
+            + "}}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), nested_unrelated_value)
+        )
+
+        flow_value_from = (
+            "- {metadata: {enabled: true}, name: "
+            + name
+            + ", valueFrom: {secretKeyRef: {name: private, key: token}}}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), flow_value_from)
         )
 
     def test_commented_multiline_assignment_start_is_ignored(self) -> None:
@@ -603,6 +723,22 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             SCANNER.scan_text(Path("config.js"), dotted_indexed_reference),
         )
 
+        for reference_value in (
+            "secrets." + name,
+            'secrets["' + name + '"]',
+        ):
+            with self.subTest(outer_array=reference_value):
+                outer_array = (
+                    "const values = [process.env."
+                    + name
+                    + " = "
+                    + reference_value
+                    + "]\n"
+                )
+                self.assertEqual(
+                    [], SCANNER.scan_text(Path("config.js"), outer_array)
+                )
+
         callable_literal = (
             'process.env["'
             + name
@@ -671,6 +807,10 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             "rust.rs": 'let text = r#"text " /* still raw"#;\n',
             "swift.swift": 'let text = #"text " /* still raw"#\n',
             "cpp.cpp": 'auto text = R"tag(text " /* still raw)tag";\n',
+            "header.h": 'auto text = R"tag(text " /* still raw)tag";\n',
+            "header.hh": 'auto text = R"tag(text " /* still raw)tag";\n',
+            "header.hpp": 'auto text = R"tag(text " /* still raw)tag";\n',
+            "header.hxx": 'auto text = R"tag(text " /* still raw)tag";\n',
             "java.java": 'var text = """text " /* still raw""";\n',
         }
         for filename, prefix in prefixes.items():
@@ -694,23 +834,31 @@ class TrackedSecretHygieneTests(unittest.TestCase):
     ) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
-        text_block = (
-            'var text = """\n'
-            + "embedded "
-            + "\\"
-            + '"""\n'
-            + "/* still text */\n"
-            + '""";\n'
-        )
-        text = text_block + name + " =\n  \"" + value + "\"\n"
+        for escaped_backslash in ("\\", "\\u005c"):
+            with self.subTest(escaped_backslash=escaped_backslash):
+                text_block = (
+                    'var text = """\n'
+                    + "embedded "
+                    + escaped_backslash
+                    + '"""\n'
+                    + "/* still text */\n"
+                    + '""";\n'
+                )
+                text = text_block + name + " =\n  \"" + value + "\"\n"
 
-        findings = SCANNER.scan_text(Path("config.java"), text)
+                findings = SCANNER.scan_text(Path("config.java"), text)
 
-        self.assertEqual(
-            [("config.java", 5, f"live-looking value assigned to {name}")],
-            findings,
-        )
-        self.assertNotIn(value, repr(findings))
+                self.assertEqual(
+                    [
+                        (
+                            "config.java",
+                            5,
+                            f"live-looking value assigned to {name}",
+                        )
+                    ],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
 
     def test_yaml_document_boundaries_end_null_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"

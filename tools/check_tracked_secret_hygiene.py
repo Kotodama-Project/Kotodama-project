@@ -115,7 +115,8 @@ MULTILINE_ASSIGNMENT_START = re.compile(
     + r")[\"'`]?(?:\s*\])?\s*(?::|"
     + ASSIGNMENT_OPERATOR
     + r")\s*"
-    + r"(?:[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?|#.*)?$",
+    + r"(?:(?P<block>[|>](?:[1-9][+-]?|[+-][1-9]?)?"
+    + r"(?:\s+#.*)?)|#.*)?$",
     re.IGNORECASE,
 )
 MULTILINE_ASSIGNMENT_NAME_ONLY = re.compile(
@@ -167,6 +168,7 @@ SWIFT_RAW_STRING_START = re.compile(
 CPP_RAW_STRING_START = re.compile(
     r"(?:u8|u|U|L)?R\"(?P<delimiter>[^ ()\\\t\r\n]{0,16})\("
 )
+JAVA_UNICODE_BACKSLASH = re.compile(r"\\u+005[cC]$")
 YAML_BLOCK_SCALAR = re.compile(
     r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?$"
 )
@@ -174,23 +176,6 @@ YAML_ENV_FIELD = re.compile(
     r"^(?P<indent>[ \t]*)(?P<item>-\s*)?"
     r"[\"']?(?P<field>name|valueFrom|value)[\"']?\s*:\s*"
     r"(?P<value>.*?)\s*$",
-    re.IGNORECASE,
-)
-ENV_FLOW_ENTRY = re.compile(
-    r"[\{,]\s*[\"']?name[\"']?\s*:\s*[\"']?(?P<name>"
-    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?\s*,\s*[\"']?value[\"']?\s*:\s*(?P<value>"
-    + r'"(?:\\.|[^"\\])*"'
-    + r"|'(?:\\.|[^'\\])*'|[^,}]+)",
-    re.IGNORECASE,
-)
-ENV_FLOW_REVERSE_ENTRY = re.compile(
-    r"[\{,]\s*[\"']?value[\"']?\s*:\s*(?P<value>"
-    + r'"(?:\\.|[^"\\])*"'
-    + r"|'(?:\\.|[^'\\])*'|[^,}]+)\s*,\s*"
-    + r"[\"']?name[\"']?\s*:\s*[\"']?(?P<name>"
-    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?",
     re.IGNORECASE,
 )
 YAML_ENV_NAME_VALUE = re.compile(
@@ -203,16 +188,18 @@ PRIVATE_BEGIN = re.compile(
     r"PGP PRIVATE KEY BLOCK)-----|PuTTY-User-Key-File-[23]:)"
 )
 HASH_COMMENT_SUFFIXES = {
-    ".cfg", ".conf", ".env", ".ini", ".md", ".properties", ".ps1",
-    ".py", ".rb", ".sh", ".toml", ".yaml", ".yml",
+    ".cfg", ".conf", ".env", ".hcl", ".ini", ".md", ".properties",
+    ".ps1", ".py", ".rb", ".sh", ".tf", ".toml", ".yaml", ".yml",
 }
 SLASH_COMMENT_SUFFIXES = {
-    ".c", ".cpp", ".cs", ".go", ".h", ".hh", ".hpp", ".hxx",
-    ".java", ".js", ".kt", ".kts", ".php", ".rs", ".swift", ".ts",
+    ".c", ".cpp", ".cs", ".go", ".h", ".hcl", ".hh", ".hpp",
+    ".hxx", ".java", ".js", ".kt", ".kts", ".php", ".rs", ".swift",
+    ".tf", ".ts",
 }
 BLOCK_COMMENT_SUFFIXES = SLASH_COMMENT_SUFFIXES | {".css", ".sql"}
 NESTED_BLOCK_COMMENT_SUFFIXES = {".rs", ".sql", ".swift"}
 TRIPLE_QUOTE_SUFFIXES = {".cs", ".java", ".kt", ".kts", ".swift"}
+CPP_SOURCE_SUFFIXES = {".cpp", ".h", ".hh", ".hpp", ".hxx"}
 SOURCE_CODE_SUFFIXES = {
     ".c", ".cpp", ".cs", ".go", ".h", ".hh", ".hpp", ".hxx",
     ".java", ".js", ".kt", ".kts", ".php", ".ps1", ".py", ".rb",
@@ -434,9 +421,11 @@ def strip_format_comment(path: Path, raw: str) -> str:
     return raw
 
 
-def assignment_value(raw: str, path: Path | None = None) -> str:
+def assignment_value(
+    raw: str, path: Path | None = None, strip_comments: bool = True
+) -> str:
     value = raw.strip().rstrip(",").strip()
-    if path is not None:
+    if path is not None and strip_comments:
         value = strip_format_comment(path, value).strip().rstrip(",").strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
         value = value[1:-1].strip()
@@ -482,8 +471,33 @@ def live_assignment(value: str) -> bool:
     return not placeholder(value)
 
 
+def trim_unmatched_closing_delimiters(value: str) -> str:
+    stack: list[str] = []
+    matching = {")": "(", "]": "[", "}": "{"}
+    quote: str | None = None
+    escaped = False
+    for index, character in enumerate(value):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+        elif character in "([{":
+            stack.append(character)
+        elif character in matching:
+            if not stack or stack[-1] != matching[character]:
+                return value[:index].rstrip()
+            stack.pop()
+    return value
+
+
 def source_code_reference(path: Path, value: str) -> bool:
-    raw = value.strip()
+    raw = trim_unmatched_closing_delimiters(value.strip())
     if path.suffix.lower() not in SOURCE_CODE_SUFFIXES or not raw:
         return False
     if raw[0] in {"'", '"', "`"}:
@@ -540,12 +554,19 @@ def line_is_comment(path: Path, line: str) -> bool:
     return suffix in {".cfg", ".conf", ".ini", ".properties"} and stripped.startswith(";")
 
 
-def escaped_by_backslash(text: str, index: int) -> bool:
+def java_delimiter_is_escaped(text: str, index: int) -> bool:
     count = 0
-    index -= 1
-    while index >= 0 and text[index] == "\\":
+    cursor = index
+    while cursor > 0:
+        if text[cursor - 1] == "\\":
+            count += 1
+            cursor -= 1
+            continue
+        unicode_backslash = JAVA_UNICODE_BACKSLASH.search(text[:cursor])
+        if unicode_backslash is None:
+            break
         count += 1
-        index -= 1
+        cursor = unicode_backslash.start()
     return count % 2 == 1
 
 
@@ -586,7 +607,7 @@ def strip_block_comments(path: Path, text: str) -> str:
             continue
         if raw_quote is not None:
             if text.startswith(raw_quote, index) and not (
-                suffix == ".java" and escaped_by_backslash(text, index)
+                suffix == ".java" and java_delimiter_is_escaped(text, index)
             ):
                 index += len(raw_quote)
                 raw_quote = None
@@ -605,7 +626,7 @@ def strip_block_comments(path: Path, text: str) -> str:
                 quote = None
             index += 1
             continue
-        if suffix == ".cpp":
+        if suffix in CPP_SOURCE_SUFFIXES:
             raw_start = CPP_RAW_STRING_START.match(text, index)
             if raw_start is not None and (
                 index == 0 or not (text[index - 1].isalnum() or text[index - 1] == "_")
@@ -773,11 +794,30 @@ def accumulate_continuation(
     return " ".join(parts)
 
 
-def multiline_assignments(path: Path, text: str) -> list[tuple[str, int, str]]:
+def yaml_block_scalar_value(
+    lines: list[str], start: int, key_indent: int
+) -> str:
+    parts: list[str] = []
+    for line in lines[start:]:
+        stripped = line.strip()
+        if not stripped:
+            if parts:
+                parts.append("")
+            continue
+        indent = len(line) - len(line.lstrip(" \t"))
+        if indent <= key_indent:
+            break
+        parts.append(stripped)
+    return " ".join(parts)
+
+
+def multiline_assignments(
+    path: Path, text: str
+) -> list[tuple[str, int, str, bool]]:
     """Find named assignments whose operator or value crosses a line."""
 
     lines = strip_block_comments(path, text).splitlines()
-    assignments: list[tuple[str, int, str]] = []
+    assignments: list[tuple[str, int, str, bool]] = []
     include_indented = path.suffix.lower() in {".yml", ".yaml"}
     for index, line in enumerate(lines):
         if line_is_comment(path, line):
@@ -785,11 +825,17 @@ def multiline_assignments(path: Path, text: str) -> list[tuple[str, int, str]]:
         key_indent = len(line) - len(line.lstrip(" \t"))
         match = MULTILINE_ASSIGNMENT_START.search(line)
         if match is not None:
-            value = continuation_value(
-                path, lines, index + 1, key_indent, include_indented
-            )
+            block_scalar = include_indented and match.group("block") is not None
+            if block_scalar:
+                value = yaml_block_scalar_value(lines, index + 1, key_indent)
+            else:
+                value = continuation_value(
+                    path, lines, index + 1, key_indent, include_indented
+                )
             if value is not None:
-                assignments.append((match.group("name"), index + 1, value))
+                assignments.append((
+                    match.group("name"), index + 1, value, not block_scalar
+                ))
             continue
 
         match = MULTILINE_ASSIGNMENT_NAME_ONLY.search(line)
@@ -803,7 +849,18 @@ def multiline_assignments(path: Path, text: str) -> list[tuple[str, int, str]]:
         if operator is None:
             continue
         value = operator.group("value").strip()
-        if not value or value.startswith("#"):
+        block_scalar = (
+            include_indented
+            and YAML_BLOCK_SCALAR.fullmatch(value) is not None
+        )
+        if block_scalar:
+            operator_indent = len(operator_line) - len(
+                operator_line.lstrip(" \t")
+            )
+            value = yaml_block_scalar_value(
+                lines, operator_index + 1, operator_indent
+            )
+        elif not value or value.startswith("#"):
             value = continuation_value(
                 path,
                 lines,
@@ -821,26 +878,114 @@ def multiline_assignments(path: Path, text: str) -> list[tuple[str, int, str]]:
                 include_indented,
             )
         if value is not None:
-            assignments.append((match.group("name"), index + 1, value))
+            assignments.append((
+                match.group("name"), index + 1, value, not block_scalar
+            ))
     return assignments
+
+
+def flow_mapping_bodies(text: str) -> list[tuple[str, int]]:
+    bodies: list[tuple[str, int]] = []
+    stack: list[tuple[int, int]] = []
+    quote: str | None = None
+    escaped = False
+    line_number = 1
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif quote == "'" and text.startswith("''", index):
+                index += 2
+                continue
+            elif character == "\\" and quote == '"':
+                escaped = True
+            elif character == quote:
+                quote = None
+            if character == "\n":
+                line_number += 1
+            index += 1
+            continue
+        if character in {"'", '"'}:
+            quote = character
+        elif character == "{":
+            stack.append((index, line_number))
+        elif character == "}" and stack:
+            start, start_line = stack.pop()
+            bodies.append((text[start + 1:index], start_line))
+        if character == "\n":
+            line_number += 1
+        index += 1
+    return bodies
+
+
+def split_flow_segments(text: str, delimiter: str) -> list[str]:
+    segments: list[str] = []
+    stack: list[str] = []
+    matching = {"}": "{", "]": "[", ")": "("}
+    quote: str | None = None
+    escaped = False
+    start = 0
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif quote == "'" and text.startswith("''", index):
+                index += 2
+                continue
+            elif character == "\\" and quote == '"':
+                escaped = True
+            elif character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in {"'", '"'}:
+            quote = character
+        elif character in "{[(":
+            stack.append(character)
+        elif character in matching and stack and stack[-1] == matching[character]:
+            stack.pop()
+        elif character == delimiter and not stack:
+            segments.append(text[start:index])
+            start = index + 1
+        index += 1
+    segments.append(text[start:])
+    return segments
 
 
 def structured_environment_assignments(
     path: Path, text: str
-) -> list[tuple[str, int, str]]:
+) -> list[tuple[str, int, str, bool]]:
     if path.suffix.lower() not in {".json", ".yaml", ".yml"}:
         return []
-    assignments: list[tuple[str, int, str]] = []
+    assignments: list[tuple[str, int, str, bool]] = []
     lines = text.splitlines()
+    for body, number in flow_mapping_bodies(text):
+        names: list[str] = []
+        values: list[str] = []
+        for raw_field in split_flow_segments(body, ","):
+            pair = split_flow_segments(raw_field, ":")
+            if len(pair) < 2:
+                continue
+            key = decode_yaml_key(assignment_value(pair[0])).lower()
+            raw_value = ":".join(pair[1:]).strip()
+            if key == "name":
+                name = decode_yaml_key(
+                    assignment_value(raw_value, path)
+                ).upper()
+                if name in ASSIGNMENT_NAMES:
+                    names.append(name)
+            elif key == "value":
+                values.append(raw_value)
+        assignments.extend(
+            (name, number, value, True)
+            for name in names
+            for value in values
+        )
     for index, line in enumerate(lines):
-        for flow in ENV_FLOW_ENTRY.finditer(line):
-            assignments.append((
-                flow.group("name"), index + 1, flow.group("value")
-            ))
-        for flow in ENV_FLOW_REVERSE_ENTRY.finditer(line):
-            assignments.append((
-                flow.group("name"), index + 1, flow.group("value")
-            ))
         name_field = YAML_ENV_FIELD.match(line)
         if name_field is None or name_field.group("field").lower() != "name":
             continue
@@ -898,7 +1043,7 @@ def structured_environment_assignments(
                 end = following_index
                 break
 
-        values: list[str] = []
+        values: list[tuple[str, bool]] = []
         value_from = False
         for candidate_index in range(start, end):
             candidate = YAML_ENV_FIELD.match(lines[candidate_index])
@@ -916,18 +1061,19 @@ def structured_environment_assignments(
             if field != "value":
                 continue
             raw_value = candidate.group("value")
+            strip_comments = True
             if YAML_BLOCK_SCALAR.fullmatch(raw_value.strip()) is not None:
-                raw_value = continuation_value(
-                    path,
-                    lines,
-                    candidate_index + 1,
-                    candidate_indent,
-                    True,
-                ) or ""
-            values.append(raw_value)
+                raw_value = yaml_block_scalar_value(
+                    lines, candidate_index + 1, candidate_indent
+                )
+                strip_comments = False
+            values.append((raw_value, strip_comments))
         if not values and value_from:
             continue
-        assignments.extend((name, index + 1, value) for value in values)
+        assignments.extend(
+            (name, index + 1, value, strip_comments)
+            for value, strip_comments in values
+        )
     return assignments
 
 
@@ -1173,9 +1319,9 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
                 reported_assignments.add(name)
         if PRIVATE_BEGIN.search(line):
             findings.append((path.as_posix(), number, "private key block"))
-    for name, number, value in multiline_assignments(path, text):
+    for name, number, value, strip_comments in multiline_assignments(path, text):
         if (
-            live_assignment(assignment_value(value, path))
+            live_assignment(assignment_value(value, path, strip_comments))
             and not multiline_code_reference(path, value)
         ):
             findings.append((
@@ -1189,8 +1335,10 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
             number,
             f"live-looking value assigned to {name}",
         ))
-    for name, number, value in structured_environment_assignments(path, text):
-        if live_assignment(assignment_value(value, path)):
+    for name, number, value, strip_comments in structured_environment_assignments(
+        path, text
+    ):
+        if live_assignment(assignment_value(value, path, strip_comments)):
             findings.append((
                 path.as_posix(),
                 number,
