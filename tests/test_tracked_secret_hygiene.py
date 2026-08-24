@@ -297,6 +297,8 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         text = "// " + name + " =\nordinaryCall()\n"
 
         self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
+        block = "/*\n" + name + " =\n*/\nordinaryCall()\n"
+        self.assertEqual([], SCANNER.scan_text(Path("config.js"), block))
 
     def test_multiline_assignment_scans_continued_expression(self) -> None:
         name = "OPENAI_" + "API_KEY"
@@ -349,6 +351,45 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             SCANNER.scan_text(Path("config.js"), with_comment),
         )
 
+        split_operator = (
+            name
+            + "\n= secrets."
+            + name
+            + "\n+ \""
+            + value
+            + "\";\n"
+        )
+        self.assertEqual(
+            [("config.js", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.js"), split_operator),
+        )
+
+    def test_bracketed_named_assignments_are_detected(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        cases = (
+            'process.env["' + name + '"] = "' + value + '"\n',
+            'process.env["' + name + '"] =\n  "' + value + '"\n',
+            'process.env["' + name + '"]\n=\n  "' + value + '"\n',
+        )
+        for text in cases:
+            with self.subTest(lines=len(text.splitlines())):
+                findings = SCANNER.scan_text(Path("config.js"), text)
+                self.assertEqual(
+                    [("config.js", 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        reference = 'environment["' + name + '"] = company_secret\n'
+        self.assertEqual([], SCANNER.scan_text(Path("config.py"), reference))
+        multiline_reference = (
+            'environment["' + name + '"] =\n  company_secret\n'
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.py"), multiline_reference)
+        )
+
     def test_yaml_document_boundaries_end_null_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         for marker in ("---", "..."):
@@ -356,6 +397,20 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 text = name + ":\n" + marker + "\nOTHER_SETTING: ordinary\n"
                 self.assertEqual(
                     [], SCANNER.scan_text(Path("settings.yaml"), text)
+                )
+
+        for value in ("---", "..."):
+            with self.subTest(indented_value=value):
+                text = name + ":\n  " + value + "\n"
+                self.assertEqual(
+                    [
+                        (
+                            "settings.yaml",
+                            1,
+                            f"live-looking value assigned to {name}",
+                        )
+                    ],
+                    SCANNER.scan_text(Path("settings.yaml"), text),
                 )
 
     def test_json_semantic_scan_decodes_escaped_sensitive_key(self) -> None:

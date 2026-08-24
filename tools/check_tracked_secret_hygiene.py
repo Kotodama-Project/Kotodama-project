@@ -88,16 +88,26 @@ INLINE_ASSIGNMENT = re.compile(
     + r"|'(?:\\.|[^'\\])*'|[^,;}\]])+)",
     re.IGNORECASE,
 )
+BRACKETED_ASSIGNMENT = re.compile(
+    r"\[\s*[\"'](?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']\s*\]\s*=(?![=>~])\s*(?P<value>(?:"
+    + r"\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
+    + r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>|"
+    + r'"(?:\\.|[^"\\])*"'
+    + r"|'(?:\\.|[^'\\])*'|[^,;}\]]+)+)",
+    re.IGNORECASE,
+)
 MULTILINE_ASSIGNMENT_START = re.compile(
     r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?\s*(?::|=(?![=>~]))\s*(?:#.*)?$",
+    + r")[\"']?(?:\s*\])?\s*(?::|=(?![=>~]))\s*(?:#.*)?$",
     re.IGNORECASE,
 )
 MULTILINE_ASSIGNMENT_NAME_ONLY = re.compile(
     r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?\s*$",
+    + r")[\"']?(?:\s*\])?\s*$",
     re.IGNORECASE,
 )
 MULTILINE_OPERATOR = re.compile(
@@ -127,6 +137,16 @@ SLASH_COMMENT_SUFFIXES = {
     ".c", ".cpp", ".cs", ".go", ".java", ".js", ".kt", ".kts",
     ".php", ".rs", ".swift", ".ts",
 }
+BLOCK_COMMENT_SUFFIXES = SLASH_COMMENT_SUFFIXES | {".css", ".sql"}
+SOURCE_CODE_SUFFIXES = {
+    ".c", ".cpp", ".cs", ".go", ".java", ".js", ".kt", ".kts", ".php",
+    ".ps1", ".py", ".rb", ".rs", ".swift", ".ts",
+}
+CODE_REFERENCE_VALUE = re.compile(
+    r"[A-Za-z_$][A-Za-z0-9_$]*"
+    r"(?:(?:\.[A-Za-z_$][A-Za-z0-9_$]*)|(?:\[[^\]\r\n]+\]))*"
+    r"(?:\([^()\r\n]*\))?"
+)
 
 
 def index_blobs(root: Path) -> dict[Path, str]:
@@ -337,6 +357,28 @@ def live_assignment(value: str) -> bool:
     return not placeholder(value)
 
 
+def bracketed_code_reference(path: Path, match: re.Match[str]) -> bool:
+    if match.re is not BRACKETED_ASSIGNMENT:
+        return False
+    raw = match.group("value").strip()
+    if path.suffix.lower() not in SOURCE_CODE_SUFFIXES or not raw:
+        return False
+    if raw[0] in {"'", '"'}:
+        return False
+    return CODE_REFERENCE_VALUE.fullmatch(raw) is not None
+
+
+def multiline_code_reference(path: Path, value: str) -> bool:
+    raw = value.strip()
+    normalized = assignment_value(value)
+    return (
+        path.suffix.lower() in SOURCE_CODE_SUFFIXES
+        and bool(normalized)
+        and raw[0] not in {"'", '"'}
+        and CODE_REFERENCE_VALUE.fullmatch(normalized) is not None
+    )
+
+
 def shell_parameter_assignments(line: str) -> list[tuple[str, str]]:
     """Return sensitive shell default/assignment expansions, including nesting."""
 
@@ -378,6 +420,60 @@ def line_is_comment(path: Path, line: str) -> bool:
     return suffix in {".cfg", ".conf", ".ini", ".properties"} and stripped.startswith(";")
 
 
+def strip_block_comments(path: Path, text: str) -> str:
+    if path.suffix.lower() not in BLOCK_COMMENT_SUFFIXES:
+        return text
+    result = list(text)
+    in_block = False
+    quote: str | None = None
+    escaped = False
+    index = 0
+    while index < len(text):
+        if in_block:
+            if text.startswith("*/", index):
+                result[index:index + 2] = [" ", " "]
+                in_block = False
+                index += 2
+                continue
+            if text[index] not in "\r\n":
+                result[index] = " "
+            index += 1
+            continue
+        character = text[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            elif character in "\r\n" and quote != "`":
+                quote = None
+            index += 1
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+            index += 1
+            continue
+        if (
+            path.suffix.lower() in SLASH_COMMENT_SUFFIXES
+            and text.startswith("//", index)
+        ) or (
+            path.suffix.lower() == ".sql"
+            and text.startswith("--", index)
+        ):
+            newline = text.find("\n", index)
+            index = len(text) if newline < 0 else newline
+            continue
+        if text.startswith("/*", index):
+            result[index:index + 2] = [" ", " "]
+            in_block = True
+            index += 2
+            continue
+        index += 1
+    return "".join(result)
+
+
 def next_content_line(
     path: Path, lines: list[str], start: int
 ) -> tuple[int, str] | None:
@@ -391,6 +487,8 @@ def next_content_line(
 
 
 def yaml_document_boundary(value: str) -> bool:
+    if value.startswith((" ", "\t")):
+        return False
     marker = value.split("#", 1)[0].strip()
     return marker in {"---", "..."}
 
@@ -424,7 +522,7 @@ def continuation_value(
         return None
     value_index, candidate = located
     stripped = candidate.strip()
-    if stripped in {"}", "},", "]", "],"} or yaml_document_boundary(stripped):
+    if stripped in {"}", "},", "]", "],"} or yaml_document_boundary(candidate):
         return None
     value_indent = len(candidate) - len(candidate.lstrip(" \t"))
     if (
@@ -433,7 +531,26 @@ def continuation_value(
         and SIBLING_ASSIGNMENT_START.match(candidate) is not None
     ):
         return None
-    parts = [stripped]
+
+    return accumulate_continuation(
+        path,
+        lines,
+        value_index,
+        stripped,
+        key_indent,
+        include_indented,
+    )
+
+
+def accumulate_continuation(
+    path: Path,
+    lines: list[str],
+    value_index: int,
+    initial_value: str,
+    key_indent: int,
+    include_indented: bool,
+) -> str:
+    parts = [initial_value]
     next_index = value_index + 1
     while True:
         following = next_content_line(path, lines, next_index)
@@ -443,7 +560,7 @@ def continuation_value(
         following_value = following_line.strip()
         if (
             following_value in {"}", "},", "]", "],"}
-            or yaml_document_boundary(following_value)
+            or yaml_document_boundary(following_line)
         ):
             break
         following_indent = len(following_line) - len(
@@ -468,7 +585,7 @@ def continuation_value(
 def multiline_assignments(path: Path, text: str) -> list[tuple[str, int, str]]:
     """Find named assignments whose operator or value crosses a line."""
 
-    lines = text.splitlines()
+    lines = strip_block_comments(path, text).splitlines()
     assignments: list[tuple[str, int, str]] = []
     include_indented = path.suffix.lower() in {".yml", ".yaml"}
     for index, line in enumerate(lines):
@@ -500,6 +617,15 @@ def multiline_assignments(path: Path, text: str) -> list[tuple[str, int, str]]:
                 path,
                 lines,
                 operator_index + 1,
+                key_indent,
+                include_indented,
+            )
+        else:
+            value = accumulate_continuation(
+                path,
+                lines,
+                operator_index,
+                value,
                 key_indent,
                 include_indented,
             )
@@ -626,6 +752,7 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
         for candidate in (
             *STRUCTURED_ASSIGNMENT.finditer(line),
             *INLINE_ASSIGNMENT.finditer(line),
+            *BRACKETED_ASSIGNMENT.finditer(line),
         ):
             name_start = candidate.start("name")
             if name_start >= 2 and line[name_start - 2:name_start] == "${":
@@ -645,6 +772,7 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
             if (
                 name not in reported_assignments
                 and live_assignment(assignment_value(raw_value))
+                and not bracketed_code_reference(path, match)
             ):
                 findings.append((
                     path.as_posix(),
@@ -664,7 +792,10 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
         if PRIVATE_BEGIN.search(line):
             findings.append((path.as_posix(), number, "private key block"))
     for name, number, value in multiline_assignments(path, text):
-        if live_assignment(assignment_value(value)):
+        if (
+            live_assignment(assignment_value(value))
+            and not multiline_code_reference(path, value)
+        ):
             findings.append((
                 path.as_posix(),
                 number,
