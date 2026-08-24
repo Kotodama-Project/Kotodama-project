@@ -128,6 +128,14 @@ MULTILINE_ASSIGNMENT_NAME_ONLY = re.compile(
 MULTILINE_OPERATOR = re.compile(
     r"^[ \t]*(?::|" + ASSIGNMENT_OPERATOR + r")[ \t]*(?P<value>.*)$"
 )
+MAKE_DEFINE_START = re.compile(
+    r"^[ \t]*(?:override[ \t]+)?define[ \t]+(?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[ \t]*$",
+    re.IGNORECASE,
+)
+MAKE_ANY_DEFINE = re.compile(r"^[ \t]*(?:override[ \t]+)?define(?:[ \t]|$)")
+MAKE_DEFINE_END = re.compile(r"^[ \t]*endef[ \t]*(?:#.*)?$")
 SIBLING_ASSIGNMENT_START = re.compile(
     r"^[ \t]*(?:[\"'][^\"']+[\"']|[A-Za-z_][A-Za-z0-9_.-]*)\s*[:=]"
 )
@@ -179,10 +187,10 @@ YAML_BLOCK_SCALAR = re.compile(
     r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?$"
 )
 YAML_SCALAR_PROPERTIES = re.compile(
-    r"^(?:(?:&[A-Za-z_][A-Za-z0-9_-]*|!![^\s]+|![^\s]+)\s+)+"
+    r"^(?:(?:&[A-Za-z_][A-Za-z0-9_-]*|!![^\s]+|![^\s]+)(?:\s+|$))+"
 )
 YAML_ANY_BLOCK_SCALAR_START = re.compile(
-    r"^(?P<indent>[ \t]*)(?P<item>-\s*)?.*?:[ \t]*"
+    r"^(?P<indent>[ \t]*)(?P<item>-\s*)?(?:.*?:[ \t]*)?"
     r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:[ \t]+#.*)?$"
 )
 YAML_ENV_FIELD = re.compile(
@@ -190,6 +198,15 @@ YAML_ENV_FIELD = re.compile(
     r"[\"']?(?P<field>name|valueFrom|value)[\"']?\s*:\s*"
     r"(?P<value>.*?)\s*$",
     re.IGNORECASE,
+)
+YAML_MERGE_FIELD = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<item>-\s*)?[\"']?<<[\"']?\s*:\s*"
+    r"(?P<value>.+?)\s*$"
+)
+YAML_ANCHOR_DECLARATION = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<item>-\s*)?.+?:[ \t]*"
+    r"&(?P<anchor>[A-Za-z_][A-Za-z0-9_-]*)"
+    r"(?:[ \t]+(?P<value>.*?))?[ \t]*$"
 )
 YAML_ENV_NAME_VALUE = re.compile(
     r"(?P<prefix>[\"']?name[\"']?\s*:\s*)"
@@ -213,6 +230,7 @@ BLOCK_COMMENT_SUFFIXES = SLASH_COMMENT_SUFFIXES | {".css", ".sql"}
 NESTED_BLOCK_COMMENT_SUFFIXES = {".rs", ".sql", ".swift"}
 TRIPLE_QUOTE_SUFFIXES = {".cs", ".java", ".kt", ".kts", ".swift"}
 CPP_SOURCE_SUFFIXES = {".cpp", ".h", ".hh", ".hpp", ".hxx"}
+JAVA_TEXT_BLOCK_SENTINEL = "<java-text-block>"
 SOURCE_CODE_SUFFIXES = {
     ".c", ".cpp", ".cs", ".go", ".h", ".hh", ".hpp", ".hxx",
     ".java", ".js", ".kt", ".kts", ".php", ".ps1", ".py", ".rb",
@@ -616,6 +634,31 @@ def java_delimiter_is_escaped(text: str, index: int) -> bool:
     return count % 2 == 1
 
 
+def java_quote_token_end(text: str, index: int) -> int | None:
+    if index < len(text) and text[index] == '"':
+        return index + 1
+    if index >= len(text) or text[index] != "\\":
+        return None
+    cursor = index + 1
+    if cursor >= len(text) or text[cursor] != "u":
+        return None
+    while cursor < len(text) and text[cursor] == "u":
+        cursor += 1
+    if text[cursor:cursor + 4].lower() != "0022":
+        return None
+    return cursor + 4
+
+
+def java_triple_quote_end(text: str, index: int) -> int | None:
+    cursor = index
+    for _ in range(3):
+        token_end = java_quote_token_end(text, cursor)
+        if token_end is None:
+            return None
+        cursor = token_end
+    return cursor
+
+
 def heredoc_end(path: Path, text: str, index: int) -> int | None:
     if text[index] != "<":
         return None
@@ -630,16 +673,23 @@ def heredoc_end(path: Path, text: str, index: int) -> int | None:
         return None
     if start is None:
         return None
-    line_end = text.find("\n", start.end())
-    if line_end < 0:
+    line_break = re.search(r"\r\n|\r|\n", text[start.end():])
+    if line_break is None:
         return None
+    line_end = start.end() + line_break.end()
     delimiter = re.escape(start.group("delimiter"))
-    terminator = re.compile(
-        rf"^[ \t]*{delimiter}{';?' if allow_semicolon else ''}"
-        r"[ \t]*(?:\r?\n|$)",
-        re.MULTILINE,
-    )
-    end = terminator.search(text, line_end + 1)
+    if allow_semicolon:
+        terminator = re.compile(
+            rf"(?:(?<=[\r\n])|^)[ \t]*{delimiter}"
+            r"(?=$|[ \t\r\n;,)\]])"
+            r"[^\r\n]*(?:\r\n|\r|\n|$)",
+        )
+    else:
+        terminator = re.compile(
+            rf"(?:(?<=[\r\n])|^)[ \t]*{delimiter}"
+            r"[ \t]*(?:\r\n|\r|\n|$)",
+        )
+    end = terminator.search(text, line_end)
     return end.end() if end is not None else None
 
 
@@ -679,9 +729,16 @@ def strip_block_comments(path: Path, text: str) -> str:
                 index += 1
             continue
         if raw_quote is not None:
-            if text.startswith(raw_quote, index) and not (
-                suffix == ".java" and java_delimiter_is_escaped(text, index)
-            ):
+            if raw_quote == JAVA_TEXT_BLOCK_SENTINEL:
+                quote_end = java_triple_quote_end(text, index)
+                if quote_end is not None and not java_delimiter_is_escaped(
+                    text, index
+                ):
+                    index = quote_end
+                    raw_quote = None
+                else:
+                    index += 1
+            elif text.startswith(raw_quote, index):
                 index += len(raw_quote)
                 raw_quote = None
             else:
@@ -725,7 +782,15 @@ def strip_block_comments(path: Path, text: str) -> str:
                 raw_quote = '"' + raw_start.group("hashes")
                 index = raw_start.end()
                 continue
-        if suffix in TRIPLE_QUOTE_SUFFIXES and text.startswith('"""', index):
+        if suffix == ".java":
+            quote_end = java_triple_quote_end(text, index)
+            if quote_end is not None and not java_delimiter_is_escaped(
+                text, index
+            ):
+                raw_quote = JAVA_TEXT_BLOCK_SENTINEL
+                index = quote_end
+                continue
+        if suffix in TRIPLE_QUOTE_SUFFIXES and suffix != ".java" and text.startswith('"""', index):
             quote_end = index + 3
             while quote_end < len(text) and text[quote_end] == '"':
                 quote_end += 1
@@ -896,6 +961,26 @@ def multiline_assignments(
     lines = strip_block_comments(path, text).splitlines()
     assignments: list[tuple[str, int, str, bool]] = []
     include_indented = path.suffix.lower() in {".yml", ".yaml"}
+    if path.name.lower() == "makefile" or path.suffix.lower() == ".mk":
+        for index, line in enumerate(lines):
+            define = MAKE_DEFINE_START.match(line)
+            if define is None:
+                continue
+            depth = 1
+            body: list[str] = []
+            for candidate in lines[index + 1:]:
+                if MAKE_ANY_DEFINE.match(candidate) is not None:
+                    depth += 1
+                elif MAKE_DEFINE_END.match(candidate) is not None:
+                    depth -= 1
+                    if depth == 0:
+                        break
+                if depth:
+                    body.append(candidate.strip())
+            if depth == 0:
+                assignments.append((
+                    define.group("name"), index + 1, " ".join(body), False
+                ))
     for index, line in enumerate(lines):
         if line_is_comment(path, line):
             continue
@@ -962,7 +1047,11 @@ def multiline_assignments(
 
 
 def yaml_quote_can_start(text: str, index: int) -> bool:
-    return index == 0 or text[index - 1] in " \t\r\n[{,:?-"
+    if index == 0 or text[index - 1] in " \t\r\n[{,:":
+        return True
+    if text[index - 1] not in "-?":
+        return False
+    return index == 1 or text[index - 2] in " \t\r\n[{,:"
 
 
 def flow_mapping_bodies(text: str) -> list[tuple[str, int, str | None]]:
@@ -1119,6 +1208,151 @@ def resolve_flow_fields(
     return resolved
 
 
+def yaml_structured_field(line: str) -> re.Match[str] | None:
+    return YAML_ENV_FIELD.match(line) or YAML_MERGE_FIELD.match(line)
+
+
+def yaml_mapping_span(
+    lines: list[str], index: int, field: re.Match[str]
+) -> tuple[int, int, int]:
+    field_indent = len(field.group("indent")) + len(field.group("item") or "")
+    boundary_indent = -1
+    start = 0
+    if field.group("item") is not None:
+        boundary_indent = len(field.group("indent"))
+        start = index
+    else:
+        for previous_index in range(index - 1, -1, -1):
+            previous = lines[previous_index]
+            stripped = previous.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if yaml_document_boundary(previous):
+                start = previous_index + 1
+                break
+            previous_indent = len(previous) - len(previous.lstrip(" \t"))
+            if previous_indent >= field_indent:
+                continue
+            previous_field = yaml_structured_field(previous)
+            boundary_indent = previous_indent
+            if (
+                previous_field is not None
+                and previous_field.group("item") is not None
+                and previous_indent + len(previous_field.group("item") or "")
+                == field_indent
+            ):
+                start = previous_index
+            else:
+                start = previous_index + 1
+            break
+
+    end = len(lines)
+    for following_index in range(index + 1, len(lines)):
+        following = lines[following_index]
+        stripped = following.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if yaml_document_boundary(following):
+            end = following_index
+            break
+        following_indent = len(following) - len(following.lstrip(" \t"))
+        if following_indent <= boundary_indent:
+            end = following_index
+            break
+    return start, end, field_indent
+
+
+def continued_yaml_scalar(
+    lines: list[str], start: int, field_indent: int
+) -> str:
+    for line in lines[start:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" \t"))
+        if indent <= field_indent:
+            break
+        return stripped
+    return ""
+
+
+def block_yaml_anchors(
+    path: Path, lines: list[str]
+) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
+    mappings: dict[str, dict[str, str]] = {}
+    scalars: dict[str, str] = {}
+    for index, line in enumerate(lines):
+        declaration = YAML_ANCHOR_DECLARATION.match(line)
+        if declaration is None:
+            continue
+        anchor = declaration.group("anchor")
+        raw_value = strip_format_comment(
+            path, declaration.group("value") or ""
+        ).strip()
+        if raw_value and not raw_value.startswith(("{", "[")):
+            scalars[anchor] = yaml_scalar_value(
+                raw_value, path, strip_properties=True
+            )
+            continue
+        if raw_value:
+            continue
+        base_indent = len(declaration.group("indent")) + len(
+            declaration.group("item") or ""
+        )
+        continuation = continued_yaml_scalar(lines, index + 1, base_indent)
+        if continuation and yaml_structured_field(continuation) is None:
+            scalars[anchor] = yaml_scalar_value(
+                continuation, path, strip_properties=True
+            )
+            continue
+        fields: dict[str, str] = {}
+        child_indent: int | None = None
+        for candidate_line in lines[index + 1:]:
+            stripped = candidate_line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            indent = len(candidate_line) - len(
+                candidate_line.lstrip(" \t")
+            )
+            if indent <= base_indent:
+                break
+            candidate = yaml_structured_field(candidate_line)
+            if candidate is None:
+                continue
+            candidate_indent = len(candidate.group("indent")) + len(
+                candidate.group("item") or ""
+            )
+            if child_indent is None:
+                child_indent = candidate_indent
+            if candidate_indent != child_indent:
+                continue
+            if candidate.re is YAML_MERGE_FIELD:
+                fields["<<"] = candidate.group("value")
+            else:
+                fields[candidate.group("field").lower()] = candidate.group("value")
+        if fields:
+            mappings[anchor] = fields
+    return mappings, scalars
+
+
+def resolve_yaml_name(
+    raw: str,
+    path: Path,
+    scalar_anchors: dict[str, str],
+) -> str:
+    value = yaml_scalar_value(raw, path, strip_properties=True)
+    seen: set[str] = set()
+    while value.startswith("*"):
+        alias = value[1:].strip()
+        if alias in seen or alias not in scalar_anchors:
+            break
+        seen.add(alias)
+        value = yaml_scalar_value(
+            scalar_anchors[alias], path, strip_properties=True
+        )
+    return value
+
+
 def structured_environment_assignments(
     path: Path, text: str
 ) -> list[tuple[str, int, str, bool]]:
@@ -1126,6 +1360,7 @@ def structured_environment_assignments(
         return []
     assignments: list[tuple[str, int, str, bool]] = []
     lines = text.splitlines()
+    block_anchors, scalar_anchors = block_yaml_anchors(path, lines)
     flow_text = (
         mask_yaml_block_scalar_contents(text)
         if path.suffix.lower() in {".yaml", ".yml"}
@@ -1135,17 +1370,18 @@ def structured_environment_assignments(
         (parsed_flow_fields(body), number, anchor)
         for body, number, anchor in flow_mapping_bodies(flow_text)
     ]
-    anchors = {
+    flow_anchors = {
         anchor: fields
         for fields, _number, anchor in flow_records
         if anchor is not None
     }
+    anchors = {**block_anchors, **flow_anchors}
     for fields, number, _anchor in flow_records:
         resolved = resolve_flow_fields(fields, anchors)
         if "name" not in resolved or "value" not in resolved:
             continue
-        name = yaml_scalar_value(
-            resolved["name"], path, strip_properties=True
+        name = resolve_yaml_name(
+            resolved["name"], path, scalar_anchors
         ).upper()
         if name in ASSIGNMENT_NAMES:
             assignments.append((name, number, resolved["value"], True))
@@ -1153,61 +1389,24 @@ def structured_environment_assignments(
         name_field = YAML_ENV_FIELD.match(line)
         if name_field is None or name_field.group("field").lower() != "name":
             continue
-        name = yaml_scalar_value(
-            name_field.group("value"), path, strip_properties=True
+        name = resolve_yaml_name(
+            name_field.group("value"), path, scalar_anchors
         ).upper()
+        if not name:
+            field_indent = len(name_field.group("indent")) + len(
+                name_field.group("item") or ""
+            )
+            name = resolve_yaml_name(
+                continued_yaml_scalar(lines, index + 1, field_indent),
+                path,
+                scalar_anchors,
+            ).upper()
         if name not in ASSIGNMENT_NAMES:
             continue
 
-        field_indent = len(name_field.group("indent")) + len(
-            name_field.group("item") or ""
+        start, end, field_indent = yaml_mapping_span(
+            lines, index, name_field
         )
-        boundary_indent = -1
-        start = 0
-        if name_field.group("item") is not None:
-            boundary_indent = len(name_field.group("indent"))
-            start = index
-        else:
-            for previous_index in range(index - 1, -1, -1):
-                previous = lines[previous_index]
-                stripped = previous.strip()
-                if not stripped or stripped.startswith("#"):
-                    continue
-                if yaml_document_boundary(previous):
-                    start = previous_index + 1
-                    break
-                previous_indent = len(previous) - len(previous.lstrip(" \t"))
-                if previous_indent >= field_indent:
-                    continue
-                boundary_indent = previous_indent
-                previous_field = YAML_ENV_FIELD.match(previous)
-                if (
-                    previous_field is not None
-                    and previous_field.group("item") is not None
-                    and previous_indent
-                    + len(previous_field.group("item") or "")
-                    == field_indent
-                ):
-                    start = previous_index
-                else:
-                    start = previous_index + 1
-                break
-
-        end = len(lines)
-        for following_index in range(index + 1, len(lines)):
-            following = lines[following_index]
-            stripped = following.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            if yaml_document_boundary(following):
-                end = following_index
-                break
-            following_indent = len(following) - len(
-                following.lstrip(" \t")
-            )
-            if following_indent <= boundary_indent:
-                end = following_index
-                break
 
         values: list[tuple[str, bool]] = []
         value_from = False
@@ -1240,6 +1439,52 @@ def structured_environment_assignments(
             (name, index + 1, value, strip_comments)
             for value, strip_comments in values
         )
+
+    for index, line in enumerate(lines):
+        merge_field = YAML_MERGE_FIELD.match(line)
+        if merge_field is None:
+            continue
+        start, end, field_indent = yaml_mapping_span(
+            lines, index, merge_field
+        )
+        fields: dict[str, str] = {"<<": merge_field.group("value")}
+        strip_value_comments = True
+        for candidate_index in range(start, end):
+            candidate = yaml_structured_field(lines[candidate_index])
+            if candidate is None:
+                continue
+            candidate_indent = len(candidate.group("indent")) + len(
+                candidate.group("item") or ""
+            )
+            if candidate_indent != field_indent:
+                continue
+            if candidate.re is YAML_MERGE_FIELD:
+                fields["<<"] = candidate.group("value")
+                continue
+            field_name = candidate.group("field").lower()
+            raw_value = candidate.group("value")
+            if (
+                field_name == "value"
+                and YAML_BLOCK_SCALAR.fullmatch(raw_value.strip()) is not None
+            ):
+                raw_value = yaml_block_scalar_value(
+                    lines, candidate_index + 1, candidate_indent
+                )
+                strip_value_comments = False
+            fields[field_name] = raw_value
+        resolved = resolve_flow_fields(fields, anchors)
+        if "name" not in resolved or "value" not in resolved:
+            continue
+        name = resolve_yaml_name(
+            resolved["name"], path, scalar_anchors
+        ).upper()
+        if name in ASSIGNMENT_NAMES:
+            assignments.append((
+                name,
+                index + 1,
+                resolved["value"],
+                strip_value_comments,
+            ))
     return assignments
 
 

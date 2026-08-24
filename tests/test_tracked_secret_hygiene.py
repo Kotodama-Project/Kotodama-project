@@ -322,6 +322,28 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 Path("settings.yaml"), safe_reference_after_comment
             ),
         )
+
+        value = "SyntheticSecretValue2026"
+        after_embedded_indicator = (
+            "description: ordinary-'text\n"
+            + "- {name: "
+            + name
+            + ", value: "
+            + value
+            + "}\n"
+        )
+        self.assertEqual(
+            [
+                (
+                    "after-indicator.yaml",
+                    2,
+                    f"live-looking value assigned to {name}",
+                )
+            ],
+            SCANNER.scan_text(
+                Path("after-indicator.yaml"), after_embedded_indicator
+            ),
+        )
         self.assertEqual(
             [], SCANNER.scan_text(Path("settings.yaml"), null_with_sibling)
         )
@@ -337,7 +359,6 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             [], SCANNER.scan_text(Path("settings.yaml"), empty_block)
         )
 
-        value = "SyntheticSecretValue2026"
         next_item = (
             "- name: "
             + name
@@ -561,6 +582,28 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                         SCANNER.scan_text(Path(filename), text),
                     )
 
+                multiline_property = (
+                    "- name: "
+                    + scalar_property
+                    + "\n    "
+                    + name
+                    + "\n  value: "
+                    + value
+                    + "\n"
+                )
+                self.assertEqual(
+                    [
+                        (
+                            "property-multiline.yaml",
+                            1,
+                            f"live-looking value assigned to {name}",
+                        )
+                    ],
+                    SCANNER.scan_text(
+                        Path("property-multiline.yaml"), multiline_property
+                    ),
+                )
+
         merge_value = (
             "common: &common {value: "
             + value
@@ -588,6 +631,66 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     ],
                     SCANNER.scan_text(Path(filename), text),
                 )
+
+        block_merge_value = (
+            "common: &common\n  value: "
+            + value
+            + "\nentry:\n  <<: *common\n  name: "
+            + name
+            + "\n"
+        )
+        block_merge_name = (
+            "common: &common\n  name: "
+            + name
+            + "\nentry:\n  <<: *common\n  value: "
+            + value
+            + "\n"
+        )
+        for label, text in (
+            ("block-merge-value", block_merge_value),
+            ("block-merge-name", block_merge_name),
+        ):
+            filename = label + ".yaml"
+            with self.subTest(block_merge=label):
+                self.assertEqual(
+                    [
+                        (
+                            filename,
+                            4,
+                            f"live-looking value assigned to {name}",
+                        )
+                    ],
+                    SCANNER.scan_text(Path(filename), text),
+                )
+
+        scalar_alias_block = (
+            "secret_name: &secret_name "
+            + name
+            + "\n- name: *secret_name\n  value: "
+            + value
+            + "\n"
+        )
+        scalar_alias_flow = (
+            "secret_name: &secret_name "
+            + name
+            + "\n- {name: *secret_name, value: "
+            + value
+            + "}\n"
+        )
+        for filename, text in (
+            ("alias-block.yaml", scalar_alias_block),
+            ("alias-flow.yaml", scalar_alias_flow),
+        ):
+            self.assertEqual(
+                [
+                    (
+                        filename,
+                        2,
+                        f"live-looking value assigned to {name}",
+                    )
+                ],
+                SCANNER.scan_text(Path(filename), text),
+            )
 
         reverse_block = "- value: " + value + "\n  name: " + name + "\n"
         self.assertEqual(
@@ -700,6 +803,18 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             [], SCANNER.scan_text(Path("settings.yaml"), flow_example_block)
         )
 
+        flow_example_sequence = (
+            "documentation:\n  - |-\n      {name: "
+            + name
+            + ", value: "
+            + value
+            + "}\n"
+        )
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(Path("settings.yaml"), flow_example_sequence),
+        )
+
         nested_unrelated_value = (
             "- {name: "
             + name
@@ -718,6 +833,19 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual(
             [], SCANNER.scan_text(Path("settings.yaml"), flow_value_from)
+        )
+
+        merge_override = (
+            "common: &common\n  value: "
+            + value
+            + "\nentry:\n  <<: *common\n  name: "
+            + name
+            + "\n  value: ${{ secrets."
+            + name
+            + " }}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), merge_override)
         )
 
     def test_commented_multiline_assignment_start_is_ignored(self) -> None:
@@ -756,6 +884,24 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertEqual(
             [("config.php", 5, f"live-looking value assigned to {name}")],
             SCANNER.scan_text(Path("config.php"), php_heredoc),
+        )
+
+        php_array_heredoc = (
+            "<?php\n$values = [\n<<<'EOT'\n/* literal text\nEOT,\n];\n$"
+            + name
+            + " =\n  \""
+            + value
+            + "\";\n"
+        )
+        self.assertEqual(
+            [("array.php", 7, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("array.php"), php_array_heredoc),
+        )
+
+        cr_php_heredoc = php_heredoc.replace("\n", "\r")
+        self.assertEqual(
+            [("cr.php", 5, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("cr.php"), cr_php_heredoc),
         )
 
         nested = (
@@ -1038,6 +1184,23 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 )
                 self.assertNotIn(value, repr(findings))
 
+        unicode_quotes = "\\u0022" * 3
+        unicode_text_block = (
+            "var text = "
+            + unicode_quotes
+            + "\nliteral /* text\n"
+            + unicode_quotes
+            + ";\n"
+            + name
+            + " =\n  \""
+            + value
+            + "\"\n"
+        )
+        self.assertEqual(
+            [("unicode.java", 4, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("unicode.java"), unicode_text_block),
+        )
+
         generated_prefix = 'var text = """\nordinary\n""";\n' * 2_000
         generated = generated_prefix + name + " =\n  \"" + value + "\"\n"
         generated_findings = SCANNER.scan_text(Path("generated.java"), generated)
@@ -1258,6 +1421,20 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertEqual(
             [("Makefile", 1, f"live-looking value assigned to {name}")],
             make_findings,
+        )
+
+        make_define = (
+            "define " + name + "\n" + value + "\nendef\n"
+        )
+        self.assertEqual(
+            [("Makefile", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("Makefile"), make_define),
+        )
+        safe_define = (
+            "define " + name + "\n${" + name + "}\nendef\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("Makefile"), safe_define)
         )
 
     def test_shell_parameter_defaults_and_assignments_are_detected(self) -> None:
