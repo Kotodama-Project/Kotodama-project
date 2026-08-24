@@ -1,5 +1,5 @@
 import hashlib
-import re
+import importlib.util
 import subprocess
 import unittest
 from pathlib import Path
@@ -8,6 +8,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 NEW_REPOSITORY = "https://github.com/Kotodama-Project/Kotodama-project"
 OLD_REPOSITORY = "https://github.com/" + "dj-thank/" + "Kotodama-project"
+WORKFLOW_SCANNER_PATH = ROOT / "tools" / "check_workflow_references.py"
+WORKFLOW_SCANNER_SPEC = importlib.util.spec_from_file_location(
+    "workflow_reference_hygiene", WORKFLOW_SCANNER_PATH
+)
+assert WORKFLOW_SCANNER_SPEC is not None and WORKFLOW_SCANNER_SPEC.loader is not None
+WORKFLOW_SCANNER = importlib.util.module_from_spec(WORKFLOW_SCANNER_SPEC)
+WORKFLOW_SCANNER_SPEC.loader.exec_module(WORKFLOW_SCANNER)
 
 
 class RepositoryPublicationHygieneTests(unittest.TestCase):
@@ -87,6 +94,9 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         install_command = (
             "python -m pip install --require-hashes -r requirements-ci.txt"
         )
+        workflow_reference_command = (
+            "python -S -B tools/check_workflow_references.py"
+        )
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn(smoke_command, workflow)
@@ -96,6 +106,10 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
                 self.assertLess(workflow.index(runtime_command), workflow.index(install_command))
         self.assertIn(install_command, workflow)
         self.assertLess(workflow.index(smoke_command), workflow.index(install_command))
+        self.assertIn(workflow_reference_command, workflow)
+        self.assertLess(
+            workflow.index(workflow_reference_command), workflow.index(install_command)
+        )
         self.assertIn("python -m unittest discover -s tests -v", workflow)
         self.assertIn(
             "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", workflow
@@ -120,24 +134,19 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         self.assertIn('"$install_dir/actionlint" .github/workflows/*.yml', workflow)
 
     def test_all_external_actions_are_pinned_to_immutable_shas(self) -> None:
-        uses_pattern = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)")
-        immutable_pattern = re.compile(r"^[^@\s]+@[0-9a-fA-F]{40}$")
-        violations = []
+        self.assertEqual([], WORKFLOW_SCANNER.scan_workflows(ROOT))
 
-        for path in sorted((ROOT / ".github/workflows").glob("*.y*ml")):
-            for line_number, line in enumerate(
-                path.read_text(encoding="utf-8").splitlines(), start=1
-            ):
-                match = uses_pattern.match(line)
-                if not match:
-                    continue
-                reference = match.group(1).strip("'\"")
-                if reference.startswith(("./", "docker://")):
-                    continue
-                if not immutable_pattern.fullmatch(reference):
-                    violations.append(f"{path.relative_to(ROOT)}:{line_number}: {reference}")
+    def test_workflow_reference_gate_rejects_mutable_docker_tags(self) -> None:
+        action_sha = "owner/action@" + ("a" * 40)
+        docker_digest = "docker://vendor/tool@sha256:" + ("b" * 64)
 
-        self.assertEqual([], violations)
+        for reference in ("./local-action", action_sha, docker_digest):
+            with self.subTest(reference=reference):
+                self.assertIsNone(WORKFLOW_SCANNER.reference_violation(reference))
+
+        for reference in ("owner/action@v1", "docker://vendor/tool:latest"):
+            with self.subTest(reference=reference):
+                self.assertIsNotNone(WORKFLOW_SCANNER.reference_violation(reference))
 
     def test_ci_dependency_lock_is_hashed_current_and_public_safe(self) -> None:
         lock = (ROOT / "requirements-ci.txt").read_text(encoding="utf-8")

@@ -14,16 +14,35 @@ SPEC.loader.exec_module(SCANNER)
 class TrackedSecretHygieneTests(unittest.TestCase):
     def test_safe_placeholders_pass(self) -> None:
         text = (
-            "OPENAI_API_KEY=${OPENAI_API_KEY}\n"
-            "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"
+            "OPENAI" + "_API_KEY=${OPENAI_API_KEY}\n"
+            "GITHUB" + "_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"
         )
         self.assertEqual([], SCANNER.scan_text(Path(".env.example"), text))
 
     def test_sensitive_filenames_are_blocked_but_templates_are_allowed(self) -> None:
-        for name in (".env", ".env.local", "server.pem", "credentials.prod.json"):
+        for name in (
+            ".env",
+            ".env.local",
+            ".dev.vars",
+            ".dev.vars.production",
+            "server.pem",
+            "credentials.prod.json",
+            "terraform.tfstate",
+            "terraform.tfstate.backup",
+            ".terraform/providers/cache.bin",
+            ".wrangler/state.json",
+            "work/private-review.json",
+        ):
             with self.subTest(name=name):
                 self.assertTrue(SCANNER.sensitive_filename(Path(name)))
-        for name in (".env.example", ".env.sample", ".env.template"):
+        for name in (
+            ".env.example",
+            ".env.sample",
+            ".env.template",
+            ".env.production.example",
+            ".dev.vars.example",
+            ".dev.vars.production.example",
+        ):
             with self.subTest(name=name):
                 self.assertFalse(SCANNER.sensitive_filename(Path(name)))
 
@@ -42,11 +61,70 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(token, repr(findings))
 
+    def test_placeholder_marker_inside_live_url_does_not_bypass_assignment_gate(
+        self,
+    ) -> None:
+        value = "postgres://admin:S3cretPassword@demo.internal/prod"
+        findings = SCANNER.scan_text(Path("config.txt"), f"DATABASE_URL={value}\n")
+
+        self.assertEqual(
+            [("config.txt", 1, "live-looking value assigned to DATABASE_URL")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+    def test_placeholder_expression_must_cover_the_entire_assignment_value(
+        self,
+    ) -> None:
+        value = "${OPENAI_API_KEY}Ab9_" + ("z" * 40)
+
+        findings = SCANNER.scan_text(
+            Path("config.txt"), f"OPENAI_API_KEY={value}\n"
+        )
+
+        self.assertEqual(
+            [("config.txt", 1, "live-looking value assigned to OPENAI_API_KEY")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+    def test_named_assignment_detects_long_lowercase_and_passphrase_values(self) -> None:
+        cases = (
+            ("CF_API_TOKEN", "abcdefghijklmnopqrstuvwxyzabcdefghijklmnop"),
+            ("N8N_ENCRYPTION_KEY", "correct horse battery staple"),
+        )
+        for name, value in cases:
+            with self.subTest(name=name):
+                findings = SCANNER.scan_text(Path("config.txt"), f"{name}={value}\n")
+                self.assertEqual(
+                    [("config.txt", 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
     def test_complete_private_key_block_is_detected(self) -> None:
         begin = "-----BEGIN " + "PRIVATE KEY-----\n"
         end = "-----END " + "PRIVATE KEY-----\n"
         private_key = begin + ((("A" * 64) + "\n") * 3) + end
         findings = SCANNER.scan_text(Path("private.txt"), private_key)
+        self.assertEqual([("private.txt", 1, "private key block")], findings)
+
+    def test_encrypted_pkcs8_private_key_block_is_detected(self) -> None:
+        begin = "-----BEGIN " + "ENCRYPTED PRIVATE KEY-----\n"
+        end = "-----END " + "ENCRYPTED PRIVATE KEY-----\n"
+        private_key = begin + ((("A" * 64) + "\n") * 3) + end
+
+        findings = SCANNER.scan_text(Path("private.txt"), private_key)
+
+        self.assertEqual([("private.txt", 1, "private key block")], findings)
+
+    def test_private_key_header_is_detected_even_when_the_block_is_incomplete(
+        self,
+    ) -> None:
+        private_key = "-----BEGIN " + "PRIVATE KEY-----\n" + ("A" * 48)
+
+        findings = SCANNER.scan_text(Path("private.txt"), private_key)
+
         self.assertEqual([("private.txt", 1, "private key block")], findings)
 
     def test_current_tracked_tree_passes(self) -> None:

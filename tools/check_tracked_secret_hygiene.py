@@ -11,7 +11,12 @@ from pathlib import Path
 
 
 MAX_TEXT_BYTES = 8 * 1024 * 1024
-ALLOWED_ENV = {".env.example", ".env.sample", ".env.template"}
+ALLOWED_ENV = {
+    ".dev.vars.example",
+    ".env.example",
+    ".env.sample",
+    ".env.template",
+}
 SENSITIVE_EXACT = {".env", "credentials.json", "id_ed25519", "id_rsa"}
 SENSITIVE_SUFFIXES = {".key", ".p12", ".pem", ".pfx"}
 
@@ -38,8 +43,9 @@ ASSIGNMENT = re.compile(
     + r")[\"']?\s*[:=]\s*(?P<value>.+?)\s*$",
     re.IGNORECASE,
 )
-PRIVATE_BEGIN = re.compile(r"-----BEGIN (?:(?:RSA|DSA|EC|OPENSSH) )?PRIVATE KEY-----")
-PRIVATE_END = re.compile(r"-----END (?:(?:RSA|DSA|EC|OPENSSH) )?PRIVATE KEY-----")
+PRIVATE_BEGIN = re.compile(
+    r"-----BEGIN (?:(?:ENCRYPTED|RSA|DSA|EC|OPENSSH) )?PRIVATE KEY-----"
+)
 
 
 def tracked_paths(root: Path) -> list[Path]:
@@ -55,11 +61,20 @@ def tracked_paths(root: Path) -> list[Path]:
 
 def sensitive_filename(path: Path) -> bool:
     name = path.name.lower()
-    if name in ALLOWED_ENV:
+    parts = tuple(part.lower() for part in path.parts)
+    if name in ALLOWED_ENV or (
+        name.startswith((".dev.vars.", ".env.")) and name.endswith(".example")
+    ):
         return False
     return (
-        name in SENSITIVE_EXACT
+        (bool(parts) and parts[0] == "work")
+        or any(part in {".terraform", ".wrangler"} for part in parts)
+        or name in SENSITIVE_EXACT
+        or name == ".dev.vars"
+        or name.startswith(".dev.vars.")
         or name.startswith(".env.")
+        or name.endswith(".tfstate")
+        or ".tfstate." in name
         or path.suffix.lower() in SENSITIVE_SUFFIXES
         or re.fullmatch(r"credentials(?:[-_.].+)?\.json", name) is not None
         or re.fullmatch(r"service[-_]account(?:[-_.].+)?\.json", name) is not None
@@ -74,33 +89,42 @@ def assignment_value(raw: str) -> str:
 
 
 def placeholder(value: str) -> bool:
-    lower = value.strip().lower()
+    stripped = value.strip()
+    lower = stripped.lower()
     if not lower or lower in {"none", "null", "nil", "undefined"}:
         return True
-    if value.lstrip().startswith(("${", "${{", "$(", "<")):
+    if re.fullmatch(
+        r"(?:\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
+        r"\$\([^()\r\n]+\)|<[^<>\r\n]+>)",
+        stripped,
+    ):
         return True
-    markers = (
-        "changeme", "change-me", "demo", "dummy", "example", "fake",
-        "not-a-real", "placeholder", "redacted", "replace-me", "replaceme",
-        "sample", "secrets.", "test-only", "vars.", "your-", "your_",
+    marker = re.fullmatch(
+        r"(?:changeme|change-me|dummy|example|fake|not-a-real|placeholder|"
+        r"redacted|replace-me|replaceme|sample|test-only)"
+        r"(?:[._-][a-z0-9._-]+)?",
+        lower,
     )
     return (
-        any(marker in lower for marker in markers)
-        or lower.startswith(("env.", "os.environ", "process.env"))
-        or re.fullmatch(r"[*xX._-]{8,}", value.strip()) is not None
+        lower == "demo"
+        or marker is not None
+        or lower.startswith(
+            (
+                "env.",
+                "os.environ",
+                "process.env",
+                "secrets.",
+                "vars.",
+                "your-",
+                "your_",
+            )
+        )
+        or re.fullmatch(r"[*xX._-]{8,}", stripped) is not None
     )
 
 
 def live_assignment(value: str) -> bool:
-    if placeholder(value) or len(value) < 16 or any(c.isspace() for c in value):
-        return False
-    classes = (
-        any(c.islower() for c in value),
-        any(c.isupper() for c in value),
-        any(c.isdigit() for c in value),
-        any(not c.isalnum() for c in value),
-    )
-    return sum(classes) >= 2
+    return not placeholder(value) and len(value) >= 16
 
 
 def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
@@ -117,19 +141,8 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
                 number,
                 f"live-looking value assigned to {match.group('name').upper()}",
             ))
-
-    begin = None
-    body = 0
-    for number, line in enumerate(lines, 1):
-        if begin is None:
-            if PRIVATE_BEGIN.search(line):
-                begin, body = number, 0
-        elif PRIVATE_END.search(line):
-            if body >= 80:
-                findings.append((path.as_posix(), begin, "private key block"))
-            begin, body = None, 0
-        else:
-            body += len(re.sub(r"[^A-Za-z0-9+/=]", "", line))
+        if PRIVATE_BEGIN.search(line):
+            findings.append((path.as_posix(), number, "private key block"))
     return findings
 
 

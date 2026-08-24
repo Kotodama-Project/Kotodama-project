@@ -20,6 +20,7 @@ dependencies:
 
 ```text
 python -S -B tools/check_tracked_secret_hygiene.py
+python -S -B tools/check_workflow_references.py
 python -m pip install --require-hashes -r requirements-ci.txt
 python -m unittest discover -s tests -v
 ```
