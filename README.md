@@ -715,6 +715,7 @@ Kotodama は、初期の言葉を消すのではなく、後続の指示、実�
 - 将来の protected runner receipt の field を固定する unpopulated [Protected Source Binding Receipt Candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md)
 - 誤送信の対照項目（source / target、workspace / revision、route、preview / confirmation）を opaque に固定する read-only [Agent Orchestration Route-Binding Candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md)。Codex transport、subagent spawn、provider / device / public send は含まない
 - 言霊の evidence chain に bounded root / worker / verifier を対応づける read-only [Agent Swarm × Kotodama Adoption Candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md)。parent edge、assignment、workspace / revision、handoff、lease、停止条件、N/C/W/V budget を比較するが、Codex spawn、subagent runtime、provider / device / public send は含まない
+- 移行対象ごとの処遇を追記専用・改竄検知可能に記録する read-only [Public Migration Ledger](docs/PUBLIC-MIGRATION-LEDGER.md)。終端分類と移送機構を別フィールドに分け、opaque 参照と digest と gate 結果だけを持つ。移行の実行、素材の複製、公開、private 継続性の証明は含まない
 
 ### 既存実装または local candidate だが、公開保証ではないもの
 
@@ -1076,6 +1077,9 @@ read-only/candidate-only公開導線であり、validatorやrunbookがPASSして
 - [Agent Swarm × Kotodama Adoption Candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) — bounded root / worker / verifier plan only; no runner or dispatch
   Schema: `schemas/company-pack-agent-swarm-execution-candidate.schema.json`
   Read-only preflight: `tools/validate_company_pack_agent_swarm_execution_candidate.py`
+- [Public Migration Ledger](docs/PUBLIC-MIGRATION-LEDGER.md) — append-only disposition records only; no migration, copy, or publication
+  Schema: `schemas/public-migration-ledger.schema.json`
+  Read-only verifier: `tools/validate_public_migration_ledger.py`
 
 ## Full review-chain smoke
 

@@ -377,6 +377,35 @@ prompt、private content を解決せず、複数candidate間の replay reservat
 未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。成功・拒否のどちらも
 `CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED` を維持します。
 
+## 15. Public migration ledger
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [public-migration-ledger.schema.json](../schemas/public-migration-ledger.schema.json) | [`validate_public_migration_ledger.py`](../tools/validate_public_migration_ledger.py) | [`test_public_migration_ledger_contract.py`](../tests/test_public_migration_ledger_contract.py) | [Public Migration Ledger](PUBLIC-MIGRATION-LEDGER.md)。追記専用 JSONL の schema、連番、hash chain、終端分類と移送機構の語彙分離、gate 一貫性だけを read-only で検査する。`LEDGER_CONSISTENT_UNVERIFIED` は記録された処遇が内部整合しているという意味だけで、移行の実行、private 継続性、公開抽出物の公開、依存切替、rollback 予行、独立検証、Human Decision、Promotion、Current Truth、Public Beta GOではない。 |
+
+PowerShell:
+
+```powershell
+python tools\validate_public_migration_ledger.py `
+  migration\public-migration-ledger.v1.jsonl
+```
+
+POSIX:
+
+```bash
+python3 tools/validate_public_migration_ledger.py \
+  migration/public-migration-ledger.v1.jsonl
+```
+
+台帳は `terminal_classification`（`PUBLIC_EXTRACT` / `PRIVATE_RETAIN` / `REGENERATE` /
+`DROP`、blocked 中は `null`）と `transfer_mode`（`REAUTHOR` / `GENERATE` / `NO_COPY`）を
+別フィールドとして持ち、片方の語彙をもう片方へ入れることを拒否します。これがないと
+unclassified 0 件を機械検証できません。すべての識別子は `ref/...` の opaque 参照で、
+private path、provider handle、host、参加者識別子、素材そのものは記録しません。
+`migration/public-migration-ledger.v1.jsonl` は現時点で未作成であり、空・不在の入力は
+`INPUT_INVALID` で fail-closed します。Draft 2020-12 検証には `requirements-test.txt` の
+`jsonschema` が必要で、未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計

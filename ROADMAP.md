@@ -452,6 +452,7 @@ Promotion, Current Truth, and Final Human GO remain outside scope.
 - [x] [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) with opaque runner/input refs, bounded evaluation window, fixed stop/rollback shape, expected receipt, and independent-verification handoff. This is schema-only; no execution is requested or accepted.
 - [x] [Agent orchestration route-binding candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md) with opaque source / target identity, workspace / revision, route, preview, confirmation, and rollback comparison. This is schema / preflight / test documentation only; no Codex transport, subagent spawn, external effect, Promotion, or Current Truth.
 - [x] [Agent Swarm × Kotodama adoption candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) with bounded root / worker / verifier assignments, explicit parent edges, handoffs, leases, stop conditions, and N/C/W/V budgets. This is schema / preflight / test documentation only; no Codex transport, subagent spawn, external effect, Promotion, or Current Truth.
+- [x] [Public migration ledger](docs/PUBLIC-MIGRATION-LEDGER.md) with an append-only hash-chained record schema that separates terminal classification from transfer mechanism, a deterministic verifier, negative tests, and a synthetic fixture. This is schema / verifier / test documentation only; the ledger file is not yet populated and no migration, copy, publication, Promotion, or Current Truth follows from it.
 
 ## Runtime profiles still requiring live evidence
 
