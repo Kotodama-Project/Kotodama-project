@@ -28,6 +28,7 @@
 - [x] Clone-to-result five-minute tour with cross-shell commands, report interpretation, and bounded next choices
 - [x] README Company OS reader/story map from Vision through current reality to safe first use
 - [x] [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) with README/STATUS/ROADMAP projections
+- [x] Agent orchestration route-binding candidate with opaque source / target / workspace / revision / route comparison, read-only preflight, and negative tests; no runner or dispatch
 
 ## Owner-confirmed Company AGI direction
 
@@ -47,7 +48,6 @@ candidate, not signed or independently verifiable governance approval,
 rightsholder proof, canonical adoption, launch decision, or Final Human GO, and
 no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25's
 contributor/provenance/NOTICE/accountable-rightsholder gaps remain open.
-- [x] Agent orchestration route-binding candidate with opaque source / target / workspace / revision / route comparison, read-only preflight, and negative tests; no runner or dispatch
 - [x] Agent Swarm × Kotodama bounded root / worker / verifier candidate with parent-edge, assignment, workspace / revision, handoff, lease, stop-condition, and N/C/W/V budget contracts; schema / preflight / tests only, no runtime swarm or dispatch
 
 ## Current public documentation revision

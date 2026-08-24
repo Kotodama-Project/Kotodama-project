@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://kotodama-project.example/schemas/company-pack-agent-orchestration-route-binding-candidate.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-agent-orchestration-route-binding-candidate.schema.json",
   "title": "Company Pack Agent Orchestration Route Binding Candidate",
   "description": "Opaque, public-preview-only route comparison contract. It fixes source/target identity, workspace/revision, route, preview, and rollback fields without invoking a runner or granting authority.",
   "type": "object",
