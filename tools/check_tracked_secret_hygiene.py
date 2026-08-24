@@ -251,7 +251,6 @@ def placeholder(value: str) -> bool:
         or marker is not None
         or reference is not None
         or code_reference is not None
-        or "hardcoded-comment-bypass" in lower
         or re.fullmatch(r"[*xX._-]{8,}", normalized) is not None
     )
 

@@ -167,6 +167,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             "process.env.OPENAI_API_KEY-live-production-suffix",
             "secrets.OPENAI_API_KEY-live-production-suffix",
             "vars.OPENAI_API_KEY-live-production-suffix",
+            "hardcoded-comment-bypass-live-secret",
         ):
             with self.subTest(value=value):
                 self.assertFalse(SCANNER.placeholder(value))
