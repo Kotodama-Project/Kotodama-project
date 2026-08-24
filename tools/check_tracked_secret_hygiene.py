@@ -69,21 +69,21 @@ BARE_SPACE_ASSIGNMENT = re.compile(
 STRUCTURED_ASSIGNMENT = re.compile(
     r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?\s*:\s*(?P<value>"
+    + r")[\"']?\s*:\s*(?P<value>(?:"
     + r"\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
     + r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>|"
     + r'"(?:\\.|[^"\\])*"'
-    + r"|'(?:\\.|[^'\\])*'|[^,}\]]+)",
+    + r"|'(?:\\.|[^'\\])*'|[^,}\]])+)",
     re.IGNORECASE,
 )
 INLINE_ASSIGNMENT = re.compile(
     r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?\s*=(?![=>~])\s*(?P<value>"
+    + r")[\"']?\s*=(?![=>~])\s*(?P<value>(?:"
     + r"\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
     + r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>|"
     + r'"(?:\\.|[^"\\])*"'
-    + r"|'(?:\\.|[^'\\])*'|[^,;}\]]+)",
+    + r"|'(?:\\.|[^'\\])*'|[^,;}\]])+)",
     re.IGNORECASE,
 )
 PRIVATE_BEGIN = re.compile(
@@ -300,11 +300,6 @@ def live_assignment(value: str) -> bool:
     return not placeholder(value)
 
 
-def assignment_expression_continues(line: str, value_end: int) -> bool:
-    remainder = line[value_end:]
-    return re.match(r"\s*(?:\+|\.|\|\||&&|\?\?)", remainder) is not None
-
-
 def shell_parameter_assignments(line: str) -> list[tuple[str, str]]:
     """Return sensitive shell default/assignment expansions, including nesting."""
 
@@ -363,13 +358,9 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
         reported_assignments: set[str] = set()
         for match in matches:
             name = match.group("name").upper()
-            value_is_live = live_assignment(assignment_value(match.group("value")))
             if (
                 name not in reported_assignments
-                and (
-                    value_is_live
-                    or assignment_expression_continues(line, match.end("value"))
-                )
+                and live_assignment(assignment_value(match.group("value")))
             ):
                 findings.append((
                     path.as_posix(),
