@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-agent-swarm-execution-candidate.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-agent-swarm-execution-candidate.schema.json",
   "title": "Company Pack Agent Swarm Execution Candidate",
   "description": "Opaque public-preview candidate for a bounded root/worker swarm plan. It records parent edges, assignments, handoffs, budgets, leases, and stop conditions without spawning or authorizing execution.",
   "type": "object",
