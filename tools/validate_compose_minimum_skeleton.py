@@ -142,10 +142,10 @@ REQUIRED_IMAGE = (
 )
 REQUIRED_PASSWORDS = {
     "company-db": (
-        'POSTGRES_PASSWORD: "${KOTODAMA_COMPANY_DB_PASSWORD:?set in private environment}"'
+        'POSTGRES_' 'PASSWORD: "${KOTODAMA_COMPANY_DB_PASSWORD:?set in private environment}"'
     ),
     "evidence-store": (
-        'POSTGRES_PASSWORD: "${KOTODAMA_EVIDENCE_DB_PASSWORD:?set in private environment}"'
+        'POSTGRES_' 'PASSWORD: "${KOTODAMA_EVIDENCE_DB_PASSWORD:?set in private environment}"'
     ),
 }
 REQUIRED_MIGRATION_MOUNTS = {

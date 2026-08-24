@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -95,7 +96,7 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             "python -m pip install --require-hashes -r requirements-ci.txt"
         )
         workflow_reference_command = (
-            "python -S -B tools/check_workflow_references.py"
+            "python -B tools/check_workflow_references.py"
         )
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("persist-credentials: false", workflow)
@@ -108,7 +109,11 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         self.assertLess(workflow.index(smoke_command), workflow.index(install_command))
         self.assertIn(workflow_reference_command, workflow)
         self.assertLess(
-            workflow.index(workflow_reference_command), workflow.index(install_command)
+            workflow.index(install_command), workflow.index(workflow_reference_command)
+        )
+        self.assertLess(
+            workflow.index(workflow_reference_command),
+            workflow.index("python -m unittest discover -s tests -v"),
         )
         self.assertIn("python -m unittest discover -s tests -v", workflow)
         self.assertIn(
@@ -147,6 +152,131 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         for reference in ("owner/action@v1", "docker://vendor/tool:latest"):
             with self.subTest(reference=reference):
                 self.assertIsNotNone(WORKFLOW_SCANNER.reference_violation(reference))
+
+    def test_workflow_reference_gate_parses_supported_yaml_representations(
+        self,
+    ) -> None:
+        mutable = "docker://vendor/tool:latest"
+        cases = {
+            "standard": f"      - uses: {mutable}\n",
+            "quoted-key": f'      - "uses" : {mutable}\n',
+            "spaced-key": f"      - uses : {mutable}\n",
+            "flow-map": f"      - {{ name: mutable, uses: {mutable} }}\n",
+        }
+
+        for name, step in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                workflows = root / ".github" / "workflows"
+                workflows.mkdir(parents=True)
+                (workflows / "candidate.yml").write_text(
+                    "name: Candidate\n"
+                    "on: push\n"
+                    "jobs:\n"
+                    "  verify:\n"
+                    "    runs-on: ubuntu-latest\n"
+                    "    steps:\n"
+                    + step,
+                    encoding="utf-8",
+                )
+
+                violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("Docker action image", violations[0][2])
+
+    def test_workflow_reference_gate_accepts_structured_immutable_references(
+        self,
+    ) -> None:
+        action_sha = "owner/action@" + ("a" * 40)
+        docker_digest = "docker://vendor/tool@sha256:" + ("b" * 64)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            local_action = root / "local-action"
+            workflows.mkdir(parents=True)
+            local_action.mkdir()
+            (workflows / "candidate.yml").write_text(
+                "name: Candidate\n"
+                "on: push\n"
+                "jobs:\n"
+                "  verify:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                f"      - 'uses' : {action_sha}\n"
+                f"      - uses: >-\n          {docker_digest}\n"
+                "      - { uses: ./local-action }\n",
+                encoding="utf-8",
+            )
+            (local_action / "action.yml").write_text(
+                "name: Local\n"
+                "runs:\n"
+                "  using: composite\n"
+                "  steps:\n"
+                "    - run: echo ok\n"
+                "      shell: bash\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual([], WORKFLOW_SCANNER.scan_workflows(root))
+
+    def test_workflow_reference_gate_covers_reusable_jobs_but_not_arbitrary_keys(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "candidate.yml").write_text(
+                "name: Candidate\n"
+                "on: push\n"
+                "jobs:\n"
+                "  reusable:\n"
+                "    \"uses\" : owner/repository/.github/workflows/reuse.yml@v1\n"
+                "  ordinary:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                "      - run: 'echo uses: docker://vendor/tool:latest'\n"
+                "        with: { uses: docker://vendor/tool:latest }\n",
+                encoding="utf-8",
+            )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(1, len(violations), violations)
+            self.assertIn("full commit SHA", violations[0][2])
+
+    def test_workflow_reference_gate_scans_nested_composite_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            action = root / "actions" / "local"
+            workflows.mkdir(parents=True)
+            action.mkdir(parents=True)
+            (workflows / "candidate.yml").write_text(
+                "name: Candidate\n"
+                "on: push\n"
+                "jobs:\n"
+                "  verify:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                "      - uses: ./actions/local\n",
+                encoding="utf-8",
+            )
+            (action / "action.yml").write_text(
+                "name: Local\n"
+                "runs:\n"
+                "  using: composite\n"
+                "  steps:\n"
+                "    - uses: owner/action@v1\n",
+                encoding="utf-8",
+            )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(1, len(violations), violations)
+            self.assertEqual("actions/local/action.yml", violations[0][0])
+            self.assertIn("full commit SHA", violations[0][2])
 
     def test_ci_dependency_lock_is_hashed_current_and_public_safe(self) -> None:
         lock = (ROOT / "requirements-ci.txt").read_text(encoding="utf-8")

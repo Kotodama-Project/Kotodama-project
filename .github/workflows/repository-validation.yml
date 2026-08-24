@@ -50,7 +50,7 @@ jobs:
           python -S -B tools/validate_installation_lifecycle.py examples/installation-lifecycle/proxmox-segmented.json
           python -S -B tools/validate_compose_minimum_skeleton.py runtime/compose-minimum
 
-      - name: Validate workflow syntax and immutable action references
+      - name: Validate workflow syntax
         shell: bash
         run: |
           set -euo pipefail
@@ -64,10 +64,12 @@ jobs:
           chmod +x "$install_dir/actionlint"
           "$install_dir/actionlint" -version
           "$install_dir/actionlint" .github/workflows/*.yml
-          python -S -B tools/check_workflow_references.py
 
       - name: Install hash-locked test dependencies
         run: python -m pip install --require-hashes -r requirements-ci.txt
+
+      - name: Validate immutable workflow references
+        run: python -B tools/check_workflow_references.py
 
       - name: Run the public test suite
         run: python -m unittest discover -s tests -v

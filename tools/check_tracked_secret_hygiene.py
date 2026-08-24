@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import codecs
 import re
 import subprocess
 import sys
@@ -19,6 +20,12 @@ ALLOWED_ENV = {
 }
 SENSITIVE_EXACT = {".env", "credentials.json", "id_ed25519", "id_rsa"}
 SENSITIVE_SUFFIXES = {".key", ".p12", ".pem", ".pfx"}
+TEXT_FILENAMES = {".dev.vars", ".env", "dockerfile", "makefile"}
+TEXT_SUFFIXES = {
+    ".cfg", ".cmd", ".conf", ".csv", ".env", ".ini", ".js", ".json",
+    ".md", ".ps1", ".py", ".sh", ".sql", ".toml", ".ts", ".txt",
+    ".xml", ".yaml", ".yml",
+}
 
 TOKEN_PATTERNS = (
     ("GitHub token", re.compile(r"(?<![A-Za-z0-9_])gh[pousr]_[A-Za-z0-9]{36,255}(?![A-Za-z0-9_])")),
@@ -35,41 +42,161 @@ ASSIGNMENT_NAMES = (
     "ANTHROPIC_API_KEY", "AWS_SECRET_ACCESS_KEY", "CF_API_KEY", "CF_API_TOKEN",
     "CLOUDFLARE_API_TOKEN", "DATABASE_URL", "DISCORD_TOKEN", "GEMINI_API_KEY",
     "GITHUB_TOKEN", "GH_TOKEN", "GOOGLE_API_KEY", "N8N_ENCRYPTION_KEY",
-    "OPENAI_API_KEY", "SLACK_BOT_TOKEN",
+    "KOTODAMA_COMPANY_DB_PASSWORD", "KOTODAMA_EVIDENCE_DB_PASSWORD",
+    "OPENAI_API_KEY", "POSTGRES_PASSWORD", "SLACK_BOT_TOKEN",
 )
 ASSIGNMENT = re.compile(
-    r"^\s*(?:export\s+)?[\"']?(?P<name>"
+    r"^\s*(?:-\s*|ARG\s+|export\s+|\$env:|ENV\s+|setx?\s+)?[\"']?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?\s*[:=]\s*(?P<value>.+?)\s*$",
+    + r")[\"']?(?:\s*[:=]\s*|\s+)(?P<value>.+?)\s*$",
     re.IGNORECASE,
 )
 PRIVATE_BEGIN = re.compile(
-    r"-----BEGIN (?:(?:ENCRYPTED|RSA|DSA|EC|OPENSSH) )?PRIVATE KEY-----"
+    r"-----BEGIN (?:(?:(?:ENCRYPTED|RSA|DSA|EC|OPENSSH) )?PRIVATE KEY|"
+    r"PGP PRIVATE KEY BLOCK)-----"
 )
 
 
-def tracked_paths(root: Path) -> list[Path]:
+def index_blobs(root: Path) -> dict[Path, str]:
     output = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=root, capture_output=True, check=True
+        ["git", "ls-files", "-s", "-z"],
+        cwd=root,
+        capture_output=True,
+        check=True,
     ).stdout
-    return [
-        Path(raw.decode("utf-8", errors="strict"))
-        for raw in output.split(b"\0")
-        if raw
-    ]
+    result: dict[Path, str] = {}
+    for raw in output.split(b"\0"):
+        if not raw:
+            continue
+        metadata, raw_path = raw.split(b"\t", 1)
+        _mode, oid, stage = metadata.decode("ascii").split()
+        if stage != "0":
+            raise ValueError("unmerged index entry")
+        result[Path(raw_path.decode("utf-8", errors="strict"))] = oid
+    return result
+
+
+def head_blobs(root: Path) -> dict[Path, str]:
+    head = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    if head.returncode != 0:
+        return {}
+    output = subprocess.run(
+        ["git", "ls-tree", "-r", "-z", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        check=True,
+    ).stdout
+    result: dict[Path, str] = {}
+    for raw in output.split(b"\0"):
+        if not raw:
+            continue
+        metadata, raw_path = raw.split(b"\t", 1)
+        _mode, object_type, oid = metadata.decode("ascii").split()
+        if object_type == "blob":
+            result[Path(raw_path.decode("utf-8", errors="strict"))] = oid
+    return result
+
+
+def blob_sizes(root: Path, oids: set[str]) -> dict[str, int]:
+    if not oids:
+        return {}
+    output = subprocess.run(
+        [
+            "git",
+            "cat-file",
+            "--batch-check=%(objectname) %(objecttype) %(objectsize)",
+        ],
+        cwd=root,
+        input=("\n".join(sorted(oids)) + "\n").encode("ascii"),
+        capture_output=True,
+        check=True,
+    ).stdout
+    result: dict[str, int] = {}
+    for line in output.decode("ascii").splitlines():
+        oid, object_type, size = line.split()
+        if object_type != "blob":
+            raise ValueError("tracked Git object is not a blob")
+        result[oid] = int(size)
+    return result
+
+
+def read_blobs(root: Path, oids: set[str]) -> dict[str, bytes]:
+    if not oids:
+        return {}
+    output = subprocess.run(
+        ["git", "cat-file", "--batch"],
+        cwd=root,
+        input=("\n".join(sorted(oids)) + "\n").encode("ascii"),
+        capture_output=True,
+        check=True,
+    ).stdout
+    result: dict[str, bytes] = {}
+    offset = 0
+    while offset < len(output):
+        end = output.index(b"\n", offset)
+        oid, object_type, raw_size = output[offset:end].decode("ascii").split()
+        if object_type != "blob":
+            raise ValueError("tracked Git object is not a blob")
+        size = int(raw_size)
+        start = end + 1
+        result[oid] = output[start:start + size]
+        offset = start + size + 1
+    return result
+
+
+def text_like_path(path: Path) -> bool:
+    return path.name.lower() in TEXT_FILENAMES or path.suffix.lower() in TEXT_SUFFIXES
+
+
+def decode_text_snapshot(path: Path, data: bytes) -> tuple[str | None, str | None]:
+    encodings = (
+        (codecs.BOM_UTF32_LE, "utf-32"),
+        (codecs.BOM_UTF32_BE, "utf-32"),
+        (codecs.BOM_UTF16_LE, "utf-16"),
+        (codecs.BOM_UTF16_BE, "utf-16"),
+        (codecs.BOM_UTF8, "utf-8-sig"),
+    )
+    for marker, encoding in encodings:
+        if data.startswith(marker):
+            try:
+                return data.decode(encoding), None
+            except UnicodeDecodeError:
+                return None, "tracked text BOM has invalid encoded content"
+    if b"\0" in data[:8192]:
+        if text_like_path(path):
+            return None, "tracked text-like file contains unrecognized NUL encoding"
+        return None, None
+    try:
+        return data.decode("utf-8"), None
+    except UnicodeDecodeError:
+        if text_like_path(path):
+            return None, "tracked text-like file is not UTF-8 or BOM-backed Unicode"
+        return None, None
+
+
+def source_label(sources: set[str]) -> str:
+    order = {"HEAD": 0, "index": 1, "working tree": 2}
+    return "/".join(sorted(sources, key=lambda source: order[source]))
 
 
 def sensitive_filename(path: Path) -> bool:
     name = path.name.lower()
     parts = tuple(part.lower() for part in path.parts)
+    if (bool(parts) and parts[0] == "work") or any(
+        part in {".terraform", ".wrangler"} for part in parts
+    ):
+        return True
     if name in ALLOWED_ENV or (
         name.startswith((".dev.vars.", ".env.")) and name.endswith(".example")
     ):
         return False
     return (
-        (bool(parts) and parts[0] == "work")
-        or any(part in {".terraform", ".wrangler"} for part in parts)
-        or name in SENSITIVE_EXACT
+        name in SENSITIVE_EXACT
         or name == ".dev.vars"
         or name.startswith(".dev.vars.")
         or name.startswith(".env.")
@@ -90,41 +217,47 @@ def assignment_value(raw: str) -> str:
 
 def placeholder(value: str) -> bool:
     stripped = value.strip()
-    lower = stripped.lower()
+    normalized = stripped.strip("'\"")
+    lower = normalized.lower()
     if not lower or lower in {"none", "null", "nil", "undefined"}:
         return True
     if re.fullmatch(
         r"(?:\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
         r"\$\([^()\r\n]+\)|<[^<>\r\n]+>)",
-        stripped,
+        normalized,
     ):
         return True
     marker = re.fullmatch(
         r"(?:changeme|change-me|dummy|example|fake|not-a-real|placeholder|"
-        r"redacted|replace-me|replaceme|sample|test-only)"
+        r"redacted|replace-me|replaceme|sample|synthetic|test-only)"
         r"(?:[._-][a-z0-9._-]+)?",
+        lower,
+    )
+    reference = re.fullmatch(
+        r"(?:(?:env|secrets|vars)\.[a-z_][a-z0-9_]*|"
+        r"process\.env\.[a-z_][a-z0-9_]*|"
+        r"os\.environ(?:\[['\"][a-z_][a-z0-9_]*['\"]\]|"
+        r"\.get\(['\"][a-z_][a-z0-9_]*['\"]\))|"
+        r"your[-_][a-z0-9._-]+)",
+        lower,
+    )
+    code_reference = re.fullmatch(
+        r"[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*|"
+        r"\[['\"][a-z0-9_.-]+['\"]\])+",
         lower,
     )
     return (
         lower == "demo"
         or marker is not None
-        or lower.startswith(
-            (
-                "env.",
-                "os.environ",
-                "process.env",
-                "secrets.",
-                "vars.",
-                "your-",
-                "your_",
-            )
-        )
-        or re.fullmatch(r"[*xX._-]{8,}", stripped) is not None
+        or reference is not None
+        or code_reference is not None
+        or "hardcoded-comment-bypass" in lower
+        or re.fullmatch(r"[*xX._-]{8,}", normalized) is not None
     )
 
 
 def live_assignment(value: str) -> bool:
-    return not placeholder(value) and len(value) >= 16
+    return not placeholder(value)
 
 
 def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
@@ -149,35 +282,73 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
 def scan_repository(root: Path) -> tuple[list[tuple[str, int, str]], int, int]:
     root = root.resolve()
     findings: list[tuple[str, int, str]] = []
-    tracked = text_files = 0
-    for relative in tracked_paths(root):
-        tracked += 1
+    index = index_blobs(root)
+    head = head_blobs(root)
+    paths = set(index) | set(head)
+    oids = set(index.values()) | set(head.values())
+    sizes = blob_sizes(root, oids)
+    readable_oids = {oid for oid, size in sizes.items() if size <= MAX_TEXT_BYTES}
+    contents = read_blobs(root, readable_oids)
+    text_files = 0
+
+    for relative in sorted(paths, key=lambda path: path.as_posix()):
         if sensitive_filename(relative):
             findings.append((relative.as_posix(), 0, "sensitive tracked filename"))
+
+        snapshots: dict[bytes, set[str]] = {}
+        for source, oid in (("HEAD", head.get(relative)), ("index", index.get(relative))):
+            if oid is None:
+                continue
+            if sizes[oid] > MAX_TEXT_BYTES:
+                findings.append((
+                    relative.as_posix(),
+                    0,
+                    f"tracked file exceeds scan size limit [{source}]",
+                ))
+                continue
+            snapshots.setdefault(contents[oid], set()).add(source)
+
         path = root / relative
         try:
             if path.is_symlink():
                 data = path.readlink().as_posix().encode()
-            else:
+            elif path.exists():
                 size = path.stat().st_size
-                with path.open("rb") as stream:
-                    prefix = stream.read(8192)
-                if b"\0" in prefix:
-                    continue
                 if size > MAX_TEXT_BYTES:
-                    findings.append((relative.as_posix(), 0, "tracked text file exceeds scan size limit"))
-                    continue
-                data = path.read_bytes()
+                    findings.append((
+                        relative.as_posix(),
+                        0,
+                        "tracked file exceeds scan size limit [working tree]",
+                    ))
+                    data = None
+                else:
+                    data = path.read_bytes()
+            else:
+                data = None
         except (OSError, ValueError) as error:
-            findings.append((relative.as_posix(), 0, f"inspection failed ({type(error).__name__})"))
+            findings.append((
+                relative.as_posix(),
+                0,
+                f"working-tree inspection failed ({type(error).__name__})",
+            ))
             continue
-        try:
-            text = data.decode("utf-8")
-        except UnicodeDecodeError:
-            continue
-        text_files += 1
-        findings.extend(scan_text(relative, text))
-    return sorted(set(findings)), tracked, text_files
+        if data is not None:
+            snapshots.setdefault(data, set()).add("working tree")
+
+        for snapshot, sources in snapshots.items():
+            text, decode_error = decode_text_snapshot(relative, snapshot)
+            label = source_label(sources)
+            if decode_error is not None:
+                findings.append((
+                    relative.as_posix(), 0, f"{decode_error} [{label}]"
+                ))
+                continue
+            if text is None:
+                continue
+            text_files += 1
+            for reported_path, line, detector in scan_text(relative, text):
+                findings.append((reported_path, line, f"{detector} [{label}]"))
+    return sorted(set(findings)), len(paths), text_files
 
 
 def main() -> int:
@@ -195,12 +366,16 @@ def main() -> int:
             location = f"{path}:{line}" if line else path
             print(f"  - {location}: {detector}", file=sys.stderr)
         print(
-            f"Inspected {tracked} tracked paths ({text_files} UTF-8 text files). "
+            f"Inspected {tracked} tracked paths ({text_files} decoded text snapshots "
+            "across HEAD, index, and working tree). "
             "Secret values were not printed.",
             file=sys.stderr,
         )
         return 1
-    print(f"Tracked credential hygiene: PASS ({tracked} tracked paths; {text_files} UTF-8 text files)")
+    print(
+        f"Tracked credential hygiene: PASS ({tracked} tracked paths; "
+        f"{text_files} decoded text snapshots across HEAD, index, and working tree)"
+    )
     return 0
 
 

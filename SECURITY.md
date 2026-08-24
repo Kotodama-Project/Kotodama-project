@@ -30,11 +30,12 @@ Before every push, run:
 python -S -B tools/check_tracked_secret_hygiene.py
 ```
 
-The command scans the current tracked tree with deterministic high-confidence
-detectors and never prints a detected value. It does not scan Git history,
-untracked files, provider configuration, or GitHub security settings. If a
-secret has ever been committed, revoke or rotate it first and treat historical
-removal as a separately reviewed incident-response change.
+The command scans the current tracked tree across HEAD, the index, and tracked
+working-tree snapshots with deterministic high-confidence detectors and never
+prints a detected value. It does not scan history older than HEAD, untracked
+files, provider configuration, or GitHub security settings. If a secret has
+ever been committed, revoke or rotate it first and treat historical removal as
+a separately reviewed incident-response change.
 A deleted file or rewritten commit does not invalidate a credential.
 
 ## Supported surface
