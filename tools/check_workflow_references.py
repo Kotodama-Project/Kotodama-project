@@ -253,9 +253,40 @@ def local_action_metadata(
     return path, data, None
 
 
+def local_workflow_metadata(
+    root: Path, reference: str, source: str
+) -> tuple[PurePosixPath | None, bytes | None, str | None]:
+    candidate = safe_relative(reference[2:])
+    if candidate is None:
+        return None, None, "local reusable workflow path escapes the repository root"
+    if (
+        candidate.parent != PurePosixPath(".github/workflows")
+        or candidate.suffix.lower() not in {".yml", ".yaml"}
+    ):
+        return (
+            None,
+            None,
+            "local reusable workflow must be a .yml or .yaml file directly under "
+            ".github/workflows",
+        )
+    if source == "working tree":
+        resolved = (root / Path(*candidate.parts)).resolve()
+        if not resolved.is_relative_to(root):
+            return (
+                None,
+                None,
+                "local reusable workflow path escapes the repository root",
+            )
+    data = read_snapshot(root, candidate, source)
+    if data is None:
+        return None, None, "local reusable workflow does not exist in the snapshot"
+    return candidate, data, None
+
+
 def scan_workflows(root: Path) -> list[tuple[str, int, str]]:
     root = root.resolve()
     violations: list[tuple[str, int, str]] = []
+    pending_workflows = workflow_snapshots(root)
     pending_actions: list[tuple[str, PurePosixPath, bytes]] = []
 
     def inspect_references(
@@ -287,7 +318,17 @@ def scan_workflows(root: Path) -> list[tuple[str, int, str]]:
                     relative_path, line_number, f"{violation} [{source}]"
                 ))
                 continue
-            if kind == "step" and reference.startswith("./"):
+            if kind == "job" and reference.startswith("./"):
+                metadata, data, local_error = local_workflow_metadata(
+                    root, reference, source
+                )
+                if local_error is not None:
+                    violations.append((
+                        relative_path, line_number, f"{local_error} [{source}]"
+                    ))
+                elif metadata is not None and data is not None:
+                    pending_workflows.append((source, metadata, data))
+            elif kind == "step" and reference.startswith("./"):
                 metadata, data, local_error = local_action_metadata(
                     root, reference, source
                 )
@@ -298,7 +339,13 @@ def scan_workflows(root: Path) -> list[tuple[str, int, str]]:
                 elif metadata is not None and data is not None:
                     pending_actions.append((source, metadata, data))
 
-    for source, path, data in workflow_snapshots(root):
+    inspected_workflows: set[tuple[str, PurePosixPath]] = set()
+    while pending_workflows:
+        source, path, data = pending_workflows.pop()
+        identity = (source, path)
+        if identity in inspected_workflows:
+            continue
+        inspected_workflows.add(identity)
         try:
             references = workflow_references(data.decode("utf-8"))
         except (UnicodeError, yaml.YAMLError) as error:

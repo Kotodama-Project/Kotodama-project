@@ -322,6 +322,82 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             self.assertEqual("actions/local/action.yml", violations[0][0])
             self.assertIn("full commit SHA", violations[0][2])
 
+    def test_workflow_reference_gate_rejects_invalid_local_reusable_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "caller.yml").write_text(
+                "name: Caller\n"
+                "on: push\n"
+                "jobs:\n"
+                "  reuse:\n"
+                "    uses: ./outside.yml\n",
+                encoding="utf-8",
+            )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(1, len(violations), violations)
+            self.assertIn("directly under .github/workflows", violations[0][2])
+
+    def test_workflow_gate_scans_referenced_untracked_reusable_workflow(self) -> None:
+        pinned = "owner/action@" + ("a" * 40)
+        mutable = "owner/action@v1"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+
+            def run_git(*arguments: str) -> None:
+                completed = subprocess.run(
+                    ["git", *arguments], cwd=root, capture_output=True, check=False
+                )
+                self.assertEqual(0, completed.returncode, completed.stderr.decode())
+
+            caller = workflows / "caller.yml"
+            caller.write_text(
+                "name: Caller\n"
+                "on: push\n"
+                "jobs:\n"
+                "  verify:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                f"      - uses: {pinned}\n",
+                encoding="utf-8",
+            )
+            run_git("init", "--quiet")
+            run_git("config", "user.name", "Test")
+            run_git("config", "user.email", "test@example.invalid")
+            run_git("add", ".")
+            run_git("commit", "--quiet", "-m", "seed")
+
+            caller.write_text(
+                "name: Caller\n"
+                "on: push\n"
+                "jobs:\n"
+                "  reuse:\n"
+                "    uses: ./.github/workflows/untracked.yml\n",
+                encoding="utf-8",
+            )
+            (workflows / "untracked.yml").write_text(
+                "name: Reusable\n"
+                "on: workflow_call\n"
+                "jobs:\n"
+                "  verify:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                f"      - uses: {mutable}\n",
+                encoding="utf-8",
+            )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(1, len(violations), violations)
+            self.assertEqual(".github/workflows/untracked.yml", violations[0][0])
+            self.assertIn("full commit SHA", violations[0][2])
+            self.assertIn("[working tree]", violations[0][2])
+
     def test_workflow_reference_gate_scans_head_index_and_worktree(self) -> None:
         mutable = "docker://vendor/tool:latest"
         pinned = "docker://vendor/tool@sha256:" + ("b" * 64)
