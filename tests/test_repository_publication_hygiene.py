@@ -16,6 +16,13 @@ WORKFLOW_SCANNER_SPEC = importlib.util.spec_from_file_location(
 assert WORKFLOW_SCANNER_SPEC is not None and WORKFLOW_SCANNER_SPEC.loader is not None
 WORKFLOW_SCANNER = importlib.util.module_from_spec(WORKFLOW_SCANNER_SPEC)
 WORKFLOW_SCANNER_SPEC.loader.exec_module(WORKFLOW_SCANNER)
+SECRET_SCANNER_PATH = ROOT / "tools" / "check_tracked_secret_hygiene.py"
+SECRET_SCANNER_SPEC = importlib.util.spec_from_file_location(
+    "tracked_secret_hygiene_for_identity", SECRET_SCANNER_PATH
+)
+assert SECRET_SCANNER_SPEC is not None and SECRET_SCANNER_SPEC.loader is not None
+SECRET_SCANNER = importlib.util.module_from_spec(SECRET_SCANNER_SPEC)
+SECRET_SCANNER_SPEC.loader.exec_module(SECRET_SCANNER)
 
 
 def decode_tracked_text(data: bytes) -> str | None:
@@ -25,27 +32,64 @@ def decode_tracked_text(data: bytes) -> str | None:
         return None
 
 
+def tracked_repository_text(root: Path) -> str:
+    index = SECRET_SCANNER.index_blobs(root)
+    head = SECRET_SCANNER.head_blobs(root)
+    oids = set(index.values()) | set(head.values())
+    sizes = SECRET_SCANNER.blob_sizes(root, oids)
+    readable = {
+        oid
+        for oid, size in sizes.items()
+        if size <= SECRET_SCANNER.MAX_TEXT_BYTES
+    }
+    snapshots = set(SECRET_SCANNER.read_blobs(root, readable).values())
+    for relative in set(index) | set(head):
+        path = root / relative
+        if path.is_symlink():
+            snapshots.add(path.readlink().as_posix().encode("utf-8"))
+        elif path.is_file() and path.stat().st_size <= SECRET_SCANNER.MAX_TEXT_BYTES:
+            snapshots.add(path.read_bytes())
+    documents = [
+        document
+        for data in snapshots
+        if (document := decode_tracked_text(data)) is not None
+    ]
+    return "\n".join(documents)
+
+
 class RepositoryPublicationHygieneTests(unittest.TestCase):
     def tracked_text(self) -> str:
-        tracked = subprocess.run(
-            ["git", "ls-files", "-z"],
-            cwd=ROOT,
-            capture_output=True,
-            check=True,
-        ).stdout.split(b"\0")
-        documents = []
-        for relative_bytes in tracked:
-            if not relative_bytes:
-                continue
-            relative = relative_bytes.decode("utf-8")
-            document = decode_tracked_text((ROOT / relative).read_bytes())
-            if document is not None:
-                documents.append(document)
-        return "\n".join(documents)
+        return tracked_repository_text(ROOT)
 
     def test_repository_identity_scan_skips_binary_content(self) -> None:
         self.assertIsNone(decode_tracked_text(b"\x89PNG\r\n\x1a\n\x00\xff"))
         self.assertEqual("plain text", decode_tracked_text(b"plain text"))
+
+    def test_repository_identity_scan_covers_head_index_and_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def run_git(*arguments: str) -> None:
+                subprocess.run(
+                    ["git", *arguments], cwd=root, capture_output=True, check=True
+                )
+
+            run_git("init", "--quiet")
+            run_git("config", "user.name", "Test")
+            run_git("config", "user.email", "test@example.invalid")
+            target = root / "identity.txt"
+            target.write_text("head-identity", encoding="utf-8")
+            run_git("add", ".")
+            run_git("commit", "--quiet", "-m", "seed")
+            target.write_text("index-identity", encoding="utf-8")
+            run_git("add", ".")
+            target.write_text("working-identity", encoding="utf-8")
+
+            combined = tracked_repository_text(root)
+
+        self.assertIn("head-identity", combined)
+        self.assertIn("index-identity", combined)
+        self.assertIn("working-identity", combined)
 
     def test_public_policy_documents_are_linked_from_readme(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

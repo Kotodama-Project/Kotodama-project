@@ -50,10 +50,16 @@ ASSIGNMENT_NAMES = (
     "KOTODAMA_COMPANY_DB_PASSWORD", "KOTODAMA_EVIDENCE_DB_PASSWORD",
     "OPENAI_API_KEY", "POSTGRES_PASSWORD", "SLACK_BOT_TOKEN",
 )
+ASSIGNMENT_OPERATOR = (
+    r"(?:\?\?=|\|\|=|&&=|\*\*=|//=|<<=|>>>=|>>=|"
+    r"[+\-*/%@|&^]?=(?![=>~]))"
+)
 ASSIGNMENT = re.compile(
     r"^\s*(?:-\s*|ARG\s+|export\s+|\$env:|ENV\s+|setx?\s+)?[\"']?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?\s*(?::|=(?![=>~]))\s*(?P<value>.+?)\s*$",
+    + r")[\"']?\s*(?::|"
+    + ASSIGNMENT_OPERATOR
+    + r")\s*(?P<value>.+?)\s*$",
     re.IGNORECASE,
 )
 SPACE_ASSIGNMENT = re.compile(
@@ -81,7 +87,9 @@ STRUCTURED_ASSIGNMENT = re.compile(
 INLINE_ASSIGNMENT = re.compile(
     r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?\s*=(?![=>~])\s*(?P<value>(?:"
+    + r")[\"']?\s*"
+    + ASSIGNMENT_OPERATOR
+    + r"\s*(?P<value>(?:"
     + r"\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
     + r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>|"
     + r'"(?:\\.|[^"\\])*"'
@@ -91,7 +99,9 @@ INLINE_ASSIGNMENT = re.compile(
 BRACKETED_ASSIGNMENT = re.compile(
     r"\[\s*[\"'`](?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"'`]\s*\]\s*=(?![=>~])\s*(?P<value>(?:"
+    + r")[\"'`]\s*\]\s*"
+    + ASSIGNMENT_OPERATOR
+    + r"\s*(?P<value>(?:"
     + r"\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
     + r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>|"
     + r'"(?:\\.|[^"\\])*"'
@@ -101,7 +111,9 @@ BRACKETED_ASSIGNMENT = re.compile(
 MULTILINE_ASSIGNMENT_START = re.compile(
     r"(?<![A-Za-z0-9_])[\"'`]?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"'`]?(?:\s*\])?\s*(?::|=(?![=>~]))\s*"
+    + r")[\"'`]?(?:\s*\])?\s*(?::|"
+    + ASSIGNMENT_OPERATOR
+    + r")\s*"
     + r"(?:[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?|#.*)?$",
     re.IGNORECASE,
 )
@@ -112,7 +124,7 @@ MULTILINE_ASSIGNMENT_NAME_ONLY = re.compile(
     re.IGNORECASE,
 )
 MULTILINE_OPERATOR = re.compile(
-    r"^[ \t]*(?::|=(?![=>~]))[ \t]*(?P<value>.*)$"
+    r"^[ \t]*(?::|" + ASSIGNMENT_OPERATOR + r")[ \t]*(?P<value>.*)$"
 )
 SIBLING_ASSIGNMENT_START = re.compile(
     r"^[ \t]*(?:[\"'][^\"']+[\"']|[A-Za-z_][A-Za-z0-9_.-]*)\s*[:=]"
@@ -121,6 +133,9 @@ JSON_STRING_TOKEN = re.compile(r'"(?:\\.|[^"\\])*"')
 JSON_KEY_SEPARATOR = re.compile(r"\s*:")
 YAML_DOUBLE_QUOTED_KEY = re.compile(
     r'"(?P<key>(?:\\.|[^"\\])*)"(?=\s*:)', re.MULTILINE
+)
+TOML_DOUBLE_QUOTED_KEY = re.compile(
+    r'"(?P<key>(?:\\.|[^"\\])*)"(?=\s*=)', re.MULTILINE
 )
 YAML_HEX_ESCAPE = re.compile(
     r"\\(?:x(?P<x>[0-9A-Fa-f]{2})|u(?P<u>[0-9A-Fa-f]{4})|"
@@ -148,8 +163,33 @@ RUST_RAW_STRING_START = re.compile(
 SWIFT_RAW_STRING_START = re.compile(
     r"(?P<hashes>#{1,255})\""
 )
+CPP_RAW_STRING_START = re.compile(
+    r"(?:u8|u|U|L)?R\"(?P<delimiter>[^ ()\\\t\r\n]{0,16})\("
+)
 YAML_BLOCK_SCALAR = re.compile(
     r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?$"
+)
+ENV_NAME_FIELD = re.compile(
+    r"^(?P<indent>[ \t]*)(?:-\s*)?[\"']?name[\"']?\s*:\s*[\"']?"
+    r"(?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']?\s*,?\s*(?:#.*)?$",
+    re.IGNORECASE,
+)
+ENV_VALUE_FIELD = re.compile(
+    r"^[ \t]*[\"']?value[\"']?\s*:\s*(?P<value>.+?)\s*$",
+    re.IGNORECASE,
+)
+ENV_VALUE_FROM_FIELD = re.compile(
+    r"^[ \t]*[\"']?valueFrom[\"']?\s*:", re.IGNORECASE
+)
+ENV_FLOW_ENTRY = re.compile(
+    r"[\{,]\s*[\"']?name[\"']?\s*:\s*[\"']?(?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']?\s*,\s*[\"']?value[\"']?\s*:\s*(?P<value>"
+    + r'"(?:\\.|[^"\\])*"'
+    + r"|'(?:\\.|[^'\\])*'|[^,}]+)",
+    re.IGNORECASE,
 )
 PRIVATE_BEGIN = re.compile(
     r"(?:-----BEGIN (?:(?:(?:ENCRYPTED|RSA|DSA|EC|OPENSSH) )?PRIVATE KEY|"
@@ -164,7 +204,8 @@ SLASH_COMMENT_SUFFIXES = {
     ".php", ".rs", ".swift", ".ts",
 }
 BLOCK_COMMENT_SUFFIXES = SLASH_COMMENT_SUFFIXES | {".css", ".sql"}
-NESTED_BLOCK_COMMENT_SUFFIXES = {".rs", ".swift"}
+NESTED_BLOCK_COMMENT_SUFFIXES = {".rs", ".sql", ".swift"}
+TRIPLE_QUOTE_SUFFIXES = {".cs", ".java", ".kt", ".kts", ".swift"}
 SOURCE_CODE_SUFFIXES = {
     ".c", ".cpp", ".cs", ".go", ".java", ".js", ".kt", ".kts", ".php",
     ".ps1", ".py", ".rb", ".rs", ".swift", ".ts",
@@ -396,7 +437,7 @@ def source_code_reference(path: Path, value: str) -> bool:
         return False
     if raw[0] in {"'", '"', "`"}:
         return False
-    normalized = assignment_value(raw)
+    normalized = assignment_value(raw).rstrip(";").rstrip()
     return (
         CODE_REFERENCE_VALUE.fullmatch(normalized) is not None
         or LOOKUP_CALL_VALUE.fullmatch(normalized) is not None
@@ -501,7 +542,16 @@ def strip_block_comments(path: Path, text: str) -> str:
                 quote = None
             index += 1
             continue
-        if path.suffix.lower() == ".rs":
+        suffix = path.suffix.lower()
+        if suffix == ".cpp":
+            raw_start = CPP_RAW_STRING_START.match(text, index)
+            if raw_start is not None and (
+                index == 0 or not (text[index - 1].isalnum() or text[index - 1] == "_")
+            ):
+                raw_quote = ")" + raw_start.group("delimiter") + '"'
+                index = raw_start.end()
+                continue
+        if suffix == ".rs":
             raw_start = RUST_RAW_STRING_START.match(text, index)
             if raw_start is not None and (
                 index == 0 or not (text[index - 1].isalnum() or text[index - 1] == "_")
@@ -509,12 +559,19 @@ def strip_block_comments(path: Path, text: str) -> str:
                 raw_quote = '"' + raw_start.group("hashes")
                 index = raw_start.end()
                 continue
-        elif path.suffix.lower() == ".swift":
+        elif suffix == ".swift":
             raw_start = SWIFT_RAW_STRING_START.match(text, index)
             if raw_start is not None:
                 raw_quote = '"' + raw_start.group("hashes")
                 index = raw_start.end()
                 continue
+        if suffix in TRIPLE_QUOTE_SUFFIXES and text.startswith('"""', index):
+            quote_end = index + 3
+            while quote_end < len(text) and text[quote_end] == '"':
+                quote_end += 1
+            raw_quote = text[index:quote_end]
+            index = quote_end
+            continue
         if character in {"'", '"', "`"}:
             quote = character
             index += 1
@@ -706,6 +763,42 @@ def multiline_assignments(path: Path, text: str) -> list[tuple[str, int, str]]:
     return assignments
 
 
+def structured_environment_assignments(
+    path: Path, text: str
+) -> list[tuple[str, int, str]]:
+    if path.suffix.lower() not in {".json", ".yaml", ".yml"}:
+        return []
+    assignments: list[tuple[str, int, str]] = []
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        for flow in ENV_FLOW_ENTRY.finditer(line):
+            assignments.append((
+                flow.group("name"), index + 1, flow.group("value")
+            ))
+        name = ENV_NAME_FIELD.match(line)
+        if name is None:
+            continue
+        base_indent = len(name.group("indent"))
+        for candidate in lines[index + 1:]:
+            stripped = candidate.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            indent = len(candidate) - len(candidate.lstrip(" \t"))
+            if stripped in {"}", "},", "]", "],"} and indent <= base_indent:
+                break
+            if ENV_NAME_FIELD.match(candidate) is not None and indent <= base_indent:
+                break
+            if ENV_VALUE_FROM_FIELD.match(candidate) is not None:
+                break
+            value = ENV_VALUE_FIELD.match(candidate)
+            if value is not None:
+                assignments.append((
+                    name.group("name"), index + 1, value.group("value")
+                ))
+                break
+    return assignments
+
+
 class JsonObject(list[tuple[str, object]]):
     """JSON object that preserves duplicate keys and document order."""
 
@@ -778,6 +871,26 @@ def json_assignments(path: Path, text: str) -> list[tuple[str, int]]:
                 findings.append((upper, line))
             stack.append(("value", child, None))
         elif isinstance(value, JsonObject):
+            environment_names = [
+                child.upper()
+                for key, child in value
+                if key.lower() == "name"
+                and isinstance(child, str)
+                and child.upper() in ASSIGNMENT_NAMES
+            ]
+            environment_values = [
+                child for key, child in value if key.lower() == "value"
+            ]
+            for name in environment_names:
+                if any(
+                    child is not None
+                    and (
+                        not isinstance(child, str)
+                        or live_assignment(child)
+                    )
+                    for child in environment_values
+                ):
+                    findings.append((name, 1))
             for key, nested in reversed(value):
                 stack.append(("pair", key, nested))
         elif isinstance(value, list):
@@ -806,6 +919,17 @@ def normalize_yaml_sensitive_keys(path: Path, text: str) -> str:
         return decoded if decoded.upper() in ASSIGNMENT_NAMES else match.group()
 
     return YAML_DOUBLE_QUOTED_KEY.sub(replace, text)
+
+
+def normalize_toml_sensitive_keys(path: Path, text: str) -> str:
+    if path.suffix.lower() != ".toml":
+        return text
+
+    def replace(match: re.Match[str]) -> str:
+        decoded = decode_yaml_key(match.group("key"))
+        return decoded if decoded.upper() in ASSIGNMENT_NAMES else match.group()
+
+    return TOML_DOUBLE_QUOTED_KEY.sub(replace, text)
 
 
 def normalize_bracketed_sensitive_keys(path: Path, text: str) -> str:
@@ -925,9 +1049,19 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
             number,
             f"live-looking value assigned to {name}",
         ))
+    for name, number, value in structured_environment_assignments(path, text):
+        if live_assignment(assignment_value(value)):
+            findings.append((
+                path.as_posix(),
+                number,
+                f"live-looking value assigned to {name.upper()}",
+            ))
     normalized_yaml = normalize_yaml_sensitive_keys(path, text)
     if normalized_yaml != text:
         findings.extend(scan_text(path, normalized_yaml))
+    normalized_toml = normalize_toml_sensitive_keys(path, text)
+    if normalized_toml != text:
+        findings.extend(scan_text(path, normalized_toml))
     normalized_brackets = normalize_bracketed_sensitive_keys(path, text)
     if normalized_brackets != text:
         findings.extend(scan_text(path, normalized_brackets))

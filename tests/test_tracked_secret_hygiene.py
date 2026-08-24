@@ -306,6 +306,36 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(value, repr(findings))
 
+    def test_structured_environment_entries_are_detected(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        cases = {
+            "settings.yaml": (
+                "- name: " + name + "\n  value: " + value + "\n"
+            ),
+            "flow.yaml": "- {name: " + name + ", value: " + value + "}\n",
+            "settings.json": (
+                '{"name":"' + name + '","value":"' + value + '"}\n'
+            ),
+        }
+        for filename, text in cases.items():
+            with self.subTest(filename=filename):
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(
+                    [(filename, 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        value_from = (
+            "- name: "
+            + name
+            + "\n  valueFrom:\n    secretKeyRef:\n      name: private\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), value_from)
+        )
+
     def test_commented_multiline_assignment_start_is_ignored(self) -> None:
         name = "OPENAI_" + "API_KEY"
         text = "// " + name + " =\nordinaryCall()\n"
@@ -320,6 +350,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + " =\nreturn true;\n*/\n"
         )
         self.assertEqual([], SCANNER.scan_text(Path("config.rs"), nested))
+        self.assertEqual([], SCANNER.scan_text(Path("migration.sql"), nested))
 
     def test_multiline_assignment_scans_continued_expression(self) -> None:
         name = "OPENAI_" + "API_KEY"
@@ -458,6 +489,10 @@ class TrackedSecretHygieneTests(unittest.TestCase):
 
         lookup = name + ' = os.getenv("' + name + '")\n'
         self.assertEqual([], SCANNER.scan_text(Path("config.py"), lookup))
+        terminated_lookup = name + ' = System.getenv("' + name + '");\n'
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.java"), terminated_lookup)
+        )
 
         for escape in ("\\x4b", "\\u004b", "\\u{4b}"):
             with self.subTest(escaped_bracket=escape):
@@ -507,6 +542,8 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         prefixes = {
             "rust.rs": 'let text = r#"text " /* still raw"#;\n',
             "swift.swift": 'let text = #"text " /* still raw"#\n',
+            "cpp.cpp": 'auto text = R"tag(text " /* still raw)tag";\n',
+            "java.java": 'var text = """text " /* still raw""";\n',
         }
         for filename, prefix in prefixes.items():
             with self.subTest(filename=filename):
@@ -588,6 +625,20 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     findings,
                 )
                 self.assertNotIn(value, repr(findings))
+
+    def test_toml_scan_decodes_escaped_sensitive_key(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        escaped_name = "OPENAI_API_" + "\\u004b" + "EY"
+        value = "SyntheticSecretValue2026"
+        text = '"' + escaped_name + '" = "' + value + '"\n'
+
+        findings = SCANNER.scan_text(Path("settings.toml"), text)
+
+        self.assertEqual(
+            [("settings.toml", 1, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
 
     def test_deep_and_repeated_escaped_json_keys_fail_closed(self) -> None:
         name = "OPENAI_" + "API_KEY"
@@ -694,6 +745,21 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                         Path("config.js"), f'{name} {operator} "ordinary"\n'
                     ),
                 )
+
+    def test_compound_named_assignments_are_detected(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        for operator in ("??=", "||=", "&&=", "+=", "**="):
+            with self.subTest(operator=operator):
+                findings = SCANNER.scan_text(
+                    Path("config.js"),
+                    name + " " + operator + ' "' + value + '"\n',
+                )
+                self.assertEqual(
+                    [("config.js", 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
 
     def test_shell_parameter_defaults_and_assignments_are_detected(self) -> None:
         name = "OPENAI_" + "API_KEY"
