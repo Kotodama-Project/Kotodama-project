@@ -216,6 +216,102 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(value, repr(findings))
 
+    def test_multiline_structured_and_equals_assignments_are_detected(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        cases = {
+            "json": "{\n  \"" + name + "\":\n    \"" + value + "\"\n}\n",
+            "split-json": (
+                "{\n  \"" + name + "\"\n  :\n    \"" + value + "\"\n}\n"
+            ),
+            "split-json-inline-value": (
+                "{\n  \"" + name + "\"\n  : \"" + value + "\"\n}\n"
+            ),
+            "yaml": name + ":\n  " + value + "\n",
+            "explicit-yaml": "? " + name + "\n: " + value + "\n",
+            "equals": "const " + name + " =\n  \"" + value + "\";\n",
+        }
+        for label, text in cases.items():
+            with self.subTest(label=label):
+                findings = SCANNER.scan_text(Path("settings.txt"), text)
+                self.assertEqual(
+                    [
+                        (
+                            "settings.txt",
+                            2
+                            if label.startswith(("json", "split-json"))
+                            else 1,
+                            f"live-looking value assigned to {name}",
+                        )
+                    ],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+    def test_multiline_safe_reference_and_null_sibling_pass(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        safe_reference = name + ":\n  ${{ secrets." + name + " }}\n"
+        safe_reference_after_comment = (
+            name
+            + ": # resolved by the private secret store\n  ${{ secrets."
+            + name
+            + " }}\n"
+        )
+        null_with_sibling = name + ":\nOTHER_SETTING: ordinary\n"
+        split_null = (
+            "{\n  \""
+            + name
+            + "\"\n  : null,\n  \"OTHER_SETTING\": true\n}\n"
+        )
+
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), safe_reference)
+        )
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(
+                Path("settings.yaml"), safe_reference_after_comment
+            ),
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), null_with_sibling)
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("settings.json"), split_null))
+
+    def test_multiline_scheme_relative_url_is_not_treated_as_a_comment(self) -> None:
+        name = "DATABASE" + "_URL"
+        value = "//user:SyntheticSecretValue2026@example.invalid/database"
+
+        findings = SCANNER.scan_text(
+            Path("settings.yaml"), name + ":\n  " + value + "\n"
+        )
+
+        self.assertEqual(
+            [("settings.yaml", 1, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+    def test_json_semantic_scan_decodes_escaped_sensitive_key(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        escaped_name = "OPENAI_API_" + "\\u004b" + "EY"
+        value = "SyntheticSecretValue2026"
+        text = '{"' + escaped_name + '": "' + value + '"}\n'
+
+        findings = SCANNER.scan_text(Path("settings.json"), text)
+
+        self.assertEqual(
+            [("settings.json", 1, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        invalid = '{"' + escaped_name + '": "' + value + '",}\n'
+        self.assertEqual(
+            [("settings.json", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("settings.json"), invalid),
+        )
+
     def test_regex_api_does_not_exempt_later_named_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"

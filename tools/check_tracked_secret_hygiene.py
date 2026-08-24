@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import codecs
+from collections import deque
+import json
 import re
 import subprocess
 import sys
@@ -86,6 +88,25 @@ INLINE_ASSIGNMENT = re.compile(
     + r"|'(?:\\.|[^'\\])*'|[^,;}\]])+)",
     re.IGNORECASE,
 )
+MULTILINE_ASSIGNMENT_START = re.compile(
+    r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']?\s*(?::|=(?![=>~]))\s*(?:#.*)?$",
+    re.IGNORECASE,
+)
+MULTILINE_ASSIGNMENT_NAME_ONLY = re.compile(
+    r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']?\s*$",
+    re.IGNORECASE,
+)
+MULTILINE_OPERATOR = re.compile(
+    r"^[ \t]*(?::|=(?![=>~]))[ \t]*(?P<value>.*)$"
+)
+SIBLING_ASSIGNMENT_START = re.compile(
+    r"^[ \t]*(?:[\"'][^\"']+[\"']|[A-Za-z_][A-Za-z0-9_.-]*)\s*[:=]"
+)
+JSON_STRING_TOKEN = re.compile(r'"(?:\\.|[^"\\])*"')
 PRIVATE_BEGIN = re.compile(
     r"(?:-----BEGIN (?:(?:(?:ENCRYPTED|RSA|DSA|EC|OPENSSH) )?PRIVATE KEY|"
     r"PGP PRIVATE KEY BLOCK)-----|PuTTY-User-Key-File-[23]:)"
@@ -329,6 +350,142 @@ def shell_parameter_assignments(line: str) -> list[tuple[str, str]]:
     return assignments
 
 
+def next_content_line(
+    lines: list[str], start: int
+) -> tuple[int, str] | None:
+    index = start
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if stripped and not stripped.startswith("#"):
+            return index, lines[index]
+        index += 1
+    return None
+
+
+def continuation_value(
+    lines: list[str], start: int, key_indent: int
+) -> str | None:
+    located = next_content_line(lines, start)
+    if located is None:
+        return None
+    _value_index, candidate = located
+    stripped = candidate.strip()
+    if stripped in {"}", "},", "]", "],"}:
+        return None
+    value_indent = len(candidate) - len(candidate.lstrip(" \t"))
+    if (
+        value_indent <= key_indent
+        and not candidate.lstrip().startswith("-")
+        and SIBLING_ASSIGNMENT_START.match(candidate) is not None
+    ):
+        return None
+    return stripped
+
+
+def multiline_assignments(text: str) -> list[tuple[str, int, str]]:
+    """Find named assignments whose operator or value crosses a line."""
+
+    lines = text.splitlines()
+    assignments: list[tuple[str, int, str]] = []
+    for index, line in enumerate(lines):
+        key_indent = len(line) - len(line.lstrip(" \t"))
+        match = MULTILINE_ASSIGNMENT_START.search(line)
+        if match is not None:
+            value = continuation_value(lines, index + 1, key_indent)
+            if value is not None:
+                assignments.append((match.group("name"), index + 1, value))
+            continue
+
+        match = MULTILINE_ASSIGNMENT_NAME_ONLY.search(line)
+        if match is None:
+            continue
+        located = next_content_line(lines, index + 1)
+        if located is None:
+            continue
+        operator_index, operator_line = located
+        operator = MULTILINE_OPERATOR.match(operator_line)
+        if operator is None:
+            continue
+        value = operator.group("value").strip()
+        if not value or value.startswith("#"):
+            value = continuation_value(lines, operator_index + 1, key_indent)
+        if value is not None:
+            assignments.append((match.group("name"), index + 1, value))
+    return assignments
+
+
+class JsonObject(list[tuple[str, object]]):
+    """JSON object that preserves duplicate keys and document order."""
+
+
+def reject_json_constant(value: str) -> None:
+    raise ValueError(f"unsupported JSON constant: {value}")
+
+
+def json_key_lines(text: str) -> dict[str, deque[int]]:
+    locations: dict[str, deque[int]] = {}
+    for token in JSON_STRING_TOKEN.finditer(text):
+        try:
+            decoded = json.loads(token.group())
+        except ValueError:
+            continue
+        if not isinstance(decoded, str):
+            continue
+        upper = decoded.upper()
+        if upper not in ASSIGNMENT_NAMES:
+            continue
+        if re.match(r"\s*:", text[token.end():]) is None:
+            continue
+        line = text.count("\n", 0, token.start()) + 1
+        locations.setdefault(upper, deque()).append(line)
+    return locations
+
+
+def json_assignments(path: Path, text: str) -> list[tuple[str, int]]:
+    if path.suffix.lower() != ".json":
+        return []
+    locations = json_key_lines(text)
+    try:
+        document = json.loads(
+            text,
+            object_pairs_hook=JsonObject,
+            parse_constant=reject_json_constant,
+        )
+    except (ValueError, RecursionError):
+        return [
+            (name, line)
+            for name, lines in locations.items()
+            for line in lines
+        ]
+
+    findings: list[tuple[str, int]] = []
+
+    def walk(value: object) -> None:
+        if isinstance(value, JsonObject):
+            for key, child in value:
+                upper = key.upper()
+                queue = locations.get(upper)
+                line = queue.popleft() if queue else 1
+                if upper in ASSIGNMENT_NAMES and (
+                    child is not None
+                    and (
+                        not isinstance(child, str)
+                        or live_assignment(child)
+                    )
+                ):
+                    findings.append((upper, line))
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    try:
+        walk(document)
+    except RecursionError:
+        return []
+    return findings
+
+
 def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
     findings: list[tuple[str, int, str]] = []
     lines = text.splitlines()
@@ -358,9 +515,15 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
         reported_assignments: set[str] = set()
         for match in matches:
             name = match.group("name").upper()
+            raw_value = match.group("value")
+            if (
+                path.suffix.lower() in {".yml", ".yaml"}
+                and raw_value.lstrip().startswith("#")
+            ):
+                continue
             if (
                 name not in reported_assignments
-                and live_assignment(assignment_value(match.group("value")))
+                and live_assignment(assignment_value(raw_value))
             ):
                 findings.append((
                     path.as_posix(),
@@ -379,7 +542,20 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
                 reported_assignments.add(name)
         if PRIVATE_BEGIN.search(line):
             findings.append((path.as_posix(), number, "private key block"))
-    return findings
+    for name, number, value in multiline_assignments(text):
+        if live_assignment(assignment_value(value)):
+            findings.append((
+                path.as_posix(),
+                number,
+                f"live-looking value assigned to {name.upper()}",
+            ))
+    for name, number in json_assignments(path, text):
+        findings.append((
+            path.as_posix(),
+            number,
+            f"live-looking value assigned to {name}",
+        ))
+    return list(dict.fromkeys(findings))
 
 
 def scan_repository(root: Path) -> tuple[list[tuple[str, int, str]], int, int]:
