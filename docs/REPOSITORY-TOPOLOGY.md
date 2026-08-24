@@ -17,9 +17,11 @@ This document describes roles and allowed information flow. It is a public archi
 The target dependency direction requires the private control plane to consume an admitted public core pinned by version, commit, and artifact digest. The current public preview does not claim that this cutover is complete. The public core never imports private implementation or data.
 
 ```text
-Local Operational Workspace --candidate + evidence--> Private Control Plane
-Private Control Plane --pinned dependency-----------> Public Core
-Public Core --------X private code, data, or runtime dependency
+Local Operational Workspace --candidate + evidence-----------> Governed Review
+Governed Review --------PUBLIC_EXTRACT / clean history-------> Public Core
+Governed Review ----------------PRIVATE_RETAIN---------------> Private Control Plane
+Private Control Plane --depends on pinned version/ref/digest--> Public Core
+Public Core --------X imports from Private Control Plane or Local Operational Workspace
 ```
 
 Public extraction uses allow-listed, clean-history, independently reviewed material. Public schemas and tests may describe a contract; populated private records and operational receipts remain private.
@@ -56,6 +58,17 @@ Every cross-layer handoff records:
 - rollback and stop conditions.
 
 A handoff does not copy authority. A successor session or adapter receives a bounded context candidate and must obtain its own capability and activation decision.
+
+## Migration disposition
+
+Governed Review assigns every in-scope path or capability exactly one terminal migration disposition:
+
+- `PUBLIC_EXTRACT` — independently licensed/provenanced, public-safe material exported as a clean-history change;
+- `PRIVATE_RETAIN` — private runtime, policy, configuration, evidence, data, or integration retained in the control plane;
+- `REGENERATE` — derived indexes, catalogs, status snapshots, caches, or receipts rebuilt from canonical inputs;
+- `DROP` — obsolete or duplicate material with dependency proof, rationale, and a recoverable retention decision.
+
+Unknown or unreviewed material remains blocked. These migration dispositions classify material; they are separate from the repository lifecycle classifications below.
 
 ## Repository lifecycle
 
