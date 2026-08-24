@@ -56,6 +56,11 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         self.assertIn("[Apache License 2.0](LICENSE)", readme)
         self.assertIn("`Apache-2.0`", readme)
 
+    def test_license_bytes_are_pinned_to_lf_on_every_checkout(self) -> None:
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("LICENSE text eol=lf", attributes.splitlines())
+        self.assertNotIn(b"\r\n", (ROOT / "LICENSE").read_bytes())
+
     def test_current_tree_uses_the_organization_repository_identity(self) -> None:
         tracked_text = self.tracked_text()
         self.assertNotIn(OLD_REPOSITORY, tracked_text)
