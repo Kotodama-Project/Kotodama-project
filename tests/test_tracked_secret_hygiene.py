@@ -292,6 +292,72 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(value, repr(findings))
 
+    def test_commented_multiline_assignment_start_is_ignored(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        text = "// " + name + " =\nordinaryCall()\n"
+
+        self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
+
+    def test_multiline_assignment_scans_continued_expression(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "-ProdSecret2026"
+        text = (
+            "const "
+            + name
+            + " =\n  secrets."
+            + name
+            + "\n  + \""
+            + value
+            + "\";\n"
+        )
+
+        findings = SCANNER.scan_text(Path("config.js"), text)
+
+        self.assertEqual(
+            [("config.js", 1, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        ternary = (
+            "const "
+            + name
+            + " =\n  secrets."
+            + name
+            + "\n  ? \""
+            + value
+            + "\"\n  : secrets."
+            + name
+            + "\n"
+        )
+        self.assertEqual(
+            [("config.js", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.js"), ternary),
+        )
+
+        with_comment = (
+            "const "
+            + name
+            + " =\n  secrets."
+            + name
+            + "\n  // continue after this comment\n  + \""
+            + value
+            + "\";\n"
+        )
+        self.assertEqual(
+            [("config.js", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.js"), with_comment),
+        )
+
+    def test_yaml_document_boundaries_end_null_assignment(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        for marker in ("---", "..."):
+            with self.subTest(marker=marker):
+                text = name + ":\n" + marker + "\nOTHER_SETTING: ordinary\n"
+                self.assertEqual(
+                    [], SCANNER.scan_text(Path("settings.yaml"), text)
+                )
+
     def test_json_semantic_scan_decodes_escaped_sensitive_key(self) -> None:
         name = "OPENAI_" + "API_KEY"
         escaped_name = "OPENAI_API_" + "\\u004b" + "EY"
@@ -310,6 +376,54 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertEqual(
             [("settings.json", 1, f"live-looking value assigned to {name}")],
             SCANNER.scan_text(Path("settings.json"), invalid),
+        )
+
+    def test_yaml_scan_decodes_escaped_sensitive_key(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        for escape in ("\\x4b", "\\u004b", "\\U0000004b"):
+            with self.subTest(escape=escape):
+                escaped_name = "OPENAI_API_" + escape + "EY"
+                text = '"' + escaped_name + '":\n  "' + value + '"\n'
+
+                findings = SCANNER.scan_text(Path("settings.yaml"), text)
+
+                self.assertEqual(
+                    [
+                        (
+                            "settings.yaml",
+                            1,
+                            f"live-looking value assigned to {name}",
+                        )
+                    ],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+    def test_deep_and_repeated_escaped_json_keys_fail_closed(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        escaped_name = "OPENAI_API_" + "\\u004b" + "EY"
+        value = "SyntheticSecretValue2026"
+        deep = (
+            "[" * 1100
+            + '{"'
+            + escaped_name
+            + '":"'
+            + value
+            + '"}'
+            + "]" * 1100
+        )
+        self.assertEqual(
+            [("settings.json", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("settings.json"), deep),
+        )
+
+        entries = [f'  "{escaped_name}": null' for _ in range(99)]
+        entries.append(f'  "{escaped_name}": "{value}"')
+        repeated = "{\n" + ",\n".join(entries) + "\n}\n"
+        self.assertEqual(
+            [("settings.json", 101, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("settings.json"), repeated),
         )
 
     def test_regex_api_does_not_exempt_later_named_assignment(self) -> None:

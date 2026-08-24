@@ -107,10 +107,26 @@ SIBLING_ASSIGNMENT_START = re.compile(
     r"^[ \t]*(?:[\"'][^\"']+[\"']|[A-Za-z_][A-Za-z0-9_.-]*)\s*[:=]"
 )
 JSON_STRING_TOKEN = re.compile(r'"(?:\\.|[^"\\])*"')
+JSON_KEY_SEPARATOR = re.compile(r"\s*:")
+YAML_DOUBLE_QUOTED_KEY = re.compile(
+    r'"(?P<key>(?:\\.|[^"\\])*)"(?=\s*:)', re.MULTILINE
+)
+YAML_HEX_ESCAPE = re.compile(
+    r"\\(?:x(?P<x>[0-9A-Fa-f]{2})|u(?P<u>[0-9A-Fa-f]{4})|"
+    r"U(?P<U>[0-9A-Fa-f]{8}))"
+)
 PRIVATE_BEGIN = re.compile(
     r"(?:-----BEGIN (?:(?:(?:ENCRYPTED|RSA|DSA|EC|OPENSSH) )?PRIVATE KEY|"
     r"PGP PRIVATE KEY BLOCK)-----|PuTTY-User-Key-File-[23]:)"
 )
+HASH_COMMENT_SUFFIXES = {
+    ".cfg", ".conf", ".env", ".ini", ".md", ".properties", ".ps1",
+    ".py", ".rb", ".sh", ".toml", ".yaml", ".yml",
+}
+SLASH_COMMENT_SUFFIXES = {
+    ".c", ".cpp", ".cs", ".go", ".java", ".js", ".kt", ".kts",
+    ".php", ".rs", ".swift", ".ts",
+}
 
 
 def index_blobs(root: Path) -> dict[Path, str]:
@@ -350,27 +366,65 @@ def shell_parameter_assignments(line: str) -> list[tuple[str, str]]:
     return assignments
 
 
+def line_is_comment(path: Path, line: str) -> bool:
+    stripped = line.lstrip()
+    suffix = path.suffix.lower()
+    if suffix in HASH_COMMENT_SUFFIXES and stripped.startswith("#"):
+        return True
+    if suffix in SLASH_COMMENT_SUFFIXES and stripped.startswith(("//", "/*", "*")):
+        return True
+    if suffix == ".sql" and stripped.startswith("--"):
+        return True
+    return suffix in {".cfg", ".conf", ".ini", ".properties"} and stripped.startswith(";")
+
+
 def next_content_line(
-    lines: list[str], start: int
+    path: Path, lines: list[str], start: int
 ) -> tuple[int, str] | None:
     index = start
     while index < len(lines):
         stripped = lines[index].strip()
-        if stripped and not stripped.startswith("#"):
+        if stripped and not line_is_comment(path, lines[index]):
             return index, lines[index]
         index += 1
     return None
 
 
+def yaml_document_boundary(value: str) -> bool:
+    marker = value.split("#", 1)[0].strip()
+    return marker in {"---", "..."}
+
+
+def expression_continues(previous: str, current: str) -> bool:
+    leading_operators = (
+        "+", ".", "||", "&&", "??", "|", "&", "?", ":", ","
+    )
+    trailing_operators = (
+        "+", ".", "||", "&&", "??", "|", "&", "?", ":", ",", "\\"
+    )
+    if current.startswith(leading_operators):
+        return True
+    if previous.rstrip().endswith(trailing_operators):
+        return True
+    return (
+        current.startswith(("'", '"'))
+        and previous.lstrip().startswith(("'", '"'))
+    )
+
+
 def continuation_value(
-    lines: list[str], start: int, key_indent: int
+    path: Path,
+    lines: list[str],
+    start: int,
+    key_indent: int,
+    include_indented: bool,
 ) -> str | None:
-    located = next_content_line(lines, start)
+    located = next_content_line(path, lines, start)
     if located is None:
         return None
-    _value_index, candidate = located
+    value_index, candidate = located
     stripped = candidate.strip()
-    if stripped in {"}", "},", "]", "],"}:
+    if stripped in {"}", "},", "]", "],"} or yaml_document_boundary(stripped):
         return None
     value_indent = len(candidate) - len(candidate.lstrip(" \t"))
     if (
@@ -379,19 +433,53 @@ def continuation_value(
         and SIBLING_ASSIGNMENT_START.match(candidate) is not None
     ):
         return None
-    return stripped
+    parts = [stripped]
+    next_index = value_index + 1
+    while True:
+        following = next_content_line(path, lines, next_index)
+        if following is None:
+            break
+        following_index, following_line = following
+        following_value = following_line.strip()
+        if (
+            following_value in {"}", "},", "]", "],"}
+            or yaml_document_boundary(following_value)
+        ):
+            break
+        following_indent = len(following_line) - len(
+            following_line.lstrip(" \t")
+        )
+        if (
+            following_indent <= key_indent
+            and not following_line.lstrip().startswith("-")
+            and SIBLING_ASSIGNMENT_START.match(following_line) is not None
+        ):
+            break
+        if not (
+            expression_continues(parts[-1], following_value)
+            or (include_indented and following_indent > key_indent)
+        ):
+            break
+        parts.append(following_value)
+        next_index = following_index + 1
+    return " ".join(parts)
 
 
-def multiline_assignments(text: str) -> list[tuple[str, int, str]]:
+def multiline_assignments(path: Path, text: str) -> list[tuple[str, int, str]]:
     """Find named assignments whose operator or value crosses a line."""
 
     lines = text.splitlines()
     assignments: list[tuple[str, int, str]] = []
+    include_indented = path.suffix.lower() in {".yml", ".yaml"}
     for index, line in enumerate(lines):
+        if line_is_comment(path, line):
+            continue
         key_indent = len(line) - len(line.lstrip(" \t"))
         match = MULTILINE_ASSIGNMENT_START.search(line)
         if match is not None:
-            value = continuation_value(lines, index + 1, key_indent)
+            value = continuation_value(
+                path, lines, index + 1, key_indent, include_indented
+            )
             if value is not None:
                 assignments.append((match.group("name"), index + 1, value))
             continue
@@ -399,7 +487,7 @@ def multiline_assignments(text: str) -> list[tuple[str, int, str]]:
         match = MULTILINE_ASSIGNMENT_NAME_ONLY.search(line)
         if match is None:
             continue
-        located = next_content_line(lines, index + 1)
+        located = next_content_line(path, lines, index + 1)
         if located is None:
             continue
         operator_index, operator_line = located
@@ -408,7 +496,13 @@ def multiline_assignments(text: str) -> list[tuple[str, int, str]]:
             continue
         value = operator.group("value").strip()
         if not value or value.startswith("#"):
-            value = continuation_value(lines, operator_index + 1, key_indent)
+            value = continuation_value(
+                path,
+                lines,
+                operator_index + 1,
+                key_indent,
+                include_indented,
+            )
         if value is not None:
             assignments.append((match.group("name"), index + 1, value))
     return assignments
@@ -424,20 +518,25 @@ def reject_json_constant(value: str) -> None:
 
 def json_key_lines(text: str) -> dict[str, deque[int]]:
     locations: dict[str, deque[int]] = {}
+    line = 1
+    cursor = 0
     for token in JSON_STRING_TOKEN.finditer(text):
+        line += text.count("\n", cursor, token.start())
         try:
             decoded = json.loads(token.group())
         except ValueError:
+            line += text.count("\n", token.start(), token.end())
+            cursor = token.end()
             continue
-        if not isinstance(decoded, str):
-            continue
-        upper = decoded.upper()
-        if upper not in ASSIGNMENT_NAMES:
-            continue
-        if re.match(r"\s*:", text[token.end():]) is None:
-            continue
-        line = text.count("\n", 0, token.start()) + 1
-        locations.setdefault(upper, deque()).append(line)
+        if isinstance(decoded, str):
+            upper = decoded.upper()
+            if (
+                upper in ASSIGNMENT_NAMES
+                and JSON_KEY_SEPARATOR.match(text, token.end()) is not None
+            ):
+                locations.setdefault(upper, deque()).append(line)
+        line += text.count("\n", token.start(), token.end())
+        cursor = token.end()
     return locations
 
 
@@ -459,31 +558,53 @@ def json_assignments(path: Path, text: str) -> list[tuple[str, int]]:
         ]
 
     findings: list[tuple[str, int]] = []
-
-    def walk(value: object) -> None:
-        if isinstance(value, JsonObject):
-            for key, child in value:
-                upper = key.upper()
-                queue = locations.get(upper)
-                line = queue.popleft() if queue else 1
-                if upper in ASSIGNMENT_NAMES and (
-                    child is not None
-                    and (
-                        not isinstance(child, str)
-                        or live_assignment(child)
-                    )
-                ):
-                    findings.append((upper, line))
-                walk(child)
+    stack: list[tuple[str, object, object | None]] = [
+        ("value", document, None)
+    ]
+    while stack:
+        kind, value, child = stack.pop()
+        if kind == "pair":
+            key = value
+            if not isinstance(key, str):
+                continue
+            upper = key.upper()
+            queue = locations.get(upper)
+            line = queue.popleft() if queue else 1
+            if upper in ASSIGNMENT_NAMES and (
+                child is not None
+                and (
+                    not isinstance(child, str)
+                    or live_assignment(child)
+                )
+            ):
+                findings.append((upper, line))
+            stack.append(("value", child, None))
+        elif isinstance(value, JsonObject):
+            for key, nested in reversed(value):
+                stack.append(("pair", key, nested))
         elif isinstance(value, list):
-            for child in value:
-                walk(child)
-
-    try:
-        walk(document)
-    except RecursionError:
-        return []
+            for nested in reversed(value):
+                stack.append(("value", nested, None))
     return findings
+
+
+def decode_yaml_key(raw: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        digits = match.group("x") or match.group("u") or match.group("U")
+        return chr(int(digits, 16))
+
+    return YAML_HEX_ESCAPE.sub(replace, raw)
+
+
+def normalize_yaml_sensitive_keys(path: Path, text: str) -> str:
+    if path.suffix.lower() not in {".yml", ".yaml"}:
+        return text
+
+    def replace(match: re.Match[str]) -> str:
+        decoded = decode_yaml_key(match.group("key"))
+        return decoded if decoded.upper() in ASSIGNMENT_NAMES else match.group()
+
+    return YAML_DOUBLE_QUOTED_KEY.sub(replace, text)
 
 
 def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
@@ -542,7 +663,7 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
                 reported_assignments.add(name)
         if PRIVATE_BEGIN.search(line):
             findings.append((path.as_posix(), number, "private key block"))
-    for name, number, value in multiline_assignments(text):
+    for name, number, value in multiline_assignments(path, text):
         if live_assignment(assignment_value(value)):
             findings.append((
                 path.as_posix(),
@@ -555,6 +676,9 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
             number,
             f"live-looking value assigned to {name}",
         ))
+    normalized_yaml = normalize_yaml_sensitive_keys(path, text)
+    if normalized_yaml != text:
+        findings.extend(scan_text(path, normalized_yaml))
     return list(dict.fromkeys(findings))
 
 
