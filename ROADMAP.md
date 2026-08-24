@@ -432,19 +432,19 @@ Promotion, Current Truth, and Final Human GO remain outside scope.
 ## Runtime profiles still requiring live evidence
 
 - [x] Executable Compose data-plane candidate manifest (not a live receipt)
-- [ ] Protected, authenticated, fresh digest-pinned image staging and clean-install/migration receipt
-- [ ] Exact Proxmox guest/service candidate and segmented deployment receipt
-- [ ] Candidate-bound restart, rollback, and isolated restore receipts
-- [ ] External checkpoint-head canonical authority, old-key revocation, adopted segmentation policy, and scope-matched tested restore execution/continuity
-- [ ] PostgreSQL Company DB and Evidence Store setup/restore E2E
+- [ ] Protected, authenticated, fresh digest-pinned image staging and clean-install/migration receipt (`PB-G6`)
+- [ ] Exact Proxmox guest/service candidate and segmented deployment receipt (`PB-G6`)
+- [ ] Candidate-bound restart, rollback, and isolated restore receipts (`PB-G6`)
+- [ ] External checkpoint-head canonical authority, old-key revocation, adopted segmentation policy, and scope-matched tested restore execution/continuity (`PB-G7`)
+- [ ] PostgreSQL Company DB and Evidence Store setup/restore E2E (`PB-G6`)
 
 ## Required before opening access
 
-- [ ] Fresh candidate-bound Voice cutover and rollback evidence
-- [ ] Real 15-minute rotation, transcription post, and deletion evidence
-- [ ] Speaker attribution and Voice-to-Verified-Handoff E2E
-- [ ] Separate-person verification and three-persona E2E
-- [ ] Protected reconciliation and independent verification receipts
-- [ ] Candidate-bound Final Human GO
+- [ ] Fresh candidate-bound Voice cutover and rollback evidence (`PB-G4`)
+- [ ] Real 15-minute rotation, transcription post, and deletion evidence (`PB-G2`, `PB-G3`)
+- [ ] Speaker attribution and Voice-to-Verified-Handoff E2E (`PB-G1`, `PB-G8`)
+- [ ] Separate-person verification and three-persona E2E (`PB-G5`)
+- [ ] Protected reconciliation and independent verification receipts (`PB-G7`)
+- [ ] Candidate-bound Final Human GO (`PB-G9`)
 
 この一覧は進捗を透明にするためのものです。チェック項目は、対応する検証 receipt が揃うまで完了扱いにしません。
