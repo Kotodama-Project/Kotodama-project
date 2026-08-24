@@ -300,6 +300,13 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         block = "/*\n" + name + " =\n*/\nordinaryCall()\n"
         self.assertEqual([], SCANNER.scan_text(Path("config.js"), block))
 
+        nested = (
+            "/* outer\n/* nested */\n"
+            + name
+            + " =\nreturn true;\n*/\n"
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.rs"), nested))
+
     def test_multiline_assignment_scans_continued_expression(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "-ProdSecret2026"
@@ -371,6 +378,13 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             'process.env["' + name + '"] = "' + value + '"\n',
             'process.env["' + name + '"] =\n  "' + value + '"\n',
             'process.env["' + name + '"]\n=\n  "' + value + '"\n',
+            (
+                "process.env[\n  \""
+                + name
+                + "\"\n] = \""
+                + value
+                + "\"\n"
+            ),
         )
         for text in cases:
             with self.subTest(lines=len(text.splitlines())):
@@ -389,6 +403,63 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertEqual(
             [], SCANNER.scan_text(Path("config.py"), multiline_reference)
         )
+
+        indexed_reference = (
+            'process.env["'
+            + name
+            + '"] = secrets["'
+            + name
+            + '"]\n'
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.js"), indexed_reference)
+        )
+
+        callable_literal = (
+            'process.env["'
+            + name
+            + '"] = String("'
+            + value
+            + '")\n'
+        )
+        self.assertEqual(
+            [("config.js", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.js"), callable_literal),
+        )
+
+        for escape in ("\\x4b", "\\u004b", "\\u{4b}"):
+            with self.subTest(escaped_bracket=escape):
+                escaped_name = "OPENAI_API_" + escape + "EY"
+                text = (
+                    'process.env["'
+                    + escaped_name
+                    + '"] = "'
+                    + value
+                    + '"\n'
+                )
+                self.assertEqual(
+                    [("config.js", 1, f"live-looking value assigned to {name}")],
+                    SCANNER.scan_text(Path("config.js"), text),
+                )
+
+    def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        text = (
+            "SELECT $$/*$$;\nSET "
+            + name
+            + " =\n  '"
+            + value
+            + "';\n"
+        )
+
+        findings = SCANNER.scan_text(Path("migration.sql"), text)
+
+        self.assertEqual(
+            [("migration.sql", 2, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
 
     def test_yaml_document_boundaries_end_null_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"

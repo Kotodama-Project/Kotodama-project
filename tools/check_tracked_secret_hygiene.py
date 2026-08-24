@@ -95,7 +95,7 @@ BRACKETED_ASSIGNMENT = re.compile(
     + r"\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
     + r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>|"
     + r'"(?:\\.|[^"\\])*"'
-    + r"|'(?:\\.|[^'\\])*'|[^,;}\]]+)+)",
+    + r"|'(?:\\.|[^'\\])*'|[^,;}\r\n]+)+)",
     re.IGNORECASE,
 )
 MULTILINE_ASSIGNMENT_START = re.compile(
@@ -125,6 +125,17 @@ YAML_HEX_ESCAPE = re.compile(
     r"\\(?:x(?P<x>[0-9A-Fa-f]{2})|u(?P<u>[0-9A-Fa-f]{4})|"
     r"U(?P<U>[0-9A-Fa-f]{8}))"
 )
+BRACKETED_QUOTED_KEY = re.compile(
+    r"\[\s*(?P<quote>[\"'])(?P<key>(?:\\.|(?!(?P=quote)).)*)"
+    r"(?P=quote)\s*\](?=\s*=)",
+    re.MULTILINE,
+)
+BRACED_UNICODE_ESCAPE = re.compile(
+    r"\\u\{(?P<digits>[0-9A-Fa-f]{1,6})\}"
+)
+POSTGRES_DOLLAR_QUOTE = re.compile(
+    r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$"
+)
 PRIVATE_BEGIN = re.compile(
     r"(?:-----BEGIN (?:(?:(?:ENCRYPTED|RSA|DSA|EC|OPENSSH) )?PRIVATE KEY|"
     r"PGP PRIVATE KEY BLOCK)-----|PuTTY-User-Key-File-[23]:)"
@@ -138,6 +149,7 @@ SLASH_COMMENT_SUFFIXES = {
     ".php", ".rs", ".swift", ".ts",
 }
 BLOCK_COMMENT_SUFFIXES = SLASH_COMMENT_SUFFIXES | {".css", ".sql"}
+NESTED_BLOCK_COMMENT_SUFFIXES = {".rs", ".swift"}
 SOURCE_CODE_SUFFIXES = {
     ".c", ".cpp", ".cs", ".go", ".java", ".js", ".kt", ".kts", ".php",
     ".ps1", ".py", ".rb", ".rs", ".swift", ".ts",
@@ -145,7 +157,6 @@ SOURCE_CODE_SUFFIXES = {
 CODE_REFERENCE_VALUE = re.compile(
     r"[A-Za-z_$][A-Za-z0-9_$]*"
     r"(?:(?:\.[A-Za-z_$][A-Za-z0-9_$]*)|(?:\[[^\]\r\n]+\]))*"
-    r"(?:\([^()\r\n]*\))?"
 )
 
 
@@ -424,20 +435,34 @@ def strip_block_comments(path: Path, text: str) -> str:
     if path.suffix.lower() not in BLOCK_COMMENT_SUFFIXES:
         return text
     result = list(text)
-    in_block = False
+    block_depth = 0
+    nested_blocks = path.suffix.lower() in NESTED_BLOCK_COMMENT_SUFFIXES
     quote: str | None = None
+    dollar_quote: str | None = None
     escaped = False
     index = 0
     while index < len(text):
-        if in_block:
+        if block_depth:
+            if nested_blocks and text.startswith("/*", index):
+                result[index:index + 2] = [" ", " "]
+                block_depth += 1
+                index += 2
+                continue
             if text.startswith("*/", index):
                 result[index:index + 2] = [" ", " "]
-                in_block = False
+                block_depth -= 1
                 index += 2
                 continue
             if text[index] not in "\r\n":
                 result[index] = " "
             index += 1
+            continue
+        if dollar_quote is not None:
+            if text.startswith(dollar_quote, index):
+                index += len(dollar_quote)
+                dollar_quote = None
+            else:
+                index += 1
             continue
         character = text[index]
         if quote is not None:
@@ -455,6 +480,12 @@ def strip_block_comments(path: Path, text: str) -> str:
             quote = character
             index += 1
             continue
+        if path.suffix.lower() == ".sql" and character == "$":
+            delimiter = POSTGRES_DOLLAR_QUOTE.match(text, index)
+            if delimiter is not None:
+                dollar_quote = delimiter.group()
+                index = delimiter.end()
+                continue
         if (
             path.suffix.lower() in SLASH_COMMENT_SUFFIXES
             and text.startswith("//", index)
@@ -467,7 +498,7 @@ def strip_block_comments(path: Path, text: str) -> str:
             continue
         if text.startswith("/*", index):
             result[index:index + 2] = [" ", " "]
-            in_block = True
+            block_depth = 1
             index += 2
             continue
         index += 1
@@ -719,7 +750,10 @@ def decode_yaml_key(raw: str) -> str:
         digits = match.group("x") or match.group("u") or match.group("U")
         return chr(int(digits, 16))
 
-    return YAML_HEX_ESCAPE.sub(replace, raw)
+    decoded = YAML_HEX_ESCAPE.sub(replace, raw)
+    return BRACED_UNICODE_ESCAPE.sub(
+        lambda match: chr(int(match.group("digits"), 16)), decoded
+    )
 
 
 def normalize_yaml_sensitive_keys(path: Path, text: str) -> str:
@@ -731,6 +765,20 @@ def normalize_yaml_sensitive_keys(path: Path, text: str) -> str:
         return decoded if decoded.upper() in ASSIGNMENT_NAMES else match.group()
 
     return YAML_DOUBLE_QUOTED_KEY.sub(replace, text)
+
+
+def normalize_bracketed_sensitive_keys(path: Path, text: str) -> str:
+    if path.suffix.lower() not in SOURCE_CODE_SUFFIXES:
+        return text
+
+    def replace(match: re.Match[str]) -> str:
+        decoded = decode_yaml_key(match.group("key"))
+        if decoded.upper() not in ASSIGNMENT_NAMES:
+            return match.group()
+        quote = match.group("quote")
+        return f"[{quote}{decoded}{quote}]"
+
+    return BRACKETED_QUOTED_KEY.sub(replace, text)
 
 
 def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
@@ -810,6 +858,9 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
     normalized_yaml = normalize_yaml_sensitive_keys(path, text)
     if normalized_yaml != text:
         findings.extend(scan_text(path, normalized_yaml))
+    normalized_brackets = normalize_bracketed_sensitive_keys(path, text)
+    if normalized_brackets != text:
+        findings.extend(scan_text(path, normalized_brackets))
     return list(dict.fromkeys(findings))
 
 
