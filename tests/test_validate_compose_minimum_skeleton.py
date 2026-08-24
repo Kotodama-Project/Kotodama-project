@@ -28,6 +28,7 @@ class ComposeMinimumSkeletonValidatorCliTests(unittest.TestCase):
         self.assertEqual(
             rules,
             {
+                "* text=auto eol=lf",
                 "runtime/compose-minimum/README.md text eol=lf",
                 "runtime/compose-minimum/compose.yaml text eol=lf",
                 "runtime/compose-minimum/company-db/001-company-core.sql text eol=lf",
