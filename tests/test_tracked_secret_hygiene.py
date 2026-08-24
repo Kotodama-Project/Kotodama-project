@@ -21,6 +21,48 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual([], SCANNER.scan_text(Path(".env.example"), text))
 
+    def test_safe_placeholders_allow_format_comments(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        env_text = name + "=${" + name + "} # injected at runtime\n"
+        yaml_text = (
+            name
+            + ": ${{ secrets."
+            + name
+            + " }} # injected at runtime\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path(".env.example"), env_text)
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), yaml_text)
+        )
+
+        quoted_live = name + '="Synthetic # Secret Value" # local only\n'
+        self.assertEqual(
+            [
+                (
+                    ".env.example",
+                    1,
+                    f"live-looking value assigned to {name}",
+                )
+            ],
+            SCANNER.scan_text(Path(".env.example"), quoted_live),
+        )
+
+        non_comment_suffix = name + "=${" + name + "} # literal suffix\n"
+        for filename in ("notes.md", "settings.properties"):
+            with self.subTest(filename=filename):
+                self.assertEqual(
+                    [
+                        (
+                            filename,
+                            1,
+                            f"live-looking value assigned to {name}",
+                        )
+                    ],
+                    SCANNER.scan_text(Path(filename), non_comment_suffix),
+                )
+
     def test_sensitive_filenames_are_blocked_but_templates_are_allowed(self) -> None:
         for name in (
             ".env",
@@ -284,6 +326,28 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
 
         value = "SyntheticSecretValue2026"
+        next_item = (
+            "- name: "
+            + name
+            + "\n- other: ordinary\n  value: "
+            + value
+            + "\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), next_item)
+        )
+
+        unrelated_mapping = (
+            "entry:\n  name: "
+            + name
+            + "\nother:\n  value: "
+            + value
+            + "\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), unrelated_mapping)
+        )
+
         unsafe_block = name + ": |2-\n    " + value + "\n"
         findings = SCANNER.scan_text(Path("settings.yaml"), unsafe_block)
         self.assertEqual(
@@ -314,6 +378,9 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 "- name: " + name + "\n  value: " + value + "\n"
             ),
             "flow.yaml": "- {name: " + name + ", value: " + value + "}\n",
+            "reverse-flow.yaml": (
+                "- {value: " + value + ", name: " + name + "}\n"
+            ),
             "settings.json": (
                 '{"name":"' + name + '","value":"' + value + '"}\n'
             ),
@@ -327,6 +394,18 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 )
                 self.assertNotIn(value, repr(findings))
 
+        reverse_block = "- value: " + value + "\n  name: " + name + "\n"
+        self.assertEqual(
+            [
+                (
+                    "reverse-block.yaml",
+                    2,
+                    f"live-looking value assigned to {name}",
+                )
+            ],
+            SCANNER.scan_text(Path("reverse-block.yaml"), reverse_block),
+        )
+
         value_from = (
             "- name: "
             + name
@@ -334,6 +413,38 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual(
             [], SCANNER.scan_text(Path("settings.yaml"), value_from)
+        )
+        reverse_value_from = (
+            "- valueFrom:\n    secretKeyRef:\n      name: private\n  name: "
+            + name
+            + "\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), reverse_value_from)
+        )
+
+        escaped_name = "OPENAI_API_" + "\\u004b" + "EY"
+        escaped = (
+            '- name: "'
+            + escaped_name
+            + '"\n  value: "'
+            + value
+            + '"\n'
+        )
+        self.assertEqual(
+            [("settings.yaml", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("settings.yaml"), escaped),
+        )
+
+        safe_block = (
+            "- name: "
+            + name
+            + "\n  value: >-\n    ${{ secrets."
+            + name
+            + " }}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), safe_block)
         )
 
     def test_commented_multiline_assignment_start_is_ignored(self) -> None:
@@ -343,6 +454,11 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
         block = "/*\n" + name + " =\n*/\nordinaryCall()\n"
         self.assertEqual([], SCANNER.scan_text(Path("config.js"), block))
+        for suffix in (".h", ".hh", ".hpp", ".hxx"):
+            with self.subTest(header=suffix):
+                self.assertEqual(
+                    [], SCANNER.scan_text(Path("config" + suffix), block)
+                )
 
         nested = (
             "/* outer\n/* nested */\n"
@@ -475,6 +591,18 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             [], SCANNER.scan_text(Path("config.js"), indexed_reference)
         )
 
+        dotted_indexed_reference = (
+            "process.env."
+            + name
+            + ' = secrets["'
+            + name
+            + '"]\n'
+        )
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(Path("config.js"), dotted_indexed_reference),
+        )
+
         callable_literal = (
             'process.env["'
             + name
@@ -560,6 +688,29 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     findings,
                 )
                 self.assertNotIn(value, repr(findings))
+
+    def test_escaped_java_text_block_delimiter_does_not_hide_assignment(
+        self,
+    ) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        text_block = (
+            'var text = """\n'
+            + "embedded "
+            + "\\"
+            + '"""\n'
+            + "/* still text */\n"
+            + '""";\n'
+        )
+        text = text_block + name + " =\n  \"" + value + "\"\n"
+
+        findings = SCANNER.scan_text(Path("config.java"), text)
+
+        self.assertEqual(
+            [("config.java", 5, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
 
     def test_yaml_document_boundaries_end_null_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
@@ -760,6 +911,14 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     findings,
                 )
                 self.assertNotIn(value, repr(findings))
+
+        make_findings = SCANNER.scan_text(
+            Path("Makefile"), name + " ?= " + value + "\n"
+        )
+        self.assertEqual(
+            [("Makefile", 1, f"live-looking value assigned to {name}")],
+            make_findings,
+        )
 
     def test_shell_parameter_defaults_and_assignments_are_detected(self) -> None:
         name = "OPENAI_" + "API_KEY"

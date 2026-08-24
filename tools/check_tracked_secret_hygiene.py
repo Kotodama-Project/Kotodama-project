@@ -25,7 +25,8 @@ SENSITIVE_SUFFIXES = {".key", ".p12", ".pem", ".pfx", ".ppk"}
 TEXT_FILENAMES = {".dev.vars", ".env", "dockerfile", "makefile"}
 TEXT_SUFFIXES = {
     ".c", ".cfg", ".cmd", ".conf", ".cpp", ".cs", ".css", ".csv",
-    ".env", ".go", ".gradle", ".graphql", ".h", ".hcl", ".html",
+    ".env", ".go", ".gradle", ".graphql", ".h", ".hcl", ".hh", ".hpp",
+    ".html", ".hxx",
     ".ini", ".java", ".js", ".json", ".kt", ".kts", ".lock", ".md",
     ".php", ".properties", ".ps1", ".py", ".rb", ".rs", ".sh",
     ".sql", ".swift", ".tf", ".toml", ".ts", ".txt", ".xml", ".yaml",
@@ -51,7 +52,7 @@ ASSIGNMENT_NAMES = (
     "OPENAI_API_KEY", "POSTGRES_PASSWORD", "SLACK_BOT_TOKEN",
 )
 ASSIGNMENT_OPERATOR = (
-    r"(?:\?\?=|\|\|=|&&=|\*\*=|//=|<<=|>>>=|>>=|"
+    r"(?:\?\?=|\?=|\|\|=|&&=|\*\*=|//=|<<=|>>>=|>>=|"
     r"[+\-*/%@|&^]?=(?![=>~]))"
 )
 ASSIGNMENT = re.compile(
@@ -93,7 +94,7 @@ INLINE_ASSIGNMENT = re.compile(
     + r"\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
     + r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>|"
     + r'"(?:\\.|[^"\\])*"'
-    + r"|'(?:\\.|[^'\\])*'|[^,;}\]])+)",
+    + r"|'(?:\\.|[^'\\])*'|[^,;}\r\n]+)+)",
     re.IGNORECASE,
 )
 BRACKETED_ASSIGNMENT = re.compile(
@@ -169,19 +170,11 @@ CPP_RAW_STRING_START = re.compile(
 YAML_BLOCK_SCALAR = re.compile(
     r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?$"
 )
-ENV_NAME_FIELD = re.compile(
-    r"^(?P<indent>[ \t]*)(?:-\s*)?[\"']?name[\"']?\s*:\s*[\"']?"
-    r"(?P<name>"
-    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?\s*,?\s*(?:#.*)?$",
+YAML_ENV_FIELD = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<item>-\s*)?"
+    r"[\"']?(?P<field>name|valueFrom|value)[\"']?\s*:\s*"
+    r"(?P<value>.*?)\s*$",
     re.IGNORECASE,
-)
-ENV_VALUE_FIELD = re.compile(
-    r"^[ \t]*[\"']?value[\"']?\s*:\s*(?P<value>.+?)\s*$",
-    re.IGNORECASE,
-)
-ENV_VALUE_FROM_FIELD = re.compile(
-    r"^[ \t]*[\"']?valueFrom[\"']?\s*:", re.IGNORECASE
 )
 ENV_FLOW_ENTRY = re.compile(
     r"[\{,]\s*[\"']?name[\"']?\s*:\s*[\"']?(?P<name>"
@@ -189,6 +182,20 @@ ENV_FLOW_ENTRY = re.compile(
     + r")[\"']?\s*,\s*[\"']?value[\"']?\s*:\s*(?P<value>"
     + r'"(?:\\.|[^"\\])*"'
     + r"|'(?:\\.|[^'\\])*'|[^,}]+)",
+    re.IGNORECASE,
+)
+ENV_FLOW_REVERSE_ENTRY = re.compile(
+    r"[\{,]\s*[\"']?value[\"']?\s*:\s*(?P<value>"
+    + r'"(?:\\.|[^"\\])*"'
+    + r"|'(?:\\.|[^'\\])*'|[^,}]+)\s*,\s*"
+    + r"[\"']?name[\"']?\s*:\s*[\"']?(?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']?",
+    re.IGNORECASE,
+)
+YAML_ENV_NAME_VALUE = re.compile(
+    r"(?P<prefix>[\"']?name[\"']?\s*:\s*)"
+    r'"(?P<key>(?:\\.|[^"\\])*)"',
     re.IGNORECASE,
 )
 PRIVATE_BEGIN = re.compile(
@@ -200,15 +207,16 @@ HASH_COMMENT_SUFFIXES = {
     ".py", ".rb", ".sh", ".toml", ".yaml", ".yml",
 }
 SLASH_COMMENT_SUFFIXES = {
-    ".c", ".cpp", ".cs", ".go", ".java", ".js", ".kt", ".kts",
-    ".php", ".rs", ".swift", ".ts",
+    ".c", ".cpp", ".cs", ".go", ".h", ".hh", ".hpp", ".hxx",
+    ".java", ".js", ".kt", ".kts", ".php", ".rs", ".swift", ".ts",
 }
 BLOCK_COMMENT_SUFFIXES = SLASH_COMMENT_SUFFIXES | {".css", ".sql"}
 NESTED_BLOCK_COMMENT_SUFFIXES = {".rs", ".sql", ".swift"}
 TRIPLE_QUOTE_SUFFIXES = {".cs", ".java", ".kt", ".kts", ".swift"}
 SOURCE_CODE_SUFFIXES = {
-    ".c", ".cpp", ".cs", ".go", ".java", ".js", ".kt", ".kts", ".php",
-    ".ps1", ".py", ".rb", ".rs", ".swift", ".ts",
+    ".c", ".cpp", ".cs", ".go", ".h", ".hh", ".hpp", ".hxx",
+    ".java", ".js", ".kt", ".kts", ".php", ".ps1", ".py", ".rb",
+    ".rs", ".swift", ".ts",
 }
 CODE_REFERENCE_VALUE = re.compile(
     r"[A-Za-z_$][A-Za-z0-9_$]*"
@@ -385,8 +393,51 @@ def sensitive_filename(path: Path) -> bool:
     )
 
 
-def assignment_value(raw: str) -> str:
+def strip_format_comment(path: Path, raw: str) -> str:
+    suffix = path.suffix.lower()
+    name = path.name.lower()
+    markers: tuple[str, ...] = ()
+    if (
+        suffix in {
+            ".env", ".hcl", ".ps1", ".py", ".rb", ".sh", ".tf",
+            ".toml", ".yaml", ".yml",
+        }
+        or name in {".dev.vars", ".env", "makefile"}
+        or name.startswith((".dev.vars.", ".env."))
+    ):
+        markers += ("#",)
+    if suffix in SLASH_COMMENT_SUFFIXES:
+        markers += ("//",)
+    if suffix == ".sql":
+        markers += ("--",)
+    if suffix in BLOCK_COMMENT_SUFFIXES:
+        markers += ("/*",)
+
+    quote: str | None = None
+    escaped = False
+    for index, character in enumerate(raw):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+            continue
+        if index and not raw[index - 1].isspace():
+            continue
+        if any(raw.startswith(marker, index) for marker in markers):
+            return raw[:index].rstrip()
+    return raw
+
+
+def assignment_value(raw: str, path: Path | None = None) -> str:
     value = raw.strip().rstrip(",").strip()
+    if path is not None:
+        value = strip_format_comment(path, value).strip().rstrip(",").strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
         value = value[1:-1].strip()
     return value
@@ -437,7 +488,7 @@ def source_code_reference(path: Path, value: str) -> bool:
         return False
     if raw[0] in {"'", '"', "`"}:
         return False
-    normalized = assignment_value(raw).rstrip(";").rstrip()
+    normalized = assignment_value(raw, path).rstrip(";").rstrip()
     return (
         CODE_REFERENCE_VALUE.fullmatch(normalized) is not None
         or LOOKUP_CALL_VALUE.fullmatch(normalized) is not None
@@ -489,8 +540,18 @@ def line_is_comment(path: Path, line: str) -> bool:
     return suffix in {".cfg", ".conf", ".ini", ".properties"} and stripped.startswith(";")
 
 
+def escaped_by_backslash(text: str, index: int) -> bool:
+    count = 0
+    index -= 1
+    while index >= 0 and text[index] == "\\":
+        count += 1
+        index -= 1
+    return count % 2 == 1
+
+
 def strip_block_comments(path: Path, text: str) -> str:
-    if path.suffix.lower() not in BLOCK_COMMENT_SUFFIXES:
+    suffix = path.suffix.lower()
+    if suffix not in BLOCK_COMMENT_SUFFIXES:
         return text
     result = list(text)
     block_depth = 0
@@ -524,7 +585,9 @@ def strip_block_comments(path: Path, text: str) -> str:
                 index += 1
             continue
         if raw_quote is not None:
-            if text.startswith(raw_quote, index):
+            if text.startswith(raw_quote, index) and not (
+                suffix == ".java" and escaped_by_backslash(text, index)
+            ):
                 index += len(raw_quote)
                 raw_quote = None
             else:
@@ -542,7 +605,6 @@ def strip_block_comments(path: Path, text: str) -> str:
                 quote = None
             index += 1
             continue
-        suffix = path.suffix.lower()
         if suffix == ".cpp":
             raw_start = CPP_RAW_STRING_START.match(text, index)
             if raw_start is not None and (
@@ -775,27 +837,97 @@ def structured_environment_assignments(
             assignments.append((
                 flow.group("name"), index + 1, flow.group("value")
             ))
-        name = ENV_NAME_FIELD.match(line)
-        if name is None:
+        for flow in ENV_FLOW_REVERSE_ENTRY.finditer(line):
+            assignments.append((
+                flow.group("name"), index + 1, flow.group("value")
+            ))
+        name_field = YAML_ENV_FIELD.match(line)
+        if name_field is None or name_field.group("field").lower() != "name":
             continue
-        base_indent = len(name.group("indent"))
-        for candidate in lines[index + 1:]:
-            stripped = candidate.strip()
+        name = assignment_value(name_field.group("value"), path).upper()
+        if name not in ASSIGNMENT_NAMES:
+            continue
+
+        field_indent = len(name_field.group("indent")) + len(
+            name_field.group("item") or ""
+        )
+        boundary_indent = -1
+        start = 0
+        if name_field.group("item") is not None:
+            boundary_indent = len(name_field.group("indent"))
+            start = index
+        else:
+            for previous_index in range(index - 1, -1, -1):
+                previous = lines[previous_index]
+                stripped = previous.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if yaml_document_boundary(previous):
+                    start = previous_index + 1
+                    break
+                previous_indent = len(previous) - len(previous.lstrip(" \t"))
+                if previous_indent >= field_indent:
+                    continue
+                boundary_indent = previous_indent
+                previous_field = YAML_ENV_FIELD.match(previous)
+                if (
+                    previous_field is not None
+                    and previous_field.group("item") is not None
+                    and previous_indent
+                    + len(previous_field.group("item") or "")
+                    == field_indent
+                ):
+                    start = previous_index
+                else:
+                    start = previous_index + 1
+                break
+
+        end = len(lines)
+        for following_index in range(index + 1, len(lines)):
+            following = lines[following_index]
+            stripped = following.strip()
             if not stripped or stripped.startswith("#"):
                 continue
-            indent = len(candidate) - len(candidate.lstrip(" \t"))
-            if stripped in {"}", "},", "]", "],"} and indent <= base_indent:
+            if yaml_document_boundary(following):
+                end = following_index
                 break
-            if ENV_NAME_FIELD.match(candidate) is not None and indent <= base_indent:
+            following_indent = len(following) - len(
+                following.lstrip(" \t")
+            )
+            if following_indent <= boundary_indent:
+                end = following_index
                 break
-            if ENV_VALUE_FROM_FIELD.match(candidate) is not None:
-                break
-            value = ENV_VALUE_FIELD.match(candidate)
-            if value is not None:
-                assignments.append((
-                    name.group("name"), index + 1, value.group("value")
-                ))
-                break
+
+        values: list[str] = []
+        value_from = False
+        for candidate_index in range(start, end):
+            candidate = YAML_ENV_FIELD.match(lines[candidate_index])
+            if candidate is None:
+                continue
+            candidate_indent = len(candidate.group("indent")) + len(
+                candidate.group("item") or ""
+            )
+            if candidate_indent != field_indent:
+                continue
+            field = candidate.group("field").lower()
+            if field == "valuefrom":
+                value_from = True
+                continue
+            if field != "value":
+                continue
+            raw_value = candidate.group("value")
+            if YAML_BLOCK_SCALAR.fullmatch(raw_value.strip()) is not None:
+                raw_value = continuation_value(
+                    path,
+                    lines,
+                    candidate_index + 1,
+                    candidate_indent,
+                    True,
+                ) or ""
+            values.append(raw_value)
+        if not values and value_from:
+            continue
+        assignments.extend((name, index + 1, value) for value in values)
     return assignments
 
 
@@ -918,7 +1050,15 @@ def normalize_yaml_sensitive_keys(path: Path, text: str) -> str:
         decoded = decode_yaml_key(match.group("key"))
         return decoded if decoded.upper() in ASSIGNMENT_NAMES else match.group()
 
-    return YAML_DOUBLE_QUOTED_KEY.sub(replace, text)
+    normalized = YAML_DOUBLE_QUOTED_KEY.sub(replace, text)
+
+    def replace_environment_name(match: re.Match[str]) -> str:
+        decoded = decode_yaml_key(match.group("key"))
+        if decoded.upper() not in ASSIGNMENT_NAMES:
+            return match.group()
+        return match.group("prefix") + decoded
+
+    return YAML_ENV_NAME_VALUE.sub(replace_environment_name, normalized)
 
 
 def normalize_toml_sensitive_keys(path: Path, text: str) -> str:
@@ -1013,7 +1153,7 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
                 continue
             if (
                 name not in reported_assignments
-                and live_assignment(assignment_value(raw_value))
+                and live_assignment(assignment_value(raw_value, path))
                 and not source_code_reference(path, raw_value)
             ):
                 findings.append((
@@ -1035,7 +1175,7 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
             findings.append((path.as_posix(), number, "private key block"))
     for name, number, value in multiline_assignments(path, text):
         if (
-            live_assignment(assignment_value(value))
+            live_assignment(assignment_value(value, path))
             and not multiline_code_reference(path, value)
         ):
             findings.append((
@@ -1050,7 +1190,7 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
             f"live-looking value assigned to {name}",
         ))
     for name, number, value in structured_environment_assignments(path, text):
-        if live_assignment(assignment_value(value)):
+        if live_assignment(assignment_value(value, path)):
             findings.append((
                 path.as_posix(),
                 number,

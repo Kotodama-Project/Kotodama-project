@@ -26,10 +26,10 @@ SECRET_SCANNER_SPEC.loader.exec_module(SECRET_SCANNER)
 
 
 def decode_tracked_text(data: bytes) -> str | None:
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
+    document, _error = SECRET_SCANNER.decode_text_snapshot(
+        Path("repository-snapshot.txt"), data
+    )
+    return document
 
 
 def tracked_repository_text(root: Path) -> str:
@@ -64,6 +64,12 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
     def test_repository_identity_scan_skips_binary_content(self) -> None:
         self.assertIsNone(decode_tracked_text(b"\x89PNG\r\n\x1a\n\x00\xff"))
         self.assertEqual("plain text", decode_tracked_text(b"plain text"))
+        for encoding in ("utf-16", "utf-32"):
+            with self.subTest(encoding=encoding):
+                self.assertEqual(
+                    "bom-backed text",
+                    decode_tracked_text("bom-backed text".encode(encoding)),
+                )
 
     def test_repository_identity_scan_covers_head_index_and_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -78,10 +84,10 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             run_git("config", "user.name", "Test")
             run_git("config", "user.email", "test@example.invalid")
             target = root / "identity.txt"
-            target.write_text("head-identity", encoding="utf-8")
+            target.write_text("head-identity", encoding="utf-16")
             run_git("add", ".")
             run_git("commit", "--quiet", "-m", "seed")
-            target.write_text("index-identity", encoding="utf-8")
+            target.write_text("index-identity", encoding="utf-32")
             run_git("add", ".")
             target.write_text("working-identity", encoding="utf-8")
 
