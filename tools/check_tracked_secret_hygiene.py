@@ -168,9 +168,22 @@ SWIFT_RAW_STRING_START = re.compile(
 CPP_RAW_STRING_START = re.compile(
     r"(?:u8|u|U|L)?R\"(?P<delimiter>[^ ()\\\t\r\n]{0,16})\("
 )
-JAVA_UNICODE_BACKSLASH = re.compile(r"\\u+005[cC]$")
+HCL_HEREDOC_START = re.compile(
+    r"<<-?(?P<delimiter>[A-Za-z_][A-Za-z0-9_]*)"
+)
+PHP_HEREDOC_START = re.compile(
+    r"<<<[ \t]*(?P<quote>['\"]?)(?P<delimiter>"
+    r"[A-Za-z_][A-Za-z0-9_]*)(?P=quote)"
+)
 YAML_BLOCK_SCALAR = re.compile(
     r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?$"
+)
+YAML_SCALAR_PROPERTIES = re.compile(
+    r"^(?:(?:&[A-Za-z_][A-Za-z0-9_-]*|!![^\s]+|![^\s]+)\s+)+"
+)
+YAML_ANY_BLOCK_SCALAR_START = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<item>-\s*)?.*?:[ \t]*"
+    r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:[ \t]+#.*)?$"
 )
 YAML_ENV_FIELD = re.compile(
     r"^(?P<indent>[ \t]*)(?P<item>-\s*)?"
@@ -414,7 +427,7 @@ def strip_format_comment(path: Path, raw: str) -> str:
         if character in {"'", '"', "`"}:
             quote = character
             continue
-        if index and not raw[index - 1].isspace():
+        if index and raw[index - 1] not in " \t\r\n":
             continue
         if any(raw.startswith(marker, index) for marker in markers):
             return raw[:index].rstrip()
@@ -429,6 +442,32 @@ def assignment_value(
         value = strip_format_comment(path, value).strip().rstrip(",").strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
         value = value[1:-1].strip()
+    return value
+
+
+def yaml_scalar_value(
+    raw: str,
+    path: Path | None = None,
+    strip_comments: bool = True,
+    strip_properties: bool = False,
+) -> str:
+    prepared = raw.strip().rstrip(",").strip()
+    if path is not None and strip_comments:
+        prepared = strip_format_comment(path, prepared).strip().rstrip(",").strip()
+    double_quoted = (
+        len(prepared) >= 2
+        and prepared[0] == prepared[-1] == '"'
+    )
+    value = assignment_value(prepared)
+    if double_quoted:
+        value = decode_yaml_key(value)
+    if strip_properties:
+        value = YAML_SCALAR_PROPERTIES.sub("", value).strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            quoted = value[0] == '"'
+            value = value[1:-1].strip()
+            if quoted:
+                value = decode_yaml_key(value)
     return value
 
 
@@ -543,7 +582,7 @@ def shell_parameter_assignments(line: str) -> list[tuple[str, str]]:
 
 
 def line_is_comment(path: Path, line: str) -> bool:
-    stripped = line.lstrip()
+    stripped = line.lstrip(" \t")
     suffix = path.suffix.lower()
     if suffix in HASH_COMMENT_SUFFIXES and stripped.startswith("#"):
         return True
@@ -562,12 +601,46 @@ def java_delimiter_is_escaped(text: str, index: int) -> bool:
             count += 1
             cursor -= 1
             continue
-        unicode_backslash = JAVA_UNICODE_BACKSLASH.search(text[:cursor])
-        if unicode_backslash is None:
+        if text[max(0, cursor - 4):cursor].lower() != "005c":
+            break
+        marker = cursor - 4
+        unicode_start = marker
+        while unicode_start > 0 and text[unicode_start - 1] == "u":
+            unicode_start -= 1
+        if unicode_start == marker or unicode_start == 0:
+            break
+        if text[unicode_start - 1] != "\\":
             break
         count += 1
-        cursor = unicode_backslash.start()
+        cursor = unicode_start - 1
     return count % 2 == 1
+
+
+def heredoc_end(path: Path, text: str, index: int) -> int | None:
+    if text[index] != "<":
+        return None
+    suffix = path.suffix.lower()
+    if suffix in {".hcl", ".tf"}:
+        start = HCL_HEREDOC_START.match(text, index)
+        allow_semicolon = False
+    elif suffix == ".php":
+        start = PHP_HEREDOC_START.match(text, index)
+        allow_semicolon = True
+    else:
+        return None
+    if start is None:
+        return None
+    line_end = text.find("\n", start.end())
+    if line_end < 0:
+        return None
+    delimiter = re.escape(start.group("delimiter"))
+    terminator = re.compile(
+        rf"^[ \t]*{delimiter}{';?' if allow_semicolon else ''}"
+        r"[ \t]*(?:\r?\n|$)",
+        re.MULTILINE,
+    )
+    end = terminator.search(text, line_end + 1)
+    return end.end() if end is not None else None
 
 
 def strip_block_comments(path: Path, text: str) -> str:
@@ -625,6 +698,10 @@ def strip_block_comments(path: Path, text: str) -> str:
             elif character in "\r\n" and quote != "`":
                 quote = None
             index += 1
+            continue
+        heredoc_stop = heredoc_end(path, text, index)
+        if heredoc_stop is not None:
+            index = heredoc_stop
             continue
         if suffix in CPP_SOURCE_SUFFIXES:
             raw_start = CPP_RAW_STRING_START.match(text, index)
@@ -884,9 +961,14 @@ def multiline_assignments(
     return assignments
 
 
-def flow_mapping_bodies(text: str) -> list[tuple[str, int]]:
-    bodies: list[tuple[str, int]] = []
-    stack: list[tuple[int, int]] = []
+def yaml_quote_can_start(text: str, index: int) -> bool:
+    return index == 0 or text[index - 1] in " \t\r\n[{,:?-"
+
+
+def flow_mapping_bodies(text: str) -> list[tuple[str, int, str | None]]:
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    bodies: list[tuple[str, int, str | None]] = []
+    stack: list[tuple[int, int, str | None]] = []
     sanitized = list(text)
     quote: str | None = None
     comment = False
@@ -918,17 +1000,28 @@ def flow_mapping_bodies(text: str) -> list[tuple[str, int]]:
             index += 1
             continue
         if character == "#" and (
-            index == 0 or text[index - 1].isspace()
+            index == 0 or text[index - 1] in " \t\n"
         ):
             sanitized[index] = " "
             comment = True
-        elif character in {"'", '"'}:
+        elif character in {"'", '"'} and yaml_quote_can_start(text, index):
             quote = character
         elif character == "{":
-            stack.append((index, line_number))
+            prefix = text[max(0, index - 256):index]
+            anchor_match = re.search(
+                r"&(?P<anchor>[A-Za-z_][A-Za-z0-9_-]*)\s*$", prefix
+            )
+            anchor = (
+                anchor_match.group("anchor")
+                if anchor_match is not None
+                else None
+            )
+            stack.append((index, line_number, anchor))
         elif character == "}" and stack:
-            start, start_line = stack.pop()
-            bodies.append(("".join(sanitized[start + 1:index]), start_line))
+            start, start_line, anchor = stack.pop()
+            bodies.append((
+                "".join(sanitized[start + 1:index]), start_line, anchor
+            ))
         if character == "\n":
             line_number += 1
         index += 1
@@ -971,6 +1064,61 @@ def split_flow_segments(text: str, delimiter: str) -> list[str]:
     return segments
 
 
+def mask_yaml_block_scalar_contents(text: str) -> str:
+    masked: list[str] = []
+    active_indent: int | None = None
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        ending = line[len(content):]
+        stripped = content.strip()
+        indent = len(content) - len(content.lstrip(" \t"))
+        if active_indent is not None:
+            if not stripped or indent > active_indent:
+                masked.append(" " * len(content) + ending)
+                continue
+            active_indent = None
+        marker = YAML_ANY_BLOCK_SCALAR_START.match(content)
+        if marker is not None:
+            active_indent = len(marker.group("indent")) + len(
+                marker.group("item") or ""
+            )
+        masked.append(line)
+    return "".join(masked)
+
+
+def parsed_flow_fields(body: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for raw_field in split_flow_segments(body, ","):
+        pair = split_flow_segments(raw_field, ":")
+        if len(pair) < 2:
+            continue
+        key = yaml_scalar_value(pair[0]).lower()
+        fields[key] = ":".join(pair[1:]).strip()
+    return fields
+
+
+def resolve_flow_fields(
+    fields: dict[str, str],
+    anchors: dict[str, dict[str, str]],
+    seen: frozenset[str] = frozenset(),
+) -> dict[str, str]:
+    resolved: dict[str, str] = {}
+    for alias in re.findall(
+        r"\*(?P<alias>[A-Za-z_][A-Za-z0-9_-]*)", fields.get("<<", "")
+    ):
+        if alias in seen or alias not in anchors:
+            continue
+        inherited = resolve_flow_fields(
+            anchors[alias], anchors, seen | {alias}
+        )
+        for key, value in inherited.items():
+            resolved.setdefault(key, value)
+    for key, value in fields.items():
+        if key != "<<":
+            resolved[key] = value
+    return resolved
+
+
 def structured_environment_assignments(
     path: Path, text: str
 ) -> list[tuple[str, int, str, bool]]:
@@ -978,33 +1126,36 @@ def structured_environment_assignments(
         return []
     assignments: list[tuple[str, int, str, bool]] = []
     lines = text.splitlines()
-    for body, number in flow_mapping_bodies(text):
-        names: list[str] = []
-        values: list[str] = []
-        for raw_field in split_flow_segments(body, ","):
-            pair = split_flow_segments(raw_field, ":")
-            if len(pair) < 2:
-                continue
-            key = decode_yaml_key(assignment_value(pair[0])).lower()
-            raw_value = ":".join(pair[1:]).strip()
-            if key == "name":
-                name = decode_yaml_key(
-                    assignment_value(raw_value, path)
-                ).upper()
-                if name in ASSIGNMENT_NAMES:
-                    names.append(name)
-            elif key == "value":
-                values.append(raw_value)
-        assignments.extend(
-            (name, number, value, True)
-            for name in names
-            for value in values
-        )
+    flow_text = (
+        mask_yaml_block_scalar_contents(text)
+        if path.suffix.lower() in {".yaml", ".yml"}
+        else text
+    )
+    flow_records = [
+        (parsed_flow_fields(body), number, anchor)
+        for body, number, anchor in flow_mapping_bodies(flow_text)
+    ]
+    anchors = {
+        anchor: fields
+        for fields, _number, anchor in flow_records
+        if anchor is not None
+    }
+    for fields, number, _anchor in flow_records:
+        resolved = resolve_flow_fields(fields, anchors)
+        if "name" not in resolved or "value" not in resolved:
+            continue
+        name = yaml_scalar_value(
+            resolved["name"], path, strip_properties=True
+        ).upper()
+        if name in ASSIGNMENT_NAMES:
+            assignments.append((name, number, resolved["value"], True))
     for index, line in enumerate(lines):
         name_field = YAML_ENV_FIELD.match(line)
         if name_field is None or name_field.group("field").lower() != "name":
             continue
-        name = assignment_value(name_field.group("value"), path).upper()
+        name = yaml_scalar_value(
+            name_field.group("value"), path, strip_properties=True
+        ).upper()
         if name not in ASSIGNMENT_NAMES:
             continue
 
@@ -1209,7 +1360,12 @@ def normalize_yaml_sensitive_keys(path: Path, text: str) -> str:
 
     def replace(match: re.Match[str]) -> str:
         decoded = decode_yaml_key(match.group("key"))
-        return decoded if decoded.upper() in ASSIGNMENT_NAMES else match.group()
+        if (
+            decoded.upper() in ASSIGNMENT_NAMES
+            or decoded.lower() in {"name", "value", "valuefrom"}
+        ):
+            return decoded
+        return match.group()
 
     normalized = YAML_DOUBLE_QUOTED_KEY.sub(replace, text)
 

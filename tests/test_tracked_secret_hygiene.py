@@ -460,6 +460,20 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 + value
                 + "}\n"
             ),
+            "cr-only-flow-comment.yaml": (
+                "- {name: "
+                + name
+                + ", # comment\r  value: "
+                + value
+                + "}\r"
+            ),
+            "flow-nbsp-hash.yaml": (
+                "- {name: "
+                + name
+                + ", value: <injected-at-runtime>\u00a0#"
+                + value
+                + "}\n"
+            ),
             "settings.json": (
                 '{"name":"' + name + '","value":"' + value + '"}\n'
             ),
@@ -472,6 +486,108 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     findings,
                 )
                 self.assertNotIn(value, repr(findings))
+
+        after_plain_apostrophe = (
+            "description: it's ordinary\n"
+            + "- {name: "
+            + name
+            + ", value: "
+            + value
+            + "}\n"
+        )
+        self.assertEqual(
+            [
+                (
+                    "after-apostrophe.yaml",
+                    2,
+                    f"live-looking value assigned to {name}",
+                )
+            ],
+            SCANNER.scan_text(
+                Path("after-apostrophe.yaml"), after_plain_apostrophe
+            ),
+        )
+
+        escaped_block_fields = (
+            '- "na\\u006de": '
+            + name
+            + '\n  "val\\u0075e": '
+            + value
+            + "\n"
+        )
+        self.assertEqual(
+            [
+                (
+                    "escaped-block.yaml",
+                    1,
+                    f"live-looking value assigned to {name}",
+                )
+            ],
+            SCANNER.scan_text(Path("escaped-block.yaml"), escaped_block_fields),
+        )
+
+        for scalar_property in ("&s", "!!str"):
+            with self.subTest(scalar_property=scalar_property):
+                block_property = (
+                    "- name: "
+                    + scalar_property
+                    + " "
+                    + name
+                    + "\n  value: "
+                    + value
+                    + "\n"
+                )
+                flow_property = (
+                    "- {name: "
+                    + scalar_property
+                    + " "
+                    + name
+                    + ", value: "
+                    + value
+                    + "}\n"
+                )
+                for filename, text in (
+                    ("property-block.yaml", block_property),
+                    ("property-flow.yaml", flow_property),
+                ):
+                    self.assertEqual(
+                        [
+                            (
+                                filename,
+                                1,
+                                f"live-looking value assigned to {name}",
+                            )
+                        ],
+                        SCANNER.scan_text(Path(filename), text),
+                    )
+
+        merge_value = (
+            "common: &common {value: "
+            + value
+            + "}\nentry: {name: "
+            + name
+            + ", <<: *common}\n"
+        )
+        merge_name = (
+            "common: &common {name: "
+            + name
+            + "}\nentry: {<<: *common, value: "
+            + value
+            + "}\n"
+        )
+        for label, text in (("merge-value", merge_value), ("merge-name", merge_name)):
+            filename = label + ".yaml"
+            with self.subTest(merge=label):
+                self.assertEqual(
+                    [
+                        (
+                            filename,
+                            2,
+                            f"live-looking value assigned to {name}",
+                        )
+                    ],
+                    SCANNER.scan_text(Path(filename), text),
+                )
 
         reverse_block = "- value: " + value + "\n  name: " + name + "\n"
         self.assertEqual(
@@ -561,6 +677,29 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             [], SCANNER.scan_text(Path("settings.yaml"), commented_flow_record)
         )
 
+        single_quoted_escape_key = (
+            "- {'na\\u006de': "
+            + name
+            + ", value: "
+            + value
+            + "}\n"
+        )
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(Path("settings.yaml"), single_quoted_escape_key),
+        )
+
+        flow_example_block = (
+            "documentation: |-\n  {name: "
+            + name
+            + ", value: "
+            + value
+            + "}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), flow_example_block)
+        )
+
         nested_unrelated_value = (
             "- {name: "
             + name
@@ -593,6 +732,31 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 self.assertEqual(
                     [], SCANNER.scan_text(Path("config" + suffix), block)
                 )
+
+        value = "SyntheticSecretValue2026"
+        hcl_heredoc = (
+            "description = <<-EOT\n/* literal text\nEOT\n"
+            + name
+            + " =\n  \""
+            + value
+            + "\"\n"
+        )
+        self.assertEqual(
+            [("settings.hcl", 4, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("settings.hcl"), hcl_heredoc),
+        )
+
+        php_heredoc = (
+            "<?php\n$description = <<<'EOT'\n/* literal text\nEOT;\n$"
+            + name
+            + " =\n  \""
+            + value
+            + "\";\n"
+        )
+        self.assertEqual(
+            [("config.php", 5, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.php"), php_heredoc),
+        )
 
         nested = (
             "/* outer\n/* nested */\n"
@@ -873,6 +1037,20 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     findings,
                 )
                 self.assertNotIn(value, repr(findings))
+
+        generated_prefix = 'var text = """\nordinary\n""";\n' * 2_000
+        generated = generated_prefix + name + " =\n  \"" + value + "\"\n"
+        generated_findings = SCANNER.scan_text(Path("generated.java"), generated)
+        self.assertEqual(
+            [
+                (
+                    "generated.java",
+                    6_001,
+                    f"live-looking value assigned to {name}",
+                )
+            ],
+            generated_findings,
+        )
 
     def test_yaml_document_boundaries_end_null_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
