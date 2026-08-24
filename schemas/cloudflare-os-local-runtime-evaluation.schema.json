@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/cloudflare-os-local-runtime-evaluation.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/cloudflare-os-local-runtime-evaluation.schema.json",
   "title": "Cloudflare OS local runtime evaluation receipt",
   "type": "object",
   "additionalProperties": false,
