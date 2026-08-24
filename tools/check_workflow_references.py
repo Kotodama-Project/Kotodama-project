@@ -17,6 +17,9 @@ ACTION_SHA_PATTERN = re.compile(r"^[^@\s]+@[0-9a-fA-F]{40}$")
 DOCKER_DIGEST_PATTERN = re.compile(
     r"^docker://[^@\s]+@sha256:[0-9a-f]{64}$"
 )
+CONTAINER_DIGEST_PATTERN = re.compile(
+    r"^[^@\s]+@sha256:[0-9a-f]{64}$"
+)
 
 
 def reference_violation(reference: str) -> str | None:
@@ -31,6 +34,12 @@ def reference_violation(reference: str) -> str | None:
     if ACTION_SHA_PATTERN.fullmatch(reference):
         return None
     return "external GitHub Action is not pinned to a full commit SHA"
+
+
+def container_image_violation(reference: str) -> str | None:
+    if CONTAINER_DIGEST_PATTERN.fullmatch(reference):
+        return None
+    return "workflow container image is not pinned to a sha256 digest"
 
 
 def mapping_values(node: Node, key: str) -> list[tuple[int, Node]]:
@@ -53,6 +62,21 @@ def workflow_references(text: str) -> list[tuple[int, str | None, str]]:
         return []
 
     references: list[tuple[int, str | None, str]] = []
+
+    def append_container_image(line: int, node: Node, kind: str) -> None:
+        if kind == "service" and not isinstance(node, MappingNode):
+            references.append((line, None, kind))
+            return
+        if isinstance(node, ScalarNode):
+            references.append((line, scalar_value(node), kind))
+            return
+        images = mapping_values(node, "image")
+        if not images:
+            references.append((line, None, kind))
+            return
+        for image_line, image in images:
+            references.append((image_line, scalar_value(image), kind))
+
     for _jobs_line, jobs in mapping_values(root, "jobs"):
         if not isinstance(jobs, MappingNode):
             continue
@@ -65,6 +89,15 @@ def workflow_references(text: str) -> list[tuple[int, str | None, str]]:
                     scalar_value(reference),
                     "job",
                 ))
+            for line, container in mapping_values(job, "container"):
+                append_container_image(line, container, "container")
+            for _services_line, services in mapping_values(job, "services"):
+                if not isinstance(services, MappingNode):
+                    references.append((_services_line, None, "service"))
+                    continue
+                for service_name, service in services.value:
+                    line = service_name.start_mark.line + 1
+                    append_container_image(line, service, "service")
             for _steps_line, steps in mapping_values(job, "steps"):
                 if not isinstance(steps, SequenceNode):
                     continue
@@ -233,13 +266,22 @@ def scan_workflows(root: Path) -> list[tuple[str, int, str]]:
         relative_path = path.as_posix()
         for line_number, reference, kind in references:
             if reference is None:
+                noun = (
+                    "container image"
+                    if kind in {"container", "service"}
+                    else "uses reference"
+                )
                 violations.append((
                     relative_path,
                     line_number,
-                    f"workflow uses reference must be a scalar literal [{source}]",
+                    f"workflow {noun} must be a scalar literal [{source}]",
                 ))
                 continue
-            violation = reference_violation(reference)
+            violation = (
+                container_image_violation(reference)
+                if kind in {"container", "service"}
+                else reference_violation(reference)
+            )
             if violation is not None:
                 violations.append((
                     relative_path, line_number, f"{violation} [{source}]"

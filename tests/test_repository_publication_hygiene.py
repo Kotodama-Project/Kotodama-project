@@ -249,6 +249,47 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             self.assertEqual(1, len(violations), violations)
             self.assertIn("full commit SHA", violations[0][2])
 
+    def test_workflow_reference_gate_requires_digest_pinned_job_images(self) -> None:
+        mutable = "vendor/runtime:latest"
+        pinned = "vendor/runtime@sha256:" + ("b" * 64)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "candidate.yml").write_text(
+                "name: Candidate\n"
+                "on: push\n"
+                "jobs:\n"
+                "  mutable:\n"
+                "    runs-on: ubuntu-latest\n"
+                f"    container: {mutable}\n"
+                "    services:\n"
+                "      database:\n"
+                f"        image: {mutable}\n"
+                "    steps:\n"
+                "      - run: echo no\n"
+                "  pinned:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    container:\n"
+                f"      image: {pinned}\n"
+                "    services:\n"
+                f"      database: {{ image: {pinned} }}\n"
+                "    steps:\n"
+                "      - run: echo ok\n",
+                encoding="utf-8",
+            )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(2, len(violations), violations)
+            self.assertTrue(
+                all(
+                    "container image" in violation
+                    for _path, _line, violation in violations
+                ),
+                violations,
+            )
+
     def test_workflow_reference_gate_scans_nested_composite_actions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

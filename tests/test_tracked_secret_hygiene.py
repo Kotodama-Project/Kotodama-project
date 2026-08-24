@@ -63,10 +63,11 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertNotIn(token, repr(findings))
 
     def test_live_named_assignment_is_detected(self) -> None:
+        name = "CF_API" + "_TOKEN"
         token = "Ab9_" + ("z" * 44)
-        findings = SCANNER.scan_text(Path("config.txt"), f"CF_API_TOKEN={token}\n")
+        findings = SCANNER.scan_text(Path("config.txt"), f"{name}={token}\n")
         self.assertEqual(
-            [("config.txt", 1, "live-looking value assigned to CF_API_TOKEN")],
+            [("config.txt", 1, f"live-looking value assigned to {name}")],
             findings,
         )
         self.assertNotIn(token, repr(findings))
@@ -74,11 +75,12 @@ class TrackedSecretHygieneTests(unittest.TestCase):
     def test_placeholder_marker_inside_live_url_does_not_bypass_assignment_gate(
         self,
     ) -> None:
+        name = "DATABASE" + "_URL"
         value = "postgres://admin:S3cretPassword@demo.internal/prod"
-        findings = SCANNER.scan_text(Path("config.txt"), f"DATABASE_URL={value}\n")
+        findings = SCANNER.scan_text(Path("config.txt"), f"{name}={value}\n")
 
         self.assertEqual(
-            [("config.txt", 1, "live-looking value assigned to DATABASE_URL")],
+            [("config.txt", 1, f"live-looking value assigned to {name}")],
             findings,
         )
         self.assertNotIn(value, repr(findings))
@@ -86,14 +88,15 @@ class TrackedSecretHygieneTests(unittest.TestCase):
     def test_placeholder_expression_must_cover_the_entire_assignment_value(
         self,
     ) -> None:
-        value = "${OPENAI_API_KEY}Ab9_" + ("z" * 40)
+        name = "OPENAI_" + "API_KEY"
+        value = "${" + name + "}Ab9_" + ("z" * 40)
 
         findings = SCANNER.scan_text(
-            Path("config.txt"), f"OPENAI_API_KEY={value}\n"
+            Path("config.txt"), f"{name}={value}\n"
         )
 
         self.assertEqual(
-            [("config.txt", 1, "live-looking value assigned to OPENAI_API_KEY")],
+            [("config.txt", 1, f"live-looking value assigned to {name}")],
             findings,
         )
         self.assertNotIn(value, repr(findings))
@@ -157,6 +160,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             "secrets.OPENAI_API_KEY",
             "vars.OPENAI_API_KEY",
             "your-api-key",
+            "{runtime_secret}",
         )
         for value in safe:
             with self.subTest(value=value):
@@ -199,11 +203,123 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(value, repr(findings))
 
-    def test_defensive_python_regex_is_not_treated_as_an_assignment(self) -> None:
-        name = "POSTGRES_" + "PASSWORD"
-        text = 'pattern = re.compile(r\'"' + name + '":\\s*(.+)\')\n'
+    def test_unquoted_flow_mapping_named_assignment_is_detected(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        findings = SCANNER.scan_text(
+            Path("settings.yaml"), "{" + name + ": " + value + "}\n"
+        )
 
-        self.assertEqual([], SCANNER.scan_text(Path("detector.py"), text))
+        self.assertEqual(
+            [("settings.yaml", 1, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+    def test_regex_api_does_not_exempt_later_named_assignment(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        text = (
+            're.compile("x"); settings={"'
+            + name
+            + '":"'
+            + value
+            + '"}\n'
+        )
+
+        findings = SCANNER.scan_text(Path("detector.py"), text)
+
+        self.assertEqual(
+            [("detector.py", 1, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+    def test_inline_equals_named_assignments_are_detected(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        lines = (
+            f'prefix = 1; {name} = "{value}"',
+            f'config.{name}="{value}"',
+            f'const {name} = "{value}"',
+        )
+        for line in lines:
+            with self.subTest(line=line.split(value)[0]):
+                findings = SCANNER.scan_text(Path("config.js"), line + "\n")
+                self.assertEqual(
+                    [("config.js", 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+    def test_inline_placeholder_must_cover_the_entire_expression(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        text = f'prefix = 1; {name} = "placeholder" + "{value}"\n'
+
+        findings = SCANNER.scan_text(Path("config.js"), text)
+
+        self.assertEqual(
+            [("config.js", 1, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+    def test_properties_whitespace_assignment_remains_detected(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+
+        findings = SCANNER.scan_text(
+            Path("application.properties"), f"{name} {value}\n"
+        )
+
+        self.assertEqual(
+            [
+                (
+                    "application.properties",
+                    1,
+                    f"live-looking value assigned to {name}",
+                )
+            ],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+    def test_comparison_and_arrow_operators_are_not_assignments(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        for operator in ("==", "===", "!=", "<=", ">=", "=>", "=~"):
+            with self.subTest(operator=operator):
+                self.assertEqual(
+                    [],
+                    SCANNER.scan_text(
+                        Path("config.js"), f'{name} {operator} "ordinary"\n'
+                    ),
+                )
+
+    def test_shell_parameter_defaults_and_assignments_are_detected(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        for operator in (":-", "-", ":=", "=", ":+", "+"):
+            with self.subTest(operator=operator):
+                text = "echo ${" + name + operator + value + "}\n"
+                findings = SCANNER.scan_text(Path("script.sh"), text)
+                self.assertEqual(
+                    [("script.sh", 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        nested = "echo ${" + name + ":-${OTHER:-" + value + "}}\n"
+        self.assertEqual(
+            [("script.sh", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("script.sh"), nested),
+        )
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(
+                Path("script.sh"), "echo ${" + name + ":?set privately}\n"
+            ),
+        )
 
     def test_complete_private_key_block_is_detected(self) -> None:
         begin = "-----BEGIN " + "PRIVATE KEY-----\n"

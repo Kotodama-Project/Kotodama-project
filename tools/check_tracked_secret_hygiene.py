@@ -51,15 +51,39 @@ ASSIGNMENT_NAMES = (
 ASSIGNMENT = re.compile(
     r"^\s*(?:-\s*|ARG\s+|export\s+|\$env:|ENV\s+|setx?\s+)?[\"']?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?(?:\s*[:=]\s*|\s+)(?P<value>.+?)\s*$",
+    + r")[\"']?\s*(?::|=(?![=>~]))\s*(?P<value>.+?)\s*$",
+    re.IGNORECASE,
+)
+SPACE_ASSIGNMENT = re.compile(
+    r"^\s*(?:ENV\s+|setx?\s+)[\"']?(?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']?\s+(?P<value>.+?)\s*$",
+    re.IGNORECASE,
+)
+BARE_SPACE_ASSIGNMENT = re.compile(
+    r"^\s*[\"']?(?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']?\s+(?P<value>.+?)\s*$",
     re.IGNORECASE,
 )
 STRUCTURED_ASSIGNMENT = re.compile(
     r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
     + r")[\"']?\s*:\s*(?P<value>"
+    + r"\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
+    + r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>|"
     + r'"(?:\\.|[^"\\])*"'
     + r"|'(?:\\.|[^'\\])*'|[^,}\]]+)",
+    re.IGNORECASE,
+)
+INLINE_ASSIGNMENT = re.compile(
+    r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']?\s*=(?![=>~])\s*(?P<value>"
+    + r"\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
+    + r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>|"
+    + r'"(?:\\.|[^"\\])*"'
+    + r"|'(?:\\.|[^'\\])*'|[^,;}\]]+)",
     re.IGNORECASE,
 )
 PRIVATE_BEGIN = re.compile(
@@ -246,7 +270,7 @@ def placeholder(value: str) -> bool:
     if re.fullmatch(
         r"(?:\$\{\{\s*(?:env|secrets|vars)\.[A-Za-z_][A-Za-z0-9_]*\s*\}\}|"
         r"\$\{[A-Za-z_][A-Za-z0-9_]*(?:(?::?\?)[^{}\r\n]*)?\}|"
-        r"<[^<>\r\n]+>)",
+        r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>)",
         normalized,
     ):
         return True
@@ -276,6 +300,40 @@ def live_assignment(value: str) -> bool:
     return not placeholder(value)
 
 
+def assignment_expression_continues(line: str, value_end: int) -> bool:
+    remainder = line[value_end:]
+    return re.match(r"\s*(?:\+|\.|\|\||&&|\?\?)", remainder) is not None
+
+
+def shell_parameter_assignments(line: str) -> list[tuple[str, str]]:
+    """Return sensitive shell default/assignment expansions, including nesting."""
+
+    assignments: list[tuple[str, str]] = []
+    stack: list[int] = []
+    index = 0
+    names = sorted(ASSIGNMENT_NAMES, key=len, reverse=True)
+    while index < len(line):
+        if line.startswith("${", index):
+            stack.append(index)
+            index += 2
+            continue
+        if line[index] == "}" and stack:
+            start = stack.pop()
+            body = line[start + 2:index]
+            upper = body.upper()
+            for name in names:
+                if not upper.startswith(name):
+                    continue
+                remainder = body[len(name):]
+                for operator in (":-", ":=", ":+", "-", "=", "+"):
+                    if remainder.startswith(operator):
+                        assignments.append((name, remainder[len(operator):]))
+                        break
+                break
+        index += 1
+    return assignments
+
+
 def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
     findings: list[tuple[str, int, str]] = []
     lines = text.splitlines()
@@ -284,32 +342,50 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
             if pattern.search(line):
                 findings.append((path.as_posix(), number, detector))
         matches = []
-        match = ASSIGNMENT.match(line)
-        if match is not None:
-            matches.append(match)
+        patterns = [ASSIGNMENT, SPACE_ASSIGNMENT]
+        if path.suffix.lower() == ".properties":
+            patterns.append(BARE_SPACE_ASSIGNMENT)
+        for pattern in patterns:
+            match = pattern.match(line)
+            if match is not None:
+                matches.append(match)
         name_spans = {candidate.span("name") for candidate in matches}
-        for candidate in STRUCTURED_ASSIGNMENT.finditer(line):
+        for candidate in (
+            *STRUCTURED_ASSIGNMENT.finditer(line),
+            *INLINE_ASSIGNMENT.finditer(line),
+        ):
             name_start = candidate.start("name")
-            if name_start > 0 and line[name_start - 1] in "${":
-                continue
-            if path.suffix == ".py" and any(
-                marker in line[:name_start]
-                for marker in (
-                    "re.compile(", "re.findall(", "re.fullmatch(",
-                    "re.match(", "re.search(",
-                )
-            ):
+            if name_start >= 2 and line[name_start - 2:name_start] == "${":
                 continue
             if candidate.span("name") not in name_spans:
                 matches.append(candidate)
                 name_spans.add(candidate.span("name"))
+        reported_assignments: set[str] = set()
         for match in matches:
-            if live_assignment(assignment_value(match.group("value"))):
+            name = match.group("name").upper()
+            value_is_live = live_assignment(assignment_value(match.group("value")))
+            if (
+                name not in reported_assignments
+                and (
+                    value_is_live
+                    or assignment_expression_continues(line, match.end("value"))
+                )
+            ):
                 findings.append((
                     path.as_posix(),
                     number,
-                    f"live-looking value assigned to {match.group('name').upper()}",
+                    f"live-looking value assigned to {name}",
                 ))
+                reported_assignments.add(name)
+        for name, value in shell_parameter_assignments(line):
+            name = name.upper()
+            if name not in reported_assignments and live_assignment(value):
+                findings.append((
+                    path.as_posix(),
+                    number,
+                    f"live-looking value assigned to {name}",
+                ))
+                reported_assignments.add(name)
         if PRIVATE_BEGIN.search(line):
             findings.append((path.as_posix(), number, "private key block"))
     return findings
