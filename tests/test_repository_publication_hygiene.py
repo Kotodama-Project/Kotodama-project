@@ -18,6 +18,13 @@ WORKFLOW_SCANNER = importlib.util.module_from_spec(WORKFLOW_SCANNER_SPEC)
 WORKFLOW_SCANNER_SPEC.loader.exec_module(WORKFLOW_SCANNER)
 
 
+def decode_tracked_text(data: bytes) -> str | None:
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
 class RepositoryPublicationHygieneTests(unittest.TestCase):
     def tracked_text(self) -> str:
         tracked = subprocess.run(
@@ -31,8 +38,14 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             if not relative_bytes:
                 continue
             relative = relative_bytes.decode("utf-8")
-            documents.append((ROOT / relative).read_text(encoding="utf-8"))
+            document = decode_tracked_text((ROOT / relative).read_bytes())
+            if document is not None:
+                documents.append(document)
         return "\n".join(documents)
+
+    def test_repository_identity_scan_skips_binary_content(self) -> None:
+        self.assertIsNone(decode_tracked_text(b"\x89PNG\r\n\x1a\n\x00\xff"))
+        self.assertEqual("plain text", decode_tracked_text(b"plain text"))
 
     def test_public_policy_documents_are_linked_from_readme(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

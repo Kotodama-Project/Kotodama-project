@@ -89,9 +89,9 @@ INLINE_ASSIGNMENT = re.compile(
     re.IGNORECASE,
 )
 BRACKETED_ASSIGNMENT = re.compile(
-    r"\[\s*[\"'](?P<name>"
+    r"\[\s*[\"'`](?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']\s*\]\s*=(?![=>~])\s*(?P<value>(?:"
+    + r")[\"'`]\s*\]\s*=(?![=>~])\s*(?P<value>(?:"
     + r"\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
     + r"\{[A-Za-z_][A-Za-z0-9_]*\}|<[^<>\r\n]+>|"
     + r'"(?:\\.|[^"\\])*"'
@@ -99,15 +99,16 @@ BRACKETED_ASSIGNMENT = re.compile(
     re.IGNORECASE,
 )
 MULTILINE_ASSIGNMENT_START = re.compile(
-    r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
+    r"(?<![A-Za-z0-9_])[\"'`]?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?(?:\s*\])?\s*(?::|=(?![=>~]))\s*(?:#.*)?$",
+    + r")[\"'`]?(?:\s*\])?\s*(?::|=(?![=>~]))\s*"
+    + r"(?:[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?|#.*)?$",
     re.IGNORECASE,
 )
 MULTILINE_ASSIGNMENT_NAME_ONLY = re.compile(
-    r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
+    r"(?<![A-Za-z0-9_])[\"'`]?(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[\"']?(?:\s*\])?\s*$",
+    + r")[\"'`]?(?:\s*\])?\s*$",
     re.IGNORECASE,
 )
 MULTILINE_OPERATOR = re.compile(
@@ -126,7 +127,7 @@ YAML_HEX_ESCAPE = re.compile(
     r"U(?P<U>[0-9A-Fa-f]{8}))"
 )
 BRACKETED_QUOTED_KEY = re.compile(
-    r"\[\s*(?P<quote>[\"'])(?P<key>(?:\\.|(?!(?P=quote)).)*)"
+    r"\[\s*(?P<quote>[\"'`])(?P<key>(?:\\.|(?!(?P=quote)).)*)"
     r"(?P=quote)\s*\](?=\s*=)",
     re.MULTILINE,
 )
@@ -140,6 +141,15 @@ ESCAPED_IDENTIFIER_TOKEN = re.compile(
 )
 POSTGRES_DOLLAR_QUOTE = re.compile(
     r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$"
+)
+RUST_RAW_STRING_START = re.compile(
+    r"(?:br|r)(?P<hashes>#{0,255})\""
+)
+SWIFT_RAW_STRING_START = re.compile(
+    r"(?P<hashes>#{1,255})\""
+)
+YAML_BLOCK_SCALAR = re.compile(
+    r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?$"
 )
 PRIVATE_BEGIN = re.compile(
     r"(?:-----BEGIN (?:(?:(?:ENCRYPTED|RSA|DSA|EC|OPENSSH) )?PRIVATE KEY|"
@@ -162,6 +172,13 @@ SOURCE_CODE_SUFFIXES = {
 CODE_REFERENCE_VALUE = re.compile(
     r"[A-Za-z_$][A-Za-z0-9_$]*"
     r"(?:(?:\.[A-Za-z_$][A-Za-z0-9_$]*)|(?:\[[^\]\r\n]+\]))*"
+)
+LOOKUP_CALL_VALUE = re.compile(
+    r"(?:os\.getenv|os\.environ\.get|System\.getenv|"
+    r"Environment\.GetEnvironmentVariable|getenv|std::env::var)"
+    r"\(\s*[\"'](?:"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']\s*\)"
 )
 
 
@@ -373,26 +390,21 @@ def live_assignment(value: str) -> bool:
     return not placeholder(value)
 
 
-def bracketed_code_reference(path: Path, match: re.Match[str]) -> bool:
-    if match.re is not BRACKETED_ASSIGNMENT:
-        return False
-    raw = match.group("value").strip()
+def source_code_reference(path: Path, value: str) -> bool:
+    raw = value.strip()
     if path.suffix.lower() not in SOURCE_CODE_SUFFIXES or not raw:
         return False
-    if raw[0] in {"'", '"'}:
+    if raw[0] in {"'", '"', "`"}:
         return False
-    return CODE_REFERENCE_VALUE.fullmatch(raw) is not None
+    normalized = assignment_value(raw)
+    return (
+        CODE_REFERENCE_VALUE.fullmatch(normalized) is not None
+        or LOOKUP_CALL_VALUE.fullmatch(normalized) is not None
+    )
 
 
 def multiline_code_reference(path: Path, value: str) -> bool:
-    raw = value.strip()
-    normalized = assignment_value(value)
-    return (
-        path.suffix.lower() in SOURCE_CODE_SUFFIXES
-        and bool(normalized)
-        and raw[0] not in {"'", '"'}
-        and CODE_REFERENCE_VALUE.fullmatch(normalized) is not None
-    )
+    return source_code_reference(path, value)
 
 
 def shell_parameter_assignments(line: str) -> list[tuple[str, str]]:
@@ -444,6 +456,7 @@ def strip_block_comments(path: Path, text: str) -> str:
     nested_blocks = path.suffix.lower() in NESTED_BLOCK_COMMENT_SUFFIXES
     quote: str | None = None
     dollar_quote: str | None = None
+    raw_quote: str | None = None
     escaped = False
     index = 0
     while index < len(text):
@@ -469,6 +482,13 @@ def strip_block_comments(path: Path, text: str) -> str:
             else:
                 index += 1
             continue
+        if raw_quote is not None:
+            if text.startswith(raw_quote, index):
+                index += len(raw_quote)
+                raw_quote = None
+            else:
+                index += 1
+            continue
         character = text[index]
         if quote is not None:
             if escaped:
@@ -481,6 +501,20 @@ def strip_block_comments(path: Path, text: str) -> str:
                 quote = None
             index += 1
             continue
+        if path.suffix.lower() == ".rs":
+            raw_start = RUST_RAW_STRING_START.match(text, index)
+            if raw_start is not None and (
+                index == 0 or not (text[index - 1].isalnum() or text[index - 1] == "_")
+            ):
+                raw_quote = '"' + raw_start.group("hashes")
+                index = raw_start.end()
+                continue
+        elif path.suffix.lower() == ".swift":
+            raw_start = SWIFT_RAW_STRING_START.match(text, index)
+            if raw_start is not None:
+                raw_quote = '"' + raw_start.group("hashes")
+                index = raw_start.end()
+                continue
         if character in {"'", '"', "`"}:
             quote = character
             index += 1
@@ -847,13 +881,16 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
             raw_value = match.group("value")
             if (
                 path.suffix.lower() in {".yml", ".yaml"}
-                and raw_value.lstrip().startswith("#")
+                and (
+                    raw_value.lstrip().startswith("#")
+                    or YAML_BLOCK_SCALAR.fullmatch(raw_value.strip()) is not None
+                )
             ):
                 continue
             if (
                 name not in reported_assignments
                 and live_assignment(assignment_value(raw_value))
-                and not bracketed_code_reference(path, match)
+                and not source_code_reference(path, raw_value)
             ):
                 findings.append((
                     path.as_posix(),

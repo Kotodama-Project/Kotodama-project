@@ -278,6 +278,20 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual([], SCANNER.scan_text(Path("settings.json"), split_null))
 
+        safe_block = name + ": >-\n  ${{ secrets." + name + " }}\n"
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("settings.yaml"), safe_block)
+        )
+
+        value = "SyntheticSecretValue2026"
+        unsafe_block = name + ": |2-\n    " + value + "\n"
+        findings = SCANNER.scan_text(Path("settings.yaml"), unsafe_block)
+        self.assertEqual(
+            [("settings.yaml", 1, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
     def test_multiline_scheme_relative_url_is_not_treated_as_a_comment(self) -> None:
         name = "DATABASE" + "_URL"
         value = "//user:SyntheticSecretValue2026@example.invalid/database"
@@ -376,6 +390,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         value = "SyntheticSecretValue2026"
         cases = (
             'process.env["' + name + '"] = "' + value + '"\n',
+            "process.env[`" + name + "`] = \"" + value + "\"\n",
             'process.env["' + name + '"] =\n  "' + value + '"\n',
             'process.env["' + name + '"]\n=\n  "' + value + '"\n',
             (
@@ -441,6 +456,9 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             SCANNER.scan_text(Path("config.js"), callable_literal),
         )
 
+        lookup = name + ' = os.getenv("' + name + '")\n'
+        self.assertEqual([], SCANNER.scan_text(Path("config.py"), lookup))
+
         for escape in ("\\x4b", "\\u004b", "\\u{4b}"):
             with self.subTest(escaped_bracket=escape):
                 escaped_name = "OPENAI_API_" + escape + "EY"
@@ -482,6 +500,29 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             findings,
         )
         self.assertNotIn(value, repr(findings))
+
+    def test_raw_strings_do_not_hide_later_assignments(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        prefixes = {
+            "rust.rs": 'let text = r#"text " /* still raw"#;\n',
+            "swift.swift": 'let text = #"text " /* still raw"#\n',
+        }
+        for filename, prefix in prefixes.items():
+            with self.subTest(filename=filename):
+                text = prefix + name + " =\n  \"" + value + "\"\n"
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(
+                    [
+                        (
+                            filename,
+                            2,
+                            f"live-looking value assigned to {name}",
+                        )
+                    ],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
 
     def test_yaml_document_boundaries_end_null_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
