@@ -133,6 +133,11 @@ BRACKETED_QUOTED_KEY = re.compile(
 BRACED_UNICODE_ESCAPE = re.compile(
     r"\\u\{(?P<digits>[0-9A-Fa-f]{1,6})\}"
 )
+ESCAPED_IDENTIFIER_TOKEN = re.compile(
+    r"(?:[A-Za-z0-9_$]|"
+    r"\\(?:x[0-9A-Fa-f]{2}|u\{[0-9A-Fa-f]{1,6}\}|"
+    r"u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}))+"
+)
 POSTGRES_DOLLAR_QUOTE = re.compile(
     r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$"
 )
@@ -494,7 +499,9 @@ def strip_block_comments(path: Path, text: str) -> str:
             and text.startswith("--", index)
         ):
             newline = text.find("\n", index)
-            index = len(text) if newline < 0 else newline
+            end = len(text) if newline < 0 else newline
+            result[index:end] = [" "] * (end - index)
+            index = end
             continue
         if text.startswith("/*", index):
             result[index:index + 2] = [" ", " "]
@@ -770,15 +777,41 @@ def normalize_yaml_sensitive_keys(path: Path, text: str) -> str:
 def normalize_bracketed_sensitive_keys(path: Path, text: str) -> str:
     if path.suffix.lower() not in SOURCE_CODE_SUFFIXES:
         return text
+    sanitized = strip_block_comments(path, text)
+    changed = False
 
     def replace(match: re.Match[str]) -> str:
+        nonlocal changed
         decoded = decode_yaml_key(match.group("key"))
         if decoded.upper() not in ASSIGNMENT_NAMES:
             return match.group()
+        changed = True
         quote = match.group("quote")
         return f"[{quote}{decoded}{quote}]"
 
-    return BRACKETED_QUOTED_KEY.sub(replace, text)
+    normalized = BRACKETED_QUOTED_KEY.sub(replace, sanitized)
+    return normalized if changed else text
+
+
+def normalize_source_sensitive_identifiers(path: Path, text: str) -> str:
+    if path.suffix.lower() not in SOURCE_CODE_SUFFIXES:
+        return text
+    sanitized = strip_block_comments(path, text)
+    changed = False
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal changed
+        raw = match.group()
+        if "\\" not in raw:
+            return raw
+        decoded = decode_yaml_key(raw)
+        if decoded.upper() not in ASSIGNMENT_NAMES:
+            return raw
+        changed = True
+        return decoded
+
+    normalized = ESCAPED_IDENTIFIER_TOKEN.sub(replace, sanitized)
+    return normalized if changed else text
 
 
 def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
@@ -861,6 +894,9 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
     normalized_brackets = normalize_bracketed_sensitive_keys(path, text)
     if normalized_brackets != text:
         findings.extend(scan_text(path, normalized_brackets))
+    normalized_source = normalize_source_sensitive_identifiers(path, text)
+    if normalized_source != text:
+        findings.extend(scan_text(path, normalized_source))
     return list(dict.fromkeys(findings))
 
 

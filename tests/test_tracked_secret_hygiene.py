@@ -385,6 +385,20 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 + value
                 + "\"\n"
             ),
+            (
+                'process.env["'
+                + name
+                + '"] /* comment */ = "'
+                + value
+                + '"\n'
+            ),
+            (
+                'process.env["'
+                + name
+                + '"] // comment\n= "'
+                + value
+                + '"\n'
+            ),
         )
         for text in cases:
             with self.subTest(lines=len(text.splitlines())):
@@ -441,6 +455,14 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     [("config.js", 1, f"live-looking value assigned to {name}")],
                     SCANNER.scan_text(Path("config.js"), text),
                 )
+
+        dotted_escaped = (
+            "process.env.OPENAI_API_\\u004bEY = \"" + value + "\"\n"
+        )
+        self.assertEqual(
+            [("config.js", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.js"), dotted_escaped),
+        )
 
     def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
