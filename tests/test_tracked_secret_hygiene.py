@@ -168,9 +168,42 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             "secrets.OPENAI_API_KEY-live-production-suffix",
             "vars.OPENAI_API_KEY-live-production-suffix",
             "hardcoded-comment-bypass-live-secret",
+            "Tr0ub4dor.Horse.Battery.Staple",
         ):
             with self.subTest(value=value):
                 self.assertFalse(SCANNER.placeholder(value))
+
+    def test_shell_fallback_literals_are_not_placeholders(self) -> None:
+        safe = "${POSTGRES_" + "PASSWORD:?set in private environment}"
+        unsafe = "${POSTGRES_" + "PASSWORD:-ProdSecret2026}"
+
+        self.assertTrue(SCANNER.placeholder(safe))
+        self.assertFalse(SCANNER.placeholder(unsafe))
+        findings = SCANNER.scan_text(
+            Path("compose.yaml"), "POSTGRES_" + f'PASSWORD: "{unsafe}"\n'
+        )
+        self.assertEqual(
+            [("compose.yaml", 1, "live-looking value assigned to POSTGRES_PASSWORD")],
+            findings,
+        )
+
+    def test_compact_json_named_assignment_is_detected(self) -> None:
+        value = "correct horse battery staple"
+        text = '{"POSTGRES_' + 'PASSWORD":"' + value + '"}\n'
+
+        findings = SCANNER.scan_text(Path("settings.json"), text)
+
+        self.assertEqual(
+            [("settings.json", 1, "live-looking value assigned to POSTGRES_PASSWORD")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+    def test_defensive_python_regex_is_not_treated_as_an_assignment(self) -> None:
+        name = "POSTGRES_" + "PASSWORD"
+        text = 'pattern = re.compile(r\'"' + name + '":\\s*(.+)\')\n'
+
+        self.assertEqual([], SCANNER.scan_text(Path("detector.py"), text))
 
     def test_complete_private_key_block_is_detected(self) -> None:
         begin = "-----BEGIN " + "PRIVATE KEY-----\n"
@@ -206,6 +239,14 @@ class TrackedSecretHygieneTests(unittest.TestCase):
 
         self.assertEqual([("private.txt", 1, "private key block")], findings)
 
+    def test_putty_private_key_file_and_header_are_detected(self) -> None:
+        self.assertTrue(SCANNER.sensitive_filename(Path("deploy.ppk")))
+        header = "PuTTY-User-Key-" + "File-3: ssh-rsa\n"
+
+        findings = SCANNER.scan_text(Path("private.txt"), header)
+
+        self.assertEqual([("private.txt", 1, "private key block")], findings)
+
     def test_repository_scans_head_index_worktree_and_utf16_snapshots(self) -> None:
         name = "CF_API" + "_TOKEN"
         value = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnop"
@@ -232,6 +273,9 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             (root / "utf16.txt").write_text(
                 f"{name}={value}\n", encoding="utf-16"
             )
+            (root / "latin1.properties").write_bytes(
+                ("# café\n" + f"{name}={value}\n").encode("latin-1")
+            )
             run_git("add", ".")
             run_git("commit", "--quiet", "-m", "seed")
 
@@ -253,7 +297,14 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertEqual(
             {"head.txt", "index.txt", "working.txt", "utf16.txt"}, paths
         )
-        self.assertEqual(4, tracked)
+        self.assertTrue(
+            any(
+                path == "latin1.properties" and "not UTF-8" in detector
+                for path, _line, detector in findings
+            ),
+            findings,
+        )
+        self.assertEqual(5, tracked)
         self.assertGreaterEqual(text_files, 4)
         self.assertNotIn(value, repr(findings))
 

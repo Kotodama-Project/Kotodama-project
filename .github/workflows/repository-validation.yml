@@ -63,7 +63,9 @@ jobs:
           tar -xzf "$archive" -C "$install_dir" actionlint
           chmod +x "$install_dir/actionlint"
           "$install_dir/actionlint" -version
-          "$install_dir/actionlint" .github/workflows/*.yml
+          shopt -s nullglob
+          workflow_files=(.github/workflows/*.yml .github/workflows/*.yaml)
+          "$install_dir/actionlint" "${workflow_files[@]}"
 
       - name: Install hash-locked test dependencies
         run: python -m pip install --require-hashes -r requirements-ci.txt

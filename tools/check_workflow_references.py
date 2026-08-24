@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import re
-from pathlib import Path
+import subprocess
+import sys
+from pathlib import Path, PurePosixPath
 
 import yaml
 from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
@@ -102,87 +104,194 @@ def action_references(text: str) -> list[tuple[int, str | None, str]]:
     return references
 
 
-def local_action_metadata(
-    root: Path, reference: str
-) -> tuple[Path | None, str | None]:
-    candidate = (root / reference[2:]).resolve()
-    if not candidate.is_relative_to(root):
-        return None, "local action path escapes the repository root"
-    matches: list[Path] = []
-    for path in (candidate / "action.yml", candidate / "action.yaml"):
-        if not path.is_file():
+def is_git_repository(root: Path) -> bool:
+    result = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def git_paths(root: Path, source: str) -> set[PurePosixPath]:
+    if source == "HEAD":
+        head = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        )
+        if head.returncode != 0:
+            return set()
+        command = [
+            "git", "ls-tree", "-r", "--name-only", "-z", "HEAD", "--",
+            ".github/workflows",
+        ]
+    elif source == "index":
+        command = ["git", "ls-files", "-z", "--", ".github/workflows"]
+    else:
+        raise ValueError(f"unsupported Git source: {source}")
+    output = subprocess.run(
+        command, cwd=root, capture_output=True, check=True
+    ).stdout
+    result: set[PurePosixPath] = set()
+    for raw in output.split(b"\0"):
+        if not raw:
             continue
-        resolved = path.resolve()
-        if not resolved.is_relative_to(root):
-            return None, "local action metadata escapes the repository root"
-        matches.append(resolved)
+        path = PurePosixPath(raw.decode("utf-8", errors="strict"))
+        if path.suffix.lower() in {".yml", ".yaml"}:
+            result.add(path)
+    return result
+
+
+def safe_relative(reference: str) -> PurePosixPath | None:
+    path = PurePosixPath(reference)
+    if path.is_absolute() or ".." in path.parts or not path.parts:
+        return None
+    return path
+
+
+def read_snapshot(root: Path, path: PurePosixPath, source: str) -> bytes | None:
+    relative = path.as_posix()
+    if source == "HEAD":
+        command = ["git", "show", f"HEAD:{relative}"]
+    elif source == "index":
+        command = ["git", "show", f":{relative}"]
+    elif source == "working tree":
+        candidate = (root / Path(*path.parts)).resolve()
+        if not candidate.is_relative_to(root) or not candidate.is_file():
+            return None
+        return candidate.read_bytes()
+    else:
+        raise ValueError(f"unsupported snapshot source: {source}")
+    result = subprocess.run(command, cwd=root, capture_output=True, check=False)
+    return result.stdout if result.returncode == 0 else None
+
+
+def workflow_snapshots(root: Path) -> list[tuple[str, PurePosixPath, bytes]]:
+    if not is_git_repository(root):
+        return [
+            (
+                "working tree",
+                PurePosixPath(path.relative_to(root).as_posix()),
+                path.read_bytes(),
+            )
+            for path in sorted((root / ".github" / "workflows").glob("*.y*ml"))
+        ]
+
+    by_source = {
+        "HEAD": git_paths(root, "HEAD"),
+        "index": git_paths(root, "index"),
+    }
+    by_source["working tree"] = by_source["HEAD"] | by_source["index"]
+    snapshots: list[tuple[str, PurePosixPath, bytes]] = []
+    for source, paths in by_source.items():
+        for path in sorted(paths, key=lambda value: value.as_posix()):
+            data = read_snapshot(root, path, source)
+            if data is not None:
+                snapshots.append((source, path, data))
+    return snapshots
+
+
+def local_action_metadata(
+    root: Path, reference: str, source: str
+) -> tuple[PurePosixPath | None, bytes | None, str | None]:
+    candidate = safe_relative(reference[2:])
+    if candidate is None:
+        return None, None, "local action path escapes the repository root"
+    metadata = [candidate / "action.yml", candidate / "action.yaml"]
+    matches = [
+        (path, data)
+        for path in metadata
+        if (data := read_snapshot(root, path, source)) is not None
+    ]
     if len(matches) != 1:
-        return None, "local action must contain exactly one action.yml or action.yaml"
-    return matches[0], None
+        return (
+            None,
+            None,
+            "local action must contain exactly one action.yml or action.yaml",
+        )
+    path, data = matches[0]
+    if source == "working tree":
+        resolved = (root / Path(*path.parts)).resolve()
+        if not resolved.is_relative_to(root):
+            return None, None, "local action metadata escapes the repository root"
+    return path, data, None
 
 
 def scan_workflows(root: Path) -> list[tuple[str, int, str]]:
     root = root.resolve()
     violations: list[tuple[str, int, str]] = []
-    pending_actions: list[Path] = []
+    pending_actions: list[tuple[str, PurePosixPath, bytes]] = []
 
     def inspect_references(
-        path: Path, references: list[tuple[int, str | None, str]]
+        source: str,
+        path: PurePosixPath,
+        references: list[tuple[int, str | None, str]],
     ) -> None:
-        relative_path = path.relative_to(root).as_posix()
+        relative_path = path.as_posix()
         for line_number, reference, kind in references:
             if reference is None:
                 violations.append((
                     relative_path,
                     line_number,
-                    "workflow uses reference must be a scalar literal",
+                    f"workflow uses reference must be a scalar literal [{source}]",
                 ))
                 continue
             violation = reference_violation(reference)
             if violation is not None:
-                violations.append((relative_path, line_number, violation))
+                violations.append((
+                    relative_path, line_number, f"{violation} [{source}]"
+                ))
                 continue
             if kind == "step" and reference.startswith("./"):
-                metadata, local_error = local_action_metadata(root, reference)
+                metadata, data, local_error = local_action_metadata(
+                    root, reference, source
+                )
                 if local_error is not None:
-                    violations.append((relative_path, line_number, local_error))
-                elif metadata is not None:
-                    pending_actions.append(metadata)
+                    violations.append((
+                        relative_path, line_number, f"{local_error} [{source}]"
+                    ))
+                elif metadata is not None and data is not None:
+                    pending_actions.append((source, metadata, data))
 
-    for path in sorted((root / ".github" / "workflows").glob("*.y*ml")):
+    for source, path, data in workflow_snapshots(root):
         try:
-            references = workflow_references(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, yaml.YAMLError) as error:
+            references = workflow_references(data.decode("utf-8"))
+        except (UnicodeError, yaml.YAMLError) as error:
             mark = getattr(error, "problem_mark", None)
             line = mark.line + 1 if mark is not None else 0
             violations.append((
-                path.relative_to(root).as_posix(),
+                path.as_posix(),
                 line,
-                f"workflow inspection failed ({type(error).__name__})",
+                f"workflow inspection failed ({type(error).__name__}) [{source}]",
             ))
             continue
-        inspect_references(path, references)
+        inspect_references(source, path, references)
 
-    inspected_actions: set[Path] = set()
+    inspected_actions: set[tuple[str, PurePosixPath]] = set()
     while pending_actions:
-        path = pending_actions.pop()
-        if path in inspected_actions:
+        source, path, data = pending_actions.pop()
+        identity = (source, path)
+        if identity in inspected_actions:
             continue
-        inspected_actions.add(path)
+        inspected_actions.add(identity)
         try:
-            references = action_references(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, yaml.YAMLError) as error:
+            references = action_references(data.decode("utf-8"))
+        except (UnicodeError, yaml.YAMLError) as error:
             mark = getattr(error, "problem_mark", None)
             line = mark.line + 1 if mark is not None else 0
             violations.append((
-                path.relative_to(root).as_posix(),
+                path.as_posix(),
                 line,
-                f"action metadata inspection failed ({type(error).__name__})",
+                f"action metadata inspection failed ({type(error).__name__}) "
+                f"[{source}]",
             ))
             continue
-        inspect_references(path, references)
+        inspect_references(source, path, references)
 
-    return violations
+    return sorted(set(violations))
 
 
 def main() -> int:
@@ -191,7 +300,14 @@ def main() -> int:
         "--root", type=Path, default=Path(__file__).resolve().parents[1]
     )
     root = parser.parse_args().root.resolve()
-    violations = scan_workflows(root)
+    try:
+        violations = scan_workflows(root)
+    except (OSError, subprocess.CalledProcessError, UnicodeError, ValueError) as error:
+        print(
+            f"Workflow reference hygiene: ERROR ({type(error).__name__})",
+            file=sys.stderr,
+        )
+        return 2
     if violations:
         print("Workflow reference hygiene: FAIL")
         for path, line, violation in violations:

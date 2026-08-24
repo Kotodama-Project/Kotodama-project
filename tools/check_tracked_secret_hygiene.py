@@ -19,12 +19,15 @@ ALLOWED_ENV = {
     ".env.template",
 }
 SENSITIVE_EXACT = {".env", "credentials.json", "id_ed25519", "id_rsa"}
-SENSITIVE_SUFFIXES = {".key", ".p12", ".pem", ".pfx"}
+SENSITIVE_SUFFIXES = {".key", ".p12", ".pem", ".pfx", ".ppk"}
 TEXT_FILENAMES = {".dev.vars", ".env", "dockerfile", "makefile"}
 TEXT_SUFFIXES = {
-    ".cfg", ".cmd", ".conf", ".csv", ".env", ".ini", ".js", ".json",
-    ".md", ".ps1", ".py", ".sh", ".sql", ".toml", ".ts", ".txt",
-    ".xml", ".yaml", ".yml",
+    ".c", ".cfg", ".cmd", ".conf", ".cpp", ".cs", ".css", ".csv",
+    ".env", ".go", ".gradle", ".graphql", ".h", ".hcl", ".html",
+    ".ini", ".java", ".js", ".json", ".kt", ".kts", ".lock", ".md",
+    ".php", ".properties", ".ps1", ".py", ".rb", ".rs", ".sh",
+    ".sql", ".swift", ".tf", ".toml", ".ts", ".txt", ".xml", ".yaml",
+    ".yml",
 }
 
 TOKEN_PATTERNS = (
@@ -51,9 +54,17 @@ ASSIGNMENT = re.compile(
     + r")[\"']?(?:\s*[:=]\s*|\s+)(?P<value>.+?)\s*$",
     re.IGNORECASE,
 )
+STRUCTURED_ASSIGNMENT = re.compile(
+    r"(?<![A-Za-z0-9_])[\"']?(?P<name>"
+    + "|".join(map(re.escape, ASSIGNMENT_NAMES))
+    + r")[\"']?\s*:\s*(?P<value>"
+    + r'"(?:\\.|[^"\\])*"'
+    + r"|'(?:\\.|[^'\\])*'|[^,}\]]+)",
+    re.IGNORECASE,
+)
 PRIVATE_BEGIN = re.compile(
-    r"-----BEGIN (?:(?:(?:ENCRYPTED|RSA|DSA|EC|OPENSSH) )?PRIVATE KEY|"
-    r"PGP PRIVATE KEY BLOCK)-----"
+    r"(?:-----BEGIN (?:(?:(?:ENCRYPTED|RSA|DSA|EC|OPENSSH) )?PRIVATE KEY|"
+    r"PGP PRIVATE KEY BLOCK)-----|PuTTY-User-Key-File-[23]:)"
 )
 
 
@@ -153,6 +164,17 @@ def text_like_path(path: Path) -> bool:
     return path.name.lower() in TEXT_FILENAMES or path.suffix.lower() in TEXT_SUFFIXES
 
 
+def looks_like_text(data: bytes) -> bool:
+    sample = data[:8192]
+    if not sample:
+        return True
+    control = sum(
+        (byte < 32 and byte not in {8, 9, 10, 12, 13}) or byte == 127
+        for byte in sample
+    )
+    return control / len(sample) <= 0.01
+
+
 def decode_text_snapshot(path: Path, data: bytes) -> tuple[str | None, str | None]:
     encodings = (
         (codecs.BOM_UTF32_LE, "utf-32"),
@@ -174,7 +196,7 @@ def decode_text_snapshot(path: Path, data: bytes) -> tuple[str | None, str | Non
     try:
         return data.decode("utf-8"), None
     except UnicodeDecodeError:
-        if text_like_path(path):
+        if text_like_path(path) or looks_like_text(data):
             return None, "tracked text-like file is not UTF-8 or BOM-backed Unicode"
         return None, None
 
@@ -222,8 +244,9 @@ def placeholder(value: str) -> bool:
     if not lower or lower in {"none", "null", "nil", "undefined"}:
         return True
     if re.fullmatch(
-        r"(?:\$\{\{[^{}\r\n]+\}\}|\$\{[^{}\r\n]+\}|"
-        r"\$\([^()\r\n]+\)|<[^<>\r\n]+>)",
+        r"(?:\$\{\{\s*(?:env|secrets|vars)\.[A-Za-z_][A-Za-z0-9_]*\s*\}\}|"
+        r"\$\{[A-Za-z_][A-Za-z0-9_]*(?:(?::?\?)[^{}\r\n]*)?\}|"
+        r"<[^<>\r\n]+>)",
         normalized,
     ):
         return True
@@ -241,16 +264,10 @@ def placeholder(value: str) -> bool:
         r"your[-_][a-z0-9._-]+)",
         lower,
     )
-    code_reference = re.fullmatch(
-        r"[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*|"
-        r"\[['\"][a-z0-9_.-]+['\"]\])+",
-        lower,
-    )
     return (
         lower == "demo"
         or marker is not None
         or reference is not None
-        or code_reference is not None
         or re.fullmatch(r"[*xX._-]{8,}", normalized) is not None
     )
 
@@ -266,13 +283,33 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
         for detector, pattern in TOKEN_PATTERNS:
             if pattern.search(line):
                 findings.append((path.as_posix(), number, detector))
+        matches = []
         match = ASSIGNMENT.match(line)
-        if match and live_assignment(assignment_value(match.group("value"))):
-            findings.append((
-                path.as_posix(),
-                number,
-                f"live-looking value assigned to {match.group('name').upper()}",
-            ))
+        if match is not None:
+            matches.append(match)
+        name_spans = {candidate.span("name") for candidate in matches}
+        for candidate in STRUCTURED_ASSIGNMENT.finditer(line):
+            name_start = candidate.start("name")
+            if name_start > 0 and line[name_start - 1] in "${":
+                continue
+            if path.suffix == ".py" and any(
+                marker in line[:name_start]
+                for marker in (
+                    "re.compile(", "re.findall(", "re.fullmatch(",
+                    "re.match(", "re.search(",
+                )
+            ):
+                continue
+            if candidate.span("name") not in name_spans:
+                matches.append(candidate)
+                name_spans.add(candidate.span("name"))
+        for match in matches:
+            if live_assignment(assignment_value(match.group("value"))):
+                findings.append((
+                    path.as_posix(),
+                    number,
+                    f"live-looking value assigned to {match.group('name').upper()}",
+                ))
         if PRIVATE_BEGIN.search(line):
             findings.append((path.as_posix(), number, "private key block"))
     return findings
@@ -356,7 +393,7 @@ def main() -> int:
     root = parser.parse_args().root
     try:
         findings, tracked, text_files = scan_repository(root)
-    except (OSError, subprocess.CalledProcessError, UnicodeError) as error:
+    except (OSError, subprocess.CalledProcessError, UnicodeError, ValueError) as error:
         print(f"Tracked credential hygiene: ERROR ({type(error).__name__})", file=sys.stderr)
         return 2
     if findings:

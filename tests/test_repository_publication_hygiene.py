@@ -136,7 +136,10 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         self.assertIn('${RUNNER_TEMP}/actionlint.tar.gz', workflow)
         self.assertIn('${RUNNER_TEMP}/actionlint', workflow)
         self.assertIn("sha256sum -c -", workflow)
-        self.assertIn('"$install_dir/actionlint" .github/workflows/*.yml', workflow)
+        self.assertIn("shopt -s nullglob", workflow)
+        self.assertIn(".github/workflows/*.yml", workflow)
+        self.assertIn(".github/workflows/*.yaml", workflow)
+        self.assertIn('"$install_dir/actionlint" "${workflow_files[@]}"', workflow)
 
     def test_all_external_actions_are_pinned_to_immutable_shas(self) -> None:
         self.assertEqual([], WORKFLOW_SCANNER.scan_workflows(ROOT))
@@ -277,6 +280,61 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             self.assertEqual(1, len(violations), violations)
             self.assertEqual("actions/local/action.yml", violations[0][0])
             self.assertIn("full commit SHA", violations[0][2])
+
+    def test_workflow_reference_gate_scans_head_index_and_worktree(self) -> None:
+        mutable = "docker://vendor/tool:latest"
+        pinned = "docker://vendor/tool@sha256:" + ("b" * 64)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+
+            def workflow(reference: str) -> str:
+                return (
+                    "name: Candidate\n"
+                    "on: push\n"
+                    "jobs:\n"
+                    "  verify:\n"
+                    "    runs-on: ubuntu-latest\n"
+                    "    steps:\n"
+                    f"      - uses: {reference}\n"
+                )
+
+            def run_git(*arguments: str) -> None:
+                completed = subprocess.run(
+                    ["git", *arguments], cwd=root, capture_output=True, check=False
+                )
+                self.assertEqual(0, completed.returncode, completed.stderr.decode())
+
+            run_git("init", "--quiet")
+            run_git("config", "user.name", "Test")
+            run_git("config", "user.email", "test@example.invalid")
+            head_path = workflows / "head.yml"
+            index_path = workflows / "index.yaml"
+            working_path = workflows / "working.yml"
+            for path in (head_path, index_path, working_path):
+                path.write_text(workflow(pinned), encoding="utf-8")
+            head_path.write_text(workflow(mutable), encoding="utf-8")
+            run_git("add", ".")
+            run_git("commit", "--quiet", "-m", "seed")
+
+            head_path.write_text(workflow(pinned), encoding="utf-8")
+            index_path.write_text(workflow(mutable), encoding="utf-8")
+            run_git("add", str(index_path.relative_to(root)))
+            index_path.write_text(workflow(pinned), encoding="utf-8")
+            working_path.write_text(workflow(mutable), encoding="utf-8")
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+        paths = {path for path, _line, _violation in violations}
+        self.assertEqual(
+            {
+                ".github/workflows/head.yml",
+                ".github/workflows/index.yaml",
+                ".github/workflows/working.yml",
+            },
+            paths,
+        )
 
     def test_ci_dependency_lock_is_hashed_current_and_public_safe(self) -> None:
         lock = (ROOT / "requirements-ci.txt").read_text(encoding="utf-8")
