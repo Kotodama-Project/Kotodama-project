@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-08-05
+Updated: 2026-08-26
 
 | Surface | Status |
 |---|---|
@@ -36,12 +36,22 @@ Updated: 2026-08-05
 | One-command review-chain smoke | Published standard-library-only local smoke; exact thirteen steps in a temporary workspace, no retained artifacts or GO |
 | [5-minute tour](docs/FIVE-MINUTE-TOUR.md) | Clone-to-result first-visit path; external-free local smoke and bounded next choices only |
 | README Company OS story map | Vision-to-Try-it reader map and eight-surface ideal/current boundary; documentation only |
+| [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) | Canonical product direction; documentation only, runtime remains unimplemented, `NO_GO_UNPUBLISHED` |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
 | Public Voice Bot | Inactive |
 | Raw audio or transcript corpus | Not published |
 | Final Human GO | Not completed |
+
+## Owner-confirmed Company AGI direction
+
+The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) records the
+Company AGI target, bounded autonomy, Voice Requirements Agent, per-Invocation
+authority, causal ledger, and unresolved design decisions. README, STATUS, and
+ROADMAP are projections of that source. This documentation does not activate
+Voice, Agent Swarm, provider, deployment, Promotion, or Current Truth; runtime
+remains unimplemented and Public Beta remains `NO_GO_UNPUBLISHED`.
 
 ## Latest runtime result
 
