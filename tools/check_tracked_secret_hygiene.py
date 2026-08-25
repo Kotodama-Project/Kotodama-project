@@ -131,7 +131,7 @@ MULTILINE_OPERATOR = re.compile(
 MAKE_DEFINE_START = re.compile(
     r"^[ \t]*(?:override[ \t]+)?define[ \t]+(?P<name>"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
-    + r")[ \t]*$",
+    + r")(?:[ \t]+(?:\?=|\+=|!=|:::=|::=|:=|=))?[ \t]*$",
     re.IGNORECASE,
 )
 MAKE_ANY_DEFINE = re.compile(r"^[ \t]*(?:override[ \t]+)?define(?:[ \t]|$)")
@@ -183,6 +183,14 @@ PHP_HEREDOC_START = re.compile(
     r"<<<[ \t]*(?P<quote>['\"]?)(?P<delimiter>"
     r"[A-Za-z_][A-Za-z0-9_]*)(?P=quote)"
 )
+JAVA_UNICODE_ESCAPE = re.compile(
+    r"\\u+(?P<digits>[0-9A-Fa-f]{4})"
+)
+FLOW_SCALAR_ANCHOR = re.compile(
+    r"&(?P<anchor>[A-Za-z_][A-Za-z0-9_-]*)\s+(?P<value>"
+    r'"(?:\\.|[^"\\])*"'
+    r"|'(?:\\.|[^'\\])*'|[^\s,\]\}\r\n]+)"
+)
 YAML_BLOCK_SCALAR = re.compile(
     r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?$"
 )
@@ -230,6 +238,8 @@ BLOCK_COMMENT_SUFFIXES = SLASH_COMMENT_SUFFIXES | {".css", ".sql"}
 NESTED_BLOCK_COMMENT_SUFFIXES = {".rs", ".sql", ".swift"}
 TRIPLE_QUOTE_SUFFIXES = {".cs", ".java", ".kt", ".kts", ".swift"}
 CPP_SOURCE_SUFFIXES = {".cpp", ".h", ".hh", ".hpp", ".hxx"}
+C_SOURCE_SUFFIXES = {".c"} | CPP_SOURCE_SUFFIXES
+JAVASCRIPT_SOURCE_SUFFIXES = {".js", ".ts"}
 JAVA_TEXT_BLOCK_SENTINEL = "<java-text-block>"
 SOURCE_CODE_SUFFIXES = {
     ".c", ".cpp", ".cs", ".go", ".h", ".hh", ".hpp", ".hxx",
@@ -241,7 +251,7 @@ CODE_REFERENCE_VALUE = re.compile(
     r"(?:(?:\.[A-Za-z_$][A-Za-z0-9_$]*)|(?:\[[^\]\r\n]+\]))*"
 )
 LOOKUP_CALL_VALUE = re.compile(
-    r"(?:os\.getenv|os\.environ\.get|System\.getenv|"
+    r"(?:os\.getenv|os\.environ\.get|os\.Getenv|System\.getenv|"
     r"Environment\.GetEnvironmentVariable|getenv|std::env::var)"
     r"\(\s*[\"'](?:"
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
@@ -509,7 +519,7 @@ def placeholder(value: str) -> bool:
         lower,
     )
     reference = re.fullmatch(
-        r"(?:(?:env|secrets|vars)\.[a-z_][a-z0-9_]*|"
+        r"(?:(?:env|secrets|vars|var)\.[a-z_][a-z0-9_]*|"
         r"process\.env\.[a-z_][a-z0-9_]*|"
         r"os\.environ(?:\[['\"][a-z_][a-z0-9_]*['\"]\]|"
         r"\.get\(['\"][a-z_][a-z0-9_]*['\"]\))|"
@@ -634,6 +644,15 @@ def java_delimiter_is_escaped(text: str, index: int) -> bool:
     return count % 2 == 1
 
 
+def escaped_by_backslash(text: str, index: int) -> bool:
+    count = 0
+    cursor = index - 1
+    while cursor >= 0 and text[cursor] == "\\":
+        count += 1
+        cursor -= 1
+    return count % 2 == 1
+
+
 def java_quote_token_end(text: str, index: int) -> int | None:
     if index < len(text) and text[index] == '"':
         return index + 1
@@ -657,6 +676,18 @@ def java_triple_quote_end(text: str, index: int) -> int | None:
             return None
         cursor = token_end
     return cursor
+
+
+def normalize_java_lexical_escapes(text: str) -> str:
+    """Translate Java escapes that alter scanner lexical boundaries."""
+
+    def replace(match: re.Match[str]) -> str:
+        character = chr(int(match.group("digits"), 16))
+        if character in {"\r", "\n", '"', "\\"}:
+            return character
+        return match.group()
+
+    return JAVA_UNICODE_ESCAPE.sub(replace, text)
 
 
 def heredoc_end(path: Path, text: str, index: int) -> int | None:
@@ -693,6 +724,63 @@ def heredoc_end(path: Path, text: str, index: int) -> int | None:
     return end.end() if end is not None else None
 
 
+def javascript_regex_end(text: str, index: int) -> int | None:
+    if index + 1 >= len(text) or text[index] != "/" or text[index + 1] in "/*":
+        return None
+    previous = index - 1
+    while previous >= 0 and text[previous].isspace():
+        previous -= 1
+    if previous >= 0 and text[previous] not in "=([{,:;!&|?~+-*%^<>":
+        return None
+    escaped = False
+    character_class = False
+    cursor = index + 1
+    while cursor < len(text):
+        character = text[cursor]
+        if character in "\r\n":
+            return None
+        if escaped:
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif character == "[":
+            character_class = True
+        elif character == "]":
+            character_class = False
+        elif character == "/" and not character_class:
+            cursor += 1
+            while cursor < len(text) and text[cursor].isalpha():
+                cursor += 1
+            return cursor
+        cursor += 1
+    return None
+
+
+def c_spliced_pair_length(
+    text: str, index: int, first: str, second: str
+) -> int | None:
+    if not text.startswith(first, index):
+        return None
+    cursor = index + 1
+    if cursor < len(text) and text[cursor] == second:
+        return 2
+    if text.startswith("\\\r\n", cursor):
+        cursor += 3
+    elif text.startswith("\\\n", cursor):
+        cursor += 2
+    else:
+        return None
+    return cursor - index + 1 if cursor < len(text) and text[cursor] == second else None
+
+
+def blank_comment_delimiter(
+    result: list[str], text: str, index: int, length: int
+) -> None:
+    for cursor in range(index, index + length):
+        if text[cursor] not in "\r\n":
+            result[cursor] = " "
+
+
 def strip_block_comments(path: Path, text: str) -> str:
     suffix = path.suffix.lower()
     if suffix not in BLOCK_COMMENT_SUFFIXES:
@@ -707,15 +795,25 @@ def strip_block_comments(path: Path, text: str) -> str:
     index = 0
     while index < len(text):
         if block_depth:
-            if nested_blocks and text.startswith("/*", index):
-                result[index:index + 2] = [" ", " "]
+            nested_length = (
+                c_spliced_pair_length(text, index, "/", "*")
+                if suffix in C_SOURCE_SUFFIXES
+                else (2 if text.startswith("/*", index) else None)
+            )
+            if nested_blocks and nested_length is not None:
+                blank_comment_delimiter(result, text, index, nested_length)
                 block_depth += 1
-                index += 2
+                index += nested_length
                 continue
-            if text.startswith("*/", index):
-                result[index:index + 2] = [" ", " "]
+            end_length = (
+                c_spliced_pair_length(text, index, "*", "/")
+                if suffix in C_SOURCE_SUFFIXES
+                else (2 if text.startswith("*/", index) else None)
+            )
+            if end_length is not None:
+                blank_comment_delimiter(result, text, index, end_length)
                 block_depth -= 1
-                index += 2
+                index += end_length
                 continue
             if text[index] not in "\r\n":
                 result[index] = " "
@@ -738,7 +836,9 @@ def strip_block_comments(path: Path, text: str) -> str:
                     raw_quote = None
                 else:
                     index += 1
-            elif text.startswith(raw_quote, index):
+            elif text.startswith(raw_quote, index) and not (
+                suffix == ".swift" and escaped_by_backslash(text, index)
+            ):
                 index += len(raw_quote)
                 raw_quote = None
             else:
@@ -760,6 +860,11 @@ def strip_block_comments(path: Path, text: str) -> str:
         if heredoc_stop is not None:
             index = heredoc_stop
             continue
+        if suffix in JAVASCRIPT_SOURCE_SUFFIXES:
+            regex_end = javascript_regex_end(text, index)
+            if regex_end is not None:
+                index = regex_end
+                continue
         if suffix in CPP_SOURCE_SUFFIXES:
             raw_start = CPP_RAW_STRING_START.match(text, index)
             if raw_start is not None and (
@@ -790,7 +895,12 @@ def strip_block_comments(path: Path, text: str) -> str:
                 raw_quote = JAVA_TEXT_BLOCK_SENTINEL
                 index = quote_end
                 continue
-        if suffix in TRIPLE_QUOTE_SUFFIXES and suffix != ".java" and text.startswith('"""', index):
+        if (
+            suffix in TRIPLE_QUOTE_SUFFIXES
+            and suffix != ".java"
+            and text.startswith('"""', index)
+            and not (suffix == ".swift" and escaped_by_backslash(text, index))
+        ):
             quote_end = index + 3
             while quote_end < len(text) and text[quote_end] == '"':
                 quote_end += 1
@@ -819,10 +929,15 @@ def strip_block_comments(path: Path, text: str) -> str:
             result[index:end] = [" "] * (end - index)
             index = end
             continue
-        if text.startswith("/*", index):
-            result[index:index + 2] = [" ", " "]
+        start_length = (
+            c_spliced_pair_length(text, index, "/", "*")
+            if suffix in C_SOURCE_SUFFIXES
+            else (2 if text.startswith("/*", index) else None)
+        )
+        if start_length is not None:
+            blank_comment_delimiter(result, text, index, start_length)
             block_depth = 1
-            index += 2
+            index += start_length
             continue
         index += 1
     return "".join(result)
@@ -1168,9 +1283,7 @@ def mask_yaml_block_scalar_contents(text: str) -> str:
             active_indent = None
         marker = YAML_ANY_BLOCK_SCALAR_START.match(content)
         if marker is not None:
-            active_indent = len(marker.group("indent")) + len(
-                marker.group("item") or ""
-            )
+            active_indent = len(marker.group("indent"))
         masked.append(line)
     return "".join(masked)
 
@@ -1370,6 +1483,14 @@ def structured_environment_assignments(
         (parsed_flow_fields(body), number, anchor)
         for body, number, anchor in flow_mapping_bodies(flow_text)
     ]
+    for scalar in FLOW_SCALAR_ANCHOR.finditer(flow_text):
+        raw_value = scalar.group("value")
+        if raw_value.startswith(("{", "[")):
+            continue
+        scalar_anchors.setdefault(
+            scalar.group("anchor"),
+            yaml_scalar_value(raw_value, path, strip_properties=True),
+        )
     flow_anchors = {
         anchor: fields
         for fields, _number, anchor in flow_records
@@ -1675,6 +1796,8 @@ def normalize_source_sensitive_identifiers(path: Path, text: str) -> str:
 
 
 def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
+    if path.suffix.lower() == ".java":
+        text = normalize_java_lexical_escapes(text)
     findings: list[tuple[str, int, str]] = []
     lines = text.splitlines()
     for number, line in enumerate(lines, 1):

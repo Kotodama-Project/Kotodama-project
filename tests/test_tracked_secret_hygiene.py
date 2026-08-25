@@ -70,6 +70,20 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     [], SCANNER.scan_text(Path("settings.hcl"), hcl)
                 )
 
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(
+                Path("config.go"),
+                "var " + name + ' = os.Getenv("' + name + '")\n',
+            ),
+        )
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(
+                Path("main.tf"), name + " = var.openai_api_key\n"
+            ),
+        )
+
     def test_sensitive_filenames_are_blocked_but_templates_are_allowed(self) -> None:
         for name in (
             ".env",
@@ -692,6 +706,24 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 SCANNER.scan_text(Path(filename), text),
             )
 
+        flow_collection_alias = (
+            "names: [&secret_name "
+            + name
+            + "]\n- name: *secret_name\n  value: "
+            + value
+            + "\n"
+        )
+        self.assertEqual(
+            [
+                (
+                    "flow-alias.yaml",
+                    2,
+                    f"live-looking value assigned to {name}",
+                )
+            ],
+            SCANNER.scan_text(Path("flow-alias.yaml"), flow_collection_alias),
+        )
+
         reverse_block = "- value: " + value + "\n  name: " + name + "\n"
         self.assertEqual(
             [
@@ -719,6 +751,18 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual(
             [], SCANNER.scan_text(Path("settings.yaml"), reverse_value_from)
+        )
+
+        canonical_sequence_scalar = (
+            "documentation:\n  - |-\n    {name: "
+            + name
+            + ", value: "
+            + value
+            + "}\n"
+        )
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(Path("settings.yaml"), canonical_sequence_scalar),
         )
 
         escaped_name = "OPENAI_API_" + "\\u004b" + "EY"
@@ -904,6 +948,18 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             SCANNER.scan_text(Path("cr.php"), cr_php_heredoc),
         )
 
+        php_define_with_operator = (
+            "<?php\n$values = [\n<<<'EOT'\n/* literal text\nEOT,\n];\n$"
+            + name
+            + " =\n  \""
+            + value
+            + "\";\n"
+        )
+        self.assertEqual(
+            [("punctuation.php", 7, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("punctuation.php"), php_define_with_operator),
+        )
+
         nested = (
             "/* outer\n/* nested */\n"
             + name
@@ -911,6 +967,30 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual([], SCANNER.scan_text(Path("config.rs"), nested))
         self.assertEqual([], SCANNER.scan_text(Path("migration.sql"), nested))
+
+        javascript_regex = (
+            "const expression = /[/*]/\n"
+            + name
+            + " =\n  \""
+            + value
+            + "\"\n"
+        )
+        self.assertEqual(
+            [("config.js", 2, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.js"), javascript_regex),
+        )
+
+        c_line_splice = (
+            "/* comment *\\\n/\n"
+            + name
+            + " =\n  \""
+            + value
+            + "\"\n"
+        )
+        self.assertEqual(
+            [("config.c", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.c"), c_line_splice),
+        )
 
     def test_multiline_assignment_scans_continued_expression(self) -> None:
         name = "OPENAI_" + "API_KEY"
@@ -1153,6 +1233,18 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 )
                 self.assertNotIn(value, repr(findings))
 
+        swift_escaped_delimiter = (
+            'let text = """\nembedded \\\"""\n/* still text */\n"""\n'
+            + name
+            + " =\n  \""
+            + value
+            + "\"\n"
+        )
+        self.assertEqual(
+            [("escaped.swift", 5, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("escaped.swift"), swift_escaped_delimiter),
+        )
+
     def test_escaped_java_text_block_delimiter_does_not_hide_assignment(
         self,
     ) -> None:
@@ -1199,6 +1291,18 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertEqual(
             [("unicode.java", 4, f"live-looking value assigned to {name}")],
             SCANNER.scan_text(Path("unicode.java"), unicode_text_block),
+        )
+
+        unicode_line_terminators = (
+            "class X { // ordinary \\u000a String "
+            + name
+            + " \\u000a = \""
+            + value
+            + "\"; }\n"
+        )
+        self.assertEqual(
+            [("terminator.java", 2, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("terminator.java"), unicode_line_terminators),
         )
 
         generated_prefix = 'var text = """\nordinary\n""";\n' * 2_000
@@ -1435,6 +1539,18 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual(
             [], SCANNER.scan_text(Path("Makefile"), safe_define)
+        )
+
+        make_shell_define = (
+            "define "
+            + name
+            + " !=\nprintf "
+            + value
+            + "\nendef\n"
+        )
+        self.assertEqual(
+            [("Makefile", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("Makefile"), make_shell_define),
         )
 
     def test_shell_parameter_defaults_and_assignments_are_detected(self) -> None:
