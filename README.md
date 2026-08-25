@@ -23,6 +23,66 @@ README は、最初から最後まで一枚の壁として読む必要はあり�
 | **Current Reality** | 公開済み、local candidate、未証明をどう分けているか | [現在地](#現在地--夢と実証範囲を分ける) / [Public Preview と Public Beta](#public-preview-と-public-beta) |
 | **Try it** | 約5分の安全な体験と、次に選べる bounded path | [最初に選ぶ](#最初に選ぶ) / [5-minute tour](docs/FIVE-MINUTE-TOUR.md) |
 
+## Company AGI / Owner-confirmed direction
+
+> **会話を、根拠と権限を失わずに、専門Agentの仕事と学習へ変える。**
+
+これがKotodamaのCompany AGIの約束です。正本は
+[Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md)。
+README は Projection であり、実行権限、Current Truth、Final Human GOを
+作りません。
+
+```text
+Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
+-> bounded Work Order -> Agent Swarm -> Verification Receipt -> Promotion
+-> reply / learning
+```
+
+### Target
+
+- BecomeOneの組織SSOT、decomposition、Agent Swarm、Context kernelを改善・検証し、
+  Kotodamaの会話、Voice、Intent、runtimeへ統合して一製品・一Company SSOTへ収束する。
+- 指定private VCではpolicy-bound auto-joinと継続recording / transcriptionを許し、
+  candidateを同じchannelへpreviewする。それ以外のguild / channelのcaptureは
+  fail-closedです。**Voice Requirements Agent**が一度に一問だけ確認してPlan Candidateを
+  Humanへ返し、**Execution Agent**とは分離する。candidateをHuman DecisionやCurrent
+  Truthへ自己昇格せず、曖昧・不可逆・外部・高影響判断をHuman gateへ戻す。
+- specialistは **Agent Definition / Card** として共有し、Invocationごとに
+  Capability Grant、Knowledge Scope、MCP / Tool / Action Grant、VM / CT placement、
+  Voice / Context binding、budget / expiry / kill、Evidence Sinkを束縛する。
+- 発話、Intent、回答、訂正、撤回、確認をcausal ledgerで追跡し、Conversation /
+  Swarm / Decision viewを同じcanonical event ledgerからのprojectionにする。
+- Local処理は**ASR / VAD**、話者支援、Encoder / embedding / indexing、必要最小の
+  tiny classifier / ranker、決定論的parser / validator / redaction / routingに限定する。
+  **General local LLM**はdeferredで、reasoning layerやfallbackとして採用しない。
+- **Codex App Server**のidentity-bound subscriptionを高推論・codingへ使う。
+  coordinator / researcher / worker-builder / reviewer / verifierを含むAgent Swarmは
+  全role **GPT-5.6 Luna**の**Luna-only Swarm**です。**GPT-5.6 Sol**はSwarm外の
+  root integrator（**Sol is outside the Swarm**）です。Invocationは
+  user / workspace / **seat / model / rate-limit** / effort / approval / budget / TTL /
+  evidenceを固定してcredentialやseatをpoolせず、**runtime model / effort / provenance**を証明できなければ
+  **stop without fallback**とします。metered API architectureは採りません。
+
+### Current reality
+
+- この変更はowner directionのdocumentationだけで、runtime remains unimplemented。
+- private CT200には複数のVoice部品がありますが、current desktop Voice bridge経路は
+  **recording / rotation / transcription / Intent** を同時に結ぶend-to-endとしては
+  未結線です。Agent Swarm、provider E2E、Public Betaも未証明です。
+- 公開repositoryはcandidate contractsとvalidatorを提供するIncomplete Public
+  Previewであり、`NO_GO_UNPUBLISHED`を維持します。
+
+### Open design decisions
+
+- A2A、realtime / large Context、causal ledger、RAG / knowledge graph / encoder、
+  Google Drive / Proxmox storage、hierarchy / graph / namingの最終形は研究中です。
+- eight-surface product mapとForest Map v2 eight-layer hierarchyは別概念であり、
+  現行Forest Mapの最終採用は未決定です。
+- provider、model / subscription、Context Subscription、specialist sharingの詳細は、
+  private data、保持、費用、authorityの検証後に決めます。
+- Terraはoptionalで自動fallbackではありません。Anthropicもcompatible termsと
+  明示approvalがある非Swarm候補に限ります。
+
 ## Company OS system map
 
 詳細へ入る前に、Kotodama 全体を八つの面として見ると位置関係が分かります。
@@ -128,6 +188,12 @@ Kotodama が目指す体験は、長い仕様書を最初に書くことでは�
 6. 成果物、test、観測、rollback 情報を Verification Receipt に束縛する
 7. authority を持つ人または policy が、候補の採用・拒否を判断する
 8. 結果と学習が会社の Office と正本へ戻る
+
+**Voice Requirements Agent** / GrillU facilitatorは、話者別Source Evidenceから
+最重要の曖昧さを**一度に一問**だけ音声で確認します。Humanの**回答**、**訂正**、
+**保留**、`unknown`をprovenance付きの**Requirement State**へ反映し、十分になった
+**Plan Candidate**を読み上げて確認を求めます。このAgentは**Execution Agent**と
+分離され、自己承認も自己実行もしません。
 
 この完全な体験はまだ Public Beta として提供していません。現在の公開リポジトリでは、その中核となる Company governance flow と検証ツールを先に試せます。
 

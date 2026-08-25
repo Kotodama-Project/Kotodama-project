@@ -27,6 +27,17 @@
 - [x] Standard-library-only one-command review-chain smoke with temporary cleanup and closed report
 - [x] Clone-to-result five-minute tour with cross-shell commands, report interpretation, and bounded next choices
 - [x] README Company OS reader/story map from Vision through current reality to safe first use
+- [x] [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) with README/STATUS/ROADMAP projections
+
+## Owner-confirmed Company AGI direction
+
+The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) is the
+canonical product-direction source for Company AGI, bounded autonomy,
+Voice Requirements Agent, per-Invocation authority, and one eventual Kotodama product
+and Company SSOT. This documentation milestone does not implement the runtime:
+Voice-to-Requirement, Agent Swarm, Context/encoder, provider, storage, and
+Promotion remain separate work. The runtime remains unimplemented and Public
+Beta remains `NO_GO_UNPUBLISHED`.
 
 ## Current public documentation revision
 
