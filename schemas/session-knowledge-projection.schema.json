@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/session-knowledge-projection.schema.json",
+  "title": "Kotodama Session Knowledge Projection",
+  "description": "Rebuildable, public-safe projection of a bound Session. It is never a source authority, Human Decision, or Current Truth record.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_revision",
+    "projection_id",
+    "session_ref",
+    "projection_revision_ref",
+    "projection_digest",
+    "generated_at",
+    "status",
+    "source_ledger_head",
+    "session_governance",
+    "knowledge_representation",
+    "source_event_refs",
+    "source_timeline",
+    "confirmed_intent",
+    "decisions",
+    "corrections",
+    "action_items",
+    "evidence_refs",
+    "policy_deviations",
+    "unresolved_questions",
+    "omissions",
+    "next_safe_action",
+    "knowledge_scope",
+    "integrity",
+    "authority",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {"const": "kotodama.session-knowledge-projection"},
+    "schema_revision": {"const": "v1"},
+    "projection_id": {"$ref": "#/$defs/ref"},
+    "session_ref": {
+      "type": "string",
+      "pattern": "^ref/session/[a-z0-9][a-z0-9/_-]{1,240}$"
+    },
+    "projection_revision_ref": {"$ref": "#/$defs/ref"},
+    "projection_digest": {"$ref": "#/$defs/sha256"},
+    "generated_at": {"$ref": "#/$defs/timestamp"},
+    "status": {"enum": ["REBUILDABLE", "INVALIDATED", "INCOMPLETE"]},
+    "source_ledger_head": {"$ref": "#/$defs/head"},
+    "session_governance": {"$ref": "#/$defs/session_governance"},
+    "knowledge_representation": {"$ref": "#/$defs/knowledge_representation"},
+    "source_event_refs": {"$ref": "#/$defs/event_refs"},
+    "source_timeline": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/timeline_item"}},
+    "confirmed_intent": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/intent_item"}},
+    "decisions": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/decision_item"}},
+    "corrections": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/correction_item"}},
+    "action_items": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/action_item"}},
+    "evidence_refs": {"$ref": "#/$defs/refs"},
+    "policy_deviations": {"type": "array", "maxItems": 256, "items": {"$ref": "#/$defs/deviation_item"}},
+    "unresolved_questions": {"$ref": "#/$defs/refs"},
+    "omissions": {"$ref": "#/$defs/refs"},
+    "next_safe_action": {"$ref": "#/$defs/next_action"},
+    "knowledge_scope": {"$ref": "#/$defs/knowledge_scope"},
+    "integrity": {"$ref": "#/$defs/projection_integrity"},
+    "authority": {"$ref": "#/$defs/authority"},
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 512,
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$"
+    },
+    "event_ref": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 512,
+      "pattern": "^ref/event/[a-z0-9][a-z0-9/_-]{1,500}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "refs": {
+      "type": "array",
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/ref"}
+    },
+    "event_refs": {
+      "type": "array",
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/event_ref"}
+    },
+    "head": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sequence", "event_hash"],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 0},
+        "event_hash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "session_governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authority_status", "creation_mode", "task_ssot_ref", "plan_ref", "requirement_refs", "invocation_ref", "model_ref",
+        "capability_grant_refs", "knowledge_grant_refs", "mcp_tool_grant_refs", "delegation_ref",
+        "dependency_refs", "parallel_status_ref", "evidence_refs", "invalidation_refs"
+      ],
+      "properties": {
+        "authority_status": {"enum": ["BOUND_UNVERIFIED", "UNKNOWN", "INVALIDATED"]},
+        "creation_mode": {"enum": ["AUTO_CREATED", "EXPLICIT", "UNASSIGNED_INBOX"]},
+        "task_ssot_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "plan_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "requirement_refs": {"$ref": "#/$defs/refs"},
+        "invocation_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "model_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "capability_grant_refs": {"$ref": "#/$defs/refs"},
+        "knowledge_grant_refs": {"$ref": "#/$defs/refs"},
+        "mcp_tool_grant_refs": {"$ref": "#/$defs/refs"},
+        "delegation_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "dependency_refs": {"$ref": "#/$defs/refs"},
+        "parallel_status_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "evidence_refs": {"$ref": "#/$defs/refs"},
+        "invalidation_refs": {"$ref": "#/$defs/refs"}
+      }
+    },
+    "knowledge_representation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "document_ref", "profile_requirements_ref", "contract_status", "derivation", "source_authority", "raw_archive_authority", "acl_authority", "audit_authority"],
+      "properties": {
+        "format": {"const": "GOOGLE_CLOUD_OKF_V0_2"},
+        "document_ref": {"$ref": "#/$defs/ref"},
+        "profile_requirements_ref": {"$ref": "#/$defs/ref"},
+        "contract_status": {"const": "CANDIDATE_UNVERIFIED"},
+        "derivation": {"const": "GENERATED_PROJECTION"},
+        "source_authority": {"const": false},
+        "raw_archive_authority": {"const": false},
+        "acl_authority": {"const": false},
+        "audit_authority": {"const": false}
+      }
+    },
+    "timeline_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_ref", "source_type", "occurred_at", "actor_ref", "authority_role", "event_kind", "state", "summary_ref", "evidence_refs"],
+      "properties": {
+        "event_ref": {"$ref": "#/$defs/event_ref"},
+        "source_type": {"type": "string", "minLength": 1, "maxLength": 32},
+        "occurred_at": {"$ref": "#/$defs/timestamp"},
+        "actor_ref": {"$ref": "#/$defs/ref"},
+        "authority_role": {"enum": ["HUMAN", "OWNER", "AGENT", "CONNECTOR", "SYSTEM"]},
+        "event_kind": {"type": "string", "minLength": 1, "maxLength": 64},
+        "state": {"type": "string", "minLength": 1, "maxLength": 32},
+        "summary_ref": {"$ref": "#/$defs/ref"},
+        "evidence_refs": {"$ref": "#/$defs/refs"}
+      }
+    },
+    "intent_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_ref", "source_event_refs", "confirmation_event_ref", "human_evidence_ref", "status"],
+      "properties": {
+        "candidate_ref": {"$ref": "#/$defs/ref"},
+        "source_event_refs": {"$ref": "#/$defs/event_refs"},
+        "confirmation_event_ref": {"oneOf": [{"$ref": "#/$defs/event_ref"}, {"type": "null"}]},
+        "human_evidence_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "status": {"enum": ["CANDIDATE_ONLY", "HUMAN_CONFIRMED", "HUMAN_CORRECTED", "WITHDRAWN", "INVALIDATED"]}
+      }
+    },
+    "decision_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_ref", "source_event_refs", "status", "human_evidence_ref"],
+      "properties": {
+        "decision_ref": {"$ref": "#/$defs/ref"},
+        "source_event_refs": {"$ref": "#/$defs/event_refs"},
+        "status": {"enum": ["CANDIDATE_ONLY", "HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN", "INVALIDATED"]},
+        "human_evidence_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}
+      }
+    },
+    "correction_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_ref", "corrects_event_ref", "evidence_ref"],
+      "properties": {
+        "event_ref": {"$ref": "#/$defs/event_ref"},
+        "corrects_event_ref": {"$ref": "#/$defs/event_ref"},
+        "evidence_ref": {"$ref": "#/$defs/ref"}
+      }
+    },
+    "action_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_ref", "owner_ref", "source_event_ref", "status"],
+      "properties": {
+        "action_ref": {"$ref": "#/$defs/ref"},
+        "owner_ref": {"$ref": "#/$defs/ref"},
+        "source_event_ref": {"$ref": "#/$defs/event_ref"},
+        "status": {"enum": ["OPEN", "INVALIDATED", "RECORDED"]}
+      }
+    },
+    "deviation_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_ref", "rule_ref", "reason_ref", "approver_ref", "expires_at", "remediation_ref", "status"],
+      "properties": {
+        "event_ref": {"$ref": "#/$defs/event_ref"},
+        "rule_ref": {"$ref": "#/$defs/ref"},
+        "reason_ref": {"$ref": "#/$defs/ref"},
+        "approver_ref": {"$ref": "#/$defs/ref"},
+        "expires_at": {"$ref": "#/$defs/timestamp"},
+        "remediation_ref": {"$ref": "#/$defs/ref"},
+        "status": {"enum": ["APPROVED", "EXPIRED", "REMEDIATED"]}
+      }
+    },
+    "next_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "source_event_ref", "action_ref"],
+      "properties": {
+        "kind": {"enum": ["REQUEST_HUMAN_CONFIRMATION", "REVIEW_INVALIDATION", "REPAIR_GAP", "NONE"]},
+        "source_event_ref": {"oneOf": [{"$ref": "#/$defs/event_ref"}, {"type": "null"}]},
+        "action_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}
+      }
+    },
+    "knowledge_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope_ref", "acl_state", "projection_access"],
+      "properties": {
+        "scope_ref": {"$ref": "#/$defs/ref"},
+        "acl_state": {"enum": ["AVAILABLE", "UNKNOWN", "LOST", "REVOKED"]},
+        "projection_access": {"enum": ["ALLOWED_UNVERIFIED", "FAIL_CLOSED"]}
+      }
+    },
+    "projection_integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ledger_valid", "complete_sequence", "replay_detected", "integrity_markers", "invalidation_refs"],
+      "properties": {
+        "ledger_valid": {"const": true},
+        "complete_sequence": {"type": "boolean"},
+        "replay_detected": {"type": "boolean"},
+        "integrity_markers": {"type": "array", "uniqueItems": true, "items": {"enum": ["GAP", "CORRUPT", "RECOVERY"]}},
+        "invalidation_refs": {"$ref": "#/$defs/refs"}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projection_is_source_authority", "compaction_summary_is_source", "human_decision_requires_evidence", "current_truth_changed"],
+      "properties": {
+        "projection_is_source_authority": {"const": false},
+        "compaction_summary_is_source": {"const": false},
+        "human_decision_requires_evidence": {"const": true},
+        "current_truth_changed": {"const": false}
+      }
+    }
+  }
+}
