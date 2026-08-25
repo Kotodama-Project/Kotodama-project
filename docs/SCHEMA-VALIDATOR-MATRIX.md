@@ -303,6 +303,22 @@ The smoke asserts pending request state, structural item response matching, and
 false and `NO_GO_UNPUBLISHED` remains in force; this does not create reviewer
 identity, Human approval, runtime, Promotion, Current Truth, or Public Beta GO.
 
+## Session Conversation/Event Ledger Candidate 2
+
+| Schema | Validator / projector | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [session-conversation-event-ledger.schema.json](../schemas/session-conversation-event-ledger.schema.json)、[session-knowledge-projection.schema.json](../schemas/session-knowledge-projection.schema.json) | [`validate_session_conversation_ledger.py`](../tools/validate_session_conversation_ledger.py) | [`test_session_conversation_ledger.py`](../tests/test_session_conversation_ledger.py) | [Session Conversation/Event Ledger](SESSION-CONVERSATION-LEDGER.md)。append-only event、unassigned inboxからの後付けbinding、opaque/public-safe refs、hash chain、idempotency、causal/lifecycle target、raw/derived artifact lineage、Session/Task/Invocation/grant provenance、tiered provider-neutral Archive Target、invalidation、候補とHuman evidenceの分離、projection digest/head再構築だけを標準ライブラリで検査する。`LEDGER_VALID` は `LOCAL_PASS` のみで、device/provider/public/Human GO、Current Truth、live connector、compaction summaryのsource authorityを意味しない。 |
+
+```powershell
+python tools\validate_session_conversation_ledger.py validate path\to\ledger.jsonl
+python tools\validate_session_conversation_ledger.py project path\to\ledger.jsonl ref/session/example
+```
+
+```bash
+python3 tools/validate_session_conversation_ledger.py validate path/to/ledger.jsonl
+python3 tools/validate_session_conversation_ledger.py project path/to/ledger.jsonl ref/session/example
+```
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
