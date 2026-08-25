@@ -49,7 +49,12 @@ Updated: 2026-08-26
 The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) records the
 Company AGI target, bounded autonomy, Voice Requirements Agent, per-Invocation
 authority, causal ledger, and unresolved design decisions. README, STATUS, and
-ROADMAP are projections of that source. This documentation does not activate
+ROADMAP are projections of that source. Correction themes: one Kotodama product
+with BecomeOne as migration donor/control plane; OKF v0.2 as the central
+representation for governed curated knowledge, not sole Company truth; and
+separate raw/derived Voice evidence with adaptive GrillU. Luna-first routing,
+an OPEN archive backend, reversible delegation, and the bounded Unattended
+Improvement Loop remain requirements. This documentation does not activate
 Voice, Agent Swarm, provider, deployment, Promotion, or Current Truth; runtime
 remains unimplemented and Public Beta remains `NO_GO_UNPUBLISHED`.
 

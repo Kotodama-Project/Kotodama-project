@@ -33,11 +33,16 @@
 
 The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) is the
 canonical product-direction source for Company AGI, bounded autonomy,
-Voice Requirements Agent, per-Invocation authority, and one eventual Kotodama product
-and Company SSOT. This documentation milestone does not implement the runtime:
-Voice-to-Requirement, Agent Swarm, Context/encoder, provider, storage, and
-Promotion remain separate work. The runtime remains unimplemented and Public
-Beta remains `NO_GO_UNPUBLISHED`.
+Voice Requirements Agent, per-Invocation authority, and one Kotodama product /
+Company SSOT. Correction themes: BecomeOne is the migration donor/control plane;
+OKF v0.2 is central for governed curated knowledge, not sole Company truth; and
+Voice raw/derived evidence plus adaptive GrillU remain explicit. Luna-first
+routing, an OPEN archive backend, reversible review/revert delegation, and the
+bounded Unattended Improvement Loop remain product requirements. This
+documentation milestone does not implement the runtime: Voice-to-Requirement,
+Agent Swarm, Context/encoder, provider, storage, and Promotion remain separate
+work. The runtime remains unimplemented and Public Beta remains
+`NO_GO_UNPUBLISHED`.
 
 ## Current public documentation revision
 
