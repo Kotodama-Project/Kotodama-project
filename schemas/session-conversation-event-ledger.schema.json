@@ -1,0 +1,913 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/session-conversation-event-ledger.schema.json",
+  "title": "Kotodama Session Conversation/Event Ledger Event",
+  "description": "Closed, public-safe metadata for one append-only conversation or lifecycle event. Raw private text, transcript, audio, and provider payloads remain outside the public repository in a protected vault.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_revision",
+    "event_id",
+    "sequence",
+    "session",
+    "source",
+    "content",
+    "causation",
+    "context",
+    "ownership",
+    "event",
+    "decision",
+    "policy_deviation",
+    "retention",
+    "provenance",
+    "public_safety",
+    "integrity",
+    "previous_event_hash",
+    "event_hash"
+  ],
+  "properties": {
+    "kind": {"const": "kotodama.conversation-event"},
+    "schema_revision": {"const": "v1"},
+    "event_id": {"$ref": "#/$defs/event_ref"},
+    "sequence": {"type": "integer", "minimum": 1},
+    "session": {"$ref": "#/$defs/session_binding"},
+    "source": {"$ref": "#/$defs/source"},
+    "content": {"$ref": "#/$defs/content"},
+    "causation": {"$ref": "#/$defs/causation"},
+    "context": {"$ref": "#/$defs/context"},
+    "ownership": {"$ref": "#/$defs/ownership"},
+    "event": {"$ref": "#/$defs/event_detail"},
+    "decision": {"$ref": "#/$defs/decision"},
+    "policy_deviation": {"$ref": "#/$defs/policy_deviation"},
+    "retention": {"$ref": "#/$defs/retention"},
+    "provenance": {"$ref": "#/$defs/provenance"},
+    "public_safety": {"$ref": "#/$defs/public_safety"},
+    "integrity": {"$ref": "#/$defs/integrity"},
+    "egress": {"$ref": "#/$defs/egress"},
+    "previous_event_hash": {"$ref": "#/$defs/sha256"},
+    "event_hash": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "content": {
+            "properties": {
+              "artifact_stage": {
+                "enum": ["RAW_AUDIO", "RAW_SOURCE_JSON", "RAW_ASR", "ALIGNED_TRANSCRIPT", "SPEAKER_ATTRIBUTED_TRANSCRIPT", "SOURCE_EVIDENCE"]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "retention": {
+            "properties": {
+              "storage_class": {"enum": ["PROTECTED_HOT", "ENCRYPTED_COLD_ARCHIVE"]}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event": {"properties": {"kind": {"const": "voice_reply"}}}}},
+      "then": {
+        "required": ["egress"],
+        "properties": {
+          "source": {
+            "properties": {"channel_ref": {"$ref": "#/$defs/ref"}}
+          }
+        }
+      },
+      "else": {"not": {"required": ["egress"]}}
+    },
+    {
+      "if": {"properties": {"event": {"properties": {"kind": {"enum": ["voice_segment", "voice_reply"]}}}}},
+      "then": {"properties": {"source": {"properties": {"type": {"const": "discord_voice"}}}}}
+    }
+  ],
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 512,
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
+    },
+    "event_ref": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 512,
+      "pattern": "^ref/event/[a-z0-9][a-z0-9/_-]{1,500}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
+    },
+    "session_ref": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 256,
+      "pattern": "^ref/session/[a-z0-9][a-z0-9/_-]{1,244}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
+    },
+    "revision_ref": {
+      "type": "string",
+      "minLength": 21,
+      "maxLength": 256,
+      "pattern": "^ref/session-revision/[1-9][0-9]*$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
+    },
+    "public_ref_safety": {
+      "allOf": [
+        {"not": {"pattern": "[0-9]{17,20}"}},
+        {"not": {"pattern": "(sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)"}},
+        {"not": {"pattern": "[@\\s\\\\:]"}},
+        {"not": {"pattern": "(^|/)([0-9]{1,3}\\.){3}[0-9]{1,3}(/|$)"}},
+        {"not": {"pattern": "(^|/)([a-z0-9-]+\\.)+[a-z]{2,}(/|$)"}},
+        {"not": {"pattern": "(^|/)(https?://|file://|[A-Za-z]:[\\\\/]|\\\\\\\\)"}}
+      ]
+    },
+    "person_ref": {
+      "allOf": [
+        {"$ref": "#/$defs/ref"},
+        {"pattern": "^ref/person/[a-z0-9][a-z0-9/_-]{1,240}$"}
+      ]
+    },
+    "track_ref": {
+      "allOf": [
+        {"$ref": "#/$defs/ref"},
+        {"pattern": "^ref/track/[a-z0-9][a-z0-9/_-]{1,240}$"}
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "ref_array": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/ref"}
+    },
+    "event_ref_array": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/event_ref"}
+    },
+    "session_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "session_ref", "revision_ref", "binding_event_ref", "governance"],
+      "properties": {
+        "state": {"enum": ["BOUND", "UNASSIGNED_INBOX"]},
+        "session_ref": {
+          "oneOf": [{"$ref": "#/$defs/session_ref"}, {"type": "null"}]
+        },
+        "revision_ref": {
+          "oneOf": [{"$ref": "#/$defs/revision_ref"}, {"type": "null"}]
+        },
+        "binding_event_ref": {
+          "oneOf": [{"$ref": "#/$defs/event_ref"}, {"type": "null"}]
+        },
+        "governance": {"$ref": "#/$defs/session_governance"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "UNASSIGNED_INBOX"}}},
+          "then": {
+            "properties": {
+              "session_ref": {"type": "null"},
+              "revision_ref": {"type": "null"},
+              "binding_event_ref": {"type": "null"},
+              "governance": {
+                "properties": {
+                  "creation_mode": {"const": "UNASSIGNED_INBOX"},
+                  "task_ssot_ref": {"type": "null"},
+                  "invocation_ref": {"type": "null"},
+                  "model_ref": {"type": "null"},
+                  "delegation_ref": {"type": "null"},
+                  "capability_grant_refs": {"maxItems": 0},
+                  "knowledge_grant_refs": {"maxItems": 0},
+                  "mcp_tool_grant_refs": {"maxItems": 0}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"state": {"const": "BOUND"}}},
+          "then": {
+            "required": ["session_ref", "revision_ref"],
+            "properties": {
+              "session_ref": {"$ref": "#/$defs/session_ref"},
+              "revision_ref": {"$ref": "#/$defs/revision_ref"},
+              "governance": {
+                "properties": {
+                  "creation_mode": {"enum": ["AUTO_CREATED", "EXPLICIT"]},
+                  "task_ssot_ref": {"$ref": "#/$defs/ref"},
+                  "plan_ref": {"$ref": "#/$defs/ref"},
+                  "requirement_refs": {"minItems": 1},
+                  "invocation_ref": {"$ref": "#/$defs/ref"},
+                  "model_ref": {"$ref": "#/$defs/ref"},
+                  "delegation_ref": {"$ref": "#/$defs/ref"},
+                  "capability_grant_refs": {"minItems": 1},
+                  "knowledge_grant_refs": {"minItems": 1},
+                  "mcp_tool_grant_refs": {"minItems": 1},
+                  "evidence_refs": {"minItems": 1}
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "session_governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "creation_mode", "task_ssot_ref", "plan_ref", "requirement_refs", "invocation_ref", "model_ref",
+        "capability_grant_refs", "knowledge_grant_refs", "mcp_tool_grant_refs", "delegation_ref",
+        "dependency_refs", "parallel_status_ref", "evidence_refs", "invalidation_refs"
+      ],
+      "properties": {
+        "creation_mode": {"enum": ["UNASSIGNED_INBOX", "AUTO_CREATED", "EXPLICIT"]},
+        "task_ssot_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "plan_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "requirement_refs": {"$ref": "#/$defs/ref_array"},
+        "invocation_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "model_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "capability_grant_refs": {"$ref": "#/$defs/ref_array"},
+        "knowledge_grant_refs": {"$ref": "#/$defs/ref_array"},
+        "mcp_tool_grant_refs": {"$ref": "#/$defs/ref_array"},
+        "delegation_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "dependency_refs": {"$ref": "#/$defs/ref_array"},
+        "parallel_status_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "evidence_refs": {"$ref": "#/$defs/ref_array"},
+        "invalidation_refs": {"$ref": "#/$defs/ref_array"}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "authority_ref"],
+      "properties": {
+        "role": {"enum": ["HUMAN", "OWNER", "AGENT", "CONNECTOR", "SYSTEM"]},
+        "authority_ref": {
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/authority/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "occurred_at",
+        "ingested_at",
+        "locator_ref",
+        "source_revision_ref",
+        "actor_ref",
+        "identity_verification",
+        "speaker_track_ref",
+        "authority",
+        "thread_ref",
+        "channel_ref",
+        "document_ref",
+        "repository_ref",
+        "evidence_ref",
+        "consent_ref"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "discord_text",
+            "discord_voice",
+            "notion",
+            "github",
+            "codex",
+            "claude",
+            "google_drive",
+            "n8n",
+            "system"
+          ]
+        },
+        "occurred_at": {"$ref": "#/$defs/timestamp"},
+        "ingested_at": {"$ref": "#/$defs/timestamp"},
+        "locator_ref": {"$ref": "#/$defs/ref"},
+        "source_revision_ref": {"$ref": "#/$defs/ref"},
+        "actor_ref": {
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/(actor|speaker|agent|connector|system)/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
+        },
+        "identity_verification": {"enum": ["UNVERIFIED_PUBLIC_CLAIM", "NOT_APPLICABLE"]},
+        "speaker_track_ref": {
+          "oneOf": [
+            {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/track/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]},
+            {"type": "null"}
+          ]
+        },
+        "authority": {"$ref": "#/$defs/authority"},
+        "thread_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "channel_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "document_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "repository_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "evidence_ref": {"$ref": "#/$defs/ref"},
+        "consent_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "discord_voice"}}},
+          "then": {
+            "required": ["speaker_track_ref", "locator_ref", "source_revision_ref", "evidence_ref"],
+            "properties": {"speaker_track_ref": {"$ref": "#/$defs/track_ref"}}
+          }
+        },
+        {
+          "if": {"properties": {"type": {"enum": ["discord_text", "discord_voice", "notion", "github", "codex", "claude", "google_drive", "n8n"]}}},
+          "then": {
+            "required": ["consent_ref"],
+            "properties": {"consent_ref": {"$ref": "#/$defs/ref"}}
+          }
+        },
+        {
+          "if": {"properties": {"actor_ref": {"pattern": "^ref/(actor|speaker)/"}}},
+          "then": {"properties": {
+            "authority": {"properties": {"role": {"enum": ["HUMAN", "OWNER"]}}},
+            "identity_verification": {"const": "UNVERIFIED_PUBLIC_CLAIM"}
+          }}
+        },
+        {
+          "if": {"properties": {"actor_ref": {"pattern": "^ref/agent/"}}},
+          "then": {"properties": {
+            "authority": {"properties": {"role": {"enum": ["AGENT", "SYSTEM"]}}},
+            "identity_verification": {"const": "NOT_APPLICABLE"}
+          }}
+        },
+        {
+          "if": {"properties": {"actor_ref": {"pattern": "^ref/connector/"}}},
+          "then": {"properties": {
+            "authority": {"properties": {"role": {"enum": ["CONNECTOR", "SYSTEM"]}}},
+            "identity_verification": {"const": "NOT_APPLICABLE"}
+          }}
+        },
+        {
+          "if": {"properties": {"actor_ref": {"pattern": "^ref/system/"}}},
+          "then": {"properties": {
+            "authority": {"properties": {"role": {"const": "SYSTEM"}}},
+            "identity_verification": {"const": "NOT_APPLICABLE"}
+          }}
+        }
+      ]
+    },
+    "content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "payload_vault_ref",
+        "vault_manifest_ref",
+        "content_hash",
+        "span_ref",
+        "storage",
+        "raw_content_embedded",
+        "artifact_stage",
+        "derived_from_event_refs"
+      ],
+      "properties": {
+        "payload_vault_ref": {
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/vault/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
+        },
+        "vault_manifest_ref": {
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/vault-manifest/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
+        },
+        "content_hash": {"$ref": "#/$defs/sha256"},
+        "span_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "storage": {"const": "PROTECTED_PAYLOAD_VAULT"},
+        "raw_content_embedded": {"const": false},
+        "artifact_stage": {
+          "enum": ["RAW_AUDIO", "RAW_SOURCE_JSON", "RAW_ASR", "ALIGNED_TRANSCRIPT", "SPEAKER_ATTRIBUTED_TRANSCRIPT", "CORRECTED_TRANSCRIPT", "MINUTES", "SOURCE_EVIDENCE"]
+        },
+        "derived_from_event_refs": {"$ref": "#/$defs/event_ref_array"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"artifact_stage": {"enum": ["RAW_AUDIO", "RAW_SOURCE_JSON"]}}},
+          "then": {"properties": {"derived_from_event_refs": {"maxItems": 0}}},
+          "else": {"properties": {"derived_from_event_refs": {"minItems": 1}}}
+        }
+      ]
+    },
+    "causation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "caused_by_event_refs",
+        "correlation_ref",
+        "idempotency_key_ref",
+        "cursor_ref",
+        "replay_of_event_ref"
+      ],
+      "properties": {
+        "caused_by_event_refs": {"$ref": "#/$defs/event_ref_array"},
+        "correlation_ref": {"$ref": "#/$defs/ref"},
+        "idempotency_key_ref": {
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/idempotency/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
+        },
+        "cursor_ref": {
+          "oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]
+        },
+        "replay_of_event_ref": {
+          "oneOf": [{"$ref": "#/$defs/event_ref"}, {"type": "null"}]
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "background_ref",
+        "knowledge_scope_ref",
+        "context_pack_refs",
+        "omission_refs"
+      ],
+      "properties": {
+        "background_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "knowledge_scope_ref": {"$ref": "#/$defs/ref"},
+        "context_pack_refs": {"$ref": "#/$defs/ref_array"},
+        "omission_refs": {"$ref": "#/$defs/ref_array"}
+      }
+    },
+    "ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner_ref", "assignee_ref"],
+      "properties": {
+        "owner_ref": {
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/owner/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
+        },
+        "assignee_ref": {
+          "oneOf": [
+            {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/assignee/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_event_refs",
+        "destination_session_ref",
+        "destination_revision_ref"
+      ],
+      "properties": {
+        "target_event_refs": {"$ref": "#/$defs/event_ref_array"},
+        "destination_session_ref": {
+          "oneOf": [{"$ref": "#/$defs/session_ref"}, {"type": "null"}]
+        },
+        "destination_revision_ref": {
+          "oneOf": [{"$ref": "#/$defs/revision_ref"}, {"type": "null"}]
+        }
+      }
+    },
+    "event_detail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "state",
+        "summary_ref",
+        "correction_of_event_ref",
+        "withdrawal_of_event_ref",
+        "confirmation_of_event_ref",
+        "invalidation_kind",
+        "invalidation_refs",
+        "binding"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "session_open",
+            "human_message",
+            "voice_segment",
+            "voice_reply",
+            "tool_action",
+            "agent_action",
+            "decision_candidate",
+            "decision_confirmed",
+            "correction",
+            "withdrawal",
+            "confirmation",
+            "source_update",
+            "source_delete",
+            "acl_loss",
+            "invalidation",
+            "pre_compact",
+            "session_end",
+            "session_seal",
+            "session_binding",
+            "recovery_marker",
+            "integrity_marker"
+          ]
+        },
+        "state": {
+          "enum": [
+            "OBSERVED",
+            "CANDIDATE",
+            "CONFIRMED",
+            "CORRECTED",
+            "WITHDRAWN",
+            "INVALIDATED",
+            "PROJECTION_ONLY",
+            "RECOVERY"
+          ]
+        },
+        "summary_ref": {"$ref": "#/$defs/ref"},
+        "correction_of_event_ref": {
+          "oneOf": [{"$ref": "#/$defs/event_ref"}, {"type": "null"}]
+        },
+        "withdrawal_of_event_ref": {
+          "oneOf": [{"$ref": "#/$defs/event_ref"}, {"type": "null"}]
+        },
+        "confirmation_of_event_ref": {
+          "oneOf": [{"$ref": "#/$defs/event_ref"}, {"type": "null"}]
+        },
+        "invalidation_kind": {
+          "oneOf": [
+            {"enum": ["SOURCE_UPDATED", "SOURCE_DELETED", "ACL_LOST"]},
+            {"type": "null"}
+          ]
+        },
+        "invalidation_refs": {"$ref": "#/$defs/ref_array"},
+        "binding": {"$ref": "#/$defs/binding"}
+      }
+    },
+    "egress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "destination_binding",
+        "consent_binding",
+        "reply_artifact_ref",
+        "delivery_receipt_ref",
+        "delivery_state",
+        "raw_content_embedded"
+      ],
+      "properties": {
+        "destination_binding": {"const": "SOURCE_CHANNEL"},
+        "consent_binding": {"const": "SOURCE_CONSENT"},
+        "reply_artifact_ref": {"$ref": "#/$defs/ref"},
+        "delivery_receipt_ref": {"$ref": "#/$defs/ref"},
+        "delivery_state": {"const": "VERIFIED"},
+        "raw_content_embedded": {"const": false}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "candidate_ref",
+        "human_evidence_ref",
+        "human_decision_ref",
+        "human_actor_ref",
+        "current_truth_ref",
+        "execution_authority_granted"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "NONE",
+            "LLM_CANDIDATE",
+            "HUMAN_CONFIRMED",
+            "HUMAN_CORRECTED",
+            "HUMAN_WITHDRAWN"
+          ]
+        },
+        "candidate_ref": {
+          "oneOf": [
+            {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/candidate/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]},
+            {"type": "null"}
+          ]
+        },
+        "human_evidence_ref": {
+          "oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]
+        },
+        "human_decision_ref": {
+          "oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]
+        },
+        "human_actor_ref": {
+          "oneOf": [{"$ref": "#/$defs/person_ref"}, {"type": "null"}]
+        },
+        "current_truth_ref": {"type": "null"},
+        "execution_authority_granted": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"enum": ["HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"]}}},
+          "then": {
+            "properties": {
+              "human_actor_ref": {"$ref": "#/$defs/person_ref"},
+              "human_evidence_ref": {"$ref": "#/$defs/ref"},
+              "human_decision_ref": {"$ref": "#/$defs/ref"}
+            },
+            "required": ["human_actor_ref", "human_evidence_ref", "human_decision_ref"]
+          }
+        },
+        {
+          "if": {"properties": {"status": {"enum": ["NONE", "LLM_CANDIDATE"]}}},
+          "then": {"properties": {"human_actor_ref": {"type": "null"}}}
+        }
+      ]
+    },
+    "policy_deviation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "rule_ref", "reason_ref", "approver_ref", "expires_at", "remediation_ref"],
+      "properties": {
+        "status": {"enum": ["NONE", "APPROVED", "EXPIRED", "REMEDIATED"]},
+        "rule_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "reason_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "approver_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "expires_at": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+        "remediation_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_ref",
+        "policy_revision_ref",
+        "storage_class",
+        "encryption_ref",
+        "encryption_status",
+        "retain_until",
+        "archive_target_kind",
+        "archive_target_ref",
+        "archive_target_uri_ref",
+        "archive_package_digest",
+        "snapshot_receipt_ref",
+        "archive_status",
+        "archive_receipt_ref",
+        "restore_status",
+        "restore_receipt_ref",
+        "deletion_trigger",
+        "deletion_state",
+        "deletion_receipt_ref",
+        "deletion_readback"
+      ],
+      "properties": {
+        "policy_ref": {"$ref": "#/$defs/ref"},
+        "policy_revision_ref": {"$ref": "#/$defs/ref"},
+        "storage_class": {"enum": ["PROTECTED_HOT", "ENCRYPTED_COLD_ARCHIVE", "DERIVED_SEARCH_INDEX"]},
+        "encryption_ref": {"$ref": "#/$defs/ref"},
+        "encryption_status": {"enum": ["DECLARED_UNVERIFIED", "NOT_APPLICABLE"]},
+        "retain_until": {"$ref": "#/$defs/timestamp"},
+        "archive_target_kind": {"enum": ["NONE", "SESSION_ARCHIVE_VAULT", "ARCHIVE_TARGET"]},
+        "archive_target_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "archive_target_uri_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "archive_package_digest": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "snapshot_receipt_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "archive_status": {"enum": ["NOT_REQUESTED", "DECLARED", "RESTORE_PENDING", "RESTORED", "DELETED", "FAILED"]},
+        "archive_receipt_ref": {
+          "oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]
+        },
+        "restore_status": {"enum": ["NOT_REQUESTED", "PENDING", "RESTORED", "FAILED"]},
+        "restore_receipt_ref": {
+          "oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]
+        },
+        "deletion_trigger": {"enum": ["expiry", "withdrawal", "source_delete", "expiry_or_withdrawal"]},
+        "deletion_state": {"enum": ["NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"]},
+        "deletion_receipt_ref": {
+          "oneOf": [
+            {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/deletion-receipt/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]},
+            {"type": "null"}
+          ]
+        },
+        "deletion_readback": {"enum": ["NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"archive_target_kind": {"const": "NONE"}}},
+          "then": {"properties": {
+            "archive_status": {"const": "NOT_REQUESTED"},
+            "archive_target_ref": {"type": "null"},
+            "archive_target_uri_ref": {"type": "null"},
+            "archive_package_digest": {"type": "null"},
+            "snapshot_receipt_ref": {"type": "null"},
+            "archive_receipt_ref": {"type": "null"},
+            "restore_status": {"const": "NOT_REQUESTED"},
+            "restore_receipt_ref": {"type": "null"}
+          }}
+        },
+        {
+          "if": {"properties": {"archive_status": {"enum": ["DECLARED", "RESTORED", "DELETED"]}}},
+          "then": {"properties": {"archive_receipt_ref": {"$ref": "#/$defs/ref"}}}
+        },
+        {
+          "if": {"properties": {"deletion_state": {"const": "CONFIRMED"}}},
+          "then": {"properties": {
+            "deletion_readback": {"const": "CONFIRMED"},
+            "deletion_receipt_ref": {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/deletion-receipt/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]}
+          }}
+        },
+        {
+          "if": {"properties": {"deletion_readback": {"const": "CONFIRMED"}}},
+          "then": {"properties": {
+            "deletion_state": {"const": "CONFIRMED"},
+            "deletion_receipt_ref": {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/deletion-receipt/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]}
+          }}
+        },
+        {
+          "if": {"properties": {"storage_class": {"const": "ENCRYPTED_COLD_ARCHIVE"}}},
+          "then": {"properties": {
+            "encryption_status": {"const": "DECLARED_UNVERIFIED"},
+            "archive_target_kind": {"enum": ["SESSION_ARCHIVE_VAULT", "ARCHIVE_TARGET"]}
+          }}
+        },
+        {
+          "if": {"properties": {"archive_target_kind": {"enum": ["SESSION_ARCHIVE_VAULT", "ARCHIVE_TARGET"]}}},
+          "then": {"properties": {
+            "archive_target_ref": {"$ref": "#/$defs/ref"},
+            "archive_target_uri_ref": {"$ref": "#/$defs/ref"},
+            "archive_package_digest": {"$ref": "#/$defs/sha256"},
+            "archive_status": {"enum": ["DECLARED", "RESTORE_PENDING", "RESTORED", "DELETED", "FAILED"]}
+          }}
+        },
+        {
+          "if": {"properties": {"archive_status": {"const": "RESTORE_PENDING"}}},
+          "then": {"properties": {"restore_status": {"const": "PENDING"}}}
+        },
+        {
+          "if": {"properties": {"restore_status": {"const": "PENDING"}}},
+          "then": {"properties": {"archive_status": {"const": "RESTORE_PENDING"}}}
+        },
+        {
+          "if": {"properties": {"archive_status": {"const": "RESTORED"}}},
+          "then": {"properties": {
+            "restore_status": {"const": "RESTORED"},
+            "restore_receipt_ref": {"$ref": "#/$defs/ref"}
+          }}
+        },
+        {
+          "if": {"properties": {"restore_status": {"const": "RESTORED"}}},
+          "then": {"properties": {
+            "archive_status": {"enum": ["RESTORED", "DELETED"]},
+            "restore_receipt_ref": {"$ref": "#/$defs/ref"}
+          }}
+        },
+        {
+          "if": {"properties": {"restore_status": {"const": "NOT_REQUESTED"}}},
+          "then": {"properties": {"restore_receipt_ref": {"type": "null"}}}
+        }
+      ]
+    },
+    "extraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "candidate_binding", "model_ref", "confirmation_required"],
+      "properties": {
+        "kind": {"enum": ["NONE", "LLM_CANDIDATE"]},
+        "candidate_binding": {"enum": ["DECISION_CANDIDATE", "NOT_APPLICABLE"]},
+        "model_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "confirmation_required": {"const": true}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "LLM_CANDIDATE"}}},
+          "then": {"properties": {
+            "candidate_binding": {"const": "DECISION_CANDIDATE"},
+            "model_ref": {"$ref": "#/$defs/ref"}
+          }},
+          "else": {"properties": {"candidate_binding": {"const": "NOT_APPLICABLE"}, "model_ref": {"type": "null"}}}
+        }
+      ]
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "cursor_ref", "receipt_ref"],
+      "properties": {
+        "status": {"enum": ["NOT_APPLICABLE", "PENDING", "RECOVERED", "FAILED"]},
+        "cursor_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "receipt_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter_contract_ref",
+        "ingested_by_ref",
+        "ingest_mode",
+        "connector_ref",
+        "extraction",
+        "recovery"
+      ],
+      "properties": {
+        "adapter_contract_ref": {"$ref": "#/$defs/ref"},
+        "ingested_by_ref": {"$ref": "#/$defs/ref"},
+        "ingest_mode": {"enum": ["ONLINE", "OFFLINE_RECOVERY"]},
+        "connector_ref": {"$ref": "#/$defs/ref"},
+        "extraction": {"$ref": "#/$defs/extraction"},
+        "recovery": {"$ref": "#/$defs/recovery"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"ingest_mode": {"const": "OFFLINE_RECOVERY"}}},
+          "then": {"properties": {"recovery": {"properties": {
+            "status": {"const": "RECOVERED"},
+            "cursor_ref": {"$ref": "#/$defs/ref"},
+            "receipt_ref": {"$ref": "#/$defs/ref"}
+          }}}},
+          "else": {"properties": {"recovery": {"properties": {
+            "status": {"const": "NOT_APPLICABLE"},
+            "cursor_ref": {"type": "null"},
+            "receipt_ref": {"type": "null"}
+          }}}}
+        }
+      ]
+    },
+    "public_safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_visibility",
+        "raw_payload_embedded",
+        "protected_payload_ref",
+        "knowledge_scope_ref",
+        "acl_state"
+      ],
+      "properties": {
+        "record_visibility": {"const": "PUBLIC_SANITIZED_METADATA"},
+        "raw_payload_embedded": {"const": false},
+        "protected_payload_ref": {
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/vault/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
+        },
+        "knowledge_scope_ref": {"$ref": "#/$defs/ref"},
+        "acl_state": {"enum": ["AVAILABLE", "UNKNOWN", "LOST", "REVOKED"]}
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["marker", "marker_ref"],
+      "properties": {
+        "marker": {"enum": ["NONE", "GAP", "CORRUPT", "RECOVERY"]},
+        "marker_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"marker": {"const": "NONE"}}},
+          "then": {"properties": {"marker_ref": {"type": "null"}}},
+          "else": {"properties": {"marker_ref": {"$ref": "#/$defs/ref"}}}
+        }
+      ]
+    }
+  }
+}

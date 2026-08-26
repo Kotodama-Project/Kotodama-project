@@ -1,5 +1,6 @@
 # Project Status
 
+Updated: 2026-08-26  
 Current state checked: 2026-08-21  
 Published fixed point: `main@be71f424689648b3ab1b1db15adbaddea374586b`
 
@@ -16,6 +17,7 @@ This file answers **what is true now** for the public repository. It is not a de
 | Cloudflare candidate | Draft PR #1 at `83e7b9e0789f941f993fd2c43a938dd872b12581`; scope-specific validation run `32488235678` passed | Keep Cloudflare evidence scope-specific; reconcile only after neutral repository gates |
 | `main` protection | Protected for everyone, but the sole required context is `Trusted Cloudflare candidate validation` | Rebind generic repository checks and read back the final rule under issue #19 |
 | Runtime, Voice, and Discord | No supported public production runtime, public Voice Bot, or public Discord invite is published | Exact scope-matched runtime, privacy, security, rollback, and independent evidence plus Final Human GO |
+| [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) | Redacted owner-directed direction candidate; not signed/independently verified governance approval or rightsholder proof; runtime remains unimplemented, `NO_GO_UNPUBLISHED` | Signed, independently verifiable governance record and an accountable rightsholder decision under Issue #25 |
 | Public Beta | `NO_GO_UNPUBLISHED` | Remains blocked |
 
 A private Voice runtime cutover attempt is not public runtime evidence and does not authorize a public Voice surface.
@@ -69,3 +71,22 @@ A passing candidate-owned workflow is hosted evidence, not independent human app
 ## Boundary
 
 This public repository remains an incomplete preview. It does not publish credentials, private host identifiers, raw conversations, personal data, deployment authority, provider authority, billing authority, Promotion, Current Truth, Final Human GO, or Public Beta access. Every candidate remains `read-only/candidate-only` and `NO_GO_UNPUBLISHED` until its own evidence and human gates are satisfied.
+
+## Owner-confirmed Company AGI direction
+
+The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) records the
+Company AGI target, bounded autonomy, Voice Requirements Agent, per-Invocation authority, causal ledger, and unresolved design decisions. README, STATUS, and
+ROADMAP are projections of that source. Correction themes: one Kotodama product
+with BecomeOne as migration donor/control plane; OKF v0.2 as the central
+representation for governed curated knowledge, not sole Company truth; and
+separate raw/derived Voice evidence with adaptive GrillU. Luna-first routing,
+the provider-neutral archive interface/private ZFS v1 target (exact safe dataset
+binding still pending), reversible delegation, and the bounded Goal Completion
+Improvement Loop remain requirements. This documentation does not activate
+Voice, Agent Swarm, provider, deployment, Promotion, or Current Truth; runtime
+remains unimplemented and Public Beta remains `NO_GO_UNPUBLISHED`. The public
+bytes preserve the user's working direction as a redacted owner-directed
+candidate, not a signed or independently verifiable governance approval,
+rightsholder proof, canonical adoption, launch decision, or Final Human GO; no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25
+contributor/provenance/NOTICE/accountable-rightsholder gaps remain open and are
+not marked closed.

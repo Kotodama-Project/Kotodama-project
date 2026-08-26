@@ -120,3 +120,22 @@ These remain deterministic, read-only candidate tools. Discoverability is not pr
 ## Non-goals before Final Human GO
 
 Do not publish credentials, raw conversations, personal data, private host identifiers, Discord access, Voice access, production routes, billing changes, provider mutations, Promotion, Current Truth, or Public Beta access. Do not rename, archive, or deprecate either repository before issue #24 proves zero unclassified items, zero residual consumers, and a tested rollback. This roadmap creates no authority to merge, deploy, release, or invite users.
+
+## Owner-confirmed Company AGI direction
+
+The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) is the canonical product-direction source for Company AGI, bounded autonomy,
+Voice Requirements Agent, per-Invocation authority, and one Kotodama product /
+Company SSOT. Correction themes: BecomeOne is the migration donor/control plane;
+OKF v0.2 is central for governed curated knowledge, not sole Company truth; and
+Voice raw/derived evidence plus adaptive GrillU remain explicit. Luna-first
+routing, a provider-neutral archive interface with a private ZFS v1 target still
+pending exact safe dataset binding, reversible review/revert delegation, and the
+bounded Goal Completion Loop remain product requirements. This
+documentation milestone does not implement the runtime: Voice-to-Requirement,
+Agent Swarm, Context/encoder, provider, storage, and Promotion remain separate
+work. The runtime remains unimplemented and Public Beta remains
+`NO_GO_UNPUBLISHED`. The public bytes are a redacted owner-directed direction
+candidate, not signed or independently verifiable governance approval,
+rightsholder proof, canonical adoption, launch decision, or Final Human GO, and
+no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25's
+contributor/provenance/NOTICE/accountable-rightsholder gaps remain open.
