@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - codex/cloudflare-os-foundation
+      - codex/cloudflare-os-foundation-rebased-20260824
 
 permissions:
   contents: read

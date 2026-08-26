@@ -183,7 +183,7 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "workflow_dispatch:",
         "refs/heads/main",
         "^[0-9a-f]{40}$",
-        "refs/remotes/origin/codex/cloudflare-os-foundation",
+        "refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824",
         "path: trusted",
         "path: candidate",
         "ref: ${{ github.sha }}",
@@ -208,7 +208,7 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         if required not in workflow:
             errors.append(f"workflow missing required guard: {required}")
     exact_tip_guard = (
-        'test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation)" '
+        'test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824)" '
         '= "$CANDIDATE_SHA"'
     )
     upload_job_marker = "  upload-preview-version:"
