@@ -671,6 +671,37 @@ class SessionConversationLedgerTests(unittest.TestCase):
         )
         self.assertFalse(projection["authority"]["compaction_summary_is_source"])
 
+    def test_fail_closed_projection_suppresses_next_safe_action(self) -> None:
+        allowed_projection = ledger.project_session(_valid_records(), _ref("session", "demo"))
+        self.assertEqual("ALLOWED_UNVERIFIED", allowed_projection["knowledge_scope"]["projection_access"])
+        self.assertEqual("REQUEST_HUMAN_CONFIRMATION", allowed_projection["next_safe_action"]["kind"])
+        self.assertIsNotNone(allowed_projection["next_safe_action"]["source_event_ref"])
+
+        records = _valid_records()
+        acl_loss = _event(
+            "action-acl-loss",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="acl_loss",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_state="INVALIDATED",
+            invalidation_kind="ACL_LOST",
+            invalidation_refs=[_ref("projection", "demo")],
+            acl_state="LOST",
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        records.append(acl_loss)
+        fail_closed_projection = ledger.project_session(_rechain(records), _ref("session", "demo"))
+        self.assertEqual("FAIL_CLOSED", fail_closed_projection["knowledge_scope"]["projection_access"])
+        self.assertEqual(
+            {"kind": "NONE", "source_event_ref": None, "action_ref": None},
+            fail_closed_projection["next_safe_action"],
+        )
+
     def test_cli_project_emits_schema_valid_projection_and_exit_zero(self) -> None:
         records = _valid_records()
         projection_schema = json.loads(PROJECTION_SCHEMA.read_text(encoding="utf-8"))
@@ -736,6 +767,41 @@ class SessionConversationLedgerTests(unittest.TestCase):
         stale[2]["session"]["revision_ref"] = _ref("session-revision", "1")
         stale_report = ledger.validate_ledger(_rechain(stale))
         self.assertIn("STALE_SESSION_REVISION", stale_report["reason_codes"])
+
+    def test_session_governance_is_stable_within_revision(self) -> None:
+        stable = _valid_records()
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(stable)["result"])
+
+        drifted = copy.deepcopy(stable)
+        drifted[-1]["session"]["governance"]["task_ssot_ref"] = _ref("task", "drifted")
+        drift_report = ledger.validate_ledger(_rechain(drifted))
+        self.assertEqual("REFUSED", drift_report["result"], drift_report)
+        self.assertIn("SESSION_GOVERNANCE_REVISION_DRIFT", drift_report["reason_codes"])
+        with self.assertRaises(ledger.LedgerValidationError) as raised:
+            ledger.project_session(drifted, _ref("session", "demo"))
+        self.assertIn("SESSION_GOVERNANCE_REVISION_DRIFT", raised.exception.reason_codes)
+
+        new_revision = copy.deepcopy(stable)
+        next_event = _event(
+            "governance-new-revision",
+            sequence=4,
+            previous_hash=new_revision[-1]["event_hash"],
+            event_kind="human_message",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            revision=_ref("session-revision", "2"),
+            source_type="discord_text",
+            actor_ref="ref/speaker/alice",
+            authority_role="HUMAN",
+            authority_ref="ref/authority/alice",
+        )
+        next_event["session"]["governance"]["task_ssot_ref"] = _ref("task", "revision-2")
+        new_revision.append(next_event)
+        new_revision = _rechain(new_revision)
+        new_revision_report = ledger.validate_ledger(new_revision)
+        self.assertEqual("LEDGER_VALID", new_revision_report["result"], new_revision_report)
+        projected = ledger.project_session(new_revision, _ref("session", "demo"))
+        self.assertEqual(_ref("task", "revision-2"), projected["session_governance"]["task_ssot_ref"])
 
     def test_ref_length_boundaries_match_schema_and_validator(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
@@ -855,6 +921,58 @@ class SessionConversationLedgerTests(unittest.TestCase):
         backward[4]["content"]["derived_from_event_refs"] = [backward[5]["event_id"]]
         report = ledger.validate_ledger(_rechain(backward))
         self.assertIn("CONTENT_LINEAGE_ORDER_INVALID", report["reason_codes"])
+
+        late_bound_raw = _event("late-lineage-raw")
+        late_bound_binding = _event(
+            "late-lineage-binding",
+            sequence=2,
+            previous_hash=late_bound_raw["event_hash"],
+            event_kind="session_binding",
+            session_state="BOUND",
+            session_ref=_ref("session", "lineage"),
+            binding_targets=[late_bound_raw["event_id"]],
+            binding_destination=_ref("session", "lineage"),
+            binding_revision=_ref("session-revision", "1"),
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        late_bound_child = _event(
+            "late-lineage-child",
+            sequence=3,
+            previous_hash=late_bound_binding["event_hash"],
+            session_state="BOUND",
+            session_ref=_ref("session", "lineage"),
+            artifact_stage="RAW_ASR",
+            derived_from_event_refs=[late_bound_raw["event_id"]],
+            content_hash="8" * 64,
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        late_bound = _rechain([late_bound_raw, late_bound_binding, late_bound_child])
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(late_bound)["result"])
+
+        wrong_effective_session = copy.deepcopy(late_bound)
+        wrong_effective_session[-1]["session"]["session_ref"] = _ref("session", "wrong")
+        wrong_report = ledger.validate_ledger(_rechain(wrong_effective_session))
+        self.assertEqual("REFUSED", wrong_report["result"], wrong_report)
+        self.assertIn("CONTENT_LINEAGE_SESSION_INVALID", wrong_report["reason_codes"])
+
+        unbound_raw = _event("unbound-lineage-raw")
+        unbound_child = _event(
+            "unbound-lineage-child",
+            sequence=2,
+            previous_hash=unbound_raw["event_hash"],
+            artifact_stage="RAW_ASR",
+            derived_from_event_refs=[unbound_raw["event_id"]],
+            content_hash="9" * 64,
+        )
+        unbound_report = ledger.validate_ledger(_rechain([unbound_raw, unbound_child]))
+        self.assertEqual("REFUSED", unbound_report["result"], unbound_report)
+        self.assertIn("CONTENT_LINEAGE_SESSION_INVALID", unbound_report["reason_codes"])
 
         cross_session = copy.deepcopy(valid[:5])
         cross_session[-2]["session"]["session_ref"] = _ref("session", "other")

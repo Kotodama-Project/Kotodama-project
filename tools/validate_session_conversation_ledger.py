@@ -645,6 +645,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     seen_binding_targets: set[str] = set()
     bound_session_for_target: dict[str, str] = {}
     bound_session_revision_for_target: dict[str, tuple[str, str]] = {}
+    bound_governance_for_target: dict[str, dict[str, Any]] = {}
     for candidate_record in records:
         if _validate_event_shape(candidate_record):
             continue
@@ -662,8 +663,10 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                     target_ref,
                     (candidate_session["session_ref"], candidate_session["revision_ref"]),
                 )
+                bound_governance_for_target.setdefault(target_ref, candidate_session["governance"])
     candidate_scope_by_event: dict[str, str | None] = {}
     effective_session_revision_by_event: dict[str, tuple[str, str] | None] = {}
+    effective_governance_by_event: dict[str, dict[str, Any] | None] = {}
     candidate_scopes: dict[str, set[str | None]] = {}
     for candidate_record in records:
         if _validate_event_shape(candidate_record):
@@ -675,11 +678,14 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                 candidate_session["session_ref"],
                 candidate_session["revision_ref"],
             )
+            effective_governance = candidate_session["governance"]
         else:
             candidate_scope = bound_session_for_target.get(candidate_record["event_id"])
             effective_session_revision = bound_session_revision_for_target.get(candidate_record["event_id"])
+            effective_governance = bound_governance_for_target.get(candidate_record["event_id"])
         candidate_scope_by_event[candidate_record["event_id"]] = candidate_scope
         effective_session_revision_by_event[candidate_record["event_id"]] = effective_session_revision
+        effective_governance_by_event[candidate_record["event_id"]] = effective_governance
         candidate_ref = candidate_record["decision"]["candidate_ref"]
         if isinstance(candidate_ref, str):
             candidate_scopes.setdefault(candidate_ref, set()).add(candidate_scope)
@@ -688,6 +694,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         if len(bound_scopes) > 1 or (bound_scopes and None in scopes):
             reasons.append("CANDIDATE_SESSION_OWNERSHIP_INVALID")
     knowledge_scope_by_session_revision: dict[tuple[str, str], str] = {}
+    session_governance_by_revision: dict[tuple[str, str], dict[str, Any]] = {}
     for record in records:
         shape_reasons = _validate_event_shape(record)
         reasons.extend(shape_reasons)
@@ -722,6 +729,14 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             )
             if previous_scope != knowledge_scope:
                 reasons.append("KNOWLEDGE_SCOPE_REVISION_DRIFT")
+            effective_governance = effective_governance_by_event.get(event_id)
+            if effective_governance is not None:
+                previous_governance = session_governance_by_revision.setdefault(
+                    effective_session_revision,
+                    effective_governance,
+                )
+                if previous_governance != effective_governance:
+                    reasons.append("SESSION_GOVERNANCE_REVISION_DRIFT")
         for causal_ref in record["causation"]["caused_by_event_refs"]:
             causal_record = known.get(causal_ref)
             if causal_record is None:
@@ -782,9 +797,10 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             if not isinstance(parent_content, dict):
                 reasons.append("CONTENT_LINEAGE_STAGE_INVALID")
                 continue
-            if parent.get("session", {}).get("state") != session.get("state") or (
-                session.get("state") == "BOUND"
-                and parent.get("session", {}).get("session_ref") != session.get("session_ref")
+            if (
+                candidate_scope_by_event.get(parent_ref) is None
+                or candidate_scope_by_event.get(event_id) is None
+                or candidate_scope_by_event.get(parent_ref) != candidate_scope_by_event.get(event_id)
             ):
                 reasons.append("CONTENT_LINEAGE_SESSION_INVALID")
             if parent_content.get("artifact_stage") not in ARTIFACT_STAGE_PARENTS.get(stage, frozenset()):
@@ -1193,6 +1209,8 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
         record["event"]["invalidation_kind"] == "ACL_LOST" or record["event"]["kind"] == "acl_loss"
         for record in ordered
     )
+    if acl_fail_closed:
+        next_action = {"kind": "NONE", "source_event_ref": None, "action_ref": None}
     acl_state = next((state for state in ("REVOKED", "LOST", "UNKNOWN") if state in acl_states), latest["public_safety"]["acl_state"])
     latest_sequence = _integer_value(latest["sequence"])
     projection = {
