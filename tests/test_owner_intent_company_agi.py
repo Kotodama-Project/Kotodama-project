@@ -91,8 +91,8 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             "Session auto-creation",
             "adaptive",
             "Luna-first",
-            "Archive backendは**OPEN**",
-            "Unattended Improvement",
+            "private v1 backend",
+            "Goal Completion",
             "NO_GO_UNPUBLISHED",
         ):
             with self.subTest(surface="readme projection", marker=marker):
@@ -275,10 +275,10 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             "tiny deterministic specialists",
             "metered API architecture remains\nexcluded",
             "## Conversation archive boundary",
-            "archive backend is **OPEN**",
-            "provider-neutral,\nversioned, encrypted Conversation Evidence Package",
-            "restore/delete/\nretention test receipts",
-            "Backend selection follows those restore, delete, and\nretention tests",
+            "Archive Target interface remains provider-neutral",
+            "package manifest and\ndigests",
+            "retention period\nand deletion policy remain OPEN",
+            "ordinary encrypted file package on a dedicated ZFS",
             "## Standing GitHub delegation",
             "agent-executable revert path",
             "independent review and tests pass",
@@ -306,9 +306,9 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             "Luna-first",
             "GPT-5.6 Sol",
             "Terra",
-            "Archive backendは**OPEN**",
+            "private v1 backend",
             "Standing GitHub delegation",
-            "Unattended Improvement",
+            "Goal Completion",
             "reversible merge/revert",
             "auto",
             "kill",
@@ -334,7 +334,9 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
                 with self.subTest(surface=text_name, stale=marker):
                     self.assertNotIn(marker, text)
 
-        for backend in ("Blob Store", "ZFS", "AWS", "Drive", "MinIO", "NAS"):
+        self.assertIn("owner-selected\nprivate v1 backend is an ordinary encrypted file package on a dedicated ZFS", self.canonical)
+        self.assertIn("current inspection found no safe\ndedicated existing target", self.canonical)
+        for backend in ("Blob Store", "AWS", "Drive", "MinIO", "NAS"):
             adopted_pattern = re.compile(
                 rf"(?i)(?:adopt(?:ed|ion)?|prefer(?:red|ence)?|select(?:ed|ion)?|chosen).{{0,60}}{re.escape(backend)}"
             )
@@ -352,8 +354,8 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
                 "Correction themes",
                 "OKF v0.2",
                 "Luna-first",
-                "OPEN archive backend",
-                "bounded Unattended",
+                "private ZFS v1 target",
+                "bounded Goal Completion",
                 "runtime remains unimplemented",
                 "NO_GO_UNPUBLISHED",
                 "redacted owner-directed",
@@ -372,7 +374,7 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             projection = _markdown_section(text, heading)
             nonblank_lines = [line for line in projection.splitlines() if line.strip()]
             with self.subTest(surface=name, boundary="compact projection"):
-                self.assertLessEqual(len(nonblank_lines), 16)
+                self.assertLessEqual(len(nonblank_lines), 18)
                 self.assertLess(len(projection), len(self.canonical) // 3)
                 self.assertNotIn("## Governed knowledge and OKF", projection)
                 self.assertNotIn("## Unattended Improvement Loop", projection)

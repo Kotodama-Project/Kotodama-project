@@ -52,7 +52,8 @@ ROADMAP are projections of that source. Correction themes: one Kotodama product
 with BecomeOne as migration donor/control plane; OKF v0.2 as the central
 representation for governed curated knowledge, not sole Company truth; and
 separate raw/derived Voice evidence with adaptive GrillU. Luna-first routing,
-an OPEN archive backend, reversible delegation, and the bounded Unattended
+the provider-neutral archive interface/private ZFS v1 target (exact safe dataset
+binding still pending), reversible delegation, and the bounded Goal Completion
 Improvement Loop remain requirements. This documentation does not activate
 Voice, Agent Swarm, provider, deployment, Promotion, or Current Truth; runtime
 remains unimplemented and Public Beta remains `NO_GO_UNPUBLISHED`. The public

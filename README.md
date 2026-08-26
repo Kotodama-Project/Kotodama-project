@@ -61,6 +61,16 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
 - Session auto-creationを許し、Task SSOT、Plan/Requirement refs、Agent Invocation /
   model provenance、Capability/Knowledge/MCP grants、A2A、依存・parallel status、
   evidence / invalidationを束ねます。未知・曖昧なauthorityは明示します。
+- scoped goalごとに一つの**Completion Owner Agent**がGoal Completion Loopを所有します。
+  task数ではなくacceptance evidenceとtarget experienceを追い、max depth 2、一つのN/C/W/V ledger、
+  duplicate `work_key` / same-writer禁止、budget/TTL/kill/rollback、unchanged-input rerun抑止、
+  regression auto-revert、同一blockerのbounded escalationを強制します。
+  A2Aはgenericでmanifest-drivenです。effectを持たないRouting Agentがspecialistを選び、別の
+  Metadata/Context Resolution Agentがexact SSOT/OKF/Session/Knowledge revision・lineage・grantから
+  provenance-bound Context Packを作ります。両者は実行もtruth promotionもしません。
+  Session再利用候補はexact metadata/Forest level/identity/ACL/current revision filter、lexical、
+  optionalなsmall local encoder similarityの順で探し、source digest/provenanceとsuperseded/authorityを
+  再読検証します。embeddingはrebuildable recall projectionでありSSOTではありません。
 - **Voice Requirements Agent / GrillU**はadaptiveでchannel-neutralです。自然なcontinuous
   VoiceからもRequirementを形成し、uncertainty・impact・authorityが必要な時だけ確認します。
   固定UI・固定質問ritualを要求せず、facilitationはself-approve / self-promote / executeしません。
@@ -73,15 +83,16 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
   exact runtime model/provenance、evidenceを記録します。Identity-bound Codex subscriptionはcandidate、
   General-purpose local LLMはdeferred、local ASR/VAD・speaker support・encoder・tiny deterministic
   specialistsは許容し、metered APIは除外です。
-- Archive backendは**OPEN**で、provider-neutral versioned encrypted Conversation Evidence Packageの
-  restore / delete / retention test後に選びます。Standing GitHub delegationとUnattended Improvement
+- Archive Target interfaceはprovider-neutralのまま、private v1 backendはordinary encrypted-file
+  package + ZFS snapshotです。exactな適合dataset/mountがread-onlyで確認できるまで作成・書込みせず、
+  local restore testだけを先行します。Standing GitHub delegationとGoal Completion
   Loopは、独立review/testsとagent-executable revert pathが揃った場合に限り、agentsが
   branch/commit/open PR/mergeをautonomously実行できる設計です。reversible merge/revert、monitor、
   budget、cadence、kill、provenance、bounded authorityを必須にします。詳細な契約はcanonical docを参照してください。
 
 ### Current reality
 
-- この変更はowner directionのdocumentationだけで、runtime remains unimplemented。
+- この変更はpublic documentation/schema/validator candidateで、private runtime/deployは未実装・未証明です。
 - private Voice/Intent/Swarm pathはcontinuous capture、rotation、transcription、Requirement、
   delegation、execution、verificationを結ぶend-to-endとして未証明です。Agent Swarm、provider E2E、
   Public Betaも未証明です。

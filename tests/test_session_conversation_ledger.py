@@ -166,6 +166,11 @@ def _event(
             "locator_ref": _ref("source", f"locator-{event_id}"),
             "source_revision_ref": _ref("source-revision", f"{event_id}-1"),
             "actor_ref": actor_ref,
+            "identity_verification": (
+                "UNVERIFIED_PUBLIC_CLAIM"
+                if actor_ref.startswith(("ref/actor/", "ref/speaker/"))
+                else "NOT_APPLICABLE"
+            ),
             "speaker_track_ref": speaker_track_ref,
             "authority": {"role": authority_role, "authority_ref": authority_ref},
             "thread_ref": _ref("thread", "demo"),
@@ -1144,7 +1149,10 @@ class SessionConversationLedgerTests(unittest.TestCase):
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         integral = _valid_records()
         integral[0]["sequence"] = 1.0
+        integral[0]["integrity"]["marker"] = "GAP"
         integral[0]["integrity"]["gap_start_sequence"] = 1.0
+        integral[0]["integrity"]["gap_end_sequence"] = 1.0
+        integral[0]["integrity"]["marker_ref"] = _ref("integrity-marker", "gap-1")
         integral = _rechain(integral)
         self.assertEqual(
             [], list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(integral[0]))
@@ -1514,6 +1522,116 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual("LEDGER_VALID", json.loads(completed.stdout)["result"])
 
+    def test_adversarial_review_regressions_fail_closed(self) -> None:
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+
+        def rejected_by_schema_and_validator(mutator) -> None:  # type: ignore[no-untyped-def]
+            records = _valid_records()
+            mutator(records[-1])
+            records = _rechain(records)
+            self.assertTrue(list(Draft202012Validator(schema).iter_errors(records[-1])))
+            self.assertEqual("REFUSED", ledger.validate_ledger(records)["result"])
+
+        rejected_by_schema_and_validator(
+            lambda record: record["content"].update(
+                {"artifact_stage": "MINUTES", "derived_from_event_refs": []}
+            )
+        )
+        rejected_by_schema_and_validator(
+            lambda record: record["retention"].update(
+                {"archive_target_kind": "NONE", "archive_status": "DECLARED", "archive_receipt_ref": _ref("archive-receipt", "forged")}
+            )
+        )
+        rejected_by_schema_and_validator(
+            lambda record: record["retention"].update(
+                {"deletion_state": "CONFIRMED", "deletion_readback": "CONFIRMED", "deletion_receipt_ref": None}
+            )
+        )
+        rejected_by_schema_and_validator(
+            lambda record: record["integrity"].update(
+                {"marker": "GAP", "gap_start_sequence": 1, "gap_end_sequence": 2, "marker_ref": None}
+            )
+        )
+        rejected_by_schema_and_validator(
+            lambda record: record["provenance"].update(
+                {"ingest_mode": "OFFLINE_RECOVERY", "recovery": {"status": "PENDING", "cursor_ref": None, "receipt_ref": None}}
+            )
+        )
+        rejected_by_schema_and_validator(
+            lambda record: record["provenance"].update(
+                {"extraction": {"kind": "LLM_CANDIDATE", "candidate_ref": _ref("candidate", "demo"), "model_ref": None, "confirmation_required": True}}
+            )
+        )
+        rejected_by_schema_and_validator(
+            lambda record: (
+                record["content"].update({"artifact_stage": "RAW_AUDIO"}),
+                record["retention"].update({"storage_class": "DERIVED_SEARCH_INDEX"}),
+            )
+        )
+
+        self.assertEqual(
+            "REFUSED",
+            ledger.validate_ledger([{"event_id": []}])["result"],
+        )
+
+    def test_deep_json_and_embedded_public_identifiers_are_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "deep.jsonl"
+            path.write_text('{"x":' * 5000 + "0" + "}" * 5000 + "\n", encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, "-B", str(VALIDATOR), "validate", str(path)],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+        self.assertEqual(2, completed.returncode)
+        self.assertNotIn("Traceback", completed.stderr)
+        self.assertIn("INPUT_INVALID", json.loads(completed.stdout)["reason_codes"])
+
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        for unsafe in (
+            "ref/source/discord-12345678901234567",
+            "ref/source/foo-sk-token",
+        ):
+            records = _valid_records()
+            records[0]["source"]["locator_ref"] = unsafe
+            records = _rechain(records)
+            with self.subTest(unsafe=unsafe):
+                self.assertTrue(list(Draft202012Validator(schema).iter_errors(records[0])))
+                self.assertIn("PUBLIC_METADATA_UNSAFE_REF", ledger.validate_ledger(records)["reason_codes"])
+
+    def test_voice_reply_egress_is_exactly_destination_and_receipt_bound(self) -> None:
+        records = _valid_records()
+        reply = _event(
+            "voice-reply-1",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="voice_reply",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            revision=_ref("session-revision", "1"),
+            source_type="discord_voice",
+            speaker_track_ref=_ref("track", "reply"),
+        )
+        reply["egress"] = {
+            "destination_ref": reply["source"]["channel_ref"],
+            "consent_ref": reply["source"]["consent_ref"],
+            "reply_artifact_ref": _ref("reply-artifact", "voice-reply-1"),
+            "delivery_receipt_ref": _ref("delivery-receipt", "voice-reply-1"),
+            "delivery_state": "VERIFIED",
+            "raw_content_embedded": False,
+        }
+        records.append(reply)
+        records = _rechain(records)
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(records)["result"])
+
+        wrong = copy.deepcopy(records)
+        wrong[-1]["egress"]["destination_ref"] = _ref("channel", "other")
+        wrong = _rechain(wrong)
+        self.assertIn("VOICE_REPLY_EGRESS_SCOPE_INVALID", ledger.validate_ledger(wrong)["reason_codes"])
+
     def test_runbook_covers_all_lifecycle_and_source_hooks_without_connectors(self) -> None:
         runbook = RUNBOOK.read_text(encoding="utf-8")
         for token in (
@@ -1551,7 +1669,7 @@ class SessionConversationLedgerTests(unittest.TestCase):
             "kill switch",
             "Luna-first",
             "Terra",
-            "Unattended Improvement Loop",
+            "Goal Completion Loop",
             "Archive Target / Session Archive Vault",
             "COLD_ARCHIVE_TARGET_REQUIRED",
             "CANDIDATE_LIFECYCLE_REGRESSION",

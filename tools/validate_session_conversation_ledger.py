@@ -30,6 +30,7 @@ EVENT_REQUIRED = {
     "policy_deviation", "retention", "provenance", "public_safety", "integrity",
     "previous_event_hash", "event_hash",
 }
+EVENT_ALLOWED = EVENT_REQUIRED | {"egress"}
 SESSION_KEYS = {"state", "session_ref", "revision_ref", "binding_event_ref", "governance"}
 GOVERNANCE_KEYS = {
     "creation_mode", "task_ssot_ref", "plan_ref", "requirement_refs", "invocation_ref", "model_ref",
@@ -38,7 +39,7 @@ GOVERNANCE_KEYS = {
 }
 SOURCE_KEYS = {
     "type", "occurred_at", "ingested_at", "locator_ref", "source_revision_ref",
-    "actor_ref", "speaker_track_ref", "authority", "thread_ref", "channel_ref", "document_ref",
+    "actor_ref", "identity_verification", "speaker_track_ref", "authority", "thread_ref", "channel_ref", "document_ref",
     "repository_ref", "evidence_ref", "consent_ref",
 }
 AUTHORITY_KEYS = {"role", "authority_ref"}
@@ -55,6 +56,10 @@ OWNERSHIP_KEYS = {"owner_ref", "assignee_ref"}
 EVENT_KEYS = {
     "kind", "state", "summary_ref", "correction_of_event_ref", "withdrawal_of_event_ref",
     "confirmation_of_event_ref", "invalidation_kind", "invalidation_refs", "binding",
+}
+EGRESS_KEYS = {
+    "destination_ref", "consent_ref", "reply_artifact_ref", "delivery_receipt_ref",
+    "delivery_state", "raw_content_embedded",
 }
 BINDING_KEYS = {"target_event_refs", "destination_session_ref", "destination_revision_ref"}
 DECISION_KEYS = {
@@ -85,7 +90,7 @@ ACTOR_AUTHORITY_ROLES = {
     "system": {"SYSTEM"},
 }
 EVENT_KINDS = {
-    "session_open", "human_message", "voice_segment", "tool_action", "agent_action",
+    "session_open", "human_message", "voice_segment", "voice_reply", "tool_action", "agent_action",
     "decision_candidate", "decision_confirmed", "correction", "withdrawal", "confirmation",
     "source_update", "source_delete", "acl_loss", "invalidation", "pre_compact",
     "session_end", "session_seal", "session_binding", "recovery_marker", "integrity_marker",
@@ -222,10 +227,10 @@ def _public_ref_is_safe(value: Any) -> bool:
     if not isinstance(value, str):
         return True
     lowered = value.casefold()
-    if re.search(r"(?:^|/)\d{17,20}(?:/|$)", value):
+    if re.search(r"\d{17,20}", value):
         return False
     if re.search(
-        r"(?:^|/)(?:sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)",
+        r"(?:sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)",
         lowered,
     ):
         return False
@@ -311,7 +316,7 @@ def _ref_list(value: Any, reasons: list[str], *, events: bool = False) -> bool:
 
 def _validate_event_shape(record: Any) -> list[str]:
     reasons: list[str] = []
-    if not _keys(record, EVENT_REQUIRED, EVENT_REQUIRED, "event", reasons):
+    if not _keys(record, EVENT_REQUIRED, EVENT_ALLOWED, "event", reasons):
         return list(dict.fromkeys(reasons))
     if record.get("kind") != EVENT_KIND or record.get("schema_revision") != "v1":
         reasons.append("SCHEMA_INVALID")
@@ -371,6 +376,13 @@ def _validate_event_shape(record: Any) -> list[str]:
                 reasons.append("ACTOR_AUTHORITY_CONFUSION")
             if not _actor_authority_is_consistent(actor, authority.get("role")):
                 reasons.append("ACTOR_AUTHORITY_ROLE_MISMATCH")
+        expected_identity_state = (
+            "UNVERIFIED_PUBLIC_CLAIM"
+            if _actor_kind(actor) in {"actor", "speaker"}
+            else "NOT_APPLICABLE"
+        )
+        if source.get("identity_verification") != expected_identity_state:
+            reasons.append("IDENTITY_VERIFICATION_STATE_INVALID")
         _ref(source.get("speaker_track_ref"), reasons, pattern=r"^ref/track/[a-z0-9][a-z0-9/_-]{1,240}$", nullable=True)
         if source.get("type") == "discord_voice" and source.get("speaker_track_ref") is None:
             reasons.append("VOICE_TRACK_REF_MISSING")
@@ -414,6 +426,7 @@ def _validate_event_shape(record: Any) -> list[str]:
         _ref(ownership.get("assignee_ref"), reasons, pattern=r"^ref/assignee/[a-z0-9][a-z0-9/_-]{1,240}$", nullable=True)
 
     detail = record["event"]
+    detail_kind = detail.get("kind") if isinstance(detail, dict) else None
     if _keys(detail, EVENT_KEYS, EVENT_KEYS, "event_detail", reasons):
         if detail.get("kind") not in EVENT_KINDS or detail.get("state") not in EVENT_STATES:
             reasons.append("SCHEMA_INVALID")
@@ -428,6 +441,21 @@ def _validate_event_shape(record: Any) -> list[str]:
             _ref_list(binding.get("target_event_refs"), reasons, events=True)
             _ref(binding.get("destination_session_ref"), reasons, pattern=r"^ref/session/[a-z0-9][a-z0-9/_-]{1,244}$", nullable=True)
             _ref(binding.get("destination_revision_ref"), reasons, pattern=r"^ref/session-revision/[1-9][0-9]*$", nullable=True)
+
+    egress = record.get("egress")
+    if detail_kind == "voice_reply":
+        if _keys(egress, EGRESS_KEYS, EGRESS_KEYS, "egress", reasons):
+            for key in ("destination_ref", "consent_ref", "reply_artifact_ref", "delivery_receipt_ref"):
+                _ref(egress.get(key), reasons)
+            if egress.get("delivery_state") != "VERIFIED" or egress.get("raw_content_embedded") is not False:
+                reasons.append("VOICE_REPLY_EGRESS_INVALID")
+            if (
+                egress.get("destination_ref") != record.get("source", {}).get("channel_ref")
+                or egress.get("consent_ref") != record.get("source", {}).get("consent_ref")
+            ):
+                reasons.append("VOICE_REPLY_EGRESS_SCOPE_INVALID")
+    elif egress is not None:
+        reasons.append("VOICE_REPLY_EGRESS_INVALID")
 
     decision = record["decision"]
     if _keys(decision, DECISION_KEYS, DECISION_KEYS, "decision", reasons):
@@ -520,6 +548,15 @@ def _validate_event_shape(record: Any) -> list[str]:
             reasons.append("DELETION_READBACK_RECEIPT_INVALID")
         if retention.get("deletion_state") == "CONFIRMED" and (retention.get("deletion_readback") != "CONFIRMED" or retention.get("deletion_receipt_ref") is None):
             reasons.append("DELETION_STATE_RECEIPT_INVALID")
+        if record.get("content", {}).get("artifact_stage") in {
+            "RAW_AUDIO",
+            "RAW_SOURCE_JSON",
+            "RAW_ASR",
+            "ALIGNED_TRANSCRIPT",
+            "SPEAKER_ATTRIBUTED_TRANSCRIPT",
+            "SOURCE_EVIDENCE",
+        } and retention.get("storage_class") == "DERIVED_SEARCH_INDEX":
+            reasons.append("RAW_EVIDENCE_STORAGE_CLASS_INVALID")
 
     provenance = record["provenance"]
     if _keys(provenance, PROVENANCE_KEYS, PROVENANCE_KEYS, "provenance", reasons):
@@ -546,7 +583,11 @@ def _validate_event_shape(record: Any) -> list[str]:
             _ref(recovery.get("receipt_ref"), reasons, nullable=True)
             if provenance.get("ingest_mode") == "OFFLINE_RECOVERY" and (recovery.get("cursor_ref") is None or recovery.get("receipt_ref") is None or recovery.get("status") != "RECOVERED"):
                 reasons.append("OFFLINE_RECOVERY_INCOMPLETE")
-            if provenance.get("ingest_mode") == "ONLINE" and recovery.get("status") != "NOT_APPLICABLE":
+            if provenance.get("ingest_mode") == "ONLINE" and (
+                recovery.get("status") != "NOT_APPLICABLE"
+                or recovery.get("cursor_ref") is not None
+                or recovery.get("receipt_ref") is not None
+            ):
                 reasons.append("SCHEMA_INVALID")
 
     safety = record["public_safety"]
@@ -570,6 +611,17 @@ def _validate_event_shape(record: Any) -> list[str]:
         _ref(integrity.get("marker_ref"), reasons, nullable=True)
         if integrity.get("marker") != "NONE" and integrity.get("marker_ref") is None:
             reasons.append("INTEGRITY_MARKER_UNBOUND")
+        if integrity.get("marker") == "NONE" and any(
+            integrity.get(key) is not None
+            for key in ("gap_start_sequence", "gap_end_sequence", "marker_ref")
+        ):
+            reasons.append("INTEGRITY_MARKER_UNBOUND")
+        if integrity.get("marker") == "GAP" and (
+            not _is_integer_number(integrity.get("gap_start_sequence"))
+            or not _is_integer_number(integrity.get("gap_end_sequence"))
+            or integrity["gap_end_sequence"] < integrity["gap_start_sequence"]
+        ):
+            reasons.append("INTEGRITY_GAP_INVALID")
     _sha(record.get("previous_event_hash"), reasons)
     _sha(record.get("event_hash"), reasons)
     return list(dict.fromkeys(reasons))
@@ -582,7 +634,11 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     previous_sequence = 0
     previous_ingested: datetime | None = None
     expected_previous = GENESIS_HASH
-    known = {record.get("event_id"): record for record in records if isinstance(record, dict)}
+    known = {
+        record["event_id"]: record
+        for record in records
+        if isinstance(record, dict) and isinstance(record.get("event_id"), str)
+    }
     latest_revision: dict[str, int] = {}
     seen_content_artifacts = {"payload_vault_ref": set(), "vault_manifest_ref": set(), "content_hash": set()}
     candidate_states: dict[str, str] = {}
@@ -709,6 +765,12 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                     reasons.append("LIFECYCLE_TARGET_SESSION_INVALID")
                 elif target.get("decision", {}).get("candidate_ref") is not None and record["decision"].get("candidate_ref") != target["decision"].get("candidate_ref"):
                     reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
+                elif detail["kind"] == "decision_confirmed" and (
+                    target.get("event", {}).get("kind") != "decision_candidate"
+                    or target.get("decision", {}).get("status") != "LLM_CANDIDATE"
+                    or target.get("decision", {}).get("candidate_ref") is None
+                ):
+                    reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
 
         decision = record["decision"]
         candidate_ref = decision.get("candidate_ref")
@@ -721,7 +783,6 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                 candidate_states.setdefault(candidate_ref, "CANDIDATE")
             elif candidate_status in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"}:
                 allowed = {
-                    None: {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"},
                     "CANDIDATE": {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"},
                     "HUMAN_CONFIRMED": {"HUMAN_CORRECTED", "HUMAN_WITHDRAWN"},
                     "HUMAN_CORRECTED": {"HUMAN_CORRECTED", "HUMAN_WITHDRAWN"},
@@ -751,6 +812,9 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         if decision["status"] == "LLM_CANDIDATE":
             if decision["candidate_ref"] is None or decision["human_evidence_ref"] is not None or decision["human_decision_ref"] is not None:
                 reasons.append("LLM_RESULT_NOT_CANDIDATE")
+        extraction = record["provenance"]["extraction"]
+        if extraction["kind"] == "LLM_CANDIDATE" and extraction["candidate_ref"] != decision.get("candidate_ref"):
+            reasons.append("EXTRACTION_CANDIDATE_BINDING_INVALID")
         if detail["kind"] == "decision_confirmed" and decision["status"] not in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED"}:
             reasons.append("CONFIRMED_EVENT_STATE_INVALID")
         if detail["kind"] == "correction" and decision["status"] != "HUMAN_CORRECTED":
@@ -795,6 +859,8 @@ def validate_ledger(records: list[dict[str, Any]]) -> dict[str, Any]:
         "record_count": len(records),
         "integrity_markers": markers,
         "replay_detected": "DUPLICATE_IDEMPOTENCY_KEY" in reasons,
+        "human_identity_authentication": "UNVERIFIED_PUBLIC_CLAIM",
+        "promotion_eligible": False,
     }
     if records and isinstance(records[-1], dict):
         sequence = records[-1].get("sequence")
@@ -1022,6 +1088,7 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
             "projection_is_source_authority": False,
             "compaction_summary_is_source": False,
             "human_decision_requires_evidence": True,
+            "human_identity_authentication": "UNVERIFIED_PUBLIC_CLAIM",
             "current_truth_changed": False,
         },
         "public_beta": "NO_GO_UNPUBLISHED",
@@ -1079,7 +1146,7 @@ def _cli(argv: list[str]) -> int:
         return 2
     try:
         records = read_jsonl(Path(argv[2]))
-    except (OSError, UnicodeError, ValueError, json.JSONDecodeError, DuplicateKeyError):
+    except (OSError, UnicodeError, ValueError, RecursionError, json.JSONDecodeError, DuplicateKeyError):
         print(json.dumps({"result": "REFUSED", "reason_codes": ["INPUT_INVALID"]}, separators=(",", ":")))
         return 2
     if argv[1] == "validate":

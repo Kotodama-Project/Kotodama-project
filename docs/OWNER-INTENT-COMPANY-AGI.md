@@ -152,14 +152,15 @@ redaction, and routing rules.
 
 ## Conversation archive boundary
 
-The archive backend is **OPEN**. No storage or archive backend is adopted or
-preferred by this direction. If useful, Kotodama can define a provider-neutral,
-versioned, encrypted Conversation Evidence Package containing a package
-version, encryption/key-reference boundary, content manifest and digests,
-source/session locators, retention and deletion state, and restore/delete/
-retention test receipts. Backend selection follows those restore, delete, and
-retention tests; a backend name, availability check, or historical receipt is
-not adoption evidence.
+The Archive Target interface remains provider-neutral. The owner-selected
+private v1 backend is an ordinary encrypted file package on a dedicated ZFS
+archive dataset with snapshot/restore. The exact suitable dataset and mount must
+be identified and read back before use; the current inspection found no safe
+dedicated existing target, so this direction creates nothing and writes
+nothing. Local package/restore tests proceed first. The final retention period
+and deletion policy remain OPEN; no automatic deletion is implied. Future
+Drive/S3/NAS replication or migration preserves the package manifest and
+digests rather than changing canonical raw evidence.
 
 ## Standing GitHub delegation
 
@@ -192,6 +193,31 @@ This loop is not unbounded self-modification. Each experiment and promotion
 retains its evidence, routing provenance, review, rollback, and authority
 boundary.
 
+The canonical primitive is the **Goal Completion Loop**, owned by one
+**Completion Owner Agent** per scoped goal. The owner binds acceptance criteria,
+current SSOT revision, authority/capability grants, budget/TTL/kill/rollback,
+one global N/C/W/V ledger, max depth two, unique active work keys, and
+non-overlapping writers. It decomposes only into bounded disposable work,
+aggregates typed evidence, verifies the actual target experience and negative
+controls, promotes only reviewed/read-back outputs, updates the causal ledger
+and rebuildable OKF projection, and re-evaluates the same goal until complete
+or genuinely blocked. Attempts, tasks, reviews, and proxy-green metrics are not
+completion evidence. Unchanged inputs suppress reruns, repeated identical
+blockers escalate only after a bounded threshold, and regressions auto-revert.
+
+A generic manifest-driven Routing Agent may classify and dispatch the scoped
+goal, and a separate Metadata/Context Resolution Agent may resolve exact
+SSOT/OKF/Session/Knowledge revisions, lineage, ACL and grants into the minimum
+provenance-bound Context Pack. Neither role executes effects, promotes truth, or
+expands authority. Execution and review agents consume that packet.
+
+Before creating or linking a Session, recall uses exact metadata, Forest level,
+identity, ACL and current-revision filters, then lexical and optional small local
+encoder similarity across Session plus curated Knowledge/OKF/BecomeOne donor
+candidates. Embeddings are rebuildable projections only. Reuse is allowed only
+after source-text/digest/provenance readback and current/superseded/authority
+validation; false-neighbor and stale-index paths fail closed.
+
 ## Current reality
 
 - This branch is a **documentation-only public candidate**. The canonical
@@ -210,9 +236,9 @@ boundary.
 - The OKF extension profile, A2A transport, realtime Context, Context Pack and
   attestation topology, ledger/projection topology, RAG, knowledge graph,
   encoder, and invalidation implementation remain under research.
-- Archive backend selection remains open until provider-neutral restore/delete/
-  retention tests pass. Query-plane, raw-source, and operational-system roles
-  must not be conflated with the Conversation Evidence Package.
+- Exact private ZFS dataset binding, external cold-archive replication, and the
+  retention/deletion period remain open. Query-plane, raw-source, and
+  operational-system roles must not be conflated with the Conversation Evidence Package.
 - Exact deployment, model/subscription capacity, specialist-sharing UX, and
   provider/runtime integration remain unresolved and separately governed.
 

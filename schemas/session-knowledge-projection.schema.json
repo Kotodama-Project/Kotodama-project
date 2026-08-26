@@ -85,8 +85,8 @@
     },
     "public_ref_safety": {
       "allOf": [
-        {"not": {"pattern": "(^|/)[0-9]{17,20}(/|$)"}},
-        {"not": {"pattern": "(^|/)(sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)"}},
+        {"not": {"pattern": "[0-9]{17,20}"}},
+        {"not": {"pattern": "(sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)"}},
         {"not": {"pattern": "[@\\s\\\\:]"}},
         {"not": {"pattern": "(^|/)([0-9]{1,3}\\.){3}[0-9]{1,3}(/|$)"}},
         {"not": {"pattern": "(^|/)([a-z0-9-]+\\.)+[a-z]{2,}(/|$)"}},
@@ -271,11 +271,12 @@
     "authority": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["projection_is_source_authority", "compaction_summary_is_source", "human_decision_requires_evidence", "current_truth_changed"],
+      "required": ["projection_is_source_authority", "compaction_summary_is_source", "human_decision_requires_evidence", "human_identity_authentication", "current_truth_changed"],
       "properties": {
         "projection_is_source_authority": {"const": false},
         "compaction_summary_is_source": {"const": false},
         "human_decision_requires_evidence": {"const": true},
+        "human_identity_authentication": {"const": "UNVERIFIED_PUBLIC_CLAIM"},
         "current_truth_changed": {"const": false}
       }
     }

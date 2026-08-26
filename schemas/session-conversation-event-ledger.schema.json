@@ -44,9 +44,39 @@
     "provenance": {"$ref": "#/$defs/provenance"},
     "public_safety": {"$ref": "#/$defs/public_safety"},
     "integrity": {"$ref": "#/$defs/integrity"},
+    "egress": {"$ref": "#/$defs/egress"},
     "previous_event_hash": {"$ref": "#/$defs/sha256"},
     "event_hash": {"$ref": "#/$defs/sha256"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "content": {
+            "properties": {
+              "artifact_stage": {
+                "enum": ["RAW_AUDIO", "RAW_SOURCE_JSON", "RAW_ASR", "ALIGNED_TRANSCRIPT", "SPEAKER_ATTRIBUTED_TRANSCRIPT", "SOURCE_EVIDENCE"]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "retention": {
+            "properties": {
+              "storage_class": {"enum": ["PROTECTED_HOT", "ENCRYPTED_COLD_ARCHIVE"]}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"event": {"properties": {"kind": {"const": "voice_reply"}}}}},
+      "then": {"required": ["egress"]},
+      "else": {"not": {"required": ["egress"]}}
+    }
+  ],
   "$defs": {
     "ref": {
       "type": "string",
@@ -78,8 +108,8 @@
     },
     "public_ref_safety": {
       "allOf": [
-        {"not": {"pattern": "(^|/)[0-9]{17,20}(/|$)"}},
-        {"not": {"pattern": "(^|/)(sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)"}},
+        {"not": {"pattern": "[0-9]{17,20}"}},
+        {"not": {"pattern": "(sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)"}},
         {"not": {"pattern": "[@\\s\\\\:]"}},
         {"not": {"pattern": "(^|/)([0-9]{1,3}\\.){3}[0-9]{1,3}(/|$)"}},
         {"not": {"pattern": "(^|/)([a-z0-9-]+\\.)+[a-z]{2,}(/|$)"}},
@@ -235,6 +265,7 @@
         "locator_ref",
         "source_revision_ref",
         "actor_ref",
+        "identity_verification",
         "speaker_track_ref",
         "authority",
         "thread_ref",
@@ -268,6 +299,7 @@
             {"pattern": "^ref/(actor|speaker|agent|connector|system)/[a-z0-9][a-z0-9/_-]{1,240}$"}
           ]
         },
+        "identity_verification": {"enum": ["UNVERIFIED_PUBLIC_CLAIM", "NOT_APPLICABLE"]},
         "speaker_track_ref": {
           "oneOf": [
             {"allOf": [
@@ -302,19 +334,31 @@
         },
         {
           "if": {"properties": {"actor_ref": {"pattern": "^ref/(actor|speaker)/"}}},
-          "then": {"properties": {"authority": {"properties": {"role": {"enum": ["HUMAN", "OWNER"]}}}}}
+          "then": {"properties": {
+            "authority": {"properties": {"role": {"enum": ["HUMAN", "OWNER"]}}},
+            "identity_verification": {"const": "UNVERIFIED_PUBLIC_CLAIM"}
+          }}
         },
         {
           "if": {"properties": {"actor_ref": {"pattern": "^ref/agent/"}}},
-          "then": {"properties": {"authority": {"properties": {"role": {"enum": ["AGENT", "SYSTEM"]}}}}}
+          "then": {"properties": {
+            "authority": {"properties": {"role": {"enum": ["AGENT", "SYSTEM"]}}},
+            "identity_verification": {"const": "NOT_APPLICABLE"}
+          }}
         },
         {
           "if": {"properties": {"actor_ref": {"pattern": "^ref/connector/"}}},
-          "then": {"properties": {"authority": {"properties": {"role": {"enum": ["CONNECTOR", "SYSTEM"]}}}}}
+          "then": {"properties": {
+            "authority": {"properties": {"role": {"enum": ["CONNECTOR", "SYSTEM"]}}},
+            "identity_verification": {"const": "NOT_APPLICABLE"}
+          }}
         },
         {
           "if": {"properties": {"actor_ref": {"pattern": "^ref/system/"}}},
-          "then": {"properties": {"authority": {"properties": {"role": {"const": "SYSTEM"}}}}}
+          "then": {"properties": {
+            "authority": {"properties": {"role": {"const": "SYSTEM"}}},
+            "identity_verification": {"const": "NOT_APPLICABLE"}
+          }}
         }
       ]
     },
@@ -352,7 +396,14 @@
           "enum": ["RAW_AUDIO", "RAW_SOURCE_JSON", "RAW_ASR", "ALIGNED_TRANSCRIPT", "SPEAKER_ATTRIBUTED_TRANSCRIPT", "CORRECTED_TRANSCRIPT", "MINUTES", "SOURCE_EVIDENCE"]
         },
         "derived_from_event_refs": {"$ref": "#/$defs/event_ref_array"}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"artifact_stage": {"enum": ["RAW_AUDIO", "RAW_SOURCE_JSON"]}}},
+          "then": {"properties": {"derived_from_event_refs": {"maxItems": 0}}},
+          "else": {"properties": {"derived_from_event_refs": {"minItems": 1}}}
+        }
+      ]
     },
     "causation": {
       "type": "object",
@@ -455,6 +506,7 @@
             "session_open",
             "human_message",
             "voice_segment",
+            "voice_reply",
             "tool_action",
             "agent_action",
             "decision_candidate",
@@ -504,6 +556,26 @@
         },
         "invalidation_refs": {"$ref": "#/$defs/ref_array"},
         "binding": {"$ref": "#/$defs/binding"}
+      }
+    },
+    "egress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "destination_ref",
+        "consent_ref",
+        "reply_artifact_ref",
+        "delivery_receipt_ref",
+        "delivery_state",
+        "raw_content_embedded"
+      ],
+      "properties": {
+        "destination_ref": {"$ref": "#/$defs/ref"},
+        "consent_ref": {"$ref": "#/$defs/ref"},
+        "reply_artifact_ref": {"$ref": "#/$defs/ref"},
+        "delivery_receipt_ref": {"$ref": "#/$defs/ref"},
+        "delivery_state": {"const": "VERIFIED"},
+        "raw_content_embedded": {"const": false}
       }
     },
     "decision": {
@@ -636,7 +708,50 @@
           ]
         },
         "deletion_readback": {"enum": ["NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"]}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"archive_target_kind": {"const": "NONE"}}},
+          "then": {"properties": {
+            "archive_status": {"const": "NOT_REQUESTED"},
+            "archive_target_ref": {"type": "null"},
+            "archive_target_uri_ref": {"type": "null"},
+            "archive_package_digest": {"type": "null"},
+            "snapshot_receipt_ref": {"type": "null"},
+            "archive_receipt_ref": {"type": "null"},
+            "restore_status": {"const": "NOT_REQUESTED"},
+            "restore_receipt_ref": {"type": "null"}
+          }}
+        },
+        {
+          "if": {"properties": {"archive_status": {"enum": ["DECLARED", "RESTORED", "DELETED"]}}},
+          "then": {"properties": {"archive_receipt_ref": {"$ref": "#/$defs/ref"}}}
+        },
+        {
+          "if": {"properties": {"deletion_state": {"const": "CONFIRMED"}}},
+          "then": {"properties": {
+            "deletion_readback": {"const": "CONFIRMED"},
+            "deletion_receipt_ref": {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/deletion-receipt/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]}
+          }}
+        },
+        {
+          "if": {"properties": {"deletion_readback": {"const": "CONFIRMED"}}},
+          "then": {"properties": {
+            "deletion_state": {"const": "CONFIRMED"},
+            "deletion_receipt_ref": {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/deletion-receipt/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]}
+          }}
+        },
+        {
+          "if": {"properties": {"storage_class": {"const": "ENCRYPTED_COLD_ARCHIVE"}}},
+          "then": {"properties": {"encryption_status": {"const": "DECLARED_UNVERIFIED"}}}
+        }
+      ]
     },
     "extraction": {
       "type": "object",
@@ -652,7 +767,17 @@
         },
         "model_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
         "confirmation_required": {"const": true}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "LLM_CANDIDATE"}}},
+          "then": {"properties": {
+            "candidate_ref": {"type": "string", "pattern": "^ref/candidate/[a-z0-9][a-z0-9/_-]{1,240}$"},
+            "model_ref": {"$ref": "#/$defs/ref"}
+          }},
+          "else": {"properties": {"candidate_ref": {"type": "null"}, "model_ref": {"type": "null"}}}
+        }
+      ]
     },
     "recovery": {
       "type": "object",
@@ -682,7 +807,22 @@
         "connector_ref": {"$ref": "#/$defs/ref"},
         "extraction": {"$ref": "#/$defs/extraction"},
         "recovery": {"$ref": "#/$defs/recovery"}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"ingest_mode": {"const": "OFFLINE_RECOVERY"}}},
+          "then": {"properties": {"recovery": {"properties": {
+            "status": {"const": "RECOVERED"},
+            "cursor_ref": {"$ref": "#/$defs/ref"},
+            "receipt_ref": {"$ref": "#/$defs/ref"}
+          }}}},
+          "else": {"properties": {"recovery": {"properties": {
+            "status": {"const": "NOT_APPLICABLE"},
+            "cursor_ref": {"type": "null"},
+            "receipt_ref": {"type": "null"}
+          }}}}
+        }
+      ]
     },
     "public_safety": {
       "type": "object",
@@ -720,7 +860,25 @@
           "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]
         },
         "marker_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"marker": {"const": "NONE"}}},
+          "then": {"properties": {
+            "gap_start_sequence": {"type": "null"},
+            "gap_end_sequence": {"type": "null"},
+            "marker_ref": {"type": "null"}
+          }},
+          "else": {"properties": {"marker_ref": {"$ref": "#/$defs/ref"}}}
+        },
+        {
+          "if": {"properties": {"marker": {"const": "GAP"}}},
+          "then": {"properties": {
+            "gap_start_sequence": {"type": "integer", "minimum": 1},
+            "gap_end_sequence": {"type": "integer", "minimum": 1}
+          }}
+        }
+      ]
     }
   }
 }

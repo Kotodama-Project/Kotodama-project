@@ -1,7 +1,7 @@
 # Session Conversation/Event Ledger Candidate 2
 
 これは、Kotodama の Session に関係する会話と操作を後から再構成するための、
-**未コミットの公開候補契約**です。実際の Discord、Notion、GitHub、Codex、Claude、
+**レビュー中branch上の公開候補契約**です。実際の Discord、Notion、GitHub、Codex、Claude、
 Google Drive や provider へ接続する adapter は含みません。
 
 ## Canonical boundary
@@ -42,9 +42,15 @@ are human or owner authored, agent refs are agent/system authored, connector
 refs are connector/system authored, and system refs are system authored. A
 human lifecycle decision additionally carries a person-bound
 `decision.human_actor_ref` matching the source actor and authority suffixes;
-an agent cannot become `HUMAN_CONFIRMED` by declaring OWNER or another
-approval-sounding role. Human evidence and decision refs remain required, but
-their presence alone is not person or authority proof.
+an agent cannot become a promotion-eligible Human Decision by declaring OWNER
+or another approval-sounding role. Human-shaped sources must explicitly carry
+`identity_verification: UNVERIFIED_PUBLIC_CLAIM`; the public schema and CLI
+validate structure but cannot authenticate a person. Validation output and the
+knowledge projection therefore keep `promotion_eligible: false` and
+`human_identity_authentication: UNVERIFIED_PUBLIC_CLAIM`. Human evidence and
+decision refs remain required, but their presence alone is not person or
+authority proof; a protected runtime identity receipt is still required before
+any promotion outside this public candidate.
 
 Every non-system source kind requires an explicit `source.consent_ref`; every
 event carries non-null retention policy and policy-revision refs. A
@@ -156,6 +162,7 @@ revision を opaque に返し、payload bytes をこの public candidate に返�
 |---|---|---|
 | SessionStart/open | `session_open` | session ref/revision or `UNASSIGNED_INBOX`, correlation/cursor |
 | incoming human message/voice segment | `human_message` / `voice_segment` | actor/speaker ref, source locator/revision, payload vault ref/hash/span |
+| verified private Voice reply | `voice_reply` | exact destination/consent/reply artifact/delivery receipt refs; no raw reply body |
 | tool/agent action | `tool_action` / `agent_action` | actor, authority role, owner/assignee, causation and idempotency |
 | decision confirmation/correction | `decision_confirmed` / `confirmation` / `correction` | candidate ref, human evidence, decision/correction ref |
 | pre-compact | `pre_compact` | projection summary ref, `PROJECTION_ONLY`; never source authority |
@@ -211,16 +218,43 @@ and evidence remain required. Candidate 1's exact public documentation still
 contains the superseded Luna-only absolute and needs a separate content-confirmed
 follow-up correction; it is not rewritten by this worktree.
 
-## Unattended Improvement Loop (contract-only)
+## Goal Completion Loop (contract-only)
 
-The ledger can carry the lifecycle refs for an unattended improvement loop:
+Each scoped goal has one **Completion Owner Agent**. It owns completion evidence,
+not a single task attempt. The owner binds acceptance criteria, current SSOT
+revision, authority/capability grants, one global N/C/W/V ledger, budget, TTL,
+kill, rollback, and one active `work_key`, then runs this bounded loop:
 
 ```text
-observe evidence/metrics/feedback -> hypothesis + automatic Session/Task
+read raw/canonical state -> acceptance gaps -> automatic or reused Session/Task
 -> bounded disposable experiment -> Luna-first build/review
 -> upper-tier Sol audit/integration when warranted -> reversible Git merge
--> monitor -> auto-revert regression -> promote verified learning into OKF/SSOT
+-> target-experience verification + negative controls -> monitor
+-> auto-revert regression -> causal ledger + rebuildable OKF projection
+-> re-evaluate the same goal until complete or genuinely blocked
 ```
+
+Task/retry/review counts and green proxy metrics do not complete the goal.
+Unchanged input/evidence suppresses reruns; duplicate active `work_key`,
+same-writer overlap, depth above two, budget/TTL expiry, routing/context spoof,
+stale or wrong-scope Context Pack, and authority escalation fail closed.
+Repeated identical blockers escalate only after the bounded threshold. A
+sandbox result is adopted only after reproducible test/readback and fresh
+review; subagents cannot promote canonical truth or expand authority.
+
+A generic manifest-driven **Routing Agent** classifies the scoped goal and
+selects specialist definitions without effects or ambient authority. A separate
+**Metadata/Context Resolution Agent** resolves exact SSOT/OKF/Session/Knowledge
+revisions, lineage and grants, then emits the minimal provenance-bound Context
+Pack. Execution/review agents consume that packet; routing and metadata agents
+do not execute or promote.
+
+Session lookup is hybrid but authority-first: exact metadata, Forest level,
+identity, ACL and current-revision filters precede lexical and optional small
+local encoder similarity across Session plus curated Knowledge/OKF/BecomeOne
+candidate records. Embeddings are rebuildable recall projections only. The
+source text/digest/provenance is reread and current/superseded/authority state is
+validated before reuse or linking.
 
 The loop requires explicit budget, cadence, kill conditions, and evidence at
 each transition. It cannot perform unbounded self-modification or cross
@@ -274,4 +308,5 @@ rebuildable and always reports `projection_is_source_authority: false`,
   permission invalidates the affected projection and blocks the next action.
 - A compaction summary can guide a rebuild but cannot supply source evidence or Human Decision.
 
-This candidate remains uncommitted and has no device, provider, public, or human-go effect.
+This candidate is committed on a review branch and has no device, provider,
+public-runtime, merge, or human-go effect.
