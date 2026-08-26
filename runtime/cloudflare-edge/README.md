@@ -19,6 +19,8 @@ bound preview hostname and a valid RS256 Cloudflare Access JWT with an exact
 issuer and audience. Missing, malformed, forged, expired, not-yet-valid, or
 wrong-audience JWTs fail closed. A different host, including a base
 `workers.dev` or version-origin hostname, is denied before any upstream fetch.
+Cached Access keys are refreshed once immediately when a verified token names
+an unknown `kid`, so normal signing-key rotation does not wait for cache expiry.
 
 The Voice route can call only the configured HTTPS Context Gateway origin:
 
@@ -26,6 +28,10 @@ The Voice route can call only the configured HTTPS Context Gateway origin:
 - `POST /voice/review/{id}` maps to
   `POST /v1/voice/handoffs/{id}/review`;
 - review actions are limited to `accept`, `edit`, and `reject`;
+- review request streams are cancelled as soon as they cross the 16 KiB body
+  limit, including when `Content-Length` is absent or understated;
+- the verified Access `sub` and `email` claims are copied into fresh outbound
+  actor headers, so caller-supplied spoof headers are never forwarded;
 - the Gateway response is reconstructed through an allowlist;
 - raw audio, transcript, credential, source body, and private corpus keys are
   rejected, not silently forwarded;
@@ -95,10 +101,15 @@ self-review where available, restrict deployment branches to `main`, and add
 Those protections and secrets are not configured or verified by this public
 candidate. Values must never be committed.
 
-Wrangler is fixed to `4.120.0`. Its npm integrity and SLSA subject are bound in
-[`wrangler-integrity.json`](wrangler-integrity.json). Observability and logs are
-disabled by default until provider retention and content-free readback have a
-separate receipt.
+Wrangler is fixed to `4.120.0`. The upload job downloads the exact npm tarball,
+then trusted code verifies its npm SHA-512 integrity, legacy npm shasum, and the
+recorded SLSA subject SHA-512 before installing it with lifecycle scripts
+disabled. Only that verified package path is invoked with upload credentials.
+The binding lives in
+[`wrangler-integrity.json`](wrangler-integrity.json); it does not independently
+verify the SLSA attestation signature or the full dependency closure.
+Observability and logs are disabled by default until provider retention and
+content-free readback have a separate receipt.
 
 Before running the workflow, bind an exact commit to a Work Order and verify:
 

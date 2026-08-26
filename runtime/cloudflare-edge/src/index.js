@@ -7,6 +7,7 @@ const JSON_HEADERS = {
 };
 const ACCESS_HEADER = "cf-access-jwt-assertion";
 const MAX_JWT_BYTES = 16_384;
+const MAX_ACCESS_IDENTITY_BYTES = 1_024;
 const MAX_QUERY_BYTES = 256;
 const MAX_REVIEW_BODY_BYTES = 16_384;
 const MAX_GATEWAY_BODY_BYTES = 1_048_576;
@@ -141,12 +142,51 @@ function audienceMatches(value, expected) {
   return value === expected || (Array.isArray(value) && value.includes(expected));
 }
 
+function normalizedIdentityClaim(value) {
+  if (value === undefined) return null;
+  if (
+    typeof value !== "string"
+    || !value
+    || value !== value.trim()
+    || utf8Bytes(value) > MAX_ACCESS_IDENTITY_BYTES
+    || !/^[\x21-\x7e]+$/.test(value)
+  ) return null;
+  return value;
+}
+
+async function refreshAccessJwks(config) {
+  let response;
+  try {
+    response = await fetchImpl(new Request(`${config.issuer}/cdn-cgi/access/certs`, {
+      method: "GET",
+      redirect: "error",
+      headers: { accept: "application/json" },
+    }));
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > 262_144) return null;
+  let value;
+  try {
+    value = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(value?.keys) || value.keys.length > 32) return null;
+  jwksCache = { issuer: config.issuer, keys: value.keys, expiresAt: Date.now() + 300_000 };
+  return jwksCache.keys;
+}
+
 async function accessIdentity(request, config) {
   const parsed = parseJwt(request.headers.get(ACCESS_HEADER));
   if (!parsed || parsed.header.alg !== "RS256" || typeof parsed.header.kid !== "string") {
     return null;
   }
   const now = Math.floor(Date.now() / 1000);
+  const subject = normalizedIdentityClaim(parsed.payload.sub);
+  const email = normalizedIdentityClaim(parsed.payload.email);
   if (
     parsed.payload.iss !== config.issuer
     || !audienceMatches(parsed.payload.aud, config.audience)
@@ -154,33 +194,23 @@ async function accessIdentity(request, config) {
     || parsed.payload.exp <= now
     || (parsed.payload.nbf !== undefined
       && (!Number.isSafeInteger(parsed.payload.nbf) || parsed.payload.nbf > now))
-    || (typeof parsed.payload.sub !== "string" && typeof parsed.payload.email !== "string")
+    || (parsed.payload.sub !== undefined && !subject)
+    || (parsed.payload.email !== undefined && !email)
+    || (!subject && !email)
   ) return null;
 
-  if (!jwksCache || jwksCache.issuer !== config.issuer || jwksCache.expiresAt <= Date.now()) {
-    let response;
-    try {
-      response = await fetchImpl(new Request(`${config.issuer}/cdn-cgi/access/certs`, {
-        method: "GET",
-        redirect: "error",
-        headers: { accept: "application/json" },
-      }));
-    } catch {
-      return null;
-    }
-    if (!response.ok) return null;
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > 262_144) return null;
-    let value;
-    try {
-      value = JSON.parse(new TextDecoder().decode(bytes));
-    } catch {
-      return null;
-    }
-    if (!Array.isArray(value?.keys) || value.keys.length > 32) return null;
-    jwksCache = { issuer: config.issuer, keys: value.keys, expiresAt: Date.now() + 300_000 };
+  let keys = jwksCache
+    && jwksCache.issuer === config.issuer
+    && jwksCache.expiresAt > Date.now()
+    ? jwksCache.keys
+    : await refreshAccessJwks(config);
+  if (!keys) return null;
+  let jwk = keys.find((key) => key?.kid === parsed.header.kid && key?.kty === "RSA");
+  if (!jwk) {
+    keys = await refreshAccessJwks(config);
+    if (!keys) return null;
+    jwk = keys.find((key) => key?.kid === parsed.header.kid && key?.kty === "RSA");
   }
-  const jwk = jwksCache.keys.find((key) => key?.kid === parsed.header.kid && key?.kty === "RSA");
   if (!jwk) return null;
   try {
     const key = await crypto.subtle.importKey(
@@ -201,8 +231,8 @@ async function accessIdentity(request, config) {
     return null;
   }
   return {
-    subject: typeof parsed.payload.sub === "string" ? parsed.payload.sub : null,
-    email: typeof parsed.payload.email === "string" ? parsed.payload.email : null,
+    subject,
+    email,
   };
 }
 
@@ -311,6 +341,55 @@ function sanitizeProjection(value) {
   };
 }
 
+async function boundedBodyBytes(request, limit) {
+  if (!request.body) return new Uint8Array();
+  let reader;
+  try {
+    reader = request.body.getReader();
+  } catch {
+    return null;
+  }
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value instanceof Uint8Array
+        ? value
+        : value instanceof ArrayBuffer
+          ? new Uint8Array(value)
+          : null;
+      if (!chunk || total + chunk.byteLength > limit) {
+        try {
+          await reader.cancel("body_limit_exceeded");
+        } catch {
+          // The request is already denied; cancellation is best effort.
+        }
+        return null;
+      }
+      total += chunk.byteLength;
+      chunks.push(chunk);
+    }
+  } catch {
+    try {
+      await reader.cancel("body_read_failed");
+    } catch {
+      // The request is already denied; cancellation is best effort.
+    }
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
 async function boundedReviewBody(request) {
   const contentType = request.headers.get("content-type") ?? "";
   if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(contentType.trim())) return null;
@@ -318,8 +397,8 @@ async function boundedReviewBody(request) {
   if (declared && (!/^[0-9]+$/.test(declared) || Number(declared) > MAX_REVIEW_BODY_BYTES)) {
     return null;
   }
-  const bytes = new Uint8Array(await request.arrayBuffer());
-  if (bytes.byteLength > MAX_REVIEW_BODY_BYTES) return null;
+  const bytes = await boundedBodyBytes(request, MAX_REVIEW_BODY_BYTES);
+  if (!bytes) return null;
   let value;
   try {
     value = JSON.parse(new TextDecoder().decode(bytes));
@@ -343,7 +422,7 @@ async function boundedReviewBody(request) {
   return value;
 }
 
-async function gatewayReadback(request, config, pathname) {
+async function gatewayReadback(request, config, pathname, identity) {
   let target;
   let init;
   if (request.method === "GET" && pathname === "/voice/review") {
@@ -369,6 +448,8 @@ async function gatewayReadback(request, config, pathname) {
   headers.set("accept", "application/json");
   headers.set("cf-access-client-id", config.clientId);
   headers.set("cf-access-client-secret", config.clientSecret);
+  if (identity.subject) headers.set("x-kotodama-access-subject", identity.subject);
+  if (identity.email) headers.set("x-kotodama-access-email", identity.email);
   let response;
   try {
     response = await fetchImpl(new Request(target, { ...init, headers, redirect: "error" }));
@@ -408,7 +489,7 @@ async function evaluate(request, env) {
     return request.method === "HEAD" ? new Response(null, { status: 200, headers: JSON_HEADERS }) : json(body);
   }
   if (!pathname.startsWith("/voice/review")) return deny("not_found", 404);
-  return gatewayReadback(request, config, pathname);
+  return gatewayReadback(request, config, pathname, identity);
 }
 
 export default { fetch: (request, env) => evaluate(request, env) };

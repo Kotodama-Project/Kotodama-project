@@ -8,7 +8,7 @@ const ISSUER = "https://team.cloudflareaccess.com";
 const AUDIENCE = "audience-test";
 const GATEWAY = "https://gateway.example.test";
 
-async function signingFixture() {
+async function signingFixture(kid = "kid-test") {
   const keyPair = await crypto.subtle.generateKey(
     {
       name: "RSASSA-PKCS1-v1_5",
@@ -20,13 +20,13 @@ async function signingFixture() {
     ["sign", "verify"],
   );
   const jwk = await crypto.subtle.exportKey("jwk", keyPair.publicKey);
-  jwk.kid = "kid-test";
+  jwk.kid = kid;
   jwk.alg = "RS256";
   jwk.use = "sig";
 
   async function token(overrides = {}) {
     const now = Math.floor(Date.now() / 1000);
-    const header = { alg: "RS256", kid: "kid-test", typ: "JWT" };
+    const header = { alg: "RS256", kid, typ: "JWT" };
     const payload = {
       iss: ISSUER,
       aud: AUDIENCE,
@@ -120,11 +120,18 @@ test("Access-verified review readback can only come through Context Gateway", as
     assert.equal(value.url, `${GATEWAY}/v1/voice/handoffs?q=synthetic`);
     assert.equal(value.headers.get("cf-access-client-id"), "synthetic-client-id");
     assert.equal(value.headers.get("cf-access-client-secret"), "synthetic-client-secret");
+    assert.equal(value.headers.get("x-kotodama-access-subject"), "reviewer-synthetic");
+    assert.equal(value.headers.get("x-kotodama-access-email"), "reviewer@example.test");
     return Response.json(projection());
   });
 
   const response = await worker.fetch(
-    withJwt("https://preview.example.test/voice/review?q=synthetic", jwt),
+    withJwt("https://preview.example.test/voice/review?q=synthetic", jwt, {
+      headers: {
+        "x-kotodama-access-subject": "spoofed-subject",
+        "x-kotodama-access-email": "spoofed@example.test",
+      },
+    }),
     env(),
   );
   const body = await response.json();
@@ -194,6 +201,31 @@ test("health and version surfaces require Access and exact preview host", async 
   assert.equal(authorized.status, 200);
 });
 
+test("a cached JWKS refreshes once when Cloudflare rotates to a new kid", async () => {
+  __testing.reset();
+  const original = await signingFixture("kid-original");
+  const rotated = await signingFixture("kid-rotated");
+  let jwksCalls = 0;
+  __testing.setFetch(async (request) => {
+    const value = request instanceof Request ? request : new Request(request);
+    assert.equal(value.url, `${ISSUER}/cdn-cgi/access/certs`);
+    jwksCalls += 1;
+    return Response.json({ keys: [jwksCalls === 1 ? original.jwk : rotated.jwk] });
+  });
+
+  const beforeRotation = await worker.fetch(
+    withJwt("https://preview.example.test/healthz", await original.token()),
+    env(),
+  );
+  assert.equal(beforeRotation.status, 200);
+  const afterRotation = await worker.fetch(
+    withJwt("https://preview.example.test/healthz", await rotated.token()),
+    env(),
+  );
+  assert.equal(afterRotation.status, 200);
+  assert.equal(jwksCalls, 2);
+});
+
 test("review actions are bounded and forwarded only to the Context Gateway", async () => {
   __testing.reset();
   const { jwk, token } = await signingFixture();
@@ -222,6 +254,56 @@ test("review actions are bounded and forwarded only to the Context Gateway", asy
   assert.equal(observed.url, `${GATEWAY}/v1/voice/handoffs/doc-safe-1/review`);
   assert.equal(observed.method, "POST");
   assert.deepEqual(await observed.clone().json(), { action: "accept" });
+});
+
+test("oversized review streams are cancelled as soon as the byte limit is crossed", async () => {
+  for (const declaredLength of [null, "1"]) {
+    __testing.reset();
+    const { jwk, token } = await signingFixture();
+    let gatewayCalls = 0;
+    __testing.setFetch(async (request) => {
+      const value = request instanceof Request ? request : new Request(request);
+      if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
+      gatewayCalls += 1;
+      return Response.json(projection());
+    });
+
+    const chunks = [new Uint8Array(8_192), new Uint8Array(8_193), new Uint8Array(1_024)];
+    let pulls = 0;
+    let cancelled = false;
+    const body = new ReadableStream(
+      {
+        pull(controller) {
+          if (pulls === chunks.length) {
+            controller.close();
+            return;
+          }
+          controller.enqueue(chunks[pulls]);
+          pulls += 1;
+        },
+        cancel() {
+          cancelled = true;
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    const headers = { "content-type": "application/json" };
+    if (declaredLength !== null) headers["content-length"] = declaredLength;
+
+    const response = await worker.fetch(
+      withJwt("https://preview.example.test/voice/review/doc-safe-1", await token(), {
+        method: "POST",
+        headers,
+        body,
+        duplex: "half",
+      }),
+      env(),
+    );
+    assert.equal(response.status, 400, String(declaredLength));
+    assert.equal(cancelled, true, String(declaredLength));
+    assert.equal(pulls, 2, String(declaredLength));
+    assert.equal(gatewayCalls, 0, String(declaredLength));
+  }
 });
 
 test("raw Voice, transcript, credential, and corpus fields fail closed", async () => {

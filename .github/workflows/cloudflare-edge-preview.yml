@@ -67,6 +67,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Check out trusted upload tooling from the dispatch revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
+
       - name: Check out the exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -87,11 +94,38 @@ jobs:
             +refs/heads/codex/cloudflare-os-foundation:refs/remotes/origin/codex/cloudflare-os-foundation
           test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation)" = "$CANDIDATE_SHA"
 
-      - name: Upload preview version without production promotion
-        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
+      - name: Set up exact Node runtime for verified Wrangler
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.120.0"
-          workingDirectory: candidate/runtime/cloudflare-edge
-          command: versions upload --env preview --preview-alias voice-review --message "candidate ${{ inputs.candidate_sha }}"
+          node-version: "24.14.0"
+          check-latest: false
+
+      - name: Download, verify, and install exact Wrangler artifact without secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          wrangler_tarball="$RUNNER_TEMP/wrangler-4.120.0.tgz"
+          wrangler_prefix="$RUNNER_TEMP/wrangler-verified"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$wrangler_tarball" \
+            'https://registry.npmjs.org/wrangler/-/wrangler-4.120.0.tgz'
+          python trusted/tools/verify_wrangler_artifact.py \
+            --metadata trusted/runtime/cloudflare-edge/wrangler-integrity.json \
+            --artifact "$wrangler_tarball"
+          mkdir -p "$wrangler_prefix"
+          cd "$RUNNER_TEMP"
+          npm install --ignore-scripts --no-audit --no-fund --no-package-lock --no-save \
+            --prefix "$wrangler_prefix" "$wrangler_tarball"
+          test "$(node "$wrangler_prefix/node_modules/wrangler/bin/wrangler.js" --version)" = "4.120.0"
+
+      - name: Upload preview version without production promotion
+        shell: bash
+        working-directory: candidate/runtime/cloudflare-edge
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js" \
+            versions upload --env preview --preview-alias voice-review \
+            --message "candidate ${{ inputs.candidate_sha }}"

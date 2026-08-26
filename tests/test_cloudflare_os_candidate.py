@@ -63,6 +63,22 @@ class CloudflareOsCandidateTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.CandidateViolation, "revision-bound"):
             MODULE.validate_manifest(candidate)
 
+    def test_raw_source_rejects_dot_segment_aliases(self) -> None:
+        unsafe_sources = (
+            f"https://raw.githubusercontent.com/cloudflare/cloudflare-os-starter/"
+            f"{MODULE.STARTER_COMMIT}/../main/docs/observability.md",
+            f"https://raw.githubusercontent.com/cloudflare/cloudflare-os-starter/"
+            f"{MODULE.STARTER_COMMIT}/%2e%2e/main/docs/observability.md",
+            f"https://raw.githubusercontent.com/cloudflare/cloudflare-os-starter/"
+            f"{MODULE.STARTER_COMMIT}/docs%2F..%2Fmain/observability.md",
+        )
+        for source in unsafe_sources:
+            with self.subTest(source=source):
+                candidate = self.mutate()
+                candidate["official_sources"][-1] = source
+                with self.assertRaisesRegex(MODULE.CandidateViolation, "revision-bound"):
+                    MODULE.validate_manifest(candidate)
+
     def test_observation_is_source_candidate_only(self) -> None:
         projection = ADAPTER.project_event(
             MODULE.make_event("observation"),

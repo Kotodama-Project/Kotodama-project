@@ -51,6 +51,7 @@ jobs:
           tests.test_cloudflare_os_candidate
           tests.test_cloudflare_os_local_runtime_evaluation
           tests.test_cloudflare_os_security_overlay
+          tests.test_verify_wrangler_artifact
           -v
 
       - name: Run Worker Voice review contract

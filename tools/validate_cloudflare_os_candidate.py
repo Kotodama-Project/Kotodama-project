@@ -94,25 +94,47 @@ def scan_public_text(text: str, label: str) -> None:
 
 def validate_source_url(value: str) -> None:
     parsed = urlparse(value)
-    if parsed.scheme != "https" or parsed.username or parsed.password or parsed.fragment:
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise CandidateViolation(f"unsafe source URL: {value}") from exc
+    if (
+        parsed.scheme != "https"
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or port is not None
+    ):
         raise CandidateViolation(f"unsafe source URL: {value}")
     host = parsed.hostname or ""
     if host == "os.cloudflare.app" and parsed.path in {"", "/"}:
         return
-    if host == "github.com" and parsed.path.rstrip("/") in {
-        "/cloudflare/cloudflare-os",
-        "/cloudflare/cloudflare-os-starter",
-    }:
-        return
-    if host == "developers.cloudflare.com" and parsed.path.rstrip("/") == "/dynamic-workers/pricing":
-        return
-    if host == "raw.githubusercontent.com" and parsed.path.startswith(
-        (
-            f"/cloudflare/cloudflare-os/{PINNED_CORE_COMMIT}/",
-            f"/cloudflare/cloudflare-os-starter/{STARTER_COMMIT}/",
-        )
-    ):
-        return
+    if "%" not in parsed.path and "\\" not in parsed.path:
+        raw_segments = parsed.path.split("/")
+        if raw_segments and raw_segments[0] == "":
+            segments = raw_segments[1:]
+            static_segments = segments[:-1] if segments[-1:] == [""] else segments
+            if static_segments and not any(segment in {"", ".", ".."} for segment in static_segments):
+                if host == "github.com" and static_segments in (
+                    ["cloudflare", "cloudflare-os"],
+                    ["cloudflare", "cloudflare-os-starter"],
+                ):
+                    return
+                if host == "developers.cloudflare.com" and static_segments == ["dynamic-workers", "pricing"]:
+                    return
+                raw_pins = {
+                    ("cloudflare-os", PINNED_CORE_COMMIT),
+                    ("cloudflare-os-starter", STARTER_COMMIT),
+                }
+                if (
+                    host == "raw.githubusercontent.com"
+                    and segments == static_segments
+                    and len(segments) >= 4
+                    and segments[0] == "cloudflare"
+                    and (segments[1], segments[2]) in raw_pins
+                ):
+                    return
     raise CandidateViolation(f"source URL is not official and revision-bound: {value}")
 
 

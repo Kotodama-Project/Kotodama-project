@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import pathlib
 import re
@@ -18,6 +19,8 @@ WORKFLOW = ROOT / ".github" / "workflows" / "cloudflare-edge-preview.yml"
 WRANGLER_INTEGRITY = PROFILE / "wrangler-integrity.json"
 
 VERIFIED_COMPATIBILITY_DATE = "2026-08-07"
+VERIFIED_CONFIG_SHA256 = "a75caf3b6cf486acdfc1d7a11dbce0734ac0473797a3c538906a0aff1c609bac"
+VERIFIED_WORKER_SHA256 = "a5ffc50af4aa598ee63b12d32ae61c65d9ff81e508d23de588991efa5bd9bca8"
 VERIFIED_WRANGLER = {
     "kind": "npm_supply_chain_binding",
     "package": "wrangler",
@@ -53,13 +56,24 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
     root = root.resolve()
     profile, config_path, worker_path, workflow_path, integrity_path = candidate_paths(root)
     errors: list[str] = []
-    for path in (config_path, worker_path, workflow_path, integrity_path, profile / "README.md"):
+    for path in (
+        config_path,
+        worker_path,
+        workflow_path,
+        integrity_path,
+        profile / "README.md",
+    ):
         if not path.is_file():
             errors.append(f"missing required file: {path.relative_to(root)}")
     if errors:
         return errors
 
+    if hashlib.sha256(config_path.read_bytes()).hexdigest() != VERIFIED_CONFIG_SHA256:
+        errors.append("Wrangler configuration digest does not match the reviewed artifact")
     config = load_jsonc(config_path)
+    executable_config = sorted({"build"}.intersection(config))
+    if executable_config:
+        errors.append(f"executable Wrangler configuration is forbidden: {executable_config}")
     forbidden_bindings = {
         "ai", "ai_search", "d1_databases", "durable_objects", "kv_namespaces",
         "queues", "r2_buckets", "routes", "services", "vectorize",
@@ -118,11 +132,15 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
     if integrity != VERIFIED_WRANGLER:
         errors.append("Wrangler supply-chain binding does not match verified 4.120.0 metadata")
 
-    worker = worker_path.read_text(encoding="utf-8")
+    worker_bytes = worker_path.read_bytes()
+    if hashlib.sha256(worker_bytes).hexdigest() != VERIFIED_WORKER_SHA256:
+        errors.append("Worker implementation digest does not match the reviewed artifact")
+    worker = worker_bytes.decode("utf-8")
     for forbidden in (
         "Authorization",
         "request.text(",
         "request.json(",
+        "request.arrayBuffer(",
         "console.log",
         "await fetch(",
         "return fetch(",
@@ -140,11 +158,16 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         '"/voice/review"',
         '"cf-access-jwt-assertion"',
         "/cdn-cgi/access/certs",
+        "refreshAccessJwks(config)",
         '"RSASSA-PKCS1-v1_5"',
         "normalizedHostname(env?.PREVIEW_HOST)",
         '"direct_origin_denied"',
         "normalizedHttpsOrigin(env?.CONTEXT_GATEWAY_ORIGIN)",
         "/v1/voice/handoffs",
+        '"x-kotodama-access-subject"',
+        '"x-kotodama-access-email"',
+        "request.body.getReader()",
+        'reader.cancel("body_limit_exceeded")',
         "hasForbiddenGatewayKey",
         "raw_audio_transferred: false",
         "private_transcript_transferred: false",
@@ -170,7 +193,13 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "persist-credentials: false",
         "versions upload --env preview",
         "--preview-alias voice-review",
-        'wranglerVersion: "4.120.0"',
+        "python trusted/tools/verify_wrangler_artifact.py",
+        "trusted/runtime/cloudflare-edge/wrangler-integrity.json",
+        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+        'node-version: "24.14.0"',
+        "curl --fail --location --proto '=https' --tlsv1.2",
+        "npm install --ignore-scripts",
+        'node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js"',
         "candidate_sha",
         "CLOUDFLARE_API_TOKEN",
         "CLOUDFLARE_ACCOUNT_ID",
@@ -193,8 +222,20 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
             )
     if workflow.count(exact_tip_guard) != 2:
         errors.append("workflow must bind both validation and upload jobs to the exact allowed branch tip")
+    integrity_verification = workflow.find("python trusted/tools/verify_wrangler_artifact.py")
+    upload_command = workflow.find("versions upload --env preview")
+    secret_exposure = workflow.find("CLOUDFLARE_API_TOKEN")
+    if not (
+        0 <= integrity_verification < upload_command
+        and 0 <= integrity_verification < secret_exposure
+    ):
+        errors.append("workflow must verify Wrangler before upload secrets or execution")
     for forbidden in (
         "git merge-base --is-ancestor",
+        "cloudflare/wrangler-action@",
+        "npx wrangler",
+        "npm exec wrangler",
+        "pnpm dlx",
         "wrangler deploy",
         "versions deploy",
         "pull_request:",
