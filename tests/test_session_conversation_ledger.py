@@ -1661,6 +1661,195 @@ class SessionConversationLedgerTests(unittest.TestCase):
                 report = ledger.validate_ledger(_rechain(records))
                 self.assertIn("LIFECYCLE_TARGET_RELATION_INVALID", report["reason_codes"])
 
+    def test_late_bound_lifecycle_targets_use_effective_session_scope(self) -> None:
+        lifecycle_cases = {
+            "confirmation": ("HUMAN_CONFIRMED", "CONFIRMED", "confirmation_of_event_ref"),
+            "correction": ("HUMAN_CORRECTED", "CORRECTED", "correction_of_event_ref"),
+            "withdrawal": ("HUMAN_WITHDRAWN", "WITHDRAWN", "withdrawal_of_event_ref"),
+        }
+        for event_kind, (decision_status, event_state, target_field) in lifecycle_cases.items():
+            with self.subTest(event_kind=event_kind):
+                candidate = _event(
+                    "late-bound-candidate",
+                    event_kind="decision_candidate",
+                    event_state="CANDIDATE",
+                    decision_status="LLM_CANDIDATE",
+                    candidate_ref=_ref("candidate", "late-bound"),
+                    extraction_kind="LLM_CANDIDATE",
+                    source_type="codex",
+                    actor_ref="ref/agent/codex",
+                    authority_role="AGENT",
+                    authority_ref="ref/authority/codex",
+                )
+                binding = _event(
+                    "late-bound-session",
+                    sequence=2,
+                    previous_hash=candidate["event_hash"],
+                    event_kind="session_binding",
+                    session_state="BOUND",
+                    session_ref=_ref("session", "late-bound"),
+                    binding_targets=[candidate["event_id"]],
+                    binding_destination=_ref("session", "late-bound"),
+                    binding_revision=_ref("session-revision", "1"),
+                    source_type="system",
+                    actor_ref="ref/agent/ledger",
+                    authority_role="SYSTEM",
+                    authority_ref="ref/authority/ledger",
+                )
+                lifecycle = _event(
+                    f"late-bound-{event_kind}",
+                    sequence=3,
+                    previous_hash=binding["event_hash"],
+                    event_kind=event_kind,
+                    session_state="BOUND",
+                    session_ref=_ref("session", "late-bound"),
+                    event_state=event_state,
+                    decision_status=decision_status,
+                    candidate_ref=_ref("candidate", "late-bound"),
+                    human_evidence_ref=_ref("evidence", f"late-bound-{event_kind}"),
+                    human_decision_ref=_ref("decision", f"late-bound-{event_kind}"),
+                    caused_by_event_refs=[candidate["event_id"]],
+                    source_type="discord_text",
+                    actor_ref="ref/speaker/alice",
+                    authority_role="HUMAN",
+                    authority_ref="ref/authority/alice",
+                    **{target_field: candidate["event_id"]},
+                )
+                valid_records = _rechain([candidate, binding, lifecycle])
+                valid_report = ledger.validate_ledger(valid_records)
+                self.assertEqual("LEDGER_VALID", valid_report["result"], valid_report)
+
+                wrong_destination = copy.deepcopy(lifecycle)
+                wrong_destination["session"]["session_ref"] = _ref("session", "wrong")
+                wrong_destination["session"]["revision_ref"] = _ref("session-revision", "1")
+                wrong_destination["session"]["governance"]["task_ssot_ref"] = _ref("task", "wrong")
+                wrong_destination["session"]["governance"]["plan_ref"] = _ref("plan", "wrong")
+                wrong_destination["session"]["governance"]["invocation_ref"] = _ref("invocation", "wrong")
+                wrong_destination["session"]["governance"]["model_ref"] = _ref("model", "wrong")
+                wrong_destination["session"]["governance"]["capability_grant_refs"] = [_ref("grant", "wrong")]
+                wrong_destination["session"]["governance"]["knowledge_grant_refs"] = [_ref("knowledge-grant", "wrong")]
+                wrong_destination["session"]["governance"]["mcp_tool_grant_refs"] = [_ref("mcp-grant", "wrong")]
+                wrong_destination["session"]["governance"]["delegation_ref"] = _ref("delegation", "wrong")
+                wrong_destination["session"]["governance"]["parallel_status_ref"] = _ref("parallel-status", "wrong")
+                wrong_destination["session"]["governance"]["evidence_refs"] = [_ref("evidence", "wrong")]
+                wrong_destination["context"]["knowledge_scope_ref"] = _ref("knowledge-scope", "wrong")
+                wrong_destination["public_safety"]["knowledge_scope_ref"] = _ref("knowledge-scope", "wrong")
+                wrong_destination = _rechain([candidate, binding, wrong_destination])
+                wrong_report = ledger.validate_ledger(wrong_destination)
+                self.assertEqual("REFUSED", wrong_report["result"], wrong_report)
+                self.assertIn("LIFECYCLE_TARGET_SESSION_INVALID", wrong_report["reason_codes"])
+
+                unbound_lifecycle = copy.deepcopy(lifecycle)
+                unbound_lifecycle["session"] = copy.deepcopy(candidate["session"])
+                unbound_lifecycle["context"]["knowledge_scope_ref"] = candidate["context"]["knowledge_scope_ref"]
+                unbound_lifecycle["public_safety"]["knowledge_scope_ref"] = candidate["public_safety"]["knowledge_scope_ref"]
+                unbound_report = ledger.validate_ledger(_rechain([candidate, binding, unbound_lifecycle]))
+                self.assertEqual("REFUSED", unbound_report["result"], unbound_report)
+                self.assertIn("LIFECYCLE_TARGET_SESSION_INVALID", unbound_report["reason_codes"])
+
+    def test_llm_candidate_status_requires_candidate_event_and_model_extraction(self) -> None:
+        valid_report = ledger.validate_ledger(_valid_records())
+        self.assertEqual("LEDGER_VALID", valid_report["result"], valid_report)
+
+        wrong_event_kind = copy.deepcopy(_valid_records())
+        wrong_event_kind[2]["event"]["kind"] = "human_message"
+        wrong_event_report = ledger.validate_ledger(_rechain(wrong_event_kind))
+        self.assertEqual("REFUSED", wrong_event_report["result"], wrong_event_report)
+        self.assertIn("LLM_CANDIDATE_EVENT_KIND_INVALID", wrong_event_report["reason_codes"])
+
+        wrong_extraction_kind = copy.deepcopy(_valid_records())
+        wrong_extraction_kind[2]["provenance"]["extraction"] = {
+            "kind": "NONE",
+            "candidate_binding": "NOT_APPLICABLE",
+            "model_ref": None,
+            "confirmation_required": True,
+        }
+        wrong_extraction_report = ledger.validate_ledger(_rechain(wrong_extraction_kind))
+        self.assertEqual("REFUSED", wrong_extraction_report["result"], wrong_extraction_report)
+        self.assertIn("LLM_CANDIDATE_EXTRACTION_INVALID", wrong_extraction_report["reason_codes"])
+
+    def test_knowledge_scope_must_be_stable_within_session_revision(self) -> None:
+        stable = _valid_records()
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(stable)["result"])
+
+        drifted = copy.deepcopy(stable)
+        drifted[-1]["context"]["knowledge_scope_ref"] = _ref("knowledge-scope", "drifted")
+        drifted[-1]["public_safety"]["knowledge_scope_ref"] = _ref("knowledge-scope", "drifted")
+        drifted = _rechain(drifted)
+        drift_report = ledger.validate_ledger(drifted)
+        self.assertEqual("REFUSED", drift_report["result"], drift_report)
+        self.assertIn("KNOWLEDGE_SCOPE_REVISION_DRIFT", drift_report["reason_codes"])
+        with self.assertRaises(ledger.LedgerValidationError) as raised:
+            ledger.project_session(drifted, _ref("session", "demo"))
+        self.assertIn("KNOWLEDGE_SCOPE_REVISION_DRIFT", raised.exception.reason_codes)
+
+        new_revision = copy.deepcopy(stable)
+        next_event = _event(
+            "scope-new-revision",
+            sequence=4,
+            previous_hash=new_revision[-1]["event_hash"],
+            event_kind="human_message",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            revision=_ref("session-revision", "2"),
+            source_type="discord_text",
+            actor_ref="ref/speaker/alice",
+            authority_role="HUMAN",
+            authority_ref="ref/authority/alice",
+        )
+        next_scope = _ref("knowledge-scope", "revision-2")
+        next_event["context"]["knowledge_scope_ref"] = next_scope
+        next_event["public_safety"]["knowledge_scope_ref"] = next_scope
+        new_revision.append(next_event)
+        new_revision = _rechain(new_revision)
+        new_revision_report = ledger.validate_ledger(new_revision)
+        self.assertEqual("LEDGER_VALID", new_revision_report["result"], new_revision_report)
+        projected = ledger.project_session(new_revision, _ref("session", "demo"))
+        self.assertEqual(next_scope, projected["knowledge_scope"]["scope_ref"])
+
+    def test_invalidation_event_kinds_have_exact_invalidation_pairings(self) -> None:
+        expected = {
+            "source_update": "SOURCE_UPDATED",
+            "source_delete": "SOURCE_DELETED",
+            "acl_loss": "ACL_LOST",
+        }
+        for event_kind, expected_kind in expected.items():
+            valid_records = _valid_records()
+            kwargs = {
+                "event_kind": event_kind,
+                "session_state": "BOUND",
+                "session_ref": _ref("session", "demo"),
+                "event_state": "INVALIDATED",
+                "invalidation_kind": expected_kind,
+                "invalidation_refs": [_ref("projection", "demo")],
+                "source_type": "system",
+                "actor_ref": "ref/system/ledger",
+                "authority_role": "SYSTEM",
+                "authority_ref": "ref/authority/ledger",
+            }
+            if event_kind == "source_delete":
+                kwargs.update({
+                    "deletion_state": "CONFIRMED",
+                    "deletion_receipt_ref": _ref("deletion-receipt", "source-delete"),
+                    "deletion_readback": "CONFIRMED",
+                })
+            valid_records.append(_event(
+                f"valid-{event_kind}",
+                sequence=4,
+                previous_hash=valid_records[-1]["event_hash"],
+                **kwargs,
+            ))
+            valid_report = ledger.validate_ledger(_rechain(valid_records))
+            self.assertEqual("LEDGER_VALID", valid_report["result"], valid_report)
+
+            for wrong_kind in set(expected.values()) - {expected_kind}:
+                invalid_records = copy.deepcopy(valid_records)
+                invalid_records[-1]["event"]["invalidation_kind"] = wrong_kind
+                invalid_report = ledger.validate_ledger(_rechain(invalid_records))
+                with self.subTest(event_kind=event_kind, wrong_kind=wrong_kind):
+                    self.assertEqual("REFUSED", invalid_report["result"], invalid_report)
+                    self.assertIn("INVALIDATION_KIND_MISMATCH", invalid_report["reason_codes"])
+
     def test_archive_and_delete_cross_fields_fail_closed(self) -> None:
         cases = []
         none_receipt = _valid_records()

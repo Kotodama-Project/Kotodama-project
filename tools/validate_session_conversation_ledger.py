@@ -644,26 +644,42 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     restored_archive_receipts: dict[tuple[str, str, str, str, str, str], set[str]] = {}
     seen_binding_targets: set[str] = set()
     bound_session_for_target: dict[str, str] = {}
+    bound_session_revision_for_target: dict[str, tuple[str, str]] = {}
     for candidate_record in records:
         if _validate_event_shape(candidate_record):
             continue
         candidate_session = candidate_record["session"]
         candidate_detail = candidate_record["event"]
-        if candidate_session["state"] == "BOUND" and candidate_detail["kind"] == "session_binding":
+        if (
+            candidate_session["state"] == "BOUND"
+            and candidate_detail["kind"] == "session_binding"
+            and isinstance(candidate_session.get("session_ref"), str)
+            and isinstance(candidate_session.get("revision_ref"), str)
+        ):
             for target_ref in candidate_detail["binding"]["target_event_refs"]:
                 bound_session_for_target.setdefault(target_ref, candidate_session["session_ref"])
+                bound_session_revision_for_target.setdefault(
+                    target_ref,
+                    (candidate_session["session_ref"], candidate_session["revision_ref"]),
+                )
     candidate_scope_by_event: dict[str, str | None] = {}
+    effective_session_revision_by_event: dict[str, tuple[str, str] | None] = {}
     candidate_scopes: dict[str, set[str | None]] = {}
     for candidate_record in records:
         if _validate_event_shape(candidate_record):
             continue
         candidate_session = candidate_record["session"]
-        candidate_scope = (
-            candidate_session["session_ref"]
-            if candidate_session["state"] == "BOUND"
-            else bound_session_for_target.get(candidate_record["event_id"])
-        )
+        if candidate_session["state"] == "BOUND":
+            candidate_scope = candidate_session["session_ref"]
+            effective_session_revision = (
+                candidate_session["session_ref"],
+                candidate_session["revision_ref"],
+            )
+        else:
+            candidate_scope = bound_session_for_target.get(candidate_record["event_id"])
+            effective_session_revision = bound_session_revision_for_target.get(candidate_record["event_id"])
         candidate_scope_by_event[candidate_record["event_id"]] = candidate_scope
+        effective_session_revision_by_event[candidate_record["event_id"]] = effective_session_revision
         candidate_ref = candidate_record["decision"]["candidate_ref"]
         if isinstance(candidate_ref, str):
             candidate_scopes.setdefault(candidate_ref, set()).add(candidate_scope)
@@ -671,6 +687,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         bound_scopes = {scope for scope in scopes if scope is not None}
         if len(bound_scopes) > 1 or (bound_scopes and None in scopes):
             reasons.append("CANDIDATE_SESSION_OWNERSHIP_INVALID")
+    knowledge_scope_by_session_revision: dict[tuple[str, str], str] = {}
     for record in records:
         shape_reasons = _validate_event_shape(record)
         reasons.extend(shape_reasons)
@@ -696,6 +713,15 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         if previous_ingested is not None and ingested < previous_ingested:
             reasons.append("INGESTED_AT_NOT_MONOTONIC")
         previous_ingested = ingested
+        effective_session_revision = effective_session_revision_by_event.get(event_id)
+        if effective_session_revision is not None:
+            knowledge_scope = record["context"]["knowledge_scope_ref"]
+            previous_scope = knowledge_scope_by_session_revision.setdefault(
+                effective_session_revision,
+                knowledge_scope,
+            )
+            if previous_scope != knowledge_scope:
+                reasons.append("KNOWLEDGE_SCOPE_REVISION_DRIFT")
         for causal_ref in record["causation"]["caused_by_event_refs"]:
             causal_record = known.get(causal_ref)
             if causal_record is None:
@@ -813,7 +839,11 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                     reasons.append("LIFECYCLE_TARGET_ORDER_INVALID")
                 elif target.get("event", {}).get("kind") not in {"decision_candidate", "correction", "withdrawal", "confirmation", "decision_confirmed"}:
                     reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
-                elif not _same_session(session, target.get("session")):
+                elif (
+                    candidate_scope_by_event.get(event_id) is None
+                    or candidate_scope_by_event.get(target_ref) is None
+                    or candidate_scope_by_event.get(event_id) != candidate_scope_by_event.get(target_ref)
+                ):
                     reasons.append("LIFECYCLE_TARGET_SESSION_INVALID")
                 elif target.get("decision", {}).get("candidate_ref") is not None and record["decision"].get("candidate_ref") != target["decision"].get("candidate_ref"):
                     reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
@@ -866,6 +896,13 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         if decision["status"] == "LLM_CANDIDATE":
             if decision["candidate_ref"] is None or decision["human_evidence_ref"] is not None or decision["human_decision_ref"] is not None:
                 reasons.append("LLM_RESULT_NOT_CANDIDATE")
+            extraction = record["provenance"]["extraction"]
+            if detail["kind"] != "decision_candidate":
+                reasons.append("LLM_CANDIDATE_EVENT_KIND_INVALID")
+            if extraction["kind"] != "LLM_CANDIDATE":
+                reasons.append("LLM_CANDIDATE_EXTRACTION_INVALID")
+            if extraction["model_ref"] is None:
+                reasons.append("LLM_MODEL_PROVENANCE_MISSING")
         if detail["kind"] == "decision_confirmed" and decision["status"] not in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED"}:
             reasons.append("CONFIRMED_EVENT_STATE_INVALID")
         if detail["kind"] == "correction" and decision["status"] != "HUMAN_CORRECTED":
@@ -881,6 +918,13 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             reasons.append("COMPACTION_NOT_SOURCE")
 
         invalidation_kind = detail["invalidation_kind"]
+        expected_invalidation_kind = {
+            "source_update": "SOURCE_UPDATED",
+            "source_delete": "SOURCE_DELETED",
+            "acl_loss": "ACL_LOST",
+        }.get(detail["kind"])
+        if expected_invalidation_kind is not None and invalidation_kind != expected_invalidation_kind:
+            reasons.append("INVALIDATION_KIND_MISMATCH")
         if detail["kind"] in {"source_update", "source_delete", "acl_loss", "invalidation"}:
             if invalidation_kind is None or not detail["invalidation_refs"]:
                 reasons.append("INVALIDATION_EVENT_INCOMPLETE")
