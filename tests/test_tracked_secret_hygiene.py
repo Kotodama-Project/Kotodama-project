@@ -1449,6 +1449,70 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(control=text[:18]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
 
+    def test_scope_aware_aliases_bind_nearest_prior_declaration(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        false_positive = (
+            'const value = "' + value + '";\n'
+            "{ let value = process.env.OTHER;\n"
+            + name
+            + " = value;\n}\n"
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.js"), false_positive))
+
+        outer_literal = (
+            'const value = "' + value + '";\n'
+            "{ const value = process.env.OTHER; }\n"
+            + name
+            + " = value;\n"
+        )
+        self.assertEqual(
+            [("config.js", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.js"), outer_literal),
+        )
+
+        computed_false_positive = (
+            'const key = "' + name + '";\n'
+            "{ let key = process.env.OTHER;\n"
+            'process.env[key] = "' + value + '";\n}\n'
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.js"), computed_false_positive)
+        )
+        computed_outer_literal = (
+            'const key = "' + name + '";\n'
+            "{ const key = process.env.OTHER; }\n"
+            'process.env[key] = "' + value + '";\n'
+        )
+        self.assertEqual(
+            [("config.js", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.js"), computed_outer_literal),
+        )
+
+        controls = (
+            name + ' = value;\nconst value = "' + value + '";\n',
+            'function use(value) {\n' + name + " = value;\n}\n",
+            "try {} catch (value) {\n" + name + " = value;\n}\n",
+            'const value = "' + value + '";\n'
+            "{ { let value = process.env.OTHER;\n"
+            + name
+            + " = value;\n} }\n",
+        )
+        for text in controls:
+            with self.subTest(control=text[:22]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
+
+        outer_after_inner = (
+            'const value = "' + value + '";\n'
+            "{ let value = process.env.OTHER; }\n"
+            + name
+            + " = value;\n"
+        )
+        self.assertEqual(
+            [("config.js", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.js"), outer_after_inner),
+        )
+
     def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"

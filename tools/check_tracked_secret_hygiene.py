@@ -162,6 +162,13 @@ JAVASCRIPT_CONST_DECLARATION = re.compile(
     r"(?:\s*:\s*[^=;\r\n]+)?\s*=",
     re.MULTILINE,
 )
+JAVASCRIPT_VARIABLE_DECLARATION = re.compile(
+    r"(?:^|[;{}])[ \t]*(?:export[ \t]+)?"
+    r"(?P<kind>const|let|var)[ \t]+"
+    r"(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)"
+    r"(?:\s*:\s*[^=;\r\n]+)?\s*=",
+    re.MULTILINE,
+)
 MAX_JAVASCRIPT_CONSTANT_DEPTH = 8
 MAX_JAVASCRIPT_CONSTANT_PARTS = 32
 BRACED_UNICODE_ESCAPE = re.compile(
@@ -2143,43 +2150,109 @@ def javascript_constant_statement_end(text: str, start: int) -> int:
     return min(index, len(text))
 
 
-def javascript_constant_aliases(path: Path, text: str) -> dict[str, str]:
+def javascript_scope_table(executable: str) -> list[tuple[int, int, int]]:
+    scopes: list[list[int]] = [[0, len(executable), -1]]
+    stack = [0]
+    for index, character in enumerate(executable):
+        if character == "{":
+            scopes.append([index + 1, len(executable), stack[-1]])
+            stack.append(len(scopes) - 1)
+        elif character == "}" and len(stack) > 1:
+            scopes[stack.pop()][1] = index
+    return [tuple(scope) for scope in scopes]
+
+
+def javascript_scope_at(
+    scopes: list[tuple[int, int, int]], position: int
+) -> int:
+    candidates = [
+        (scope[1] - scope[0], index)
+        for index, scope in enumerate(scopes)
+        if scope[0] <= position <= scope[1]
+    ]
+    return min(candidates)[1] if candidates else 0
+
+
+def javascript_scope_aliases(
+    scopes: list[tuple[int, int, int]],
+    bindings: list[tuple[str, str | None, int, int]],
+    position: int,
+) -> dict[str, str]:
+    scope = javascript_scope_at(scopes, position)
+    aliases: dict[str, str] = {}
+    blocked: set[str] = set()
+    while scope >= 0:
+        names = {
+            binding[0]
+            for binding in bindings
+            if binding[3] == scope and binding[2] <= position
+        }
+        for name in names:
+            candidates = [
+                binding
+                for binding in bindings
+                if binding[0] == name
+                and binding[3] == scope
+                and binding[2] <= position
+            ]
+            binding = max(candidates, key=lambda candidate: candidate[2])
+            if name not in aliases and name not in blocked and binding[1] is not None:
+                aliases[name] = binding[1]
+            elif binding[1] is None:
+                blocked.add(name)
+                aliases.pop(name, None)
+        scope = scopes[scope][2]
+    return aliases
+
+
+def javascript_binding_index(
+    path: Path, text: str
+) -> tuple[str, list[tuple[int, int, int]], list[tuple[str, str | None, int, int]]]:
     sanitized = strip_block_comments(path, text)
     executable = javascript_executable_mask(path, sanitized)
-    aliases: dict[str, str] = {}
-    ambiguous: set[str] = set()
+    scopes = javascript_scope_table(executable)
+    events: list[tuple[int, str, str, re.Match[str] | None, int]] = []
+    for match in JAVASCRIPT_VARIABLE_DECLARATION.finditer(executable):
+        events.append((
+            match.start(),
+            match.group("kind"),
+            match.group("name"),
+            match,
+            javascript_scope_at(scopes, match.end()),
+        ))
     parameter_pattern = re.compile(
         r"\((?P<parameters>[^()\r\n]{0,256})\)\s*(?:=>|\{)"
     )
-    for parameter_match in parameter_pattern.finditer(executable):
-        ambiguous.update(
-            re.findall(
-                r"[A-Za-z_$][A-Za-z0-9_$]*",
-                parameter_match.group("parameters"),
+    for match in parameter_pattern.finditer(executable):
+        parameters = re.findall(
+            r"[A-Za-z_$][A-Za-z0-9_$]*", match.group("parameters")
+        )
+        brace = executable.find("{", match.start(), match.end())
+        scope = javascript_scope_at(scopes, brace + 1) if brace >= 0 else javascript_scope_at(scopes, match.start())
+        for name in parameters:
+            events.append((match.start(), "param", name, None, scope))
+    for match in re.finditer(
+        r"\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=>", executable
+    ):
+        events.append((match.start(), "param", match.group(1), None, javascript_scope_at(scopes, match.start())))
+    bindings: list[tuple[str, str | None, int, int]] = []
+    for position, kind, name, match, scope in sorted(events, key=lambda event: event[0]):
+        value: str | None = None
+        if kind == "const" and match is not None:
+            end = javascript_constant_statement_end(sanitized, match.end())
+            expression = sanitized[match.end():end].strip()
+            expression = re.sub(r"\s+as\s+const\s*$", "", expression)
+            value = resolve_javascript_constant(
+                expression,
+                javascript_scope_aliases(scopes, bindings, position),
             )
-        )
-    ambiguous.update(
-        match.group(1)
-        for match in re.finditer(
-            r"\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=>", executable
-        )
-    )
-    seen: set[str] = set()
-    for match in JAVASCRIPT_CONST_DECLARATION.finditer(executable):
-        name = match.group("name")
-        if name in seen:
-            ambiguous.add(name)
-        seen.add(name)
-        end = javascript_constant_statement_end(sanitized, match.end())
-        expression = sanitized[match.end():end].strip()
-        expression = re.sub(r"\s+as\s+const\s*$", "", expression)
-        if name in ambiguous:
-            aliases.pop(name, None)
-            continue
-        value = resolve_javascript_constant(expression, aliases)
-        if value is not None:
-            aliases[name] = value
-    return aliases
+        bindings.append((name, value, position, scope))
+    return sanitized, scopes, bindings
+
+
+def javascript_constant_aliases(path: Path, text: str) -> dict[str, str]:
+    sanitized, scopes, bindings = javascript_binding_index(path, text)
+    return javascript_scope_aliases(scopes, bindings, len(sanitized))
 
 
 def javascript_matching_bracket(text: str, start: int) -> int | None:
@@ -2299,6 +2372,7 @@ def javascript_executable_mask(
                         path, sanitized[inner_start:end], depth + 1
                     )
                     result[inner_start:end] = inner_mask
+                    blank(end, end + 1)
                     index = end + 1
                     cursor = index
                     continue
@@ -2351,11 +2425,13 @@ def javascript_computed_members(path: Path, text: str) -> list[tuple[int, int]]:
 def normalize_javascript_computed_keys(path: Path, text: str) -> str:
     if path.suffix.lower() not in JAVASCRIPT_SOURCE_SUFFIXES:
         return text
-    sanitized = strip_block_comments(path, text)
-    aliases = javascript_constant_aliases(path, sanitized)
+    sanitized, scopes, bindings = javascript_binding_index(path, text)
     replacements: list[tuple[int, int, str]] = []
     for start, end in javascript_computed_members(path, sanitized):
-        value = resolve_javascript_constant(sanitized[start + 1:end], aliases)
+        value = resolve_javascript_constant(
+            sanitized[start + 1:end],
+            javascript_scope_aliases(scopes, bindings, start),
+        )
         canonical = value.upper() if value is not None else None
         if canonical in ASSIGNMENT_NAMES:
             replacements.append((
@@ -2472,12 +2548,17 @@ def scan_text(
     if path.suffix.lower() == ".java":
         text = normalize_java_lexical_escapes(text)
     findings: list[tuple[str, int, str]] = []
-    javascript_aliases = (
-        javascript_constant_aliases(path, text)
+    javascript_scope_data = (
+        javascript_binding_index(path, text)
         if path.suffix.lower() in JAVASCRIPT_SOURCE_SUFFIXES
         else {}
     )
     lines = text.splitlines()
+    line_starts: list[int] = []
+    cursor = 0
+    for raw_line in text.splitlines(keepends=True):
+        line_starts.append(cursor)
+        cursor += len(raw_line)
     for number, line in enumerate(lines, 1):
         for detector, pattern in TOKEN_PATTERNS:
             if pattern.search(line):
@@ -2507,9 +2588,16 @@ def scan_text(
             name = match.group("name").upper()
             raw_value = match.group("value")
             resolved_value = None
-            if javascript_aliases:
+            if javascript_scope_data:
+                _, scopes, bindings = javascript_scope_data
                 resolved_value = resolve_javascript_constant(
-                    assignment_value(raw_value, path), javascript_aliases
+                    assignment_value(raw_value, path).rstrip(";").rstrip(),
+                    javascript_scope_aliases(
+                        scopes,
+                        bindings,
+                        (line_starts[number - 1] if number <= len(line_starts) else 0)
+                        + match.start("name"),
+                    ),
                 )
             classified_value = (
                 resolved_value
@@ -2551,9 +2639,15 @@ def scan_text(
             findings.append((path.as_posix(), number, "private key block"))
     for name, number, value, strip_comments in multiline_assignments(path, text):
         resolved_value = None
-        if javascript_aliases:
+        if javascript_scope_data:
+            _, scopes, bindings = javascript_scope_data
             resolved_value = resolve_javascript_constant(
-                assignment_value(value, path, strip_comments), javascript_aliases
+                assignment_value(value, path, strip_comments).rstrip(";").rstrip(),
+                javascript_scope_aliases(
+                    scopes,
+                    bindings,
+                    line_starts[number - 1] if number <= len(line_starts) else 0,
+                ),
             )
         classified_value = (
             resolved_value
