@@ -651,9 +651,39 @@ Local-first は、すべてを一台へ詰め込むことではありません�
 | TiDB | Context Platform の第一評価候補 | 未採用、未配備 |
 | Proxmox | segmented local runtime の基準候補 | lifecycle contract 公開、live receipt なし |
 | Compose minimum | 小さな導入 profile | secret-free skeleton / candidate 公開 |
-| Cloudflare | optional public edge | optional、free-plan-first、必須ではない |
+| Cloudflare edge | bounded public ingress / application delivery | 採用方向。content-free Worker と guarded preview workflow は draft candidate、未 upload |
+| Official Cloudflare OS | AI workspace、Gadgets、Blueprints、Gatekeepers の実装基盤 | 採用方向。official starter/core source pin と local synthetic adapter は candidate、未 install／未 deploy |
 
 provider を利用する場合も、exact artifact、participant scope、purpose、provider/model、expiry、cancellation、retention を持つ transfer grant の後ろに置く方針です。
+
+### Cloudflare edge と公式 Cloudflare OS
+
+Kotodama は Cloudflare を採用方向としつつ、二つの plane を混同しません。
+Cloudflare edge は Workers と Access を使う ingress／application delivery、
+[公式 Cloudflare OS](https://os.cloudflare.app/) は agent chat、sandboxed
+Gadgets、Blueprints、capability-based Gatekeepers を備えた early-access v2
+の AI productivity environment です。後者は traditional computer OS では
+ありません。
+
+この候補では official starter、その starter が実際に pin する core gitlink、
+別途観測した core 最新 head を exact Git object として分離しました。さらに、
+Gatekeeper の content-free event を Source Evidence Candidate／Change Candidate／
+Verification Receipt Candidate へ投影する local adapter を追加しています。
+Cloudflare 側の approval や applied event だけで Kotodama の Human Decision、
+Promotion、Current Truth は作りません。
+
+[content-free local runtime evaluation](docs/CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md)
+では、固定ソース／toolchain で 1060 tests、26 workspace package builds、
+`LOOPBACK_ONLY` headers-only readback、process/listener cleanup まで検証しました。
+結果は `PASS_LOCAL_RUNTIME_WITH_GAPS` であり、independent drift review、高い
+`nanoid` advisory、retention/readback、provider E2E 等は未完です。
+
+設計、費用境界、未証明事項、再現コマンドは
+[Cloudflare edge and official Cloudflare OS](docs/CLOUDFLARE-OS-ADOPTION.md) を参照してください。
+Dynamic Workers は Workers Paid が必要なため、採用決定は billing activation や
+provider deployment の包括承認ではありません。private Context は Proxmox 側へ
+残し、query authority は Context Gateway、正規 authority は BecomeOne／Human
+Intent が保持します。
 
 ## Consent、privacy、retention
 

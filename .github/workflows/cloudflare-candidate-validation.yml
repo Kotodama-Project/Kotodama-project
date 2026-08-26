@@ -1,0 +1,76 @@
+name: Cloudflare candidate validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - codex/cloudflare-os-foundation-rebased-20260824
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-candidate-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Trusted Cloudflare candidate validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_NO_INPUT: "1"
+    steps:
+      - name: Check out candidate without persisted credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up exact Python runtime
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+          check-latest: false
+
+      - name: Run tracked credential gate before dependency installation
+        run: python -S -B tools/check_tracked_secret_hygiene.py
+
+      - name: Set up exact Node runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.14.0"
+          check-latest: false
+
+      - name: Install hash-locked validator dependencies
+        run: python -m pip install --require-hashes -r requirements-ci.txt
+
+      - name: Run focused candidate tests
+        run: >-
+          python -m unittest
+          tests.test_cloudflare_candidate_ci
+          tests.test_cloudflare_edge_candidate
+          tests.test_cloudflare_os_candidate
+          tests.test_cloudflare_os_local_runtime_evaluation
+          tests.test_cloudflare_os_security_overlay
+          tests.test_verify_wrangler_artifact
+          -v
+
+      - name: Run Worker Voice review contract
+        run: node --test tests/node/test_cloudflare_voice_review.mjs
+
+      - name: Run fail-closed candidate validators
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/validate_cloudflare_edge_candidate.py --root .
+          python tools/validate_cloudflare_os_candidate.py
+          python tools/validate_cloudflare_os_local_runtime_evaluation.py --json
+          python tools/validate_cloudflare_os_security_candidate.py
+
+      - name: Refuse validator side effects
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
