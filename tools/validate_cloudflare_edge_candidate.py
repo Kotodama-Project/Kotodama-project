@@ -17,10 +17,15 @@ CONFIG = PROFILE / "wrangler.jsonc"
 WORKER = PROFILE / "src" / "index.js"
 WORKFLOW = ROOT / ".github" / "workflows" / "cloudflare-edge-preview.yml"
 WRANGLER_INTEGRITY = PROFILE / "wrangler-integrity.json"
+WRANGLER_RUNNER_PACKAGE = PROFILE / "wrangler-runner-package.json"
+WRANGLER_RUNNER_LOCK = PROFILE / "wrangler-runner-package-lock.json"
 
 VERIFIED_COMPATIBILITY_DATE = "2026-08-07"
 VERIFIED_CONFIG_SHA256 = "a75caf3b6cf486acdfc1d7a11dbce0734ac0473797a3c538906a0aff1c609bac"
 VERIFIED_WORKER_SHA256 = "a12fbd92815bde8f7064b04397658117eb649415f414e0dcdf10534fd4062c50"
+VERIFIED_WRANGLER_RUNNER_PACKAGE_SHA256 = "78050f0fc214eda989a097930c1daf53ef608259d9d861a128651ed94e0cdf74"
+VERIFIED_WRANGLER_RUNNER_LOCK_SHA256 = "e86ede152f4135397ee58a22023dbf029e36aa361b64d767c5cc33dae97a4cc4"
+EXPECTED_WRANGLER_RUNNER_DEPENDENCY = "file:wrangler-4.120.0.tgz"
 VERIFIED_WRANGLER = {
     "kind": "npm_supply_chain_binding",
     "package": "wrangler",
@@ -41,7 +46,17 @@ def load_jsonc(path: pathlib.Path) -> dict:
     return json.loads(text)
 
 
-def candidate_paths(root: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path]:
+def candidate_paths(
+    root: pathlib.Path,
+) -> tuple[
+    pathlib.Path,
+    pathlib.Path,
+    pathlib.Path,
+    pathlib.Path,
+    pathlib.Path,
+    pathlib.Path,
+    pathlib.Path,
+]:
     profile = root / "runtime" / "cloudflare-edge"
     return (
         profile,
@@ -49,18 +64,30 @@ def candidate_paths(root: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path, pat
         profile / "src" / "index.js",
         root / ".github" / "workflows" / "cloudflare-edge-preview.yml",
         profile / "wrangler-integrity.json",
+        profile / "wrangler-runner-package.json",
+        profile / "wrangler-runner-package-lock.json",
     )
 
 
 def validate(root: pathlib.Path = ROOT) -> list[str]:
     root = root.resolve()
-    profile, config_path, worker_path, workflow_path, integrity_path = candidate_paths(root)
+    (
+        profile,
+        config_path,
+        worker_path,
+        workflow_path,
+        integrity_path,
+        runner_package_path,
+        runner_lock_path,
+    ) = candidate_paths(root)
     errors: list[str] = []
     for path in (
         config_path,
         worker_path,
         workflow_path,
         integrity_path,
+        runner_package_path,
+        runner_lock_path,
         profile / "README.md",
     ):
         if not path.is_file():
@@ -132,6 +159,108 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
     if integrity != VERIFIED_WRANGLER:
         errors.append("Wrangler supply-chain binding does not match verified 4.120.0 metadata")
 
+    for path, expected, description in (
+        (
+            runner_package_path,
+            VERIFIED_WRANGLER_RUNNER_PACKAGE_SHA256,
+            "Wrangler runner manifest",
+        ),
+        (
+            runner_lock_path,
+            VERIFIED_WRANGLER_RUNNER_LOCK_SHA256,
+            "Wrangler runner lockfile",
+        ),
+    ):
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            errors.append(f"{description} digest does not match the reviewed artifact")
+
+    try:
+        runner_manifest = json.loads(runner_package_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        runner_manifest = None
+        errors.append(f"Wrangler runner manifest is not valid JSON: {exc}")
+    if not isinstance(runner_manifest, dict):
+        if runner_manifest is not None:
+            errors.append("Wrangler runner manifest must be a JSON object")
+        runner_manifest = {}
+    manifest_dependencies = runner_manifest.get("dependencies")
+    if (
+        not isinstance(manifest_dependencies, dict)
+        or manifest_dependencies.get("wrangler") != EXPECTED_WRANGLER_RUNNER_DEPENDENCY
+    ):
+        errors.append(
+            "Wrangler runner manifest must pin wrangler to "
+            "file:wrangler-4.120.0.tgz"
+        )
+    if runner_manifest.get("private") is not True:
+        errors.append("Wrangler runner manifest must be private")
+
+    try:
+        runner_lock = json.loads(runner_lock_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        runner_lock = None
+        errors.append(f"Wrangler runner lockfile is not valid JSON: {exc}")
+    if not isinstance(runner_lock, dict):
+        if runner_lock is not None:
+            errors.append("Wrangler runner lockfile must be a JSON object")
+        runner_lock = {}
+    if runner_lock.get("lockfileVersion") != 3:
+        errors.append("Wrangler runner lockfile must use lockfileVersion 3")
+    lock_packages = runner_lock.get("packages")
+    if not isinstance(lock_packages, dict):
+        errors.append("Wrangler runner lockfile packages must be an object")
+        lock_packages = {}
+    root_lock_package = lock_packages.get("")
+    if not isinstance(root_lock_package, dict):
+        errors.append("Wrangler runner lockfile must contain a root package entry")
+        root_lock_package = {}
+    if root_lock_package.get("dependencies") != manifest_dependencies:
+        errors.append("Wrangler runner lock root dependencies must match its manifest")
+
+    expected_npm_integrity = (
+        integrity.get("npm_integrity") if isinstance(integrity, dict) else None
+    )
+    wrangler_lock_package = lock_packages.get("node_modules/wrangler")
+    if not isinstance(wrangler_lock_package, dict):
+        errors.append("Wrangler runner lockfile must contain node_modules/wrangler")
+    else:
+        if wrangler_lock_package.get("resolved") != EXPECTED_WRANGLER_RUNNER_DEPENDENCY:
+            errors.append(
+                "Wrangler runner lock node_modules/wrangler resolved must be "
+                "file:wrangler-4.120.0.tgz"
+            )
+        if wrangler_lock_package.get("integrity") != expected_npm_integrity:
+            errors.append(
+                "Wrangler runner lock node_modules/wrangler integrity must match "
+                "wrangler-integrity.json"
+            )
+
+    integrity_pattern = re.compile(r"sha(?:512|384|256)-[A-Za-z0-9+/=]+$")
+    for package_path, package in lock_packages.items():
+        if package_path == "":
+            continue
+        if not isinstance(package, dict):
+            errors.append(f"Wrangler runner lock package {package_path} must be an object")
+            continue
+        if package.get("link") is True:
+            if package_path == "node_modules/wrangler":
+                errors.append("Wrangler runner lock node_modules/wrangler must not be a link")
+            continue
+        resolved = package.get("resolved")
+        if not isinstance(resolved, str) or not resolved:
+            errors.append(f"Wrangler runner lock package {package_path} is missing resolved")
+        elif package_path != "node_modules/wrangler" and not resolved.startswith(
+            "https://registry.npmjs.org/"
+        ):
+            errors.append(
+                f"Wrangler runner lock package {package_path} must resolve from the npm registry"
+            )
+        package_integrity = package.get("integrity")
+        if not isinstance(package_integrity, str) or not integrity_pattern.fullmatch(
+            package_integrity
+        ):
+            errors.append(f"Wrangler runner lock package {package_path} is missing integrity")
+
     worker_bytes = worker_path.read_bytes()
     if hashlib.sha256(worker_bytes).hexdigest() != VERIFIED_WORKER_SHA256:
         errors.append("Worker implementation digest does not match the reviewed artifact")
@@ -198,7 +327,12 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
         'node-version: "24.14.0"',
         "curl --fail --location --proto '=https' --tlsv1.2",
-        "npm install --ignore-scripts",
+        "trusted/runtime/cloudflare-edge/wrangler-runner-package.json",
+        "trusted/runtime/cloudflare-edge/wrangler-runner-package-lock.json",
+        'cp trusted/runtime/cloudflare-edge/wrangler-runner-package.json "$RUNNER_TEMP/wrangler-verified/package.json"',
+        'cp trusted/runtime/cloudflare-edge/wrangler-runner-package-lock.json "$RUNNER_TEMP/wrangler-verified/package-lock.json"',
+        'cp "$wrangler_tarball" "$RUNNER_TEMP/wrangler-verified/wrangler-4.120.0.tgz"',
+        'npm ci --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/wrangler-verified"',
         'node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js"',
         "candidate_sha",
         "CLOUDFLARE_API_TOKEN",
@@ -223,6 +357,21 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
     if workflow.count(exact_tip_guard) != 2:
         errors.append("workflow must bind both validation and upload jobs to the exact allowed branch tip")
     integrity_verification = workflow.find("python trusted/tools/verify_wrangler_artifact.py")
+    runner_manifest_copy = workflow.find(
+        'cp trusted/runtime/cloudflare-edge/wrangler-runner-package.json '
+        '"$RUNNER_TEMP/wrangler-verified/package.json"'
+    )
+    runner_lock_copy = workflow.find(
+        'cp trusted/runtime/cloudflare-edge/wrangler-runner-package-lock.json '
+        '"$RUNNER_TEMP/wrangler-verified/package-lock.json"'
+    )
+    runner_tarball_copy = workflow.find(
+        'cp "$wrangler_tarball" "$RUNNER_TEMP/wrangler-verified/wrangler-4.120.0.tgz"'
+    )
+    npm_ci = workflow.find(
+        'npm ci --ignore-scripts --no-audit --no-fund --prefix '
+        '"$RUNNER_TEMP/wrangler-verified"'
+    )
     upload_command = workflow.find("versions upload --env preview")
     secret_exposure = workflow.find("CLOUDFLARE_API_TOKEN")
     if not (
@@ -230,11 +379,23 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         and 0 <= integrity_verification < secret_exposure
     ):
         errors.append("workflow must verify Wrangler before upload secrets or execution")
+    if not (
+        0 <= integrity_verification < runner_manifest_copy < npm_ci < secret_exposure
+        and 0 <= integrity_verification < runner_lock_copy < npm_ci
+        and 0 <= integrity_verification < runner_tarball_copy < npm_ci
+    ):
+        errors.append(
+            "workflow must copy trusted Wrangler runner inputs and run npm ci after artifact verification"
+        )
+    if workflow.count("npm ci --ignore-scripts") != 1:
+        errors.append("workflow must contain exactly one npm ci runner installation")
     for forbidden in (
         "git merge-base --is-ancestor",
         "cloudflare/wrangler-action@",
         "npx wrangler",
         "npm exec wrangler",
+        "npm install",
+        "--no-package-lock",
         "pnpm dlx",
         "wrangler deploy",
         "versions deploy",
