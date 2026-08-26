@@ -21,11 +21,13 @@ dependencies:
 ```text
 python -S -B tools/check_tracked_secret_hygiene.py
 python -m pip install --require-hashes -r requirements-ci.txt
+python -B tools/check_workflow_references.py
 python -m unittest discover -s tests -v
 ```
 
-The credential gate examines the current Git-tracked tree and reports only a
-path, line number, and detector name. It does not print a detected value. A
+The credential gate examines the current tracked tree across HEAD, the index,
+and tracked working-tree snapshots, and reports only a path, line number,
+detector name, and source snapshot. It does not print a detected value. A
 passing result does not replace provider-side secret scanning, push protection,
 or a historical repository scan.
 

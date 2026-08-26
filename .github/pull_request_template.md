@@ -11,7 +11,7 @@
 - [ ] I identified whether this changes authentication, authorization, public access, billing, deployment, DNS, secrets, personal data, or an external provider.
 - [ ] No live credential, session, private locator, customer data, or unredacted production evidence appears in commits, logs, screenshots, comments, or generated files.
 - [ ] New inputs and external responses are bounded, validated, and fail closed where a permissive fallback could create security or cost exposure.
-- [ ] GitHub Actions use reviewed full commit SHAs rather than mutable tags.
+- [ ] Repository GitHub Actions use reviewed full commit SHAs, and `docker://` actions use reviewed sha256 image digests rather than mutable tags.
 - [ ] Generated/SSOT files were updated through their authoritative generator rather than edited inconsistently by hand.
 
 ## Validation

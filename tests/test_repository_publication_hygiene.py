@@ -1,6 +1,7 @@
 import hashlib
-import re
+import importlib.util
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -8,23 +9,93 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 NEW_REPOSITORY = "https://github.com/Kotodama-Project/Kotodama-project"
 OLD_REPOSITORY = "https://github.com/" + "dj-thank/" + "Kotodama-project"
+WORKFLOW_SCANNER_PATH = ROOT / "tools" / "check_workflow_references.py"
+WORKFLOW_SCANNER_SPEC = importlib.util.spec_from_file_location(
+    "workflow_reference_hygiene", WORKFLOW_SCANNER_PATH
+)
+assert WORKFLOW_SCANNER_SPEC is not None and WORKFLOW_SCANNER_SPEC.loader is not None
+WORKFLOW_SCANNER = importlib.util.module_from_spec(WORKFLOW_SCANNER_SPEC)
+WORKFLOW_SCANNER_SPEC.loader.exec_module(WORKFLOW_SCANNER)
+SECRET_SCANNER_PATH = ROOT / "tools" / "check_tracked_secret_hygiene.py"
+SECRET_SCANNER_SPEC = importlib.util.spec_from_file_location(
+    "tracked_secret_hygiene_for_identity", SECRET_SCANNER_PATH
+)
+assert SECRET_SCANNER_SPEC is not None and SECRET_SCANNER_SPEC.loader is not None
+SECRET_SCANNER = importlib.util.module_from_spec(SECRET_SCANNER_SPEC)
+SECRET_SCANNER_SPEC.loader.exec_module(SECRET_SCANNER)
+
+
+def decode_tracked_text(data: bytes) -> str | None:
+    document, _error = SECRET_SCANNER.decode_text_snapshot(
+        Path("repository-snapshot.txt"), data
+    )
+    return document
+
+
+def tracked_repository_text(root: Path) -> str:
+    index = SECRET_SCANNER.index_blobs(root)
+    head = SECRET_SCANNER.head_blobs(root)
+    oids = set(index.values()) | set(head.values())
+    sizes = SECRET_SCANNER.blob_sizes(root, oids)
+    readable = {
+        oid
+        for oid, size in sizes.items()
+        if size <= SECRET_SCANNER.MAX_TEXT_BYTES
+    }
+    snapshots = set(SECRET_SCANNER.read_blobs(root, readable).values())
+    for relative in set(index) | set(head):
+        path = root / relative
+        if path.is_symlink():
+            snapshots.add(path.readlink().as_posix().encode("utf-8"))
+        elif path.is_file() and path.stat().st_size <= SECRET_SCANNER.MAX_TEXT_BYTES:
+            snapshots.add(path.read_bytes())
+    documents = [
+        document
+        for data in snapshots
+        if (document := decode_tracked_text(data)) is not None
+    ]
+    return "\n".join(documents)
 
 
 class RepositoryPublicationHygieneTests(unittest.TestCase):
     def tracked_text(self) -> str:
-        tracked = subprocess.run(
-            ["git", "ls-files", "-z"],
-            cwd=ROOT,
-            capture_output=True,
-            check=True,
-        ).stdout.split(b"\0")
-        documents = []
-        for relative_bytes in tracked:
-            if not relative_bytes:
-                continue
-            relative = relative_bytes.decode("utf-8")
-            documents.append((ROOT / relative).read_text(encoding="utf-8"))
-        return "\n".join(documents)
+        return tracked_repository_text(ROOT)
+
+    def test_repository_identity_scan_skips_binary_content(self) -> None:
+        self.assertIsNone(decode_tracked_text(b"\x89PNG\r\n\x1a\n\x00\xff"))
+        self.assertEqual("plain text", decode_tracked_text(b"plain text"))
+        for encoding in ("utf-16", "utf-32"):
+            with self.subTest(encoding=encoding):
+                self.assertEqual(
+                    "bom-backed text",
+                    decode_tracked_text("bom-backed text".encode(encoding)),
+                )
+
+    def test_repository_identity_scan_covers_head_index_and_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def run_git(*arguments: str) -> None:
+                subprocess.run(
+                    ["git", *arguments], cwd=root, capture_output=True, check=True
+                )
+
+            run_git("init", "--quiet")
+            run_git("config", "user.name", "Test")
+            run_git("config", "user.email", "test@example.invalid")
+            target = root / "identity.txt"
+            target.write_text("head-identity", encoding="utf-16")
+            run_git("add", ".")
+            run_git("commit", "--quiet", "-m", "seed")
+            target.write_text("index-identity", encoding="utf-32")
+            run_git("add", ".")
+            target.write_text("working-identity", encoding="utf-8")
+
+            combined = tracked_repository_text(root)
+
+        self.assertIn("head-identity", combined)
+        self.assertIn("index-identity", combined)
+        self.assertIn("working-identity", combined)
 
     def test_public_policy_documents_are_linked_from_readme(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -87,6 +158,9 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         install_command = (
             "python -m pip install --require-hashes -r requirements-ci.txt"
         )
+        workflow_reference_command = (
+            "python -B tools/check_workflow_references.py"
+        )
         self.assertIn("permissions:\n  contents: read", workflow)
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn(smoke_command, workflow)
@@ -96,6 +170,14 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
                 self.assertLess(workflow.index(runtime_command), workflow.index(install_command))
         self.assertIn(install_command, workflow)
         self.assertLess(workflow.index(smoke_command), workflow.index(install_command))
+        self.assertIn(workflow_reference_command, workflow)
+        self.assertLess(
+            workflow.index(install_command), workflow.index(workflow_reference_command)
+        )
+        self.assertLess(
+            workflow.index(workflow_reference_command),
+            workflow.index("python -m unittest discover -s tests -v"),
+        )
         self.assertIn("python -m unittest discover -s tests -v", workflow)
         self.assertIn(
             "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", workflow
@@ -117,27 +199,380 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         self.assertIn('${RUNNER_TEMP}/actionlint.tar.gz', workflow)
         self.assertIn('${RUNNER_TEMP}/actionlint', workflow)
         self.assertIn("sha256sum -c -", workflow)
-        self.assertIn('"$install_dir/actionlint" .github/workflows/*.yml', workflow)
+        self.assertIn("shopt -s nullglob", workflow)
+        self.assertIn(".github/workflows/*.yml", workflow)
+        self.assertIn(".github/workflows/*.yaml", workflow)
+        self.assertIn('"$install_dir/actionlint" "${workflow_files[@]}"', workflow)
 
     def test_all_external_actions_are_pinned_to_immutable_shas(self) -> None:
-        uses_pattern = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)")
-        immutable_pattern = re.compile(r"^[^@\s]+@[0-9a-fA-F]{40}$")
-        violations = []
+        self.assertEqual([], WORKFLOW_SCANNER.scan_workflows(ROOT))
 
-        for path in sorted((ROOT / ".github/workflows").glob("*.y*ml")):
-            for line_number, line in enumerate(
-                path.read_text(encoding="utf-8").splitlines(), start=1
-            ):
-                match = uses_pattern.match(line)
-                if not match:
-                    continue
-                reference = match.group(1).strip("'\"")
-                if reference.startswith(("./", "docker://")):
-                    continue
-                if not immutable_pattern.fullmatch(reference):
-                    violations.append(f"{path.relative_to(ROOT)}:{line_number}: {reference}")
+    def test_workflow_reference_gate_rejects_mutable_docker_tags(self) -> None:
+        action_sha = "owner/action@" + ("a" * 40)
+        docker_digest = "docker://vendor/tool@sha256:" + ("b" * 64)
 
-        self.assertEqual([], violations)
+        for reference in ("./local-action", action_sha, docker_digest):
+            with self.subTest(reference=reference):
+                self.assertIsNone(WORKFLOW_SCANNER.reference_violation(reference))
+
+        for reference in ("owner/action@v1", "docker://vendor/tool:latest"):
+            with self.subTest(reference=reference):
+                self.assertIsNotNone(WORKFLOW_SCANNER.reference_violation(reference))
+
+    def test_workflow_reference_gate_parses_supported_yaml_representations(
+        self,
+    ) -> None:
+        mutable = "docker://vendor/tool:latest"
+        cases = {
+            "standard": f"      - uses: {mutable}\n",
+            "quoted-key": f'      - "uses" : {mutable}\n',
+            "spaced-key": f"      - uses : {mutable}\n",
+            "flow-map": f"      - {{ name: mutable, uses: {mutable} }}\n",
+        }
+
+        for name, step in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                workflows = root / ".github" / "workflows"
+                workflows.mkdir(parents=True)
+                (workflows / "candidate.yml").write_text(
+                    "name: Candidate\n"
+                    "on: push\n"
+                    "jobs:\n"
+                    "  verify:\n"
+                    "    runs-on: ubuntu-latest\n"
+                    "    steps:\n"
+                    + step,
+                    encoding="utf-8",
+                )
+
+                violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+                self.assertEqual(1, len(violations), violations)
+                self.assertIn("Docker action image", violations[0][2])
+
+    def test_workflow_reference_gate_accepts_structured_immutable_references(
+        self,
+    ) -> None:
+        action_sha = "owner/action@" + ("a" * 40)
+        docker_digest = "docker://vendor/tool@sha256:" + ("b" * 64)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            local_action = root / "local-action"
+            workflows.mkdir(parents=True)
+            local_action.mkdir()
+            (workflows / "candidate.yml").write_text(
+                "name: Candidate\n"
+                "on: push\n"
+                "jobs:\n"
+                "  verify:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                f"      - 'uses' : {action_sha}\n"
+                f"      - uses: >-\n          {docker_digest}\n"
+                "      - { uses: ./local-action }\n",
+                encoding="utf-8",
+            )
+            (local_action / "action.yml").write_text(
+                "name: Local\n"
+                "runs:\n"
+                "  using: composite\n"
+                "  steps:\n"
+                "    - run: echo ok\n"
+                "      shell: bash\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual([], WORKFLOW_SCANNER.scan_workflows(root))
+
+    def test_workflow_reference_gate_covers_reusable_jobs_but_not_arbitrary_keys(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "candidate.yml").write_text(
+                "name: Candidate\n"
+                "on: push\n"
+                "jobs:\n"
+                "  reusable:\n"
+                "    \"uses\" : owner/repository/.github/workflows/reuse.yml@v1\n"
+                "  ordinary:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                "      - run: 'echo uses: docker://vendor/tool:latest'\n"
+                "        with: { uses: docker://vendor/tool:latest }\n",
+                encoding="utf-8",
+            )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(1, len(violations), violations)
+            self.assertIn("full commit SHA", violations[0][2])
+
+    def test_workflow_reference_gate_requires_digest_pinned_job_images(self) -> None:
+        mutable = "vendor/runtime:latest"
+        pinned = "vendor/runtime@sha256:" + ("b" * 64)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "candidate.yml").write_text(
+                "name: Candidate\n"
+                "on: push\n"
+                "jobs:\n"
+                "  mutable:\n"
+                "    runs-on: ubuntu-latest\n"
+                f"    container: {mutable}\n"
+                "    services:\n"
+                "      database:\n"
+                f"        image: {mutable}\n"
+                "    steps:\n"
+                "      - run: echo no\n"
+                "  pinned:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    container:\n"
+                f"      image: {pinned}\n"
+                "    services:\n"
+                f"      database: {{ image: {pinned} }}\n"
+                "    steps:\n"
+                "      - run: echo ok\n",
+                encoding="utf-8",
+            )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(2, len(violations), violations)
+            self.assertTrue(
+                all(
+                    "container image" in violation
+                    for _path, _line, violation in violations
+                ),
+                violations,
+            )
+
+    def test_workflow_reference_gate_scans_nested_composite_actions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            action = root / "actions" / "local"
+            workflows.mkdir(parents=True)
+            action.mkdir(parents=True)
+            (workflows / "candidate.yml").write_text(
+                "name: Candidate\n"
+                "on: push\n"
+                "jobs:\n"
+                "  verify:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                "      - uses: ./actions/local\n",
+                encoding="utf-8",
+            )
+            (action / "action.yml").write_text(
+                "name: Local\n"
+                "runs:\n"
+                "  using: composite\n"
+                "  steps:\n"
+                "    - uses: owner/action@v1\n",
+                encoding="utf-8",
+            )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(1, len(violations), violations)
+            self.assertEqual("actions/local/action.yml", violations[0][0])
+            self.assertIn("full commit SHA", violations[0][2])
+
+    def test_workflow_gate_rejects_unpinned_local_docker_actions(self) -> None:
+        digest = "docker://vendor/tool@sha256:" + ("b" * 64)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            actions = root / "actions"
+            workflows.mkdir(parents=True)
+            actions.mkdir()
+            action_ids = ("dockerfile", "missing", "nonscalar", "pinned")
+            (workflows / "candidate.yml").write_text(
+                "name: Candidate\n"
+                "on: push\n"
+                "jobs:\n"
+                "  verify:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                + "".join(
+                    f"      - uses: ./actions/{action_id}\n"
+                    for action_id in action_ids
+                ),
+                encoding="utf-8",
+            )
+            definitions = {
+                "dockerfile": "  image: Dockerfile\n",
+                "missing": "",
+                "nonscalar": "  image: [Dockerfile]\n",
+                "pinned": f"  image: {digest}\n",
+            }
+            for action_id, image in definitions.items():
+                directory = actions / action_id
+                directory.mkdir()
+                (directory / "action.yml").write_text(
+                    "name: Local\n"
+                    "runs:\n"
+                    "  using: docker\n"
+                    + image,
+                    encoding="utf-8",
+                )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(3, len(violations), violations)
+            self.assertEqual(
+                {
+                    "actions/dockerfile/action.yml",
+                    "actions/missing/action.yml",
+                    "actions/nonscalar/action.yml",
+                },
+                {path for path, _line, _violation in violations},
+            )
+            self.assertTrue(
+                all(
+                    "Docker action image" in violation
+                    for _, _, violation in violations
+                ),
+                violations,
+            )
+
+    def test_workflow_reference_gate_rejects_invalid_local_reusable_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "caller.yml").write_text(
+                "name: Caller\n"
+                "on: push\n"
+                "jobs:\n"
+                "  reuse:\n"
+                "    uses: ./outside.yml\n",
+                encoding="utf-8",
+            )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(1, len(violations), violations)
+            self.assertIn("directly under .github/workflows", violations[0][2])
+
+    def test_workflow_gate_scans_referenced_untracked_reusable_workflow(self) -> None:
+        pinned = "owner/action@" + ("a" * 40)
+        mutable = "owner/action@v1"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+
+            def run_git(*arguments: str) -> None:
+                completed = subprocess.run(
+                    ["git", *arguments], cwd=root, capture_output=True, check=False
+                )
+                self.assertEqual(0, completed.returncode, completed.stderr.decode())
+
+            caller = workflows / "caller.yml"
+            caller.write_text(
+                "name: Caller\n"
+                "on: push\n"
+                "jobs:\n"
+                "  verify:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                f"      - uses: {pinned}\n",
+                encoding="utf-8",
+            )
+            run_git("init", "--quiet")
+            run_git("config", "user.name", "Test")
+            run_git("config", "user.email", "test@example.invalid")
+            run_git("add", ".")
+            run_git("commit", "--quiet", "-m", "seed")
+
+            caller.write_text(
+                "name: Caller\n"
+                "on: push\n"
+                "jobs:\n"
+                "  reuse:\n"
+                "    uses: ./.github/workflows/untracked.yml\n",
+                encoding="utf-8",
+            )
+            (workflows / "untracked.yml").write_text(
+                "name: Reusable\n"
+                "on: workflow_call\n"
+                "jobs:\n"
+                "  verify:\n"
+                "    runs-on: ubuntu-latest\n"
+                "    steps:\n"
+                f"      - uses: {mutable}\n",
+                encoding="utf-8",
+            )
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+            self.assertEqual(1, len(violations), violations)
+            self.assertEqual(".github/workflows/untracked.yml", violations[0][0])
+            self.assertIn("full commit SHA", violations[0][2])
+            self.assertIn("[working tree]", violations[0][2])
+
+    def test_workflow_reference_gate_scans_head_index_and_worktree(self) -> None:
+        mutable = "docker://vendor/tool:latest"
+        pinned = "docker://vendor/tool@sha256:" + ("b" * 64)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+
+            def workflow(reference: str) -> str:
+                return (
+                    "name: Candidate\n"
+                    "on: push\n"
+                    "jobs:\n"
+                    "  verify:\n"
+                    "    runs-on: ubuntu-latest\n"
+                    "    steps:\n"
+                    f"      - uses: {reference}\n"
+                )
+
+            def run_git(*arguments: str) -> None:
+                completed = subprocess.run(
+                    ["git", *arguments], cwd=root, capture_output=True, check=False
+                )
+                self.assertEqual(0, completed.returncode, completed.stderr.decode())
+
+            run_git("init", "--quiet")
+            run_git("config", "user.name", "Test")
+            run_git("config", "user.email", "test@example.invalid")
+            head_path = workflows / "head.yml"
+            index_path = workflows / "index.yaml"
+            working_path = workflows / "working.yml"
+            for path in (head_path, index_path, working_path):
+                path.write_text(workflow(pinned), encoding="utf-8")
+            head_path.write_text(workflow(mutable), encoding="utf-8")
+            run_git("add", ".")
+            run_git("commit", "--quiet", "-m", "seed")
+
+            head_path.write_text(workflow(pinned), encoding="utf-8")
+            index_path.write_text(workflow(mutable), encoding="utf-8")
+            run_git("add", str(index_path.relative_to(root)))
+            index_path.write_text(workflow(pinned), encoding="utf-8")
+            working_path.write_text(workflow(mutable), encoding="utf-8")
+
+            violations = WORKFLOW_SCANNER.scan_workflows(root)
+
+        paths = {path for path, _line, _violation in violations}
+        self.assertEqual(
+            {
+                ".github/workflows/head.yml",
+                ".github/workflows/index.yaml",
+                ".github/workflows/working.yml",
+            },
+            paths,
+        )
 
     def test_ci_dependency_lock_is_hashed_current_and_public_safe(self) -> None:
         lock = (ROOT / "requirements-ci.txt").read_text(encoding="utf-8")

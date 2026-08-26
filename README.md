@@ -23,6 +23,94 @@ README は、最初から最後まで一枚の壁として読む必要はあり�
 | **Current Reality** | 公開済み、local candidate、未証明をどう分けているか | [現在地](#現在地--夢と実証範囲を分ける) / [Public Preview と Public Beta](#public-preview-と-public-beta) |
 | **Try it** | 約5分の安全な体験と、次に選べる bounded path | [最初に選ぶ](#最初に選ぶ) / [5-minute tour](docs/FIVE-MINUTE-TOUR.md) |
 
+## Company AGI / Owner-confirmed direction
+
+> **会話を、根拠と権限を失わずに、専門Agentの仕事と学習へ変える。**
+
+これがKotodamaのCompany AGIの約束です。正本は
+[Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md)。
+README は Projection であり、実行権限、Current Truth、Final Human GOを
+作りません。この節は canonical doc の最小 projection であり、model routing、
+質問の形、BecomeOneのmigration role、archive選択を明示的に更新します。
+ここで公開するbytesは、ユーザーのowner-directed working directionを保つ
+redacted direction candidateです。署名済み・独立検証済みのgovernance approval、
+rightsholder proof、canonical adoption、launch decision、Final Human GOのreceipt
+ではありません。receiptを捏造せず、公開境界は`NO_GO_UNPUBLISHED`のままです。
+
+```text
+Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
+-> bounded Work Order -> Agent Swarm -> Verification Receipt -> Promotion
+-> reply / learning
+```
+
+### Target
+
+- 公開製品はKotodamaの一つだけです。BecomeOneは移行中のprivate donor /
+  experimental kernelで、移行後はpublic version / content digestにpinされた
+  consumer / control planeであり、第二のProduct SSOTにはなりません。
+- [OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
+  をgoverned curated knowledgeのcentralな人間・agent-readable representationにしますが、Companyの唯一のtruthにはしません。
+  OKF自体はauthority、transaction、archive、ACL、storage/query、audit、deletion、
+  concurrencyを持たず、owner-reviewed conceptだけがgoverned curated interpretationの
+  canonicalになり得ます。generated conceptはrebuildable projectionであり、canonical source authorityではありません。
+  Kotodamaのextension profileでrevision / evidence / approval / invalidation / promotionを束ねます。
+- IngressはDiscord text / Voice、Codex、Claude、Notion、GitHub、Google Drive、n8n。
+  raw evidenceはsource/session/channel、speaker または individual track、timestamp/span、raw ASR、
+  consent/retention revision、digestを保持し、derived transcript / minutes / Intentは
+  rawを上書きしません。
+- Session auto-creationを許し、Task SSOT、Plan/Requirement refs、Agent Invocation /
+  model provenance、Capability/Knowledge/MCP grants、A2A、依存・parallel status、
+  evidence / invalidationを束ねます。未知・曖昧なauthorityは明示します。
+- scoped goalごとに一つの**Completion Owner Agent**がGoal Completion Loopを所有します。
+  task数ではなくacceptance evidenceとtarget experienceを追い、max depth 2、一つのN/C/W/V ledger、
+  duplicate `work_key` / same-writer禁止、budget/TTL/kill/rollback、unchanged-input rerun抑止、
+  regression auto-revert、同一blockerのbounded escalationを強制します。
+  A2Aはgenericでmanifest-drivenです。effectを持たないRouting Agentがspecialistを選び、別の
+  Metadata/Context Resolution Agentがexact SSOT/OKF/Session/Knowledge revision・lineage・grantから
+  provenance-bound Context Packを作ります。両者は実行もtruth promotionもしません。
+  Session再利用候補はexact metadata/Forest level/identity/ACL/current revision filter、lexical、
+  optionalなsmall local encoder similarityの順で探し、source digest/provenanceとsuperseded/authorityを
+  再読検証します。embeddingはrebuildable recall projectionでありSSOTではありません。
+- **Voice Requirements Agent / GrillU**はadaptiveでchannel-neutralです。自然なcontinuous
+  VoiceからもRequirementを形成し、uncertainty・impact・authorityが必要な時だけ確認します。
+  固定UI・固定質問ritualを要求せず、facilitationはself-approve / self-promote / executeしません。
+- reversible workはself-owned disposable clone / worktree / container、将来はisolated VMで
+  auto-executeできますが、exact base/image、owner、data/network/tool grant、budget、TTL、kill、
+  export/evidence、cleanup receiptを束ね、ambient shared / production / public / credential authorityを持ちません。
+- Policyは**Luna-first**です。圧倒的多数のContext Pack / research / implementation / coordination /
+  routine reviewはGPT-5.6 Luna、上位architecture・難しいintegration・cross-swarm audit・adversarial
+  synthesis・human-facing judgmentは必要時にGPT-5.6 Sol、Terraも明示選択可とし、routing rationale、
+  exact runtime model/provenance、evidenceを記録します。Identity-bound Codex subscriptionはcandidate、
+  General-purpose local LLMはdeferred、local ASR/VAD・speaker support・encoder・tiny deterministic
+  specialistsは許容し、metered APIは除外です。
+- Archive Target interfaceはprovider-neutralのまま、private v1 backendはordinary encrypted-file
+  package + ZFS snapshotです。exactな適合dataset/mountがread-onlyで確認できるまで作成・書込みせず、
+  local restore testだけを先行します。Standing GitHub delegationとGoal Completion
+  Loopは、独立review/testsとagent-executable revert pathが揃った場合に限り、agentsが
+  branch/commit/open PR/mergeをautonomously実行できる設計です。reversible merge/revert、monitor、
+  budget、cadence、kill、provenance、bounded authorityを必須にします。詳細な契約はcanonical docを参照してください。
+
+### Current reality
+
+- この変更はpublic documentation/schema/validator candidateで、private runtime/deployは未実装・未証明です。
+- private Voice/Intent/Swarm pathはcontinuous capture、rotation、transcription、Requirement、
+  delegation、execution、verificationを結ぶend-to-endとして未証明です。Agent Swarm、provider E2E、
+  Public Betaも未証明です。
+- 公開repositoryはcandidate contractsとvalidatorを提供するIncomplete Public
+  Previewであり、`NO_GO_UNPUBLISHED`を維持します。
+- PR #18はApache-2.0のcandidate bytesを供給しますが、Issue #25のcontributor
+  attribution、provenance、NOTICE、accountable rightsholderのgapは未解決です。
+
+### Open design decisions
+
+- A2A、realtime / large Context、causal ledger、OKF extension、RAG / knowledge graph /
+  encoder、archive provider、hierarchy / graph / namingの最終形は研究中です。
+- eight-surface product mapとForest Map v2 eight-layer hierarchyは別概念であり、
+  現行Forest Mapの最終採用は未決定です。
+- provider、model / subscription、Context Subscription、specialist sharingの詳細は、
+  private data、保持、費用、authorityの検証後に決めます。No hidden fallbackを許さず、
+  routing rationaleとruntime provenanceを残します。
+
 ## Company OS system map
 
 詳細へ入る前に、Kotodama 全体を八つの面として見ると位置関係が分かります。
@@ -39,7 +127,7 @@ Office / Input -> Voice -> Intent -> Governance -> Company Pack
 |---|---|---|
 | [Office / Input](#discord-の中に会社を作る) | Discord、Issue、文書、業務データを、人間と AI が働く共通入口にする | Discord は projection。public invite と public Voice Bot は未提供 |
 | [Voice Adapter](#voice--最初に価値を体感する入口) | 話者別 capture、local ASR、15分 rotation を Verified Handoff へつなぐ | 既存 local candidate はあるが、実 Voice E2E と public Voice Bot は未提供 |
-| [Intent / GrillU](#grillu--一度に一つだけ深掘りする) | 会話から意図候補を抽出し、重要な曖昧さだけを一問ずつ閉じる | contract / prototype は local candidate。公開サービスではない |
+| [Intent / GrillU](#grillu-adaptive-requirements) | 会話から意図候補を抽出し、不確実性・影響・authorityに応じて適応的に要件を深める | contract / prototype は local candidate。公開サービスではない |
 | [Governance / Evidence](#evidence-chain--会話から-current-truth-まで) | Source から Decision、Work、Receipt、Promotion、Current Truth まで短絡せず追跡する | schema、validator、candidate-only review chain を公開。Human approval や Current Truth は作らない |
 | [Company Pack](#company-template--会社を再現できる部品) | Template、Blocks、Records、MOCs で会社の境界と仕事を再現する | 9 Blocks、9 Records、3 MOCs と local/static tooling を試せる |
 | [Context Platform](#context-platform--会社の共有記憶) | 権限付き query plane から People、Goal、ToDo、会話、文書、証拠へ到達する | TiDB は第一評価候補。adopted / deployed / Current Truth ではない |
@@ -116,18 +204,30 @@ Kotodama における Discord は、Bot の設置場所ではなく、人間と 
 
 ただし、Discord 自体を Company SSOT にはしません。メッセージや transcript は Source Evidence であり、Human Decision、Capability Grant、Verification Receipt、Promotion、Current Truth は Discord から独立した統治層で扱います。
 
+Conversation ingress は Discord の text / Voice だけではありません。Codex、Claude、Notion、GitHub、
+Google Drive、n8n も同じ evidence boundary へ接続します。source/session/channel、speaker または
+individual track、timestamp/span、raw ASR text、consent/retention revision、digest を保持し、raw
+evidence と derived record を分離します。
+
 ## 理想のユーザー体験
 
 Kotodama が目指す体験は、長い仕様書を最初に書くことではありません。
 
-1. 人間が Discord、Voice、Issue、文書で普段どおり相談する
+1. 人間が Discord text / Voice、Codex、Claude、Notion、GitHub、Google Drive、n8n で普段どおり相談する
 2. Kotodama が目的、受益者、制約、成功条件、停止条件の候補を抽出する
-3. 重要な曖昧さだけを GrillU が一問ずつ確認する
+3. GrillU が不確実性・影響・authorityに応じて、必要な確認だけを適応的に行う
 4. 確認済みの候補を、権限と停止条件を持つ Work Order へ変換する
 5. AI または人間が bounded execution lane で仕事を進める
 6. 成果物、test、観測、rollback 情報を Verification Receipt に束縛する
 7. authority を持つ人または policy が、候補の採用・拒否を判断する
 8. 結果と学習が会社の Office と正本へ戻る
+
+**Voice Requirements Agent** / GrillU facilitatorは、話者別Source Evidenceを含む自然な
+continuous Voice conversationからRequirementを形成できます。不確実性・影響・authorityの
+解消が必要な時だけ、channel-neutralに確認します。質問数やUIを固定するritualではありません。
+Humanの**回答**、**訂正**、**保留**、`unknown`をprovenance付きの**Requirement State**へ反映し、
+十分になった**Plan Candidate**を確認に回します。このAgentは**Execution Agent**と分離され、
+self-approve、self-promote、self-executeしません。
 
 この完全な体験はまだ Public Beta として提供していません。現在の公開リポジトリでは、その中核となる Company governance flow と検証ツールを先に試せます。
 
@@ -136,18 +236,23 @@ Kotodama が目指す体験は、長い仕様書を最初に書くことでは�
 Voice は付属機能ではなく、Kotodama の思想を最短で体感できる最初のプロダクト面です。目指しているのは、音声を一つの文章へ変換するだけの仕組みではありません。
 
 ```text
-Private Discord Voice Channel
-→ 話者ごとの音声取得
-→ consent / retention gate
-→ local ASR
-→ 話者・時刻・発話内容の対応
-→ 話者別 transcript と全体 context
+raw PCM + ingress event JSON
+→ per-speaker ASR
+→ optional timestamp/acoustic alignment
+→ immutable speaker-attributed transcript
+→ deterministic/contextual corrected transcript (separate sidecar/diff)
+→ whole-conversation minutes
+→ Source Evidence / Intent events
 → 15分単位で private channel へ返す
-→ Intent / ToDo / Goal / Decision Candidate
 → GrillU または Verified Handoff
 ```
 
-既存の local / Proxmox Voice 処理系と話者別処理の候補はありますが、この公開リポジトリに public Voice runtime、実音声、transcript corpus、private Discord identifier は含みません。公開保証された Voice service ではありません。
+raw PCM、ingress event JSON、source provenance は capture evidence です。individual speaker track は
+capture contract内の attribution に限って authoritative で、ASR は derived / fallible です。
+Phoneme/G2P は dictionary lookup、normalization、alignment の補助に限り、audioから未知語を再構成する
+仕組みとは扱いません。既存の local / Proxmox Voice 処理系と話者別処理の候補はありますが、この公開
+リポジトリに public Voice runtime、実音声、transcript corpus、private Discord identifier は含みません。
+公開保証された Voice service ではありません。
 
 ### 15分 Voice rotation
 
@@ -185,27 +290,51 @@ Voice の品質は文字認識率だけでは決まりません。
 - どの候補を人が確認・訂正したか
 - そこから何が実行され、何が採用されたか
 
-これらを追跡できることが重要です。話者別 audio / ASR を authority とし、mixed audio や merged transcript は比較・文脈用途として扱う設計を目指します。
+これらを追跡できることが重要です。raw PCM、ingress event JSON、source provenance は何が capture されたかの
+evidenceであり、individual speaker track は capture contract内の attribution に限って authoritative です。
+ASR は derived / fallible で、mixed audio や merged transcript は比較・文脈用途として扱います。Derived
+stages は raw を上書きせず、次の順序で別レイヤーに追跡します。
+
+```text
+raw PCM + ingress event JSON
+→ per-speaker ASR
+→ optional timestamp/acoustic alignment
+→ immutable speaker-attributed transcript
+→ deterministic/contextual corrected transcript (separate sidecar/diff)
+→ whole-conversation minutes
+→ Source Evidence / Intent events
+```
+
+Phoneme/G2P は dictionary lookup、normalization、alignment の補助に限り、audioから未知語を再構成する
+仕組みとは扱いません。
 
 > Kotodama Voice は、音声を文章へ変換するだけでなく、会話を検証可能な仕事へ接続する Voice-to-Verified-Handoff pipeline を目指します。
 
-## GrillU — 一度に一つだけ深掘りする
+<a id="grillu-adaptive-requirements"></a>
 
-GrillU は、利用者に長い仕様書を書かせる仕組みでも、自動承認する Discord Bot 機能でもありません。検知した Intent Candidate に重要な曖昧さがあるとき、次の一問だけを出すチャネル非依存の要件深掘り機能です。
+## GrillU — 適応的でチャネル中立の要件ファシリテーション
+
+GrillU は、利用者に長い仕様書を書かせる仕組みでも、自動承認する Discord Bot 機能でもありません。
+検知した Intent Candidate と現在の Requirement State を見て、不確実性・影響・authorityが残る時だけ
+確認する、adaptiveでchannel-neutralな要件ファシリテーションです。自然なcontinuous Voiceも
+Requirement形成の入力になり、固定UIや固定質問ritualは要求しません。
 
 ```text
 検知された Intent Candidate
 → 現在の Requirement State
-→ 次の重要な質問を一つ
-→ 最大3つの選択肢 + 保留 / 修正
-→ Human response
+→ 残る不確実性・影響・authorityを評価
+→ 必要なら確認、または会話を継続
+→ Human response / correction / unknown
 → 根拠付き Requirement State 更新
-→ 次の質問、または Human-confirmed Requirement Candidate
+→ Requirement Candidate または bounded Work Order Candidate
 ```
 
-回答は、はい / いいえ、1 / 2 / 3、この理解で OK、修正する、分からない、後で、のように軽くします。Human が内容を確認しても、それだけで Human Decision、Work Order、execution authority、Promotion、Current Truth にはなりません。
+回答は自然な音声、テキスト、訂正、保留、`unknown`を含みます。Human が内容を確認しても、それだけで
+Human Decision、Work Order、execution authority、Promotion、Current Truth にはなりません。Facilitationは
+self-approve、self-promote、self-executeしません。
 
-将来は Discord、Voice、Web、Mobile、Codex UI のどこからでも同じ Requirement State を扱える構造を目指します。GrillU contract と prototype は local candidate であり、この公開 preview の提供機能ではありません。
+将来は Discord、Voice、Codex、Web、Mobile などどこからでも同じ Requirement State を扱える構造を目指します。
+GrillU contract と prototype は local candidate であり、この公開 preview の提供機能ではありません。
 
 ## Evidence Chain — 会話から Current Truth まで
 
@@ -900,7 +1029,7 @@ machine-readable な完了境界ではありません。最新チェックリス
 |---|---|
 | Authorized Corpus | 特定 identity が、明示目的・期間・操作で参照を許された情報集合 |
 | Intent Candidate | 会話や資料から抽出した、まだ未確定の意図仮説 |
-| GrillU | 一問ずつ曖昧さを閉じるチャネル非依存の要件深掘り機能 |
+| GrillU | 不確実性・影響・authorityに応じて確認する、adaptiveでchannel-neutralな要件ファシリテーション |
 | Work Order | 成果物、対象、権限、受入・停止条件を結ぶ実行契約 |
 | Capability Grant | identity と action を resource、期限、上限へ限定した権限記録 |
 | Verification Receipt | exact input / candidate / test / result を束縛した追記型記録 |

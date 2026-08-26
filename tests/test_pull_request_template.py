@@ -21,6 +21,7 @@ class PullRequestTemplateTests(unittest.TestCase):
             "No live credential",
             "fail closed",
             "full commit SHAs",
+            "sha256 image digests",
             "authoritative generator",
             "negative cases",
             "rollback or disablement path",

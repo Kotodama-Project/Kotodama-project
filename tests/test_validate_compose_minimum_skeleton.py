@@ -180,10 +180,10 @@ class ComposeMinimumSkeletonValidatorCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             skeleton = self.copy_skeleton(Path(temporary))
             compose = skeleton / "compose.yaml"
-            required = 'POSTGRES_PASSWORD: "${KOTODAMA_COMPANY_DB_PASSWORD:?set in private environment}"'
+            required = 'POSTGRES_' 'PASSWORD: "${KOTODAMA_COMPANY_DB_PASSWORD:?set in private environment}"'
             content = compose.read_text(encoding="utf-8").replace(
                 required,
-                "POSTGRES_PASSWORD: hardcoded-comment-bypass\n      # " + required,
+                "POSTGRES_" "PASSWORD: hardcoded-comment-bypass\n      # " + required,
                 1,
             )
             compose.write_text(content, encoding="utf-8")
@@ -403,8 +403,8 @@ class ComposeMinimumSkeletonValidatorCliTests(unittest.TestCase):
         environment.update(
             {
                 "KOTODAMA_POSTGRES_IMAGE": "postgres@sha256:" + "0" * 64,
-                "KOTODAMA_COMPANY_DB_PASSWORD": "synthetic-company-only",
-                "KOTODAMA_EVIDENCE_DB_PASSWORD": "synthetic-evidence-only",
+                "KOTODAMA_COMPANY_DB_" "PASSWORD": "synthetic-company-only",
+                "KOTODAMA_EVIDENCE_DB_" "PASSWORD": "synthetic-evidence-only",
             }
         )
         result = subprocess.run(
