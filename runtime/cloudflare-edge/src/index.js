@@ -10,6 +10,7 @@ const MAX_JWT_BYTES = 16_384;
 const MAX_ACCESS_IDENTITY_BYTES = 1_024;
 const MAX_QUERY_BYTES = 256;
 const MAX_REVIEW_BODY_BYTES = 16_384;
+const MAX_ACCESS_JWKS_BYTES = 262_144;
 const MAX_GATEWAY_BODY_BYTES = 1_048_576;
 const MAX_GATEWAY_JSON_DEPTH = 32;
 const MAX_GATEWAY_JSON_NODES = 10_000;
@@ -166,8 +167,8 @@ async function refreshAccessJwks(config) {
     return null;
   }
   if (!response.ok) return null;
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength > 262_144) return null;
+  const bytes = await boundedBodyBytes(response, MAX_ACCESS_JWKS_BYTES);
+  if (!bytes) return null;
   let value;
   try {
     value = JSON.parse(new TextDecoder().decode(bytes));
