@@ -1112,7 +1112,11 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
             continue
         invalidation_refs.extend(matching_refs)
         next_action = {"kind": "REVIEW_INVALIDATION", "source_event_ref": record["event_id"], "action_ref": None}
-        if detail["invalidation_kind"] == "ACL_LOST" or detail["kind"] == "acl_loss":
+        if (
+            detail["invalidation_kind"] == "ACL_LOST"
+            or detail["kind"] == "acl_loss"
+            or record["public_safety"]["acl_state"] in {"UNKNOWN", "LOST", "REVOKED"}
+        ):
             cross_session_acl_invalidation = True
     intents = list(intent_by_candidate.values())
     if any(item["status"] == "CANDIDATE_ONLY" for item in intents) and next_action["kind"] == "NONE":

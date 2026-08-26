@@ -541,6 +541,97 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertNotIn(foreign_noise["event_id"], projection["source_event_refs"])
         self.assertNotIn(foreign_acl_loss["event_id"], projection["source_event_refs"])
 
+    def test_matching_foreign_unknown_acl_state_fails_closed(self) -> None:
+        records = _valid_records()
+        foreign_unknown = _event(
+            "foreign-unknown-source-update",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="source_update",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[_ref("task", "demo")],
+            acl_state="UNKNOWN",
+            source_type="system",
+            actor_ref="ref/system/foreign",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign",
+        )
+        records.append(foreign_unknown)
+
+        projection = ledger.project_session(_rechain(records), _ref("session", "demo"))
+
+        self.assertEqual("INVALIDATED", projection["status"])
+        self.assertEqual("FAIL_CLOSED", projection["knowledge_scope"]["projection_access"])
+        self.assertEqual("AVAILABLE", projection["knowledge_scope"]["acl_state"])
+        self.assertNotIn(foreign_unknown["event_id"], projection["source_event_refs"])
+        self.assertNotIn(
+            foreign_unknown["event_id"],
+            {item["event_ref"] for item in projection["source_timeline"]},
+        )
+
+    def test_matching_foreign_unknown_lost_or_revoked_acl_state_fails_closed(self) -> None:
+        for acl_state in ("UNKNOWN", "LOST", "REVOKED"):
+            with self.subTest(acl_state=acl_state):
+                records = _valid_records()
+                foreign_invalidation = _event(
+                    f"foreign-{acl_state.lower()}-invalidation",
+                    sequence=4,
+                    previous_hash=records[-1]["event_hash"],
+                    event_kind="invalidation",
+                    session_state="BOUND",
+                    session_ref=_ref("session", "other"),
+                    event_state="INVALIDATED",
+                    invalidation_kind="SOURCE_UPDATED",
+                    invalidation_refs=[_ref("task", "demo")],
+                    acl_state=acl_state,
+                    source_type="system",
+                    actor_ref="ref/system/foreign",
+                    authority_role="SYSTEM",
+                    authority_ref="ref/authority/foreign",
+                )
+                records.append(foreign_invalidation)
+
+                projection = ledger.project_session(_rechain(records), _ref("session", "demo"))
+
+                self.assertEqual("INVALIDATED", projection["status"])
+                self.assertEqual("FAIL_CLOSED", projection["knowledge_scope"]["projection_access"])
+                self.assertEqual("AVAILABLE", projection["knowledge_scope"]["acl_state"])
+                self.assertNotIn(foreign_invalidation["event_id"], projection["source_event_refs"])
+                self.assertNotIn(
+                    foreign_invalidation["event_id"],
+                    {item["event_ref"] for item in projection["source_timeline"]},
+                )
+
+    def test_matching_foreign_available_source_update_preserves_invalidation_behavior(self) -> None:
+        records = _valid_records()
+        foreign_available = _event(
+            "foreign-available-source-update",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="source_update",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[_ref("task", "demo")],
+            acl_state="AVAILABLE",
+            source_type="system",
+            actor_ref="ref/system/foreign",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign",
+        )
+        records.append(foreign_available)
+
+        projection = ledger.project_session(_rechain(records), _ref("session", "demo"))
+
+        self.assertEqual("INVALIDATED", projection["status"])
+        self.assertEqual("ALLOWED_UNVERIFIED", projection["knowledge_scope"]["projection_access"])
+        self.assertEqual("AVAILABLE", projection["knowledge_scope"]["acl_state"])
+        self.assertNotIn(foreign_available["event_id"], projection["source_event_refs"])
+
     def test_empty_validator_and_malformed_genesis_append_fail_closed(self) -> None:
         empty_report = ledger.validate_ledger([])
         self.assertEqual("REFUSED", empty_report["result"])
