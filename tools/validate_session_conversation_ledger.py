@@ -58,7 +58,7 @@ EVENT_KEYS = {
     "confirmation_of_event_ref", "invalidation_kind", "invalidation_refs", "binding",
 }
 EGRESS_KEYS = {
-    "destination_ref", "consent_ref", "reply_artifact_ref", "delivery_receipt_ref",
+    "destination_binding", "consent_binding", "reply_artifact_ref", "delivery_receipt_ref",
     "delivery_state", "raw_content_embedded",
 }
 BINDING_KEYS = {"target_event_refs", "destination_session_ref", "destination_revision_ref"}
@@ -74,12 +74,12 @@ RETENTION_KEYS = {
     "deletion_trigger", "deletion_state", "deletion_receipt_ref", "deletion_readback",
 }
 PROVENANCE_KEYS = {"adapter_contract_ref", "ingested_by_ref", "ingest_mode", "connector_ref", "extraction", "recovery"}
-EXTRACTION_KEYS = {"kind", "candidate_ref", "model_ref", "confirmation_required"}
+EXTRACTION_KEYS = {"kind", "candidate_binding", "model_ref", "confirmation_required"}
 RECOVERY_KEYS = {"status", "cursor_ref", "receipt_ref"}
 PUBLIC_SAFETY_KEYS = {
     "record_visibility", "raw_payload_embedded", "protected_payload_ref", "knowledge_scope_ref", "acl_state",
 }
-INTEGRITY_KEYS = {"marker", "gap_start_sequence", "gap_end_sequence", "marker_ref"}
+INTEGRITY_KEYS = {"marker", "marker_ref"}
 
 SOURCE_TYPES = {"discord_text", "discord_voice", "notion", "github", "codex", "claude", "google_drive", "n8n", "system"}
 ACTOR_AUTHORITY_ROLES = {
@@ -445,17 +445,19 @@ def _validate_event_shape(record: Any) -> list[str]:
     egress = record.get("egress")
     if detail_kind == "voice_reply":
         if _keys(egress, EGRESS_KEYS, EGRESS_KEYS, "egress", reasons):
-            for key in ("destination_ref", "consent_ref", "reply_artifact_ref", "delivery_receipt_ref"):
+            for key in ("reply_artifact_ref", "delivery_receipt_ref"):
                 _ref(egress.get(key), reasons)
-            if egress.get("delivery_state") != "VERIFIED" or egress.get("raw_content_embedded") is not False:
-                reasons.append("VOICE_REPLY_EGRESS_INVALID")
             if (
-                egress.get("destination_ref") != record.get("source", {}).get("channel_ref")
-                or egress.get("consent_ref") != record.get("source", {}).get("consent_ref")
+                egress.get("destination_binding") != "SOURCE_CHANNEL"
+                or egress.get("consent_binding") != "SOURCE_CONSENT"
+                or egress.get("delivery_state") != "VERIFIED"
+                or egress.get("raw_content_embedded") is not False
             ):
-                reasons.append("VOICE_REPLY_EGRESS_SCOPE_INVALID")
+                reasons.append("VOICE_REPLY_EGRESS_INVALID")
     elif egress is not None:
         reasons.append("VOICE_REPLY_EGRESS_INVALID")
+    if detail_kind in {"voice_segment", "voice_reply"} and record.get("source", {}).get("type") != "discord_voice":
+        reasons.append("VOICE_SOURCE_TYPE_INVALID")
 
     decision = record["decision"]
     if _keys(decision, DECISION_KEYS, DECISION_KEYS, "decision", reasons):
@@ -569,10 +571,10 @@ def _validate_event_shape(record: Any) -> list[str]:
         if _keys(extraction, EXTRACTION_KEYS, EXTRACTION_KEYS, "extraction", reasons):
             if extraction.get("kind") not in {"NONE", "LLM_CANDIDATE"} or extraction.get("confirmation_required") is not True:
                 reasons.append("SCHEMA_INVALID")
-            _ref(extraction.get("candidate_ref"), reasons, pattern=r"^ref/candidate/[a-z0-9][a-z0-9/_-]{1,240}$", nullable=True)
             _ref(extraction.get("model_ref"), reasons, nullable=True)
-            if extraction.get("kind") == "LLM_CANDIDATE" and extraction.get("candidate_ref") is None:
-                reasons.append("LLM_RESULT_NOT_CANDIDATE")
+            expected_binding = "DECISION_CANDIDATE" if extraction.get("kind") == "LLM_CANDIDATE" else "NOT_APPLICABLE"
+            if extraction.get("candidate_binding") != expected_binding:
+                reasons.append("EXTRACTION_CANDIDATE_BINDING_INVALID")
             if extraction.get("kind") == "LLM_CANDIDATE" and extraction.get("model_ref") is None:
                 reasons.append("LLM_MODEL_PROVENANCE_MISSING")
         recovery = provenance.get("recovery")
@@ -604,24 +606,14 @@ def _validate_event_shape(record: Any) -> list[str]:
         marker = integrity.get("marker")
         if not isinstance(marker, str) or marker not in {"NONE", "GAP", "CORRUPT", "RECOVERY"}:
             reasons.append("SCHEMA_INVALID")
-        for key in ("gap_start_sequence", "gap_end_sequence"):
-            value = integrity.get(key)
-            if value is not None and (not _is_integer_number(value) or value < 1):
-                reasons.append("SCHEMA_INVALID")
         _ref(integrity.get("marker_ref"), reasons, nullable=True)
         if integrity.get("marker") != "NONE" and integrity.get("marker_ref") is None:
             reasons.append("INTEGRITY_MARKER_UNBOUND")
         if integrity.get("marker") == "NONE" and any(
             integrity.get(key) is not None
-            for key in ("gap_start_sequence", "gap_end_sequence", "marker_ref")
+            for key in ("marker_ref",)
         ):
             reasons.append("INTEGRITY_MARKER_UNBOUND")
-        if integrity.get("marker") == "GAP" and (
-            not _is_integer_number(integrity.get("gap_start_sequence"))
-            or not _is_integer_number(integrity.get("gap_end_sequence"))
-            or integrity["gap_end_sequence"] < integrity["gap_start_sequence"]
-        ):
-            reasons.append("INTEGRITY_GAP_INVALID")
     _sha(record.get("previous_event_hash"), reasons)
     _sha(record.get("event_hash"), reasons)
     return list(dict.fromkeys(reasons))
@@ -812,9 +804,6 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         if decision["status"] == "LLM_CANDIDATE":
             if decision["candidate_ref"] is None or decision["human_evidence_ref"] is not None or decision["human_decision_ref"] is not None:
                 reasons.append("LLM_RESULT_NOT_CANDIDATE")
-        extraction = record["provenance"]["extraction"]
-        if extraction["kind"] == "LLM_CANDIDATE" and extraction["candidate_ref"] != decision.get("candidate_ref"):
-            reasons.append("EXTRACTION_CANDIDATE_BINDING_INVALID")
         if detail["kind"] == "decision_confirmed" and decision["status"] not in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED"}:
             reasons.append("CONFIRMED_EVENT_STATE_INVALID")
         if detail["kind"] == "correction" and decision["status"] != "HUMAN_CORRECTED":
@@ -1089,6 +1078,7 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
             "compaction_summary_is_source": False,
             "human_decision_requires_evidence": True,
             "human_identity_authentication": "UNVERIFIED_PUBLIC_CLAIM",
+            "promotion_eligible": False,
             "current_truth_changed": False,
         },
         "public_beta": "NO_GO_UNPUBLISHED",

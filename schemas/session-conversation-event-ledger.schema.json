@@ -75,6 +75,10 @@
       "if": {"properties": {"event": {"properties": {"kind": {"const": "voice_reply"}}}}},
       "then": {"required": ["egress"]},
       "else": {"not": {"required": ["egress"]}}
+    },
+    {
+      "if": {"properties": {"event": {"properties": {"kind": {"enum": ["voice_segment", "voice_reply"]}}}}},
+      "then": {"properties": {"source": {"properties": {"type": {"const": "discord_voice"}}}}}
     }
   ],
   "$defs": {
@@ -419,8 +423,10 @@
         "caused_by_event_refs": {"$ref": "#/$defs/event_ref_array"},
         "correlation_ref": {"$ref": "#/$defs/ref"},
         "idempotency_key_ref": {
-          "type": "string",
-          "pattern": "^ref/idempotency/[a-z0-9][a-z0-9/_-]{1,240}$"
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/idempotency/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
         },
         "cursor_ref": {
           "oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]
@@ -562,16 +568,16 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "destination_ref",
-        "consent_ref",
+        "destination_binding",
+        "consent_binding",
         "reply_artifact_ref",
         "delivery_receipt_ref",
         "delivery_state",
         "raw_content_embedded"
       ],
       "properties": {
-        "destination_ref": {"$ref": "#/$defs/ref"},
-        "consent_ref": {"$ref": "#/$defs/ref"},
+        "destination_binding": {"const": "SOURCE_CHANNEL"},
+        "consent_binding": {"const": "SOURCE_CONSENT"},
         "reply_artifact_ref": {"$ref": "#/$defs/ref"},
         "delivery_receipt_ref": {"$ref": "#/$defs/ref"},
         "delivery_state": {"const": "VERIFIED"},
@@ -749,22 +755,55 @@
         },
         {
           "if": {"properties": {"storage_class": {"const": "ENCRYPTED_COLD_ARCHIVE"}}},
-          "then": {"properties": {"encryption_status": {"const": "DECLARED_UNVERIFIED"}}}
+          "then": {"properties": {
+            "encryption_status": {"const": "DECLARED_UNVERIFIED"},
+            "archive_target_kind": {"enum": ["SESSION_ARCHIVE_VAULT", "ARCHIVE_TARGET"]}
+          }}
+        },
+        {
+          "if": {"properties": {"archive_target_kind": {"enum": ["SESSION_ARCHIVE_VAULT", "ARCHIVE_TARGET"]}}},
+          "then": {"properties": {
+            "archive_target_ref": {"$ref": "#/$defs/ref"},
+            "archive_target_uri_ref": {"$ref": "#/$defs/ref"},
+            "archive_package_digest": {"$ref": "#/$defs/sha256"},
+            "archive_status": {"enum": ["DECLARED", "RESTORE_PENDING", "RESTORED", "DELETED", "FAILED"]}
+          }}
+        },
+        {
+          "if": {"properties": {"archive_status": {"const": "RESTORE_PENDING"}}},
+          "then": {"properties": {"restore_status": {"const": "PENDING"}}}
+        },
+        {
+          "if": {"properties": {"restore_status": {"const": "PENDING"}}},
+          "then": {"properties": {"archive_status": {"const": "RESTORE_PENDING"}}}
+        },
+        {
+          "if": {"properties": {"archive_status": {"const": "RESTORED"}}},
+          "then": {"properties": {
+            "restore_status": {"const": "RESTORED"},
+            "restore_receipt_ref": {"$ref": "#/$defs/ref"}
+          }}
+        },
+        {
+          "if": {"properties": {"restore_status": {"const": "RESTORED"}}},
+          "then": {"properties": {
+            "archive_status": {"enum": ["RESTORED", "DELETED"]},
+            "restore_receipt_ref": {"$ref": "#/$defs/ref"}
+          }}
+        },
+        {
+          "if": {"properties": {"restore_status": {"const": "NOT_REQUESTED"}}},
+          "then": {"properties": {"restore_receipt_ref": {"type": "null"}}}
         }
       ]
     },
     "extraction": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "candidate_ref", "model_ref", "confirmation_required"],
+      "required": ["kind", "candidate_binding", "model_ref", "confirmation_required"],
       "properties": {
         "kind": {"enum": ["NONE", "LLM_CANDIDATE"]},
-        "candidate_ref": {
-          "oneOf": [
-            {"type": "string", "pattern": "^ref/candidate/[a-z0-9][a-z0-9/_-]{1,240}$"},
-            {"type": "null"}
-          ]
-        },
+        "candidate_binding": {"enum": ["DECISION_CANDIDATE", "NOT_APPLICABLE"]},
         "model_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
         "confirmation_required": {"const": true}
       },
@@ -772,10 +811,10 @@
         {
           "if": {"properties": {"kind": {"const": "LLM_CANDIDATE"}}},
           "then": {"properties": {
-            "candidate_ref": {"type": "string", "pattern": "^ref/candidate/[a-z0-9][a-z0-9/_-]{1,240}$"},
+            "candidate_binding": {"const": "DECISION_CANDIDATE"},
             "model_ref": {"$ref": "#/$defs/ref"}
           }},
-          "else": {"properties": {"candidate_ref": {"type": "null"}, "model_ref": {"type": "null"}}}
+          "else": {"properties": {"candidate_binding": {"const": "NOT_APPLICABLE"}, "model_ref": {"type": "null"}}}
         }
       ]
     },
@@ -850,33 +889,16 @@
     "integrity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["marker", "gap_start_sequence", "gap_end_sequence", "marker_ref"],
+      "required": ["marker", "marker_ref"],
       "properties": {
         "marker": {"enum": ["NONE", "GAP", "CORRUPT", "RECOVERY"]},
-        "gap_start_sequence": {
-          "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]
-        },
-        "gap_end_sequence": {
-          "oneOf": [{"type": "integer", "minimum": 1}, {"type": "null"}]
-        },
         "marker_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}
       },
       "allOf": [
         {
           "if": {"properties": {"marker": {"const": "NONE"}}},
-          "then": {"properties": {
-            "gap_start_sequence": {"type": "null"},
-            "gap_end_sequence": {"type": "null"},
-            "marker_ref": {"type": "null"}
-          }},
+          "then": {"properties": {"marker_ref": {"type": "null"}}},
           "else": {"properties": {"marker_ref": {"$ref": "#/$defs/ref"}}}
-        },
-        {
-          "if": {"properties": {"marker": {"const": "GAP"}}},
-          "then": {"properties": {
-            "gap_start_sequence": {"type": "integer", "minimum": 1},
-            "gap_end_sequence": {"type": "integer", "minimum": 1}
-          }}
         }
       ]
     }

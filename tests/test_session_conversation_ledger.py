@@ -267,7 +267,7 @@ def _event(
             "connector_ref": _ref("connector", source_type),
             "extraction": {
                 "kind": extraction_kind,
-                "candidate_ref": candidate_ref if extraction_kind != "NONE" else None,
+                "candidate_binding": "DECISION_CANDIDATE" if extraction_kind != "NONE" else "NOT_APPLICABLE",
                 "model_ref": _ref("model", "candidate-only") if extraction_kind != "NONE" else None,
                 "confirmation_required": True,
             },
@@ -286,8 +286,6 @@ def _event(
         },
         "integrity": {
             "marker": integrity_marker,
-            "gap_start_sequence": None,
-            "gap_end_sequence": None,
             "marker_ref": None if integrity_marker == "NONE" else _ref("integrity-marker", event_id),
         },
         "previous_event_hash": previous_hash,
@@ -1149,10 +1147,6 @@ class SessionConversationLedgerTests(unittest.TestCase):
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         integral = _valid_records()
         integral[0]["sequence"] = 1.0
-        integral[0]["integrity"]["marker"] = "GAP"
-        integral[0]["integrity"]["gap_start_sequence"] = 1.0
-        integral[0]["integrity"]["gap_end_sequence"] = 1.0
-        integral[0]["integrity"]["marker_ref"] = _ref("integrity-marker", "gap-1")
         integral = _rechain(integral)
         self.assertEqual(
             [], list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(integral[0]))
@@ -1549,7 +1543,7 @@ class SessionConversationLedgerTests(unittest.TestCase):
         )
         rejected_by_schema_and_validator(
             lambda record: record["integrity"].update(
-                {"marker": "GAP", "gap_start_sequence": 1, "gap_end_sequence": 2, "marker_ref": None}
+                {"marker": "GAP", "marker_ref": None}
             )
         )
         rejected_by_schema_and_validator(
@@ -1559,13 +1553,35 @@ class SessionConversationLedgerTests(unittest.TestCase):
         )
         rejected_by_schema_and_validator(
             lambda record: record["provenance"].update(
-                {"extraction": {"kind": "LLM_CANDIDATE", "candidate_ref": _ref("candidate", "demo"), "model_ref": None, "confirmation_required": True}}
+                {"extraction": {"kind": "LLM_CANDIDATE", "candidate_binding": "DECISION_CANDIDATE", "model_ref": None, "confirmation_required": True}}
             )
         )
         rejected_by_schema_and_validator(
             lambda record: (
                 record["content"].update({"artifact_stage": "RAW_AUDIO"}),
                 record["retention"].update({"storage_class": "DERIVED_SEARCH_INDEX"}),
+            )
+        )
+        rejected_by_schema_and_validator(
+            lambda record: record["retention"].update(
+                {"storage_class": "ENCRYPTED_COLD_ARCHIVE", "archive_target_kind": "NONE"}
+            )
+        )
+        rejected_by_schema_and_validator(
+            lambda record: record["retention"].update(
+                {"archive_target_kind": "ARCHIVE_TARGET", "archive_status": "DECLARED"}
+            )
+        )
+        rejected_by_schema_and_validator(
+            lambda record: record["retention"].update(
+                {
+                    "archive_target_kind": "ARCHIVE_TARGET",
+                    "archive_target_ref": _ref("archive-target", "demo"),
+                    "archive_target_uri_ref": _ref("archive-uri", "demo"),
+                    "archive_package_digest": "d" * 64,
+                    "archive_status": "RESTORE_PENDING",
+                    "restore_status": "NOT_REQUESTED",
+                }
             )
         )
 
@@ -1616,8 +1632,8 @@ class SessionConversationLedgerTests(unittest.TestCase):
             speaker_track_ref=_ref("track", "reply"),
         )
         reply["egress"] = {
-            "destination_ref": reply["source"]["channel_ref"],
-            "consent_ref": reply["source"]["consent_ref"],
+            "destination_binding": "SOURCE_CHANNEL",
+            "consent_binding": "SOURCE_CONSENT",
             "reply_artifact_ref": _ref("reply-artifact", "voice-reply-1"),
             "delivery_receipt_ref": _ref("delivery-receipt", "voice-reply-1"),
             "delivery_state": "VERIFIED",
@@ -1626,11 +1642,28 @@ class SessionConversationLedgerTests(unittest.TestCase):
         records.append(reply)
         records = _rechain(records)
         self.assertEqual("LEDGER_VALID", ledger.validate_ledger(records)["result"])
+        projection = ledger.project_session(records, _ref("session", "demo"))
+        self.assertIs(projection["authority"]["promotion_eligible"], False)
 
         wrong = copy.deepcopy(records)
-        wrong[-1]["egress"]["destination_ref"] = _ref("channel", "other")
+        wrong[-1]["egress"]["destination_binding"] = "OTHER_CHANNEL"
         wrong = _rechain(wrong)
-        self.assertIn("VOICE_REPLY_EGRESS_SCOPE_INVALID", ledger.validate_ledger(wrong)["reason_codes"])
+        self.assertIn("VOICE_REPLY_EGRESS_INVALID", ledger.validate_ledger(wrong)["reason_codes"])
+
+        wrong_source = copy.deepcopy(records)
+        wrong_source[-1]["source"]["type"] = "discord_text"
+        wrong_source = _rechain(wrong_source)
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        self.assertTrue(list(Draft202012Validator(schema).iter_errors(wrong_source[-1])))
+        self.assertIn("VOICE_SOURCE_TYPE_INVALID", ledger.validate_ledger(wrong_source)["reason_codes"])
+
+    def test_specialized_public_refs_share_the_same_safety_contract(self) -> None:
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        records = _valid_records()
+        records[0]["causation"]["idempotency_key_ref"] = "ref/idempotency/discord-12345678901234567"
+        records = _rechain(records)
+        self.assertTrue(list(Draft202012Validator(schema).iter_errors(records[0])))
+        self.assertIn("PUBLIC_METADATA_UNSAFE_REF", ledger.validate_ledger(records)["reason_codes"])
 
     def test_runbook_covers_all_lifecycle_and_source_hooks_without_connectors(self) -> None:
         runbook = RUNBOOK.read_text(encoding="utf-8")

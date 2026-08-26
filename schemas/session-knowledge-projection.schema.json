@@ -271,12 +271,13 @@
     "authority": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["projection_is_source_authority", "compaction_summary_is_source", "human_decision_requires_evidence", "human_identity_authentication", "current_truth_changed"],
+      "required": ["projection_is_source_authority", "compaction_summary_is_source", "human_decision_requires_evidence", "human_identity_authentication", "promotion_eligible", "current_truth_changed"],
       "properties": {
         "projection_is_source_authority": {"const": false},
         "compaction_summary_is_source": {"const": false},
         "human_decision_requires_evidence": {"const": true},
         "human_identity_authentication": {"const": "UNVERIFIED_PUBLIC_CLAIM"},
+        "promotion_eligible": {"const": false},
         "current_truth_changed": {"const": false}
       }
     }
