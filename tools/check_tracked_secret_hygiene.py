@@ -2042,9 +2042,12 @@ def resolve_javascript_literal_tokens(
         match = re.match(r"[A-Za-z_$][A-Za-z0-9_$]*", expression[index:])
         if match is None or match.group() not in allowed_identifiers:
             return None
+        identifier = match.group()
         identifiers += 1
         if identifiers > MAX_JAVASCRIPT_CONSTANT_PARTS:
             return None
+        if identifier in aliases:
+            values.append(aliases[identifier])
         index += match.end()
     combined = "".join(values)
     return combined if len(combined) <= 512 else None
@@ -2180,6 +2183,71 @@ def javascript_matching_bracket(text: str, start: int) -> int | None:
     return None
 
 
+def javascript_matching_delimiter(
+    text: str, start: int, opening: str, closing: str
+) -> int | None:
+    if start >= len(text) or text[start] != opening:
+        return None
+    depth = 1
+    quote: str | None = None
+    escaped = False
+    for index in range(start + 1, min(len(text), start + 1025)):
+        character = text[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+        elif character == opening:
+            depth += 1
+        elif character == closing:
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def javascript_template_interpolation_members(
+    path: Path, text: str, start: int
+) -> tuple[list[tuple[int, int]], int]:
+    members: list[tuple[int, int]] = []
+    escaped = False
+    index = start + 1
+    while index < len(text):
+        character = text[index]
+        if escaped:
+            escaped = False
+            index += 1
+            continue
+        if character == "\\":
+            escaped = True
+            index += 1
+            continue
+        if character == "`":
+            break
+        if text.startswith("${", index):
+            end = javascript_matching_delimiter(text, index + 1, "{", "}")
+            if end is None:
+                break
+            inner_start = index + 2
+            inner = text[inner_start:end]
+            members.extend(
+                (member_start + inner_start, member_end + inner_start)
+                for member_start, member_end in javascript_computed_members(
+                    path, inner
+                )
+            )
+            index = end + 1
+            continue
+        index += 1
+    return members, index
+
+
 def javascript_computed_members(path: Path, text: str) -> list[tuple[int, int]]:
     sanitized = strip_block_comments(path, text)
     prefix = re.compile(
@@ -2201,7 +2269,14 @@ def javascript_computed_members(path: Path, text: str) -> list[tuple[int, int]]:
                 quote = None
             index += 1
             continue
-        if character in {"'", '"', "`"}:
+        if character == "`":
+            template_members, template_end = javascript_template_interpolation_members(
+                path, sanitized, index
+            )
+            members.extend(template_members)
+            index = template_end + 1
+            continue
+        if character in {"'", '"'}:
             quote = character
             index += 1
             continue

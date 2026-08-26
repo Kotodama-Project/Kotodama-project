@@ -1334,6 +1334,56 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(prefix=text[:18]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
 
+    def test_second_successor_isolates_aliases_and_scans_template_code(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        source_literals = (
+            "const text = 'payload; const key=\"OPENAI_API_KEY\"';\n"
+            'process.env[key] = "' + value + '"\n',
+            "const text = `payload; const key=\"OPENAI_API_KEY\"`;\n"
+            'process.env[key] = "' + value + '"\n',
+            'const matcher = /payload; const key="OPENAI_API_KEY"/;\n'
+            'process.env[key] = "' + value + '"\n',
+        )
+        for text in source_literals:
+            with self.subTest(prefix=text[:18]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
+
+        wrappers = (
+            'const key = "OPENAI_API_KEY";\n'
+            'process.env[String.raw(key)] = "' + value + '"\n',
+            'const key = "OPENAI_API_KEY";\n'
+            'process.env[key.toString()] = "' + value + '"\n',
+            'const output = `${(process.env["OPENAI_" + "API_KEY"] = "'
+            + value
+            + '")}`;\n',
+        )
+        for text in wrappers:
+            with self.subTest(wrapper=text.split("process.env[", 1)[1][:14]):
+                findings = SCANNER.scan_text(Path("config.js"), text)
+                self.assertEqual(
+                    [("config.js", 2 if "const key" in text else 1,
+                      f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        controls = (
+            "// const key=\"OPENAI_API_KEY\";\nprocess.env[key] =\n",
+            "/* const key=\"OPENAI_API_KEY\"; */\nprocess.env[key] =\n",
+            'const text = "ordinary"; // const key="OPENAI_API_KEY"\n'
+            "process.env[key] =\n",
+            "const text = `escaped "
+            + r"\`"
+            + "; const key=\"OPENAI_API_KEY\"`;\n"
+            "process.env[key] =\n",
+            "const text = `outer ${`inner; const key=\"OPENAI_API_KEY\"`}`;\n"
+            "process.env[key] =\n",
+        )
+        for text in controls:
+            with self.subTest(control=text[:18]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
+
     def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
