@@ -59,6 +59,8 @@ These remain deterministic, read-only candidate tools. Discoverability is not pr
 - [x] Public repository and project direction
 - [x] Company Pack schemas, validators, review-chain smoke, and runtime candidate contracts
 - [x] Explicit `read-only/candidate-only` and `NO_GO_UNPUBLISHED` boundary
+- [x] Draft Cloudflare edge candidate with exact Wrangler supply-chain binding and manual-only preview upload guard
+- [x] Draft official Cloudflare OS source pin and content-free Gatekeeper-to-Kotodama adapter contract
 - [ ] No claim of supported production runtime or Public Beta
 
 ### M1 — Neutral public governance baseline

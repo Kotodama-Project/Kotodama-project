@@ -214,6 +214,13 @@ python3 tools/verify_company_pack_review_decision_handoff.py \
 解決、runtime、Promotion、Current Truth、Final Human GOを作らず、公開状態は
 `NO_GO_UNPUBLISHED`のままです。
 
+## 13. Official Cloudflare OS bounded candidates
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [cloudflare-os-upstream-pin.schema.json](../schemas/cloudflare-os-upstream-pin.schema.json) | [`validate_cloudflare_os_candidate.py`](../tools/validate_cloudflare_os_candidate.py) | [`test_cloudflare_os_candidate.py`](../tests/test_cloudflare_os_candidate.py) | [Cloudflare OS adoption](CLOUDFLARE-OS-ADOPTION.md)。official starter/core の exact source pin と content-free Gatekeeper projection を検査する。install、provider execution、billing、private Context、Promotion、Current Truth、Public Beta GO は証明しない。 |
+| [cloudflare-os-local-runtime-evaluation.schema.json](../schemas/cloudflare-os-local-runtime-evaluation.schema.json) | [`validate_cloudflare_os_local_runtime_evaluation.py`](../tools/validate_cloudflare_os_local_runtime_evaluation.py) | [`test_cloudflare_os_local_runtime_evaluation.py`](../tests/test_cloudflare_os_local_runtime_evaluation.py) | [Cloudflare OS local runtime evaluation](CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md)。保存済み content-free local receipt の source pin、integrity、1060-test totals、loopback/body/cleanup、P0/P1/P2、zero effect を検査する。再実行freshness、provider deployment、private Context、production、Public Beta GO は証明しない。 |
+
 ## Public starterの同じ実行順
 
 既存exampleを変更せず、必ず新しい作業copyで実行します。

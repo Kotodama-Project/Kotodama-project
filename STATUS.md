@@ -18,6 +18,7 @@ This file answers **what is true now** for the public repository. It is not a de
 | `main` protection | Protected for everyone, but the sole required context is `Trusted Cloudflare candidate validation` | Rebind generic repository checks and read back the final rule under issue #19 |
 | Runtime, Voice, and Discord | No supported public production runtime, public Voice Bot, or public Discord invite is published | Exact scope-matched runtime, privacy, security, rollback, and independent evidence plus Final Human GO |
 | [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) | Redacted owner-directed direction candidate; not signed/independently verified governance approval or rightsholder proof; runtime remains unimplemented, `NO_GO_UNPUBLISHED` | Signed, independently verifiable governance record and an accountable rightsholder decision under Issue #25 |
+| [Cloudflare edge / official Cloudflare OS candidate](docs/CLOUDFLARE-OS-ADOPTION.md) | Local contract, source pin, and Gatekeeper adapter candidates with scope-specific validation; no account, route, binding, deployment, or provider claim | Independent review, provider-side readback, and the Workers Paid decision remain open |
 | Public Beta | `NO_GO_UNPUBLISHED` | Remains blocked |
 
 A private Voice runtime cutover attempt is not public runtime evidence and does not authorize a public Voice surface.
@@ -72,6 +73,28 @@ A passing candidate-owned workflow is hosted evidence, not independent human app
 
 This public repository remains an incomplete preview. It does not publish credentials, private host identifiers, raw conversations, personal data, deployment authority, provider authority, billing authority, Promotion, Current Truth, Final Human GO, or Public Beta access. Every candidate remains `read-only/candidate-only` and `NO_GO_UNPUBLISHED` until its own evidence and human gates are satisfied.
 
+## Latest Cloudflare candidate result
+
+The official Cloudflare OS candidate pins the current official starter and the
+core gitlink that starter actually uses. The separately observed current core
+head differs by 99 files and remains a mandatory independent-review boundary.
+The Gatekeeper validator passes six content-free synthetic projections and
+keeps provider, execution, Promotion, Current Truth, and Public Beta authority
+false.
+
+The saved [local runtime evaluation](docs/CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md)
+adds exact dependency/toolchain integrity, 1060 passing tests with 7 explicit
+skips, all 26 workspace package projects covered by build checks, three stable
+headers-only HTTP 200 responses in `LOOPBACK_ONLY` mode, and zero remaining
+evaluation processes/listeners. The result is `PASS_LOCAL_RUNTIME_WITH_GAPS`.
+
+P0/P1/P2 is 0/6/2. The open P1 set includes the independent drift review, one
+high `nanoid` advisory, Windows-only compatibility mitigation, unproven
+observability retention/readback, provider E2E, and package-manager attestation
+signature. Dynamic Workers, Workers Paid entitlement, KV, R2, Browser Rendering,
+Access, provider logs, private Context, backup, restore, Discord integration,
+and production remain unproven. The edge Worker was not uploaded or deployed.
+`NO_GO_UNPUBLISHED` remains unchanged.
 ## Owner-confirmed Company AGI direction
 
 The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) records the
