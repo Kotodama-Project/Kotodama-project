@@ -100,6 +100,7 @@ EVENT_STATES = {"OBSERVED", "CANDIDATE", "CONFIRMED", "CORRECTED", "WITHDRAWN", 
 DECISION_STATES = {"NONE", "LLM_CANDIDATE", "HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"}
 DEVIATION_STATES = {"NONE", "APPROVED", "EXPIRED", "REMEDIATED"}
 INVALIDATION_KINDS = {"SOURCE_UPDATED", "SOURCE_DELETED", "ACL_LOST"}
+INVALIDATION_EVENT_KINDS = {"source_update", "source_delete", "acl_loss", "invalidation"}
 ARTIFACT_STAGE_PARENTS = {
     "RAW_AUDIO": frozenset(),
     "RAW_SOURCE_JSON": frozenset(),
@@ -641,6 +642,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     latest_revision: dict[str, int] = {}
     seen_content_artifacts = {"payload_vault_ref": set(), "vault_manifest_ref": set(), "content_hash": set()}
     candidate_states: dict[tuple[str, str | None], str] = {}
+    seen_candidate_ref_scopes: set[tuple[str, str | None]] = set()
     restored_archive_receipts: dict[tuple[str, str, str, str, str, str], set[str]] = {}
     seen_binding_targets: set[str] = set()
     bound_session_for_target: dict[str, str] = {}
@@ -871,6 +873,8 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                     reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
 
         decision = record["decision"]
+        if decision["status"] in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"} and detail["kind"] not in lifecycle_target_fields:
+            reasons.append("HUMAN_DECISION_EVENT_KIND_INVALID")
         candidate_ref = decision.get("candidate_ref")
         if candidate_ref is not None:
             candidate_status = decision["status"]
@@ -878,6 +882,10 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             candidate_state_key = (candidate_ref, candidate_scope)
             previous_status = candidate_states.get(candidate_state_key)
             if candidate_status == "LLM_CANDIDATE":
+                if detail["kind"] == "decision_candidate":
+                    if candidate_state_key in seen_candidate_ref_scopes:
+                        reasons.append("CANDIDATE_REF_REUSED")
+                    seen_candidate_ref_scopes.add(candidate_state_key)
                 if previous_status not in (None, "CANDIDATE"):
                     reasons.append("CANDIDATE_LIFECYCLE_REGRESSION")
                 candidate_states.setdefault(candidate_state_key, "CANDIDATE")
@@ -934,6 +942,10 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             reasons.append("COMPACTION_NOT_SOURCE")
 
         invalidation_kind = detail["invalidation_kind"]
+        if detail["kind"] not in INVALIDATION_EVENT_KINDS and (
+            invalidation_kind is not None or detail["invalidation_refs"]
+        ):
+            reasons.append("INVALIDATION_METADATA_NOT_APPLICABLE")
         expected_invalidation_kind = {
             "source_update": "SOURCE_UPDATED",
             "source_delete": "SOURCE_DELETED",

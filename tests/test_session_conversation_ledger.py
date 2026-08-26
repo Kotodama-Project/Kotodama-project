@@ -502,10 +502,12 @@ class SessionConversationLedgerTests(unittest.TestCase):
             "foreign-noise-event",
             sequence=4,
             previous_hash=records[-1]["event_hash"],
-            event_kind="human_message",
+            event_kind="invalidation",
             session_state="BOUND",
             session_ref=_ref("session", "other"),
-            invalidation_refs=[_ref("task", "demo")],
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[_ref("task", "demo-extra")],
             source_type="system",
             actor_ref="ref/system/foreign",
             authority_role="SYSTEM",
@@ -1126,6 +1128,56 @@ class SessionConversationLedgerTests(unittest.TestCase):
         report = ledger.validate_ledger(records)
         self.assertEqual("REFUSED", report["result"])
         self.assertIn("CANDIDATE_LIFECYCLE_REGRESSION", report["reason_codes"])
+
+    def test_distinct_candidate_event_cannot_reuse_candidate_ref(self) -> None:
+        records = _valid_records()
+        candidate = records[-1]
+        retry_result, retry_status = ledger.append_event(records, copy.deepcopy(candidate))
+        self.assertEqual("IDEMPOTENT_REPLAY", retry_status)
+        self.assertEqual(records, retry_result)
+
+        duplicate = _event(
+            "duplicate-candidate-ref",
+            sequence=4,
+            previous_hash=candidate["event_hash"],
+            event_kind="decision_candidate",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_state="CANDIDATE",
+            decision_status="LLM_CANDIDATE",
+            candidate_ref=_ref("candidate", "intent-1"),
+            extraction_kind="LLM_CANDIDATE",
+            content_hash="e" * 64,
+            source_type="codex",
+            actor_ref="ref/agent/codex",
+            authority_role="AGENT",
+            authority_ref="ref/authority/codex",
+        )
+        duplicate_report = ledger.validate_ledger(_rechain(records + [duplicate]))
+        self.assertEqual("REFUSED", duplicate_report["result"], duplicate_report)
+        self.assertIn("CANDIDATE_REF_REUSED", duplicate_report["reason_codes"])
+
+        new_revision = _event(
+            "new-model-candidate-ref",
+            sequence=4,
+            previous_hash=candidate["event_hash"],
+            event_kind="decision_candidate",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            revision=_ref("session-revision", "2"),
+            event_state="CANDIDATE",
+            decision_status="LLM_CANDIDATE",
+            candidate_ref=_ref("candidate", "intent-2"),
+            extraction_kind="LLM_CANDIDATE",
+            content_hash="f" * 64,
+            source_type="codex",
+            actor_ref="ref/agent/codex",
+            authority_role="AGENT",
+            authority_ref="ref/authority/codex",
+        )
+        new_revision["provenance"]["extraction"]["model_ref"] = _ref("model", "revision-2")
+        new_revision_report = ledger.validate_ledger(_rechain(records + [new_revision]))
+        self.assertEqual("LEDGER_VALID", new_revision_report["result"], new_revision_report)
 
     def test_content_artifact_identity_is_global_not_only_parent_scoped(self) -> None:
         for field in ("payload_vault_ref", "vault_manifest_ref", "content_hash"):
@@ -1779,6 +1831,29 @@ class SessionConversationLedgerTests(unittest.TestCase):
                 report = ledger.validate_ledger(_rechain(records))
                 self.assertIn("LIFECYCLE_TARGET_RELATION_INVALID", report["reason_codes"])
 
+    def test_human_decision_status_requires_lifecycle_event_kind(self) -> None:
+        lifecycle_cases = (
+            ("confirmation", "HUMAN_CONFIRMED", "CONFIRMED"),
+            ("correction", "HUMAN_CORRECTED", "CORRECTED"),
+            ("withdrawal", "HUMAN_WITHDRAWN", "WITHDRAWN"),
+            ("decision_confirmed", "HUMAN_CONFIRMED", "CONFIRMED"),
+        )
+        for lifecycle_kind, decision_status, event_state in lifecycle_cases:
+            with self.subTest(lifecycle_kind=lifecycle_kind):
+                lifecycle = _lifecycle_records(lifecycle_kind, decision_status, event_state)
+                self.assertEqual("LEDGER_VALID", ledger.validate_ledger(lifecycle)["result"])
+
+                for ordinary_kind in ("human_message", "tool_action", "agent_action"):
+                    ordinary = copy.deepcopy(lifecycle)
+                    ordinary[-1]["event"]["kind"] = ordinary_kind
+                    ordinary[-1]["event"]["correction_of_event_ref"] = None
+                    ordinary[-1]["event"]["withdrawal_of_event_ref"] = None
+                    ordinary[-1]["event"]["confirmation_of_event_ref"] = None
+                    report = ledger.validate_ledger(_rechain(ordinary))
+                    with self.subTest(ordinary_kind=ordinary_kind):
+                        self.assertEqual("REFUSED", report["result"], report)
+                        self.assertIn("HUMAN_DECISION_EVENT_KIND_INVALID", report["reason_codes"])
+
     def test_late_bound_lifecycle_targets_use_effective_session_scope(self) -> None:
         lifecycle_cases = {
             "confirmation": ("HUMAN_CONFIRMED", "CONFIRMED", "confirmation_of_event_ref"),
@@ -1967,6 +2042,66 @@ class SessionConversationLedgerTests(unittest.TestCase):
                 with self.subTest(event_kind=event_kind, wrong_kind=wrong_kind):
                     self.assertEqual("REFUSED", invalid_report["result"], invalid_report)
                     self.assertIn("INVALIDATION_KIND_MISMATCH", invalid_report["reason_codes"])
+
+    def test_ordinary_events_reject_invalidation_metadata(self) -> None:
+        valid_kinds = {
+            "source_update": "SOURCE_UPDATED",
+            "source_delete": "SOURCE_DELETED",
+            "acl_loss": "ACL_LOST",
+            "invalidation": "SOURCE_UPDATED",
+        }
+        for event_kind, invalidation_kind in valid_kinds.items():
+            with self.subTest(valid_event_kind=event_kind):
+                records = _valid_records()
+                kwargs = {
+                    "event_kind": event_kind,
+                    "session_state": "BOUND",
+                    "session_ref": _ref("session", "demo"),
+                    "event_state": "INVALIDATED",
+                    "invalidation_kind": invalidation_kind,
+                    "invalidation_refs": [_ref("projection", "demo")],
+                    "source_type": "system",
+                    "actor_ref": "ref/system/ledger",
+                    "authority_role": "SYSTEM",
+                    "authority_ref": "ref/authority/ledger",
+                }
+                if event_kind == "source_delete":
+                    kwargs.update({
+                        "deletion_state": "CONFIRMED",
+                        "deletion_receipt_ref": _ref("deletion-receipt", "source-delete"),
+                        "deletion_readback": "CONFIRMED",
+                    })
+                records.append(_event(
+                    f"valid-metadata-{event_kind}",
+                    sequence=4,
+                    previous_hash=records[-1]["event_hash"],
+                    **kwargs,
+                ))
+                report = ledger.validate_ledger(_rechain(records))
+                self.assertEqual("LEDGER_VALID", report["result"], report)
+
+        for event_kind in ("human_message", "tool_action", "agent_action", "session_open", "decision_candidate"):
+            with self.subTest(ordinary_event_kind=event_kind):
+                records = _valid_records()
+                ordinary = _event(
+                    f"ordinary-metadata-{event_kind}",
+                    sequence=4,
+                    previous_hash=records[-1]["event_hash"],
+                    event_kind=event_kind,
+                    session_state="BOUND",
+                    session_ref=_ref("session", "demo"),
+                    event_state="CANDIDATE" if event_kind == "decision_candidate" else "OBSERVED",
+                    source_type="system",
+                    actor_ref="ref/system/ledger",
+                    authority_role="SYSTEM",
+                    authority_ref="ref/authority/ledger",
+                )
+                ordinary["event"]["invalidation_kind"] = "SOURCE_UPDATED"
+                ordinary["event"]["invalidation_refs"] = [_ref("projection", "demo")]
+                records.append(ordinary)
+                report = ledger.validate_ledger(_rechain(records))
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertIn("INVALIDATION_METADATA_NOT_APPLICABLE", report["reason_codes"])
 
     def test_archive_and_delete_cross_fields_fail_closed(self) -> None:
         cases = []
