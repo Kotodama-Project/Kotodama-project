@@ -106,7 +106,7 @@ function withJwt(url, jwt, init = {}) {
   });
 }
 
-function streamingGatewayResponse(chunks, { contentLength, trapArrayBuffer = false } = {}) {
+function streamingResponse(chunks, { contentLength, trapArrayBuffer = false } = {}) {
   let index = 0;
   let pulls = 0;
   let cancelled = false;
@@ -243,6 +243,88 @@ test("health and version surfaces require Access and exact preview host", async 
   assert.equal(authorized.status, 200);
 });
 
+test("J1-RED/J1-01: oversized Access JWKS streams are refused without arrayBuffer", async () => {
+  __testing.reset();
+  const { token } = await signingFixture();
+  const stream = streamingResponse(
+    [new Uint8Array(262_144), new Uint8Array(1)],
+    { trapArrayBuffer: true },
+  );
+  let gatewayCalls = 0;
+  __testing.setFetch(async (request) => {
+    const value = request instanceof Request ? request : new Request(request);
+    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return stream.response;
+    gatewayCalls += 1;
+    return Response.json({ keys: [] });
+  });
+
+  const response = await worker.fetch(
+    withJwt("https://preview.example.test/healthz", await token()),
+    env(),
+  );
+  assert.equal(response.status, 401);
+  assert.equal(stream.pulls, 2);
+  assert.equal(stream.cancelled, true);
+  assert.equal(gatewayCalls, 0);
+});
+
+test("J1-02: Access JWKS stream read errors fail closed", async () => {
+  __testing.reset();
+  const { token } = await signingFixture();
+  let pulls = 0;
+  const body = new ReadableStream(
+    {
+      pull(controller) {
+        pulls += 1;
+        controller.error(new Error("synthetic JWKS read failure"));
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  const responseWithError = {
+    ok: true,
+    headers: new Headers({ "content-type": "application/json" }),
+    body,
+    arrayBuffer() {
+      throw new Error("JWKS arrayBuffer must not be called");
+    },
+  };
+  __testing.setFetch(async (request) => {
+    const value = request instanceof Request ? request : new Request(request);
+    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return responseWithError;
+    return Response.json({ keys: [] });
+  });
+
+  const response = await worker.fetch(
+    withJwt("https://preview.example.test/healthz", await token()),
+    env(),
+  );
+  assert.equal(response.status, 401);
+  assert.equal(pulls, 1);
+});
+
+test("J1-03: an underreported Access JWKS length still enforces the byte bound", async () => {
+  __testing.reset();
+  const { token } = await signingFixture();
+  const stream = streamingResponse(
+    [new Uint8Array(262_144), new Uint8Array(1)],
+    { contentLength: "1", trapArrayBuffer: true },
+  );
+  __testing.setFetch(async (request) => {
+    const value = request instanceof Request ? request : new Request(request);
+    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return stream.response;
+    return Response.json({ keys: [] });
+  });
+
+  const response = await worker.fetch(
+    withJwt("https://preview.example.test/healthz", await token()),
+    env(),
+  );
+  assert.equal(response.status, 401);
+  assert.equal(stream.pulls, 2);
+  assert.equal(stream.cancelled, true);
+});
+
 test("a cached JWKS refreshes once when Cloudflare rotates to a new kid", async () => {
   __testing.reset();
   const original = await signingFixture("kid-original");
@@ -301,7 +383,7 @@ test("review actions are bounded and forwarded only to the Context Gateway", asy
 test("GW-RED/GW-STREAM: oversized gateway responses use a bounded reader, not arrayBuffer", async () => {
   __testing.reset();
   const { jwk, token } = await signingFixture();
-  const stream = streamingGatewayResponse(
+  const stream = streamingResponse(
     [new Uint8Array(1_048_576), new Uint8Array(1)],
     { trapArrayBuffer: true },
   );
@@ -328,7 +410,7 @@ test("GW-LENGTH: invalid or known-oversize gateway content lengths cancel before
   for (const contentLength of ["invalid", "9007199254740992", "1048577"]) {
     __testing.reset();
     const { jwk, token } = await signingFixture();
-    const stream = streamingGatewayResponse([new Uint8Array(1)], { contentLength });
+    const stream = streamingResponse([new Uint8Array(1)], { contentLength });
     __testing.setFetch(async (request) => {
       const value = request instanceof Request ? request : new Request(request);
       if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
@@ -349,7 +431,7 @@ test("GW-LENGTH: invalid or known-oversize gateway content lengths cancel before
 test("GW-UNDERREPORT: a gateway body larger than its declared length is cancelled", async () => {
   __testing.reset();
   const { jwk, token } = await signingFixture();
-  const stream = streamingGatewayResponse(
+  const stream = streamingResponse(
     [new Uint8Array(1_048_576), new Uint8Array(1)],
     { contentLength: "1", trapArrayBuffer: true },
   );
@@ -373,7 +455,7 @@ test("GW-REGRESSION: a bounded gateway projection keeps its successful readback 
   __testing.reset();
   const { jwk, token } = await signingFixture();
   const encoded = new TextEncoder().encode(JSON.stringify(projection()));
-  const stream = streamingGatewayResponse([encoded], {
+  const stream = streamingResponse([encoded], {
     contentLength: String(encoded.byteLength),
     trapArrayBuffer: true,
   });
