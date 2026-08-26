@@ -48,16 +48,26 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
 - 公開製品はKotodamaの一つだけです。BecomeOneは移行中のprivate donor /
   experimental kernelで、移行後はpublic version / content digestにpinされた
   consumer / control planeであり、第二のProduct SSOTにはなりません。
-- [OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
-  をgoverned curated knowledgeのcentralな人間・agent-readable representationにしますが、Companyの唯一のtruthにはしません。
+- Companyのtransactional coreは、訂正・authority・因果履歴・concurrencyを保持する
+  **append-only causal ledger**です。
+  [OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
+  は、そこから作るgoverned curated knowledgeのcentralな人間・agent-readable representation / read modelにしますが、Companyの唯一のtruthにはしません。
   OKF自体はauthority、transaction、archive、ACL、storage/query、audit、deletion、
   concurrencyを持たず、owner-reviewed conceptだけがgoverned curated interpretationの
   canonicalになり得ます。generated conceptはrebuildable projectionであり、canonical source authorityではありません。
   Kotodamaのextension profileでrevision / evidence / approval / invalidation / promotionを束ねます。
-- IngressはDiscord text / Voice、Codex、Claude、Notion、GitHub、Google Drive、n8n。
+- Git remains current for code/contracts and admitted facts until a separately
+  reviewed migration and cutover. The first proof is an offline single-writer
+  **SQLite/WAL** pilot bounded to **64 events / 900 seconds / 10 monitor ticks**
+  plus a `STOP` file, complete-envelope digest/replay/restore/projection checks,
+  and deny-by-default MCP access. This is **design candidate only**: no runtime,
+  database, archive, provider, public effect, Promotion, or Current Truth is adopted.
+- IngressはDiscord text / Voice、Codex、Claude、Notion、GitHub、Google Drive、n8n、
+  Microsoft Teams、Google Meet、Zoom。
   raw evidenceはsource/session/channel、speaker または individual track、timestamp/span、raw ASR、
   consent/retention revision、digestを保持し、derived transcript / minutes / Intentは
-  rawを上書きしません。
+  rawを上書きしません。Kotodama-relatedと明示された依頼は自動的に
+  Source Evidence / Intent Candidateへ記録しますが、承認・実行・Promotionにはしません。
 - Session auto-creationを許し、Task SSOT、Plan/Requirement refs、Agent Invocation /
   model provenance、Capability/Knowledge/MCP grants、A2A、依存・parallel status、
   evidence / invalidationを束ねます。未知・曖昧なauthorityは明示します。
@@ -103,7 +113,7 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
 
 ### Open design decisions
 
-- A2A、realtime / large Context、causal ledger、OKF extension、RAG / knowledge graph /
+- A2A、realtime / large Context、causal-ledger storage/query、OKF extension、RAG / knowledge graph /
   encoder、archive provider、hierarchy / graph / namingの最終形は研究中です。
 - eight-surface product mapとForest Map v2 eight-layer hierarchyは別概念であり、
   現行Forest Mapの最終採用は未決定です。

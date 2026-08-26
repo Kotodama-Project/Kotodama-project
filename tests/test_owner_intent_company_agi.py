@@ -210,6 +210,93 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             with self.subTest(surface="readme projection", marker=marker):
                 self.assertIn(marker, self.projection)
 
+    def test_causal_ledger_and_meeting_ingress_projection_is_sanitized(self) -> None:
+        canonical_words = " ".join(self.canonical.replace("**", "").split())
+        projection_words = " ".join(self.projection.replace("**", "").split())
+        for marker in (
+            "## Canonical transaction and projection boundary",
+            "append-only causal ledger",
+            "canonical transactional SSOT core",
+            "correction and supersession",
+            "authority and capability grants",
+            "concurrency and idempotency",
+            "first-class agent-readable curated knowledge read model",
+            "rebuild or invalidate",
+            "Microsoft Teams",
+            "Google Meet",
+            "Zoom",
+            "speaker-attributed raw JSON",
+            "diarization/alignment",
+            "corrected sidecars",
+            "meeting transcript or minutes self-promote",
+            "explicitly marked as Kotodama-related",
+            "Source Evidence and Intent Candidate",
+            "Raw utterances and private source locators remain in protected Source Evidence",
+            "not published in this repository",
+        ):
+            with self.subTest(surface="canonical", marker=marker):
+                self.assertIn(marker, canonical_words)
+
+        for marker in (
+            "append-only causal ledger",
+            "OKF",
+            "rebuildable",
+            "Microsoft Teams",
+            "Google Meet",
+            "Zoom",
+            "Kotodama-related",
+            "Source Evidence / Intent Candidate",
+        ):
+            with self.subTest(surface="readme projection", marker=marker):
+                self.assertIn(marker, projection_words)
+
+        for public_surface in (self.canonical, self.projection):
+            self.assertEqual(1, public_surface.count("Microsoft Teams"))
+            self.assertEqual(
+                public_surface.count("Teams"),
+                public_surface.count("Microsoft Teams"),
+            )
+            self.assertNotIn("source_thread_id", public_surface)
+
+    def test_ledger_design_projection_keeps_current_truth_and_pilot_bounded(self) -> None:
+        canonical_words = " ".join(self.canonical.replace("**", "").split())
+        projection_words = " ".join(self.projection.replace("**", "").split())
+        for marker in (
+            "target architecture candidate, not a claim about current donor runtime",
+            "Git remains authoritative",
+            "single-writer SQLite/WAL",
+            "64 admitted events",
+            "900 seconds",
+            "10 monitor ticks",
+            "STOP",
+            "complete immutable event envelope",
+            "deny-by-default",
+            "Automatic erasure remains disabled",
+            "does not adopt a runtime",
+        ):
+            with self.subTest(surface="canonical", marker=marker):
+                self.assertIn(marker, canonical_words)
+
+        for marker in (
+            "Git remains current",
+            "SQLite/WAL",
+            "64 events / 900 seconds / 10 monitor ticks",
+            "deny-by-default",
+            "design candidate only",
+        ):
+            with self.subTest(surface="readme projection", marker=marker):
+                self.assertIn(marker, projection_words)
+
+        for public_surface in (self.canonical, self.projection):
+            for private_marker in (
+                "source_thread_id",
+                "C:\\Users\\",
+                "CT200",
+                "VM214",
+                "local-zfs-raid01",
+            ):
+                self.assertNotIn(private_marker, public_surface)
+
     def test_grillu_is_adaptive_and_never_authorizes_execution(self) -> None:
         for marker in (
             "Voice Requirements / GrillU is an adaptive, channel-neutral facilitator",

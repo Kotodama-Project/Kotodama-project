@@ -1,7 +1,7 @@
 # Owner-confirmed Company AGI direction
 
 Status: **Owner-confirmed Human Intent / product direction (redacted public candidate)**
-Recorded: 2026-08-26
+Recorded: 2026-08-27
 Canonical role: the owner-intent source for Kotodama's Company AGI product direction
 Runtime state: documentation-only candidate / `NO_GO_UNPUBLISHED`
 
@@ -42,6 +42,44 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
 -> bounded Work Order -> Agent Swarm -> Verification Receipt -> Promotion
 -> reply / learning
 ```
+
+## Canonical transaction and projection boundary
+
+Kotodama's **canonical transactional SSOT core** is an **append-only causal
+ledger**. It preserves correction and supersession, authority and capability
+grants, causal history, the current revision, concurrency and idempotency, and
+immutable Source Evidence locator/digest bindings. A correction appends a new
+event and relationship; it does not erase or silently rewrite the prior event
+or source.
+
+Current Truth is derived by evaluating the applicable revision, authority, and
+causal history. OKF is a **first-class agent-readable curated knowledge read
+model** built from that ledger and provenance-bound sources. A source,
+supersession, authority, ACL, or retention change can rebuild or invalidate the
+OKF projection. OKF is not the transactional write model, raw archive,
+authority/ACL engine, or sole audit record.
+
+This is a **target architecture candidate, not a claim about current donor
+runtime**. Git remains authoritative for current code, contracts, schemas,
+policies, and already admitted facts until a reviewed migration,
+reconciliation, Promotion Decision, and cutover occur.
+
+The first executable proof is a disposable, offline, **single-writer
+SQLite/WAL** pilot. Its bounded contract allows at most **64 admitted events**,
+**900 seconds**, **10 monitor ticks**, and one `STOP` file checked before every
+append, consumer tick, snapshot, and restore boundary. The pilot must verify an
+`event_digest` over the **complete immutable event envelope**, its prior-event
+digest chain, idempotent replay and divergent-replay rejection, stream-version
+conflicts, isolated snapshot/restore, deterministic Forest/OKF rebuild, and one
+correction/invalidation path.
+
+Ledger MCP access remains **deny-by-default**: bounded read and proposal scopes
+come before protected append, restore, or promotion-request tools; no agent has
+ambient credentials, direct table access, or self-approval. **Automatic erasure
+remains disabled** until retention, legal-hold, key-custody, replica/backup, and
+post-erasure restore rules have separate approval and negative-path evidence.
+This bounded documentation direction **does not adopt a runtime**, database,
+archive target, cutover, Decision, Promotion, or Current Truth.
 
 ## Governed knowledge and OKF
 
@@ -102,6 +140,22 @@ must not be presented as reconstructing unknown words from audio. Corrections,
 summaries, and Intent events point back to source spans and revision-bound
 evidence; the corrected transcript is a sidecar/diff and never replaces raw
 capture or the immutable speaker-attributed transcript.
+
+Meeting input adapters include **Microsoft Teams, Google Meet, and Zoom**. They
+ingest speaker-attributed raw JSON and raw transcripts, preserve
+diarization/alignment and provenance, keep corrections in corrected sidecars,
+and derive minutes before emitting Source Evidence and Intent Candidate
+records. No meeting transcript or minutes self-promote to Decision or Current
+Truth, and a provider speaker label does not prove identity, consent, or
+authority.
+
+Requests explicitly marked as Kotodama-related are captured automatically as
+Source Evidence and Intent Candidate records with their source, observation
+time, attribution state, policy revision, authority label, and digest. Capture
+does not approve, execute, issue a Work Order, promote, or change Current Truth.
+Raw utterances and private source locators remain in protected Source Evidence
+and are not published in this repository. Public platform names and aliases are
+derived terminology, not silent transcript rewrites.
 
 ## Sessions, Requirements, and GrillU
 
@@ -234,7 +288,8 @@ validation; false-neighbor and stale-index paths fail closed.
 ## Open design decisions
 
 - The OKF extension profile, A2A transport, realtime Context, Context Pack and
-  attestation topology, ledger/projection topology, RAG, knowledge graph,
+  attestation topology, causal-ledger storage/query and projection invalidation
+  implementation, RAG, knowledge graph,
   encoder, and invalidation implementation remain under research.
 - Exact private ZFS dataset binding, external cold-archive replication, and the
   retention/deletion period remain open. Query-plane, raw-source, and
