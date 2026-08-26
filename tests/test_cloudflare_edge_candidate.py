@@ -15,6 +15,15 @@ MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
+REQUIRED_PREVIEW_RUNTIME_BINDINGS = [
+    "ACCESS_AUD",
+    "ACCESS_ISSUER",
+    "CONTEXT_GATEWAY_CLIENT_ID",
+    "CONTEXT_GATEWAY_CLIENT_SECRET",
+    "CONTEXT_GATEWAY_ORIGIN",
+    "PREVIEW_HOST",
+]
+
 
 class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_candidate_is_fail_closed_and_non_production(self) -> None:
@@ -27,6 +36,49 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         self.assertFalse(config["observability"]["logs"]["enabled"])
         self.assertFalse(config["env"]["preview"]["workers_dev"])
         self.assertTrue(config["env"]["preview"]["preview_urls"])
+        self.assertEqual(
+            REQUIRED_PREVIEW_RUNTIME_BINDINGS,
+            sorted(config["env"]["preview"]["secrets"]["required"]),
+        )
+
+    def test_upload_uses_one_protected_version_only_secrets_file(self) -> None:
+        workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
+        for binding in REQUIRED_PREVIEW_RUNTIME_BINDINGS:
+            self.assertIn(f"{binding}: ${{{{ secrets.{binding} }}}}", workflow)
+        for marker in (
+            'preview_secrets_file="$RUNNER_TEMP/kotodama-preview-secrets.json"',
+            'trap \'rm -f "$KOTODAMA_PREVIEW_SECRETS_FILE"\' EXIT',
+            "umask 077",
+            'os.environ.get(name, "")',
+            "missing required preview runtime bindings",
+            '--secrets-file "$KOTODAMA_PREVIEW_SECRETS_FILE"',
+        ):
+            self.assertIn(marker, workflow)
+        self.assertEqual(1, workflow.count("--secrets-file"))
+        self.assertLess(
+            workflow.index("npm ci --ignore-scripts"),
+            workflow.index("ACCESS_ISSUER: ${{ secrets.ACCESS_ISSUER }}"),
+        )
+        self.assertLess(
+            workflow.index('preview_secrets_file="$RUNNER_TEMP/kotodama-preview-secrets.json"'),
+            workflow.index("versions upload --env preview"),
+        )
+
+    def test_validator_refuses_incomplete_preview_runtime_binding_declaration(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            config_path = candidate / "runtime" / "cloudflare-edge" / "wrangler.jsonc"
+            config = MODULE.load_jsonc(config_path)
+            config["env"]["preview"]["secrets"] = {
+                "required": REQUIRED_PREVIEW_RUNTIME_BINDINGS[:-1]
+            }
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+            self.assertIn(
+                "preview environment must require the exact protected runtime bindings",
+                MODULE.validate(candidate),
+            )
 
     def test_wrangler_supply_chain_binding_is_exact(self) -> None:
         integrity = json.loads(MODULE.WRANGLER_INTEGRITY.read_text(encoding="utf-8"))
@@ -224,25 +276,31 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
                 self.assertIn(marker, MODULE.validate(candidate))
 
     def test_validator_rejects_secret_exposure_before_artifact_verification(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
-            workflow_path = candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
-            workflow = workflow_path.read_text(encoding="utf-8")
-            workflow_path.write_text(
-                workflow.replace(
-                    "          python trusted/tools/verify_wrangler_artifact.py \\",
-                    "          echo $CLOUDFLARE_API_TOKEN\n"
-                    "          python trusted/tools/verify_wrangler_artifact.py \\",
-                    1,
-                ),
-                encoding="utf-8",
-            )
-            self.assertIn(
-                "workflow must verify Wrangler before upload secrets or execution",
-                MODULE.validate(candidate),
-            )
+        for secret_name in ("CLOUDFLARE_API_TOKEN", "ACCESS_AUD"):
+            with (
+                self.subTest(secret_name=secret_name),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                candidate = pathlib.Path(temporary)
+                shutil.copytree(ROOT / "runtime", candidate / "runtime")
+                shutil.copytree(ROOT / ".github", candidate / ".github")
+                workflow_path = (
+                    candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
+                )
+                workflow = workflow_path.read_text(encoding="utf-8")
+                workflow_path.write_text(
+                    workflow.replace(
+                        "          python trusted/tools/verify_wrangler_artifact.py \\",
+                        f"          echo ${secret_name}\n"
+                        "          python trusted/tools/verify_wrangler_artifact.py \\",
+                        1,
+                    ),
+                    encoding="utf-8",
+                )
+                self.assertIn(
+                    "workflow must verify Wrangler before upload secrets or execution",
+                    MODULE.validate(candidate),
+                )
 
     def test_voice_review_is_access_verified_and_context_gateway_only(self) -> None:
         worker = MODULE.WORKER.read_text(encoding="utf-8")

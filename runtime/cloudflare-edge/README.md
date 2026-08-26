@@ -97,9 +97,13 @@ and no direct search/provider endpoint markers.
 
 Before any run, configure that Environment with required reviewers, prevent
 self-review where available, restrict deployment branches to `main`, and add
-`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as Environment secrets.
-Those protections and secrets are not configured or verified by this public
-candidate. Values must never be committed.
+`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, and the six declared preview
+runtime bindings as Environment secrets. After the verified Wrangler install,
+the upload step writes those six values to one permission-restricted temporary
+JSON file, passes it only to `versions upload --secrets-file`, and removes it
+on every step exit. Missing values fail before upload. Values must never be
+committed, printed, or passed as command-line values. These protections and
+secret values are not configured or verified by this public candidate.
 
 Wrangler is fixed to `4.120.0`. The upload job downloads the exact npm tarball,
 then trusted code verifies its npm SHA-512 integrity, legacy npm shasum, and the
@@ -115,6 +119,13 @@ the SLSA attestation signature is not independently verified here. These local
 checks do not prove provider execution or deployment.
 Observability and logs are disabled by default until provider retention and
 content-free readback have a separate receipt.
+
+A version-only upload does not create or verify the Cloudflare Access
+destination and does not supply a Context Gateway implementation. Bind Access
+to the exact preview Worker in a separate candidate-bound provider step, then
+prove unauthenticated denial and authorized `/healthz` and `/version` readback.
+Voice review routes remain blocked until the configured Context Gateway is
+implemented and independently reachable.
 
 Before running the workflow, bind an exact commit to a Work Order and verify:
 

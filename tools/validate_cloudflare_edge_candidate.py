@@ -21,11 +21,19 @@ WRANGLER_RUNNER_PACKAGE = PROFILE / "wrangler-runner-package.json"
 WRANGLER_RUNNER_LOCK = PROFILE / "wrangler-runner-package-lock.json"
 
 VERIFIED_COMPATIBILITY_DATE = "2026-08-07"
-VERIFIED_CONFIG_SHA256 = "a75caf3b6cf486acdfc1d7a11dbce0734ac0473797a3c538906a0aff1c609bac"
+VERIFIED_CONFIG_SHA256 = "88c6a3cd7ebdedff1add9d0c4d8d2a622dd70fcb7ca04362b6931c86cd89b63d"
 VERIFIED_WORKER_SHA256 = "a12fbd92815bde8f7064b04397658117eb649415f414e0dcdf10534fd4062c50"
 VERIFIED_WRANGLER_RUNNER_PACKAGE_SHA256 = "78050f0fc214eda989a097930c1daf53ef608259d9d861a128651ed94e0cdf74"
 VERIFIED_WRANGLER_RUNNER_LOCK_SHA256 = "e86ede152f4135397ee58a22023dbf029e36aa361b64d767c5cc33dae97a4cc4"
 EXPECTED_WRANGLER_RUNNER_DEPENDENCY = "file:wrangler-4.120.0.tgz"
+REQUIRED_PREVIEW_RUNTIME_BINDINGS = (
+    "ACCESS_AUD",
+    "ACCESS_ISSUER",
+    "CONTEXT_GATEWAY_CLIENT_ID",
+    "CONTEXT_GATEWAY_CLIENT_SECRET",
+    "CONTEXT_GATEWAY_ORIGIN",
+    "PREVIEW_HOST",
+)
 VERIFIED_WRANGLER = {
     "kind": "npm_supply_chain_binding",
     "package": "wrangler",
@@ -144,6 +152,12 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         errors.append("preview must disable the base workers.dev route and explicitly enable preview URLs")
     if preview.get("vars", {}).get("PUBLIC_BETA_STATUS") != "NO_GO_UNPUBLISHED":
         errors.append("preview environment must preserve NO_GO_UNPUBLISHED")
+    preview_required_secrets = preview.get("secrets", {}).get("required")
+    if (
+        not isinstance(preview_required_secrets, list)
+        or sorted(preview_required_secrets) != list(REQUIRED_PREVIEW_RUNTIME_BINDINGS)
+    ):
+        errors.append("preview environment must require the exact protected runtime bindings")
     preview_observability = preview.get("observability", observability)
     if not isinstance(preview_observability, dict) or preview_observability.get("enabled") is not False:
         errors.append("preview observability must remain disabled until provider retention is verified")
@@ -337,6 +351,16 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "candidate_sha",
         "CLOUDFLARE_API_TOKEN",
         "CLOUDFLARE_ACCOUNT_ID",
+        'preview_secrets_file="$RUNNER_TEMP/kotodama-preview-secrets.json"',
+        'trap \'rm -f "$KOTODAMA_PREVIEW_SECRETS_FILE"\' EXIT',
+        "umask 077",
+        'os.environ.get(name, "")',
+        "missing required preview runtime bindings",
+        '--secrets-file "$KOTODAMA_PREVIEW_SECRETS_FILE"',
+    )
+    required_workflow += tuple(
+        f"{binding}: ${{{{ secrets.{binding} }}}}"
+        for binding in REQUIRED_PREVIEW_RUNTIME_BINDINGS
     )
     for required in required_workflow:
         if required not in workflow:
@@ -373,7 +397,15 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         '"$RUNNER_TEMP/wrangler-verified"'
     )
     upload_command = workflow.find("versions upload --env preview")
-    secret_exposure = workflow.find("CLOUDFLARE_API_TOKEN")
+    secret_markers = (
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_ACCOUNT_ID",
+        *REQUIRED_PREVIEW_RUNTIME_BINDINGS,
+    )
+    secret_positions = [workflow.find(marker) for marker in secret_markers]
+    secret_exposure = min(
+        (position for position in secret_positions if position >= 0), default=-1
+    )
     if not (
         0 <= integrity_verification < upload_command
         and 0 <= integrity_verification < secret_exposure
@@ -389,6 +421,8 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         )
     if workflow.count("npm ci --ignore-scripts") != 1:
         errors.append("workflow must contain exactly one npm ci runner installation")
+    if workflow.count("--secrets-file") != 1:
+        errors.append("workflow must contain exactly one protected version secrets file")
     for forbidden in (
         "git merge-base --is-ancestor",
         "cloudflare/wrangler-action@",
