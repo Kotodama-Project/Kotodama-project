@@ -1150,7 +1150,8 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
         if record["event"]["kind"] in {"tool_action", "agent_action"} and record["ownership"]["assignee_ref"]:
             actions.append({
                 "action_ref": record["event"]["summary_ref"], "owner_ref": record["ownership"]["assignee_ref"],
-                "source_event_ref": record["event_id"], "status": "OPEN",
+                "source_event_ref": record["event_id"],
+                "status": "INVALIDATED" if record["event"]["state"] == "INVALIDATED" else "OPEN",
             })
         deviation = record["policy_deviation"]
         if deviation["status"] != "NONE":
@@ -1170,7 +1171,9 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
         if record["event_id"] in selected_event_ids:
             continue
         foreign_session = record["session"]
-        if foreign_session["state"] != "BOUND" or foreign_session["session_ref"] == session_ref:
+        if foreign_session["state"] not in {"BOUND", "UNASSIGNED_INBOX"}:
+            continue
+        if foreign_session["state"] == "BOUND" and foreign_session["session_ref"] == session_ref:
             continue
         detail = record["event"]
         if detail["kind"] not in {"source_update", "source_delete", "acl_loss", "invalidation"}:

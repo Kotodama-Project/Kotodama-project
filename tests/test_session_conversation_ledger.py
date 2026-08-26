@@ -634,6 +634,82 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertEqual("AVAILABLE", projection["knowledge_scope"]["acl_state"])
         self.assertNotIn(foreign_available["event_id"], projection["source_event_refs"])
 
+    def test_unassigned_invalidation_updates_projection_without_importing_event(self) -> None:
+        records = _valid_records()
+        unassigned_update = _event(
+            "unassigned-target-update",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="source_update",
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[_ref("task", "demo")],
+            session_state="UNASSIGNED_INBOX",
+            source_type="system",
+            actor_ref="ref/system/foreign",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign",
+        )
+        records.append(unassigned_update)
+        projection = ledger.project_session(_rechain(records), _ref("session", "demo"))
+
+        self.assertEqual("INVALIDATED", projection["status"])
+        self.assertEqual([_ref("task", "demo")], projection["integrity"]["invalidation_refs"])
+        self.assertEqual(
+            {"kind": "REVIEW_INVALIDATION", "source_event_ref": unassigned_update["event_id"], "action_ref": None},
+            projection["next_safe_action"],
+        )
+        self.assertNotIn(unassigned_update["event_id"], projection["source_event_refs"])
+        self.assertNotIn(
+            unassigned_update["event_id"],
+            {item["event_ref"] for item in projection["source_timeline"]},
+        )
+        self.assertEqual(_ref("task", "demo"), projection["session_governance"]["task_ssot_ref"])
+
+        unassigned_acl_loss = _event(
+            "unassigned-target-acl-loss",
+            sequence=4,
+            previous_hash=_valid_records()[-1]["event_hash"],
+            event_kind="acl_loss",
+            event_state="INVALIDATED",
+            invalidation_kind="ACL_LOST",
+            invalidation_refs=[_ref("task", "demo")],
+            acl_state="LOST",
+            session_state="UNASSIGNED_INBOX",
+            source_type="system",
+            actor_ref="ref/system/foreign-acl",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign-acl",
+        )
+        acl_records = _valid_records() + [unassigned_acl_loss]
+        acl_projection = ledger.project_session(_rechain(acl_records), _ref("session", "demo"))
+        self.assertEqual("FAIL_CLOSED", acl_projection["knowledge_scope"]["projection_access"])
+        self.assertEqual([_ref("task", "demo")], acl_projection["integrity"]["invalidation_refs"])
+        self.assertEqual("NONE", acl_projection["next_safe_action"]["kind"])
+        self.assertNotIn(unassigned_acl_loss["event_id"], acl_projection["source_event_refs"])
+
+        unrelated = _event(
+            "unassigned-unrelated-update",
+            sequence=4,
+            previous_hash=_valid_records()[-1]["event_hash"],
+            event_kind="source_update",
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[_ref("task", "demo-extra")],
+            session_state="UNASSIGNED_INBOX",
+            source_type="system",
+            actor_ref="ref/system/unrelated",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/unrelated",
+        )
+        unrelated_projection = ledger.project_session(
+            _rechain(_valid_records() + [unrelated]),
+            _ref("session", "demo"),
+        )
+        self.assertEqual("REBUILDABLE", unrelated_projection["status"])
+        self.assertEqual([], unrelated_projection["integrity"]["invalidation_refs"])
+        self.assertNotIn(unrelated["event_id"], unrelated_projection["source_event_refs"])
+
     def test_empty_validator_and_malformed_genesis_append_fail_closed(self) -> None:
         empty_report = ledger.validate_ledger([])
         self.assertEqual("REFUSED", empty_report["result"])
@@ -703,6 +779,53 @@ class SessionConversationLedgerTests(unittest.TestCase):
             {"kind": "NONE", "source_event_ref": None, "action_ref": None},
             fail_closed_projection["next_safe_action"],
         )
+
+    def test_invalidated_actions_do_not_project_as_open(self) -> None:
+        records = _valid_records()
+        previous_hash = records[-1]["event_hash"]
+        for sequence, event_kind in enumerate(("tool_action", "agent_action"), start=4):
+            action = _event(
+                f"invalidated-{event_kind}",
+                sequence=sequence,
+                previous_hash=previous_hash,
+                event_kind=event_kind,
+                session_state="BOUND",
+                session_ref=_ref("session", "demo"),
+                event_state="INVALIDATED",
+                source_type="system",
+                actor_ref="ref/system/ledger",
+                authority_role="SYSTEM",
+                authority_ref="ref/authority/ledger",
+            )
+            action["ownership"]["assignee_ref"] = _ref("assignee", event_kind)
+            records.append(action)
+            previous_hash = action["event_hash"]
+
+        projected = ledger.project_session(_rechain(records), _ref("session", "demo"))
+        self.assertEqual(
+            {"INVALIDATED"},
+            {item["status"] for item in projected["action_items"]},
+        )
+        self.assertNotIn("OPEN", {item["status"] for item in projected["action_items"]})
+
+        ordinary = _valid_records()
+        ordinary_action = _event(
+            "ordinary-open-action",
+            sequence=4,
+            previous_hash=ordinary[-1]["event_hash"],
+            event_kind="tool_action",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_state="OBSERVED",
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        ordinary_action["ownership"]["assignee_ref"] = _ref("assignee", "ordinary")
+        ordinary.append(ordinary_action)
+        ordinary_projection = ledger.project_session(_rechain(ordinary), _ref("session", "demo"))
+        self.assertEqual(["OPEN"], [item["status"] for item in ordinary_projection["action_items"]])
 
     def test_cli_project_emits_schema_valid_projection_and_exit_zero(self) -> None:
         records = _valid_records()
