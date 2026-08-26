@@ -386,6 +386,182 @@ class SessionConversationLedgerTests(unittest.TestCase):
             ledger.append_event(records, conflicting)
         self.assertIn("DUPLICATE_EVENT_ID", raised.exception.reason_codes)
 
+    def test_unassigned_inbox_target_cannot_be_bound_by_multiple_sessions(self) -> None:
+        inbox = _event("shared-inbox")
+        first_binding = _event(
+            "binding-first",
+            sequence=2,
+            previous_hash=inbox["event_hash"],
+            event_kind="session_binding",
+            session_state="BOUND",
+            session_ref=_ref("session", "first"),
+            binding_targets=[inbox["event_id"]],
+            binding_destination=_ref("session", "first"),
+            binding_revision=_ref("session-revision", "1"),
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        second_binding = _event(
+            "binding-second",
+            sequence=3,
+            previous_hash=first_binding["event_hash"],
+            event_kind="session_binding",
+            session_state="BOUND",
+            session_ref=_ref("session", "second"),
+            binding_targets=[inbox["event_id"]],
+            binding_destination=_ref("session", "second"),
+            binding_revision=_ref("session-revision", "1"),
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+
+        report = ledger.validate_ledger(_rechain([inbox, first_binding, second_binding]))
+
+        self.assertEqual("REFUSED", report["result"], report)
+        self.assertIn("SESSION_BINDING_TARGET_REUSED", report["reason_codes"])
+
+    def test_cross_session_invalidation_indexes_related_refs_without_foreign_projection_state(self) -> None:
+        records = _valid_records()
+        target_context_ref = _ref("context-pack", "target")
+        records[-1]["context"]["context_pack_refs"] = [target_context_ref]
+        records = _rechain(records)
+        target_session_ref = _ref("session", "demo")
+        target_projection_ref = "ref/projection/session-demo-3"
+
+        foreign_update = _event(
+            "foreign-source-update",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="source_update",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[_ref("task", "demo"), target_context_ref, target_projection_ref],
+            source_type="system",
+            actor_ref="ref/system/foreign",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign",
+        )
+        foreign_acl_loss = _event(
+            "foreign-acl-loss",
+            sequence=5,
+            previous_hash=foreign_update["event_hash"],
+            event_kind="acl_loss",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            event_state="INVALIDATED",
+            invalidation_kind="ACL_LOST",
+            invalidation_refs=[_ref("task", "demo"), target_context_ref, target_projection_ref],
+            acl_state="LOST",
+            source_type="system",
+            actor_ref="ref/system/foreign",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign",
+        )
+        records.extend([foreign_update, foreign_acl_loss])
+        records = _rechain(records)
+
+        projection = ledger.project_session(records, target_session_ref)
+
+        self.assertEqual("INVALIDATED", projection["status"])
+        self.assertEqual(
+            [_ref("task", "demo"), target_context_ref, target_projection_ref],
+            projection["integrity"]["invalidation_refs"],
+        )
+        self.assertNotIn(foreign_update["event_id"], projection["source_event_refs"])
+        self.assertNotIn(foreign_acl_loss["event_id"], projection["source_event_refs"])
+        self.assertEqual(3, projection["source_ledger_head"]["sequence"])
+        self.assertEqual(records[2]["event_hash"], projection["source_ledger_head"]["event_hash"])
+        self.assertEqual("ref/task/demo", projection["session_governance"]["task_ssot_ref"])
+        self.assertEqual("AVAILABLE", projection["knowledge_scope"]["acl_state"])
+        self.assertEqual("FAIL_CLOSED", projection["knowledge_scope"]["projection_access"])
+
+    def test_append_to_empty_ledger_seals_a_valid_genesis_event(self) -> None:
+        event = _event("genesis")
+
+        records, status = ledger.append_event([], event)
+
+        self.assertEqual("APPENDED", status)
+        self.assertEqual(1, len(records))
+        self.assertEqual(1, records[0]["sequence"])
+        self.assertEqual(ledger.GENESIS_HASH, records[0]["previous_event_hash"])
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(records)["result"])
+        self.assertEqual("REFUSED", ledger.validate_ledger([])["result"])
+
+    def test_cross_session_invalidation_does_not_use_global_or_prefix_matches(self) -> None:
+        records = _valid_records()
+        foreign_noise = _event(
+            "foreign-noise-event",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="human_message",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            invalidation_refs=[_ref("task", "demo")],
+            source_type="system",
+            actor_ref="ref/system/foreign",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign",
+        )
+        foreign_acl_loss = _event(
+            "foreign-unrelated-acl-loss",
+            sequence=5,
+            previous_hash=foreign_noise["event_hash"],
+            event_kind="acl_loss",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            event_state="INVALIDATED",
+            invalidation_kind="ACL_LOST",
+            invalidation_refs=[
+                _ref("task", "demo-extra"),
+                _ref("projection", "demo-evil"),
+                _ref("invalidation", "global"),
+            ],
+            acl_state="LOST",
+            source_type="system",
+            actor_ref="ref/system/foreign",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign",
+        )
+        records.extend([foreign_noise, foreign_acl_loss])
+
+        projection = ledger.project_session(_rechain(records), _ref("session", "demo"))
+
+        self.assertEqual("REBUILDABLE", projection["status"])
+        self.assertEqual([], projection["integrity"]["invalidation_refs"])
+        self.assertEqual("ALLOWED_UNVERIFIED", projection["knowledge_scope"]["projection_access"])
+        self.assertNotIn(foreign_noise["event_id"], projection["source_event_refs"])
+        self.assertNotIn(foreign_acl_loss["event_id"], projection["source_event_refs"])
+
+    def test_empty_validator_and_malformed_genesis_append_fail_closed(self) -> None:
+        empty_report = ledger.validate_ledger([])
+        self.assertEqual("REFUSED", empty_report["result"])
+        self.assertIn("INPUT_INVALID", empty_report["reason_codes"])
+        self.assertEqual("REFUSED", ledger.validate_ledger([{"event_id": []}])["result"])
+
+        malformed = _event("malformed-genesis")
+        malformed.pop("source")
+        with self.assertRaises(ledger.LedgerValidationError) as raised:
+            ledger.append_event([], malformed)
+        self.assertIn("SCHEMA_INVALID", raised.exception.reason_codes)
+
+        with self.assertRaises(ledger.LedgerValidationError) as raised:
+            ledger.append_event([], {"causation": []})
+        self.assertIn("SCHEMA_INVALID", raised.exception.reason_codes)
+
+        with self.assertRaises(ledger.LedgerValidationError) as raised:
+            ledger.append_event([], [])
+        self.assertIn("INPUT_INVALID", raised.exception.reason_codes)
+
+        with self.assertRaises(ledger.LedgerValidationError) as raised:
+            ledger.append_event(None, _event("invalid-record-container"))
+        self.assertIn("INPUT_INVALID", raised.exception.reason_codes)
+
     def test_unassigned_event_is_bound_by_new_event_and_projection_is_rebuildable(self) -> None:
         records = _valid_records()
         projection = ledger.project_session(records, _ref("session", "demo"))

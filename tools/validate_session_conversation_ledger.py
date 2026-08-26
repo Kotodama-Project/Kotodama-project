@@ -638,6 +638,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     seen_content_artifacts = {"payload_vault_ref": set(), "vault_manifest_ref": set(), "content_hash": set()}
     candidate_states: dict[str, str] = {}
     restored_archive_receipts: dict[tuple[str, str, str, str, str, str], set[str]] = {}
+    seen_binding_targets: set[str] = set()
     for record in records:
         shape_reasons = _validate_event_shape(record)
         reasons.extend(shape_reasons)
@@ -747,6 +748,11 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             if session["state"] != "BOUND" or not binding["target_event_refs"] or binding["destination_session_ref"] != session["session_ref"] or binding["destination_revision_ref"] != session["revision_ref"]:
                 reasons.append("SESSION_BINDING_INVALID")
             for target_ref in binding["target_event_refs"]:
+                if target_ref in seen_binding_targets:
+                    # This snapshot-level check complements (but cannot prove) the
+                    # runtime single-writer/CAS boundary.
+                    reasons.append("SESSION_BINDING_TARGET_REUSED")
+                seen_binding_targets.add(target_ref)
                 target = known.get(target_ref)
                 if target is None or target.get("session", {}).get("state") != "UNASSIGNED_INBOX":
                     reasons.append("SESSION_BINDING_TARGET_INVALID")
@@ -884,11 +890,17 @@ def validate_ledger(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 def append_event(records: list[dict[str, Any]], event: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
     """Append one sealed event, returning ``IDEMPOTENT_REPLAY`` for an exact retry."""
-    existing_report = validate_ledger(records)
-    if existing_report["result"] != "LEDGER_VALID":
-        raise LedgerValidationError(existing_report["reason_codes"])
-    event_id = event.get("event_id") if isinstance(event, dict) else None
-    idem = event.get("causation", {}).get("idempotency_key_ref") if isinstance(event, dict) else None
+    if not isinstance(records, list):
+        raise LedgerValidationError(["INPUT_INVALID"])
+    if not isinstance(event, dict):
+        raise LedgerValidationError(["INPUT_INVALID"])
+    if records:
+        existing_report = validate_ledger(records)
+        if existing_report["result"] != "LEDGER_VALID":
+            raise LedgerValidationError(existing_report["reason_codes"])
+    event_id = event.get("event_id")
+    causation = event.get("causation")
+    idem = causation.get("idempotency_key_ref") if isinstance(causation, dict) else None
     for old in records:
         if old.get("event_id") == event_id or old.get("causation", {}).get("idempotency_key_ref") == idem:
             old_identity = {key: value for key, value in old.items() if key not in {"sequence", "previous_event_hash", "event_hash"}}
@@ -896,7 +908,9 @@ def append_event(records: list[dict[str, Any]], event: dict[str, Any]) -> tuple[
             if old_identity == new_identity:
                 return copy.deepcopy(records), "IDEMPOTENT_REPLAY"
             raise LedgerValidationError(["DUPLICATE_EVENT_ID"] if old.get("event_id") == event_id else ["DUPLICATE_IDEMPOTENCY_KEY"])
-    candidate = seal_event(event, sequence=_integer_value(records[-1]["sequence"]) + 1, previous_hash=records[-1]["event_hash"])
+    sequence = _integer_value(records[-1]["sequence"]) + 1 if records else 1
+    previous_hash = records[-1]["event_hash"] if records else GENESIS_HASH
+    candidate = seal_event(event, sequence=sequence, previous_hash=previous_hash)
     result = copy.deepcopy(records) + [candidate]
     report = validate_ledger(result)
     if report["result"] != "LEDGER_VALID":
@@ -920,6 +934,35 @@ def _projection_exceeds_bounds(projection: dict[str, Any]) -> bool:
     if isinstance(integrity, dict) and isinstance(integrity.get("invalidation_refs"), list) and len(integrity["invalidation_refs"]) > 4096:
         return True
     return False
+
+
+def _session_related_invalidation_refs(
+    selected: dict[str, dict[str, Any]], session_ref: str
+) -> set[str]:
+    """Return exact projection/task/context refs owned by one selected session."""
+    session_key = session_ref.removeprefix("ref/session/").replace("/", "-")
+    related: set[str] = {f"ref/projection/{session_key}"}
+    for record in selected.values():
+        session = record.get("session", {})
+        if isinstance(session, dict) and session.get("state") == "BOUND" and session.get("session_ref") == session_ref:
+            sequence = record.get("sequence")
+            if _is_integer_number(sequence):
+                related.add(_projection_ref(session_ref, _integer_value(sequence)))
+            governance = session.get("governance", {})
+            if isinstance(governance, dict):
+                task_ref = governance.get("task_ssot_ref")
+                if isinstance(task_ref, str):
+                    related.add(task_ref)
+        context = record.get("context", {})
+        if isinstance(context, dict):
+            for key in ("background_ref", "knowledge_scope_ref"):
+                value = context.get(key)
+                if isinstance(value, str):
+                    related.add(value)
+            context_pack_refs = context.get("context_pack_refs", [])
+            if isinstance(context_pack_refs, list):
+                related.update(value for value in context_pack_refs if isinstance(value, str))
+    return related
 
 
 def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str, Any]:
@@ -1014,6 +1057,29 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
         if record["event"]["invalidation_refs"]:
             invalidation_refs.extend(record["event"]["invalidation_refs"])
             next_action = {"kind": "REVIEW_INVALIDATION", "source_event_ref": record["event_id"], "action_ref": None}
+    related_invalidation_refs = _session_related_invalidation_refs(selected, session_ref)
+    cross_session_acl_invalidation = False
+    selected_event_ids = set(selected)
+    for record in records:
+        if record["event_id"] in selected_event_ids:
+            continue
+        foreign_session = record["session"]
+        if foreign_session["state"] != "BOUND" or foreign_session["session_ref"] == session_ref:
+            continue
+        detail = record["event"]
+        if detail["kind"] not in {"source_update", "source_delete", "acl_loss", "invalidation"}:
+            continue
+        matching_refs = [
+            target_ref
+            for target_ref in detail["invalidation_refs"]
+            if target_ref in related_invalidation_refs
+        ]
+        if not matching_refs:
+            continue
+        invalidation_refs.extend(matching_refs)
+        next_action = {"kind": "REVIEW_INVALIDATION", "source_event_ref": record["event_id"], "action_ref": None}
+        if detail["invalidation_kind"] == "ACL_LOST" or detail["kind"] == "acl_loss":
+            cross_session_acl_invalidation = True
     intents = list(intent_by_candidate.values())
     if any(item["status"] == "CANDIDATE_ONLY" for item in intents) and next_action["kind"] == "NONE":
         candidate = next(item for item in intents if item["status"] == "CANDIDATE_ONLY")
@@ -1039,14 +1105,14 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
     status = "INVALIDATED" if invalidation_refs else ("INCOMPLETE" if set(markers) & {"GAP", "CORRUPT"} else "REBUILDABLE")
     latest = ordered[-1] if ordered else records[-1]
     acl_states = [record["public_safety"]["acl_state"] for record in ordered]
-    acl_fail_closed = any(
+    acl_fail_closed = cross_session_acl_invalidation or any(
         state in {"UNKNOWN", "LOST", "REVOKED"} for state in acl_states
     ) or any(
         record["event"]["invalidation_kind"] == "ACL_LOST" or record["event"]["kind"] == "acl_loss"
         for record in ordered
     )
     acl_state = next((state for state in ("REVOKED", "LOST", "UNKNOWN") if state in acl_states), latest["public_safety"]["acl_state"])
-    latest_sequence = _integer_value(records[-1]["sequence"])
+    latest_sequence = _integer_value(latest["sequence"])
     projection = {
         "kind": PROJECTION_KIND,
         "schema_revision": "v1",
@@ -1056,7 +1122,7 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
         "projection_digest": "0" * 64,
         "generated_at": latest["source"]["ingested_at"],
         "status": status,
-        "source_ledger_head": {"sequence": latest_sequence, "event_hash": records[-1]["event_hash"]},
+        "source_ledger_head": {"sequence": latest_sequence, "event_hash": latest["event_hash"]},
         "session_governance": {
             **latest["session"]["governance"],
             "authority_status": "INVALIDATED" if invalidation_refs else "BOUND_UNVERIFIED",
