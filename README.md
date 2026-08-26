@@ -32,6 +32,10 @@ README は、最初から最後まで一枚の壁として読む必要はあり�
 README は Projection であり、実行権限、Current Truth、Final Human GOを
 作りません。この節は canonical doc の最小 projection であり、model routing、
 質問の形、BecomeOneのmigration role、archive選択を明示的に更新します。
+ここで公開するbytesは、ユーザーのowner-directed working directionを保つ
+redacted direction candidateです。署名済み・独立検証済みのgovernance approval、
+rightsholder proof、canonical adoption、launch decision、Final Human GOのreceipt
+ではありません。receiptを捏造せず、公開境界は`NO_GO_UNPUBLISHED`のままです。
 
 ```text
 Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
@@ -83,6 +87,8 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
   Public Betaも未証明です。
 - 公開repositoryはcandidate contractsとvalidatorを提供するIncomplete Public
   Previewであり、`NO_GO_UNPUBLISHED`を維持します。
+- PR #18はApache-2.0のcandidate bytesを供給しますが、Issue #25のcontributor
+  attribution、provenance、NOTICE、accountable rightsholderのgapは未解決です。
 
 ### Open design decisions
 

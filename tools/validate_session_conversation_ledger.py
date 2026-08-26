@@ -59,7 +59,7 @@ EVENT_KEYS = {
 BINDING_KEYS = {"target_event_refs", "destination_session_ref", "destination_revision_ref"}
 DECISION_KEYS = {
     "status", "candidate_ref", "human_evidence_ref", "human_decision_ref",
-    "current_truth_ref", "execution_authority_granted",
+    "human_actor_ref", "current_truth_ref", "execution_authority_granted",
 }
 DEVIATION_KEYS = {"status", "rule_ref", "reason_ref", "approver_ref", "expires_at", "remediation_ref"}
 RETENTION_KEYS = {
@@ -77,6 +77,13 @@ PUBLIC_SAFETY_KEYS = {
 INTEGRITY_KEYS = {"marker", "gap_start_sequence", "gap_end_sequence", "marker_ref"}
 
 SOURCE_TYPES = {"discord_text", "discord_voice", "notion", "github", "codex", "claude", "google_drive", "n8n", "system"}
+ACTOR_AUTHORITY_ROLES = {
+    "actor": {"HUMAN", "OWNER"},
+    "speaker": {"HUMAN", "OWNER"},
+    "agent": {"AGENT", "SYSTEM"},
+    "connector": {"CONNECTOR", "SYSTEM"},
+    "system": {"SYSTEM"},
+}
 EVENT_KINDS = {
     "session_open", "human_message", "voice_segment", "tool_action", "agent_action",
     "decision_candidate", "decision_confirmed", "correction", "withdrawal", "confirmation",
@@ -210,9 +217,34 @@ def _match(value: Any, pattern: str) -> bool:
     return isinstance(value, str) and re.fullmatch(pattern, value) is not None
 
 
+def _public_ref_is_safe(value: Any) -> bool:
+    """Reject direct identifiers and credential-like values from public refs."""
+    if not isinstance(value, str):
+        return True
+    lowered = value.casefold()
+    if re.search(r"(?:^|/)\d{17,20}(?:/|$)", value):
+        return False
+    if re.search(
+        r"(?:^|/)(?:sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)",
+        lowered,
+    ):
+        return False
+    if re.search(r"[@\s\\:]", value):
+        return False
+    if value.startswith(("/", "\\\\")) or re.match(r"^[A-Za-z]:[\\/]", value):
+        return False
+    if re.search(r"(?:^|/)(?:\d{1,3}\.){3}\d{1,3}(?:/|$)", value):
+        return False
+    if re.search(r"(?:^|/)(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/|$)", lowered):
+        return False
+    return True
+
+
 def _ref(value: Any, reasons: list[str], *, pattern: str = r"^ref/[a-z0-9][a-z0-9/_-]{1,510}$", nullable: bool = False) -> bool:
     if value is None and nullable:
         return True
+    if not _public_ref_is_safe(value):
+        reasons.append("PUBLIC_METADATA_UNSAFE_REF")
     bounds = {
         r"^ref/[a-z0-9][a-z0-9/_-]{1,510}$": (7, 512),
         r"^ref/event/[a-z0-9][a-z0-9/_-]{1,500}$": (10, 512),
@@ -223,6 +255,18 @@ def _ref(value: Any, reasons: list[str], *, pattern: str = r"^ref/[a-z0-9][a-z0-
         reasons.append("SCHEMA_INVALID")
         return False
     return True
+
+
+def _actor_kind(actor_ref: Any) -> str | None:
+    if not isinstance(actor_ref, str):
+        return None
+    match = re.fullmatch(r"ref/(actor|speaker|agent|connector|system)/[a-z0-9][a-z0-9/_-]{1,240}", actor_ref)
+    return match.group(1) if match else None
+
+
+def _actor_authority_is_consistent(actor_ref: Any, role: Any) -> bool:
+    kind = _actor_kind(actor_ref)
+    return kind is not None and role in ACTOR_AUTHORITY_ROLES.get(kind, set())
 
 
 def _sha(value: Any, reasons: list[str]) -> bool:
@@ -325,6 +369,8 @@ def _validate_event_shape(record: Any) -> list[str]:
             _ref(authority.get("authority_ref"), reasons, pattern=r"^ref/authority/[a-z0-9][a-z0-9/_-]{1,240}$")
             if actor == authority.get("authority_ref") or (isinstance(actor, str) and actor.startswith("ref/authority/")):
                 reasons.append("ACTOR_AUTHORITY_CONFUSION")
+            if not _actor_authority_is_consistent(actor, authority.get("role")):
+                reasons.append("ACTOR_AUTHORITY_ROLE_MISMATCH")
         _ref(source.get("speaker_track_ref"), reasons, pattern=r"^ref/track/[a-z0-9][a-z0-9/_-]{1,240}$", nullable=True)
         if source.get("type") == "discord_voice" and source.get("speaker_track_ref") is None:
             reasons.append("VOICE_TRACK_REF_MISSING")
@@ -332,7 +378,7 @@ def _validate_event_shape(record: Any) -> list[str]:
             _ref(source.get(key), reasons, nullable=True)
         _ref(source.get("evidence_ref"), reasons)
         _ref(source.get("consent_ref"), reasons, nullable=True)
-        if source.get("type") in {"discord_voice", "discord_text"} and source.get("consent_ref") is None:
+        if source.get("type") != "system" and source.get("consent_ref") is None:
             reasons.append("CONSENT_REF_MISSING")
 
     content = record["content"]
@@ -390,6 +436,7 @@ def _validate_event_shape(record: Any) -> list[str]:
         _ref(decision.get("candidate_ref"), reasons, pattern=r"^ref/candidate/[a-z0-9][a-z0-9/_-]{1,240}$", nullable=True)
         _ref(decision.get("human_evidence_ref"), reasons, nullable=True)
         _ref(decision.get("human_decision_ref"), reasons, nullable=True)
+        _ref(decision.get("human_actor_ref"), reasons, pattern=r"^ref/person/[a-z0-9][a-z0-9/_-]{1,240}$", nullable=True)
         if decision.get("current_truth_ref") is not None or decision.get("execution_authority_granted") is not False:
             reasons.append("DECISION_OVERCLAIM")
 
@@ -687,6 +734,20 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         if decision["status"] in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"}:
             if decision["human_evidence_ref"] is None or decision["human_decision_ref"] is None:
                 reasons.append("CONFIRMED_DECISION_NEEDS_HUMAN_EVIDENCE")
+            human_actor_ref = decision.get("human_actor_ref")
+            if human_actor_ref is None:
+                reasons.append("HUMAN_DECISION_PERSON_REF_MISSING")
+            actor_kind = _actor_kind(record["source"].get("actor_ref"))
+            if actor_kind not in {"actor", "speaker"} or record["source"]["authority"].get("role") not in {"HUMAN", "OWNER"}:
+                reasons.append("HUMAN_CONFIRMATION_REQUIRES_PERSON")
+            if isinstance(human_actor_ref, str):
+                person_id = human_actor_ref.rsplit("/", 1)[-1]
+                actor_id = record["source"]["actor_ref"].rsplit("/", 1)[-1]
+                authority_id = record["source"]["authority"]["authority_ref"].rsplit("/", 1)[-1]
+                if person_id != actor_id or person_id != authority_id:
+                    reasons.append("HUMAN_DECISION_PERSON_BINDING_INVALID")
+        elif decision.get("human_actor_ref") is not None:
+            reasons.append("HUMAN_ACTOR_REF_NOT_APPLICABLE")
         if decision["status"] == "LLM_CANDIDATE":
             if decision["candidate_ref"] is None or decision["human_evidence_ref"] is not None or decision["human_decision_ref"] is not None:
                 reasons.append("LLM_RESULT_NOT_CANDIDATE")

@@ -31,8 +31,7 @@
 
 ## Owner-confirmed Company AGI direction
 
-The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) is the
-canonical product-direction source for Company AGI, bounded autonomy,
+The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) is the canonical product-direction source for Company AGI, bounded autonomy,
 Voice Requirements Agent, per-Invocation authority, and one Kotodama product /
 Company SSOT. Correction themes: BecomeOne is the migration donor/control plane;
 OKF v0.2 is central for governed curated knowledge, not sole Company truth; and
@@ -42,7 +41,11 @@ bounded Unattended Improvement Loop remain product requirements. This
 documentation milestone does not implement the runtime: Voice-to-Requirement,
 Agent Swarm, Context/encoder, provider, storage, and Promotion remain separate
 work. The runtime remains unimplemented and Public Beta remains
-`NO_GO_UNPUBLISHED`.
+`NO_GO_UNPUBLISHED`. The public bytes are a redacted owner-directed direction
+candidate, not signed or independently verifiable governance approval,
+rightsholder proof, canonical adoption, launch decision, or Final Human GO, and
+no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25's
+contributor/provenance/NOTICE/accountable-rightsholder gaps remain open.
 
 ## Current public documentation revision
 

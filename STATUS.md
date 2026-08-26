@@ -36,7 +36,7 @@ Updated: 2026-08-26
 | One-command review-chain smoke | Published standard-library-only local smoke; exact thirteen steps in a temporary workspace, no retained artifacts or GO |
 | [5-minute tour](docs/FIVE-MINUTE-TOUR.md) | Clone-to-result first-visit path; external-free local smoke and bounded next choices only |
 | README Company OS story map | Vision-to-Try-it reader map and eight-surface ideal/current boundary; documentation only |
-| [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) | Canonical product direction; documentation only, runtime remains unimplemented, `NO_GO_UNPUBLISHED` |
+| [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) | Redacted owner-directed direction candidate; not signed/independently verified governance approval or rightsholder proof; runtime remains unimplemented, `NO_GO_UNPUBLISHED` |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -47,8 +47,7 @@ Updated: 2026-08-26
 ## Owner-confirmed Company AGI direction
 
 The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) records the
-Company AGI target, bounded autonomy, Voice Requirements Agent, per-Invocation
-authority, causal ledger, and unresolved design decisions. README, STATUS, and
+Company AGI target, bounded autonomy, Voice Requirements Agent, per-Invocation authority, causal ledger, and unresolved design decisions. README, STATUS, and
 ROADMAP are projections of that source. Correction themes: one Kotodama product
 with BecomeOne as migration donor/control plane; OKF v0.2 as the central
 representation for governed curated knowledge, not sole Company truth; and
@@ -56,7 +55,12 @@ separate raw/derived Voice evidence with adaptive GrillU. Luna-first routing,
 an OPEN archive backend, reversible delegation, and the bounded Unattended
 Improvement Loop remain requirements. This documentation does not activate
 Voice, Agent Swarm, provider, deployment, Promotion, or Current Truth; runtime
-remains unimplemented and Public Beta remains `NO_GO_UNPUBLISHED`.
+remains unimplemented and Public Beta remains `NO_GO_UNPUBLISHED`. The public
+bytes preserve the user's working direction as a redacted owner-directed
+candidate, not a signed or independently verifiable governance approval,
+rightsholder proof, canonical adoption, launch decision, or Final Human GO; no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25
+contributor/provenance/NOTICE/accountable-rightsholder gaps remain open and are
+not marked closed.
 
 ## Latest runtime result
 

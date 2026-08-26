@@ -37,10 +37,7 @@
     "kind": {"const": "kotodama.session-knowledge-projection"},
     "schema_revision": {"const": "v1"},
     "projection_id": {"$ref": "#/$defs/ref"},
-    "session_ref": {
-      "type": "string",
-      "pattern": "^ref/session/[a-z0-9][a-z0-9/_-]{1,240}$"
-    },
+    "session_ref": {"$ref": "#/$defs/session_ref"},
     "projection_revision_ref": {"$ref": "#/$defs/ref"},
     "projection_digest": {"$ref": "#/$defs/sha256"},
     "generated_at": {"$ref": "#/$defs/timestamp"},
@@ -69,13 +66,32 @@
       "type": "string",
       "minLength": 7,
       "maxLength": 512,
-      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$"
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
     },
     "event_ref": {
       "type": "string",
       "minLength": 10,
       "maxLength": 512,
-      "pattern": "^ref/event/[a-z0-9][a-z0-9/_-]{1,500}$"
+      "pattern": "^ref/event/[a-z0-9][a-z0-9/_-]{1,500}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
+    },
+    "session_ref": {
+      "type": "string",
+      "minLength": 12,
+      "maxLength": 256,
+      "pattern": "^ref/session/[a-z0-9][a-z0-9/_-]{1,244}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
+    },
+    "public_ref_safety": {
+      "allOf": [
+        {"not": {"pattern": "(^|/)[0-9]{17,20}(/|$)"}},
+        {"not": {"pattern": "(^|/)(sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)"}},
+        {"not": {"pattern": "[@\\s\\\\:]"}},
+        {"not": {"pattern": "(^|/)([0-9]{1,3}\\.){3}[0-9]{1,3}(/|$)"}},
+        {"not": {"pattern": "(^|/)([a-z0-9-]+\\.)+[a-z]{2,}(/|$)"}},
+        {"not": {"pattern": "(^|/)(https?://|file://|[A-Za-z]:[\\\\/]|\\\\\\\\)"}}
+      ]
     },
     "timestamp": {
       "type": "string",

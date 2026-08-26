@@ -356,6 +356,11 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
                 "bounded Unattended",
                 "runtime remains unimplemented",
                 "NO_GO_UNPUBLISHED",
+                "redacted owner-directed",
+                "not signed",
+                "independently verifiable",
+                "rightsholder",
+                "Issue #25",
             ):
                 with self.subTest(surface=name, marker=marker):
                     self.assertIn(marker, text)
@@ -410,6 +415,10 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             "does not grant Final Human GO",
             "Credentials are never pooled or shared",
             "personal seat is not unlimited multi-tenant capacity",
+            "redacted public candidate",
+            "not a signed or independently verifiable governance",
+            "Issue #25 remains open",
+            "Apache-2.0 candidate bytes",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.canonical)

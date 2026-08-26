@@ -1,11 +1,15 @@
 # Owner-confirmed Company AGI direction
 
-Status: **Owner-confirmed Human Intent / product direction**
+Status: **Owner-confirmed Human Intent / product direction (redacted public candidate)**
 Recorded: 2026-08-26
 Canonical role: the owner-intent source for Kotodama's Company AGI product direction
 Runtime state: documentation-only candidate / `NO_GO_UNPUBLISHED`
 
-This record is authoritative for the candidate product direction. It explicitly
+This public byte projection preserves the user's owner-directed working
+direction, but it is not a signed or independently verifiable governance
+approval, rightsholder proof, canonical adoption record, launch decision, or
+Final Human GO. It does not fabricate a receipt. The redacted record is
+authoritative only as a candidate input for the product direction. It explicitly
 supersedes stale Candidate 1 wording about model routing, fixed question shape,
 archive selection, and BecomeOne's migration role. It does not treat a README,
 design candidate, runtime flag, or local test as execution authority or Current
@@ -220,4 +224,9 @@ This record does not change Current Truth.
 This record does not grant Final Human GO.
 Credentials are never pooled or shared.
 One personal seat is not unlimited multi-tenant capacity.
+
+PR #18 supplies Apache-2.0 candidate bytes for this public repository. Issue #25 remains open for contributor attribution, complete provenance, NOTICE
+handling, and an accountable rightsholder decision; those gaps are not closed
+by this redacted direction candidate or by local tests.
+
 The public candidate remains `NO_GO_UNPUBLISHED`.

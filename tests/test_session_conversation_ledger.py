@@ -67,6 +67,7 @@ def _event(
     candidate_ref: str | None = None,
     human_evidence_ref: str | None = None,
     human_decision_ref: str | None = None,
+    human_actor_ref: str | None = None,
     deviation_status: str = "NONE",
     deletion_state: str = "NOT_REQUESTED",
     deletion_receipt_ref: str | None = None,
@@ -110,6 +111,8 @@ def _event(
         binding_destination = session_ref
     if event_kind == "session_binding" and binding_revision is None:
         binding_revision = revision
+    if decision_status in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"} and human_actor_ref is None:
+        human_actor_ref = _ref("person", "alice")
     if session_state == "UNASSIGNED_INBOX":
         governance = {
             "creation_mode": "UNASSIGNED_INBOX",
@@ -219,6 +222,7 @@ def _event(
             "candidate_ref": candidate_ref,
             "human_evidence_ref": human_evidence_ref,
             "human_decision_ref": human_decision_ref,
+            "human_actor_ref": human_actor_ref,
             "current_truth_ref": None,
             "execution_authority_granted": False,
         },
@@ -759,9 +763,9 @@ class SessionConversationLedgerTests(unittest.TestCase):
             confirmation_of_event_ref=candidate["event_id"],
             caused_by_event_refs=[candidate["event_id"]],
             source_type="system",
-            actor_ref="ref/system/ledger",
-            authority_role="SYSTEM",
-            authority_ref="ref/authority/ledger",
+            actor_ref="ref/speaker/alice",
+            authority_role="HUMAN",
+            authority_ref="ref/authority/alice",
         )
         correction = _event(
             "correct-chain",
@@ -778,9 +782,9 @@ class SessionConversationLedgerTests(unittest.TestCase):
             correction_of_event_ref=confirmation["event_id"],
             caused_by_event_refs=[confirmation["event_id"]],
             source_type="system",
-            actor_ref="ref/system/ledger",
-            authority_role="SYSTEM",
-            authority_ref="ref/authority/ledger",
+            actor_ref="ref/speaker/alice",
+            authority_role="HUMAN",
+            authority_ref="ref/authority/alice",
         )
         withdrawal = _event(
             "withdraw-chain",
@@ -797,9 +801,9 @@ class SessionConversationLedgerTests(unittest.TestCase):
             withdrawal_of_event_ref=correction["event_id"],
             caused_by_event_refs=[correction["event_id"]],
             source_type="system",
-            actor_ref="ref/system/ledger",
-            authority_role="SYSTEM",
-            authority_ref="ref/authority/ledger",
+            actor_ref="ref/speaker/alice",
+            authority_role="HUMAN",
+            authority_ref="ref/authority/alice",
         )
         records.extend([confirmation, correction, withdrawal])
         self.assertEqual("LEDGER_VALID", ledger.validate_ledger(records)["result"])
@@ -823,9 +827,9 @@ class SessionConversationLedgerTests(unittest.TestCase):
             confirmation_of_event_ref=withdrawal["event_id"],
             caused_by_event_refs=[withdrawal["event_id"]],
             source_type="system",
-            actor_ref="ref/system/ledger",
-            authority_role="SYSTEM",
-            authority_ref="ref/authority/ledger",
+            actor_ref="ref/speaker/alice",
+            authority_role="HUMAN",
+            authority_ref="ref/authority/alice",
         )
         report = ledger.validate_ledger(records + [late_confirmation])
         self.assertEqual("REFUSED", report["result"], report)
@@ -1341,6 +1345,72 @@ class SessionConversationLedgerTests(unittest.TestCase):
         overwritten[0]["content"]["content_hash"] = "b" * 64
         overwrite_report = ledger.validate_ledger(overwritten)
         self.assertIn("CONTENT_DIGEST_DRIFT", overwrite_report["reason_codes"])
+
+    def test_public_fixes_reject_forged_authority_non_discord_consent_voice_gap_and_unsafe_refs(self) -> None:
+        forged = _lifecycle_records("decision_confirmed", "HUMAN_CONFIRMED", "CONFIRMED")
+        forged[-1]["source"]["actor_ref"] = "ref/agent/forged"
+        forged[-1]["source"]["authority"] = {
+            "role": "OWNER",
+            "authority_ref": "ref/authority/forged",
+        }
+        forged_report = ledger.validate_ledger(_rechain(forged))
+        self.assertEqual("REFUSED", forged_report["result"], forged_report)
+        self.assertIn("ACTOR_AUTHORITY_ROLE_MISMATCH", forged_report["reason_codes"])
+        forged_schema_errors = list(
+            Draft202012Validator(
+                json.loads(SCHEMA.read_text(encoding="utf-8")),
+                format_checker=FormatChecker(),
+            ).iter_errors(forged[-1])
+        )
+        self.assertTrue(forged_schema_errors)
+
+        for source_type in sorted(ledger.SOURCE_TYPES - {"system"}):
+            with self.subTest(source_type=source_type):
+                records = _valid_records()
+                records[0]["source"]["type"] = source_type
+                records[0]["source"]["consent_ref"] = None
+                report = ledger.validate_ledger(_rechain(records))
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertIn("CONSENT_REF_MISSING", report["reason_codes"])
+                schema_errors = list(
+                    Draft202012Validator(
+                        json.loads(SCHEMA.read_text(encoding="utf-8")),
+                        format_checker=FormatChecker(),
+                    ).iter_errors(records[0])
+                )
+                self.assertTrue(schema_errors)
+
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        voice = _valid_records()[0]
+        voice["source"]["type"] = "discord_voice"
+        voice["source"]["speaker_track_ref"] = None
+        voice["source"]["consent_ref"] = _ref("consent", "voice-demo")
+        voice_schema_errors = list(
+            Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(voice)
+        )
+        self.assertTrue(voice_schema_errors)
+        voice_report = ledger.validate_ledger(_rechain([voice]))
+        self.assertIn("VOICE_TRACK_REF_MISSING", voice_report["reason_codes"])
+
+        for unsafe in (
+            "ref/source/12345678901234567",
+            "ref/source/sk-test-token",
+            "alice@example.com",
+            "192.0.2.10",
+            "C:/Users/alice/private.json",
+            "host.example.com",
+        ):
+            with self.subTest(unsafe=unsafe):
+                records = _valid_records()
+                records[0]["source"]["locator_ref"] = unsafe
+                records = _rechain(records)
+                report = ledger.validate_ledger(records)
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertIn("PUBLIC_METADATA_UNSAFE_REF", report["reason_codes"])
+                schema_errors = list(
+                    Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(records[0])
+                )
+                self.assertTrue(schema_errors)
 
     def test_malformed_jsonl_and_projection_digest_mismatch_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

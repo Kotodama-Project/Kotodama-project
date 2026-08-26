@@ -52,25 +52,51 @@
       "type": "string",
       "minLength": 7,
       "maxLength": 512,
-      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$"
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
     },
     "event_ref": {
       "type": "string",
       "minLength": 10,
       "maxLength": 512,
-      "pattern": "^ref/event/[a-z0-9][a-z0-9/_-]{1,500}$"
+      "pattern": "^ref/event/[a-z0-9][a-z0-9/_-]{1,500}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
     },
     "session_ref": {
       "type": "string",
       "minLength": 12,
       "maxLength": 256,
-      "pattern": "^ref/session/[a-z0-9][a-z0-9/_-]{1,244}$"
+      "pattern": "^ref/session/[a-z0-9][a-z0-9/_-]{1,244}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
     },
     "revision_ref": {
       "type": "string",
       "minLength": 21,
       "maxLength": 256,
-      "pattern": "^ref/session-revision/[1-9][0-9]*$"
+      "pattern": "^ref/session-revision/[1-9][0-9]*$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
+    },
+    "public_ref_safety": {
+      "allOf": [
+        {"not": {"pattern": "(^|/)[0-9]{17,20}(/|$)"}},
+        {"not": {"pattern": "(^|/)(sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)"}},
+        {"not": {"pattern": "[@\\s\\\\:]"}},
+        {"not": {"pattern": "(^|/)([0-9]{1,3}\\.){3}[0-9]{1,3}(/|$)"}},
+        {"not": {"pattern": "(^|/)([a-z0-9-]+\\.)+[a-z]{2,}(/|$)"}},
+        {"not": {"pattern": "(^|/)(https?://|file://|[A-Za-z]:[\\\\/]|\\\\\\\\)"}}
+      ]
+    },
+    "person_ref": {
+      "allOf": [
+        {"$ref": "#/$defs/ref"},
+        {"pattern": "^ref/person/[a-z0-9][a-z0-9/_-]{1,240}$"}
+      ]
+    },
+    "track_ref": {
+      "allOf": [
+        {"$ref": "#/$defs/ref"},
+        {"pattern": "^ref/track/[a-z0-9][a-z0-9/_-]{1,240}$"}
+      ]
     },
     "timestamp": {
       "type": "string",
@@ -192,8 +218,10 @@
       "properties": {
         "role": {"enum": ["HUMAN", "OWNER", "AGENT", "CONNECTOR", "SYSTEM"]},
         "authority_ref": {
-          "type": "string",
-          "pattern": "^ref/authority/[a-z0-9][a-z0-9/_-]{1,240}$"
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/authority/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
         }
       }
     },
@@ -235,12 +263,17 @@
         "locator_ref": {"$ref": "#/$defs/ref"},
         "source_revision_ref": {"$ref": "#/$defs/ref"},
         "actor_ref": {
-          "type": "string",
-          "pattern": "^ref/(actor|speaker|agent|connector|system)/[a-z0-9][a-z0-9/_-]{1,240}$"
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/(actor|speaker|agent|connector|system)/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
         },
         "speaker_track_ref": {
           "oneOf": [
-            {"type": "string", "pattern": "^ref/track/[a-z0-9][a-z0-9/_-]{1,240}$"},
+            {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/track/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]},
             {"type": "null"}
           ]
         },
@@ -251,7 +284,39 @@
         "repository_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
         "evidence_ref": {"$ref": "#/$defs/ref"},
         "consent_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "discord_voice"}}},
+          "then": {
+            "required": ["speaker_track_ref", "locator_ref", "source_revision_ref", "evidence_ref"],
+            "properties": {"speaker_track_ref": {"$ref": "#/$defs/track_ref"}}
+          }
+        },
+        {
+          "if": {"properties": {"type": {"enum": ["discord_text", "discord_voice", "notion", "github", "codex", "claude", "google_drive", "n8n"]}}},
+          "then": {
+            "required": ["consent_ref"],
+            "properties": {"consent_ref": {"$ref": "#/$defs/ref"}}
+          }
+        },
+        {
+          "if": {"properties": {"actor_ref": {"pattern": "^ref/(actor|speaker)/"}}},
+          "then": {"properties": {"authority": {"properties": {"role": {"enum": ["HUMAN", "OWNER"]}}}}}
+        },
+        {
+          "if": {"properties": {"actor_ref": {"pattern": "^ref/agent/"}}},
+          "then": {"properties": {"authority": {"properties": {"role": {"enum": ["AGENT", "SYSTEM"]}}}}}
+        },
+        {
+          "if": {"properties": {"actor_ref": {"pattern": "^ref/connector/"}}},
+          "then": {"properties": {"authority": {"properties": {"role": {"enum": ["CONNECTOR", "SYSTEM"]}}}}}
+        },
+        {
+          "if": {"properties": {"actor_ref": {"pattern": "^ref/system/"}}},
+          "then": {"properties": {"authority": {"properties": {"role": {"const": "SYSTEM"}}}}}
+        }
+      ]
     },
     "content": {
       "type": "object",
@@ -268,12 +333,16 @@
       ],
       "properties": {
         "payload_vault_ref": {
-          "type": "string",
-          "pattern": "^ref/vault/[a-z0-9][a-z0-9/_-]{1,240}$"
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/vault/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
         },
         "vault_manifest_ref": {
-          "type": "string",
-          "pattern": "^ref/vault-manifest/[a-z0-9][a-z0-9/_-]{1,240}$"
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/vault-manifest/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
         },
         "content_hash": {"$ref": "#/$defs/sha256"},
         "span_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
@@ -332,12 +401,17 @@
       "required": ["owner_ref", "assignee_ref"],
       "properties": {
         "owner_ref": {
-          "type": "string",
-          "pattern": "^ref/owner/[a-z0-9][a-z0-9/_-]{1,240}$"
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/owner/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
         },
         "assignee_ref": {
           "oneOf": [
-            {"type": "string", "pattern": "^ref/assignee/[a-z0-9][a-z0-9/_-]{1,240}$"},
+            {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/assignee/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]},
             {"type": "null"}
           ]
         }
@@ -440,6 +514,7 @@
         "candidate_ref",
         "human_evidence_ref",
         "human_decision_ref",
+        "human_actor_ref",
         "current_truth_ref",
         "execution_authority_granted"
       ],
@@ -455,7 +530,10 @@
         },
         "candidate_ref": {
           "oneOf": [
-            {"type": "string", "pattern": "^ref/candidate/[a-z0-9][a-z0-9/_-]{1,240}$"},
+            {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/candidate/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]},
             {"type": "null"}
           ]
         },
@@ -465,9 +543,29 @@
         "human_decision_ref": {
           "oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]
         },
+        "human_actor_ref": {
+          "oneOf": [{"$ref": "#/$defs/person_ref"}, {"type": "null"}]
+        },
         "current_truth_ref": {"type": "null"},
         "execution_authority_granted": {"const": false}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"enum": ["HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"]}}},
+          "then": {
+            "properties": {
+              "human_actor_ref": {"$ref": "#/$defs/person_ref"},
+              "human_evidence_ref": {"$ref": "#/$defs/ref"},
+              "human_decision_ref": {"$ref": "#/$defs/ref"}
+            },
+            "required": ["human_actor_ref", "human_evidence_ref", "human_decision_ref"]
+          }
+        },
+        {
+          "if": {"properties": {"status": {"enum": ["NONE", "LLM_CANDIDATE"]}}},
+          "then": {"properties": {"human_actor_ref": {"type": "null"}}}
+        }
+      ]
     },
     "policy_deviation": {
       "type": "object",
@@ -530,7 +628,10 @@
         "deletion_state": {"enum": ["NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"]},
         "deletion_receipt_ref": {
           "oneOf": [
-            {"type": "string", "pattern": "^ref/deletion-receipt/[a-z0-9][a-z0-9/_-]{1,240}$"},
+            {"allOf": [
+              {"$ref": "#/$defs/ref"},
+              {"pattern": "^ref/deletion-receipt/[a-z0-9][a-z0-9/_-]{1,240}$"}
+            ]},
             {"type": "null"}
           ]
         },
@@ -597,8 +698,10 @@
         "record_visibility": {"const": "PUBLIC_SANITIZED_METADATA"},
         "raw_payload_embedded": {"const": false},
         "protected_payload_ref": {
-          "type": "string",
-          "pattern": "^ref/vault/[a-z0-9][a-z0-9/_-]{1,240}$"
+          "allOf": [
+            {"$ref": "#/$defs/ref"},
+            {"pattern": "^ref/vault/[a-z0-9][a-z0-9/_-]{1,240}$"}
+          ]
         },
         "knowledge_scope_ref": {"$ref": "#/$defs/ref"},
         "acl_state": {"enum": ["AVAILABLE", "UNKNOWN", "LOST", "REVOKED"]}

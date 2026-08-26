@@ -29,6 +29,30 @@ SSOT ではありません。
   ref を必須とし、候補を projection 上で supersede する。
 - `pre_compact` は `PROJECTION_ONLY` の summary event であり source authority ではない。
 
+### Authority and public-reference safety
+
+Public metadata refs use one opaque, pseudonymous shape:
+`ref/<namespace>/<opaque-slug>`. They do not embed direct provider IDs (including
+17--20 digit identifiers), email addresses, IP addresses, absolute paths,
+hostnames, or credential-like prefixes such as `sk-`. The shape is a public
+locator contract, not an identity or authenticity proof.
+
+`source.actor_ref` and `source.authority.role` must agree: speaker/actor refs
+are human or owner authored, agent refs are agent/system authored, connector
+refs are connector/system authored, and system refs are system authored. A
+human lifecycle decision additionally carries a person-bound
+`decision.human_actor_ref` matching the source actor and authority suffixes;
+an agent cannot become `HUMAN_CONFIRMED` by declaring OWNER or another
+approval-sounding role. Human evidence and decision refs remain required, but
+their presence alone is not person or authority proof.
+
+Every non-system source kind requires an explicit `source.consent_ref`; every
+event carries non-null retention policy and policy-revision refs. A
+`discord_voice` source also requires `speaker_track_ref`, locator, source
+revision, and evidence refs in both the JSON Schema and validator. These are
+fail-closed metadata contracts, not proof that consent, retention enforcement,
+speaker identity, or deletion was actually observed.
+
 ### Knowledge representation boundary
 
 The rebuildable knowledge document may be rendered in the owner-confirmed Google
