@@ -152,7 +152,7 @@ jobs:
               "PREVIEW_HOST",
           )
           values = {name: os.environ.get(name, "") for name in required}
-          missing = [name for name, value in values.items() if not value]
+          missing = [name for name, value in values.items() if not value.strip()]
           if missing:
               raise SystemExit(
                   "missing required preview runtime bindings: " + ", ".join(missing)
