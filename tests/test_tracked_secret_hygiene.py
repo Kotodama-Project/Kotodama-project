@@ -1185,6 +1185,75 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             SCANNER.scan_text(Path("config.js"), dotted_escaped),
         )
 
+    def test_constant_computed_javascript_environment_keys_are_detected(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        cases = (
+            (
+                'process.env["OPENAI_" + "API_KEY"] = "' + value + '"\n',
+                1,
+            ),
+            (
+                "process.env[`OPENAI_${\"API_KEY\"}`] = \""
+                + value
+                + "\"\n",
+                1,
+            ),
+            (
+                'const key = "OPENAI_" + "API_KEY";\n'
+                'process.env[key] = "' + value + '"\n',
+                2,
+            ),
+            (
+                'environment["OPENAI_" + "API_KEY"] = "' + value + '"\n',
+                1,
+            ),
+        )
+        for text, line in cases:
+            with self.subTest(lines=len(text.splitlines())):
+                findings = SCANNER.scan_text(Path("config.js"), text)
+                self.assertEqual(
+                    [("config.js", line, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        escaped = (
+            'process.env["OPENAI_API_\\u004bEY" + ""] = "'
+            + value
+            + '"\n'
+        )
+        self.assertEqual(
+            [("config.ts", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.ts"), escaped),
+        )
+
+    def test_dynamic_javascript_environment_keys_and_references_remain_safe(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        dynamic = (
+            "const suffix = getSecretName();\n"
+            'process.env["OPENAI_" + suffix] = "' + value + '"\n'
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.js"), dynamic))
+        indexed_reference = (
+            'process.env["OPENAI_" + "API_KEY"] = secrets["'
+            + name
+            + '"]\n'
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.js"), indexed_reference)
+        )
+        comments = (
+            '// process.env["OPENAI_" + "API_KEY"] = "'
+            + value
+            + '"\n'
+            '/* process.env["OPENAI_" + "API_KEY"] = "'
+            + value
+            + '" */\n'
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.js"), comments))
+
     def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
@@ -1577,6 +1646,55 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 Path("script.sh"), "echo ${" + name + ":?set privately}\n"
             ),
         )
+
+    def test_shell_backslash_newline_splices_are_detected_with_origin_line(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        cases = (
+            "OPENAI_API_\\\nKEY=" + value + "\n",
+            "export OPENAI_API_\\\nKEY=" + value + "\n",
+            "OPENAI_API_KEY\\\n= " + value + "\n",
+            "echo ${OPENAI_API_\\\nKEY:-" + value + "}\n",
+        )
+        for text in cases:
+            with self.subTest(lines=len(text.splitlines())):
+                findings = SCANNER.scan_text(Path("script.sh"), text)
+                self.assertEqual(
+                    [("script.sh", 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        crlf = "OPENAI_API_\\\r\nKEY=" + value + "\r\n"
+        self.assertEqual(
+            [("script.sh", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("script.sh"), crlf),
+        )
+
+    def test_shell_continuations_preserve_quotes_comments_heredocs_and_safe_values(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        escaped_backslash = "OPENAI_API_\\\\\nKEY=" + value + "\n"
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("script.sh"), escaped_backslash)
+        )
+        single_quoted = "printf '%s' 'OPENAI_API_\\\nKEY=" + value + "'\n"
+        self.assertEqual([], SCANNER.scan_text(Path("script.sh"), single_quoted))
+        double_quoted = 'printf "%s" "OPENAI_API_\\\nKEY=' + value + '"\n'
+        self.assertEqual([], SCANNER.scan_text(Path("script.sh"), double_quoted))
+        comment = "# OPENAI_API_\\\nKEY=" + value + "\n"
+        self.assertEqual([], SCANNER.scan_text(Path("script.sh"), comment))
+        heredoc = (
+            "cat <<'EOF'\n"
+            "OPENAI_API_\\\n"
+            "KEY=" + value + "\n"
+            "EOF\n"
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("script.sh"), heredoc))
+        ordinary = "printf '%s ' \\\n'ordinary continuation'\n"
+        self.assertEqual([], SCANNER.scan_text(Path("script.sh"), ordinary))
+        safe_parameter = "echo ${OPENAI_API_\\\nKEY:?set privately}\n"
+        self.assertEqual([], SCANNER.scan_text(Path("script.sh"), safe_parameter))
 
     def test_complete_private_key_block_is_detected(self) -> None:
         begin = "-----BEGIN " + "PRIVATE KEY-----\n"

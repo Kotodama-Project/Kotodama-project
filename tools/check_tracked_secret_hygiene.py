@@ -156,6 +156,19 @@ BRACKETED_QUOTED_KEY = re.compile(
     r"(?P=quote)\s*\](?=\s*=)",
     re.MULTILINE,
 )
+JAVASCRIPT_CONST_DECLARATION = re.compile(
+    r"(?:^|[;{}])[ \t]*(?:export[ \t]+)?const[ \t]+"
+    r"(?P<name>[A-Za-z_$][A-Za-z0-9_$]*)"
+    r"(?:\s*:\s*[^=;\r\n]+)?\s*=",
+    re.MULTILINE,
+)
+JAVASCRIPT_COMPUTED_KEY = re.compile(
+    r"(?P<prefix>(?:[A-Za-z_$][A-Za-z0-9_$]*\.)*"
+    r"[A-Za-z_$][A-Za-z0-9_$]*)\[(?P<expression>[^\]]{1,512})\]",
+    re.DOTALL,
+)
+MAX_JAVASCRIPT_CONSTANT_DEPTH = 8
+MAX_JAVASCRIPT_CONSTANT_PARTS = 32
 BRACED_UNICODE_ESCAPE = re.compile(
     r"\\u\{(?P<digits>[0-9A-Fa-f]{1,6})\}"
 )
@@ -607,6 +620,169 @@ def shell_parameter_assignments(line: str) -> list[tuple[str, str]]:
                 break
         index += 1
     return assignments
+
+
+def shell_heredoc_delimiters(line: str) -> list[tuple[str, bool]]:
+    """Find heredoc delimiters without interpreting quoted shell content."""
+
+    delimiters: list[tuple[str, bool]] = []
+    quote: str | None = None
+    escaped = False
+    comment = False
+    index = 0
+    while index < len(line):
+        character = line[index]
+        if comment:
+            break
+        if quote == "'":
+            if character == "'":
+                quote = None
+            index += 1
+            continue
+        if escaped:
+            escaped = False
+            index += 1
+            continue
+        if character == "\\":
+            escaped = True
+            index += 1
+            continue
+        if quote is not None:
+            if character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in {'"', "'", "`"}:
+            quote = character
+            index += 1
+            continue
+        if character == "#" and (index == 0 or line[index - 1].isspace()):
+            comment = True
+            break
+        if line.startswith("<<", index) and not line.startswith("<<<", index):
+            cursor = index + 2
+            strip_tabs = cursor < len(line) and line[cursor] == "-"
+            if strip_tabs:
+                cursor += 1
+            while cursor < len(line) and line[cursor] in " \t":
+                cursor += 1
+            if cursor >= len(line):
+                index = cursor
+                continue
+            delimiter_quote = line[cursor] if line[cursor] in {"'", '"'} else None
+            if delimiter_quote is not None:
+                cursor += 1
+                end = line.find(delimiter_quote, cursor)
+                if end < 0:
+                    index = cursor
+                    continue
+                delimiter = line[cursor:end]
+                index = end + 1
+            else:
+                match = re.match(r"[^\s;&|<>]+", line[cursor:])
+                if match is None:
+                    index = cursor
+                    continue
+                delimiter = match.group()
+                index = cursor + match.end()
+            if delimiter:
+                delimiters.append((delimiter, strip_tabs))
+            continue
+        index += 1
+    return delimiters
+
+
+def shell_heredoc_terminator(
+    line: str, delimiter: str, strip_tabs: bool
+) -> bool:
+    candidate = line.rstrip("\r\n")
+    if strip_tabs:
+        candidate = candidate.lstrip("\t")
+    return candidate == delimiter
+
+
+def normalize_shell_line_continuations(text: str) -> tuple[str, list[int]]:
+    """Join shell logical lines while preserving the first physical line."""
+
+    result: list[str] = []
+    line_origins = [1]
+    heredocs: list[tuple[str, bool]] = []
+    logical_line: list[str] = []
+    physical_line = 1
+    quote: str | None = None
+    comment = False
+    for raw_line in text.splitlines(keepends=True):
+        if heredocs:
+            result.extend(raw_line)
+            if "\n" in raw_line or "\r" in raw_line:
+                line_origins.append(physical_line + 1)
+            if shell_heredoc_terminator(raw_line, *heredocs[0]):
+                heredocs.pop(0)
+            physical_line += 1
+            logical_line = []
+            continue
+
+        line_ending = ""
+        body = raw_line
+        if body.endswith("\r\n"):
+            line_ending = "\r\n"
+            body = body[:-2]
+        elif body.endswith(("\n", "\r")):
+            line_ending = body[-1]
+            body = body[:-1]
+        result.extend(body)
+        logical_line.extend(body)
+
+        escaped = False
+        for index, character in enumerate(body):
+            if comment:
+                continue
+            if quote == "'":
+                if character == "'":
+                    quote = None
+                continue
+            if escaped:
+                escaped = False
+                continue
+            if character == "\\":
+                escaped = True
+                continue
+            if quote is not None:
+                if character == quote:
+                    quote = None
+                continue
+            if character in {'"', "'", "`"}:
+                quote = character
+            elif character == "#" and (index == 0 or body[index - 1].isspace()):
+                comment = True
+
+        backslashes = 0
+        for character in reversed(body):
+            if character != "\\":
+                break
+            backslashes += 1
+        continuation = (
+            bool(line_ending)
+            and backslashes % 2 == 1
+        )
+        # Quoted literals and comments must not be reinterpreted as assignments.
+        if quote is not None or comment:
+            continuation = False
+        if continuation:
+            result.pop()
+            logical_line.pop()
+            escaped = False
+        elif line_ending:
+            result.extend(line_ending)
+            line_origins.append(physical_line + 1)
+            heredocs.extend(shell_heredoc_delimiters("".join(logical_line)))
+            logical_line = []
+            comment = False
+            escaped = False
+        physical_line += 1
+    if not text:
+        line_origins = [1]
+    return "".join(result), line_origins
 
 
 def line_is_comment(path: Path, line: str) -> bool:
@@ -1720,6 +1896,197 @@ def decode_yaml_key(raw: str) -> str:
     )
 
 
+def decode_javascript_string_contents(raw: str, quote: str) -> str | None:
+    """Decode only JavaScript string escapes; never execute source text."""
+
+    result: list[str] = []
+    index = 0
+    escapes = {
+        "0": "\0",
+        "b": "\b",
+        "f": "\f",
+        "n": "\n",
+        "r": "\r",
+        "t": "\t",
+        "v": "\v",
+        "\\": "\\",
+        "'": "'",
+        '"': '"',
+        "`": "`",
+    }
+    while index < len(raw):
+        character = raw[index]
+        if character != "\\":
+            if quote != "`" and character in "\r\n":
+                return None
+            result.append(character)
+            index += 1
+            continue
+        index += 1
+        if index >= len(raw):
+            return None
+        escaped = raw[index]
+        if escaped == "\r":
+            index += 1
+            if index < len(raw) and raw[index] == "\n":
+                index += 1
+            continue
+        if escaped == "\n":
+            index += 1
+            continue
+        if escaped in escapes:
+            result.append(escapes[escaped])
+            index += 1
+            continue
+        if escaped == "x" and index + 2 < len(raw):
+            digits = raw[index + 1:index + 3]
+            if re.fullmatch(r"[0-9A-Fa-f]{2}", digits) is None:
+                return None
+            result.append(chr(int(digits, 16)))
+            index += 3
+            continue
+        if escaped == "u":
+            if index + 1 < len(raw) and raw[index + 1] == "{":
+                end = raw.find("}", index + 2)
+                if end < 0:
+                    return None
+                digits = raw[index + 2:end]
+                if re.fullmatch(r"[0-9A-Fa-f]{1,6}", digits) is None:
+                    return None
+                codepoint = int(digits, 16)
+                if codepoint > 0x10FFFF:
+                    return None
+                result.append(chr(codepoint))
+                index = end + 1
+                continue
+            digits = raw[index + 1:index + 5]
+            if len(digits) != 4 or re.fullmatch(r"[0-9A-Fa-f]{4}", digits) is None:
+                return None
+            result.append(chr(int(digits, 16)))
+            index += 5
+            continue
+        return None
+    return "".join(result)
+
+
+def javascript_literal_end(expression: str) -> int | None:
+    if not expression or expression[0] not in {"'", '"', "`"}:
+        return None
+    quote = expression[0]
+    escaped = False
+    for index, character in enumerate(expression[1:], 1):
+        if escaped:
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif character == quote:
+            return index
+        elif quote != "`" and character in "\r\n":
+            return None
+    return None
+
+
+def split_javascript_concatenation(expression: str) -> list[str] | None:
+    if len(expression) > 512:
+        return None
+    parts: list[str] = []
+    start = 0
+    quote: str | None = None
+    escaped = False
+    for index, character in enumerate(expression):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+        elif character == "+":
+            parts.append(expression[start:index].strip())
+            start = index + 1
+    if quote is not None:
+        return None
+    parts.append(expression[start:].strip())
+    return parts if len(parts) <= MAX_JAVASCRIPT_CONSTANT_PARTS else None
+
+
+def resolve_javascript_constant(
+    expression: str,
+    aliases: dict[str, str],
+    depth: int = 0,
+) -> str | None:
+    if depth > MAX_JAVASCRIPT_CONSTANT_DEPTH or len(expression) > 512:
+        return None
+    expression = expression.strip()
+    if not expression:
+        return None
+    parts = split_javascript_concatenation(expression)
+    if parts is None:
+        return None
+    if len(parts) > 1:
+        resolved: list[str] = []
+        for part in parts:
+            value = resolve_javascript_constant(part, aliases, depth + 1)
+            if value is None:
+                return None
+            resolved.append(value)
+        return "".join(resolved)
+    expression = parts[0]
+    end = javascript_literal_end(expression)
+    if end == len(expression) - 1:
+        if expression[0] == "`":
+            body = expression[1:-1]
+            substitutions = re.findall(r"(?<!\\)\$\{([^{}]*)\}", body)
+            if "${" in body and len(substitutions) != body.count("${"):
+                return None
+            for substitution in substitutions:
+                value = resolve_javascript_constant(substitution, aliases, depth + 1)
+                if value is None:
+                    return None
+                body = body.replace("${" + substitution + "}", value, 1)
+            return decode_javascript_string_contents(body, "`")
+        return decode_javascript_string_contents(
+            expression[1:-1], expression[0]
+        )
+    match = re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", expression)
+    return aliases.get(match.group()) if match is not None else None
+
+
+def javascript_constant_aliases(path: Path, text: str) -> dict[str, str]:
+    sanitized = strip_block_comments(path, text)
+    aliases: dict[str, str] = {}
+    for line in sanitized.splitlines():
+        match = JAVASCRIPT_CONST_DECLARATION.search(line)
+        if match is None:
+            continue
+        expression = line[match.end():].split(";", 1)[0].strip()
+        expression = re.sub(r"\s+as\s+const\s*$", "", expression)
+        value = resolve_javascript_constant(expression, aliases)
+        if value is not None:
+            aliases[match.group("name")] = value
+    return aliases
+
+
+def normalize_javascript_computed_keys(path: Path, text: str) -> str:
+    if path.suffix.lower() not in JAVASCRIPT_SOURCE_SUFFIXES:
+        return text
+    sanitized = strip_block_comments(path, text)
+    aliases = javascript_constant_aliases(path, sanitized)
+
+    def replace(match: re.Match[str]) -> str:
+        value = resolve_javascript_constant(match.group("expression"), aliases)
+        canonical = value.upper() if value is not None else None
+        if canonical not in ASSIGNMENT_NAMES:
+            return match.group()
+        return f'{match.group("prefix")}["{canonical}"]'
+
+    normalized = JAVASCRIPT_COMPUTED_KEY.sub(replace, sanitized)
+    return normalized if normalized != text else text
+
+
 def normalize_yaml_sensitive_keys(path: Path, text: str) -> str:
     if path.suffix.lower() not in {".yml", ".yaml"}:
         return text
@@ -1795,7 +2162,22 @@ def normalize_source_sensitive_identifiers(path: Path, text: str) -> str:
     return normalized if changed else text
 
 
-def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
+def scan_text(
+    path: Path, text: str, _normalize_shell: bool = True
+) -> list[tuple[str, int, str]]:
+    if _normalize_shell and path.suffix.lower() == ".sh":
+        normalized_shell, line_origins = normalize_shell_line_continuations(text)
+        if normalized_shell != text:
+            findings = scan_text(path, normalized_shell, False)
+            remapped = [
+                (
+                    reported_path,
+                    line_origins[line - 1] if 0 < line <= len(line_origins) else line,
+                    detector,
+                )
+                for reported_path, line, detector in findings
+            ]
+            return list(dict.fromkeys(remapped))
     if path.suffix.lower() == ".java":
         text = normalize_java_lexical_escapes(text)
     findings: list[tuple[str, int, str]] = []
@@ -1892,6 +2274,9 @@ def scan_text(path: Path, text: str) -> list[tuple[str, int, str]]:
     normalized_brackets = normalize_bracketed_sensitive_keys(path, text)
     if normalized_brackets != text:
         findings.extend(scan_text(path, normalized_brackets))
+    normalized_computed = normalize_javascript_computed_keys(path, text)
+    if normalized_computed != text:
+        findings.extend(scan_text(path, normalized_computed))
     normalized_source = normalize_source_sensitive_identifiers(path, text)
     if normalized_source != text:
         findings.extend(scan_text(path, normalized_source))
