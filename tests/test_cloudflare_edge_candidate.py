@@ -460,9 +460,9 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
                 self.assertIn(marker, MODULE.validate(candidate))
 
     def test_validator_rejects_secret_exposure_before_artifact_verification(self) -> None:
-        for secret_name in ("CLOUDFLARE_API_TOKEN", "ACCESS_AUD"):
+        for binding_name in ("CLOUDFLARE_API_TOKEN", "ACCESS_AUD"):
             with (
-                self.subTest(secret_name=secret_name),
+                self.subTest(binding_name=binding_name),
                 tempfile.TemporaryDirectory() as temporary,
             ):
                 candidate = pathlib.Path(temporary)
@@ -475,7 +475,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
                 workflow_path.write_text(
                     workflow.replace(
                         "          python trusted/tools/verify_wrangler_artifact.py \\",
-                        f"          echo ${secret_name}\n"
+                        f"          # premature protected binding marker: {binding_name}\n"
                         "          python trusted/tools/verify_wrangler_artifact.py \\",
                         1,
                     ),
