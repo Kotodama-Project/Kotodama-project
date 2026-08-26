@@ -186,6 +186,71 @@ test("Access-verified review readback can only come through Context Gateway", as
   assert.equal(JSON.stringify(body).includes("synthetic-client-secret"), false);
 });
 
+test("valid and absent optional speaker references survive projection allowlisting", async () => {
+  __testing.reset();
+  const { jwk, token } = await signingFixture();
+  const expected = projection({
+    speaker_highlights: [
+      { summary: "A highlight with a valid speaker reference.", speaker_ref: "speaker-highlight-1" },
+      { summary: "A highlight without a speaker reference." },
+    ],
+    todos: [
+      { summary: "A todo with a valid owner reference.", owner: "speaker-owner-1", due: "2026-08-10" },
+      { summary: "A todo without an owner reference.", due: "2026-08-11" },
+    ],
+  });
+  __testing.setFetch(async (request) => {
+    const value = request instanceof Request ? request : new Request(request);
+    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
+    return Response.json(expected);
+  });
+
+  const response = await worker.fetch(
+    withJwt("https://preview.example.test/voice/review", await token()),
+    env(),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), expected);
+});
+
+test("explicit speaker_ref and owner values must match safe reference syntax", async () => {
+  const fields = [
+    ["speaker_highlights", "speaker_ref"],
+    ["decisions", "speaker_ref"],
+    ["todos", "owner"],
+    ["open_questions", "owner"],
+  ];
+  const invalidValues = ["", " ", "\t", "speaker-", "speaker-A", "speaker-a/b", null, 42, {}];
+
+  for (const [section, field] of fields) {
+    for (const invalid of invalidValues) {
+      __testing.reset();
+      const { jwk, token } = await signingFixture();
+      let gatewayCalls = 0;
+      __testing.setFetch(async (request) => {
+        const value = request instanceof Request ? request : new Request(request);
+        if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
+        gatewayCalls += 1;
+        return Response.json(projection({
+          [section]: [{ summary: "Invalid optional reference.", [field]: invalid }],
+        }));
+      });
+
+      const response = await worker.fetch(
+        withJwt("https://preview.example.test/voice/review", await token()),
+        env(),
+      );
+      assert.equal(response.status, 502, `${section}.${field}=${JSON.stringify(invalid)}`);
+      assert.equal(
+        (await response.json()).error,
+        "context_gateway_projection_denied",
+        `${section}.${field}=${JSON.stringify(invalid)}`,
+      );
+      assert.equal(gatewayCalls, 1, `${section}.${field}=${JSON.stringify(invalid)}`);
+    }
+  }
+});
+
 test("missing, forged, and expired Access JWTs deny direct origin access", async () => {
   __testing.reset();
   const { jwk, token } = await signingFixture();

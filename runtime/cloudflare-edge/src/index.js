@@ -275,8 +275,8 @@ function projectItems(value) {
       }
     }
     if (
-      (projected.speaker_ref && !SAFE_SPEAKER_REF.test(projected.speaker_ref))
-      || (projected.owner && !SAFE_SPEAKER_REF.test(projected.owner))
+      (projected.speaker_ref !== undefined && !SAFE_SPEAKER_REF.test(projected.speaker_ref))
+      || (projected.owner !== undefined && !SAFE_SPEAKER_REF.test(projected.owner))
     ) return null;
     result.push(projected);
   }
