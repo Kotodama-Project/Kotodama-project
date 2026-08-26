@@ -104,10 +104,15 @@ candidate. Values must never be committed.
 Wrangler is fixed to `4.120.0`. The upload job downloads the exact npm tarball,
 then trusted code verifies its npm SHA-512 integrity, legacy npm shasum, and the
 recorded SLSA subject SHA-512 before installing it with lifecycle scripts
-disabled. Only that verified package path is invoked with upload credentials.
-The binding lives in
-[`wrangler-integrity.json`](wrangler-integrity.json); it does not independently
-verify the SLSA attestation signature or the full dependency closure.
+disabled. The trusted, hash-bound
+[`wrangler-runner-package.json`](wrangler-runner-package.json) and
+[`wrangler-runner-package-lock.json`](wrangler-runner-package-lock.json) are
+copied beside that verified tarball and installed with `npm ci`; the validator
+checks the lock entry and registry dependency closure before any upload secret
+is exposed. Only that verified package path is invoked with upload credentials.
+The top-level binding lives in [`wrangler-integrity.json`](wrangler-integrity.json);
+the SLSA attestation signature is not independently verified here. These local
+checks do not prove provider execution or deployment.
 Observability and logs are disabled by default until provider retention and
 content-free readback have a separate receipt.
 

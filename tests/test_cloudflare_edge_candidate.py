@@ -57,7 +57,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
             'node-version: "24.14.0"',
             "curl --fail --location --proto '=https' --tlsv1.2",
-            "npm install --ignore-scripts",
+            'npm ci --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/wrangler-verified"',
             'node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js"',
         ):
             self.assertIn(marker, workflow)
@@ -65,6 +65,184 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             workflow.index("python trusted/tools/verify_wrangler_artifact.py"),
             workflow.index('node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js"'),
         )
+
+    def test_dedicated_wrangler_runner_manifest_and_lock_are_closed(self) -> None:
+        manifest = json.loads(
+            MODULE.WRANGLER_RUNNER_PACKAGE.read_text(encoding="utf-8")
+        )
+        lock = json.loads(
+            MODULE.WRANGLER_RUNNER_LOCK.read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            "file:wrangler-4.120.0.tgz",
+            manifest["dependencies"]["wrangler"],
+        )
+        self.assertEqual(3, lock["lockfileVersion"])
+        self.assertEqual(manifest["dependencies"], lock["packages"][""]["dependencies"])
+        self.assertEqual(
+            json.loads(MODULE.WRANGLER_INTEGRITY.read_text(encoding="utf-8"))["npm_integrity"],
+            lock["packages"]["node_modules/wrangler"]["integrity"],
+        )
+        for package_path, package in lock["packages"].items():
+            if package_path == "" or package.get("link"):
+                continue
+            resolved = package.get("resolved")
+            if isinstance(resolved, str) and resolved.startswith("https://registry.npmjs.org/"):
+                self.assertTrue(package.get("integrity"), package_path)
+
+    def test_upload_uses_trusted_runner_manifest_lock_and_npm_ci(self) -> None:
+        workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
+        for marker in (
+            "trusted/runtime/cloudflare-edge/wrangler-runner-package.json",
+            "trusted/runtime/cloudflare-edge/wrangler-runner-package-lock.json",
+            'cp trusted/runtime/cloudflare-edge/wrangler-runner-package.json "$RUNNER_TEMP/wrangler-verified/package.json"',
+            'cp trusted/runtime/cloudflare-edge/wrangler-runner-package-lock.json "$RUNNER_TEMP/wrangler-verified/package-lock.json"',
+            'cp "$wrangler_tarball" "$RUNNER_TEMP/wrangler-verified/wrangler-4.120.0.tgz"',
+            'npm ci --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/wrangler-verified"',
+        ):
+            self.assertIn(marker, workflow)
+        self.assertNotIn("npm install", workflow)
+        self.assertNotIn("--no-package-lock", workflow)
+        verification = workflow.index("python trusted/tools/verify_wrangler_artifact.py")
+        manifest_copy = workflow.index(
+            'cp trusted/runtime/cloudflare-edge/wrangler-runner-package.json'
+        )
+        install = workflow.index("npm ci --ignore-scripts")
+        secret = workflow.index("CLOUDFLARE_API_TOKEN")
+        self.assertLess(verification, manifest_copy)
+        self.assertLess(manifest_copy, install)
+        self.assertLess(install, secret)
+
+    def test_validator_refuses_runner_manifest_or_lock_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            manifest_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package.json"
+            lock_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package-lock.json"
+            for path, marker in (
+                (manifest_path, "Wrangler runner manifest digest does not match the reviewed artifact"),
+                (lock_path, "Wrangler runner lockfile digest does not match the reviewed artifact"),
+            ):
+                with self.subTest(path=path.name):
+                    path.write_bytes(path.read_bytes() + b"\n")
+                    self.assertIn(marker, MODULE.validate(candidate))
+
+    def test_validator_refuses_runner_lock_closure_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            lock_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package-lock.json"
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            lock["packages"]["node_modules/wrangler"]["integrity"] = "sha512-mismatch"
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            errors = MODULE.validate(candidate)
+            self.assertIn(
+                "Wrangler runner lockfile digest does not match the reviewed artifact",
+                errors,
+            )
+            self.assertIn(
+                "Wrangler runner lock node_modules/wrangler integrity must match wrangler-integrity.json",
+                errors,
+            )
+
+    def test_validator_refuses_registry_dependency_without_resolved_or_integrity(self) -> None:
+        for field, marker in (
+            ("resolved", "Wrangler runner lock package node_modules/esbuild is missing resolved"),
+            ("integrity", "Wrangler runner lock package node_modules/esbuild is missing integrity"),
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                candidate = pathlib.Path(temporary)
+                shutil.copytree(ROOT / "runtime", candidate / "runtime")
+                shutil.copytree(ROOT / ".github", candidate / ".github")
+                lock_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package-lock.json"
+                lock = json.loads(lock_path.read_text(encoding="utf-8"))
+                del lock["packages"]["node_modules/esbuild"][field]
+                lock_path.write_text(json.dumps(lock), encoding="utf-8")
+                self.assertIn(marker, MODULE.validate(candidate))
+
+    def test_validator_rejects_non_registry_transitive_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            lock_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package-lock.json"
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            lock["packages"]["node_modules/esbuild"]["resolved"] = (
+                "https://untrusted.example.test/esbuild.tgz"
+            )
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            self.assertIn(
+                "Wrangler runner lock package node_modules/esbuild must resolve from the npm registry",
+                MODULE.validate(candidate),
+            )
+
+    def test_validator_allows_link_exception_without_registry_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            lock_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package-lock.json"
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            lock["packages"]["node_modules/local-link"] = {"link": True}
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            errors = MODULE.validate(candidate)
+            self.assertNotIn(
+                "Wrangler runner lock package node_modules/local-link is missing resolved",
+                errors,
+            )
+            self.assertNotIn(
+                "Wrangler runner lock package node_modules/local-link is missing integrity",
+                errors,
+            )
+
+    def test_validator_rejects_npm_install_and_no_package_lock(self) -> None:
+        for replacement, marker in (
+            (
+                'npm install --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/wrangler-verified"',
+                "workflow contains forbidden automatic/production action: npm install",
+            ),
+            (
+                'npm ci --ignore-scripts --no-audit --no-fund --no-package-lock --prefix "$RUNNER_TEMP/wrangler-verified"',
+                "workflow contains forbidden automatic/production action: --no-package-lock",
+            ),
+        ):
+            with self.subTest(replacement=replacement), tempfile.TemporaryDirectory() as temporary:
+                candidate = pathlib.Path(temporary)
+                shutil.copytree(ROOT / "runtime", candidate / "runtime")
+                shutil.copytree(ROOT / ".github", candidate / ".github")
+                workflow_path = candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
+                workflow = workflow_path.read_text(encoding="utf-8")
+                workflow_path.write_text(
+                    workflow.replace(
+                        'npm ci --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/wrangler-verified"',
+                        replacement,
+                    ),
+                    encoding="utf-8",
+                )
+                self.assertIn(marker, MODULE.validate(candidate))
+
+    def test_validator_rejects_secret_exposure_before_artifact_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            workflow_path = candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
+            workflow = workflow_path.read_text(encoding="utf-8")
+            workflow_path.write_text(
+                workflow.replace(
+                    "          python trusted/tools/verify_wrangler_artifact.py \\",
+                    "          echo $CLOUDFLARE_API_TOKEN\n"
+                    "          python trusted/tools/verify_wrangler_artifact.py \\",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            self.assertIn(
+                "workflow must verify Wrangler before upload secrets or execution",
+                MODULE.validate(candidate),
+            )
 
     def test_voice_review_is_access_verified_and_context_gateway_only(self) -> None:
         worker = MODULE.WORKER.read_text(encoding="utf-8")

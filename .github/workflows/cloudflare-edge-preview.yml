@@ -113,9 +113,11 @@ jobs:
             --metadata trusted/runtime/cloudflare-edge/wrangler-integrity.json \
             --artifact "$wrangler_tarball"
           mkdir -p "$wrangler_prefix"
+          cp trusted/runtime/cloudflare-edge/wrangler-runner-package.json "$RUNNER_TEMP/wrangler-verified/package.json"
+          cp trusted/runtime/cloudflare-edge/wrangler-runner-package-lock.json "$RUNNER_TEMP/wrangler-verified/package-lock.json"
+          cp "$wrangler_tarball" "$RUNNER_TEMP/wrangler-verified/wrangler-4.120.0.tgz"
           cd "$RUNNER_TEMP"
-          npm install --ignore-scripts --no-audit --no-fund --no-package-lock --no-save \
-            --prefix "$wrangler_prefix" "$wrangler_tarball"
+          npm ci --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/wrangler-verified"
           test "$(node "$wrangler_prefix/node_modules/wrangler/bin/wrangler.js" --version)" = "4.120.0"
 
       - name: Upload preview version without production promotion
