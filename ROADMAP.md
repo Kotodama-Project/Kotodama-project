@@ -27,6 +27,26 @@
 - [x] Standard-library-only one-command review-chain smoke with temporary cleanup and closed report
 - [x] Clone-to-result five-minute tour with cross-shell commands, report interpretation, and bounded next choices
 - [x] README Company OS reader/story map from Vision through current reality to safe first use
+- [x] [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) with README/STATUS/ROADMAP projections
+
+## Owner-confirmed Company AGI direction
+
+The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) is the canonical product-direction source for Company AGI, bounded autonomy,
+Voice Requirements Agent, per-Invocation authority, and one Kotodama product /
+Company SSOT. Correction themes: BecomeOne is the migration donor/control plane;
+OKF v0.2 is central for governed curated knowledge, not sole Company truth; and
+Voice raw/derived evidence plus adaptive GrillU remain explicit. Luna-first
+routing, a provider-neutral archive interface with a private ZFS v1 target still
+pending exact safe dataset binding, reversible review/revert delegation, and the
+bounded Goal Completion Loop remain product requirements. This
+documentation milestone does not implement the runtime: Voice-to-Requirement,
+Agent Swarm, Context/encoder, provider, storage, and Promotion remain separate
+work. The runtime remains unimplemented and Public Beta remains
+`NO_GO_UNPUBLISHED`. The public bytes are a redacted owner-directed direction
+candidate, not signed or independently verifiable governance approval,
+rightsholder proof, canonical adoption, launch decision, or Final Human GO, and
+no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25's
+contributor/provenance/NOTICE/accountable-rightsholder gaps remain open.
 
 ## Current public documentation revision
 

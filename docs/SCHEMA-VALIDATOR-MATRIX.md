@@ -303,6 +303,22 @@ The smoke asserts pending request state, structural item response matching, and
 false and `NO_GO_UNPUBLISHED` remains in force; this does not create reviewer
 identity, Human approval, runtime, Promotion, Current Truth, or Public Beta GO.
 
+## Session Conversation/Event Ledger Candidate 2
+
+| Schema | Validator / projector | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [session-conversation-event-ledger.schema.json](../schemas/session-conversation-event-ledger.schema.json)、[session-knowledge-projection.schema.json](../schemas/session-knowledge-projection.schema.json) | [`validate_session_conversation_ledger.py`](../tools/validate_session_conversation_ledger.py) | [`test_session_conversation_ledger.py`](../tests/test_session_conversation_ledger.py) | [Session Conversation/Event Ledger](SESSION-CONVERSATION-LEDGER.md)。append-only event、unassigned inboxからの後付けbinding、embedded provider ID/tokenも拒否するpublic-safe refs、actor-kind/authority整合、`UNVERIFIED_PUBLIC_CLAIM`のHuman-shaped identity、非system consent、discord_voiceのspeaker/source/evidence parityとreceipt-bound `voice_reply`、hash chain、idempotency、causal/lifecycle target、raw/derived artifact lineageとstorage-class parity、Session/Task/Invocation/grant provenance、tiered provider-neutral Archive Target、invalidation、候補とHuman evidenceの分離、projection digest/head再構築だけを標準ライブラリで検査する。Schemaとvalidatorはderived parent、archive/delete tuple、integrity marker、offline recovery、model provenanceの同じ負例を拒否する。`LEDGER_VALID` は構造上の `LOCAL_PASS` のみで、person authentication、promotion eligibility、device/provider/public/Human GO、Current Truth、live connector、compaction summaryのsource authorityを意味しない。 |
+
+```powershell
+python tools\validate_session_conversation_ledger.py validate path\to\ledger.jsonl
+python tools\validate_session_conversation_ledger.py project path\to\ledger.jsonl ref/session/example
+```
+
+```bash
+python3 tools/validate_session_conversation_ledger.py validate path/to/ledger.jsonl
+python3 tools/validate_session_conversation_ledger.py project path/to/ledger.jsonl ref/session/example
+```
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
