@@ -390,6 +390,85 @@ async function boundedBodyBytes(request, limit) {
   return bytes;
 }
 
+async function cancelReadableBody(body, reason) {
+  if (!body) return;
+  let reader;
+  try {
+    reader = body.getReader();
+    await reader.cancel(reason);
+  } catch {
+    // The response is already denied; cancellation is best effort.
+  } finally {
+    try {
+      reader?.releaseLock();
+    } catch {
+      // The response is already denied; releasing is best effort.
+    }
+  }
+}
+
+async function boundedGatewayBody(response, limit) {
+  const declared = response.headers.get("content-length");
+  if (declared !== null) {
+    const declaredBytes = Number(declared);
+    if (
+      !/^[0-9]+$/.test(declared)
+      || !Number.isSafeInteger(declaredBytes)
+      || declaredBytes > limit
+    ) {
+      await cancelReadableBody(response.body, "gateway_body_length_denied");
+      return null;
+    }
+  }
+
+  if (!response.body) return new Uint8Array();
+  let reader;
+  try {
+    reader = response.body.getReader();
+  } catch {
+    return null;
+  }
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value instanceof Uint8Array
+        ? value
+        : value instanceof ArrayBuffer
+          ? new Uint8Array(value)
+          : null;
+      if (!chunk || total + chunk.byteLength > limit) {
+        try {
+          await reader.cancel("gateway_body_limit_exceeded");
+        } catch {
+          // The response is already denied; cancellation is best effort.
+        }
+        return null;
+      }
+      total += chunk.byteLength;
+      chunks.push(chunk);
+    }
+  } catch {
+    try {
+      await reader.cancel("gateway_body_read_failed");
+    } catch {
+      // The response is already denied; cancellation is best effort.
+    }
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
 async function boundedReviewBody(request) {
   const contentType = request.headers.get("content-type") ?? "";
   if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(contentType.trim())) return null;
@@ -457,8 +536,8 @@ async function gatewayReadback(request, config, pathname, identity) {
     return deny("context_gateway_unavailable", 502);
   }
   if (!response.ok) return deny("context_gateway_refused", 502);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength > MAX_GATEWAY_BODY_BYTES) return deny("context_gateway_body_denied", 502);
+  const bytes = await boundedGatewayBody(response, MAX_GATEWAY_BODY_BYTES);
+  if (!bytes) return deny("context_gateway_body_denied", 502);
   let value;
   try {
     value = JSON.parse(new TextDecoder().decode(bytes));
