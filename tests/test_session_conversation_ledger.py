@@ -431,7 +431,7 @@ class SessionConversationLedgerTests(unittest.TestCase):
         records[-1]["context"]["context_pack_refs"] = [target_context_ref]
         records = _rechain(records)
         target_session_ref = _ref("session", "demo")
-        target_projection_ref = "ref/projection/session-demo-3"
+        target_projection_ref = "ref/projection/session/demo/sequence/3"
 
         foreign_update = _event(
             "foreign-source-update",
@@ -484,6 +484,69 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertEqual("ref/task/demo", projection["session_governance"]["task_ssot_ref"])
         self.assertEqual("AVAILABLE", projection["knowledge_scope"]["acl_state"])
         self.assertEqual("FAIL_CLOSED", projection["knowledge_scope"]["projection_access"])
+
+    def test_projection_refs_preserve_slash_identity_and_isolate_foreign_invalidations(self) -> None:
+        schema = json.loads(PROJECTION_SCHEMA.read_text(encoding="utf-8"))
+        session_a = _ref("session", "a/b")
+        session_b = _ref("session", "a-b")
+
+        def records_for(session_ref: str) -> list[dict]:
+            records = copy.deepcopy(_valid_records())
+            for record in records:
+                if record["session"]["state"] == "BOUND":
+                    record["session"]["session_ref"] = session_ref
+                    if record["event"]["kind"] == "session_binding":
+                        record["event"]["binding"]["destination_session_ref"] = session_ref
+            return _rechain(records)
+
+        records_a = records_for(session_a)
+        records_b = records_for(session_b)
+        projection_a = ledger.project_session(records_a, session_a)
+        projection_b = ledger.project_session(records_b, session_b)
+        self.assertNotEqual(projection_a["projection_id"], projection_b["projection_id"])
+        self.assertEqual(projection_a, ledger.project_session(records_a, session_a))
+        self.assertEqual([], list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(projection_a)))
+        self.assertEqual([], list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(projection_b)))
+
+        foreign_a_invalidation = _event(
+            "foreign-a-projection-invalidation",
+            sequence=4,
+            previous_hash=records_a[-1]["event_hash"],
+            event_kind="source_update",
+            session_state="BOUND",
+            session_ref=session_b,
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[projection_a["projection_id"]],
+            source_type="system",
+            actor_ref="ref/system/foreign-b",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign-b",
+        )
+        affected_a = ledger.project_session(_rechain(records_a + [foreign_a_invalidation]), session_a)
+        self.assertEqual("INVALIDATED", affected_a["status"])
+        self.assertEqual([projection_a["projection_id"]], affected_a["integrity"]["invalidation_refs"])
+        self.assertNotIn(foreign_a_invalidation["event_id"], affected_a["source_event_refs"])
+
+        foreign_b_invalidation = _event(
+            "foreign-b-projection-invalidation",
+            sequence=4,
+            previous_hash=records_b[-1]["event_hash"],
+            event_kind="source_update",
+            session_state="BOUND",
+            session_ref=session_a,
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[projection_a["projection_id"]],
+            source_type="system",
+            actor_ref="ref/system/foreign-a",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign-a",
+        )
+        unaffected_b = ledger.project_session(_rechain(records_b + [foreign_b_invalidation]), session_b)
+        self.assertEqual("REBUILDABLE", unaffected_b["status"])
+        self.assertEqual([], unaffected_b["integrity"]["invalidation_refs"])
+        self.assertNotIn(foreign_b_invalidation["event_id"], unaffected_b["source_event_refs"])
 
     def test_append_to_empty_ledger_seals_a_valid_genesis_event(self) -> None:
         event = _event("genesis")
@@ -780,6 +843,79 @@ class SessionConversationLedgerTests(unittest.TestCase):
             {"kind": "NONE", "source_event_ref": None, "action_ref": None},
             fail_closed_projection["next_safe_action"],
         )
+
+    def test_integrity_markers_override_projection_actions_with_acl_precedence(self) -> None:
+        complete_candidate = ledger.project_session(_valid_records(), _ref("session", "demo"))
+        self.assertEqual("REQUEST_HUMAN_CONFIRMATION", complete_candidate["next_safe_action"]["kind"])
+
+        candidate_gap = _valid_records()
+        gap_event = candidate_gap[-1]
+        gap_event["integrity"] = {
+            "marker": "GAP",
+            "marker_ref": _ref("integrity-marker", "candidate-gap"),
+        }
+        candidate_gap_projection = ledger.project_session(_rechain(candidate_gap), _ref("session", "demo"))
+        self.assertEqual("INCOMPLETE", candidate_gap_projection["status"])
+        self.assertEqual(
+            {
+                "kind": "REPAIR_GAP",
+                "source_event_ref": gap_event["event_id"],
+                "action_ref": gap_event["integrity"]["marker_ref"],
+            },
+            candidate_gap_projection["next_safe_action"],
+        )
+
+        invalidation_records = _valid_records()
+        corrupt = _event(
+            "corrupt-invalidation",
+            sequence=4,
+            previous_hash=invalidation_records[-1]["event_hash"],
+            event_kind="source_update",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[_ref("task", "demo")],
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+            integrity_marker="CORRUPT",
+        )
+        corrupt["integrity"]["marker_ref"] = _ref("integrity-marker", "corrupt-invalidation")
+        invalidation_records.append(corrupt)
+        corrupt_projection = ledger.project_session(_rechain(invalidation_records), _ref("session", "demo"))
+        self.assertEqual("REPAIR_GAP", corrupt_projection["next_safe_action"]["kind"])
+        self.assertEqual(corrupt["event_id"], corrupt_projection["next_safe_action"]["source_event_ref"])
+        self.assertEqual(corrupt["integrity"]["marker_ref"], corrupt_projection["next_safe_action"]["action_ref"])
+
+        acl_corrupt = copy.deepcopy(invalidation_records)
+        acl_corrupt[-1]["event"]["kind"] = "acl_loss"
+        acl_corrupt[-1]["event"]["invalidation_kind"] = "ACL_LOST"
+        acl_corrupt[-1]["public_safety"]["acl_state"] = "LOST"
+        acl_corrupt_projection = ledger.project_session(_rechain(acl_corrupt), _ref("session", "demo"))
+        self.assertEqual("FAIL_CLOSED", acl_corrupt_projection["knowledge_scope"]["projection_access"])
+        self.assertEqual("NONE", acl_corrupt_projection["next_safe_action"]["kind"])
+
+        ordinary_invalidation = _valid_records()
+        ordinary_event = _event(
+            "ordinary-invalidation",
+            sequence=4,
+            previous_hash=ordinary_invalidation[-1]["event_hash"],
+            event_kind="source_update",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[_ref("task", "demo")],
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        ordinary_invalidation.append(ordinary_event)
+        ordinary_projection = ledger.project_session(_rechain(ordinary_invalidation), _ref("session", "demo"))
+        self.assertEqual("REVIEW_INVALIDATION", ordinary_projection["next_safe_action"]["kind"])
 
     def test_invalidated_actions_do_not_project_as_open(self) -> None:
         records = _valid_records()
@@ -2261,6 +2397,36 @@ class SessionConversationLedgerTests(unittest.TestCase):
         wrong_extraction_report = ledger.validate_ledger(_rechain(wrong_extraction_kind))
         self.assertEqual("REFUSED", wrong_extraction_report["result"], wrong_extraction_report)
         self.assertIn("LLM_CANDIDATE_EXTRACTION_INVALID", wrong_extraction_report["reason_codes"])
+
+    def test_none_decision_status_keeps_all_decision_refs_null(self) -> None:
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_valid_records())["result"])
+        for field, value in (
+            ("candidate_ref", _ref("candidate", "none")),
+            ("human_evidence_ref", _ref("evidence", "none")),
+            ("human_decision_ref", _ref("decision", "none")),
+            ("human_actor_ref", _ref("person", "alice")),
+        ):
+            with self.subTest(field=field):
+                records = _valid_records()
+                records[2]["decision"]["status"] = "NONE"
+                records[2]["decision"][field] = value
+                report = ledger.validate_ledger(_rechain(records))
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertEqual(["NONE_DECISION_FIELDS_INVALID"], report["reason_codes"])
+
+        combined = _valid_records()
+        combined[2]["decision"].update(
+            {
+                "status": "NONE",
+                "candidate_ref": _ref("candidate", "none-combined"),
+                "human_evidence_ref": _ref("evidence", "none-combined"),
+                "human_decision_ref": _ref("decision", "none-combined"),
+                "human_actor_ref": _ref("person", "alice"),
+            }
+        )
+        combined_report = ledger.validate_ledger(_rechain(combined))
+        self.assertEqual("REFUSED", combined_report["result"], combined_report)
+        self.assertEqual(["NONE_DECISION_FIELDS_INVALID"], combined_report["reason_codes"])
 
     def test_knowledge_scope_must_be_stable_within_session_revision(self) -> None:
         stable = _valid_records()

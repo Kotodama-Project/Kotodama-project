@@ -701,7 +701,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         effective_session_revision_by_event[candidate_record["event_id"]] = effective_session_revision
         effective_governance_by_event[candidate_record["event_id"]] = effective_governance
         candidate_ref = candidate_record["decision"]["candidate_ref"]
-        if isinstance(candidate_ref, str):
+        if isinstance(candidate_ref, str) and candidate_record["decision"]["status"] != "NONE":
             candidate_scopes.setdefault(candidate_ref, set()).add(candidate_scope)
     for scopes in candidate_scopes.values():
         bound_scopes = {scope for scope in scopes if scope is not None}
@@ -933,7 +933,13 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                     reasons.append("CANDIDATE_LIFECYCLE_REGRESSION")
                 else:
                     candidate_states[candidate_state_key] = candidate_status
-        if decision["status"] in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"}:
+        if decision["status"] == "NONE":
+            if any(
+                decision.get(key) is not None
+                for key in ("candidate_ref", "human_evidence_ref", "human_decision_ref", "human_actor_ref")
+            ):
+                reasons.append("NONE_DECISION_FIELDS_INVALID")
+        elif decision["status"] in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"}:
             if decision["human_evidence_ref"] is None or decision["human_decision_ref"] is None:
                 reasons.append("CONFIRMED_DECISION_NEEDS_HUMAN_EVIDENCE")
             human_actor_ref = decision.get("human_actor_ref")
@@ -1079,8 +1085,7 @@ def _session_related_invalidation_refs(
     selected: dict[str, dict[str, Any]], session_ref: str
 ) -> set[str]:
     """Return exact projection/task/context refs owned by one selected session."""
-    session_key = session_ref.removeprefix("ref/session/").replace("/", "-")
-    related: set[str] = {f"ref/projection/{session_key}"}
+    related: set[str] = {_projection_scope_ref(session_ref)}
     for record in selected.values():
         session = record.get("session", {})
         if isinstance(session, dict) and session.get("state") == "BOUND" and session.get("session_ref") == session_ref:
@@ -1233,6 +1238,24 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
     invalidation_refs = list(dict.fromkeys(invalidation_refs))
     omissions = list(dict.fromkeys(omissions))
     markers = report.get("integrity_markers", [])
+    if set(markers) & {"GAP", "CORRUPT"}:
+        latest_repair_marker = next(
+            (
+                record
+                for record in reversed(ordered)
+                if record["integrity"]["marker"] in {"GAP", "CORRUPT"}
+                and record["integrity"].get("marker_ref") is not None
+            ),
+            None,
+        )
+        if latest_repair_marker is None:
+            next_action = {"kind": "NONE", "source_event_ref": None, "action_ref": None}
+        else:
+            next_action = {
+                "kind": "REPAIR_GAP",
+                "source_event_ref": latest_repair_marker["event_id"],
+                "action_ref": latest_repair_marker["integrity"]["marker_ref"],
+            }
     projection_arrays = {
         "source_event_refs": event_refs,
         "source_timeline": timeline,
@@ -1327,8 +1350,11 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
 
 
 def _projection_ref(session_ref: str, sequence: int) -> str:
-    safe = session_ref.removeprefix("ref/").replace("/", "-")
-    return f"ref/projection/{safe}-{_integer_value(sequence)}"
+    return f"{_projection_scope_ref(session_ref)}/sequence/{_integer_value(sequence)}"
+
+
+def _projection_scope_ref(session_ref: str) -> str:
+    return f"ref/projection/{session_ref.removeprefix('ref/')}"
 
 
 def validate_projection(projection: dict[str, Any], records: list[dict[str, Any]], session_ref: str) -> dict[str, Any]:
