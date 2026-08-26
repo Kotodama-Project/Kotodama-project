@@ -162,11 +162,6 @@ JAVASCRIPT_CONST_DECLARATION = re.compile(
     r"(?:\s*:\s*[^=;\r\n]+)?\s*=",
     re.MULTILINE,
 )
-JAVASCRIPT_COMPUTED_KEY = re.compile(
-    r"(?P<prefix>(?:[A-Za-z_$][A-Za-z0-9_$]*\.)*"
-    r"[A-Za-z_$][A-Za-z0-9_$]*)\[(?P<expression>[^\]]{1,512})\]",
-    re.DOTALL,
-)
 MAX_JAVASCRIPT_CONSTANT_DEPTH = 8
 MAX_JAVASCRIPT_CONSTANT_PARTS = 32
 BRACED_UNICODE_ESCAPE = re.compile(
@@ -2013,6 +2008,48 @@ def split_javascript_concatenation(expression: str) -> list[str] | None:
     return parts if len(parts) <= MAX_JAVASCRIPT_CONSTANT_PARTS else None
 
 
+def resolve_javascript_literal_tokens(
+    expression: str,
+    aliases: dict[str, str],
+    depth: int,
+) -> str | None:
+    """Concatenate literals in a small, whitelisted wrapper expression."""
+
+    allowed_identifiers = {
+        "String", "raw", "concat", "toString", "join", *aliases
+    }
+    values: list[str] = []
+    identifiers = 0
+    index = 0
+    while index < len(expression):
+        character = expression[index]
+        if character.isspace() or character in "()[],.+":
+            index += 1
+            continue
+        if character in {"'", '"', "`"}:
+            end = javascript_literal_end(expression[index:])
+            if end is None:
+                return None
+            literal = expression[index:index + end + 1]
+            value = resolve_javascript_constant(literal, aliases, depth + 1)
+            if value is None:
+                return None
+            values.append(value)
+            if len(values) > MAX_JAVASCRIPT_CONSTANT_PARTS:
+                return None
+            index += end + 1
+            continue
+        match = re.match(r"[A-Za-z_$][A-Za-z0-9_$]*", expression[index:])
+        if match is None or match.group() not in allowed_identifiers:
+            return None
+        identifiers += 1
+        if identifiers > MAX_JAVASCRIPT_CONSTANT_PARTS:
+            return None
+        index += match.end()
+    combined = "".join(values)
+    return combined if len(combined) <= 512 else None
+
+
 def resolve_javascript_constant(
     expression: str,
     aliases: dict[str, str],
@@ -2052,17 +2089,63 @@ def resolve_javascript_constant(
             expression[1:-1], expression[0]
         )
     match = re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*", expression)
-    return aliases.get(match.group()) if match is not None else None
+    if match is not None:
+        return aliases.get(match.group())
+    return resolve_javascript_literal_tokens(expression, aliases, depth)
+
+
+def javascript_constant_statement_end(text: str, start: int) -> int:
+    stack: list[str] = []
+    quote: str | None = None
+    escaped = False
+    index = start
+    while index < len(text) and index - start <= 1024:
+        character = text[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+        elif character in "([{":
+            stack.append(character)
+        elif character in ")]}":
+            if not stack:
+                return index
+            stack.pop()
+        elif not stack and character == ";":
+            return index
+        elif not stack and character in "\r\n":
+            previous = text[start:index].rstrip()
+            cursor = index + 1
+            while cursor < len(text) and text[cursor].isspace():
+                cursor += 1
+            next_character = text[cursor] if cursor < len(text) else ""
+            if not previous:
+                index += 1
+                continue
+            if previous.endswith(("=", "+", "(", "[", "{", ",")):
+                index += 1
+                continue
+            if next_character == "+":
+                index += 1
+                continue
+            return index
+        index += 1
+    return min(index, len(text))
 
 
 def javascript_constant_aliases(path: Path, text: str) -> dict[str, str]:
     sanitized = strip_block_comments(path, text)
     aliases: dict[str, str] = {}
-    for line in sanitized.splitlines():
-        match = JAVASCRIPT_CONST_DECLARATION.search(line)
-        if match is None:
-            continue
-        expression = line[match.end():].split(";", 1)[0].strip()
+    for match in JAVASCRIPT_CONST_DECLARATION.finditer(sanitized):
+        end = javascript_constant_statement_end(sanitized, match.end())
+        expression = sanitized[match.end():end].strip()
         expression = re.sub(r"\s+as\s+const\s*$", "", expression)
         value = resolve_javascript_constant(expression, aliases)
         if value is not None:
@@ -2070,20 +2153,107 @@ def javascript_constant_aliases(path: Path, text: str) -> dict[str, str]:
     return aliases
 
 
+def javascript_matching_bracket(text: str, start: int) -> int | None:
+    if start >= len(text) or text[start] != "[":
+        return None
+    depth = 1
+    quote: str | None = None
+    escaped = False
+    for index in range(start + 1, min(len(text), start + 1025)):
+        character = text[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+        elif character == "[":
+            depth += 1
+        elif character == "]":
+            depth -= 1
+            if depth == 0:
+                return index
+    return None
+
+
+def javascript_computed_members(path: Path, text: str) -> list[tuple[int, int]]:
+    sanitized = strip_block_comments(path, text)
+    prefix = re.compile(
+        r"(?:[A-Za-z_$][A-Za-z0-9_$]*\.)*"
+        r"[A-Za-z_$][A-Za-z0-9_$]*\s*\["
+    )
+    members: list[tuple[int, int]] = []
+    quote: str | None = None
+    escaped = False
+    index = 0
+    while index < len(sanitized):
+        character = sanitized[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+            index += 1
+            continue
+        if character == "/":
+            regex_end = javascript_regex_end(sanitized, index)
+            if regex_end is not None:
+                index = regex_end
+                continue
+        if (
+            index == 0
+            or not (
+                sanitized[index - 1].isalnum()
+                or sanitized[index - 1] in "_$"
+            )
+        ):
+            match = prefix.match(sanitized, index)
+            if match is not None:
+                bracket = sanitized.find("[", index, match.end())
+                end = javascript_matching_bracket(sanitized, bracket)
+                if end is not None:
+                    members.append((bracket, end))
+                    index = end + 1
+                    continue
+        index += 1
+    return members
+
+
 def normalize_javascript_computed_keys(path: Path, text: str) -> str:
     if path.suffix.lower() not in JAVASCRIPT_SOURCE_SUFFIXES:
         return text
     sanitized = strip_block_comments(path, text)
     aliases = javascript_constant_aliases(path, sanitized)
-
-    def replace(match: re.Match[str]) -> str:
-        value = resolve_javascript_constant(match.group("expression"), aliases)
+    replacements: list[tuple[int, int, str]] = []
+    for start, end in javascript_computed_members(path, sanitized):
+        value = resolve_javascript_constant(sanitized[start + 1:end], aliases)
         canonical = value.upper() if value is not None else None
-        if canonical not in ASSIGNMENT_NAMES:
-            return match.group()
-        return f'{match.group("prefix")}["{canonical}"]'
-
-    normalized = JAVASCRIPT_COMPUTED_KEY.sub(replace, sanitized)
+        if canonical in ASSIGNMENT_NAMES:
+            replacements.append((
+                start + 1,
+                end,
+                f'"{canonical}"',
+            ))
+    if not replacements:
+        return text
+    pieces: list[str] = []
+    cursor = 0
+    for start, end, replacement in replacements:
+        pieces.append(sanitized[cursor:start])
+        pieces.append(replacement)
+        cursor = end
+    pieces.append(sanitized[cursor:])
+    normalized = "".join(pieces)
     return normalized if normalized != text else text
 
 
@@ -2125,6 +2295,8 @@ def normalize_toml_sensitive_keys(path: Path, text: str) -> str:
 def normalize_bracketed_sensitive_keys(path: Path, text: str) -> str:
     if path.suffix.lower() not in SOURCE_CODE_SUFFIXES:
         return text
+    if path.suffix.lower() in JAVASCRIPT_SOURCE_SUFFIXES:
+        return normalize_javascript_computed_keys(path, text)
     sanitized = strip_block_comments(path, text)
     changed = False
 
@@ -2274,9 +2446,6 @@ def scan_text(
     normalized_brackets = normalize_bracketed_sensitive_keys(path, text)
     if normalized_brackets != text:
         findings.extend(scan_text(path, normalized_brackets))
-    normalized_computed = normalize_javascript_computed_keys(path, text)
-    if normalized_computed != text:
-        findings.extend(scan_text(path, normalized_computed))
     normalized_source = normalize_source_sensitive_identifiers(path, text)
     if normalized_source != text:
         findings.extend(scan_text(path, normalized_source))

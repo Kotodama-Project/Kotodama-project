@@ -1254,6 +1254,86 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual([], SCANNER.scan_text(Path("config.js"), comments))
 
+    def test_successor_computed_keys_cover_join_and_multiline_const(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        joined = (
+            'process.env[["OPENAI_", "API_KEY"].join("")] = "'
+            + value
+            + '"\n'
+        )
+        nested_join = (
+            'process.env[(["OPENAI_", "API_KEY"]).join("")] = "'
+            + value
+            + '"\n'
+        )
+        method_wrappers = (
+            'process.env[("OPENAI_" + "API_KEY")] = "' + value + '"\n',
+            'process.env[(("OPENAI_" + "API_KEY"))] = "' + value + '"\n',
+            'process.env[String.raw("OPENAI_API_KEY")] = "' + value + '"\n',
+            'process.env[String.raw`OPENAI_API_KEY`] = "' + value + '"\n',
+            'process.env[("OPENAI_API_KEY").toString()] = "' + value + '"\n',
+            'process.env["OPENAI_".concat("API_KEY")] = "' + value + '"\n',
+        )
+        multiline_const = (
+            "const key =\n"
+            '  "OPENAI_" +\n'
+            '  "API_KEY";\n'
+            'process.env[key] = "'
+            + value
+            + '"\n'
+        )
+        for text, line in ((joined, 1), (nested_join, 1), (multiline_const, 4)):
+            with self.subTest(line=line):
+                findings = SCANNER.scan_text(Path("config.js"), text)
+                self.assertEqual(
+                    [("config.js", line, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+        for text in method_wrappers:
+            with self.subTest(wrapper=text.split("process.env[", 1)[1][:12]):
+                findings = SCANNER.scan_text(Path("config.js"), text)
+                self.assertEqual(
+                    [("config.js", 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+    def test_successor_computed_key_normalization_stays_executable_only(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        string_literal = (
+            'const source = \'process.env["OPENAI_" + "API_KEY"] = "'
+            + value
+            + '"\'\n'
+        )
+        template_literal = (
+            "const source = `process.env[\"OPENAI_\" + \"API_KEY\"] = \""
+            + value
+            + "\"`\n"
+        )
+        regex_literal = (
+            'const matcher = /process\\.env\\["OPENAI_" \\+ "API_KEY"\\] = "'
+            + value
+            + '"/;\n'
+        )
+        malformed = (
+            'process.env["OPENAI_" + suffix] = "' + value + '"\n'
+        )
+        unbounded = (
+            'process.env["' + ("A" * 513) + '"] = "' + value + '"\n'
+        )
+        for text in (
+            string_literal,
+            template_literal,
+            regex_literal,
+            malformed,
+            unbounded,
+        ):
+            with self.subTest(prefix=text[:18]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
+
     def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
