@@ -45,7 +45,18 @@ async function signingFixture(kid = "kid-test") {
     );
     return `${encoded}.${base64url(new Uint8Array(signature))}`;
   }
-  return { jwk, token };
+
+  async function signedTokenFromBytes(headerBytes, payloadBytes) {
+    const encoded = `${base64url(headerBytes)}.${base64url(payloadBytes)}`;
+    const signature = await crypto.subtle.sign(
+      "RSASSA-PKCS1-v1_5",
+      keyPair.privateKey,
+      new TextEncoder().encode(encoded),
+    );
+    return `${encoded}.${base64url(new Uint8Array(signature))}`;
+  }
+
+  return { jwk, token, signedTokenFromBytes };
 }
 
 function base64url(value) {
@@ -148,6 +159,36 @@ function streamingResponse(chunks, { contentLength, trapArrayBuffer = false } = 
   };
 }
 
+const MALFORMED_UTF8_CASES = [
+  { name: "bad continuation", bytes: Uint8Array.from([0xc3, 0x28]) },
+  { name: "truncated sequence", bytes: Uint8Array.from([0xe2, 0x82]) },
+];
+
+function malformedJsonBytes(value, key, replacement) {
+  const json = JSON.stringify(value);
+  const marker = `"${key}":"`;
+  const markerStart = json.indexOf(marker);
+  assert.notEqual(markerStart, -1, `missing JSON marker for ${key}`);
+  const valueStart = markerStart + marker.length;
+  const prefix = new TextEncoder().encode(json.slice(0, valueStart));
+  const suffix = new TextEncoder().encode(json.slice(valueStart + 1));
+  return Uint8Array.from([...prefix, ...replacement, ...suffix]);
+}
+
+function installFetch(fixture, { onJwks, onGateway } = {}) {
+  const calls = { jwks: 0, gateway: 0 };
+  __testing.setFetch(async (request) => {
+    const value = request instanceof Request ? request : new Request(request);
+    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) {
+      calls.jwks += 1;
+      return onJwks ? onJwks(value) : Response.json({ keys: [fixture.jwk] });
+    }
+    calls.gateway += 1;
+    return onGateway ? onGateway(value) : Response.json(projection());
+  });
+  return calls;
+}
+
 test("Access-verified review readback can only come through Context Gateway", async () => {
   __testing.reset();
   const { jwk, token } = await signingFixture();
@@ -184,6 +225,91 @@ test("Access-verified review readback can only come through Context Gateway", as
   assert.equal(body.raw_audio_transferred, false);
   assert.equal(body.private_transcript_transferred, false);
   assert.equal(JSON.stringify(body).includes("synthetic-client-secret"), false);
+});
+
+test("malformed UTF-8 in Access JWT and JWKS JSON is denied", async () => {
+  const malformed = MALFORMED_UTF8_CASES[0];
+  for (const field of ["header", "payload"]) {
+    __testing.reset();
+    const fixture = await signingFixture();
+    const now = Math.floor(Date.now() / 1000);
+    const header = { alg: "RS256", kid: "kid-test", typ: "a" };
+    const payload = {
+      iss: ISSUER, aud: AUDIENCE, sub: "reviewer-synthetic", email: "reviewer@example.test",
+      iat: now - 1, nbf: now - 1, exp: now + 300, note: "a",
+    };
+    const headerBytes = field === "header"
+      ? malformedJsonBytes(header, "typ", malformed.bytes)
+      : new TextEncoder().encode(JSON.stringify(header));
+    const payloadBytes = field === "payload"
+      ? malformedJsonBytes(payload, "note", malformed.bytes)
+      : new TextEncoder().encode(JSON.stringify(payload));
+    const jwt = await fixture.signedTokenFromBytes(headerBytes, payloadBytes);
+    const calls = installFetch(fixture);
+    const response = await worker.fetch(
+      withJwt("https://preview.example.test/healthz", jwt),
+      env(),
+    );
+    const label = `${field}/${malformed.name}`;
+    assert.equal(response.status, 401, label);
+    assert.equal(calls.jwks, 0, label);
+  }
+
+  __testing.reset();
+  const fixture = await signingFixture();
+  const body = malformedJsonBytes({ keys: [fixture.jwk], marker: "a" }, "marker", malformed.bytes);
+  const stream = streamingResponse([body], { contentLength: String(body.byteLength) });
+  const calls = installFetch(fixture, { onJwks: () => stream.response });
+  const response = await worker.fetch(
+    withJwt("https://preview.example.test/healthz", await fixture.token()),
+    env(),
+  );
+  assert.equal(response.status, 401, malformed.name);
+  assert.equal(calls.gateway, 0, malformed.name);
+});
+
+test("malformed UTF-8 in review JSON is denied before gateway forwarding", async () => {
+  for (const malformed of MALFORMED_UTF8_CASES) {
+    __testing.reset();
+    const fixture = await signingFixture();
+    const body = malformedJsonBytes(
+      { action: "edit", edited_overview: "Synthetic overview." },
+      "edited_overview",
+      malformed.bytes,
+    );
+    const calls = installFetch(fixture);
+    const response = await worker.fetch(
+      withJwt("https://preview.example.test/voice/review/doc-safe-1", await fixture.token(), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": String(body.byteLength),
+        },
+        body,
+      }),
+      env(),
+    );
+    assert.equal(response.status, 400, malformed.name);
+    assert.equal((await response.json()).error, "review_body_denied", malformed.name);
+    assert.equal(calls.gateway, 0, malformed.name);
+  }
+});
+
+test("malformed UTF-8 in Context Gateway JSON is denied as a body failure", async () => {
+  for (const malformed of MALFORMED_UTF8_CASES) {
+    __testing.reset();
+    const fixture = await signingFixture();
+    const body = malformedJsonBytes(projection(), "overview", malformed.bytes);
+    const stream = streamingResponse([body], { contentLength: String(body.byteLength) });
+    const calls = installFetch(fixture, { onGateway: () => stream.response });
+    const response = await worker.fetch(
+      withJwt("https://preview.example.test/voice/review", await fixture.token()),
+      env(),
+    );
+    assert.equal(response.status, 502, malformed.name);
+    assert.equal((await response.json()).error, "context_gateway_body_denied", malformed.name);
+    assert.equal(calls.gateway, 1, malformed.name);
+  }
 });
 
 test("valid and absent optional speaker references survive projection allowlisting", async () => {
@@ -516,14 +642,19 @@ test("GW-UNDERREPORT: a gateway body larger than its declared length is cancelle
   assert.equal(stream.cancelled, true);
 });
 
-test("GW-REGRESSION: a bounded gateway projection keeps its successful readback semantics", async () => {
+test("GW-REGRESSION: valid Unicode JSON keeps successful bounded readback semantics", async () => {
   __testing.reset();
   const { jwk, token } = await signingFixture();
-  const encoded = new TextEncoder().encode(JSON.stringify(projection()));
-  const stream = streamingResponse([encoded], {
-    contentLength: String(encoded.byteLength),
-    trapArrayBuffer: true,
-  });
+  const expected = projection({ overview: "日本語の概要 🌸" });
+  const encoded = new TextEncoder().encode(JSON.stringify(expected));
+  const emojiStart = encoded.indexOf(0xf0);
+  assert.notEqual(emojiStart, -1);
+  const withBom = Uint8Array.from([0xef, 0xbb, 0xbf, ...encoded]);
+  const splitAt = emojiStart + 4;
+  const stream = streamingResponse(
+    [withBom.slice(0, splitAt), withBom.slice(splitAt)],
+    { contentLength: String(withBom.byteLength), trapArrayBuffer: true },
+  );
   __testing.setFetch(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
@@ -535,7 +666,7 @@ test("GW-REGRESSION: a bounded gateway projection keeps its successful readback 
     env(),
   );
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), projection());
+  assert.deepEqual(await response.json(), expected);
   assert.equal(stream.cancelled, false);
 });
 

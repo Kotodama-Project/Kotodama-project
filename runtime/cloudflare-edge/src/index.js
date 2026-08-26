@@ -51,6 +51,16 @@ function utf8Bytes(value) {
   return new TextEncoder().encode(value).byteLength;
 }
 
+const FATAL_UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
+
+function decodeUtf8(bytes) {
+  try {
+    return FATAL_UTF8_DECODER.decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
 function normalizedHttpsOrigin(value) {
   if (typeof value !== "string" || value.length > 2048) return null;
   try {
@@ -127,9 +137,12 @@ function parseJwt(token) {
   const payloadBytes = decodeBase64url(parts[1]);
   const signature = decodeBase64url(parts[2]);
   if (!headerBytes || !payloadBytes || !signature) return null;
+  const headerText = decodeUtf8(headerBytes);
+  const payloadText = decodeUtf8(payloadBytes);
+  if (headerText === null || payloadText === null) return null;
   try {
-    const header = JSON.parse(new TextDecoder().decode(headerBytes));
-    const payload = JSON.parse(new TextDecoder().decode(payloadBytes));
+    const header = JSON.parse(headerText);
+    const payload = JSON.parse(payloadText);
     if (!header || typeof header !== "object" || !payload || typeof payload !== "object") {
       return null;
     }
@@ -169,9 +182,11 @@ async function refreshAccessJwks(config) {
   if (!response.ok) return null;
   const bytes = await boundedBodyBytes(response, MAX_ACCESS_JWKS_BYTES);
   if (!bytes) return null;
+  const text = decodeUtf8(bytes);
+  if (text === null) return null;
   let value;
   try {
-    value = JSON.parse(new TextDecoder().decode(bytes));
+    value = JSON.parse(text);
   } catch {
     return null;
   }
@@ -433,9 +448,11 @@ async function boundedReviewBody(request) {
   }
   const bytes = await boundedBodyBytes(request, MAX_REVIEW_BODY_BYTES);
   if (!bytes) return null;
+  const text = decodeUtf8(bytes);
+  if (text === null) return null;
   let value;
   try {
-    value = JSON.parse(new TextDecoder().decode(bytes));
+    value = JSON.parse(text);
   } catch {
     return null;
   }
@@ -493,9 +510,11 @@ async function gatewayReadback(request, config, pathname, identity) {
   if (!response.ok) return deny("context_gateway_refused", 502);
   const bytes = await boundedGatewayBody(response, MAX_GATEWAY_BODY_BYTES);
   if (!bytes) return deny("context_gateway_body_denied", 502);
+  const text = decodeUtf8(bytes);
+  if (text === null) return deny("context_gateway_body_denied", 502);
   let value;
   try {
-    value = JSON.parse(new TextDecoder().decode(bytes));
+    value = JSON.parse(text);
   } catch {
     return deny("context_gateway_body_denied", 502);
   }
