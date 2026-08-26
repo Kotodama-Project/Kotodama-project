@@ -968,6 +968,147 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertEqual("REFUSED", report["result"], report)
         self.assertIn("ARCHIVE_DELETION_STATE_INVALID", report["reason_codes"])
 
+    def test_candidate_ref_is_owned_by_one_bound_session(self) -> None:
+        records = _valid_records()
+        foreign_candidate = _event(
+            "foreign-candidate",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="decision_candidate",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            event_state="CANDIDATE",
+            decision_status="LLM_CANDIDATE",
+            candidate_ref=_ref("candidate", "intent-1"),
+            extraction_kind="LLM_CANDIDATE",
+            source_type="codex",
+            actor_ref="ref/agent/foreign",
+            authority_role="AGENT",
+            authority_ref="ref/authority/foreign",
+        )
+        records.append(foreign_candidate)
+
+        report = ledger.validate_ledger(_rechain(records))
+
+        self.assertEqual("REFUSED", report["result"], report)
+        self.assertIn("CANDIDATE_SESSION_OWNERSHIP_INVALID", report["reason_codes"])
+
+    def test_distinct_candidate_refs_remain_isolated_across_bound_sessions(self) -> None:
+        records = _valid_records()
+        foreign_candidate = _event(
+            "foreign-distinct-candidate",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="decision_candidate",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            event_state="CANDIDATE",
+            decision_status="LLM_CANDIDATE",
+            candidate_ref=_ref("candidate", "intent-other"),
+            extraction_kind="LLM_CANDIDATE",
+            source_type="codex",
+            actor_ref="ref/agent/foreign",
+            authority_role="AGENT",
+            authority_ref="ref/authority/foreign",
+        )
+        records.append(foreign_candidate)
+
+        report = ledger.validate_ledger(_rechain(records))
+
+        self.assertEqual("LEDGER_VALID", report["result"], report)
+
+    def test_candidate_lifecycle_state_does_not_leak_across_bound_sessions(self) -> None:
+        records = _valid_records()
+        target_candidate = records[-1]
+        foreign_candidate = _event(
+            "foreign-lifecycle-candidate",
+            sequence=4,
+            previous_hash=target_candidate["event_hash"],
+            event_kind="decision_candidate",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            event_state="CANDIDATE",
+            decision_status="LLM_CANDIDATE",
+            candidate_ref=_ref("candidate", "intent-1"),
+            extraction_kind="LLM_CANDIDATE",
+            source_type="codex",
+            actor_ref="ref/agent/foreign",
+            authority_role="AGENT",
+            authority_ref="ref/authority/foreign",
+        )
+        foreign_withdrawal = _event(
+            "foreign-lifecycle-withdrawal",
+            sequence=5,
+            previous_hash=foreign_candidate["event_hash"],
+            event_kind="withdrawal",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            event_state="WITHDRAWN",
+            decision_status="HUMAN_WITHDRAWN",
+            candidate_ref=_ref("candidate", "intent-1"),
+            human_evidence_ref=_ref("evidence", "foreign-withdrawal"),
+            human_decision_ref=_ref("decision", "foreign-withdrawal"),
+            withdrawal_of_event_ref=foreign_candidate["event_id"],
+            caused_by_event_refs=[foreign_candidate["event_id"]],
+            source_type="discord_text",
+            actor_ref="ref/speaker/alice",
+            authority_role="HUMAN",
+            authority_ref="ref/authority/alice",
+        )
+        target_correction = _event(
+            "target-lifecycle-correction",
+            sequence=6,
+            previous_hash=foreign_withdrawal["event_hash"],
+            event_kind="correction",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_state="CORRECTED",
+            decision_status="HUMAN_CORRECTED",
+            candidate_ref=_ref("candidate", "intent-1"),
+            human_evidence_ref=_ref("evidence", "target-correction"),
+            human_decision_ref=_ref("decision", "target-correction"),
+            correction_of_event_ref=target_candidate["event_id"],
+            caused_by_event_refs=[target_candidate["event_id"]],
+            source_type="discord_text",
+            actor_ref="ref/speaker/alice",
+            authority_role="HUMAN",
+            authority_ref="ref/authority/alice",
+        )
+        records.extend([foreign_candidate, foreign_withdrawal, target_correction])
+
+        report = ledger.validate_ledger(_rechain(records))
+
+        self.assertEqual("REFUSED", report["result"], report)
+        self.assertIn("CANDIDATE_SESSION_OWNERSHIP_INVALID", report["reason_codes"])
+        self.assertNotIn("CANDIDATE_LIFECYCLE_REGRESSION", report["reason_codes"])
+
+    def test_knowledge_scope_refs_must_align_before_invalidation_projection(self) -> None:
+        records = _valid_records()
+        context_scope = _ref("knowledge-scope", "context")
+        public_scope = _ref("knowledge-scope", "public")
+        invalidation = _event(
+            "scope-invalidation",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="source_update",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[public_scope],
+        )
+        invalidation["context"]["knowledge_scope_ref"] = context_scope
+        invalidation["public_safety"]["knowledge_scope_ref"] = public_scope
+        records.append(invalidation)
+
+        report = ledger.validate_ledger(_rechain(records))
+
+        self.assertEqual("REFUSED", report["result"], report)
+        self.assertIn("KNOWLEDGE_SCOPE_REF_MISMATCH", report["reason_codes"])
+        with self.assertRaises(ledger.LedgerValidationError) as raised:
+            ledger.project_session(records, _ref("session", "demo"))
+        self.assertIn("KNOWLEDGE_SCOPE_REF_MISMATCH", raised.exception.reason_codes)
+
     def test_candidate_human_state_is_monotonic_and_withdrawal_is_terminal(self) -> None:
         records = _valid_records()
         candidate = records[-1]

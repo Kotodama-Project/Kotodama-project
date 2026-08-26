@@ -603,6 +603,10 @@ def _validate_event_shape(record: Any) -> list[str]:
         _ref(safety.get("knowledge_scope_ref"), reasons)
         if safety.get("acl_state") not in {"AVAILABLE", "UNKNOWN", "LOST", "REVOKED"}:
             reasons.append("SCHEMA_INVALID")
+    if isinstance(context, dict) and isinstance(safety, dict) and (
+        context.get("knowledge_scope_ref") != safety.get("knowledge_scope_ref")
+    ):
+        reasons.append("KNOWLEDGE_SCOPE_REF_MISMATCH")
 
     integrity = record["integrity"]
     if _keys(integrity, INTEGRITY_KEYS, INTEGRITY_KEYS, "integrity", reasons):
@@ -636,9 +640,37 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     }
     latest_revision: dict[str, int] = {}
     seen_content_artifacts = {"payload_vault_ref": set(), "vault_manifest_ref": set(), "content_hash": set()}
-    candidate_states: dict[str, str] = {}
+    candidate_states: dict[tuple[str, str | None], str] = {}
     restored_archive_receipts: dict[tuple[str, str, str, str, str, str], set[str]] = {}
     seen_binding_targets: set[str] = set()
+    bound_session_for_target: dict[str, str] = {}
+    for candidate_record in records:
+        if _validate_event_shape(candidate_record):
+            continue
+        candidate_session = candidate_record["session"]
+        candidate_detail = candidate_record["event"]
+        if candidate_session["state"] == "BOUND" and candidate_detail["kind"] == "session_binding":
+            for target_ref in candidate_detail["binding"]["target_event_refs"]:
+                bound_session_for_target.setdefault(target_ref, candidate_session["session_ref"])
+    candidate_scope_by_event: dict[str, str | None] = {}
+    candidate_scopes: dict[str, set[str | None]] = {}
+    for candidate_record in records:
+        if _validate_event_shape(candidate_record):
+            continue
+        candidate_session = candidate_record["session"]
+        candidate_scope = (
+            candidate_session["session_ref"]
+            if candidate_session["state"] == "BOUND"
+            else bound_session_for_target.get(candidate_record["event_id"])
+        )
+        candidate_scope_by_event[candidate_record["event_id"]] = candidate_scope
+        candidate_ref = candidate_record["decision"]["candidate_ref"]
+        if isinstance(candidate_ref, str):
+            candidate_scopes.setdefault(candidate_ref, set()).add(candidate_scope)
+    for scopes in candidate_scopes.values():
+        bound_scopes = {scope for scope in scopes if scope is not None}
+        if len(bound_scopes) > 1 or (bound_scopes and None in scopes):
+            reasons.append("CANDIDATE_SESSION_OWNERSHIP_INVALID")
     for record in records:
         shape_reasons = _validate_event_shape(record)
         reasons.extend(shape_reasons)
@@ -796,11 +828,13 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         candidate_ref = decision.get("candidate_ref")
         if candidate_ref is not None:
             candidate_status = decision["status"]
-            previous_status = candidate_states.get(candidate_ref)
+            candidate_scope = candidate_scope_by_event.get(event_id)
+            candidate_state_key = (candidate_ref, candidate_scope)
+            previous_status = candidate_states.get(candidate_state_key)
             if candidate_status == "LLM_CANDIDATE":
                 if previous_status not in (None, "CANDIDATE"):
                     reasons.append("CANDIDATE_LIFECYCLE_REGRESSION")
-                candidate_states.setdefault(candidate_ref, "CANDIDATE")
+                candidate_states.setdefault(candidate_state_key, "CANDIDATE")
             elif candidate_status in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"}:
                 allowed = {
                     "CANDIDATE": {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"},
@@ -811,7 +845,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                 if candidate_status not in allowed.get(previous_status, set()):
                     reasons.append("CANDIDATE_LIFECYCLE_REGRESSION")
                 else:
-                    candidate_states[candidate_ref] = candidate_status
+                    candidate_states[candidate_state_key] = candidate_status
         if decision["status"] in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"}:
             if decision["human_evidence_ref"] is None or decision["human_decision_ref"] is None:
                 reasons.append("CONFIRMED_DECISION_NEEDS_HUMAN_EVIDENCE")
