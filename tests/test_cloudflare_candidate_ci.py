@@ -27,7 +27,12 @@ class CloudflareCandidateCIContractTests(unittest.TestCase):
         self.assertIn('python-version: "3.12.10"', workflow)
         self.assertIn("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", workflow)
         self.assertIn('node-version: "24.14.0"', workflow)
+        self.assertIn("python -S -B tools/check_tracked_secret_hygiene.py", workflow)
         self.assertIn("--require-hashes -r requirements-ci.txt", workflow)
+        self.assertLess(
+            workflow.index("python -S -B tools/check_tracked_secret_hygiene.py"),
+            workflow.index("--require-hashes -r requirements-ci.txt"),
+        )
         self.assertIn("tests.test_cloudflare_candidate_ci", workflow)
         self.assertIn("tests.test_cloudflare_edge_candidate", workflow)
         self.assertIn("tests.test_cloudflare_os_candidate", workflow)

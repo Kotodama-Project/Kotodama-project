@@ -34,6 +34,9 @@ jobs:
           python-version: "3.12.10"
           check-latest: false
 
+      - name: Run tracked credential gate before dependency installation
+        run: python -S -B tools/check_tracked_secret_hygiene.py
+
       - name: Set up exact Node runtime
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:

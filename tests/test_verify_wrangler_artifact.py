@@ -47,6 +47,23 @@ class WranglerArtifactIntegrityTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.WranglerIntegrityViolation, "npm integrity mismatch"):
                 MODULE.verify_artifact(metadata_for(approved), artifact_path)
 
+    def test_each_recorded_digest_is_independently_enforced(self) -> None:
+        artifact = b"synthetic wrangler archive bytes"
+        mutations = {
+            "npm_integrity": ("sha512-invalid", "npm integrity mismatch"),
+            "npm_shasum": ("0" * 40, "npm shasum mismatch"),
+            "slsa_subject_sha512": ("0" * 128, "SLSA subject digest mismatch"),
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact_path = pathlib.Path(temporary) / "wrangler.tgz"
+            artifact_path.write_bytes(artifact)
+            for field, (value, message) in mutations.items():
+                with self.subTest(field=field):
+                    changed = metadata_for(artifact)
+                    changed[field] = value
+                    with self.assertRaisesRegex(MODULE.WranglerIntegrityViolation, message):
+                        MODULE.verify_artifact(changed, artifact_path)
+
     def test_metadata_cannot_redirect_the_download_identity(self) -> None:
         artifact = b"synthetic wrangler archive bytes"
         changed = metadata_for(artifact)
