@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import importlib.util
 import json
 import os
@@ -187,6 +188,166 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         self.assertLess(verification, manifest_copy)
         self.assertLess(manifest_copy, install)
         self.assertLess(install, secret)
+
+    def test_upload_pins_absolute_candidate_wrangler_config_before_upload(self) -> None:
+        workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
+        candidate_config = (
+            'candidate_config="$GITHUB_WORKSPACE/candidate/runtime/cloudflare-edge/'
+            'wrangler.jsonc"'
+        )
+        self.assertIn(candidate_config, workflow)
+        self.assertIn('--config "$candidate_config"', workflow)
+        self.assertEqual(1, workflow.count('--config "$candidate_config"'))
+        self.assertLess(
+            workflow.index(candidate_config),
+            workflow.index("versions upload --env preview"),
+        )
+        self.assertLess(
+            workflow.index('--config "$candidate_config"'),
+            workflow.index("versions upload --env preview"),
+        )
+
+    def test_validator_rejects_runtime_alternate_wrangler_configs(self) -> None:
+        for filename in ("wrangler.json", "wrangler.toml"):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as temporary:
+                candidate = pathlib.Path(temporary)
+                shutil.copytree(ROOT / "runtime", candidate / "runtime")
+                shutil.copytree(ROOT / ".github", candidate / ".github")
+                alternate = candidate / "runtime" / "cloudflare-edge" / filename
+                alternate.write_text("{}\n", encoding="utf-8")
+
+                self.assertIn(
+                    f"alternate Wrangler configuration is forbidden: "
+                    f"runtime/cloudflare-edge/{filename}",
+                    MODULE.validate(candidate),
+                )
+
+    def test_validator_rejects_symlinked_alternate_wrangler_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            alternate = candidate / "runtime" / "cloudflare-edge" / "wrangler.json"
+            target = alternate.with_name("wrangler.jsonc")
+            try:
+                alternate.symlink_to(target)
+            except (OSError, NotImplementedError) as exc:
+                if isinstance(exc, OSError) and not (
+                    getattr(exc, "winerror", None) == 1314
+                    or exc.errno
+                    in {
+                        errno.EACCES,
+                        errno.EPERM,
+                        errno.ENOTSUP,
+                        errno.EOPNOTSUPP,
+                    }
+                ):
+                    raise
+                self.skipTest(f"symlink creation unavailable: {exc}")
+
+            self.assertIn(
+                "alternate Wrangler configuration is forbidden: "
+                "runtime/cloudflare-edge/wrangler.json",
+                MODULE.validate(candidate),
+            )
+
+    def test_validator_rejects_ancestor_alternate_wrangler_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            alternate = candidate / "runtime" / "wrangler.toml"
+            alternate.write_text("name = 'untrusted'\n", encoding="utf-8")
+
+            self.assertIn(
+                "alternate Wrangler configuration is forbidden: runtime/wrangler.toml",
+                MODULE.validate(candidate),
+            )
+
+    def test_validator_rejects_deploy_redirect_and_present_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            profile = candidate / "runtime" / "cloudflare-edge"
+            deploy_config = profile / ".wrangler" / "deploy" / "config.json"
+            deploy_config.parent.mkdir(parents=True)
+            redirect_target = profile / "wrangler.json"
+            redirect_target.write_text("{}\n", encoding="utf-8")
+            deploy_config.write_text(
+                json.dumps({"configPath": "../../wrangler.json"}),
+                encoding="utf-8",
+            )
+
+            errors = MODULE.validate(candidate)
+            self.assertIn(
+                "Wrangler deploy redirect configuration is forbidden: "
+                "runtime/cloudflare-edge/.wrangler/deploy/config.json",
+                errors,
+            )
+            self.assertIn(
+                "Wrangler deploy redirect target is forbidden: "
+                "runtime/cloudflare-edge/wrangler.json",
+                errors,
+            )
+
+    def test_validator_rejects_non_regular_config_and_worker_paths(self) -> None:
+        for relative_path in (
+            pathlib.Path("runtime/cloudflare-edge/wrangler.jsonc"),
+            pathlib.Path("runtime/cloudflare-edge/src/index.js"),
+        ):
+            with self.subTest(path=relative_path), tempfile.TemporaryDirectory() as temporary:
+                candidate = pathlib.Path(temporary)
+                shutil.copytree(ROOT / "runtime", candidate / "runtime")
+                shutil.copytree(ROOT / ".github", candidate / ".github")
+                path = candidate / relative_path
+                path.unlink()
+                path.mkdir()
+
+                self.assertIn(
+                    "required candidate file must be a regular non-symlink file: "
+                    f"{relative_path.as_posix()}",
+                    MODULE.validate(candidate),
+                )
+
+    def test_validator_rejects_symlinked_config_and_worker_paths(self) -> None:
+        unavailable = []
+        for relative_path in (
+            pathlib.Path("runtime/cloudflare-edge/wrangler.jsonc"),
+            pathlib.Path("runtime/cloudflare-edge/src/index.js"),
+        ):
+            with self.subTest(path=relative_path), tempfile.TemporaryDirectory() as temporary:
+                candidate = pathlib.Path(temporary)
+                shutil.copytree(ROOT / "runtime", candidate / "runtime")
+                shutil.copytree(ROOT / ".github", candidate / ".github")
+                path = candidate / relative_path
+                target = path.with_name(path.name + ".target")
+                path.replace(target)
+                try:
+                    path.symlink_to(target)
+                except (OSError, NotImplementedError) as exc:
+                    if isinstance(exc, OSError) and not (
+                        getattr(exc, "winerror", None) == 1314
+                        or exc.errno
+                        in {
+                            errno.EACCES,
+                            errno.EPERM,
+                            errno.ENOTSUP,
+                            errno.EOPNOTSUPP,
+                        }
+                    ):
+                        raise
+                    unavailable.append(f"{relative_path}: {exc}")
+                    continue
+
+                self.assertIn(
+                    "required candidate file must be a regular non-symlink file: "
+                    f"{relative_path.as_posix()}",
+                    MODULE.validate(candidate),
+                )
+
+        if len(unavailable) == 2:
+            self.skipTest("symlink creation unavailable: " + "; ".join(unavailable))
 
     def test_validator_refuses_runner_manifest_or_lock_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

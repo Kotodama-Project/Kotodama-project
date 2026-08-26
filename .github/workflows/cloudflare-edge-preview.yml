@@ -162,7 +162,11 @@ jobs:
           ) as handle:
               json.dump(values, handle, separators=(",", ":"))
           PY
+          candidate_config="$GITHUB_WORKSPACE/candidate/runtime/cloudflare-edge/wrangler.jsonc"
+          test -f "$candidate_config"
+          test ! -L "$candidate_config"
           node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js" \
+            --config "$candidate_config" \
             versions upload --env preview --preview-alias voice-review \
             --secrets-file "$KOTODAMA_PREVIEW_SECRETS_FILE" \
             --message "candidate ${{ inputs.candidate_sha }}"

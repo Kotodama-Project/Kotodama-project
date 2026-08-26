@@ -8,6 +8,7 @@ import hashlib
 import json
 import pathlib
 import re
+import stat
 import sys
 
 
@@ -26,6 +27,8 @@ VERIFIED_WORKER_SHA256 = "0085b007fe45b912f10046e3cfa2517747680c450c3f738d73fae4
 VERIFIED_WRANGLER_RUNNER_PACKAGE_SHA256 = "78050f0fc214eda989a097930c1daf53ef608259d9d861a128651ed94e0cdf74"
 VERIFIED_WRANGLER_RUNNER_LOCK_SHA256 = "e86ede152f4135397ee58a22023dbf029e36aa361b64d767c5cc33dae97a4cc4"
 EXPECTED_WRANGLER_RUNNER_DEPENDENCY = "file:wrangler-4.120.0.tgz"
+WRANGLER_CONFIG_FILENAMES = ("wrangler.json", "wrangler.jsonc", "wrangler.toml")
+WRANGLER_DEPLOY_CONFIG_RELATIVE = pathlib.Path(".wrangler") / "deploy" / "config.json"
 REQUIRED_PREVIEW_RUNTIME_BINDINGS = (
     "ACCESS_AUD",
     "ACCESS_ISSUER",
@@ -52,6 +55,113 @@ def load_jsonc(path: pathlib.Path) -> dict:
     text = path.read_text(encoding="utf-8")
     text = re.sub(r"//.*$", "", text, flags=re.MULTILINE)
     return json.loads(text)
+
+
+def path_kind(path: pathlib.Path) -> str | None:
+    """Return a fail-closed kind for a path without following symlinks."""
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return "unreadable"
+    if stat.S_ISREG(mode):
+        return "regular"
+    return "non_regular"
+
+
+def relative_candidate_path(root: pathlib.Path, path: pathlib.Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return "<outside candidate root>"
+
+
+def discovery_directories(root: pathlib.Path, profile: pathlib.Path):
+    """Yield every directory Wrangler can search from the upload cwd."""
+    current = profile
+    while True:
+        yield current
+        if current == root:
+            return
+        if root not in current.parents:
+            return
+        current = current.parent
+
+
+def validate_wrangler_discovery_surface(
+    root: pathlib.Path, profile: pathlib.Path, config_path: pathlib.Path
+) -> list[str]:
+    errors: list[str] = []
+    canonical_config = config_path
+    for directory in discovery_directories(root, profile):
+        for filename in WRANGLER_CONFIG_FILENAMES:
+            candidate = directory / filename
+            if candidate == canonical_config:
+                continue
+            kind = path_kind(candidate)
+            if kind is None:
+                continue
+            if kind == "unreadable":
+                errors.append(
+                    "unable to inspect alternate Wrangler configuration: "
+                    f"{relative_candidate_path(root, candidate)}"
+                )
+            else:
+                errors.append(
+                    "alternate Wrangler configuration is forbidden: "
+                    f"{relative_candidate_path(root, candidate)}"
+                )
+
+        deploy_config = directory / WRANGLER_DEPLOY_CONFIG_RELATIVE
+        deploy_kind = path_kind(deploy_config)
+        if deploy_kind is None:
+            continue
+        deploy_relative = relative_candidate_path(root, deploy_config)
+        if deploy_kind == "unreadable":
+            errors.append(
+                "unable to inspect Wrangler deploy redirect configuration: "
+                f"{deploy_relative}"
+            )
+            continue
+        errors.append(
+            "Wrangler deploy redirect configuration is forbidden: "
+            f"{deploy_relative}"
+        )
+        if deploy_kind != "regular":
+            continue
+        try:
+            deploy_config_data = load_jsonc(deploy_config)
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            errors.append(
+                "Wrangler deploy redirect configuration is not valid JSON: "
+                f"{deploy_relative}"
+            )
+            continue
+        if not isinstance(deploy_config_data, dict):
+            errors.append(
+                "Wrangler deploy redirect configuration must be a JSON object: "
+                f"{deploy_relative}"
+            )
+            continue
+        redirect = deploy_config_data.get("configPath")
+        if not isinstance(redirect, str) or not redirect.strip():
+            continue
+        try:
+            redirect_target = (deploy_config.parent / redirect).resolve()
+        except (OSError, RuntimeError, ValueError):
+            errors.append(
+                "Wrangler deploy redirect target could not be resolved: "
+                f"{deploy_relative}"
+            )
+            continue
+        if path_kind(redirect_target) is None:
+            continue
+        errors.append(
+            "Wrangler deploy redirect target is forbidden: "
+            f"{relative_candidate_path(root, redirect_target)}"
+        )
+    return errors
 
 
 def candidate_paths(
@@ -98,10 +208,18 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         runner_lock_path,
         profile / "README.md",
     ):
-        if not path.is_file():
+        kind = path_kind(path)
+        if kind is None:
             errors.append(f"missing required file: {path.relative_to(root)}")
+        elif kind != "regular":
+            errors.append(
+                "required candidate file must be a regular non-symlink file: "
+                f"{path.relative_to(root).as_posix()}"
+            )
     if errors:
         return errors
+
+    errors.extend(validate_wrangler_discovery_surface(root, profile, config_path))
 
     if hashlib.sha256(config_path.read_bytes()).hexdigest() != VERIFIED_CONFIG_SHA256:
         errors.append("Wrangler configuration digest does not match the reviewed artifact")
@@ -348,6 +466,8 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         'cp "$wrangler_tarball" "$RUNNER_TEMP/wrangler-verified/wrangler-4.120.0.tgz"',
         'npm ci --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/wrangler-verified"',
         'node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js"',
+        'candidate_config="$GITHUB_WORKSPACE/candidate/runtime/cloudflare-edge/wrangler.jsonc"',
+        '--config "$candidate_config"',
         "candidate_sha",
         "CLOUDFLARE_API_TOKEN",
         "CLOUDFLARE_ACCOUNT_ID",
@@ -397,6 +517,10 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         '"$RUNNER_TEMP/wrangler-verified"'
     )
     upload_command = workflow.find("versions upload --env preview")
+    candidate_config = workflow.find(
+        'candidate_config="$GITHUB_WORKSPACE/candidate/runtime/cloudflare-edge/wrangler.jsonc"'
+    )
+    config_argument = workflow.find('--config "$candidate_config"')
     secret_markers = (
         "CLOUDFLARE_API_TOKEN",
         "CLOUDFLARE_ACCOUNT_ID",
@@ -411,6 +535,11 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         and 0 <= integrity_verification < secret_exposure
     ):
         errors.append("workflow must verify Wrangler before upload secrets or execution")
+    if not (0 <= candidate_config < config_argument < upload_command):
+        errors.append(
+            "workflow must invoke Wrangler with the absolute candidate wrangler.jsonc "
+            "before versions upload"
+        )
     if not (
         0 <= integrity_verification < runner_manifest_copy < npm_ci < secret_exposure
         and 0 <= integrity_verification < runner_lock_copy < npm_ci
