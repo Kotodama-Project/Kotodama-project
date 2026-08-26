@@ -21,6 +21,7 @@ from typing import Any
 
 GENESIS_HASH = "0" * 64
 MAX_INPUT_BYTES = 8_388_608
+MAX_JSON_NESTING_DEPTH = 128
 EVENT_KIND = "kotodama.conversation-event"
 PROJECTION_KIND = "kotodama.session-knowledge-projection"
 
@@ -1129,6 +1130,32 @@ def validate_projection(projection: dict[str, Any], records: list[dict[str, Any]
     return {"result": "PROJECTION_VALID", "projection_digest": projection["projection_digest"], "source_event_count": len(projection.get("source_event_refs", []))}
 
 
+def _json_nesting_within_bound(text: str) -> bool:
+    depth = 0
+    in_string = False
+    escaped = False
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            if depth > MAX_JSON_NESTING_DEPTH:
+                return False
+        elif character in "]}":
+            depth -= 1
+            if depth < 0:
+                return False
+    return depth == 0 and not in_string and not escaped
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     raw = path.read_bytes()
     if len(raw) > MAX_INPUT_BYTES:
@@ -1138,6 +1165,8 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     for line in text.splitlines():
         if not line.strip():
             raise ValueError("blank line")
+        if not _json_nesting_within_bound(line):
+            raise ValueError("JSON nesting exceeds bound")
         record = json.loads(line, object_pairs_hook=_reject_duplicate_keys)
         if not isinstance(record, dict):
             raise ValueError("event is not an object")

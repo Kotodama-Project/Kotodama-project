@@ -1647,6 +1647,14 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertNotIn("Traceback", completed.stderr)
         self.assertIn("INPUT_INVALID", json.loads(completed.stdout)["reason_codes"])
 
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "braces-in-string.jsonl"
+            record = _rechain(_valid_records())[0]
+            record["event"]["summary_ref"] = _ref("summary", "braces-{}-[]")
+            record = _rechain([record])[0]
+            path.write_text(json.dumps(record, separators=(",", ":")) + "\n", encoding="utf-8")
+            self.assertEqual(1, len(ledger.read_jsonl(path)))
+
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         for unsafe in (
             "ref/source/discord-12345678901234567",
