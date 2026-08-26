@@ -106,6 +106,48 @@ function withJwt(url, jwt, init = {}) {
   });
 }
 
+function streamingGatewayResponse(chunks, { contentLength, trapArrayBuffer = false } = {}) {
+  let index = 0;
+  let pulls = 0;
+  let cancelled = false;
+  const body = new ReadableStream(
+    {
+      pull(controller) {
+        pulls += 1;
+        if (index === chunks.length) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(chunks[index]);
+        index += 1;
+      },
+      cancel() {
+        cancelled = true;
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  const headers = new Headers({ "content-type": "application/json" });
+  if (contentLength !== undefined) headers.set("content-length", contentLength);
+  return {
+    response: {
+      ok: true,
+      headers,
+      body,
+      arrayBuffer() {
+        if (trapArrayBuffer) throw new Error("arrayBuffer must not be called");
+        return new ArrayBuffer(0);
+      },
+    },
+    get pulls() {
+      return pulls;
+    },
+    get cancelled() {
+      return cancelled;
+    },
+  };
+}
+
 test("Access-verified review readback can only come through Context Gateway", async () => {
   __testing.reset();
   const { jwk, token } = await signingFixture();
@@ -254,6 +296,100 @@ test("review actions are bounded and forwarded only to the Context Gateway", asy
   assert.equal(observed.url, `${GATEWAY}/v1/voice/handoffs/doc-safe-1/review`);
   assert.equal(observed.method, "POST");
   assert.deepEqual(await observed.clone().json(), { action: "accept" });
+});
+
+test("GW-RED/GW-STREAM: oversized gateway responses use a bounded reader, not arrayBuffer", async () => {
+  __testing.reset();
+  const { jwk, token } = await signingFixture();
+  const stream = streamingGatewayResponse(
+    [new Uint8Array(1_048_576), new Uint8Array(1)],
+    { trapArrayBuffer: true },
+  );
+  let gatewayCalls = 0;
+  __testing.setFetch(async (request) => {
+    const value = request instanceof Request ? request : new Request(request);
+    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
+    gatewayCalls += 1;
+    return stream.response;
+  });
+
+  const response = await worker.fetch(
+    withJwt("https://preview.example.test/voice/review", await token()),
+    env(),
+  );
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).error, "context_gateway_body_denied");
+  assert.equal(stream.pulls, 2);
+  assert.equal(stream.cancelled, true);
+  assert.equal(gatewayCalls, 1);
+});
+
+test("GW-LENGTH: invalid or known-oversize gateway content lengths cancel before pulling", async () => {
+  for (const contentLength of ["invalid", "9007199254740992", "1048577"]) {
+    __testing.reset();
+    const { jwk, token } = await signingFixture();
+    const stream = streamingGatewayResponse([new Uint8Array(1)], { contentLength });
+    __testing.setFetch(async (request) => {
+      const value = request instanceof Request ? request : new Request(request);
+      if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
+      return stream.response;
+    });
+
+    const response = await worker.fetch(
+      withJwt("https://preview.example.test/voice/review", await token()),
+      env(),
+    );
+    assert.equal(response.status, 502, contentLength);
+    assert.equal((await response.json()).error, "context_gateway_body_denied", contentLength);
+    assert.equal(stream.pulls, 0, contentLength);
+    assert.equal(stream.cancelled, true, contentLength);
+  }
+});
+
+test("GW-UNDERREPORT: a gateway body larger than its declared length is cancelled", async () => {
+  __testing.reset();
+  const { jwk, token } = await signingFixture();
+  const stream = streamingGatewayResponse(
+    [new Uint8Array(1_048_576), new Uint8Array(1)],
+    { contentLength: "1", trapArrayBuffer: true },
+  );
+  __testing.setFetch(async (request) => {
+    const value = request instanceof Request ? request : new Request(request);
+    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
+    return stream.response;
+  });
+
+  const response = await worker.fetch(
+    withJwt("https://preview.example.test/voice/review", await token()),
+    env(),
+  );
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).error, "context_gateway_body_denied");
+  assert.equal(stream.pulls, 2);
+  assert.equal(stream.cancelled, true);
+});
+
+test("GW-REGRESSION: a bounded gateway projection keeps its successful readback semantics", async () => {
+  __testing.reset();
+  const { jwk, token } = await signingFixture();
+  const encoded = new TextEncoder().encode(JSON.stringify(projection()));
+  const stream = streamingGatewayResponse([encoded], {
+    contentLength: String(encoded.byteLength),
+    trapArrayBuffer: true,
+  });
+  __testing.setFetch(async (request) => {
+    const value = request instanceof Request ? request : new Request(request);
+    if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
+    return stream.response;
+  });
+
+  const response = await worker.fetch(
+    withJwt("https://preview.example.test/voice/review", await token()),
+    env(),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), projection());
+  assert.equal(stream.cancelled, false);
 });
 
 test("oversized review streams are cancelled as soon as the byte limit is crossed", async () => {
