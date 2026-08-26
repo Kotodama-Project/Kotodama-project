@@ -420,53 +420,7 @@ async function boundedGatewayBody(response, limit) {
       return null;
     }
   }
-
-  if (!response.body) return new Uint8Array();
-  let reader;
-  try {
-    reader = response.body.getReader();
-  } catch {
-    return null;
-  }
-  const chunks = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = value instanceof Uint8Array
-        ? value
-        : value instanceof ArrayBuffer
-          ? new Uint8Array(value)
-          : null;
-      if (!chunk || total + chunk.byteLength > limit) {
-        try {
-          await reader.cancel("gateway_body_limit_exceeded");
-        } catch {
-          // The response is already denied; cancellation is best effort.
-        }
-        return null;
-      }
-      total += chunk.byteLength;
-      chunks.push(chunk);
-    }
-  } catch {
-    try {
-      await reader.cancel("gateway_body_read_failed");
-    } catch {
-      // The response is already denied; cancellation is best effort.
-    }
-    return null;
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
+  return boundedBodyBytes(response, limit);
 }
 
 async function boundedReviewBody(request) {
