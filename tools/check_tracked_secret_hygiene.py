@@ -2145,14 +2145,40 @@ def javascript_constant_statement_end(text: str, start: int) -> int:
 
 def javascript_constant_aliases(path: Path, text: str) -> dict[str, str]:
     sanitized = strip_block_comments(path, text)
+    executable = javascript_executable_mask(path, sanitized)
     aliases: dict[str, str] = {}
-    for match in JAVASCRIPT_CONST_DECLARATION.finditer(sanitized):
+    ambiguous: set[str] = set()
+    parameter_pattern = re.compile(
+        r"\((?P<parameters>[^()\r\n]{0,256})\)\s*(?:=>|\{)"
+    )
+    for parameter_match in parameter_pattern.finditer(executable):
+        ambiguous.update(
+            re.findall(
+                r"[A-Za-z_$][A-Za-z0-9_$]*",
+                parameter_match.group("parameters"),
+            )
+        )
+    ambiguous.update(
+        match.group(1)
+        for match in re.finditer(
+            r"\b([A-Za-z_$][A-Za-z0-9_$]*)\s*=>", executable
+        )
+    )
+    seen: set[str] = set()
+    for match in JAVASCRIPT_CONST_DECLARATION.finditer(executable):
+        name = match.group("name")
+        if name in seen:
+            ambiguous.add(name)
+        seen.add(name)
         end = javascript_constant_statement_end(sanitized, match.end())
         expression = sanitized[match.end():end].strip()
         expression = re.sub(r"\s+as\s+const\s*$", "", expression)
+        if name in ambiguous:
+            aliases.pop(name, None)
+            continue
         value = resolve_javascript_constant(expression, aliases)
         if value is not None:
-            aliases[match.group("name")] = value
+            aliases[name] = value
     return aliases
 
 
@@ -2212,89 +2238,107 @@ def javascript_matching_delimiter(
     return None
 
 
-def javascript_template_interpolation_members(
-    path: Path, text: str, start: int
-) -> tuple[list[tuple[int, int]], int]:
-    members: list[tuple[int, int]] = []
-    escaped = False
-    index = start + 1
-    while index < len(text):
-        character = text[index]
-        if escaped:
+def javascript_executable_mask(
+    path: Path, text: str, depth: int = 0
+) -> str:
+    """Blank non-code literals while preserving offsets and line breaks."""
+
+    if depth > MAX_JAVASCRIPT_CONSTANT_DEPTH:
+        return " " * len(text)
+    sanitized = strip_block_comments(path, text)
+    result = list(sanitized)
+
+    def blank(start: int, end: int) -> None:
+        for cursor in range(start, end):
+            if result[cursor] not in "\r\n":
+                result[cursor] = " "
+
+    index = 0
+    while index < len(sanitized):
+        character = sanitized[index]
+        if character in {"'", '"'}:
             escaped = False
-            index += 1
-            continue
-        if character == "\\":
-            escaped = True
-            index += 1
+            cursor = index + 1
+            while cursor < len(sanitized):
+                current = sanitized[cursor]
+                if escaped:
+                    escaped = False
+                elif current == "\\":
+                    escaped = True
+                elif current == character:
+                    cursor += 1
+                    break
+                cursor += 1
+            blank(index, cursor)
+            index = cursor
             continue
         if character == "`":
-            break
-        if text.startswith("${", index):
-            end = javascript_matching_delimiter(text, index + 1, "{", "}")
-            if end is None:
-                break
-            inner_start = index + 2
-            inner = text[inner_start:end]
-            members.extend(
-                (member_start + inner_start, member_end + inner_start)
-                for member_start, member_end in javascript_computed_members(
-                    path, inner
-                )
-            )
-            index = end + 1
+            escaped = False
+            cursor = index + 1
+            while cursor < len(sanitized):
+                current = sanitized[cursor]
+                if escaped:
+                    escaped = False
+                    cursor += 1
+                    continue
+                if current == "\\":
+                    escaped = True
+                    cursor += 1
+                    continue
+                if sanitized.startswith("${", cursor):
+                    end = javascript_matching_delimiter(
+                        sanitized, cursor + 1, "{", "}"
+                    )
+                    if end is None:
+                        blank(index, len(sanitized))
+                        return "".join(result)
+                    blank(index, cursor)
+                    blank(cursor, cursor + 2)
+                    inner_start = cursor + 2
+                    inner_mask = javascript_executable_mask(
+                        path, sanitized[inner_start:end], depth + 1
+                    )
+                    result[inner_start:end] = inner_mask
+                    index = end + 1
+                    cursor = index
+                    continue
+                if current == "`":
+                    cursor += 1
+                    break
+                cursor += 1
+            blank(index, cursor)
+            index = cursor
             continue
+        if character == "/":
+            regex_end = javascript_regex_end(sanitized, index)
+            if regex_end is not None:
+                blank(index, regex_end)
+                index = regex_end
+                continue
         index += 1
-    return members, index
+    return "".join(result)
 
 
 def javascript_computed_members(path: Path, text: str) -> list[tuple[int, int]]:
     sanitized = strip_block_comments(path, text)
+    executable = javascript_executable_mask(path, sanitized)
     prefix = re.compile(
         r"(?:[A-Za-z_$][A-Za-z0-9_$]*\.)*"
         r"[A-Za-z_$][A-Za-z0-9_$]*\s*\["
     )
     members: list[tuple[int, int]] = []
-    quote: str | None = None
-    escaped = False
     index = 0
-    while index < len(sanitized):
-        character = sanitized[index]
-        if quote is not None:
-            if escaped:
-                escaped = False
-            elif character == "\\":
-                escaped = True
-            elif character == quote:
-                quote = None
-            index += 1
-            continue
-        if character == "`":
-            template_members, template_end = javascript_template_interpolation_members(
-                path, sanitized, index
-            )
-            members.extend(template_members)
-            index = template_end + 1
-            continue
-        if character in {"'", '"'}:
-            quote = character
-            index += 1
-            continue
-        if character == "/":
-            regex_end = javascript_regex_end(sanitized, index)
-            if regex_end is not None:
-                index = regex_end
-                continue
+    while index < len(executable):
         if (
             index == 0
             or not (
-                sanitized[index - 1].isalnum()
-                or sanitized[index - 1] in "_$"
+                executable[index - 1].isalnum()
+                or executable[index - 1] in "_$"
             )
         ):
-            match = prefix.match(sanitized, index)
+            match = prefix.match(executable, index)
             if match is not None:
-                bracket = sanitized.find("[", index, match.end())
+                bracket = executable.find("[", index, match.end())
                 end = javascript_matching_bracket(sanitized, bracket)
                 if end is not None:
                     members.append((bracket, end))
@@ -2428,6 +2472,11 @@ def scan_text(
     if path.suffix.lower() == ".java":
         text = normalize_java_lexical_escapes(text)
     findings: list[tuple[str, int, str]] = []
+    javascript_aliases = (
+        javascript_constant_aliases(path, text)
+        if path.suffix.lower() in JAVASCRIPT_SOURCE_SUFFIXES
+        else {}
+    )
     lines = text.splitlines()
     for number, line in enumerate(lines, 1):
         for detector, pattern in TOKEN_PATTERNS:
@@ -2457,6 +2506,16 @@ def scan_text(
         for match in matches:
             name = match.group("name").upper()
             raw_value = match.group("value")
+            resolved_value = None
+            if javascript_aliases:
+                resolved_value = resolve_javascript_constant(
+                    assignment_value(raw_value, path), javascript_aliases
+                )
+            classified_value = (
+                resolved_value
+                if resolved_value is not None
+                else assignment_value(raw_value, path)
+            )
             if (
                 path.suffix.lower() in {".yml", ".yaml"}
                 and (
@@ -2467,8 +2526,11 @@ def scan_text(
                 continue
             if (
                 name not in reported_assignments
-                and live_assignment(assignment_value(raw_value, path))
-                and not source_code_reference(path, raw_value)
+                and live_assignment(classified_value)
+                and (
+                    resolved_value is not None
+                    or not source_code_reference(path, raw_value)
+                )
             ):
                 findings.append((
                     path.as_posix(),
@@ -2488,9 +2550,22 @@ def scan_text(
         if PRIVATE_BEGIN.search(line):
             findings.append((path.as_posix(), number, "private key block"))
     for name, number, value, strip_comments in multiline_assignments(path, text):
+        resolved_value = None
+        if javascript_aliases:
+            resolved_value = resolve_javascript_constant(
+                assignment_value(value, path, strip_comments), javascript_aliases
+            )
+        classified_value = (
+            resolved_value
+            if resolved_value is not None
+            else assignment_value(value, path, strip_comments)
+        )
         if (
-            live_assignment(assignment_value(value, path, strip_comments))
-            and not multiline_code_reference(path, value)
+            live_assignment(classified_value)
+            and (
+                resolved_value is not None
+                or not multiline_code_reference(path, value)
+            )
         ):
             findings.append((
                 path.as_posix(),

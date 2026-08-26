@@ -1384,6 +1384,71 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(control=text[:18]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
 
+    def test_literal_rhs_aliases_are_classified_as_live_values(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        cases = (
+            (
+                'const value = "' + value + '";\n'
+                + name
+                + " = value\n",
+                2,
+            ),
+            (
+                'const value = "Synthetic" + "SecretValue2026";\n'
+                + name
+                + " = value\n",
+                2,
+            ),
+            (
+                'const value = `Synthetic${"SecretValue2026"}`;\n'
+                + name
+                + " = value\n",
+                2,
+            ),
+            (
+                'const first = "' + value + '";\n'
+                "const second = first;\n"
+                + name
+                + " = second\n",
+                3,
+            ),
+            (
+                'const value: string =\n'
+                '  "Synthetic" +\n'
+                '  "SecretValue2026";\n'
+                + name
+                + " = value\n",
+                4,
+            ),
+        )
+        for text, line in cases:
+            with self.subTest(line=line):
+                findings = SCANNER.scan_text(Path("config.js"), text)
+                self.assertEqual(
+                    [("config.js", line, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        controls = (
+            'const value = process.env.OTHER;\n' + name + " = value\n",
+            'const value = secrets["' + name + '"];\n' + name + " = value\n",
+            'const text = \'const value = "' + value + '";\';\n'
+            + name
+            + " = value\n",
+            'const matcher = /const value="' + value + '"/;\n'
+            + name
+            + " = value\n",
+            'const value = "' + value + '";\n'
+            'function read(value) {\n'
+            + name
+            + " = value\n}\n",
+        )
+        for text in controls:
+            with self.subTest(control=text[:18]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.js"), text))
+
     def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
