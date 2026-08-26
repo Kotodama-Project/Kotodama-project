@@ -271,6 +271,16 @@ def _actor_kind(actor_ref: Any) -> str | None:
     return match.group(1) if match else None
 
 
+def _typed_identity_suffix(value: Any, prefixes: tuple[str, ...]) -> str | None:
+    if not isinstance(value, str):
+        return None
+    for prefix in prefixes:
+        if value.startswith(prefix):
+            suffix = value[len(prefix):]
+            return suffix or None
+    return None
+
+
 def _actor_authority_is_consistent(actor_ref: Any, role: Any) -> bool:
     kind = _actor_kind(actor_ref)
     return kind is not None and role in ACTOR_AUTHORITY_ROLES.get(kind, set())
@@ -648,6 +658,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     bound_session_for_target: dict[str, str] = {}
     bound_session_revision_for_target: dict[str, tuple[str, str]] = {}
     bound_governance_for_target: dict[str, dict[str, Any]] = {}
+    bound_sequence_for_target: dict[str, int] = {}
     for candidate_record in records:
         if _validate_event_shape(candidate_record):
             continue
@@ -666,6 +677,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                     (candidate_session["session_ref"], candidate_session["revision_ref"]),
                 )
                 bound_governance_for_target.setdefault(target_ref, candidate_session["governance"])
+                bound_sequence_for_target.setdefault(target_ref, _integer_value(candidate_record["sequence"]))
     candidate_scope_by_event: dict[str, str | None] = {}
     effective_session_revision_by_event: dict[str, tuple[str, str] | None] = {}
     effective_governance_by_event: dict[str, dict[str, Any] | None] = {}
@@ -861,6 +873,13 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                     candidate_scope_by_event.get(event_id) is None
                     or candidate_scope_by_event.get(target_ref) is None
                     or candidate_scope_by_event.get(event_id) != candidate_scope_by_event.get(target_ref)
+                    or (
+                        target.get("session", {}).get("state") == "UNASSIGNED_INBOX"
+                        and (
+                            bound_sequence_for_target.get(target_ref) is None
+                            or bound_sequence_for_target[target_ref] >= sequence_number
+                        )
+                    )
                 ):
                     reasons.append("LIFECYCLE_TARGET_SESSION_INVALID")
                 elif target.get("decision", {}).get("candidate_ref") is not None and record["decision"].get("candidate_ref") != target["decision"].get("candidate_ref"):
@@ -875,6 +894,13 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         decision = record["decision"]
         if decision["status"] in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"} and detail["kind"] not in lifecycle_target_fields:
             reasons.append("HUMAN_DECISION_EVENT_KIND_INVALID")
+        expected_event_state = {
+            "HUMAN_CONFIRMED": "CONFIRMED",
+            "HUMAN_CORRECTED": "CORRECTED",
+            "HUMAN_WITHDRAWN": "WITHDRAWN",
+        }.get(decision["status"])
+        if expected_event_state is not None and detail["state"] != expected_event_state:
+            reasons.append("DECISION_EVENT_STATE_MISMATCH")
         candidate_ref = decision.get("candidate_ref")
         if candidate_ref is not None:
             candidate_status = decision["status"]
@@ -910,10 +936,10 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             if actor_kind not in {"actor", "speaker"} or record["source"]["authority"].get("role") not in {"HUMAN", "OWNER"}:
                 reasons.append("HUMAN_CONFIRMATION_REQUIRES_PERSON")
             if isinstance(human_actor_ref, str):
-                person_id = human_actor_ref.rsplit("/", 1)[-1]
-                actor_id = record["source"]["actor_ref"].rsplit("/", 1)[-1]
-                authority_id = record["source"]["authority"]["authority_ref"].rsplit("/", 1)[-1]
-                if person_id != actor_id or person_id != authority_id:
+                person_suffix = _typed_identity_suffix(human_actor_ref, ("ref/person/",))
+                actor_suffix = _typed_identity_suffix(record["source"]["actor_ref"], ("ref/actor/", "ref/speaker/"))
+                authority_suffix = _typed_identity_suffix(record["source"]["authority"]["authority_ref"], ("ref/authority/",))
+                if person_suffix is None or person_suffix != actor_suffix or person_suffix != authority_suffix:
                     reasons.append("HUMAN_DECISION_PERSON_BINDING_INVALID")
         elif decision.get("human_actor_ref") is not None:
             reasons.append("HUMAN_ACTOR_REF_NOT_APPLICABLE")
@@ -1341,10 +1367,17 @@ def _json_nesting_within_bound(text: str) -> bool:
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
-    raw = path.read_bytes()
+    raw = bytearray()
+    with path.open("rb") as stream:
+        while len(raw) <= MAX_INPUT_BYTES:
+            remaining = MAX_INPUT_BYTES + 1 - len(raw)
+            chunk = stream.read(min(64 * 1024, remaining))
+            if not chunk:
+                break
+            raw.extend(chunk)
     if len(raw) > MAX_INPUT_BYTES:
         raise ValueError("input too large")
-    text = raw.decode("utf-8")
+    text = bytes(raw).decode("utf-8")
     records: list[dict[str, Any]] = []
     for line in text.splitlines():
         if not line.strip():

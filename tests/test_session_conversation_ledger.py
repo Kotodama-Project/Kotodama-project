@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -1977,6 +1978,33 @@ class SessionConversationLedgerTests(unittest.TestCase):
                         self.assertEqual("REFUSED", report["result"], report)
                         self.assertIn("HUMAN_DECISION_EVENT_KIND_INVALID", report["reason_codes"])
 
+    def test_human_decision_identity_binding_keeps_full_scoped_suffix(self) -> None:
+        scoped = _lifecycle_records("decision_confirmed", "HUMAN_CONFIRMED", "CONFIRMED")
+        scoped[-1]["decision"]["human_actor_ref"] = _ref("person", "org/team/alice")
+        scoped[-1]["source"]["actor_ref"] = "ref/speaker/org/team/alice"
+        scoped[-1]["source"]["authority"]["authority_ref"] = "ref/authority/org/team/alice"
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain(scoped))["result"], scoped)
+
+        different_scope = copy.deepcopy(scoped)
+        different_scope[-1]["decision"]["human_actor_ref"] = _ref("person", "org-a/alice")
+        different_scope[-1]["source"]["actor_ref"] = "ref/speaker/org-b/alice"
+        different_scope[-1]["source"]["authority"]["authority_ref"] = "ref/authority/org-b/alice"
+        different_scope_report = ledger.validate_ledger(_rechain(different_scope))
+        self.assertEqual("REFUSED", different_scope_report["result"], different_scope_report)
+        self.assertIn("HUMAN_DECISION_PERSON_BINDING_INVALID", different_scope_report["reason_codes"])
+
+        missing = copy.deepcopy(scoped)
+        missing[-1]["decision"]["human_actor_ref"] = None
+        missing_report = ledger.validate_ledger(_rechain(missing))
+        self.assertEqual("REFUSED", missing_report["result"], missing_report)
+        self.assertIn("HUMAN_DECISION_PERSON_REF_MISSING", missing_report["reason_codes"])
+
+        malformed = copy.deepcopy(scoped)
+        malformed[-1]["decision"]["human_actor_ref"] = "ref/person"
+        malformed_report = ledger.validate_ledger(_rechain(malformed))
+        self.assertEqual("REFUSED", malformed_report["result"], malformed_report)
+        self.assertIn("SCHEMA_INVALID", malformed_report["reason_codes"])
+
     def test_late_bound_lifecycle_targets_use_effective_session_scope(self) -> None:
         lifecycle_cases = {
             "confirmation": ("HUMAN_CONFIRMED", "CONFIRMED", "confirmation_of_event_ref"),
@@ -2062,6 +2090,100 @@ class SessionConversationLedgerTests(unittest.TestCase):
                 unbound_report = ledger.validate_ledger(_rechain([candidate, binding, unbound_lifecycle]))
                 self.assertEqual("REFUSED", unbound_report["result"], unbound_report)
                 self.assertIn("LIFECYCLE_TARGET_SESSION_INVALID", unbound_report["reason_codes"])
+
+    def test_lifecycle_cannot_use_a_future_binding_for_an_unassigned_target(self) -> None:
+        candidate = _event(
+            "temporal-candidate",
+            event_kind="decision_candidate",
+            event_state="CANDIDATE",
+            decision_status="LLM_CANDIDATE",
+            candidate_ref=_ref("candidate", "temporal"),
+            extraction_kind="LLM_CANDIDATE",
+            source_type="codex",
+            actor_ref="ref/agent/codex",
+            authority_role="AGENT",
+            authority_ref="ref/authority/codex",
+        )
+        binding = _event(
+            "temporal-binding",
+            sequence=2,
+            previous_hash=candidate["event_hash"],
+            event_kind="session_binding",
+            session_state="BOUND",
+            session_ref=_ref("session", "temporal"),
+            binding_targets=[candidate["event_id"]],
+            binding_destination=_ref("session", "temporal"),
+            binding_revision=_ref("session-revision", "1"),
+            source_type="system",
+            actor_ref="ref/agent/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        lifecycle = _event(
+            "temporal-lifecycle",
+            sequence=3,
+            previous_hash=binding["event_hash"],
+            event_kind="decision_confirmed",
+            session_state="BOUND",
+            session_ref=_ref("session", "temporal"),
+            event_state="CONFIRMED",
+            decision_status="HUMAN_CONFIRMED",
+            candidate_ref=_ref("candidate", "temporal"),
+            human_evidence_ref=_ref("evidence", "temporal-confirmation"),
+            human_decision_ref=_ref("decision", "temporal-confirmation"),
+            confirmation_of_event_ref=candidate["event_id"],
+            caused_by_event_refs=[candidate["event_id"]],
+            source_type="discord_text",
+            actor_ref="ref/speaker/alice",
+            authority_role="HUMAN",
+            authority_ref="ref/authority/alice",
+        )
+        self.assertEqual(
+            "LEDGER_VALID",
+            ledger.validate_ledger(_rechain([candidate, binding, lifecycle]))["result"],
+        )
+
+        future_lifecycle = copy.deepcopy(lifecycle)
+        future_lifecycle["event_id"] = _ref("event", "temporal-future-lifecycle")
+        future_lifecycle["sequence"] = 2
+        future_lifecycle["previous_event_hash"] = candidate["event_hash"]
+        future_lifecycle["source"]["occurred_at"] = "2026-08-26T00:00:02Z"
+        future_lifecycle["source"]["ingested_at"] = "2026-08-26T00:01:02Z"
+        future_lifecycle["causation"]["idempotency_key_ref"] = _ref("idempotency", "temporal-future-lifecycle")
+        future_lifecycle["causation"]["cursor_ref"] = _ref("cursor", "temporal-future-lifecycle-1")
+        future_binding = copy.deepcopy(binding)
+        future_binding["event_id"] = _ref("event", "temporal-future-binding")
+        future_binding["sequence"] = 3
+        future_binding["previous_event_hash"] = future_lifecycle["event_hash"]
+        future_binding["source"]["occurred_at"] = "2026-08-26T00:00:03Z"
+        future_binding["source"]["ingested_at"] = "2026-08-26T00:01:03Z"
+        future_binding["causation"]["idempotency_key_ref"] = _ref("idempotency", "temporal-future-binding")
+        future_binding["causation"]["cursor_ref"] = _ref("cursor", "temporal-future-binding-1")
+        future_report = ledger.validate_ledger(_rechain([candidate, future_lifecycle, future_binding]))
+        self.assertEqual("REFUSED", future_report["result"], future_report)
+        self.assertIn("LIFECYCLE_TARGET_SESSION_INVALID", future_report["reason_codes"])
+
+    def test_human_decision_status_requires_exact_lifecycle_event_state(self) -> None:
+        valid_cases = (
+            ("decision_confirmed", "HUMAN_CONFIRMED", "CONFIRMED"),
+            ("confirmation", "HUMAN_CONFIRMED", "CONFIRMED"),
+            ("correction", "HUMAN_CORRECTED", "CORRECTED"),
+            ("withdrawal", "HUMAN_WITHDRAWN", "WITHDRAWN"),
+        )
+        mismatched_state = {
+            "CONFIRMED": "CORRECTED",
+            "CORRECTED": "CONFIRMED",
+            "WITHDRAWN": "CONFIRMED",
+        }
+        for event_kind, decision_status, event_state in valid_cases:
+            with self.subTest(event_kind=event_kind):
+                valid = _lifecycle_records(event_kind, decision_status, event_state)
+                self.assertEqual("LEDGER_VALID", ledger.validate_ledger(valid)["result"], valid)
+                invalid = copy.deepcopy(valid)
+                invalid[-1]["event"]["state"] = mismatched_state[event_state]
+                report = ledger.validate_ledger(_rechain(invalid))
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertIn("DECISION_EVENT_STATE_MISMATCH", report["reason_codes"])
 
     def test_llm_candidate_status_requires_candidate_event_and_model_extraction(self) -> None:
         valid_report = ledger.validate_ledger(_valid_records())
@@ -2473,6 +2595,59 @@ class SessionConversationLedgerTests(unittest.TestCase):
         with self.assertRaises(ledger.LedgerValidationError) as raised:
             ledger.validate_projection(projection, records, _ref("session", "demo"))
         self.assertIn("PROJECTION_DIGEST_MISMATCH", raised.exception.reason_codes)
+
+    def test_read_jsonl_uses_bounded_streaming_input(self) -> None:
+        record = _rechain(_valid_records())[0]
+        encoded = json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        self.assertLess(len(encoded), ledger.MAX_INPUT_BYTES)
+
+        with tempfile.TemporaryDirectory() as directory:
+            at_limit = Path(directory) / "at-limit.jsonl"
+            at_limit.write_bytes(encoded + b" " * (ledger.MAX_INPUT_BYTES - len(encoded)))
+            with mock.patch.object(Path, "read_bytes", side_effect=AssertionError("read_bytes is forbidden")):
+                self.assertEqual([record], ledger.read_jsonl(at_limit))
+
+            over_limit = Path(directory) / "over-limit.jsonl"
+            with over_limit.open("wb") as stream:
+                stream.truncate(ledger.MAX_INPUT_BYTES + 1)
+            with mock.patch.object(Path, "read_bytes", side_effect=AssertionError("read_bytes is forbidden")):
+                with self.assertRaises(ValueError):
+                    ledger.read_jsonl(over_limit)
+
+            cli = subprocess.run(
+                [sys.executable, "-B", str(VALIDATOR), "validate", str(over_limit)],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+            self.assertEqual(2, cli.returncode)
+            self.assertIn("INPUT_INVALID", json.loads(cli.stdout)["reason_codes"])
+
+            short_read = Path(directory) / "short-read.jsonl"
+            short_read.write_bytes(encoded + b"\n")
+            real_open = Path.open
+
+            class ShortReadStream:
+                def __init__(self, stream) -> None:
+                    self._stream = stream
+
+                def __enter__(self):
+                    self._stream.__enter__()
+                    return self
+
+                def __exit__(self, *args):
+                    return self._stream.__exit__(*args)
+
+                def read(self, size: int = -1):
+                    return self._stream.read(1 if size < 1 else min(size, 3))
+
+            def open_short(path, mode="r", buffering=-1, encoding=None, errors=None, newline=None):
+                return ShortReadStream(real_open(path, mode, buffering, encoding, errors, newline))
+
+            with mock.patch.object(Path, "open", autospec=True, side_effect=open_short):
+                self.assertEqual([record], ledger.read_jsonl(short_read))
 
     def test_offline_recovery_and_integrity_markers_are_explicit(self) -> None:
         records = _valid_records()
