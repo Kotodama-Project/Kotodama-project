@@ -815,6 +815,13 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                 candidate_scope_by_event.get(parent_ref) is None
                 or candidate_scope_by_event.get(event_id) is None
                 or candidate_scope_by_event.get(parent_ref) != candidate_scope_by_event.get(event_id)
+                or (
+                    parent.get("session", {}).get("state") == "UNASSIGNED_INBOX"
+                    and (
+                        bound_sequence_for_target.get(parent_ref) is None
+                        or bound_sequence_for_target[parent_ref] >= sequence_number
+                    )
+                )
             ):
                 reasons.append("CONTENT_LINEAGE_SESSION_INVALID")
             if parent_content.get("artifact_stage") not in ARTIFACT_STAGE_PARENTS.get(stage, frozenset()):

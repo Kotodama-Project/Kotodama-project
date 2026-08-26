@@ -1106,6 +1106,62 @@ class SessionConversationLedgerTests(unittest.TestCase):
         report = ledger.validate_ledger(_rechain(cross_session))
         self.assertIn("CONTENT_LINEAGE_SESSION_INVALID", report["reason_codes"])
 
+    def test_lineage_rejects_a_future_binding_for_an_unassigned_parent(self) -> None:
+        raw = _event("lineage-temporal-raw")
+        binding = _event(
+            "lineage-temporal-binding",
+            sequence=2,
+            previous_hash=raw["event_hash"],
+            event_kind="session_binding",
+            session_state="BOUND",
+            session_ref=_ref("session", "lineage-temporal"),
+            binding_targets=[raw["event_id"]],
+            binding_destination=_ref("session", "lineage-temporal"),
+            binding_revision=_ref("session-revision", "1"),
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        child = _event(
+            "lineage-temporal-child",
+            sequence=3,
+            previous_hash=binding["event_hash"],
+            session_state="BOUND",
+            session_ref=_ref("session", "lineage-temporal"),
+            artifact_stage="RAW_ASR",
+            derived_from_event_refs=[raw["event_id"]],
+            content_hash="a" * 64,
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        self.assertEqual(
+            "LEDGER_VALID",
+            ledger.validate_ledger(_rechain([raw, binding, child]))["result"],
+        )
+
+        child_before_binding = copy.deepcopy(child)
+        child_before_binding["event_id"] = _ref("event", "lineage-temporal-child-before-binding")
+        child_before_binding["sequence"] = 2
+        child_before_binding["previous_event_hash"] = raw["event_hash"]
+        child_before_binding["source"]["occurred_at"] = "2026-08-26T00:00:02Z"
+        child_before_binding["source"]["ingested_at"] = "2026-08-26T00:01:02Z"
+        child_before_binding["causation"]["idempotency_key_ref"] = _ref("idempotency", "lineage-temporal-child-before-binding")
+        child_before_binding["causation"]["cursor_ref"] = _ref("cursor", "lineage-temporal-child-before-binding-1")
+        binding_after_child = copy.deepcopy(binding)
+        binding_after_child["event_id"] = _ref("event", "lineage-temporal-binding-after-child")
+        binding_after_child["sequence"] = 3
+        binding_after_child["previous_event_hash"] = child_before_binding["event_hash"]
+        binding_after_child["source"]["occurred_at"] = "2026-08-26T00:00:03Z"
+        binding_after_child["source"]["ingested_at"] = "2026-08-26T00:01:03Z"
+        binding_after_child["causation"]["idempotency_key_ref"] = _ref("idempotency", "lineage-temporal-binding-after-child")
+        binding_after_child["causation"]["cursor_ref"] = _ref("cursor", "lineage-temporal-binding-after-child-1")
+        future_report = ledger.validate_ledger(_rechain([raw, child_before_binding, binding_after_child]))
+        self.assertEqual("REFUSED", future_report["result"], future_report)
+        self.assertIn("CONTENT_LINEAGE_SESSION_INVALID", future_report["reason_codes"])
+
     def test_archive_state_combinations_are_coherent(self) -> None:
         restored = _valid_records()
         restored[-1]["retention"].update(
