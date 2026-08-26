@@ -135,7 +135,7 @@ not claim that an archive backend was contacted):
 | target present, archive `DECLARED`, restore `NOT_REQUESTED` | accept | archive receipt; no restore receipt |
 | archive `RESTORED` | accept only as a pair | archive receipt + restore `RESTORED` + restore receipt |
 | archive `DELETED` | accept only with deletion | deletion state/readback `CONFIRMED` + deletion receipt |
-| archive `DELETED` after a restore | accept only if history is retained | keep restore `RESTORED` and its receipt; contradictory `NOT_REQUESTED` plus a restore receipt is rejected |
+| archive `DELETED` after a restore | accept only if history is retained | keep restore `RESTORED` and the earlier receipt for the exact Session/archive-package binding; otherwise `ARCHIVE_RESTORE_HISTORY_LOST` |
 | restore receipt with restore `NOT_REQUESTED` | reject | cannot silently erase or contradict restore history |
 | non-`NONE` archive target plus confirmed deletion/readback/receipt while archive is not `DELETED` | reject | archive/deletion state is contradictory; a `NONE` target may still delete protected-hot source data |
 
@@ -162,7 +162,7 @@ revision を opaque に返し、payload bytes をこの public candidate に返�
 |---|---|---|
 | SessionStart/open | `session_open` | session ref/revision or `UNASSIGNED_INBOX`, correlation/cursor |
 | incoming human message/voice segment | `human_message` / `voice_segment` | actor/speaker ref, source locator/revision, payload vault ref/hash/span |
-| verified private Voice reply | `voice_reply` | exact destination/consent/reply artifact/delivery receipt refs; no raw reply body |
+| verified private Voice reply | `voice_reply` | non-null source channel plus exact destination/consent/reply artifact/delivery receipt refs; no raw reply body |
 | tool/agent action | `tool_action` / `agent_action` | actor, authority role, owner/assignee, causation and idempotency |
 | decision confirmation/correction | `decision_confirmed` / `confirmation` / `correction` | candidate ref, human evidence, decision/correction ref |
 | pre-compact | `pre_compact` | projection summary ref, `PROJECTION_ONLY`; never source authority |

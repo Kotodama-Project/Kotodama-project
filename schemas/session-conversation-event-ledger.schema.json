@@ -73,7 +73,14 @@
     },
     {
       "if": {"properties": {"event": {"properties": {"kind": {"const": "voice_reply"}}}}},
-      "then": {"required": ["egress"]},
+      "then": {
+        "required": ["egress"],
+        "properties": {
+          "source": {
+            "properties": {"channel_ref": {"$ref": "#/$defs/ref"}}
+          }
+        }
+      },
       "else": {"not": {"required": ["egress"]}}
     },
     {

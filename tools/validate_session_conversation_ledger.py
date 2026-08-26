@@ -444,6 +444,8 @@ def _validate_event_shape(record: Any) -> list[str]:
 
     egress = record.get("egress")
     if detail_kind == "voice_reply":
+        if record.get("source", {}).get("channel_ref") is None:
+            reasons.append("VOICE_REPLY_SOURCE_CHANNEL_REQUIRED")
         if _keys(egress, EGRESS_KEYS, EGRESS_KEYS, "egress", reasons):
             for key in ("reply_artifact_ref", "delivery_receipt_ref"):
                 _ref(egress.get(key), reasons)
@@ -634,6 +636,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     latest_revision: dict[str, int] = {}
     seen_content_artifacts = {"payload_vault_ref": set(), "vault_manifest_ref": set(), "content_hash": set()}
     candidate_states: dict[str, str] = {}
+    restored_archive_receipts: dict[tuple[str, str, str, str, str, str], set[str]] = {}
     for record in records:
         shape_reasons = _validate_event_shape(record)
         reasons.extend(shape_reasons)
@@ -678,6 +681,24 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                 reasons.append("REPLAY_TARGET_ORDER_INVALID")
 
         session = record["session"]
+        retention = record["retention"]
+        if retention["archive_target_kind"] != "NONE":
+            archive_history_key = (
+                session["state"],
+                session.get("session_ref") or "",
+                retention["archive_target_kind"],
+                retention["archive_target_ref"],
+                retention["archive_target_uri_ref"],
+                retention["archive_package_digest"],
+            )
+            prior_restore_receipts = restored_archive_receipts.get(archive_history_key, set())
+            if prior_restore_receipts and retention["archive_status"] == "DELETED" and (
+                retention["restore_status"] != "RESTORED"
+                or retention["restore_receipt_ref"] not in prior_restore_receipts
+            ):
+                reasons.append("ARCHIVE_RESTORE_HISTORY_LOST")
+            if retention["restore_status"] == "RESTORED" and isinstance(retention["restore_receipt_ref"], str):
+                restored_archive_receipts.setdefault(archive_history_key, set()).add(retention["restore_receipt_ref"])
         content = record["content"]
         for artifact_field, seen in seen_content_artifacts.items():
             artifact_value = content[artifact_field]

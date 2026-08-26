@@ -673,6 +673,47 @@ class SessionConversationLedgerTests(unittest.TestCase):
         )
         self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain(direct_delete))["result"])
 
+        restore_history = _valid_records()
+        archive_binding = {
+            "archive_target_kind": "ARCHIVE_TARGET",
+            "archive_target_ref": _ref("archive-target", "history"),
+            "archive_target_uri_ref": _ref("archive-uri", "history"),
+            "archive_package_digest": "f" * 64,
+            "snapshot_receipt_ref": _ref("snapshot-receipt", "history"),
+            "archive_receipt_ref": _ref("archive-receipt", "history"),
+        }
+        for record in restore_history:
+            record["retention"].update(archive_binding)
+            record["retention"]["archive_status"] = "DECLARED"
+        restore_history[1]["retention"].update(
+            {
+                "archive_status": "RESTORED",
+                "restore_status": "RESTORED",
+                "restore_receipt_ref": _ref("restore-receipt", "history"),
+            }
+        )
+        restore_history[2]["retention"].update(
+            {
+                "archive_status": "DELETED",
+                "restore_status": "NOT_REQUESTED",
+                "restore_receipt_ref": None,
+                "deletion_state": "CONFIRMED",
+                "deletion_readback": "CONFIRMED",
+                "deletion_receipt_ref": _ref("deletion-receipt", "history"),
+            }
+        )
+        report = ledger.validate_ledger(_rechain(restore_history))
+        self.assertIn("ARCHIVE_RESTORE_HISTORY_LOST", report["reason_codes"])
+
+        retained_history = copy.deepcopy(restore_history)
+        retained_history[-1]["retention"].update(
+            {
+                "restore_status": "RESTORED",
+                "restore_receipt_ref": _ref("restore-receipt", "history"),
+            }
+        )
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain(retained_history))["result"])
+
     def test_later_llm_candidate_reuse_after_human_state_is_refused(self) -> None:
         records = _lifecycle_records("decision_confirmed", "HUMAN_CONFIRMED", "CONFIRMED")
         previous = records[-1]["event_hash"]
@@ -1656,6 +1697,15 @@ class SessionConversationLedgerTests(unittest.TestCase):
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         self.assertTrue(list(Draft202012Validator(schema).iter_errors(wrong_source[-1])))
         self.assertIn("VOICE_SOURCE_TYPE_INVALID", ledger.validate_ledger(wrong_source)["reason_codes"])
+
+        missing_source_channel = copy.deepcopy(records)
+        missing_source_channel[-1]["source"]["channel_ref"] = None
+        missing_source_channel = _rechain(missing_source_channel)
+        self.assertTrue(list(Draft202012Validator(schema).iter_errors(missing_source_channel[-1])))
+        self.assertIn(
+            "VOICE_REPLY_SOURCE_CHANNEL_REQUIRED",
+            ledger.validate_ledger(missing_source_channel)["reason_codes"],
+        )
 
     def test_specialized_public_refs_share_the_same_safety_contract(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
