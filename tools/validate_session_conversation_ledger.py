@@ -1122,7 +1122,10 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
         "projection_digest": "0" * 64,
         "generated_at": latest["source"]["ingested_at"],
         "status": status,
-        "source_ledger_head": {"sequence": latest_sequence, "event_hash": latest["event_hash"]},
+        "source_ledger_head": {
+            "sequence": _integer_value(records[-1]["sequence"]),
+            "event_hash": records[-1]["event_hash"],
+        },
         "session_governance": {
             **latest["session"]["governance"],
             "authority_status": "INVALIDATED" if invalidation_refs else "BOUND_UNVERIFIED",

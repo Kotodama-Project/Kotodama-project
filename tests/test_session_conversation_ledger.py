@@ -475,8 +475,11 @@ class SessionConversationLedgerTests(unittest.TestCase):
         )
         self.assertNotIn(foreign_update["event_id"], projection["source_event_refs"])
         self.assertNotIn(foreign_acl_loss["event_id"], projection["source_event_refs"])
-        self.assertEqual(3, projection["source_ledger_head"]["sequence"])
-        self.assertEqual(records[2]["event_hash"], projection["source_ledger_head"]["event_hash"])
+        timeline_refs = {item["event_ref"] for item in projection["source_timeline"]}
+        self.assertNotIn(foreign_update["event_id"], timeline_refs)
+        self.assertNotIn(foreign_acl_loss["event_id"], timeline_refs)
+        self.assertEqual(5, projection["source_ledger_head"]["sequence"])
+        self.assertEqual(records[-1]["event_hash"], projection["source_ledger_head"]["event_hash"])
         self.assertEqual("ref/task/demo", projection["session_governance"]["task_ssot_ref"])
         self.assertEqual("AVAILABLE", projection["knowledge_scope"]["acl_state"])
         self.assertEqual("FAIL_CLOSED", projection["knowledge_scope"]["projection_access"])
