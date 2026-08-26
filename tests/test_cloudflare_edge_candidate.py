@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import pathlib
 import shutil
 import tempfile
+import textwrap
 import unittest
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -63,6 +66,26 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             workflow.index('preview_secrets_file="$RUNNER_TEMP/kotodama-preview-secrets.json"'),
             workflow.index("versions upload --env preview"),
         )
+
+    def test_upload_refuses_whitespace_only_preview_runtime_binding(self) -> None:
+        workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
+        script = workflow.split("          python - <<'PY'\n", 1)[1].split(
+            "\n          PY", 1
+        )[0]
+        environment = {
+            binding: "bounded-test-value"
+            for binding in REQUIRED_PREVIEW_RUNTIME_BINDINGS
+        }
+        environment["ACCESS_AUD"] = "   \t"
+        with tempfile.TemporaryDirectory() as temporary:
+            secrets_file = pathlib.Path(temporary) / "preview-secrets.json"
+            environment["KOTODAMA_PREVIEW_SECRETS_FILE"] = str(secrets_file)
+            with (
+                mock.patch.dict(os.environ, environment, clear=True),
+                self.assertRaisesRegex(SystemExit, "ACCESS_AUD"),
+            ):
+                exec(compile(textwrap.dedent(script), "<preview-secrets-writer>", "exec"))
+            self.assertFalse(secrets_file.exists())
 
     def test_validator_refuses_incomplete_preview_runtime_binding_declaration(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
