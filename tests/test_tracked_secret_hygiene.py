@@ -1430,7 +1430,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 self.assertNotIn(value, repr(findings))
 
         negatives = (
-            f'Environment.SetEnvironmentVariable(variable: "{name}", "{value}");\n',
+            f'Environment.SetEnvironmentVariable(value: "{value}", "{name}");\n',
             f'Environment.SetEnvironmentVariable("{name}", value: dynamicValue);\n',
             f'Environment.SetEnvironmentVariable("{name}", value: "{value}", target: dynamicTarget);\n',
             f'Environment.SetEnvironmentVariable("{name}", value: "{value}", value: "OTHER");\n',
@@ -1439,6 +1439,95 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         for text in negatives:
             with self.subTest(negative=text[:36]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.cs"), text))
+
+    def test_csharp_named_prefixes_allow_only_correct_parameter_position(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        target = "EnvironmentVariableTarget.Process"
+        positives = (
+            f'Environment.SetEnvironmentVariable(variable: "{name}", "{value}");\n',
+            f'Environment.SetEnvironmentVariable(variable: "{name}", "{value}", {target});\n',
+            f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", {target});\n',
+            f'Environment.SetEnvironmentVariable(variable: "{name}", "{value}", target: {target});\n',
+        )
+        for text in positives:
+            with self.subTest(positive=text[:40]):
+                findings = SCANNER.scan_text(Path("config.cs"), text)
+                self.assertEqual(
+                    [("config.cs", 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        negatives = (
+            f'Environment.SetEnvironmentVariable(value: "{value}", "{name}");\n',
+            f'Environment.SetEnvironmentVariable(variable: "{name}", dynamicValue);\n',
+            f'Environment.SetEnvironmentVariable(variable: "{name}", "{value}", target: dynamicTarget);\n',
+            f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", "{target}");\n',
+        )
+        for text in negatives:
+            with self.subTest(negative=text[:40]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.cs"), text))
+
+    def test_environment_setter_values_resolve_prior_local_literal_aliases(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        positives = (
+            (
+                "config.go",
+                f'secret := "{value}"\nos.Setenv("{name}", secret)\n',
+            ),
+            (
+                "config.cs",
+                f'var secret = "{value}";\nEnvironment.SetEnvironmentVariable("{name}", secret);\n',
+            ),
+            (
+                "config.cs",
+                f'string secret = "{value}";\nEnvironment.SetEnvironmentVariable("{name}", secret);\n',
+            ),
+            (
+                "config.py",
+                f'secret = "{value}"\nos.putenv("{name}", secret)\n',
+            ),
+        )
+        for filename, text in positives:
+            with self.subTest(positive=filename):
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(
+                    [(filename, 2, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        negatives = (
+            (
+                "config.go",
+                f'secret := "{value}"\nsecret = getSecret()\nos.Setenv("{name}", secret)\n',
+            ),
+            (
+                "config.go",
+                f'os.Setenv("{name}", secret)\nsecret := "{value}"\n',
+            ),
+            (
+                "config.go",
+                f'secret := "{value}"\n{{\n  secret := getSecret()\n  os.Setenv("{name}", secret)\n}}\n',
+            ),
+            (
+                "config.cs",
+                f'var secret = "{value}";\nvoid Use(string secret) {{ Environment.SetEnvironmentVariable("{name}", secret); }}\n',
+            ),
+            (
+                "config.py",
+                f'def use(secret):\n    os.putenv("{name}", secret)\n',
+            ),
+            (
+                "config.go",
+                f'var source = `os.Setenv("{name}", "{value}")`\n',
+            ),
+        )
+        for filename, text in negatives:
+            with self.subTest(negative=filename, prefix=text[:24]):
+                self.assertEqual([], SCANNER.scan_text(Path(filename), text))
 
     def test_c_family_setter_calls_normalize_translation_phase_splices(self) -> None:
         name = "OPENAI_" + "API_KEY"

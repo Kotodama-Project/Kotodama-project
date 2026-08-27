@@ -262,7 +262,7 @@ TRIPLE_QUOTE_SUFFIXES = {".cs", ".java", ".kt", ".kts", ".swift"}
 CPP_SOURCE_SUFFIXES = {".cpp", ".h", ".hh", ".hpp", ".hxx"}
 C_SOURCE_SUFFIXES = {".c"} | CPP_SOURCE_SUFFIXES
 JAVASCRIPT_SOURCE_SUFFIXES = {".cjs", ".js", ".mjs", ".ts"}
-NON_JAVASCRIPT_ALIAS_SUFFIXES = {".py", ".rb", ".ps1"}
+NON_JAVASCRIPT_ALIAS_SUFFIXES = {".cs", ".go", ".py", ".rb", ".ps1"}
 JAVA_TEXT_BLOCK_SENTINEL = "<java-text-block>"
 SOURCE_CODE_SUFFIXES = {
     ".c", ".cpp", ".cs", ".go", ".h", ".hh", ".hpp", ".hxx",
@@ -2447,6 +2447,87 @@ def python_alias_bindings(
     return [tuple(scope) for scope in scopes], bindings
 
 
+def local_alias_scopes(path: Path, text: str) -> tuple[
+    str, str, list[tuple[int, int, int]]
+]:
+    source = strip_block_comments(path, text)
+    executable = executable_code_mask(path, text)
+    scopes: list[list[int]] = [[0, len(text), -1]]
+    stack = [0]
+    for position, character in enumerate(executable):
+        if character == "{":
+            scopes.append([position + 1, len(text), stack[-1]])
+            stack.append(len(scopes) - 1)
+        elif character == "}" and len(stack) > 1:
+            scopes[stack.pop()][1] = position
+    return source, executable, [tuple(scope) for scope in scopes]
+
+
+def local_parameter_names(parameters: str, suffix: str) -> list[str]:
+    names: list[str] = []
+    for parameter in parameters.split(","):
+        identifiers = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", parameter)
+        if not identifiers:
+            continue
+        name = identifiers[0] if suffix == ".go" else identifiers[-1]
+        if name not in {"_", "this"}:
+            names.append(name)
+    return names
+
+
+def go_csharp_alias_bindings(
+    path: Path, text: str
+) -> tuple[list[tuple[int, int, int]], list[tuple[str, str | None, int, int]]]:
+    suffix = path.suffix.lower()
+    source, executable, scopes = local_alias_scopes(path, text)
+    if suffix == ".go":
+        declaration = re.compile(
+            r"(?:^|(?<=[;{}]))[ \t]*(?:(?:var|const)\s+)?"
+            r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+            r"(?:\s+[A-Za-z_][A-Za-z0-9_.*\[\],<> ]*)?"
+            r"\s*(?::=|=)\s*(?P<value>[^;\r\n]*)",
+            re.MULTILINE,
+        )
+        function = re.compile(
+            r"\bfunc\s*(?:\([^)]*\)\s*)?(?:[A-Za-z_][A-Za-z0-9_]*\s*)?"
+            r"\((?P<parameters>[^()]*)\)[^{]*\{"
+        )
+    else:
+        declaration = re.compile(
+            r"(?:^|(?<=[;{}]))[ \t]*(?:(?:const|readonly)\s+)?"
+            r"(?:(?:var|string|object|bool|byte|char|decimal|double|float|"
+            r"int|long|nint|nuint|short|uint|ulong|ushort|"
+            r"[A-Z][A-Za-z0-9_.]*(?:<[^>\r\n]+>)?)\??\s+)?"
+            r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
+            r"(?P<value>[^;\r\n]*)",
+            re.MULTILINE,
+        )
+        function = re.compile(
+            r"\b(?:[A-Za-z_][A-Za-z0-9_.]*(?:<[^>{}]+>)?\s+)+"
+            r"[A-Za-z_][A-Za-z0-9_]*\s*\((?P<parameters>[^()]*)\)[^{]*\{"
+        )
+    bindings: list[tuple[str, str | None, int, int]] = []
+    for match in function.finditer(executable):
+        brace = executable.rfind("{", match.start(), match.end())
+        if brace < 0:
+            continue
+        scope = non_javascript_scope_at(scopes, brace + 1)
+        for name in local_parameter_names(match.group("parameters"), suffix):
+            bindings.append((name, None, match.start(), scope))
+    for match in declaration.finditer(source):
+        position = match.start("name")
+        if position >= len(executable) or executable[position].isspace():
+            continue
+        scope = non_javascript_scope_at(scopes, position)
+        value = resolve_non_javascript_literal(
+            match.group("value"),
+            non_javascript_scope_aliases(scopes, bindings, position),
+            suffix,
+        )
+        bindings.append((match.group("name"), value, position, scope))
+    return scopes, bindings
+
+
 def powershell_tokens(line: str) -> list[tuple[str, int]]:
     tokens: list[tuple[str, int]] = []
     start = 0
@@ -2569,6 +2650,8 @@ def script_alias_bindings(
     suffix = path.suffix.lower()
     if suffix == ".py":
         return python_alias_bindings(path, text)
+    if suffix in {".cs", ".go"}:
+        return go_csharp_alias_bindings(path, text)
     if suffix == ".ps1":
         return powershell_alias_bindings(path, text)
     else:
@@ -3348,50 +3431,72 @@ CSHARP_ENVIRONMENT_TARGETS = {
 
 def decode_csharp_setter_arguments(
     arguments: list[str],
+    aliases: dict[str, str] | None = None,
 ) -> tuple[str, str] | None:
-    positional: list[str] = []
-    named: dict[str, str] = {}
-    saw_named = False
-    for index, argument in enumerate(arguments):
-        argument = argument.strip()
-        if not argument and index == len(arguments) - 1:
-            continue
+    parameter_order = ("variable", "value", "target")
+    parameter_indexes = {
+        parameter: index for index, parameter in enumerate(parameter_order)
+    }
+    slots: dict[int, str] = {}
+    prefix_named: list[tuple[int, int]] = []
+    named_since_positional: list[tuple[int, int]] = []
+    saw_positional = False
+    cleaned = [
+        argument.strip()
+        for index, argument in enumerate(arguments)
+        if argument.strip() or index != len(arguments) - 1
+    ]
+    for argument_index, argument in enumerate(cleaned):
         label = re.fullmatch(
             r"(?P<label>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?P<value>.+)",
             argument,
             re.DOTALL,
         )
-        if label is None:
-            if saw_named:
+        if label is not None:
+            label_name = label.group("label")
+            if label_name not in parameter_indexes:
                 return None
-            positional.append(argument)
+            parameter_index = parameter_indexes[label_name]
+            if parameter_index in slots:
+                return None
+            slots[parameter_index] = label.group("value").strip()
+            if saw_positional:
+                named_since_positional.append((argument_index, parameter_index))
+            else:
+                prefix_named.append((argument_index, parameter_index))
             continue
-        label_name = label.group("label")
-        if label_name not in {"variable", "value", "target"}:
+        if argument_index >= len(parameter_order) or (
+            prefix_named
+            and not saw_positional
+            and any(
+                parameter_index != index
+                for index, parameter_index in prefix_named
+            )
+        ) or (
+            saw_positional
+            and named_since_positional
+            and any(
+                parameter_index != index
+                for index, parameter_index in named_since_positional
+            )
+        ):
             return None
-        if label_name in named:
+        if argument_index in slots:
             return None
-        saw_named = True
-        named[label_name] = label.group("value").strip()
-    if len(positional) > 3:
-        return None
-    slots: dict[str, str] = {}
-    parameter_order = ("variable", "value", "target")
-    for parameter, argument in zip(parameter_order, positional):
-        slots[parameter] = argument
-    for label_name, argument in named.items():
-        if label_name in slots:
-            return None
-        slots[label_name] = argument
-    if not {"variable", "value"}.issubset(slots):
+        slots[argument_index] = argument
+        saw_positional = True
+        named_since_positional = []
+    if 0 not in slots or 1 not in slots:
         return None
     if (
-        "target" in slots
-        and slots["target"] not in CSHARP_ENVIRONMENT_TARGETS
+        2 in slots
+        and slots[2] not in CSHARP_ENVIRONMENT_TARGETS
     ):
         return None
-    variable = decode_environment_setter_literal(slots["variable"], ".cs")
-    value = decode_environment_setter_literal(slots["value"], ".cs")
+    variable = decode_environment_setter_literal(slots[0], ".cs")
+    value = decode_environment_setter_literal(slots[1], ".cs")
+    if value is None and aliases is not None:
+        value = resolve_non_javascript_literal(slots[1], aliases, ".cs")
     if variable is None or value is None:
         return None
     return variable, value
@@ -3434,6 +3539,11 @@ def environment_setter_assignments(
         origins = list(range(len(text)))
     sanitized = strip_setter_comments(path, source)
     executable = executable_code_mask(path, source)
+    alias_state = (
+        non_javascript_alias_bindings(path, source)
+        if suffix in NON_JAVASCRIPT_ALIAS_SUFFIXES
+        else None
+    )
     findings: list[tuple[str, int]] = []
     for match in pattern.finditer(sanitized):
         if executable[match.start()].isspace():
@@ -3447,13 +3557,25 @@ def environment_setter_assignments(
             sanitized[match.end():close], suffix
         )
         if suffix == ".cs":
-            decoded_arguments = decode_csharp_setter_arguments(arguments)
+            aliases = (
+                non_javascript_scope_aliases(
+                    alias_state[0], alias_state[1], match.start()
+                )
+                if alias_state is not None
+                else None
+            )
+            decoded_arguments = decode_csharp_setter_arguments(arguments, aliases)
         else:
             if len(arguments) < 2:
                 continue
+            value = decode_environment_setter_literal(arguments[1], suffix)
+            if value is None and alias_state is not None:
+                value = non_javascript_alias_value(
+                    path, alias_state, arguments[1], match.start()
+                )
             decoded_arguments = (
                 decode_environment_setter_literal(arguments[0], suffix),
-                decode_environment_setter_literal(arguments[1], suffix),
+                value,
             )
         if decoded_arguments is None:
             continue
