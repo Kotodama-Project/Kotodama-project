@@ -2122,6 +2122,67 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(value, repr(findings))
 
+    def test_python_typed_ephemeral_values_follow_nested_branch_order(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        none_truthiness = (
+            'name = (flag := None) or (name_part := "OPENAI_API_KEY")\n'
+            f'secret = (secret_flag := None) or (secret_part := "{value}")\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), none_truthiness)
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        bool_numeric_flags = (
+            'name = (false_flag := False) or (name_part := "OPENAI_API_KEY")\n'
+            f'secret = (zero_flag := 0) or (secret_part := "{value}")\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), bool_numeric_flags)
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        cross_type_equality = (
+            'name = (none_flag := None) == None and '
+            '(name_part := "OPENAI_API_KEY")\n'
+            f'secret = (bool_flag := True) == 1 and (secret_part := "{value}")\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), cross_type_equality)
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        nested_branch = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            'result = (flag := None) or '
+            '("unused" if flag else (alias := "OPENAI_API_KEY"))\n'
+            "os.putenv(alias, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), nested_branch)
+        self.assertEqual(
+            [("config.py", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        unknown_object = (
+            'unknown = object()\n'
+            'name = (flag := unknown) or (name_part := "OPENAI_API_KEY")\n'
+            f'secret = "{value}"\n'
+            "os.putenv(name, secret)\n"
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.py"), unknown_object))
+
     def test_environment_setter_values_decode_native_local_string_initializers(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"

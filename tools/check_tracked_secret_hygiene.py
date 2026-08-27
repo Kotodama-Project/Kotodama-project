@@ -2289,7 +2289,7 @@ def non_javascript_scope_at(
 
 def non_javascript_scope_aliases(
     scopes: list[tuple[int, int, int]],
-    bindings: list[tuple[str, str | None, int, int]],
+    bindings: list[tuple[str, PythonStateValue, int, int]],
     position: int,
 ) -> dict[str, str]:
     scope = non_javascript_scope_at(scopes, position)
@@ -2316,7 +2316,7 @@ def non_javascript_scope_aliases(
             )[1]
             if name in blocked or name in aliases:
                 continue
-            if binding[1] is None:
+            if binding[1] is None or binding[1] is UNRESOLVED:
                 blocked.add(name)
             else:
                 aliases[name] = binding[1]
@@ -2361,37 +2361,77 @@ def python_source_end_offset(
     return python_byte_column_to_offset(text, line_offsets, line, column)
 
 
-PythonResolvedValue = str | tuple | list | bool | int | float | complex
+class _Unresolved:
+    __slots__ = ()
 
 
-def python_value_truthiness(value: PythonResolvedValue) -> bool | None:
+UNRESOLVED = _Unresolved()
+PythonResolvedValue = type(None) | str | tuple | list | bool | int | float | complex
+PythonStateValue = PythonResolvedValue | _Unresolved
+
+
+def python_scope_aliases(
+    scopes: list[tuple[int, int, int]],
+    bindings: list[tuple[str, PythonStateValue, int, int]],
+    position: int,
+) -> dict[str, PythonStateValue]:
+    scope = non_javascript_scope_at(scopes, position)
+    aliases: dict[str, PythonStateValue] = {}
+    blocked: set[str] = set()
+    while scope >= 0:
+        names = {
+            binding[0]
+            for binding in bindings
+            if binding[3] == scope and binding[2] <= position
+        }
+        for name in names:
+            candidates = [
+                binding
+                for binding in bindings
+                if binding[0] == name
+                and binding[3] == scope
+                and binding[2] <= position
+            ]
+            binding = max(
+                enumerate(candidates),
+                key=lambda candidate: (candidate[1][2], candidate[0]),
+            )[1]
+            if name in blocked or name in aliases:
+                continue
+            if binding[1] is UNRESOLVED:
+                blocked.add(name)
+            else:
+                aliases[name] = binding[1]
+        scope = scopes[scope][2]
+    return aliases
+
+
+def python_value_truthiness(value: PythonStateValue) -> bool | _Unresolved:
+    if value is UNRESOLVED:
+        return UNRESOLVED
+    if value is None:
+        return False
     if isinstance(value, (str, tuple, list, bool, int, float, complex)):
         return bool(value)
-    return None
+    return UNRESOLVED
 
 
 def python_compare_values(
-    left: PythonResolvedValue | None,
-    right: PythonResolvedValue | None,
+    left: PythonStateValue,
+    right: PythonStateValue,
     operator: ast.cmpop,
-) -> bool | None:
-    if left is None or right is None:
-        return None
-    primitive = (str, bool, int, float, complex)
+) -> bool | _Unresolved:
+    if left is UNRESOLVED or right is UNRESOLVED:
+        return UNRESOLVED
+    primitive = (type(None), str, bool, int, float, complex)
     if not isinstance(left, primitive) or not isinstance(right, primitive):
-        return None
+        return UNRESOLVED
     both_strings = isinstance(left, str) and isinstance(right, str)
-    both_numbers = (
-        isinstance(left, (bool, int, float, complex))
-        and isinstance(right, (bool, int, float, complex))
-    )
     if isinstance(operator, (ast.Eq, ast.NotEq)):
-        if not (both_strings or both_numbers):
-            return None
         try:
             result = left == right
         except (TypeError, ValueError, OverflowError):
-            return None
+            return UNRESOLVED
         return not result if isinstance(operator, ast.NotEq) else result
     real_numbers = (bool, int, float)
     ordered = (
@@ -2401,7 +2441,7 @@ def python_compare_values(
         and isinstance(right, real_numbers)
     )
     if not ordered:
-        return None
+        return UNRESOLVED
     try:
         if isinstance(operator, ast.Lt):
             return left < right
@@ -2412,27 +2452,31 @@ def python_compare_values(
         if isinstance(operator, ast.GtE):
             return left >= right
     except (TypeError, ValueError, OverflowError):
-        return None
-    return None
+        return UNRESOLVED
+    return UNRESOLVED
 
 
 def resolve_python_value(
     node: ast.AST,
     scopes: list[tuple[int, int, int]],
-    bindings: list[tuple[str, str | None, int, int]],
+    bindings: list[tuple[str, PythonStateValue, int, int]],
     position: int,
-    ephemeral: dict[str, PythonResolvedValue | None],
-) -> PythonResolvedValue | None:
+    ephemeral: dict[str, PythonStateValue],
+) -> PythonStateValue:
     if isinstance(node, ast.Constant):
         if isinstance(node.value, str):
-            return node.value if len(node.value) <= 512 else None
+            return node.value if len(node.value) <= 512 else UNRESOLVED
         if isinstance(node.value, (bool, int, float, complex)):
             return node.value
-        return None
+        if node.value is None:
+            return None
+        return UNRESOLVED
     if isinstance(node, ast.Name):
         if node.id in ephemeral:
             return ephemeral[node.id]
-        return non_javascript_scope_aliases(scopes, bindings, position).get(node.id)
+        return python_scope_aliases(
+            scopes, bindings, position
+        ).get(node.id, UNRESOLVED)
     if isinstance(node, ast.BinOp):
         left = resolve_python_value(
             node.left, scopes, bindings, position, ephemeral
@@ -2447,18 +2491,18 @@ def resolve_python_value(
             and len(left + right) <= 512
         ):
             return left + right
-        return None
+        return UNRESOLVED
     if isinstance(node, ast.BoolOp):
-        result: PythonResolvedValue | None = None
+        result: PythonStateValue = UNRESOLVED
         for operand in node.values:
             resolved = resolve_python_value(
                 operand, scopes, bindings, position, ephemeral
             )
-            if resolved is None:
-                return None
+            if resolved is UNRESOLVED:
+                return UNRESOLVED
             truthiness = python_value_truthiness(resolved)
-            if truthiness is None:
-                return None
+            if truthiness is UNRESOLVED:
+                return UNRESOLVED
             result = resolved
             if isinstance(node.op, ast.And) and not truthiness:
                 return resolved
@@ -2478,12 +2522,12 @@ def resolve_python_value(
             resolved = resolve_python_value(
                 element, scopes, bindings, position, ephemeral
             )
-            if resolved is None:
+            if resolved is UNRESOLVED:
                 unknown = True
             else:
                 values.append(resolved)
         if unknown:
-            return None
+            return UNRESOLVED
         return tuple(values) if isinstance(node, ast.Tuple) else values
     if isinstance(node, ast.JoinedStr):
         parts: list[str] = []
@@ -2519,7 +2563,7 @@ def resolve_python_value(
                 continue
             unknown = True
         result = "".join(parts)
-        return result if not unknown and len(result) <= 512 else None
+        return result if not unknown and len(result) <= 512 else UNRESOLVED
     if isinstance(node, ast.NamedExpr):
         value = resolve_python_value(
             node.value, scopes, bindings, position, ephemeral
@@ -2535,15 +2579,17 @@ def resolve_python_value(
             node.slice, scopes, bindings, position, ephemeral
         )
         if (
-            isinstance(base, (tuple, list))
+            base is not UNRESOLVED
+            and index is not UNRESOLVED
+            and isinstance(base, (tuple, list))
             and isinstance(index, int)
             and not isinstance(index, bool)
         ):
             try:
                 return base[index]
             except IndexError:
-                return None
-        return None
+                return UNRESOLVED
+        return UNRESOLVED
     if isinstance(node, ast.Call):
         resolve_python_value(node.func, scopes, bindings, position, ephemeral)
         for argument in node.args:
@@ -2554,23 +2600,23 @@ def resolve_python_value(
             resolve_python_value(
                 keyword.value, scopes, bindings, position, ephemeral
             )
-        return None
+        return UNRESOLVED
     if isinstance(node, ast.Dict):
         for key, value in zip(node.keys, node.values):
             if key is not None:
                 resolve_python_value(key, scopes, bindings, position, ephemeral)
             resolve_python_value(value, scopes, bindings, position, ephemeral)
-        return None
+        return UNRESOLVED
     if isinstance(node, ast.Attribute):
         resolve_python_value(node.value, scopes, bindings, position, ephemeral)
-        return None
+        return UNRESOLVED
     if isinstance(node, ast.Starred):
         return resolve_python_value(
             node.value, scopes, bindings, position, ephemeral
         )
     if isinstance(node, ast.UnaryOp):
         resolve_python_value(node.operand, scopes, bindings, position, ephemeral)
-        return None
+        return UNRESOLVED
     if isinstance(node, ast.Compare):
         left = resolve_python_value(
             node.left, scopes, bindings, position, ephemeral
@@ -2583,48 +2629,48 @@ def resolve_python_value(
             if result is not True:
                 return result
             left = right
-        return True if node.ops else None
+        return True if node.ops else UNRESOLVED
     if isinstance(node, ast.IfExp):
         test = resolve_python_value(
             node.test, scopes, bindings, position, ephemeral
         )
-        if test is None:
-            return None
+        if test is UNRESOLVED:
+            return UNRESOLVED
         truthiness = python_value_truthiness(test)
-        if truthiness is None:
-            return None
+        if truthiness is UNRESOLVED:
+            return UNRESOLVED
         branch = node.body if truthiness else node.orelse
         return resolve_python_value(
             branch, scopes, bindings, position, ephemeral
         )
-    return None
+    return UNRESOLVED
 
 
 def resolve_python_expression(
     node: ast.AST,
     scopes: list[tuple[int, int, int]],
-    bindings: list[tuple[str, str | None, int, int]],
+    bindings: list[tuple[str, PythonStateValue, int, int]],
     position: int,
-    ephemeral: dict[str, PythonResolvedValue | None] | None = None,
-) -> str | None:
+    ephemeral: dict[str, PythonStateValue] | None = None,
+) -> str | _Unresolved:
     state = {} if ephemeral is None else ephemeral
     resolved = resolve_python_value(node, scopes, bindings, position, state)
-    return resolved if isinstance(resolved, str) else None
+    return resolved if isinstance(resolved, str) else UNRESOLVED
 
 
 def resolve_python_literal_iterable(
     node: ast.AST,
     scopes: list[tuple[int, int, int]],
-    bindings: list[tuple[str, str | None, int, int]],
+    bindings: list[tuple[str, PythonStateValue, int, int]],
     position: int,
-    ephemeral: dict[str, PythonResolvedValue | None] | None = None,
-) -> list[PythonResolvedValue] | None:
+    ephemeral: dict[str, PythonStateValue] | None = None,
+) -> list[PythonResolvedValue] | _Unresolved:
     state = {} if ephemeral is None else ephemeral
     if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
         values: list[PythonResolvedValue] = []
         unknown = False
         if len(node.elts) > MAX_JAVASCRIPT_CONSTANT_PARTS:
-            return None
+            return UNRESOLVED
         for element in node.elts:
             if isinstance(element, ast.Starred):
                 resolve_python_value(
@@ -2635,37 +2681,37 @@ def resolve_python_literal_iterable(
             value = resolve_python_value(
                 element, scopes, bindings, position, state
             )
-            if value is None:
+            if value is UNRESOLVED:
                 unknown = True
             else:
                 values.append(value)
-        return None if unknown else values
+        return UNRESOLVED if unknown else values
     if isinstance(node, ast.Dict):
         values: list[PythonResolvedValue] = []
         unknown = False
         if len(node.keys) > MAX_JAVASCRIPT_CONSTANT_PARTS:
-            return None
+            return UNRESOLVED
         for key in node.keys:
             if key is None:
                 unknown = True
                 continue
             value = resolve_python_value(key, scopes, bindings, position, state)
-            if value is None:
+            if value is UNRESOLVED:
                 unknown = True
             else:
                 values.append(value)
-        return None if unknown else values
+        return UNRESOLVED if unknown else values
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return list(node.value[:MAX_JAVASCRIPT_CONSTANT_PARTS]) \
-            if len(node.value) <= MAX_JAVASCRIPT_CONSTANT_PARTS else None
-    return None
+            if len(node.value) <= MAX_JAVASCRIPT_CONSTANT_PARTS else UNRESOLVED
+    return UNRESOLVED
 
 
 def python_target_bindings(
     target: ast.AST, value: PythonResolvedValue
-) -> dict[str, str | None] | None:
+) -> dict[str, PythonStateValue] | None:
     if isinstance(target, ast.Name):
-        return {target.id: value if isinstance(value, str) else None}
+        return {target.id: value}
     if isinstance(target, ast.Starred):
         return None
     if isinstance(target, (ast.Tuple, ast.List)):
@@ -2673,7 +2719,7 @@ def python_target_bindings(
             return None
         if not isinstance(value, (tuple, list)) or len(target.elts) != len(value):
             return None
-        result: dict[str, str | None] = {}
+        result: dict[str, PythonStateValue] = {}
         for element, element_value in zip(target.elts, value):
             nested = python_target_bindings(element, element_value)
             if nested is None:
@@ -2701,7 +2747,10 @@ def python_target_names(node: ast.AST) -> list[str]:
 
 def python_alias_bindings(
     path: Path, text: str
-) -> tuple[list[tuple[int, int, int]], list[tuple[str, str | None, int, int]]]:
+) -> tuple[
+    list[tuple[int, int, int]],
+    list[tuple[str, PythonStateValue, int, int]],
+]:
     line_offsets: list[int] = []
     offset = 0
     for raw_line in text.splitlines(keepends=True):
@@ -2714,11 +2763,12 @@ def python_alias_bindings(
     except (SyntaxError, ValueError, TypeError):
         return [(0, len(text), -1)], []
     scopes: list[list[int]] = [[0, len(text), -1]]
-    bindings: list[tuple[str, str | None, int, int]] = []
+    bindings: list[tuple[str, PythonStateValue, int, int]] = []
 
     class Visitor(ast.NodeVisitor):
         scope = 0
         walrus_scope = 0
+        ephemeral: dict[str, PythonStateValue] | None = None
 
         def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
             self._visit_function(node)
@@ -2729,6 +2779,7 @@ def python_alias_bindings(
         def visit_Lambda(self, node: ast.Lambda) -> None:
             parent = self.scope
             previous_walrus_scope = self.walrus_scope
+            previous_ephemeral = self.ephemeral
             for default in (*node.args.defaults, *node.args.kw_defaults):
                 if default is not None:
                     self.visit(default)
@@ -2742,18 +2793,21 @@ def python_alias_bindings(
                 *node.args.args,
                 *node.args.kwonlyargs,
             ):
-                bindings.append((argument.arg, None, start, self.scope))
+                bindings.append((argument.arg, UNRESOLVED, start, self.scope))
             if node.args.vararg is not None:
-                bindings.append((node.args.vararg.arg, None, start, self.scope))
+                bindings.append((node.args.vararg.arg, UNRESOLVED, start, self.scope))
             if node.args.kwarg is not None:
-                bindings.append((node.args.kwarg.arg, None, start, self.scope))
+                bindings.append((node.args.kwarg.arg, UNRESOLVED, start, self.scope))
+            self.ephemeral = None
             self.visit(node.body)
             self.scope = parent
             self.walrus_scope = previous_walrus_scope
+            self.ephemeral = previous_ephemeral
 
         def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
             parent = self.scope
             previous_walrus_scope = self.walrus_scope
+            previous_ephemeral = self.ephemeral
             for expression in node.decorator_list:
                 self.visit(expression)
             for default in (*node.args.defaults, *node.args.kw_defaults):
@@ -2778,28 +2832,33 @@ def python_alias_bindings(
             self.scope = len(scopes) - 1
             self.walrus_scope = self.scope
             for argument in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs):
-                bindings.append((argument.arg, None, start, self.scope))
+                bindings.append((argument.arg, UNRESOLVED, start, self.scope))
             if node.args.vararg is not None:
-                bindings.append((node.args.vararg.arg, None, start, self.scope))
+                bindings.append((node.args.vararg.arg, UNRESOLVED, start, self.scope))
             if node.args.kwarg is not None:
-                bindings.append((node.args.kwarg.arg, None, start, self.scope))
+                bindings.append((node.args.kwarg.arg, UNRESOLVED, start, self.scope))
+            self.ephemeral = None
             for child in node.body:
                 self.visit(child)
             self.scope = parent
             self.walrus_scope = previous_walrus_scope
+            self.ephemeral = previous_ephemeral
 
         def visit_ClassDef(self, node: ast.ClassDef) -> None:
             start = python_source_offset(text, line_offsets, node)
             end = python_source_end_offset(text, line_offsets, node)
             parent = self.scope
             previous_walrus_scope = self.walrus_scope
+            previous_ephemeral = self.ephemeral
             scopes.append([start, end, parent])
             self.scope = len(scopes) - 1
             self.walrus_scope = self.scope
+            self.ephemeral = None
             for child in node.body:
                 self.visit(child)
             self.scope = parent
             self.walrus_scope = previous_walrus_scope
+            self.ephemeral = previous_ephemeral
 
         def _bind_comprehension_target(
             self,
@@ -2807,8 +2866,8 @@ def python_alias_bindings(
             iterable: ast.AST,
             scope: int,
             activation_position: int,
-        ) -> dict[str, str | None]:
-            ephemeral: dict[str, PythonResolvedValue | None] = {}
+        ) -> dict[str, PythonStateValue]:
+            ephemeral: dict[str, PythonStateValue] = {}
             values = resolve_python_literal_iterable(
                 iterable,
                 [tuple(scope_data) for scope_data in scopes],
@@ -2817,8 +2876,8 @@ def python_alias_bindings(
                 ephemeral,
             )
             target_names = python_target_names(target)
-            target_values = {name: None for name in target_names}
-            if values:
+            target_values = {name: UNRESOLVED for name in target_names}
+            if values is not UNRESOLVED and values:
                 resolved_targets = [
                     python_target_bindings(target, value)
                     for value in values
@@ -2844,7 +2903,7 @@ def python_alias_bindings(
         def _visit_comprehension_stage(
             self,
             expression: ast.AST,
-            available: dict[str, str | None],
+            available: dict[str, PythonStateValue],
             parent: int,
             projection_scope: int | None = None,
             projection_position: int | None = None,
@@ -2857,11 +2916,15 @@ def python_alias_bindings(
             for name, value in available.items():
                 bindings.append((name, value, start, stage_scope))
             previous_scope = self.scope
+            previous_ephemeral = self.ephemeral
+            if self.ephemeral is None:
+                self.ephemeral = {}
             walrus_scope = self.walrus_scope
             binding_start = len(bindings)
             self.scope = stage_scope
             self.visit(expression)
             self.scope = previous_scope
+            self.ephemeral = previous_ephemeral
             if projection_scope is not None and projection_position is not None:
                 for name, value, _, binding_scope in bindings[binding_start:]:
                     if binding_scope == walrus_scope and (
@@ -2883,9 +2946,13 @@ def python_alias_bindings(
             elements: tuple[ast.AST, ...],
             generators: list[ast.comprehension],
         ) -> None:
+            previous_ephemeral = self.ephemeral
+            if self.ephemeral is None:
+                self.ephemeral = {}
             if not generators:
                 for element in elements:
                     self.visit(element)
+                self.ephemeral = previous_ephemeral
                 return
             parent = self.scope
             previous_walrus_scope = self.walrus_scope
@@ -2896,7 +2963,7 @@ def python_alias_bindings(
             end = python_source_end_offset(text, line_offsets, node)
             scopes.append([body_start, end, parent])
             comprehension_scope = len(scopes) - 1
-            available: dict[str, str | None] = {}
+            available: dict[str, PythonStateValue] = {}
             body_binding_position = body_start - len(generators)
             target_names = {
                 name
@@ -2958,6 +3025,7 @@ def python_alias_bindings(
                 self.visit(element)
             self.scope = parent
             self.walrus_scope = previous_walrus_scope
+            self.ephemeral = previous_ephemeral
 
         def visit_ListComp(self, node: ast.ListComp) -> None:
             self._visit_comprehension(
@@ -2980,115 +3048,174 @@ def python_alias_bindings(
             )
 
         def visit_BoolOp(self, node: ast.BoolOp) -> None:
-            ephemeral: dict[str, PythonResolvedValue | None] = {}
-            for operand in node.values:
-                resolved = resolve_python_value(
-                    operand,
-                    [tuple(scope) for scope in scopes],
-                    bindings,
-                    python_source_offset(text, line_offsets, operand),
-                    ephemeral,
-                )
-                self.visit(operand)
-                if resolved is None:
-                    return
-                truthiness = python_value_truthiness(resolved)
-                if truthiness is None:
-                    return
-                if isinstance(node.op, ast.And) and not truthiness:
-                    return
-                if isinstance(node.op, ast.Or) and truthiness:
-                    return
+            previous_ephemeral = self.ephemeral
+            ephemeral = self.ephemeral if self.ephemeral is not None else {}
+            self.ephemeral = ephemeral
+            try:
+                for operand in node.values:
+                    resolved = resolve_python_value(
+                        operand,
+                        [tuple(scope) for scope in scopes],
+                        bindings,
+                        python_source_offset(text, line_offsets, operand),
+                        ephemeral,
+                    )
+                    self.visit(operand)
+                    if resolved is UNRESOLVED:
+                        return
+                    truthiness = python_value_truthiness(resolved)
+                    if truthiness is UNRESOLVED:
+                        return
+                    if isinstance(node.op, ast.And) and not truthiness:
+                        return
+                    if isinstance(node.op, ast.Or) and truthiness:
+                        return
+            finally:
+                self.ephemeral = previous_ephemeral
 
         def visit_IfExp(self, node: ast.IfExp) -> None:
-            ephemeral: dict[str, PythonResolvedValue | None] = {}
-            test = resolve_python_value(
-                node.test,
-                [tuple(scope) for scope in scopes],
-                bindings,
-                python_source_offset(text, line_offsets, node.test),
-                ephemeral,
-            )
-            self.visit(node.test)
-            if test is None:
-                return
-            truthiness = python_value_truthiness(test)
-            if truthiness is None:
-                return
-            self.visit(node.body if truthiness else node.orelse)
-
-        def visit_Compare(self, node: ast.Compare) -> None:
-            ephemeral: dict[str, PythonResolvedValue | None] = {}
-            left = resolve_python_value(
-                node.left,
-                [tuple(scope) for scope in scopes],
-                bindings,
-                python_source_offset(text, line_offsets, node.left),
-                ephemeral,
-            )
-            self.visit(node.left)
-            for operator, comparator in zip(node.ops, node.comparators):
-                right = resolve_python_value(
-                    comparator,
+            previous_ephemeral = self.ephemeral
+            ephemeral = self.ephemeral if self.ephemeral is not None else {}
+            self.ephemeral = ephemeral
+            try:
+                test = resolve_python_value(
+                    node.test,
                     [tuple(scope) for scope in scopes],
                     bindings,
-                    python_source_offset(text, line_offsets, comparator),
+                    python_source_offset(text, line_offsets, node.test),
                     ephemeral,
                 )
-                self.visit(comparator)
-                result = python_compare_values(left, right, operator)
-                if result is not True:
+                self.visit(node.test)
+                if test is UNRESOLVED:
                     return
-                left = right
+                truthiness = python_value_truthiness(test)
+                if truthiness is UNRESOLVED:
+                    return
+                self.visit(node.body if truthiness else node.orelse)
+            finally:
+                self.ephemeral = previous_ephemeral
+
+        def visit_Compare(self, node: ast.Compare) -> None:
+            previous_ephemeral = self.ephemeral
+            ephemeral = self.ephemeral if self.ephemeral is not None else {}
+            self.ephemeral = ephemeral
+            try:
+                left = resolve_python_value(
+                    node.left,
+                    [tuple(scope) for scope in scopes],
+                    bindings,
+                    python_source_offset(text, line_offsets, node.left),
+                    ephemeral,
+                )
+                self.visit(node.left)
+                for operator, comparator in zip(node.ops, node.comparators):
+                    right = resolve_python_value(
+                        comparator,
+                        [tuple(scope) for scope in scopes],
+                        bindings,
+                        python_source_offset(text, line_offsets, comparator),
+                        ephemeral,
+                    )
+                    self.visit(comparator)
+                    result = python_compare_values(left, right, operator)
+                    if result is not True:
+                        return
+                    left = right
+            finally:
+                self.ephemeral = previous_ephemeral
+
+        def visit_Call(self, node: ast.Call) -> None:
+            previous_ephemeral = self.ephemeral
+            if self.ephemeral is None:
+                self.ephemeral = {}
+            try:
+                self.visit(node.func)
+                for argument in node.args:
+                    self.visit(argument)
+                for keyword in node.keywords:
+                    self.visit(keyword.value)
+            finally:
+                self.ephemeral = previous_ephemeral
 
         def visit_Assign(self, node: ast.Assign) -> None:
-            value = resolve_python_expression(
+            previous_ephemeral = self.ephemeral
+            if self.ephemeral is None:
+                self.ephemeral = {}
+            value = resolve_python_value(
                 node.value, [tuple(scope) for scope in scopes], bindings,
                 python_source_offset(text, line_offsets, node.value),
+                self.ephemeral,
             )
+            self.visit(node.value)
+            self.ephemeral = previous_ephemeral
+            activation = python_source_end_offset(text, line_offsets, node.value)
             for target in node.targets:
                 if isinstance(target, ast.Name):
-                    bindings.append((target.id, value, python_source_offset(text, line_offsets, target), self.scope))
-            self.visit(node.value)
+                    bindings.append((target.id, value, activation, self.scope))
 
         def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-            value = resolve_python_expression(
+            previous_ephemeral = self.ephemeral
+            if self.ephemeral is None:
+                self.ephemeral = {}
+            value = resolve_python_value(
                 node.value, [tuple(scope) for scope in scopes], bindings,
-                python_source_offset(text, line_offsets, node.value) if node.value else python_source_offset(text, line_offsets, node),
-            ) if node.value is not None else None
-            if isinstance(node.target, ast.Name):
-                bindings.append((node.target.id, value, python_source_offset(text, line_offsets, node.target), self.scope))
+                python_source_offset(text, line_offsets, node.value),
+                self.ephemeral,
+            ) if node.value is not None else UNRESOLVED
             if node.value is not None:
                 self.visit(node.value)
+            self.ephemeral = previous_ephemeral
+            if isinstance(node.target, ast.Name):
+                activation = (
+                    python_source_end_offset(text, line_offsets, node.value)
+                    if node.value is not None
+                    else python_source_end_offset(text, line_offsets, node)
+                )
+                bindings.append((node.target.id, value, activation, self.scope))
 
         def visit_AugAssign(self, node: ast.AugAssign) -> None:
-            if isinstance(node.target, ast.Name):
-                bindings.append((node.target.id, None, python_source_offset(text, line_offsets, node.target), self.scope))
+            previous_ephemeral = self.ephemeral
+            if self.ephemeral is None:
+                self.ephemeral = {}
             self.visit(node.value)
+            self.ephemeral = previous_ephemeral
+            if isinstance(node.target, ast.Name):
+                bindings.append((
+                    node.target.id,
+                    UNRESOLVED,
+                    python_source_end_offset(text, line_offsets, node.value),
+                    self.scope,
+                ))
 
         def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
-            value = resolve_python_expression(
+            previous_ephemeral = self.ephemeral
+            if self.ephemeral is None:
+                self.ephemeral = {}
+            value = resolve_python_value(
                 node.value,
                 [tuple(scope) for scope in scopes],
                 bindings,
                 python_source_offset(text, line_offsets, node.value),
+                self.ephemeral,
             )
             self.visit(node.value)
             if isinstance(node.target, ast.Name):
+                self.ephemeral[node.target.id] = value
                 bindings.append((
                     node.target.id,
                     value,
                     python_source_end_offset(text, line_offsets, node.value),
                     self.walrus_scope,
                 ))
+            self.ephemeral = previous_ephemeral
 
         def visit_Import(self, node: ast.Import) -> None:
             for alias in node.names:
-                bindings.append((alias.asname or alias.name.split(".")[0], None, python_source_offset(text, line_offsets, node), self.scope))
+                bindings.append((alias.asname or alias.name.split(".")[0], UNRESOLVED, python_source_offset(text, line_offsets, node), self.scope))
 
         def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
             for alias in node.names:
-                bindings.append((alias.asname or alias.name, None, python_source_offset(text, line_offsets, node), self.scope))
+                bindings.append((alias.asname or alias.name, UNRESOLVED, python_source_offset(text, line_offsets, node), self.scope))
 
     Visitor().visit(tree)
     return [tuple(scope) for scope in scopes], bindings
@@ -3606,7 +3733,7 @@ def non_javascript_alias_value(
     path: Path,
     binding_state: tuple[
         list[tuple[int, int, int]],
-        list[tuple[str, str | None, int, int]],
+        list[tuple[str, PythonStateValue, int, int]],
     ],
     raw_value: str,
     position: int,
@@ -3627,11 +3754,20 @@ def non_javascript_alias_value(
             raw_value.strip().rstrip(";").strip(),
         )
     scopes, bindings = binding_state
-    aliases = non_javascript_scope_aliases(scopes, bindings, position)
+    aliases = (
+        python_scope_aliases(scopes, bindings, position)
+        if suffix == ".py"
+        else non_javascript_scope_aliases(scopes, bindings, position)
+    )
     if name_match is None:
+        string_aliases = {
+            name: value
+            for name, value in aliases.items()
+            if isinstance(value, str)
+        }
         return resolve_non_javascript_literal(
             raw_value,
-            aliases,
+            string_aliases,
             suffix,
         )
     alias_name = (
@@ -3641,7 +3777,8 @@ def non_javascript_alias_value(
     )
     if suffix == ".ps1":
         alias_name = alias_name.casefold()
-    return aliases.get(alias_name)
+    value = aliases.get(alias_name, UNRESOLVED)
+    return value if isinstance(value, str) else None
 
 
 def javascript_matching_bracket(text: str, start: int) -> int | None:
