@@ -255,6 +255,7 @@ TRIPLE_QUOTE_SUFFIXES = {".cs", ".java", ".kt", ".kts", ".swift"}
 CPP_SOURCE_SUFFIXES = {".cpp", ".h", ".hh", ".hpp", ".hxx"}
 C_SOURCE_SUFFIXES = {".c"} | CPP_SOURCE_SUFFIXES
 JAVASCRIPT_SOURCE_SUFFIXES = {".js", ".ts"}
+NON_JAVASCRIPT_ALIAS_SUFFIXES = {".py", ".rb", ".ps1"}
 JAVA_TEXT_BLOCK_SENTINEL = "<java-text-block>"
 SOURCE_CODE_SUFFIXES = {
     ".c", ".cpp", ".cs", ".go", ".h", ".hh", ".hpp", ".hxx",
@@ -2255,6 +2256,132 @@ def javascript_constant_aliases(path: Path, text: str) -> dict[str, str]:
     return javascript_scope_aliases(scopes, bindings, len(sanitized))
 
 
+def non_javascript_alias_bindings(
+    path: Path, text: str
+) -> list[tuple[str, str | None, int]]:
+    suffix = path.suffix.lower()
+    if suffix not in NON_JAVASCRIPT_ALIAS_SUFFIXES:
+        return []
+    if suffix == ".ps1":
+        declarations = re.compile(
+            r"^[ \t]*\$(?!env:)(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+            r"[ \t]*=[ \t]*(?P<value>.*?)\s*$",
+            re.MULTILINE,
+        )
+    else:
+        declarations = re.compile(
+            r"^[ \t]*(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+            r"(?:[ \t]*:[^=\r\n]+)?[ \t]*=[ \t]*(?P<value>.*?)\s*$",
+            re.MULTILINE,
+        )
+    bindings: list[tuple[str, str | None, int]] = []
+    offset = 0
+    quoted: str | None = None
+    for raw_line in text.splitlines(keepends=True):
+        line = raw_line.rstrip("\r\n")
+        if quoted is not None:
+            if quoted in line:
+                quoted = None
+            offset += len(raw_line)
+            continue
+        if suffix == ".ps1" and line.lstrip().startswith(("@'", '@"')):
+            quoted = "'@" if line.lstrip().startswith("@'") else '"@'
+            offset += len(raw_line)
+            continue
+        if suffix in {".py", ".rb"} and line.lstrip().startswith(("'''", '"""')):
+            quoted = line.lstrip()[:3]
+            if line.lstrip()[3:].find(quoted) >= 0:
+                quoted = None
+            offset += len(raw_line)
+            continue
+        match = declarations.match(line)
+        if match is not None:
+            name = match.group("name")
+            prior: dict[str, str | None] = {}
+            for binding_name, binding_value, binding_start in bindings:
+                if binding_start <= offset + match.start():
+                    prior[binding_name] = binding_value
+            value = resolve_non_javascript_literal(
+                match.group("value"),
+                {
+                    binding_name: binding_value
+                    for binding_name, binding_value in prior.items()
+                    if binding_value is not None
+                },
+                suffix,
+            )
+            bindings.append((name, value, offset + match.start()))
+        offset += len(raw_line)
+    return bindings
+
+
+def resolve_non_javascript_literal(
+    expression: str,
+    aliases: dict[str, str],
+    suffix: str,
+) -> str | None:
+    expression = strip_format_comment(Path("value" + suffix), expression).strip()
+    if len(expression) > 512:
+        return None
+    values: list[str] = []
+    index = 0
+    while index < len(expression):
+        character = expression[index]
+        if character.isspace() or character in "()+":
+            index += 1
+            continue
+        if character in {"'", '"'}:
+            end = javascript_literal_end(expression[index:])
+            if end is None:
+                return None
+            literal = expression[index:index + end + 1]
+            decoded = decode_javascript_string_contents(
+                literal[1:-1], literal[0]
+            )
+            if decoded is None:
+                return None
+            values.append(decoded)
+            index += end + 1
+            continue
+        if suffix == ".ps1" and character == "`":
+            index += 1
+            continue
+        if suffix == ".ps1" and character == "$":
+            match = re.match(r"\$([A-Za-z_][A-Za-z0-9_]*)", expression[index:])
+        else:
+            match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", expression[index:])
+        if match is None or match.group(1) not in aliases:
+            return None
+        values.append(aliases[match.group(1)])
+        index += match.end()
+    combined = "".join(values)
+    return combined if values and len(combined) <= 512 else None
+
+
+def non_javascript_alias_value(
+    path: Path,
+    bindings: list[tuple[str, str | None, int]],
+    raw_value: str,
+    position: int,
+) -> str | None:
+    if path.suffix.lower() not in NON_JAVASCRIPT_ALIAS_SUFFIXES:
+        return None
+    name_match = re.fullmatch(
+        r"\$?([A-Za-z_][A-Za-z0-9_]*)", raw_value.strip().rstrip(";").strip()
+    )
+    aliases: dict[str, str | None] = {}
+    for name, value, start in bindings:
+        if start <= position:
+            aliases[name] = value
+    if name_match is None:
+        return resolve_non_javascript_literal(
+            raw_value,
+            {name: value for name, value in aliases.items() if value is not None},
+            path.suffix.lower(),
+        )
+    return aliases.get(name_match.group(1))
+
+
 def javascript_matching_bracket(text: str, start: int) -> int | None:
     if start >= len(text) or text[start] != "[":
         return None
@@ -2553,6 +2680,7 @@ def scan_text(
         if path.suffix.lower() in JAVASCRIPT_SOURCE_SUFFIXES
         else {}
     )
+    non_javascript_bindings = non_javascript_alias_bindings(path, text)
     lines = text.splitlines()
     line_starts: list[int] = []
     cursor = 0
@@ -2598,6 +2726,14 @@ def scan_text(
                         (line_starts[number - 1] if number <= len(line_starts) else 0)
                         + match.start("name"),
                     ),
+                )
+            elif non_javascript_bindings:
+                resolved_value = non_javascript_alias_value(
+                    path,
+                    non_javascript_bindings,
+                    raw_value,
+                    (line_starts[number - 1] if number <= len(line_starts) else 0)
+                    + match.start("name"),
                 )
             classified_value = (
                 resolved_value
@@ -2648,6 +2784,13 @@ def scan_text(
                     bindings,
                     line_starts[number - 1] if number <= len(line_starts) else 0,
                 ),
+            )
+        elif non_javascript_bindings:
+            resolved_value = non_javascript_alias_value(
+                path,
+                non_javascript_bindings,
+                value,
+                line_starts[number - 1] if number <= len(line_starts) else 0,
             )
         classified_value = (
             resolved_value

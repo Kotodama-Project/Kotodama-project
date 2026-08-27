@@ -1513,6 +1513,100 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             SCANNER.scan_text(Path("config.js"), outer_after_inner),
         )
 
+    def test_non_javascript_literal_rhs_aliases_are_detected(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        cases = (
+            (
+                'value = "' + value + '"\n'
+                'os.environ["' + name + '"] = value\n',
+                "config.py",
+                2,
+            ),
+            (
+                'value: str = "Synthetic" + "SecretValue2026"\n'
+                'os.environ["' + name + '"] = value\n',
+                "config.py",
+                2,
+            ),
+            (
+                'value = "Synthetic" "SecretValue2026"\n'
+                'os.environ["' + name + '"] = value\n',
+                "config.py",
+                2,
+            ),
+            (
+                'value = "Synthetic" + "SecretValue2026"\n'
+                'ENV["' + name + '"] = value\n',
+                "config.rb",
+                2,
+            ),
+            (
+                '$value = "Synthetic" + "SecretValue2026"\n'
+                '$env:' + name + ' = $value\n',
+                "config.ps1",
+                2,
+            ),
+        )
+        for text, filename, line in cases:
+            with self.subTest(filename=filename):
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(
+                    [(filename, line, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+    def test_non_javascript_alias_controls_remain_unresolved(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        cases = (
+            (
+                'value = os.getenv("' + name + '")\n'
+                'os.environ["' + name + '"] = value\n',
+                "config.py",
+            ),
+            (
+                'value = ENV["' + name + '"]\n'
+                'ENV["' + name + '"] = value\n',
+                "config.rb",
+            ),
+            (
+                '$value = Get-Secret\n'
+                '$env:' + name + ' = $value\n',
+                "config.ps1",
+            ),
+            (
+                'text = """value = "' + value + '"""\n'
+                'os.environ["' + name + '"] = value\n',
+                "config.py",
+            ),
+            (
+                "@'\n$value = \"" + value + "\"\n'@\n"
+                "$env:" + name + " = $value\n",
+                "config.ps1",
+            ),
+            (
+                'text = /value = "' + value + '"/\n'
+                'ENV["' + name + '"] = value\n',
+                "config.rb",
+            ),
+            (
+                'os.environ["' + name + '"] = value\n'
+                'value = "' + value + '"\n',
+                "config.py",
+            ),
+            (
+                'value = "' + value + '"\n'
+                'value = os.getenv("OTHER")\n'
+                'os.environ["' + name + '"] = value\n',
+                "config.py",
+            ),
+        )
+        for text, filename in cases:
+            with self.subTest(filename=filename, prefix=text[:16]):
+                self.assertEqual([], SCANNER.scan_text(Path(filename), text))
+
     def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
