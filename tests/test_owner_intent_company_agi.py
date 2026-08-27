@@ -440,6 +440,7 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
     def test_status_and_roadmap_project_direction_without_promoting_runtime(self) -> None:
         self.assertIn("Updated: 2026-08-26", self.status)
         for name, text in (("status", self.status), ("roadmap", self.roadmap)):
+            normalized = " ".join(text.split())
             for marker in (
                 CANONICAL_LINK,
                 "Company AGI",
@@ -460,6 +461,11 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             ):
                 with self.subTest(surface=name, marker=marker):
                     self.assertIn(marker, text)
+            self.assertIn("synthetic ZFS test dataset", normalized)
+            self.assertIn("8/8 file-hash restore readback", normalized)
+            self.assertIn("production dataset", normalized.lower())
+            self.assertNotIn("exact safe dataset binding still pending", normalized)
+            self.assertNotIn("still pending exact safe dataset binding", normalized)
 
         for name, text, heading in (
             ("status", self.status, "## Owner-confirmed Company AGI direction"),

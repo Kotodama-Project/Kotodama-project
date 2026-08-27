@@ -67,9 +67,9 @@ Voice Requirements Agent, per-Invocation authority, and one Kotodama product /
 Company SSOT. Correction themes: BecomeOne is the migration donor/control plane;
 OKF v0.2 is central for governed curated knowledge, not sole Company truth; and
 Voice raw/derived evidence plus adaptive GrillU remain explicit. Luna-first
-routing, a provider-neutral archive interface with a private ZFS v1 target still
-pending exact safe dataset binding, reversible review/revert delegation, and the
-bounded Goal Completion Loop remain product requirements. This
+routing, a provider-neutral archive interface with a private ZFS v1 target, and a synthetic ZFS test dataset with authenticated restore and 8/8 file-hash restore readback are distinct.
+Production dataset/key custody/retention/deletion/replication binding remain pending. Reversible review/revert delegation
+and the bounded Goal Completion Loop remain product requirements. This
 documentation milestone does not implement the runtime: Voice-to-Requirement,
 Agent Swarm, Context/encoder, provider, storage, and Promotion remain separate
 work. The runtime remains unimplemented and Public Beta remains
