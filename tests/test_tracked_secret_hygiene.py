@@ -1774,6 +1774,106 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             SCANNER.scan_text(Path("config.py"), after_use),
         )
 
+    def test_python_named_expression_rhs_and_nested_values_follow_evaluation_order(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        rhs_setter = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "(secret := os.putenv(name, secret))\n"
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), rhs_setter)
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        nested = (
+            '(name := "OPENAI_API_KEY")\n'
+            f'(secret := "{value}")\n'
+            "(outer := (inner := secret))\n"
+            "os.putenv(name, outer)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), nested)
+        self.assertEqual(
+            [("config.py", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+    def test_python_comprehension_walrus_scopes_are_bounded(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        positives = (
+            f'name = "{name}"\n'
+            f'[os.putenv(name, secret) for secret in ["{value}"]]\n',
+            f'name = "{name}"\n'
+            f'{{os.putenv(name, secret) for secret in {{"{value}"}}}}\n',
+            f'name = "{name}"\n'
+            f'{{secret: os.putenv(name, secret) for secret in ("{value}",)}}\n',
+            f'name = "{name}"\n'
+            f'(os.putenv(name, secret) for secret in ("{value}",))\n',
+            f'name = "{name}"\n'
+            f'[os.putenv(name, secret) for secret in ["{value}", "{value}"]]\n',
+        )
+        for text in positives:
+            with self.subTest(positive=text[:28]):
+                findings = SCANNER.scan_text(Path("config.py"), text)
+                self.assertEqual(
+                    [("config.py", 2, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        first_iterable = (
+            f'name = "{name}"\n'
+            f'secret = "{value}"\n'
+            "[item for secret in [os.putenv(name, secret)]]\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), first_iterable)
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        walrus_in_condition = (
+            f'name = "{name}"\n'
+            f'[os.putenv(name, secret) for item in [0] if (secret := "{value}")]\n'
+        )
+        findings = SCANNER.scan_text(Path("config.py"), walrus_in_condition)
+        self.assertEqual(
+            [("config.py", 2, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        walrus_in_iterable = (
+            f'name = "{name}"\n'
+            f'[os.putenv(name, secret) for item in [(secret := "{value}")]]\n'
+        )
+        findings = SCANNER.scan_text(Path("config.py"), walrus_in_iterable)
+        self.assertEqual(
+            [("config.py", 2, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        negatives = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "[os.putenv(name, secret) for secret in secrets]\n",
+            f'name = "{name}"\nsecret = "{value}"\n'
+            '[os.putenv(name, secret) for secret in ["other", "' + value + '"]]\n',
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "[os.putenv(name, secret) for x in [0] for secret in get_secrets()]\n",
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "[os.putenv(name, secret) for secret in [get_secret()] if secret]\n",
+        )
+        for text in negatives:
+            with self.subTest(negative=text[:28]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
+
     def test_environment_setter_values_decode_native_local_string_initializers(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"

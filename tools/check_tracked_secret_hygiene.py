@@ -2308,7 +2308,12 @@ def non_javascript_scope_aliases(
                 and binding[3] == scope
                 and binding[2] <= position
             ]
-            binding = max(candidates, key=lambda candidate: candidate[2])
+            # Some Python comprehension events share a virtual position;
+            # traversal order is their bounded evaluation-order tie-breaker.
+            binding = max(
+                enumerate(candidates),
+                key=lambda candidate: (candidate[1][2], candidate[0]),
+            )[1]
             if name in blocked or name in aliases:
                 continue
             if binding[1] is None:
@@ -2382,9 +2387,60 @@ def resolve_python_expression(
                 return None
         result = "".join(parts)
         return result if len(result) <= 512 else None
+    if isinstance(node, ast.NamedExpr):
+        return resolve_python_expression(node.value, scopes, bindings, position)
     if isinstance(node, ast.Name):
         return non_javascript_scope_aliases(scopes, bindings, position).get(node.id)
     return None
+
+
+def resolve_python_literal_iterable(
+    node: ast.AST,
+    scopes: list[tuple[int, int, int]],
+    bindings: list[tuple[str, str | None, int, int]],
+    position: int,
+) -> list[str] | None:
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        values: list[str] = []
+        if len(node.elts) > MAX_JAVASCRIPT_CONSTANT_PARTS:
+            return None
+        for element in node.elts:
+            value = resolve_python_expression(
+                element, scopes, bindings, position
+            )
+            if value is None:
+                return None
+            values.append(value)
+        return values
+    if isinstance(node, ast.Dict):
+        values = []
+        if len(node.keys) > MAX_JAVASCRIPT_CONSTANT_PARTS:
+            return None
+        for key in node.keys:
+            if key is None:
+                return None
+            value = resolve_python_expression(key, scopes, bindings, position)
+            if value is None:
+                return None
+            values.append(value)
+        return values
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return list(node.value[:MAX_JAVASCRIPT_CONSTANT_PARTS]) \
+            if len(node.value) <= MAX_JAVASCRIPT_CONSTANT_PARTS else None
+    return None
+
+
+def python_target_names(node: ast.AST) -> list[str]:
+    if isinstance(node, ast.Name):
+        return [node.id]
+    if isinstance(node, ast.Starred):
+        return python_target_names(node.value)
+    if isinstance(node, (ast.List, ast.Tuple)):
+        names: list[str] = []
+        for element in node.elts:
+            names.extend(python_target_names(element))
+        return names
+    return []
 
 
 def python_alias_bindings(
@@ -2406,6 +2462,7 @@ def python_alias_bindings(
 
     class Visitor(ast.NodeVisitor):
         scope = 0
+        walrus_scope = 0
 
         def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
             self._visit_function(node)
@@ -2415,6 +2472,7 @@ def python_alias_bindings(
 
         def visit_Lambda(self, node: ast.Lambda) -> None:
             parent = self.scope
+            previous_walrus_scope = self.walrus_scope
             for default in (*node.args.defaults, *node.args.kw_defaults):
                 if default is not None:
                     self.visit(default)
@@ -2422,6 +2480,7 @@ def python_alias_bindings(
             end = python_source_end_offset(text, line_offsets, node)
             scopes.append([start, end, parent])
             self.scope = len(scopes) - 1
+            self.walrus_scope = self.scope
             for argument in (
                 *node.args.posonlyargs,
                 *node.args.args,
@@ -2434,9 +2493,11 @@ def python_alias_bindings(
                 bindings.append((node.args.kwarg.arg, None, start, self.scope))
             self.visit(node.body)
             self.scope = parent
+            self.walrus_scope = previous_walrus_scope
 
         def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
             parent = self.scope
+            previous_walrus_scope = self.walrus_scope
             for expression in node.decorator_list:
                 self.visit(expression)
             for default in (*node.args.defaults, *node.args.kw_defaults):
@@ -2459,6 +2520,7 @@ def python_alias_bindings(
             end = python_source_end_offset(text, line_offsets, node)
             scopes.append([start, end, parent])
             self.scope = len(scopes) - 1
+            self.walrus_scope = self.scope
             for argument in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs):
                 bindings.append((argument.arg, None, start, self.scope))
             if node.args.vararg is not None:
@@ -2468,16 +2530,182 @@ def python_alias_bindings(
             for child in node.body:
                 self.visit(child)
             self.scope = parent
+            self.walrus_scope = previous_walrus_scope
 
         def visit_ClassDef(self, node: ast.ClassDef) -> None:
             start = python_source_offset(text, line_offsets, node)
             end = python_source_end_offset(text, line_offsets, node)
             parent = self.scope
+            previous_walrus_scope = self.walrus_scope
             scopes.append([start, end, parent])
             self.scope = len(scopes) - 1
+            self.walrus_scope = self.scope
             for child in node.body:
                 self.visit(child)
             self.scope = parent
+            self.walrus_scope = previous_walrus_scope
+
+        def _bind_comprehension_target(
+            self,
+            target: ast.AST,
+            iterable: ast.AST,
+            scope: int,
+            activation_position: int,
+        ) -> dict[str, str | None]:
+            values = resolve_python_literal_iterable(
+                iterable,
+                [tuple(scope_data) for scope_data in scopes],
+                bindings,
+                python_source_offset(text, line_offsets, iterable),
+            )
+            target_value = (
+                values[0]
+                if values and all(value == values[0] for value in values)
+                else None
+            )
+            target_values: dict[str, str | None] = {}
+            for name in python_target_names(target):
+                bindings.append((name, target_value, activation_position, scope))
+                target_values[name] = target_value
+            return target_values
+
+        def _visit_comprehension_stage(
+            self,
+            expression: ast.AST,
+            available: dict[str, str | None],
+            parent: int,
+            projection_scope: int | None = None,
+            projection_position: int | None = None,
+            blocked_names: set[str] | None = None,
+        ) -> None:
+            start = python_source_offset(text, line_offsets, expression)
+            end = python_source_end_offset(text, line_offsets, expression)
+            scopes.append([start, end, parent])
+            stage_scope = len(scopes) - 1
+            for name, value in available.items():
+                bindings.append((name, value, start, stage_scope))
+            previous_scope = self.scope
+            walrus_scope = self.walrus_scope
+            binding_start = len(bindings)
+            self.scope = stage_scope
+            self.visit(expression)
+            self.scope = previous_scope
+            if projection_scope is not None and projection_position is not None:
+                for name, value, _, binding_scope in bindings[binding_start:]:
+                    if binding_scope == walrus_scope and (
+                        blocked_names is None or name not in blocked_names
+                    ):
+                        # Comprehension bodies are written before their
+                        # generators, so project completed outer walruses at
+                        # the body's virtual entry point.
+                        bindings.append((
+                            name,
+                            value,
+                            projection_position,
+                            projection_scope,
+                        ))
+
+        def _visit_comprehension(
+            self,
+            node: ast.AST,
+            elements: tuple[ast.AST, ...],
+            generators: list[ast.comprehension],
+        ) -> None:
+            if not generators:
+                for element in elements:
+                    self.visit(element)
+                return
+            parent = self.scope
+            previous_walrus_scope = self.walrus_scope
+            body_start = min(
+                python_source_offset(text, line_offsets, element)
+                for element in elements
+            )
+            end = python_source_end_offset(text, line_offsets, node)
+            scopes.append([body_start, end, parent])
+            comprehension_scope = len(scopes) - 1
+            available: dict[str, str | None] = {}
+            body_binding_position = body_start - len(generators)
+            target_names = {
+                name
+                for generator in generators
+                for name in python_target_names(generator.target)
+            }
+            first_iter = generators[0].iter
+            self._visit_comprehension_stage(
+                first_iter,
+                available,
+                parent,
+                comprehension_scope,
+                body_start,
+                target_names,
+            )
+            self.scope = comprehension_scope
+            self.walrus_scope = previous_walrus_scope
+            available.update(self._bind_comprehension_target(
+                generators[0].target,
+                first_iter,
+                comprehension_scope,
+                body_binding_position,
+            ))
+            for condition in generators[0].ifs:
+                self._visit_comprehension_stage(
+                    condition,
+                    available,
+                    parent,
+                    comprehension_scope,
+                    body_start,
+                    target_names,
+                )
+            for generator_index, generator in enumerate(generators[1:], start=1):
+                iterable = generator.iter
+                self._visit_comprehension_stage(
+                    iterable,
+                    available,
+                    parent,
+                    comprehension_scope,
+                    body_start,
+                    target_names,
+                )
+                available.update(self._bind_comprehension_target(
+                    generator.target,
+                    iterable,
+                    comprehension_scope,
+                    body_binding_position + generator_index,
+                ))
+                for condition in generator.ifs:
+                    self._visit_comprehension_stage(
+                        condition,
+                        available,
+                        parent,
+                        comprehension_scope,
+                        body_start,
+                        target_names,
+                    )
+            for element in elements:
+                self.visit(element)
+            self.scope = parent
+            self.walrus_scope = previous_walrus_scope
+
+        def visit_ListComp(self, node: ast.ListComp) -> None:
+            self._visit_comprehension(
+                node, (node.elt,), node.generators
+            )
+
+        def visit_SetComp(self, node: ast.SetComp) -> None:
+            self._visit_comprehension(
+                node, (node.elt,), node.generators
+            )
+
+        def visit_DictComp(self, node: ast.DictComp) -> None:
+            self._visit_comprehension(
+                node, (node.key, node.value), node.generators
+            )
+
+        def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+            self._visit_comprehension(
+                node, (node.elt,), node.generators
+            )
 
         def visit_Assign(self, node: ast.Assign) -> None:
             value = resolve_python_expression(
@@ -2511,14 +2739,14 @@ def python_alias_bindings(
                 bindings,
                 python_source_offset(text, line_offsets, node.value),
             )
+            self.visit(node.value)
             if isinstance(node.target, ast.Name):
                 bindings.append((
                     node.target.id,
                     value,
-                    python_source_offset(text, line_offsets, node.target),
-                    self.scope,
+                    python_source_end_offset(text, line_offsets, node.value),
+                    self.walrus_scope,
                 ))
-            self.visit(node.value)
 
         def visit_Import(self, node: ast.Import) -> None:
             for alias in node.names:
