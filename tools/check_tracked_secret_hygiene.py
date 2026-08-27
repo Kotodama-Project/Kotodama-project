@@ -2466,6 +2466,7 @@ def local_alias_scopes(path: Path, text: str) -> tuple[
 def local_parameter_names(parameters: str, suffix: str) -> list[str]:
     names: list[str] = []
     for parameter in parameters.split(","):
+        parameter = parameter.split("=", 1)[0]
         identifiers = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", parameter)
         if not identifiers:
             continue
@@ -2494,7 +2495,8 @@ def go_csharp_alias_bindings(
         )
     else:
         declaration = re.compile(
-            r"(?:^|(?<=[;{}]))[ \t]*(?:(?:const|readonly)\s+)?"
+            r"(?:^|(?<=[;{}]))[ \t]*(?:(?:(?:public|private|protected|internal|"
+            r"static|readonly|volatile|new)\s+)*(?:const|readonly)\s+)?"
             r"(?:(?:var|string|object|bool|byte|char|decimal|double|float|"
             r"int|long|nint|nuint|short|uint|ulong|ushort|"
             r"[A-Z][A-Za-z0-9_.]*(?:<[^>\r\n]+>)?)\??\s+)?"
@@ -2503,8 +2505,11 @@ def go_csharp_alias_bindings(
             re.MULTILINE,
         )
         function = re.compile(
-            r"\b(?:[A-Za-z_][A-Za-z0-9_.]*(?:<[^>{}]+>)?\s+)+"
-            r"[A-Za-z_][A-Za-z0-9_]*\s*\((?P<parameters>[^()]*)\)[^{]*\{"
+            r"(?:\b(?:[A-Za-z_][A-Za-z0-9_.]*(?:<[^>{}]+>)?\s+)+"
+            r"[A-Za-z_][A-Za-z0-9_]*|"
+            r"\b(?:class|record|struct)\s+[A-Z][A-Za-z0-9_]*|"
+            r"\b[A-Z][A-Za-z0-9_]*)"
+            r"\s*\((?P<parameters>[^()]*)\)[^{]*\{"
         )
     bindings: list[tuple[str, str | None, int, int]] = []
     for match in function.finditer(executable):
@@ -2524,6 +2529,11 @@ def go_csharp_alias_bindings(
             non_javascript_scope_aliases(scopes, bindings, position),
             suffix,
         )
+        native_value = decode_environment_setter_literal(
+            match.group("value"), suffix
+        )
+        if native_value is not None:
+            value = native_value
         bindings.append((match.group("name"), value, position, scope))
     return scopes, bindings
 
