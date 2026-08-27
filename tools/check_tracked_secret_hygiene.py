@@ -2370,6 +2370,47 @@ def python_value_truthiness(value: PythonResolvedValue) -> bool | None:
     return None
 
 
+def python_compare_values(
+    left: PythonResolvedValue | None,
+    right: PythonResolvedValue | None,
+    operator: ast.cmpop,
+) -> bool | None:
+    if left is None or right is None:
+        return None
+    primitive = (str, bool, int, float, complex)
+    if not isinstance(left, primitive) or not isinstance(right, primitive):
+        return None
+    if isinstance(operator, (ast.Eq, ast.NotEq)):
+        try:
+            result = left == right
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return not result if isinstance(operator, ast.NotEq) else result
+    real_numbers = (int, float)
+    ordered = (
+        isinstance(left, str) and isinstance(right, str)
+    ) or (
+        isinstance(left, real_numbers)
+        and not isinstance(left, bool)
+        and isinstance(right, real_numbers)
+        and not isinstance(right, bool)
+    )
+    if not ordered:
+        return None
+    try:
+        if isinstance(operator, ast.Lt):
+            return left < right
+        if isinstance(operator, ast.LtE):
+            return left <= right
+        if isinstance(operator, ast.Gt):
+            return left > right
+        if isinstance(operator, ast.GtE):
+            return left >= right
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return None
+
+
 def resolve_python_value(
     node: ast.AST,
     scopes: list[tuple[int, int, int]],
@@ -2423,6 +2464,12 @@ def resolve_python_value(
         values: list[PythonResolvedValue] = []
         unknown = False
         for element in node.elts:
+            if isinstance(element, ast.Starred):
+                resolve_python_value(
+                    element.value, scopes, bindings, position, ephemeral
+                )
+                unknown = True
+                continue
             resolved = resolve_python_value(
                 element, scopes, bindings, position, ephemeral
             )
@@ -2444,7 +2491,23 @@ def resolve_python_value(
                 resolved = resolve_python_value(
                     value.value, scopes, bindings, position, ephemeral
                 )
-                if isinstance(resolved, str):
+                format_spec = value.format_spec
+                if format_spec is not None:
+                    resolve_python_value(
+                        format_spec, scopes, bindings, position, ephemeral
+                    )
+                format_spec_nonempty = (
+                    format_spec is not None
+                    and (
+                        not isinstance(format_spec, ast.JoinedStr)
+                        or bool(format_spec.values)
+                    )
+                )
+                if (
+                    isinstance(resolved, str)
+                    and value.conversion == -1
+                    and not format_spec_nonempty
+                ):
                     parts.append(resolved)
                 else:
                     unknown = True
@@ -2504,12 +2567,18 @@ def resolve_python_value(
         resolve_python_value(node.operand, scopes, bindings, position, ephemeral)
         return None
     if isinstance(node, ast.Compare):
-        resolve_python_value(node.left, scopes, bindings, position, ephemeral)
-        if node.comparators:
-            resolve_python_value(
-                node.comparators[0], scopes, bindings, position, ephemeral
+        left = resolve_python_value(
+            node.left, scopes, bindings, position, ephemeral
+        )
+        for operator, comparator in zip(node.ops, node.comparators):
+            right = resolve_python_value(
+                comparator, scopes, bindings, position, ephemeral
             )
-        return None
+            result = python_compare_values(left, right, operator)
+            if result is not True:
+                return result
+            left = right
+        return True if node.ops else None
     if isinstance(node, ast.IfExp):
         test = resolve_python_value(
             node.test, scopes, bindings, position, ephemeral
@@ -2552,6 +2621,12 @@ def resolve_python_literal_iterable(
         if len(node.elts) > MAX_JAVASCRIPT_CONSTANT_PARTS:
             return None
         for element in node.elts:
+            if isinstance(element, ast.Starred):
+                resolve_python_value(
+                    element.value, scopes, bindings, position, state
+                )
+                unknown = True
+                continue
             value = resolve_python_value(
                 element, scopes, bindings, position, state
             )
@@ -2599,8 +2674,8 @@ def python_target_bindings(
             if nested is None:
                 return None
             for name, resolved in nested.items():
-                if name in result and result[name] != resolved:
-                    return None
+                # Tuple/list targets assign left-to-right; a repeated name
+                # retains the final element's value.
                 result[name] = resolved
         return result
     return {}
@@ -2898,6 +2973,30 @@ def python_alias_bindings(
             self._visit_comprehension(
                 node, (node.elt,), node.generators
             )
+
+        def visit_Compare(self, node: ast.Compare) -> None:
+            ephemeral: dict[str, PythonResolvedValue | None] = {}
+            left = resolve_python_value(
+                node.left,
+                [tuple(scope) for scope in scopes],
+                bindings,
+                python_source_offset(text, line_offsets, node.left),
+                ephemeral,
+            )
+            self.visit(node.left)
+            for operator, comparator in zip(node.ops, node.comparators):
+                right = resolve_python_value(
+                    comparator,
+                    [tuple(scope) for scope in scopes],
+                    bindings,
+                    python_source_offset(text, line_offsets, comparator),
+                    ephemeral,
+                )
+                self.visit(comparator)
+                result = python_compare_values(left, right, operator)
+                if result is not True:
+                    return
+                left = right
 
         def visit_Assign(self, node: ast.Assign) -> None:
             value = resolve_python_expression(

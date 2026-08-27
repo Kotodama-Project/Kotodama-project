@@ -1988,6 +1988,91 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(negative=text[:40]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
 
+    def test_python_compound_literals_and_comparisons_fail_closed(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        starred = (
+            'name = [*"OPENAI_API_KEY"][0]\n'
+            f'secret = [*"{value}"][0]\n'
+            "os.putenv(name, secret)\n"
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.py"), starred))
+
+        converted = (
+            'name = f"{(name_part := \'OPENAI_API_KEY\')!r}"\n'
+            f'secret = f"{{(secret_part := \'{value}\'):>40}}"\n'
+            "os.putenv(name, secret)\n"
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.py"), converted))
+
+        converted_side_effect = (
+            f'name = "{name}"\n'
+            f'secret = f"{{(secret_part := \'{value}\')!r}}"\n'
+            "os.putenv(name, secret_part)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), converted_side_effect)
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        safe_comparison = (
+            f'name = "{name}"\n'
+            f'secret = ("a" < "z") and (secret_part := "{value}")\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), safe_comparison)
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        comparison_short_circuit = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            'result = "z" < "a" < (name := "NOT_A_SECRET")\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), comparison_short_circuit)
+        self.assertEqual(
+            [("config.py", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        duplicate_target = (
+            '[os.putenv(name, secret) for name, secret, secret in '
+            f'[("{name}", "<PLACEHOLDER>", "{value}")]]\n'
+        )
+        findings = SCANNER.scan_text(Path("config.py"), duplicate_target)
+        self.assertEqual(
+            [("config.py", 1, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        duplicate_target_placeholder = (
+            '[os.putenv(name, secret) for name, secret, secret in '
+            f'[("{name}", "{value}", "<PLACEHOLDER>")]]\n'
+        )
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(Path("config.py"), duplicate_target_placeholder),
+        )
+
+        comparison_unknown = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            'result = get_value() < "z" < (name := "NOT_A_SECRET")\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), comparison_unknown)
+        self.assertEqual(
+            [("config.py", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
     def test_environment_setter_values_decode_native_local_string_initializers(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
