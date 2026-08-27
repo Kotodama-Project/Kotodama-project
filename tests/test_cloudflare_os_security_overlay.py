@@ -2,7 +2,23 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import io
+import json
+import pathlib
+import subprocess
+import sys
+import tempfile
 import unittest
+from contextlib import redirect_stdout
+from unittest import mock
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+TOOLS_PATH = ROOT / "tools"
+VALIDATOR_PATH = TOOLS_PATH / "validate_cloudflare_os_security_candidate.py"
+if str(TOOLS_PATH) not in sys.path:
+    sys.path.insert(0, str(TOOLS_PATH))
+import validate_cloudflare_os_security_candidate as candidate_validator
 
 from tools.cloudflare_os_security_overlay import (
     SPEC_PATH,
@@ -140,6 +156,174 @@ def fixture_spec() -> dict:
 
 
 class CloudflareOsSecurityOverlayTests(unittest.TestCase):
+    def test_validator_accepts_exact_limit_materialization_bytes_without_read_bytes(self) -> None:
+        spec = fixture_spec()
+        workspace_out, _report = apply_workspace_overlay(WORKSPACE_FIXTURE, LOCK_FIXTURE, spec)
+        with tempfile.TemporaryDirectory() as directory:
+            workspace_path = pathlib.Path(directory) / "workspace.yaml"
+            lock_path = pathlib.Path(directory) / "lock.yaml"
+            workspace_path.write_bytes(workspace_out)
+            lock_path.write_bytes(GENERATED_LOCK_FIXTURE)
+            output = io.StringIO()
+            with mock.patch.object(candidate_validator, "load_spec", return_value=spec):
+                with mock.patch.object(candidate_validator, "validate_spec"):
+                    with mock.patch.object(pathlib.Path, "read_bytes", side_effect=AssertionError("read_bytes is forbidden")):
+                        with redirect_stdout(output):
+                            status = candidate_validator.main(
+                                [
+                                    "--generated-workspace",
+                                    str(workspace_path),
+                                    "--generated-lock",
+                                    str(lock_path),
+                                ]
+                            )
+        self.assertEqual(status, 0)
+        self.assertEqual(json.loads(output.getvalue())["status"], "PASS")
+
+    def test_validator_rejects_short_and_oversize_materialization_without_private_echo(self) -> None:
+        spec = fixture_spec()
+        workspace_out, _report = apply_workspace_overlay(WORKSPACE_FIXTURE, LOCK_FIXTURE, spec)
+        private_marker = "PRIVATE_MATERIALIZATION_SENTINEL"
+        cases = (
+            ("short-workspace", workspace_out[:-1], GENERATED_LOCK_FIXTURE),
+            ("oversize-workspace", workspace_out + b"x", GENERATED_LOCK_FIXTURE),
+            ("short-lock", workspace_out, GENERATED_LOCK_FIXTURE[:-1]),
+            ("oversize-lock", workspace_out, GENERATED_LOCK_FIXTURE + b"x"),
+        )
+        with tempfile.TemporaryDirectory(prefix=private_marker) as directory:
+            for label, workspace_bytes, lock_bytes in cases:
+                with self.subTest(label=label):
+                    workspace_path = pathlib.Path(directory) / f"{private_marker}-{label}-workspace"
+                    lock_path = pathlib.Path(directory) / f"{private_marker}-{label}-lock"
+                    workspace_path.write_bytes(workspace_bytes)
+                    lock_path.write_bytes(lock_bytes)
+                    output = io.StringIO()
+                    with mock.patch.object(candidate_validator, "load_spec", return_value=spec):
+                        with mock.patch.object(candidate_validator, "validate_spec"):
+                            with redirect_stdout(output):
+                                status = candidate_validator.main(
+                                    [
+                                        "--generated-workspace",
+                                        str(workspace_path),
+                                        "--generated-lock",
+                                        str(lock_path),
+                                    ]
+                                )
+                    rendered = output.getvalue()
+                    self.assertEqual(status, 1)
+                    self.assertEqual(json.loads(rendered)["status"], "FAIL")
+                    self.assertNotIn(private_marker, rendered)
+                    self.assertNotIn(str(workspace_path), rendered)
+                    self.assertNotIn(str(lock_path), rendered)
+                    self.assertNotIn("Traceback", rendered)
+
+            sparse_workspace = pathlib.Path(directory) / f"{private_marker}-sparse-workspace"
+            sparse_lock = pathlib.Path(directory) / f"{private_marker}-sparse-lock"
+            with sparse_workspace.open("wb") as stream:
+                stream.truncate(len(workspace_out) + 1)
+            sparse_lock.write_bytes(GENERATED_LOCK_FIXTURE)
+            output = io.StringIO()
+            with mock.patch.object(candidate_validator, "load_spec", return_value=spec):
+                with mock.patch.object(candidate_validator, "validate_spec"):
+                    with redirect_stdout(output):
+                        status = candidate_validator.main(
+                            [
+                                "--generated-workspace",
+                                str(sparse_workspace),
+                                "--generated-lock",
+                                str(sparse_lock),
+                            ]
+                        )
+            rendered = output.getvalue()
+            self.assertEqual(status, 1)
+            self.assertEqual(json.loads(rendered)["status"], "FAIL")
+            self.assertNotIn(private_marker, rendered)
+            self.assertNotIn("Traceback", rendered)
+
+    def test_validator_reads_materialization_in_bounded_chunks(self) -> None:
+        spec = fixture_spec()
+        workspace_out, _report = apply_workspace_overlay(WORKSPACE_FIXTURE, LOCK_FIXTURE, spec)
+        read_sizes: list[int] = []
+        real_open = pathlib.Path.open
+
+        class TrackingStream:
+            def __init__(self, stream) -> None:
+                self._stream = stream
+
+            def __enter__(self):
+                self._stream.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self._stream.__exit__(*args)
+
+            def read(self, size: int = -1):
+                read_sizes.append(size)
+                return self._stream.read(size)
+
+        def open_tracking(path, mode="r", buffering=-1, encoding=None, errors=None, newline=None):
+            return TrackingStream(real_open(path, mode, buffering, encoding, errors, newline))
+
+        with tempfile.TemporaryDirectory() as directory:
+            workspace_path = pathlib.Path(directory) / "workspace.yaml"
+            lock_path = pathlib.Path(directory) / "lock.yaml"
+            workspace_path.write_bytes(workspace_out)
+            lock_path.write_bytes(GENERATED_LOCK_FIXTURE)
+            output = io.StringIO()
+            with mock.patch.object(candidate_validator, "load_spec", return_value=spec):
+                with mock.patch.object(candidate_validator, "validate_spec"):
+                    with mock.patch.object(pathlib.Path, "open", autospec=True, side_effect=open_tracking):
+                        with redirect_stdout(output):
+                            status = candidate_validator.main(
+                                [
+                                    "--generated-workspace",
+                                    str(workspace_path),
+                                    "--generated-lock",
+                                    str(lock_path),
+                                ]
+                            )
+        self.assertEqual(status, 0)
+        self.assertEqual(json.loads(output.getvalue())["status"], "PASS")
+        self.assertTrue(read_sizes)
+        self.assertNotIn(-1, read_sizes)
+        self.assertTrue(all(size > 0 for size in read_sizes))
+
+    def test_cli_rejects_sparse_input_without_private_echo_or_traceback(self) -> None:
+        spec = load_spec()
+        workspace_size = spec["remediation"]["expected_workspace_output"]["canonical_bytes"]
+        lock_size = spec["remediation"]["observed_generated_lock"]["canonical_bytes"]
+        private_marker = "PRIVATE_SPARSE_INPUT_SENTINEL"
+        with tempfile.TemporaryDirectory(prefix=private_marker) as directory:
+            workspace_path = pathlib.Path(directory) / f"{private_marker}-workspace"
+            lock_path = pathlib.Path(directory) / f"{private_marker}-lock"
+            with workspace_path.open("wb") as stream:
+                stream.truncate(workspace_size + 1)
+            with lock_path.open("wb") as stream:
+                stream.truncate(lock_size)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-B",
+                    str(VALIDATOR_PATH),
+                    "--generated-workspace",
+                    str(workspace_path),
+                    "--generated-lock",
+                    str(lock_path),
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=False,
+            )
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads(result.stdout)["status"], "FAIL")
+        self.assertEqual(result.stderr, "")
+        self.assertNotIn(private_marker, result.stdout + result.stderr)
+        self.assertNotIn(str(workspace_path), result.stdout + result.stderr)
+        self.assertNotIn(str(lock_path), result.stdout + result.stderr)
+        self.assertNotIn("Traceback", result.stdout + result.stderr)
+
     def test_current_spec_is_fail_closed_and_not_remediation_proof(self) -> None:
         spec = load_spec()
         validate_spec(spec)

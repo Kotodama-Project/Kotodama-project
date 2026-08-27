@@ -16,12 +16,39 @@ from cloudflare_os_security_overlay import (
 )
 
 
-def main() -> int:
+READ_CHUNK_BYTES = 64 * 1024
+
+
+def _read_bounded_bytes(path: pathlib.Path, expected_bytes: int) -> bytes:
+    """Read exactly the bound plus one byte, without unbounded allocation."""
+
+    if type(expected_bytes) is not int or expected_bytes <= 0:
+        raise SecurityOverlayViolation("generated materialization byte contract is invalid")
+    value = bytearray()
+    try:
+        with path.open("rb") as stream:
+            remaining = expected_bytes
+            while remaining:
+                chunk = stream.read(min(READ_CHUNK_BYTES, remaining))
+                if not isinstance(chunk, bytes) or not chunk or len(chunk) > remaining:
+                    raise SecurityOverlayViolation("generated materialization byte count drifted")
+                value.extend(chunk)
+                remaining -= len(chunk)
+            if stream.read(1):
+                raise SecurityOverlayViolation("generated materialization byte count drifted")
+    except SecurityOverlayViolation:
+        raise
+    except (OSError, TypeError, ValueError) as exc:
+        raise SecurityOverlayViolation("cannot read generated materialization bytes") from exc
+    return bytes(value)
+
+
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core-repo", type=pathlib.Path)
     parser.add_argument("--generated-workspace", type=pathlib.Path)
     parser.add_argument("--generated-lock", type=pathlib.Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     try:
         spec = load_spec()
         validate_spec(spec)
@@ -30,11 +57,14 @@ def main() -> int:
             raise SecurityOverlayViolation("generated workspace and lock must be supplied together")
         materialization = None
         if args.generated_workspace is not None and args.generated_lock is not None:
-            try:
-                workspace_bytes = args.generated_workspace.read_bytes()
-                lock_bytes = args.generated_lock.read_bytes()
-            except OSError as exc:
-                raise SecurityOverlayViolation("cannot read generated materialization bytes") from exc
+            workspace_bytes = _read_bounded_bytes(
+                args.generated_workspace,
+                spec["remediation"]["expected_workspace_output"]["canonical_bytes"],
+            )
+            lock_bytes = _read_bounded_bytes(
+                args.generated_lock,
+                spec["remediation"]["observed_generated_lock"]["canonical_bytes"],
+            )
             materialization = verify_observed_generated_lock(workspace_bytes, lock_bytes, spec)
     except SecurityOverlayViolation as exc:
         print(json.dumps({"status": "FAIL", "error": str(exc)}, sort_keys=True))
