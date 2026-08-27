@@ -1585,6 +1585,37 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(negative=filename, prefix=text[:24]):
                 self.assertEqual([], SCANNER.scan_text(Path(filename), text))
 
+    def test_python_lambda_parameter_scopes_block_outer_aliases(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        lambda_cases = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "(lambda secret: os.putenv(name, secret))(secret)\n",
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "(lambda secret, /: os.putenv(name, secret))(secret)\n",
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "(lambda *, secret: os.putenv(name, secret))(secret=secret)\n",
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "(lambda *secret: os.putenv(name, secret))(secret)\n",
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "(lambda **secret: os.putenv(name, secret))(secret=secret)\n",
+        )
+        for text in lambda_cases:
+            with self.subTest(lambda_case=text.split("lambda", 1)[1][:18]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
+
+        outside_after_lambda = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "(lambda other: os.putenv(name, other))(secret)\n"
+            f'os.putenv("{name}", secret)\n'
+        )
+        findings = SCANNER.scan_text(Path("config.py"), outside_after_lambda)
+        self.assertEqual(
+            [("config.py", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
     def test_environment_setter_values_decode_native_local_string_initializers(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
@@ -1720,6 +1751,83 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             "}\n"
         )
         findings = SCANNER.scan_text(Path("config.cs"), true_constructor)
+        self.assertEqual(
+            [("config.cs", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        same_line_attribute = (
+            "class Holder {\n"
+            f'    private string secret = "{value}";\n'
+            "    [Obsolete] Holder(string secret) {\n"
+            f'        Environment.SetEnvironmentVariable("{name}", secret);\n'
+            "    }\n"
+            "}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.cs"), same_line_attribute)
+        )
+
+        multiline_attribute = (
+            "class Holder {\n"
+            f'    private string secret = "{value}";\n'
+            "    [Obsolete(\n"
+            '        "constructor"\n'
+            "    )]\n"
+            "    Holder(string secret) {\n"
+            f'        Environment.SetEnvironmentVariable("{name}", secret);\n'
+            "    }\n"
+            "}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.cs"), multiline_attribute)
+        )
+
+        attribute_on_other_member = (
+            "class Holder {\n"
+            f'    private const string secret = "{value}";\n'
+            "    [Configure(secret)]\n"
+            "    void Use() {\n"
+            f'        Environment.SetEnvironmentVariable("{name}", secret);\n'
+            "    }\n"
+            "}\n"
+        )
+        findings = SCANNER.scan_text(Path("config.cs"), attribute_on_other_member)
+        self.assertEqual(
+            [("config.cs", 5, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+    def test_csharp_primary_constructor_headers_are_anchored_before_bases(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        primary = (
+            "class Holder(string secret) : Base<(string Left, string Right)> {\n"
+            f'    Environment.SetEnvironmentVariable("{name}", secret);\n'
+            "}\n"
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.cs"), primary))
+
+        generic_primary = (
+            "class Holder<T>(string secret) : Base<(string Left, string Right)> {\n"
+            f'    Environment.SetEnvironmentVariable("{name}", secret);\n'
+            "}\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.cs"), generic_primary)
+        )
+
+        base_tuple_only = (
+            "class Holder : Base<(string Left, string secret)> {\n"
+            f'    private const string secret = "{value}";\n'
+            "    void Use() {\n"
+            f'        Environment.SetEnvironmentVariable("{name}", secret);\n'
+            "    }\n"
+            "}\n"
+        )
+        findings = SCANNER.scan_text(Path("config.cs"), base_tuple_only)
         self.assertEqual(
             [("config.cs", 4, f"live-looking value assigned to {name}")],
             findings,

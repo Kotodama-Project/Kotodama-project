@@ -2382,6 +2382,27 @@ def python_alias_bindings(
         def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
             self._visit_function(node)
 
+        def visit_Lambda(self, node: ast.Lambda) -> None:
+            start = python_source_offset(line_offsets, node)
+            end = start + 1
+            if getattr(node, "end_lineno", None) is not None:
+                end = line_offsets[node.end_lineno - 1] + node.end_col_offset
+            parent = self.scope
+            scopes.append([start, end, parent])
+            self.scope = len(scopes) - 1
+            for argument in (
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+            ):
+                bindings.append((argument.arg, None, start, self.scope))
+            if node.args.vararg is not None:
+                bindings.append((node.args.vararg.arg, None, start, self.scope))
+            if node.args.kwarg is not None:
+                bindings.append((node.args.kwarg.arg, None, start, self.scope))
+            self.visit(node.body)
+            self.scope = parent
+
         def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
             start = python_source_offset(line_offsets, node)
             end = python_source_offset(line_offsets, node) + 1
@@ -2544,10 +2565,13 @@ def csharp_parameter_bindings(
 
     type_declaration = re.compile(
         r"\b(?:class|record|struct)\s+(?P<type>[A-Za-z_][A-Za-z0-9_]*)"
+        r"(?:\s*<[^>{}]*>)?"
+        r"(?:\s*(?P<primary>\([^()]*\)))?"
         r"(?P<header>[^\{;]*)\{"
     )
     constructor_template = (
-        r"(?:^|[{};])[ \t]*(?:(?:public|private|protected|internal|"
+        r"(?:^|[{};])\s*(?:\[[^\]]*\]\s*)*"
+        r"(?:(?:public|private|protected|internal|"
         r"static|extern|unsafe)\s+)*{type_name}"
         r"\s*\((?P<parameters>[^()]*)\)"
         r"\s*(?::\s*(?:base|this)\s*\([^{}]*\)\s*)?\{"
@@ -2557,9 +2581,9 @@ def csharp_parameter_bindings(
         if class_brace < 0:
             continue
         class_scope = non_javascript_scope_at(scopes, class_brace + 1)
-        primary = re.search(r"\((?P<parameters>[^()]*)\)", type_match.group("header"))
+        primary = type_match.group("primary")
         if primary is not None:
-            for name in local_parameter_names(primary.group("parameters"), ".cs"):
+            for name in local_parameter_names(primary[1:-1], ".cs"):
                 bindings.append((name, None, type_match.start(), class_scope))
         class_end = scopes[class_scope][1]
         constructor = re.compile(
