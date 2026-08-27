@@ -1371,6 +1371,46 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 )
                 self.assertNotIn(value, repr(findings))
 
+    def test_csharp_named_environment_setter_arguments_are_bounded(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        target = "EnvironmentVariableTarget.Process"
+        positives = (
+            (
+                f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}");\n',
+                1,
+            ),
+            (
+                f'Environment.SetEnvironmentVariable(value: "{value}", variable: "{name}");\n',
+                1,
+            ),
+            (
+                f'Environment.SetEnvironmentVariable(target: {target}, value: "{value}", variable: "{name}");\n',
+                1,
+            ),
+        )
+        for text, line in positives:
+            with self.subTest(positive=text[:32]):
+                findings = SCANNER.scan_text(Path("config.cs"), text)
+                self.assertEqual(
+                    [("config.cs", line, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        negatives = (
+            f'Environment.SetEnvironmentVariable(variable: "{name}", value: secretValue);\n',
+            f'Environment.SetEnvironmentVariable(name: "{name}", value: "{value}");\n',
+            f'Environment.SetEnvironmentVariable(variable: "{name}", variable: "OTHER", value: "{value}");\n',
+            f'Environment.SetEnvironmentVariable(Variable: "{name}", Value: "{value}");\n',
+            f'Environment.SetEnvironmentVariable("{name}", value: "{value}");\n',
+            f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", target: target);\n',
+            f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", target: "Process");\n',
+        )
+        for text in negatives:
+            with self.subTest(negative=text[:32]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.cs"), text))
+
     def test_unsupported_setter_literal_delimiters_fail_closed(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"

@@ -3339,6 +3339,60 @@ def split_environment_setter_arguments(
     return arguments
 
 
+CSHARP_ENVIRONMENT_TARGETS = {
+    f"{qualifier}EnvironmentVariableTarget.{target}"
+    for qualifier in ("", "System.", "global::System.")
+    for target in ("Process", "User", "Machine")
+}
+
+
+def decode_csharp_setter_arguments(
+    arguments: list[str],
+) -> tuple[str, str] | None:
+    positional: list[str] = []
+    named: dict[str, str] = {}
+    for index, argument in enumerate(arguments):
+        argument = argument.strip()
+        if not argument and index == len(arguments) - 1:
+            continue
+        label = re.fullmatch(
+            r"(?P<label>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?P<value>.+)",
+            argument,
+            re.DOTALL,
+        )
+        if label is None:
+            positional.append(argument)
+            continue
+        label_name = label.group("label")
+        if label_name not in {"variable", "value", "target"}:
+            return None
+        if label_name in named:
+            return None
+        named[label_name] = label.group("value").strip()
+    if named:
+        if positional or not {"variable", "value"}.issubset(named):
+            return None
+        if (
+            "target" in named
+            and named["target"] not in CSHARP_ENVIRONMENT_TARGETS
+        ):
+            return None
+        variable = decode_environment_setter_literal(
+            named["variable"], ".cs"
+        )
+        value = decode_environment_setter_literal(named["value"], ".cs")
+    else:
+        if len(positional) not in {2, 3}:
+            return None
+        if len(positional) == 3 and positional[2] not in CSHARP_ENVIRONMENT_TARGETS:
+            return None
+        variable = decode_environment_setter_literal(positional[0], ".cs")
+        value = decode_environment_setter_literal(positional[1], ".cs")
+    if variable is None or value is None:
+        return None
+    return variable, value
+
+
 def environment_setter_assignments(
     path: Path, text: str
 ) -> list[tuple[str, int]]:
@@ -3365,10 +3419,18 @@ def environment_setter_assignments(
         arguments = split_environment_setter_arguments(
             sanitized[match.end():close], suffix
         )
-        if len(arguments) < 2:
+        if suffix == ".cs":
+            decoded_arguments = decode_csharp_setter_arguments(arguments)
+        else:
+            if len(arguments) < 2:
+                continue
+            decoded_arguments = (
+                decode_environment_setter_literal(arguments[0], suffix),
+                decode_environment_setter_literal(arguments[1], suffix),
+            )
+        if decoded_arguments is None:
             continue
-        name = decode_environment_setter_literal(arguments[0], suffix)
-        value = decode_environment_setter_literal(arguments[1], suffix)
+        name, value = decoded_arguments
         if (
             name is None
             or value is None
