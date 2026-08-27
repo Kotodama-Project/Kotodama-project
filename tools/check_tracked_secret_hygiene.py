@@ -2463,9 +2463,59 @@ def local_alias_scopes(path: Path, text: str) -> tuple[
     return source, executable, [tuple(scope) for scope in scopes]
 
 
+def local_statement_segments(
+    source: str, executable: str
+) -> list[tuple[str, int]]:
+    segments: list[tuple[str, int]] = []
+    start = 0
+    for position, character in enumerate(executable):
+        if character in ";{}":
+            segments.append((source[start:position], start))
+            start = position + 1
+    segments.append((source[start:], start))
+    return segments
+
+
+def local_parameter_parts(parameters: str) -> list[str]:
+    parts: list[str] = []
+    start = 0
+    stack: list[str] = []
+    quote: str | None = None
+    escaped = False
+    matching = {")": "(", "]": "[", "}": "{"}
+    index = 0
+    while index < len(parameters):
+        character = parameters[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in {"'", '"'}:
+            quote = character
+        elif character in "([{":
+            stack.append(character)
+        elif character in matching:
+            if not stack or stack[-1] != matching[character]:
+                return []
+            stack.pop()
+        elif character == "," and not stack:
+            parts.append(parameters[start:index].strip())
+            start = index + 1
+        index += 1
+    if quote is not None or stack:
+        return []
+    parts.append(parameters[start:].strip())
+    return parts
+
+
 def local_parameter_names(parameters: str, suffix: str) -> list[str]:
     names: list[str] = []
-    for parameter in parameters.split(","):
+    for parameter in local_parameter_parts(parameters):
         parameter = parameter.split("=", 1)[0]
         identifiers = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", parameter)
         if not identifiers:
@@ -2474,6 +2524,69 @@ def local_parameter_names(parameters: str, suffix: str) -> list[str]:
         if name not in {"_", "this"}:
             names.append(name)
     return names
+
+
+def csharp_parameter_bindings(
+    executable: str, scopes: list[tuple[int, int, int]]
+) -> list[tuple[str, str | None, int, int]]:
+    bindings: list[tuple[str, str | None, int, int]] = []
+    method = re.compile(
+        r"\b(?:[A-Za-z_][A-Za-z0-9_.]*(?:<[^>{}]+>)?\s+)+"
+        r"[A-Za-z_][A-Za-z0-9_]*\s*\((?P<parameters>[^()]*)\)[^{]*\{"
+    )
+    for match in method.finditer(executable):
+        brace = executable.rfind("{", match.start(), match.end())
+        if brace < 0:
+            continue
+        scope = non_javascript_scope_at(scopes, brace + 1)
+        for name in local_parameter_names(match.group("parameters"), ".cs"):
+            bindings.append((name, None, match.start(), scope))
+
+    type_declaration = re.compile(
+        r"\b(?:class|record|struct)\s+(?P<type>[A-Za-z_][A-Za-z0-9_]*)"
+        r"(?P<header>[^\{;]*)\{"
+    )
+    constructor_template = (
+        r"(?:^|[{};])[ \t]*(?:(?:public|private|protected|internal|"
+        r"static|extern|unsafe)\s+)*{type_name}"
+        r"\s*\((?P<parameters>[^()]*)\)"
+        r"\s*(?::\s*(?:base|this)\s*\([^{}]*\)\s*)?\{"
+    )
+    for type_match in type_declaration.finditer(executable):
+        class_brace = executable.rfind("{", type_match.start(), type_match.end())
+        if class_brace < 0:
+            continue
+        class_scope = non_javascript_scope_at(scopes, class_brace + 1)
+        primary = re.search(r"\((?P<parameters>[^()]*)\)", type_match.group("header"))
+        if primary is not None:
+            for name in local_parameter_names(primary.group("parameters"), ".cs"):
+                bindings.append((name, None, type_match.start(), class_scope))
+        class_end = scopes[class_scope][1]
+        constructor = re.compile(
+            constructor_template.replace(
+                "{type_name}", re.escape(type_match.group("type"))
+            ),
+            re.MULTILINE,
+        )
+        for constructor_match in constructor.finditer(
+            executable, class_brace + 1, class_end
+        ):
+            brace = executable.rfind(
+                "{", constructor_match.start(), constructor_match.end()
+            )
+            if brace < 0:
+                continue
+            constructor_scope = non_javascript_scope_at(scopes, brace + 1)
+            for name in local_parameter_names(
+                constructor_match.group("parameters"), ".cs"
+            ):
+                bindings.append((
+                    name,
+                    None,
+                    constructor_match.start(),
+                    constructor_scope,
+                ))
+    return bindings
 
 
 def go_csharp_alias_bindings(
@@ -2486,7 +2599,7 @@ def go_csharp_alias_bindings(
             r"(?:^|(?<=[;{}]))[ \t]*(?:(?:var|const)\s+)?"
             r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
             r"(?:\s+[A-Za-z_][A-Za-z0-9_.*\[\],<> ]*)?"
-            r"\s*(?::=|=)\s*(?P<value>[^;\r\n]*)",
+            r"\s*(?::=|=)\s*(?P<value>[^\r\n]*)",
             re.MULTILINE,
         )
         function = re.compile(
@@ -2495,46 +2608,45 @@ def go_csharp_alias_bindings(
         )
     else:
         declaration = re.compile(
-            r"(?:^|(?<=[;{}]))[ \t]*(?:(?:(?:public|private|protected|internal|"
-            r"static|readonly|volatile|new)\s+)*(?:const|readonly)\s+)?"
+            r"(?:^|(?<=[;{}]))[ \t]*(?:(?:public|private|protected|internal|"
+            r"static|readonly|volatile|new)\s+)*(?:(?:const|readonly)\s+)?"
             r"(?:(?:var|string|object|bool|byte|char|decimal|double|float|"
             r"int|long|nint|nuint|short|uint|ulong|ushort|"
             r"[A-Z][A-Za-z0-9_.]*(?:<[^>\r\n]+>)?)\??\s+)?"
             r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
-            r"(?P<value>[^;\r\n]*)",
+            r"(?P<value>[^\r\n]*)",
             re.MULTILINE,
         )
-        function = re.compile(
-            r"(?:\b(?:[A-Za-z_][A-Za-z0-9_.]*(?:<[^>{}]+>)?\s+)+"
-            r"[A-Za-z_][A-Za-z0-9_]*|"
-            r"\b(?:class|record|struct)\s+[A-Z][A-Za-z0-9_]*|"
-            r"\b[A-Z][A-Za-z0-9_]*)"
-            r"\s*\((?P<parameters>[^()]*)\)[^{]*\{"
-        )
+        function = None
     bindings: list[tuple[str, str | None, int, int]] = []
-    for match in function.finditer(executable):
-        brace = executable.rfind("{", match.start(), match.end())
-        if brace < 0:
-            continue
-        scope = non_javascript_scope_at(scopes, brace + 1)
-        for name in local_parameter_names(match.group("parameters"), suffix):
-            bindings.append((name, None, match.start(), scope))
-    for match in declaration.finditer(source):
-        position = match.start("name")
-        if position >= len(executable) or executable[position].isspace():
-            continue
-        scope = non_javascript_scope_at(scopes, position)
-        value = resolve_non_javascript_literal(
-            match.group("value"),
-            non_javascript_scope_aliases(scopes, bindings, position),
-            suffix,
-        )
-        native_value = decode_environment_setter_literal(
-            match.group("value"), suffix
-        )
-        if native_value is not None:
-            value = native_value
-        bindings.append((match.group("name"), value, position, scope))
+    if suffix == ".go":
+        parameter_bindings = []
+        for match in function.finditer(executable):
+            brace = executable.rfind("{", match.start(), match.end())
+            if brace < 0:
+                continue
+            scope = non_javascript_scope_at(scopes, brace + 1)
+            for name in local_parameter_names(match.group("parameters"), suffix):
+                parameter_bindings.append((name, None, match.start(), scope))
+    else:
+        parameter_bindings = csharp_parameter_bindings(executable, scopes)
+    bindings.extend(parameter_bindings)
+    for segment, segment_start in local_statement_segments(source, executable):
+        for match in declaration.finditer(segment):
+            position = segment_start + match.start("name")
+            if position >= len(executable) or executable[position].isspace():
+                continue
+            scope = non_javascript_scope_at(scopes, position)
+            aliases = non_javascript_scope_aliases(scopes, bindings, position)
+            value = resolve_non_javascript_literal(
+                match.group("value"), aliases, suffix
+            )
+            native_value = decode_environment_setter_literal(
+                match.group("value"), suffix
+            )
+            if native_value is not None:
+                value = native_value
+            bindings.append((match.group("name"), value, position, scope))
     return scopes, bindings
 
 
@@ -3505,6 +3617,8 @@ def decode_csharp_setter_arguments(
         return None
     variable = decode_environment_setter_literal(slots[0], ".cs")
     value = decode_environment_setter_literal(slots[1], ".cs")
+    if variable is None and aliases is not None:
+        variable = resolve_non_javascript_literal(slots[0], aliases, ".cs")
     if value is None and aliases is not None:
         value = resolve_non_javascript_literal(slots[1], aliases, ".cs")
     if variable is None or value is None:
@@ -3578,13 +3692,18 @@ def environment_setter_assignments(
         else:
             if len(arguments) < 2:
                 continue
+            name = decode_environment_setter_literal(arguments[0], suffix)
+            if name is None and alias_state is not None:
+                name = non_javascript_alias_value(
+                    path, alias_state, arguments[0], match.start()
+                )
             value = decode_environment_setter_literal(arguments[1], suffix)
             if value is None and alias_state is not None:
                 value = non_javascript_alias_value(
                     path, alias_state, arguments[1], match.start()
                 )
             decoded_arguments = (
-                decode_environment_setter_literal(arguments[0], suffix),
+                name,
                 value,
             )
         if decoded_arguments is None:

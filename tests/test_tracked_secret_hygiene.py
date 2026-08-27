@@ -1529,6 +1529,62 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(negative=filename, prefix=text[:24]):
                 self.assertEqual([], SCANNER.scan_text(Path(filename), text))
 
+    def test_environment_setter_name_and_value_aliases_resolve_bounded(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        positives = (
+            (
+                "config.go",
+                f'name := "{name}"\nsecret := "{value}"\nos.Setenv(name, secret)\n',
+            ),
+            (
+                "config.go",
+                f'prefix := "OPENAI_"\nname := prefix + "API_KEY"\nsecret := "{value}"\nos.Setenv(name, secret)\n',
+            ),
+            (
+                "config.cs",
+                f'var name = "{name}";\nvar secret = "{value}";\nEnvironment.SetEnvironmentVariable(variable: name, value: secret);\n',
+            ),
+            (
+                "config.py",
+                f'name = "{name}"\nsecret = "{value}"\nos.putenv(name, secret)\n',
+            ),
+        )
+        for filename, text in positives:
+            with self.subTest(positive=filename):
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(
+                    [(filename, text.count("\n"), f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        negatives = (
+            (
+                "config.go",
+                f'name := "NOT_A_SECRET"\nsecret := "{value}"\nos.Setenv(name, secret)\n',
+            ),
+            (
+                "config.go",
+                f'name := getName()\nsecret := "{value}"\nos.Setenv(name, secret)\n',
+            ),
+            (
+                "config.go",
+                f'name := "{name}"\nsecret := "{value}"\nname = getName()\nos.Setenv(name, secret)\n',
+            ),
+            (
+                "config.cs",
+                f'var name = "{name}";\nvar secret = "{value}";\nname = GetName();\nEnvironment.SetEnvironmentVariable(name, secret);\n',
+            ),
+            (
+                "config.py",
+                f'name = "{name}"\nsecret = "{value}"\nname = get_name()\nos.putenv(name, secret)\n',
+            ),
+        )
+        for filename, text in negatives:
+            with self.subTest(negative=filename, prefix=text[:24]):
+                self.assertEqual([], SCANNER.scan_text(Path(filename), text))
+
     def test_environment_setter_values_decode_native_local_string_initializers(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
@@ -1554,6 +1610,30 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     findings,
                 )
                 self.assertNotIn(value, repr(findings))
+
+        semicolon_value = "Synthetic;SecretValue2026"
+        semicolon_cases = (
+            (
+                "config.go",
+                f'secret := `{semicolon_value}`\nos.Setenv("{name}", secret)\n',
+            ),
+            (
+                "config.cs",
+                f'var secret = @"{semicolon_value}";\nEnvironment.SetEnvironmentVariable("{name}", secret);\n',
+            ),
+            (
+                "config.cs",
+                f'string secret = """{semicolon_value}""";\nEnvironment.SetEnvironmentVariable("{name}", secret);\n',
+            ),
+        )
+        for filename, text in semicolon_cases:
+            with self.subTest(semicolon=filename):
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(
+                    [(filename, 2, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(semicolon_value, repr(findings))
 
         negatives = (
             (
@@ -1607,6 +1687,39 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             "}\n"
         )
         findings = SCANNER.scan_text(Path("config.cs"), outer_const)
+        self.assertEqual(
+            [("config.cs", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        configure_invocation = (
+            "class Holder {\n"
+            f'    private string secret = "{value}";\n'
+            "    void Use() {\n"
+            "        Configure(secret);\n"
+            "        if (condition) {\n"
+            f'            Environment.SetEnvironmentVariable("{name}", secret);\n'
+            "        }\n"
+            "    }\n"
+            "}\n"
+        )
+        findings = SCANNER.scan_text(Path("config.cs"), configure_invocation)
+        self.assertEqual(
+            [("config.cs", 6, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        true_constructor = (
+            "class Holder {\n"
+            f'    private string secret = "{value}";\n'
+            "    Holder(string other) {\n"
+            f'        Environment.SetEnvironmentVariable("{name}", secret);\n'
+            "    }\n"
+            "}\n"
+        )
+        findings = SCANNER.scan_text(Path("config.cs"), true_constructor)
         self.assertEqual(
             [("config.cs", 4, f"live-looking value assigned to {name}")],
             findings,
