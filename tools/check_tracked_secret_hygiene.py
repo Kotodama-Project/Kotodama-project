@@ -2361,37 +2361,181 @@ def python_source_end_offset(
     return python_byte_column_to_offset(text, line_offsets, line, column)
 
 
+PythonResolvedValue = str | tuple | list | bool | int | float | complex
+
+
+def python_value_truthiness(value: PythonResolvedValue) -> bool | None:
+    if isinstance(value, (str, tuple, list, bool, int, float, complex)):
+        return bool(value)
+    return None
+
+
+def resolve_python_value(
+    node: ast.AST,
+    scopes: list[tuple[int, int, int]],
+    bindings: list[tuple[str, str | None, int, int]],
+    position: int,
+    ephemeral: dict[str, PythonResolvedValue | None],
+) -> PythonResolvedValue | None:
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, str):
+            return node.value if len(node.value) <= 512 else None
+        if isinstance(node.value, (bool, int, float, complex)):
+            return node.value
+        return None
+    if isinstance(node, ast.Name):
+        if node.id in ephemeral:
+            return ephemeral[node.id]
+        return non_javascript_scope_aliases(scopes, bindings, position).get(node.id)
+    if isinstance(node, ast.BinOp):
+        left = resolve_python_value(
+            node.left, scopes, bindings, position, ephemeral
+        )
+        right = resolve_python_value(
+            node.right, scopes, bindings, position, ephemeral
+        )
+        if (
+            isinstance(node.op, ast.Add)
+            and isinstance(left, str)
+            and isinstance(right, str)
+            and len(left + right) <= 512
+        ):
+            return left + right
+        return None
+    if isinstance(node, ast.BoolOp):
+        result: PythonResolvedValue | None = None
+        for operand in node.values:
+            resolved = resolve_python_value(
+                operand, scopes, bindings, position, ephemeral
+            )
+            if resolved is None:
+                return None
+            truthiness = python_value_truthiness(resolved)
+            if truthiness is None:
+                return None
+            result = resolved
+            if isinstance(node.op, ast.And) and not truthiness:
+                return resolved
+            if isinstance(node.op, ast.Or) and truthiness:
+                return resolved
+        return result
+    if isinstance(node, (ast.Tuple, ast.List)):
+        values: list[PythonResolvedValue] = []
+        unknown = False
+        for element in node.elts:
+            resolved = resolve_python_value(
+                element, scopes, bindings, position, ephemeral
+            )
+            if resolved is None:
+                unknown = True
+            else:
+                values.append(resolved)
+        if unknown:
+            return None
+        return tuple(values) if isinstance(node, ast.Tuple) else values
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        unknown = False
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                parts.append(value.value)
+                continue
+            if isinstance(value, ast.FormattedValue):
+                resolved = resolve_python_value(
+                    value.value, scopes, bindings, position, ephemeral
+                )
+                if isinstance(resolved, str):
+                    parts.append(resolved)
+                else:
+                    unknown = True
+                continue
+            unknown = True
+        result = "".join(parts)
+        return result if not unknown and len(result) <= 512 else None
+    if isinstance(node, ast.NamedExpr):
+        value = resolve_python_value(
+            node.value, scopes, bindings, position, ephemeral
+        )
+        if isinstance(node.target, ast.Name):
+            ephemeral[node.target.id] = value
+        return value
+    if isinstance(node, ast.Subscript):
+        base = resolve_python_value(
+            node.value, scopes, bindings, position, ephemeral
+        )
+        index = resolve_python_value(
+            node.slice, scopes, bindings, position, ephemeral
+        )
+        if (
+            isinstance(base, (tuple, list))
+            and isinstance(index, int)
+            and not isinstance(index, bool)
+        ):
+            try:
+                return base[index]
+            except IndexError:
+                return None
+        return None
+    if isinstance(node, ast.Call):
+        resolve_python_value(node.func, scopes, bindings, position, ephemeral)
+        for argument in node.args:
+            resolve_python_value(
+                argument, scopes, bindings, position, ephemeral
+            )
+        for keyword in node.keywords:
+            resolve_python_value(
+                keyword.value, scopes, bindings, position, ephemeral
+            )
+        return None
+    if isinstance(node, ast.Dict):
+        for key, value in zip(node.keys, node.values):
+            if key is not None:
+                resolve_python_value(key, scopes, bindings, position, ephemeral)
+            resolve_python_value(value, scopes, bindings, position, ephemeral)
+        return None
+    if isinstance(node, ast.Attribute):
+        resolve_python_value(node.value, scopes, bindings, position, ephemeral)
+        return None
+    if isinstance(node, ast.Starred):
+        return resolve_python_value(
+            node.value, scopes, bindings, position, ephemeral
+        )
+    if isinstance(node, ast.UnaryOp):
+        resolve_python_value(node.operand, scopes, bindings, position, ephemeral)
+        return None
+    if isinstance(node, ast.Compare):
+        resolve_python_value(node.left, scopes, bindings, position, ephemeral)
+        if node.comparators:
+            resolve_python_value(
+                node.comparators[0], scopes, bindings, position, ephemeral
+            )
+        return None
+    if isinstance(node, ast.IfExp):
+        test = resolve_python_value(
+            node.test, scopes, bindings, position, ephemeral
+        )
+        if test is None:
+            return None
+        truthiness = python_value_truthiness(test)
+        if truthiness is None:
+            return None
+        branch = node.body if truthiness else node.orelse
+        return resolve_python_value(
+            branch, scopes, bindings, position, ephemeral
+        )
+    return None
+
+
 def resolve_python_expression(
     node: ast.AST,
     scopes: list[tuple[int, int, int]],
     bindings: list[tuple[str, str | None, int, int]],
     position: int,
+    ephemeral: dict[str, PythonResolvedValue | None] | None = None,
 ) -> str | None:
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value if len(node.value) <= 512 else None
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        left = resolve_python_expression(node.left, scopes, bindings, position)
-        right = resolve_python_expression(node.right, scopes, bindings, position)
-        return left + right if left is not None and right is not None and len(left + right) <= 512 else None
-    if isinstance(node, ast.JoinedStr):
-        parts: list[str] = []
-        for value in node.values:
-            if isinstance(value, ast.Constant) and isinstance(value.value, str):
-                parts.append(value.value)
-            elif isinstance(value, ast.FormattedValue):
-                resolved = resolve_python_expression(value.value, scopes, bindings, position)
-                if resolved is None:
-                    return None
-                parts.append(resolved)
-            else:
-                return None
-        result = "".join(parts)
-        return result if len(result) <= 512 else None
-    if isinstance(node, ast.NamedExpr):
-        return resolve_python_expression(node.value, scopes, bindings, position)
-    if isinstance(node, ast.Name):
-        return non_javascript_scope_aliases(scopes, bindings, position).get(node.id)
-    return None
+    state = {} if ephemeral is None else ephemeral
+    resolved = resolve_python_value(node, scopes, bindings, position, state)
+    return resolved if isinstance(resolved, str) else None
 
 
 def resolve_python_literal_iterable(
@@ -2399,35 +2543,67 @@ def resolve_python_literal_iterable(
     scopes: list[tuple[int, int, int]],
     bindings: list[tuple[str, str | None, int, int]],
     position: int,
-) -> list[str] | None:
+    ephemeral: dict[str, PythonResolvedValue | None] | None = None,
+) -> list[PythonResolvedValue] | None:
+    state = {} if ephemeral is None else ephemeral
     if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-        values: list[str] = []
+        values: list[PythonResolvedValue] = []
+        unknown = False
         if len(node.elts) > MAX_JAVASCRIPT_CONSTANT_PARTS:
             return None
         for element in node.elts:
-            value = resolve_python_expression(
-                element, scopes, bindings, position
+            value = resolve_python_value(
+                element, scopes, bindings, position, state
             )
             if value is None:
-                return None
-            values.append(value)
-        return values
+                unknown = True
+            else:
+                values.append(value)
+        return None if unknown else values
     if isinstance(node, ast.Dict):
-        values = []
+        values: list[PythonResolvedValue] = []
+        unknown = False
         if len(node.keys) > MAX_JAVASCRIPT_CONSTANT_PARTS:
             return None
         for key in node.keys:
             if key is None:
-                return None
-            value = resolve_python_expression(key, scopes, bindings, position)
+                unknown = True
+                continue
+            value = resolve_python_value(key, scopes, bindings, position, state)
             if value is None:
-                return None
-            values.append(value)
-        return values
+                unknown = True
+            else:
+                values.append(value)
+        return None if unknown else values
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return list(node.value[:MAX_JAVASCRIPT_CONSTANT_PARTS]) \
             if len(node.value) <= MAX_JAVASCRIPT_CONSTANT_PARTS else None
     return None
+
+
+def python_target_bindings(
+    target: ast.AST, value: PythonResolvedValue
+) -> dict[str, str | None] | None:
+    if isinstance(target, ast.Name):
+        return {target.id: value if isinstance(value, str) else None}
+    if isinstance(target, ast.Starred):
+        return None
+    if isinstance(target, (ast.Tuple, ast.List)):
+        if any(isinstance(element, ast.Starred) for element in target.elts):
+            return None
+        if not isinstance(value, (tuple, list)) or len(target.elts) != len(value):
+            return None
+        result: dict[str, str | None] = {}
+        for element, element_value in zip(target.elts, value):
+            nested = python_target_bindings(element, element_value)
+            if nested is None:
+                return None
+            for name, resolved in nested.items():
+                if name in result and result[name] != resolved:
+                    return None
+                result[name] = resolved
+        return result
+    return {}
 
 
 def python_target_names(node: ast.AST) -> list[str]:
@@ -2552,21 +2728,37 @@ def python_alias_bindings(
             scope: int,
             activation_position: int,
         ) -> dict[str, str | None]:
+            ephemeral: dict[str, PythonResolvedValue | None] = {}
             values = resolve_python_literal_iterable(
                 iterable,
                 [tuple(scope_data) for scope_data in scopes],
                 bindings,
                 python_source_offset(text, line_offsets, iterable),
+                ephemeral,
             )
-            target_value = (
-                values[0]
-                if values and all(value == values[0] for value in values)
-                else None
-            )
-            target_values: dict[str, str | None] = {}
-            for name in python_target_names(target):
-                bindings.append((name, target_value, activation_position, scope))
-                target_values[name] = target_value
+            target_names = python_target_names(target)
+            target_values = {name: None for name in target_names}
+            if values:
+                resolved_targets = [
+                    python_target_bindings(target, value)
+                    for value in values
+                ]
+                first_target = resolved_targets[0]
+                if (
+                    first_target is not None
+                    and all(targets == first_target for targets in resolved_targets)
+                ):
+                    target_values = {
+                        name: first_target.get(name)
+                        for name in target_names
+                    }
+            for name in target_names:
+                bindings.append((
+                    name,
+                    target_values[name],
+                    activation_position,
+                    scope,
+                ))
             return target_values
 
         def _visit_comprehension_stage(
