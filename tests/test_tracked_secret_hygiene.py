@@ -1678,6 +1678,48 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             SCANNER.scan_text(Path("config.ps1"), powershell_outer),
         )
 
+    def test_powershell_one_line_scope_respects_statement_boundaries(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        dynamic_inner = (
+            '$value = "' + value + '";\n'
+            'function f { $value=Get-Secret; $env:' + name + '=$value }\n'
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.ps1"), dynamic_inner))
+
+        top_level = '$value = "' + value + '"; $env:' + name + '=$value\n'
+        self.assertEqual(
+            [("config.ps1", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.ps1"), top_level),
+        )
+        inner_literal = (
+            'function f { $value="' + value + '"; $env:' + name + '=$value }\n'
+        )
+        self.assertEqual(
+            [("config.ps1", 1, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.ps1"), inner_literal),
+        )
+        outer_after_inner = (
+            '$value = "' + value + '";\n'
+            'function f { $value=Get-Secret; $null=$value }\n'
+            '$env:' + name + '=$value\n'
+        )
+        self.assertEqual(
+            [("config.ps1", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.ps1"), outer_after_inner),
+        )
+
+        controls = (
+            '$text = "semicolon; $value = "' + value + '"";\n'
+            '$env:' + name + '=$value\n',
+            '# $value = "' + value + '";\n$env:' + name + '=$value\n',
+            "@'\n$value = \"" + value + "\";\n'@\n"
+            '$env:' + name + '=$value\n',
+        )
+        for text in controls:
+            with self.subTest(prefix=text[:18]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.ps1"), text))
+
     def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"

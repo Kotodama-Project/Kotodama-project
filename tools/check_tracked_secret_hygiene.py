@@ -2427,6 +2427,104 @@ def python_alias_bindings(
     return [tuple(scope) for scope in scopes], bindings
 
 
+def powershell_tokens(line: str) -> list[tuple[str, int]]:
+    tokens: list[tuple[str, int]] = []
+    start = 0
+    quote: str | None = None
+    escaped = False
+    for index, character in enumerate(line):
+        if quote == "'":
+            if character == "'":
+                quote = None
+            continue
+        if quote == '"':
+            if escaped:
+                escaped = False
+            elif character == "`":
+                escaped = True
+            elif character == '"':
+                quote = None
+            continue
+        if character in {"'", '"'}:
+            quote = character
+        elif character == "#":
+            tokens.append((line[start:index], start))
+            return tokens
+        elif character in ";{}":
+            tokens.append((line[start:index], start))
+            tokens.append((character, index))
+            start = index + 1
+    tokens.append((line[start:], start))
+    return tokens
+
+
+def powershell_alias_bindings(
+    path: Path, text: str
+) -> tuple[list[tuple[int, int, int]], list[tuple[str, str | None, int, int]]]:
+    declarations = re.compile(
+        r"^[ \t]*\$(?!env:)(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+        r"[ \t]*=[ \t]*(?P<value>.*?)\s*$"
+    )
+    scopes: list[list[int]] = [[0, len(text), -1]]
+    stack = [0]
+    bindings: list[tuple[str, str | None, int, int]] = []
+    offset = 0
+    quoted: str | None = None
+    block_comment = False
+    for raw_line in text.splitlines(keepends=True):
+        line = raw_line.rstrip("\r\n")
+        stripped = line.lstrip()
+        if block_comment:
+            if "#>" in line:
+                block_comment = False
+            offset += len(raw_line)
+            continue
+        if quoted is not None:
+            if quoted in line:
+                quoted = None
+            offset += len(raw_line)
+            continue
+        if "<#" in line:
+            start = line.find("<#")
+            if "#>" not in line[start + 2:]:
+                block_comment = True
+                offset += len(raw_line)
+                continue
+        for marker, terminator in (("@'", "'@"), ('@"', '"@')):
+            if marker in line:
+                start = line.find(marker)
+                if terminator not in line[start + 2:]:
+                    quoted = terminator
+                    break
+        if quoted is not None:
+            offset += len(raw_line)
+            continue
+        for token, token_start in powershell_tokens(line):
+            position = offset + token_start
+            stripped_token = token.strip()
+            if stripped_token == "{":
+                scopes.append([position + 1, len(text), stack[-1]])
+                stack.append(len(scopes) - 1)
+                continue
+            if stripped_token == "}":
+                if len(stack) > 1:
+                    scopes[stack.pop()][1] = position
+                continue
+            match = declarations.match(token)
+            if match is None:
+                continue
+            value = resolve_non_javascript_literal(
+                match.group("value"),
+                non_javascript_scope_aliases(
+                    [tuple(scope) for scope in scopes], bindings, position
+                ),
+                ".ps1",
+            )
+            bindings.append((match.group("name"), value, position, stack[-1]))
+        offset += len(raw_line)
+    return [tuple(scope) for scope in scopes], bindings
+
+
 def script_alias_bindings(
     path: Path, text: str
 ) -> tuple[list[tuple[int, int, int]], list[tuple[str, str | None, int, int]]]:
@@ -2434,10 +2532,7 @@ def script_alias_bindings(
     if suffix == ".py":
         return python_alias_bindings(path, text)
     if suffix == ".ps1":
-        declarations = re.compile(
-            r"^[ \t]*\$(?!env:)(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
-            r"[ \t]*=[ \t]*(?P<value>.*?)\s*$"
-        )
+        return powershell_alias_bindings(path, text)
     else:
         declarations = re.compile(
             r"^[ \t]*(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
