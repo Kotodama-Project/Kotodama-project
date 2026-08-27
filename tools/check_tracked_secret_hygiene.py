@@ -3186,14 +3186,128 @@ def decode_environment_setter_literal(
     return combined if values and len(combined) <= 512 else None
 
 
-def split_environment_setter_arguments(body: str) -> list[str]:
+def environment_literal_span(
+    expression: str, start: int, suffix: str
+) -> int | None:
+    if suffix in {".c", ".cpp", ".h", ".hh", ".hpp", ".hxx"}:
+        raw_start = CPP_RAW_STRING_START.match(expression, start)
+        if raw_start is not None:
+            terminator = ")" + raw_start.group("delimiter") + '"'
+            end = expression.find(terminator, raw_start.end())
+            return None if end < 0 else end + len(terminator)
+        prefix = re.match(r"(?:u8|u|U|L)?(?P<quote>[\"'])", expression[start:])
+        if prefix is not None:
+            quote_start = start + prefix.start("quote")
+            decoded = decode_basic_environment_literal(
+                expression, quote_start, prefix.group("quote")
+            )
+            return None if decoded is None else decoded[1]
+    elif suffix == ".cs":
+        cursor = start
+        for candidate in ("$@", "@$", "$", "@"):
+            if expression.startswith(candidate, cursor):
+                cursor += len(candidate)
+                break
+        if expression.startswith('"""', cursor):
+            decoded = decode_triple_quoted_literal(expression, cursor, '"""')
+            return None if decoded is None else decoded[1]
+        if cursor < len(expression) and expression[cursor] == '"':
+            if expression.startswith("@", start) or expression.startswith("$@", start) or expression.startswith("@$", start):
+                end = cursor + 1
+                while end < len(expression):
+                    if expression[end] == '"':
+                        if end + 1 < len(expression) and expression[end + 1] == '"':
+                            end += 2
+                            continue
+                        return end + 1
+                    end += 1
+            decoded = decode_basic_environment_literal(expression, cursor, '"')
+            return None if decoded is None else decoded[1]
+    elif suffix == ".py":
+        prefix_match = re.match(r"(?i:[rubf]{0,2})", expression[start:])
+        if prefix_match is not None:
+            cursor = start + len(prefix_match.group())
+            if cursor < len(expression) and expression[cursor] in {"'", '"'}:
+                quote = expression[cursor]
+                if expression.startswith(quote * 3, cursor):
+                    decoded = decode_triple_quoted_literal(
+                        expression, cursor, quote * 3
+                    )
+                else:
+                    decoded = decode_basic_environment_literal(
+                        expression, cursor, quote
+                    )
+                return None if decoded is None else decoded[1]
+    elif suffix == ".rs":
+        raw_start = RUST_RAW_STRING_START.match(expression, start)
+        if raw_start is not None:
+            terminator = '"' + raw_start.group("hashes")
+            end = expression.find(terminator, raw_start.end())
+            return None if end < 0 else end + len(terminator)
+        if expression.startswith('"', start):
+            decoded = decode_basic_environment_literal(expression, start, '"')
+            return None if decoded is None else decoded[1]
+    elif suffix == ".swift":
+        extended = re.match(
+            r"(?P<hashes>#+)(?P<quote>\"{1,3})", expression[start:]
+        )
+        if extended is not None:
+            quote = extended.group("quote")
+            opening_end = start + extended.end()
+            terminator = quote + extended.group("hashes")
+            end = expression.find(terminator, opening_end)
+            return None if end < 0 else end + len(terminator)
+        if expression.startswith('"""', start):
+            decoded = decode_triple_quoted_literal(expression, start, '"""')
+            return None if decoded is None else decoded[1]
+        if expression.startswith('"', start):
+            decoded = decode_basic_environment_literal(expression, start, '"')
+            return None if decoded is None else decoded[1]
+    if start < len(expression) and expression[start] in {"'", '"', "`"}:
+        decoded = decode_basic_environment_literal(
+            expression, start, expression[start]
+        )
+        return None if decoded is None else decoded[1]
+    return None
+
+
+def environment_setter_matching_delimiter(
+    text: str, start: int, suffix: str
+) -> int | None:
+    if start >= len(text) or text[start] != "(":
+        return None
+    depth = 1
+    index = start + 1
+    while index < min(len(text), start + 1025):
+        literal_end = environment_literal_span(text, index, suffix)
+        if literal_end is not None:
+            index = literal_end
+            continue
+        character = text[index]
+        if character in {"'", '"', "`"}:
+            return None
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+    return None
+
+
+def split_environment_setter_arguments(
+    body: str, suffix: str
+) -> list[str]:
     arguments: list[str] = []
     start = 0
     stack: list[str] = []
     quote: str | None = None
     escaped = False
     matching = {")": "(", "]": "[", "}": "{"}
-    for index, character in enumerate(body):
+    index = 0
+    while index < len(body):
+        character = body[index]
         if quote is not None:
             if escaped:
                 escaped = False
@@ -3201,6 +3315,11 @@ def split_environment_setter_arguments(body: str) -> list[str]:
                 escaped = True
             elif character == quote:
                 quote = None
+            index += 1
+            continue
+        literal_end = environment_literal_span(body, index, suffix)
+        if literal_end is not None:
+            index = literal_end
             continue
         if character in {"'", '"', "`"}:
             quote = character
@@ -3213,6 +3332,7 @@ def split_environment_setter_arguments(body: str) -> list[str]:
         elif character == "," and not stack:
             arguments.append(body[start:index].strip())
             start = index + 1
+        index += 1
     if quote is not None or stack:
         return []
     arguments.append(body[start:].strip())
@@ -3237,13 +3357,13 @@ def environment_setter_assignments(
     for match in pattern.finditer(sanitized):
         if executable[match.start()].isspace():
             continue
-        close = javascript_matching_delimiter(
-            sanitized, match.end() - 1, "(", ")"
+        close = environment_setter_matching_delimiter(
+            sanitized, match.end() - 1, suffix
         )
         if close is None:
             continue
         arguments = split_environment_setter_arguments(
-            sanitized[match.end():close]
+            sanitized[match.end():close], suffix
         )
         if len(arguments) < 2:
             continue
@@ -3283,6 +3403,13 @@ def javascript_multiline_assignment_is_executable(
         if absolute < len(executable) and not executable[absolute].isspace():
             return True
         bracket_start = line.rfind("[", 0, name_start)
+        template_start = line.rfind("`", 0, name_start)
+        if (
+            template_start > bracket_start
+            and line_start + template_start < len(executable)
+            and executable[line_start + template_start].isspace()
+        ):
+            bracket_start = -1
         if (
             bracket_start >= 0
             and line_start + bracket_start < len(executable)

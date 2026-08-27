@@ -1325,6 +1325,37 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(dynamic=filename):
                 self.assertEqual([], SCANNER.scan_text(Path(filename), text))
 
+    def test_environment_setter_static_literals_preserve_internal_delimiters(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = 'Synthetic "quoted", (paren) SecretValue2026'
+        cases = (
+            (
+                "config.cpp",
+                f'setenv(R"tag({name})tag", R"tag({value})tag", 1);\n',
+            ),
+            (
+                "config.rs",
+                f'std::env::set_var(r##"{name}"##, r##"{value}"##);\n',
+            ),
+            ("config.py", f'os.putenv("""{name}""", """{value}""")\n'),
+            (
+                "config.cs",
+                f'Environment.SetEnvironmentVariable("""{name}""", """{value}""");\n',
+            ),
+            (
+                "config.swift",
+                f'setenv("""{name}""", """{value}""", 1)\n',
+            ),
+        )
+        for filename, text in cases:
+            with self.subTest(filename=filename):
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(
+                    [(filename, 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
     def test_csharp_fully_qualified_environment_setter_calls_detect_literals(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
@@ -1542,6 +1573,20 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "\"\n`;\n"
         )
+        outer_bracket_template_text = (
+            "const values = [`"
+            + name
+            + " =\n  \""
+            + value
+            + "\"\n`];\n"
+        )
+        outer_call_template_text = (
+            "emit(`"
+            + name
+            + " =\n  \""
+            + value
+            + "\"\n`);\n"
+        )
         executable_assignment = (
             "const "
             + name
@@ -1558,6 +1603,18 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     [],
                     SCANNER.scan_text(
                         Path("config" + suffix), bracket_template_text
+                    ),
+                )
+                self.assertEqual(
+                    [],
+                    SCANNER.scan_text(
+                        Path("config" + suffix), outer_bracket_template_text
+                    ),
+                )
+                self.assertEqual(
+                    [],
+                    SCANNER.scan_text(
+                        Path("config" + suffix), outer_call_template_text
                     ),
                 )
                 findings = SCANNER.scan_text(
