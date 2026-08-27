@@ -25,10 +25,11 @@ SENSITIVE_EXACT = {".env", "credentials.json", "id_ed25519", "id_rsa"}
 SENSITIVE_SUFFIXES = {".key", ".p12", ".pem", ".pfx", ".ppk"}
 TEXT_FILENAMES = {".dev.vars", ".env", "dockerfile", "makefile"}
 TEXT_SUFFIXES = {
-    ".c", ".cfg", ".cmd", ".conf", ".cpp", ".cs", ".css", ".csv",
+    ".c", ".cfg", ".cjs", ".cmd", ".conf", ".cpp", ".cs", ".css", ".csv",
     ".env", ".go", ".gradle", ".graphql", ".h", ".hcl", ".hh", ".hpp",
     ".html", ".hxx",
     ".ini", ".java", ".js", ".json", ".kt", ".kts", ".lock", ".md",
+    ".mjs",
     ".php", ".properties", ".ps1", ".py", ".rb", ".rs", ".sh",
     ".sql", ".swift", ".tf", ".toml", ".ts", ".txt", ".xml", ".yaml",
     ".yml",
@@ -251,7 +252,8 @@ HASH_COMMENT_SUFFIXES = {
 }
 SLASH_COMMENT_SUFFIXES = {
     ".c", ".cpp", ".cs", ".go", ".h", ".hcl", ".hh", ".hpp",
-    ".hxx", ".java", ".js", ".kt", ".kts", ".php", ".rs", ".swift",
+    ".hxx", ".java", ".js", ".cjs", ".mjs", ".kt", ".kts", ".php", ".rs",
+    ".swift",
     ".tf", ".ts",
 }
 BLOCK_COMMENT_SUFFIXES = SLASH_COMMENT_SUFFIXES | {".css", ".sql"}
@@ -259,12 +261,13 @@ NESTED_BLOCK_COMMENT_SUFFIXES = {".rs", ".sql", ".swift"}
 TRIPLE_QUOTE_SUFFIXES = {".cs", ".java", ".kt", ".kts", ".swift"}
 CPP_SOURCE_SUFFIXES = {".cpp", ".h", ".hh", ".hpp", ".hxx"}
 C_SOURCE_SUFFIXES = {".c"} | CPP_SOURCE_SUFFIXES
-JAVASCRIPT_SOURCE_SUFFIXES = {".js", ".ts"}
+JAVASCRIPT_SOURCE_SUFFIXES = {".cjs", ".js", ".mjs", ".ts"}
 NON_JAVASCRIPT_ALIAS_SUFFIXES = {".py", ".rb", ".ps1"}
 JAVA_TEXT_BLOCK_SENTINEL = "<java-text-block>"
 SOURCE_CODE_SUFFIXES = {
     ".c", ".cpp", ".cs", ".go", ".h", ".hh", ".hpp", ".hxx",
-    ".java", ".js", ".kt", ".kts", ".php", ".ps1", ".py", ".rb",
+    ".cjs", ".java", ".js", ".kt", ".kts", ".mjs", ".php", ".ps1", ".py",
+    ".rb",
     ".rs", ".swift", ".ts",
 }
 CODE_REFERENCE_VALUE = re.compile(
@@ -278,6 +281,14 @@ LOOKUP_CALL_VALUE = re.compile(
     + "|".join(map(re.escape, ASSIGNMENT_NAMES))
     + r")[\"']\s*\)"
 )
+ENVIRONMENT_SETTER_NAMES = {
+    **{suffix: ("setenv",) for suffix in C_SOURCE_SUFFIXES},
+    ".cs": ("Environment.SetEnvironmentVariable",),
+    ".go": ("os.Setenv",),
+    ".py": ("os.putenv",),
+    ".rs": ("std::env::set_var",),
+    ".swift": ("setenv",),
+}
 
 
 def index_blobs(root: Path) -> dict[Path, str]:
@@ -2830,6 +2841,181 @@ def javascript_matching_delimiter(
     return None
 
 
+def executable_code_mask(path: Path, text: str) -> str:
+    """Blank comments and literals while preserving executable source offsets."""
+
+    suffix = path.suffix.lower()
+    if suffix in JAVASCRIPT_SOURCE_SUFFIXES:
+        return javascript_executable_mask(path, text)
+    sanitized = strip_block_comments(path, text)
+    result = list(sanitized)
+
+    def blank(start: int, end: int) -> None:
+        for cursor in range(start, end):
+            if result[cursor] not in "\r\n":
+                result[cursor] = " "
+
+    index = 0
+    quote: str | None = None
+    escaped = False
+    while index < len(sanitized):
+        character = sanitized[index]
+        if quote is not None:
+            if character not in "\r\n":
+                result[index] = " "
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            index += 1
+            continue
+        if suffix in CPP_SOURCE_SUFFIXES:
+            raw_start = CPP_RAW_STRING_START.match(sanitized, index)
+            if raw_start is not None and (
+                index == 0
+                or not (sanitized[index - 1].isalnum() or sanitized[index - 1] == "_")
+            ):
+                terminator = ")" + raw_start.group("delimiter") + '"'
+                end = sanitized.find(terminator, raw_start.end())
+                end = len(sanitized) if end < 0 else end + len(terminator)
+                blank(index, end)
+                index = end
+                continue
+        if suffix == ".rs":
+            raw_start = RUST_RAW_STRING_START.match(sanitized, index)
+            if raw_start is not None and (
+                index == 0
+                or not (sanitized[index - 1].isalnum() or sanitized[index - 1] == "_")
+            ):
+                terminator = '"' + raw_start.group("hashes")
+                end = sanitized.find(terminator, raw_start.end())
+                end = len(sanitized) if end < 0 else end + len(terminator)
+                blank(index, end)
+                index = end
+                continue
+        if suffix == ".swift":
+            raw_start = SWIFT_RAW_STRING_START.match(sanitized, index)
+            if raw_start is not None:
+                terminator = '"' + raw_start.group("hashes")
+                end = sanitized.find(terminator, raw_start.end())
+                end = len(sanitized) if end < 0 else end + len(terminator)
+                blank(index, end)
+                index = end
+                continue
+        if suffix in {".py", ".rb"} and (
+            sanitized.startswith('"""', index)
+            or sanitized.startswith("'''", index)
+        ):
+            delimiter = sanitized[index:index + 3]
+            end = sanitized.find(delimiter, index + 3)
+            blank(index, len(sanitized) if end < 0 else end + 3)
+            index = len(sanitized) if end < 0 else end + 3
+            continue
+        if suffix in HASH_COMMENT_SUFFIXES and character == "#":
+            end = sanitized.find("\n", index)
+            blank(index, len(sanitized) if end < 0 else end)
+            index = len(sanitized) if end < 0 else end
+            continue
+        if suffix in TRIPLE_QUOTE_SUFFIXES and sanitized.startswith('"""', index):
+            end = sanitized.find('"""', index + 3)
+            end = len(sanitized) if end < 0 else end + 3
+            blank(index, end)
+            index = end
+            continue
+        if character in {"'", '"', "`"}:
+            result[index] = " "
+            quote = character
+        index += 1
+    return "".join(result)
+
+
+def decode_environment_setter_literal(raw: str) -> str | None:
+    literal = raw.strip()
+    if len(literal) < 2 or literal[0] not in {"'", '"', "`"}:
+        return None
+    end = javascript_literal_end(literal)
+    if end != len(literal) - 1:
+        return None
+    if literal[0] == "`":
+        return literal[1:-1]
+    return decode_javascript_string_contents(literal[1:-1], literal[0])
+
+
+def split_environment_setter_arguments(body: str) -> list[str]:
+    arguments: list[str] = []
+    start = 0
+    stack: list[str] = []
+    quote: str | None = None
+    escaped = False
+    matching = {")": "(", "]": "[", "}": "{"}
+    for index, character in enumerate(body):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in {"'", '"', "`"}:
+            quote = character
+        elif character in "([{":
+            stack.append(character)
+        elif character in matching:
+            if not stack or stack[-1] != matching[character]:
+                return []
+            stack.pop()
+        elif character == "," and not stack:
+            arguments.append(body[start:index].strip())
+            start = index + 1
+    if quote is not None or stack:
+        return []
+    arguments.append(body[start:].strip())
+    return arguments
+
+
+def environment_setter_assignments(
+    path: Path, text: str
+) -> list[tuple[str, int]]:
+    suffix = path.suffix.lower()
+    names = ENVIRONMENT_SETTER_NAMES.get(suffix)
+    if not names:
+        return []
+    pattern = re.compile(
+        r"(?<![A-Za-z0-9_.$])(?:"
+        + "|".join(map(re.escape, names))
+        + r")\s*\("
+    )
+    executable = executable_code_mask(path, text)
+    findings: list[tuple[str, int]] = []
+    for match in pattern.finditer(text):
+        if executable[match.start()].isspace():
+            continue
+        close = javascript_matching_delimiter(
+            text, match.end() - 1, "(", ")"
+        )
+        if close is None:
+            continue
+        arguments = split_environment_setter_arguments(
+            text[match.end():close]
+        )
+        if len(arguments) < 2:
+            continue
+        name = decode_environment_setter_literal(arguments[0])
+        value = decode_environment_setter_literal(arguments[1])
+        if (
+            name is None
+            or value is None
+            or name.upper() not in ASSIGNMENT_NAMES
+            or not live_assignment(value)
+        ):
+            continue
+        findings.append((name.upper(), text.count("\n", 0, match.start()) + 1))
+    return list(dict.fromkeys(findings))
+
+
 def javascript_executable_mask(
     path: Path, text: str, depth: int = 0
 ) -> str:
@@ -3165,6 +3351,12 @@ def scan_text(
                 reported_assignments.add(name)
         if PRIVATE_BEGIN.search(line):
             findings.append((path.as_posix(), number, "private key block"))
+    for name, number in environment_setter_assignments(path, text):
+        findings.append((
+            path.as_posix(),
+            number,
+            f"live-looking value assigned to {name}",
+        ))
     for name, number, value, strip_comments in multiline_assignments(path, text):
         resolved_value = None
         if javascript_scope_data:
