@@ -774,6 +774,31 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertEqual([], unrelated_projection["integrity"]["invalidation_refs"])
         self.assertNotIn(unrelated["event_id"], unrelated_projection["source_event_refs"])
 
+    def test_selected_session_invalidation_requires_an_exact_affected_ref(self) -> None:
+        records = _valid_records()
+        unrelated = _event(
+            "selected-unrelated-invalidation",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="source_update",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_state="INVALIDATED",
+            invalidation_kind="SOURCE_UPDATED",
+            invalidation_refs=[_ref("task", "other")],
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        records.append(unrelated)
+
+        projection = ledger.project_session(_rechain(records), _ref("session", "demo"))
+
+        self.assertEqual("REBUILDABLE", projection["status"])
+        self.assertEqual([], projection["integrity"]["invalidation_refs"])
+        self.assertEqual("REQUEST_HUMAN_CONFIRMATION", projection["next_safe_action"]["kind"])
+
     def test_empty_validator_and_malformed_genesis_append_fail_closed(self) -> None:
         empty_report = ledger.validate_ledger([])
         self.assertEqual("REFUSED", empty_report["result"])
@@ -812,6 +837,70 @@ class SessionConversationLedgerTests(unittest.TestCase):
             projection["source_event_refs"],
         )
         self.assertFalse(projection["authority"]["compaction_summary_is_source"])
+
+    def test_invalidated_session_binding_cannot_bind_targets(self) -> None:
+        inbox = _event("invalidated-binding-inbox")
+        binding = _event(
+            "invalidated-binding",
+            sequence=2,
+            previous_hash=inbox["event_hash"],
+            event_kind="session_binding",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_state="INVALIDATED",
+            binding_targets=[inbox["event_id"]],
+            binding_destination=_ref("session", "demo"),
+            binding_revision=_ref("session-revision", "1"),
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+
+        direct = _event(
+            "direct-after-invalidated-binding",
+            sequence=3,
+            previous_hash=binding["event_hash"],
+            event_kind="human_message",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        records = [inbox, binding, direct]
+        report = ledger.validate_ledger(_rechain(records))
+        self.assertEqual("LEDGER_VALID", report["result"], report)
+
+        projection = ledger.project_session(records, _ref("session", "demo"))
+        self.assertIn(direct["event_id"], projection["source_event_refs"])
+        self.assertNotIn(inbox["event_id"], projection["source_event_refs"])
+
+    def test_binding_event_ref_requires_an_earlier_matching_session_binding(self) -> None:
+        valid = _valid_records()
+        valid[-1]["session"]["binding_event_ref"] = valid[1]["event_id"]
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain(valid))["result"])
+
+        wrong_kind = copy.deepcopy(valid)
+        wrong_kind[-1]["session"]["binding_event_ref"] = wrong_kind[0]["event_id"]
+        wrong_kind_report = ledger.validate_ledger(_rechain(wrong_kind))
+        self.assertEqual("REFUSED", wrong_kind_report["result"], wrong_kind_report)
+        self.assertIn("BINDING_EVENT_REF_INVALID", wrong_kind_report["reason_codes"])
+
+        future = copy.deepcopy(valid)
+        future[-1]["session"]["binding_event_ref"] = future[-1]["event_id"]
+        future_report = ledger.validate_ledger(_rechain(future))
+        self.assertEqual("REFUSED", future_report["result"], future_report)
+        self.assertIn("BINDING_EVENT_REF_INVALID", future_report["reason_codes"])
+
+        wrong_destination = copy.deepcopy(valid)
+        wrong_destination[1]["event"]["binding"]["destination_revision_ref"] = _ref(
+            "session-revision", "2"
+        )
+        wrong_destination_report = ledger.validate_ledger(_rechain(wrong_destination))
+        self.assertEqual("REFUSED", wrong_destination_report["result"], wrong_destination_report)
+        self.assertIn("BINDING_EVENT_REF_INVALID", wrong_destination_report["reason_codes"])
 
     def test_fail_closed_projection_suppresses_next_safe_action(self) -> None:
         allowed_projection = ledger.project_session(_valid_records(), _ref("session", "demo"))
@@ -917,6 +1006,30 @@ class SessionConversationLedgerTests(unittest.TestCase):
         ordinary_projection = ledger.project_session(_rechain(ordinary_invalidation), _ref("session", "demo"))
         self.assertEqual("REVIEW_INVALIDATION", ordinary_projection["next_safe_action"]["kind"])
 
+    def test_integrity_markers_are_scoped_to_the_selected_session(self) -> None:
+        records = _valid_records()
+        foreign_gap = _event(
+            "foreign-gap-marker",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="human_message",
+            session_state="BOUND",
+            session_ref=_ref("session", "other"),
+            event_state="OBSERVED",
+            integrity_marker="GAP",
+            source_type="system",
+            actor_ref="ref/system/foreign",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/foreign",
+        )
+        records.append(foreign_gap)
+
+        projection = ledger.project_session(_rechain(records), _ref("session", "demo"))
+
+        self.assertEqual("REBUILDABLE", projection["status"])
+        self.assertEqual([], projection["integrity"]["integrity_markers"])
+        self.assertEqual("REQUEST_HUMAN_CONFIRMATION", projection["next_safe_action"]["kind"])
+
     def test_invalidated_actions_do_not_project_as_open(self) -> None:
         records = _valid_records()
         previous_hash = records[-1]["event_hash"]
@@ -963,6 +1076,20 @@ class SessionConversationLedgerTests(unittest.TestCase):
         ordinary.append(ordinary_action)
         ordinary_projection = ledger.project_session(_rechain(ordinary), _ref("session", "demo"))
         self.assertEqual(["OPEN"], [item["status"] for item in ordinary_projection["action_items"]])
+
+    def test_invalidated_decision_candidate_is_not_actionable(self) -> None:
+        records = _valid_records()
+        records[-1]["event"]["state"] = "INVALIDATED"
+
+        projection = ledger.project_session(_rechain(records), _ref("session", "demo"))
+
+        intent = next(
+            item
+            for item in projection["confirmed_intent"]
+            if item["candidate_ref"] == _ref("candidate", "intent-1")
+        )
+        self.assertEqual("INVALIDATED", intent["status"])
+        self.assertEqual("NONE", projection["next_safe_action"]["kind"])
 
     def test_cli_project_emits_schema_valid_projection_and_exit_zero(self) -> None:
         records = _valid_records()
@@ -1420,6 +1547,75 @@ class SessionConversationLedgerTests(unittest.TestCase):
         )
         self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain(retained_history))["result"])
 
+    def test_archive_history_uses_the_effective_bound_session(self) -> None:
+        archive = {
+            "archive_target_kind": "ARCHIVE_TARGET",
+            "archive_target_ref": _ref("archive-target", "late-bound"),
+            "archive_target_uri_ref": _ref("archive-uri", "late-bound"),
+            "archive_package_digest": "a" * 64,
+            "snapshot_receipt_ref": _ref("snapshot-receipt", "late-bound"),
+            "archive_receipt_ref": _ref("archive-receipt", "late-bound"),
+        }
+        first = _event("late-bound-archive-declared")
+        first["retention"].update(archive)
+        first["retention"]["archive_status"] = "DECLARED"
+        second = _event(
+            "late-bound-archive-restored",
+            sequence=2,
+            previous_hash=first["event_hash"],
+        )
+        second["retention"].update(archive)
+        second["retention"].update(
+            {
+                "archive_status": "RESTORED",
+                "restore_status": "RESTORED",
+                "restore_receipt_ref": _ref("restore-receipt", "late-bound"),
+            }
+        )
+        binding = _event(
+            "late-bound-archive-binding",
+            sequence=3,
+            previous_hash=second["event_hash"],
+            event_kind="session_binding",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            binding_targets=[first["event_id"], second["event_id"]],
+            binding_destination=_ref("session", "demo"),
+            binding_revision=_ref("session-revision", "1"),
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        deleted = _event(
+            "late-bound-archive-deleted",
+            sequence=4,
+            previous_hash=binding["event_hash"],
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_kind="human_message",
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        deleted["retention"].update(archive)
+        deleted["retention"].update(
+            {
+                "archive_status": "DELETED",
+                "restore_status": "NOT_REQUESTED",
+                "restore_receipt_ref": None,
+                "deletion_state": "CONFIRMED",
+                "deletion_readback": "CONFIRMED",
+                "deletion_receipt_ref": _ref("deletion-receipt", "late-bound"),
+            }
+        )
+
+        report = ledger.validate_ledger(_rechain([first, second, binding, deleted]))
+
+        self.assertEqual("REFUSED", report["result"], report)
+        self.assertIn("ARCHIVE_RESTORE_HISTORY_LOST", report["reason_codes"])
+
     def test_later_llm_candidate_reuse_after_human_state_is_refused(self) -> None:
         records = _lifecycle_records("decision_confirmed", "HUMAN_CONFIRMED", "CONFIRMED")
         previous = records[-1]["event_hash"]
@@ -1778,9 +1974,6 @@ class SessionConversationLedgerTests(unittest.TestCase):
 
     def test_replay_requires_session_parity(self) -> None:
         cases: list[list[dict]] = []
-        bound_replaying_unassigned = _valid_records()
-        bound_replaying_unassigned[2]["causation"]["replay_of_event_ref"] = bound_replaying_unassigned[0]["event_id"]
-        cases.append(_rechain(bound_replaying_unassigned))
 
         unassigned_replaying_bound = _valid_records()
         replay = _event(
@@ -1819,6 +2012,13 @@ class SessionConversationLedgerTests(unittest.TestCase):
                 self.assertEqual("REFUSED", report["result"], report)
                 self.assertIn("REPLAY_SESSION_INVALID", report["reason_codes"])
 
+        bound_replaying_late_bound = _valid_records()
+        bound_replaying_late_bound[2]["causation"]["replay_of_event_ref"] = bound_replaying_late_bound[0]["event_id"]
+        self.assertEqual(
+            "LEDGER_VALID",
+            ledger.validate_ledger(_rechain(bound_replaying_late_bound))["result"],
+        )
+
         first = _event("replay-inbox-1", source_type="system", actor_ref="ref/system/ledger", authority_role="SYSTEM", authority_ref="ref/authority/ledger")
         second = _event(
             "replay-inbox-2",
@@ -1832,6 +2032,52 @@ class SessionConversationLedgerTests(unittest.TestCase):
         )
         second["causation"]["replay_of_event_ref"] = first["event_id"]
         self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain([first, second]))["result"])
+
+    def test_replay_session_parity_uses_effective_late_binding(self) -> None:
+        source = _event("effective-replay-source")
+        replay = _event(
+            "effective-replay-target",
+            sequence=2,
+            previous_hash=source["event_hash"],
+        )
+        replay["causation"]["replay_of_event_ref"] = source["event_id"]
+        first_binding = _event(
+            "effective-replay-binding-first",
+            sequence=3,
+            previous_hash=replay["event_hash"],
+            event_kind="session_binding",
+            session_state="BOUND",
+            session_ref=_ref("session", "first"),
+            binding_targets=[source["event_id"]],
+            binding_destination=_ref("session", "first"),
+            binding_revision=_ref("session-revision", "1"),
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        second_binding = _event(
+            "effective-replay-binding-second",
+            sequence=4,
+            previous_hash=first_binding["event_hash"],
+            event_kind="session_binding",
+            session_state="BOUND",
+            session_ref=_ref("session", "second"),
+            binding_targets=[replay["event_id"]],
+            binding_destination=_ref("session", "second"),
+            binding_revision=_ref("session-revision", "1"),
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+
+        report = ledger.validate_ledger(
+            _rechain([source, replay, first_binding, second_binding])
+        )
+
+        self.assertEqual("REFUSED", report["result"], report)
+        self.assertIn("REPLAY_SESSION_INVALID", report["reason_codes"])
 
     def test_malformed_integrity_values_refuse_without_traceback(self) -> None:
         for malformed_integrity in (None, "not-an-object", [], ["marker"], 1):
@@ -2109,6 +2355,19 @@ class SessionConversationLedgerTests(unittest.TestCase):
         records[-1]["session"]["session_ref"] = _ref("session", "other")
         report = ledger.validate_ledger(_rechain(records))
         self.assertIn("LIFECYCLE_TARGET_SESSION_INVALID", report["reason_codes"])
+
+    def test_lifecycle_target_refs_are_rejected_on_unrelated_or_extra_fields(self) -> None:
+        unrelated = _valid_records()
+        unrelated[-1]["event"]["correction_of_event_ref"] = unrelated[0]["event_id"]
+        unrelated_report = ledger.validate_ledger(_rechain(unrelated))
+        self.assertEqual("REFUSED", unrelated_report["result"], unrelated_report)
+        self.assertIn("LIFECYCLE_TARGET_NOT_APPLICABLE", unrelated_report["reason_codes"])
+
+        extra = _lifecycle_records("correction", "HUMAN_CORRECTED", "CORRECTED")
+        extra[-1]["event"]["withdrawal_of_event_ref"] = extra[-1]["event"]["correction_of_event_ref"]
+        extra_report = ledger.validate_ledger(_rechain(extra))
+        self.assertEqual("REFUSED", extra_report["result"], extra_report)
+        self.assertIn("LIFECYCLE_TARGET_NOT_APPLICABLE", extra_report["reason_codes"])
 
     def test_lifecycle_target_refs_are_required_earlier_and_typed(self) -> None:
         target_fields = {
@@ -2398,6 +2657,22 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertEqual("REFUSED", wrong_extraction_report["result"], wrong_extraction_report)
         self.assertIn("LLM_CANDIDATE_EXTRACTION_INVALID", wrong_extraction_report["reason_codes"])
 
+        extraction_without_decision = _valid_records()
+        extraction_without_decision[0]["provenance"]["extraction"] = {
+            "kind": "LLM_CANDIDATE",
+            "candidate_binding": "DECISION_CANDIDATE",
+            "model_ref": _ref("model", "candidate-only"),
+            "confirmation_required": True,
+        }
+        extraction_without_decision_report = ledger.validate_ledger(
+            _rechain(extraction_without_decision)
+        )
+        self.assertEqual("REFUSED", extraction_without_decision_report["result"], extraction_without_decision_report)
+        self.assertIn(
+            "LLM_CANDIDATE_EXTRACTION_INVALID",
+            extraction_without_decision_report["reason_codes"],
+        )
+
     def test_none_decision_status_keeps_all_decision_refs_null(self) -> None:
         self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_valid_records())["result"])
         for field, value in (
@@ -2412,7 +2687,10 @@ class SessionConversationLedgerTests(unittest.TestCase):
                 records[2]["decision"][field] = value
                 report = ledger.validate_ledger(_rechain(records))
                 self.assertEqual("REFUSED", report["result"], report)
-                self.assertEqual(["NONE_DECISION_FIELDS_INVALID"], report["reason_codes"])
+                self.assertEqual(
+                    ["LLM_CANDIDATE_EXTRACTION_INVALID", "NONE_DECISION_FIELDS_INVALID"],
+                    report["reason_codes"],
+                )
 
         combined = _valid_records()
         combined[2]["decision"].update(
@@ -2426,7 +2704,10 @@ class SessionConversationLedgerTests(unittest.TestCase):
         )
         combined_report = ledger.validate_ledger(_rechain(combined))
         self.assertEqual("REFUSED", combined_report["result"], combined_report)
-        self.assertEqual(["NONE_DECISION_FIELDS_INVALID"], combined_report["reason_codes"])
+        self.assertEqual(
+            ["LLM_CANDIDATE_EXTRACTION_INVALID", "NONE_DECISION_FIELDS_INVALID"],
+            combined_report["reason_codes"],
+        )
 
     def test_knowledge_scope_must_be_stable_within_session_revision(self) -> None:
         stable = _valid_records()
@@ -2467,6 +2748,35 @@ class SessionConversationLedgerTests(unittest.TestCase):
         projected = ledger.project_session(new_revision, _ref("session", "demo"))
         self.assertEqual(next_scope, projected["knowledge_scope"]["scope_ref"])
 
+    def test_projection_preserves_knowledge_grants_from_all_revisions(self) -> None:
+        records = _valid_records()
+        first_grant = _ref("knowledge-grant", "revision-1")
+        second_grant = _ref("knowledge-grant", "revision-2")
+        records[1]["session"]["governance"]["knowledge_grant_refs"] = [first_grant]
+        records[-1]["session"]["governance"]["knowledge_grant_refs"] = [first_grant]
+        next_event = _event(
+            "knowledge-scope-revision-2",
+            sequence=4,
+            previous_hash=records[-1]["event_hash"],
+            event_kind="human_message",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            revision=_ref("session-revision", "2"),
+            source_type="discord_text",
+            actor_ref="ref/speaker/alice",
+            authority_role="HUMAN",
+            authority_ref="ref/authority/alice",
+        )
+        next_event["session"]["governance"]["knowledge_grant_refs"] = [second_grant]
+        records.append(next_event)
+
+        projection = ledger.project_session(_rechain(records), _ref("session", "demo"))
+
+        self.assertEqual(
+            [first_grant, second_grant],
+            projection["session_governance"]["knowledge_grant_refs"],
+        )
+
     def test_invalidation_event_kinds_have_exact_invalidation_pairings(self) -> None:
         expected = {
             "source_update": "SOURCE_UPDATED",
@@ -2493,6 +2803,8 @@ class SessionConversationLedgerTests(unittest.TestCase):
                     "deletion_receipt_ref": _ref("deletion-receipt", "source-delete"),
                     "deletion_readback": "CONFIRMED",
                 })
+            if event_kind == "acl_loss":
+                kwargs["acl_state"] = "UNKNOWN"
             valid_records.append(_event(
                 f"valid-{event_kind}",
                 sequence=4,
@@ -2538,6 +2850,8 @@ class SessionConversationLedgerTests(unittest.TestCase):
                         "deletion_receipt_ref": _ref("deletion-receipt", "source-delete"),
                         "deletion_readback": "CONFIRMED",
                     })
+                if event_kind == "acl_loss":
+                    kwargs["acl_state"] = "UNKNOWN"
                 records.append(_event(
                     f"valid-metadata-{event_kind}",
                     sequence=4,
@@ -2631,6 +2945,33 @@ class SessionConversationLedgerTests(unittest.TestCase):
         report = ledger.validate_ledger(broken)
         self.assertEqual("REFUSED", report["result"])
         self.assertIn("ACL_LOSS_NOT_INVALIDATED", report["reason_codes"])
+
+    def test_acl_lost_invalidation_requires_non_available_acl_state(self) -> None:
+        for event_kind in ("acl_loss", "invalidation"):
+            with self.subTest(event_kind=event_kind):
+                records = _valid_records()
+                event = _event(
+                    f"available-acl-lost-{event_kind}",
+                    sequence=4,
+                    previous_hash=records[-1]["event_hash"],
+                    event_kind=event_kind,
+                    session_state="BOUND",
+                    session_ref=_ref("session", "demo"),
+                    event_state="INVALIDATED",
+                    invalidation_kind="ACL_LOST",
+                    invalidation_refs=[_ref("projection", "demo")],
+                    acl_state="AVAILABLE",
+                    source_type="system",
+                    actor_ref="ref/system/ledger",
+                    authority_role="SYSTEM",
+                    authority_ref="ref/authority/ledger",
+                )
+                records.append(event)
+
+                report = ledger.validate_ledger(_rechain(records))
+
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertIn("ACL_LOST_STATE_INVALID", report["reason_codes"])
 
     def test_negative_controls_cover_closed_and_public_safe_boundaries(self) -> None:
         cases: list[tuple[str, dict, str]] = []
@@ -3125,6 +3466,17 @@ class SessionConversationLedgerTests(unittest.TestCase):
         records = _rechain(records)
         self.assertTrue(list(Draft202012Validator(schema).iter_errors(records[0])))
         self.assertIn("PUBLIC_METADATA_UNSAFE_REF", ledger.validate_ledger(records)["reason_codes"])
+
+    def test_protected_payload_ref_must_match_content_vault_ref(self) -> None:
+        records = _valid_records()
+        records[0]["public_safety"]["protected_payload_ref"] = _ref(
+            "vault", "different-payload"
+        )
+
+        report = ledger.validate_ledger(_rechain(records))
+
+        self.assertEqual("REFUSED", report["result"], report)
+        self.assertIn("PROTECTED_PAYLOAD_REF_MISMATCH", report["reason_codes"])
 
     def test_runbook_covers_all_lifecycle_and_source_hooks_without_connectors(self) -> None:
         runbook = RUNBOOK.read_text(encoding="utf-8")

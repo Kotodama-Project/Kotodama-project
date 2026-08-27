@@ -213,6 +213,35 @@ def _same_session(left: Any, right: Any) -> bool:
     return left.get("state") != "BOUND" or left.get("session_ref") == right.get("session_ref")
 
 
+def _effective_session_key(
+    record: dict[str, Any],
+    bound_sessions: dict[str, tuple[str, str, str | None]],
+) -> tuple[str, str, str | None]:
+    session = record.get("session", {})
+    if isinstance(session, dict) and session.get("state") == "BOUND":
+        return (
+            "BOUND",
+            session.get("session_ref", ""),
+            session.get("revision_ref"),
+        )
+    event_id = record.get("event_id")
+    if isinstance(event_id, str) and event_id in bound_sessions:
+        return bound_sessions[event_id]
+    return ("UNASSIGNED_INBOX", "", None)
+
+
+def _same_effective_session(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    bound_sessions: dict[str, tuple[str, str, str | None]],
+) -> bool:
+    left_key = _effective_session_key(left, bound_sessions)
+    right_key = _effective_session_key(right, bound_sessions)
+    if left_key[0] != right_key[0]:
+        return False
+    return left_key[0] != "BOUND" or left_key[1] == right_key[1]
+
+
 def _integrity_marker(record: Any) -> str | None:
     if not isinstance(record, dict) or not isinstance(record.get("integrity"), dict):
         return None
@@ -660,14 +689,22 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     bound_session_revision_for_target: dict[str, tuple[str, str]] = {}
     bound_governance_for_target: dict[str, dict[str, Any]] = {}
     bound_sequence_for_target: dict[str, int] = {}
+    effective_sessions: dict[str, tuple[str, str, str | None]] = {}
     for candidate_record in records:
         if _validate_event_shape(candidate_record):
             continue
         candidate_session = candidate_record["session"]
         candidate_detail = candidate_record["event"]
+        if candidate_session["state"] == "BOUND":
+            effective_sessions[candidate_record["event_id"]] = (
+                "BOUND",
+                candidate_session["session_ref"],
+                candidate_session["revision_ref"],
+            )
         if (
             candidate_session["state"] == "BOUND"
             and candidate_detail["kind"] == "session_binding"
+            and candidate_detail["state"] != "INVALIDATED"
             and isinstance(candidate_session.get("session_ref"), str)
             and isinstance(candidate_session.get("revision_ref"), str)
         ):
@@ -679,6 +716,14 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                 )
                 bound_governance_for_target.setdefault(target_ref, candidate_session["governance"])
                 bound_sequence_for_target.setdefault(target_ref, _integer_value(candidate_record["sequence"]))
+                effective_sessions.setdefault(
+                    target_ref,
+                    (
+                        "BOUND",
+                        candidate_session["session_ref"],
+                        candidate_session["revision_ref"],
+                    ),
+                )
     candidate_scope_by_event: dict[str, str | None] = {}
     effective_session_revision_by_event: dict[str, tuple[str, str] | None] = {}
     effective_governance_by_event: dict[str, dict[str, Any] | None] = {}
@@ -735,6 +780,8 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         if previous_ingested is not None and ingested < previous_ingested:
             reasons.append("INGESTED_AT_NOT_MONOTONIC")
         previous_ingested = ingested
+        if record["content"]["payload_vault_ref"] != record["public_safety"]["protected_payload_ref"]:
+            reasons.append("PROTECTED_PAYLOAD_REF_MISMATCH")
         effective_session_revision = effective_session_revision_by_event.get(event_id)
         if effective_session_revision is not None:
             knowledge_scope = record["context"]["knowledge_scope_ref"]
@@ -765,17 +812,33 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                 reasons.append("REPLAY_TARGET_MISSING")
             elif replay_ref == event_id:
                 reasons.append("REPLAY_TARGET_SELF_REFERENCE")
-            elif not _same_session(record.get("session"), replay_target.get("session")):
+            elif not _same_effective_session(record, replay_target, effective_sessions):
                 reasons.append("REPLAY_SESSION_INVALID")
             elif _sequence_is_not_earlier(replay_target, sequence_number):
                 reasons.append("REPLAY_TARGET_ORDER_INVALID")
 
         session = record["session"]
+        binding_event_ref = session.get("binding_event_ref")
+        if binding_event_ref is not None:
+            binding_record = known.get(binding_event_ref)
+            binding_session = binding_record.get("session", {}) if isinstance(binding_record, dict) else {}
+            binding_detail = binding_record.get("event", {}) if isinstance(binding_record, dict) else {}
+            if (
+                not isinstance(binding_record, dict)
+                or _sequence_is_not_earlier(binding_record, sequence_number)
+                or binding_detail.get("kind") != "session_binding"
+                or binding_detail.get("state") == "INVALIDATED"
+                or binding_session.get("state") != "BOUND"
+                or binding_detail.get("binding", {}).get("destination_session_ref") != session.get("session_ref")
+                or binding_detail.get("binding", {}).get("destination_revision_ref") != session.get("revision_ref")
+            ):
+                reasons.append("BINDING_EVENT_REF_INVALID")
         retention = record["retention"]
         if retention["archive_target_kind"] != "NONE":
+            effective_session = _effective_session_key(record, effective_sessions)
             archive_history_key = (
-                session["state"],
-                session.get("session_ref") or "",
+                effective_session[0],
+                effective_session[1],
                 retention["archive_target_kind"],
                 retention["archive_target_ref"],
                 retention["archive_target_uri_ref"],
@@ -863,8 +926,16 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             "confirmation": "confirmation_of_event_ref",
             "decision_confirmed": "confirmation_of_event_ref",
         }
-        if detail["kind"] in lifecycle_target_fields:
-            target_ref = detail[lifecycle_target_fields[detail["kind"]]]
+        target_field = lifecycle_target_fields.get(detail["kind"])
+        for candidate_field in (
+            "correction_of_event_ref",
+            "withdrawal_of_event_ref",
+            "confirmation_of_event_ref",
+        ):
+            if detail[candidate_field] is not None and candidate_field != target_field:
+                reasons.append("LIFECYCLE_TARGET_NOT_APPLICABLE")
+        if target_field is not None:
+            target_ref = detail[target_field]
             if target_ref is None:
                 reasons.append("LIFECYCLE_TARGET_REQUIRED")
             else:
@@ -900,6 +971,12 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                     reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
 
         decision = record["decision"]
+        extraction = record["provenance"]["extraction"]
+        if extraction["kind"] == "LLM_CANDIDATE" and (
+            detail["kind"] != "decision_candidate"
+            or decision["status"] != "LLM_CANDIDATE"
+        ):
+            reasons.append("LLM_CANDIDATE_EXTRACTION_INVALID")
         if decision["status"] in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"} and detail["kind"] not in lifecycle_target_fields:
             reasons.append("HUMAN_DECISION_EVENT_KIND_INVALID")
         expected_event_state = {
@@ -998,6 +1075,11 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                 reasons.append("INVALIDATION_EVENT_INCOMPLETE")
         if record["public_safety"]["acl_state"] in {"LOST", "REVOKED"} and detail["kind"] not in {"acl_loss", "invalidation"}:
             reasons.append("ACL_LOSS_NOT_INVALIDATED")
+        if (
+            (detail["kind"] == "acl_loss" or invalidation_kind == "ACL_LOST")
+            and record["public_safety"]["acl_state"] == "AVAILABLE"
+        ):
+            reasons.append("ACL_LOST_STATE_INVALID")
         if detail["kind"] == "acl_loss" and invalidation_kind != "ACL_LOST":
             reasons.append("INVALIDATION_EVENT_INCOMPLETE")
         if detail["kind"] == "source_delete" and invalidation_kind != "SOURCE_DELETED":
@@ -1119,11 +1201,20 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
     selected: dict[str, dict[str, Any]] = {
         record["event_id"]: record
         for record in records
-        if record["session"]["state"] == "BOUND" and record["session"]["session_ref"] == session_ref
+        if record["session"]["state"] == "BOUND"
+        and record["session"]["session_ref"] == session_ref
+        and not (
+            record["event"]["kind"] == "session_binding"
+            and record["event"]["state"] == "INVALIDATED"
+        )
     }
     for record in records:
         binding = record["event"]["binding"]
-        if record["event"]["kind"] == "session_binding" and binding["destination_session_ref"] == session_ref:
+        if (
+            record["event"]["kind"] == "session_binding"
+            and record["event"]["state"] != "INVALIDATED"
+            and binding["destination_session_ref"] == session_ref
+        ):
             selected[record["event_id"]] = record
             for target_ref in binding["target_event_refs"]:
                 if target_ref in by_id:
@@ -1131,6 +1222,7 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
     if not selected:
         raise LedgerValidationError(["SESSION_NOT_FOUND"])
     ordered = sorted(selected.values(), key=lambda record: record["sequence"])
+    related_invalidation_refs = _session_related_invalidation_refs(selected, session_ref)
     event_refs = [record["event_id"] for record in ordered]
     evidence_refs = list(dict.fromkeys(record["source"]["evidence_ref"] for record in ordered))
     timeline = [
@@ -1163,6 +1255,8 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
                 "confirmation_event_ref": None, "human_evidence_ref": None, "status": "CANDIDATE_ONLY",
             })
             item["source_event_refs"] = list(dict.fromkeys(item["source_event_refs"] + [record["event_id"]]))
+            if record["event"]["state"] == "INVALIDATED":
+                item["status"] = "INVALIDATED"
         elif decision["status"] in {"HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"} and decision["candidate_ref"]:
             intent_status = {
                 "HUMAN_CONFIRMED": "HUMAN_CONFIRMED",
@@ -1200,10 +1294,14 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
                 "remediation_ref": deviation["remediation_ref"], "status": deviation["status"],
             })
         omissions.extend(record["context"]["omission_refs"])
-        if record["event"]["invalidation_refs"]:
-            invalidation_refs.extend(record["event"]["invalidation_refs"])
+        matching_refs = [
+            target_ref
+            for target_ref in record["event"]["invalidation_refs"]
+            if target_ref in related_invalidation_refs
+        ]
+        if matching_refs:
+            invalidation_refs.extend(matching_refs)
             next_action = {"kind": "REVIEW_INVALIDATION", "source_event_ref": record["event_id"], "action_ref": None}
-    related_invalidation_refs = _session_related_invalidation_refs(selected, session_ref)
     cross_session_acl_invalidation = False
     selected_event_ids = set(selected)
     for record in records:
@@ -1238,7 +1336,11 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
         next_action = {"kind": "REQUEST_HUMAN_CONFIRMATION", "source_event_ref": candidate["source_event_refs"][0], "action_ref": None}
     invalidation_refs = list(dict.fromkeys(invalidation_refs))
     omissions = list(dict.fromkeys(omissions))
-    markers = report.get("integrity_markers", [])
+    markers = list(dict.fromkeys(
+        record["integrity"]["marker"]
+        for record in ordered
+        if record["integrity"]["marker"] != "NONE"
+    ))
     if set(markers) & {"GAP", "CORRUPT"}:
         latest_repair_marker = next(
             (
@@ -1285,6 +1387,13 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
         next_action = {"kind": "NONE", "source_event_ref": None, "action_ref": None}
     acl_state = next((state for state in ("REVOKED", "LOST", "UNKNOWN") if state in acl_states), latest["public_safety"]["acl_state"])
     latest_sequence = _integer_value(latest["sequence"])
+    all_knowledge_grant_refs = list(dict.fromkeys(
+        grant_ref
+        for record in ordered
+        for grant_ref in record["session"]["governance"]["knowledge_grant_refs"]
+    ))
+    session_governance = copy.deepcopy(latest["session"]["governance"])
+    session_governance["knowledge_grant_refs"] = all_knowledge_grant_refs
     projection = {
         "kind": PROJECTION_KIND,
         "schema_revision": "v1",
@@ -1299,7 +1408,7 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
             "event_hash": records[-1]["event_hash"],
         },
         "session_governance": {
-            **latest["session"]["governance"],
+            **session_governance,
             "authority_status": "INVALIDATED" if invalidation_refs else "BOUND_UNVERIFIED",
         },
         "knowledge_representation": {
