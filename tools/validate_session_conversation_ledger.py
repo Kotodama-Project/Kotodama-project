@@ -97,6 +97,7 @@ EVENT_KINDS = {
     "session_end", "session_seal", "session_binding", "recovery_marker", "integrity_marker",
 }
 EVENT_STATES = {"OBSERVED", "CANDIDATE", "CONFIRMED", "CORRECTED", "WITHDRAWN", "INVALIDATED", "PROJECTION_ONLY", "RECOVERY"}
+SESSION_BINDING_ACTIVE_STATE = "OBSERVED"
 DECISION_STATES = {"NONE", "LLM_CANDIDATE", "HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"}
 DEVIATION_STATES = {"NONE", "APPROVED", "EXPIRED", "REMEDIATED"}
 INVALIDATION_KINDS = {"SOURCE_UPDATED", "SOURCE_DELETED", "ACL_LOST"}
@@ -591,6 +592,12 @@ def _validate_event_shape(record: Any) -> list[str]:
         if retention.get("deletion_state") not in {"NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"} or retention.get("deletion_readback") not in {"NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"}:
             reasons.append("SCHEMA_INVALID")
         _ref(retention.get("deletion_receipt_ref"), reasons, pattern=r"^ref/deletion-receipt/[a-z0-9][a-z0-9/_-]{1,240}$", nullable=True)
+        if (
+            retention.get("deletion_receipt_ref") is not None
+            and retention.get("deletion_state") == "NOT_REQUESTED"
+            and retention.get("deletion_readback") == "NOT_REQUESTED"
+        ):
+            reasons.append("DELETION_RECEIPT_STATE_INVALID")
         if retention.get("deletion_readback") == "CONFIRMED" and (retention.get("deletion_receipt_ref") is None or retention.get("deletion_state") != "CONFIRMED"):
             reasons.append("DELETION_READBACK_RECEIPT_INVALID")
         if retention.get("deletion_state") == "CONFIRMED" and (retention.get("deletion_readback") != "CONFIRMED" or retention.get("deletion_receipt_ref") is None):
@@ -697,7 +704,10 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             continue
         candidate_session = candidate_record["session"]
         candidate_detail = candidate_record["event"]
-        if candidate_session["state"] == "BOUND":
+        if candidate_session["state"] == "BOUND" and not (
+            candidate_detail["kind"] == "session_binding"
+            and candidate_detail["state"] != SESSION_BINDING_ACTIVE_STATE
+        ):
             effective_sessions[candidate_record["event_id"]] = (
                 "BOUND",
                 candidate_session["session_ref"],
@@ -706,7 +716,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         if (
             candidate_session["state"] == "BOUND"
             and candidate_detail["kind"] == "session_binding"
-            and candidate_detail["state"] != "INVALIDATED"
+            and candidate_detail["state"] == SESSION_BINDING_ACTIVE_STATE
             and isinstance(candidate_session.get("session_ref"), str)
             and isinstance(candidate_session.get("revision_ref"), str)
         ):
@@ -1248,14 +1258,14 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
         and record["session"]["session_ref"] == session_ref
         and not (
             record["event"]["kind"] == "session_binding"
-            and record["event"]["state"] == "INVALIDATED"
+            and record["event"]["state"] != SESSION_BINDING_ACTIVE_STATE
         )
     }
     for record in records:
         binding = record["event"]["binding"]
         if (
             record["event"]["kind"] == "session_binding"
-            and record["event"]["state"] != "INVALIDATED"
+            and record["event"]["state"] == SESSION_BINDING_ACTIVE_STATE
             and binding["destination_session_ref"] == session_ref
         ):
             selected[record["event_id"]] = record

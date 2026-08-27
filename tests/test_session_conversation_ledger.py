@@ -877,6 +877,49 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertIn(direct["event_id"], projection["source_event_refs"])
         self.assertNotIn(inbox["event_id"], projection["source_event_refs"])
 
+    def test_only_observed_session_binding_can_bind_targets(self) -> None:
+        non_active_states = sorted(ledger.EVENT_STATES - {"OBSERVED"})
+        for binding_state in ("OBSERVED", *non_active_states):
+            with self.subTest(binding_state=binding_state):
+                inbox = _event(f"binding-state-target-{binding_state.lower()}")
+                binding = _event(
+                    f"binding-state-{binding_state.lower()}",
+                    sequence=2,
+                    previous_hash=inbox["event_hash"],
+                    event_kind="session_binding",
+                    session_state="BOUND",
+                    session_ref=_ref("session", "demo"),
+                    event_state=binding_state,
+                    binding_targets=[inbox["event_id"]],
+                    binding_destination=_ref("session", "demo"),
+                    binding_revision=_ref("session-revision", "1"),
+                    source_type="system",
+                    actor_ref="ref/system/ledger",
+                    authority_role="SYSTEM",
+                    authority_ref="ref/authority/ledger",
+                )
+                direct = _event(
+                    f"direct-for-binding-state-{binding_state.lower()}",
+                    sequence=3,
+                    previous_hash=binding["event_hash"],
+                    event_kind="human_message",
+                    session_state="BOUND",
+                    session_ref=_ref("session", "demo"),
+                    source_type="system",
+                    actor_ref="ref/system/ledger",
+                    authority_role="SYSTEM",
+                    authority_ref="ref/authority/ledger",
+                )
+                records = _rechain([inbox, binding, direct])
+                self.assertEqual("LEDGER_VALID", ledger.validate_ledger(records)["result"])
+                projection = ledger.project_session(records, _ref("session", "demo"))
+                if binding_state == "OBSERVED":
+                    self.assertIn(inbox["event_id"], projection["source_event_refs"])
+                else:
+                    self.assertNotIn(inbox["event_id"], projection["source_event_refs"])
+                    self.assertNotIn(binding["event_id"], projection["source_event_refs"])
+                self.assertIn(direct["event_id"], projection["source_event_refs"])
+
     def test_binding_event_ref_requires_an_earlier_matching_session_binding(self) -> None:
         valid = _valid_records()
         valid[-1]["session"]["binding_event_ref"] = valid[1]["event_id"]
@@ -1546,6 +1589,74 @@ class SessionConversationLedgerTests(unittest.TestCase):
             }
         )
         self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain(retained_history))["result"])
+
+    def test_deletion_receipt_requires_confirmed_state_and_readback(self) -> None:
+        for deletion_state, deletion_readback in (
+            ("NOT_REQUESTED", "NOT_REQUESTED"),
+        ):
+            with self.subTest(deletion_state=deletion_state, deletion_readback=deletion_readback):
+                records = _valid_records()
+                records[-1]["retention"].update(
+                    {
+                        "deletion_state": deletion_state,
+                        "deletion_readback": deletion_readback,
+                        "deletion_receipt_ref": _ref(
+                            "deletion-receipt", f"unexpected-{deletion_state.lower()}"
+                        ),
+                    }
+                )
+                report = ledger.validate_ledger(_rechain(records))
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertIn("DELETION_RECEIPT_STATE_INVALID", report["reason_codes"])
+
+        confirmed = _valid_records()
+        confirmed[-1]["retention"].update(
+            {
+                "deletion_state": "CONFIRMED",
+                "deletion_readback": "CONFIRMED",
+                "deletion_receipt_ref": _ref("deletion-receipt", "confirmed"),
+            }
+        )
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain(confirmed))["result"])
+
+        for deletion_state, deletion_readback in (
+            ("PENDING", "PENDING"),
+            ("FAILED", "FAILED"),
+        ):
+            with self.subTest(receipt_state=deletion_state):
+                records = _valid_records()
+                records[-1]["retention"].update(
+                    {
+                        "deletion_state": deletion_state,
+                        "deletion_readback": deletion_readback,
+                        "deletion_receipt_ref": _ref(
+                            "deletion-receipt", f"{deletion_state.lower()}-receipt"
+                        ),
+                    }
+                )
+                self.assertEqual(
+                    "LEDGER_VALID",
+                    ledger.validate_ledger(_rechain(records))["result"],
+                )
+
+        for deletion_state, deletion_readback in (
+            ("NOT_REQUESTED", "NOT_REQUESTED"),
+            ("PENDING", "PENDING"),
+            ("FAILED", "FAILED"),
+        ):
+            with self.subTest(null_receipt_state=deletion_state):
+                records = _valid_records()
+                records[-1]["retention"].update(
+                    {
+                        "deletion_state": deletion_state,
+                        "deletion_readback": deletion_readback,
+                        "deletion_receipt_ref": None,
+                    }
+                )
+                self.assertEqual(
+                    "LEDGER_VALID",
+                    ledger.validate_ledger(_rechain(records))["result"],
+                )
 
     def test_archive_history_uses_the_effective_bound_session(self) -> None:
         archive = {
