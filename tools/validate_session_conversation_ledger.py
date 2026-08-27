@@ -98,6 +98,7 @@ EVENT_KINDS = {
 }
 EVENT_STATES = {"OBSERVED", "CANDIDATE", "CONFIRMED", "CORRECTED", "WITHDRAWN", "INVALIDATED", "PROJECTION_ONLY", "RECOVERY"}
 SESSION_BINDING_ACTIVE_STATE = "OBSERVED"
+ACTION_ACTIVE_STATE = "OBSERVED"
 DECISION_STATES = {"NONE", "LLM_CANDIDATE", "HUMAN_CONFIRMED", "HUMAN_CORRECTED", "HUMAN_WITHDRAWN"}
 DEVIATION_STATES = {"NONE", "APPROVED", "EXPIRED", "REMEDIATED"}
 INVALIDATION_KINDS = {"SOURCE_UPDATED", "SOURCE_DELETED", "ACL_LOST"}
@@ -523,7 +524,14 @@ def _validate_event_shape(record: Any) -> list[str]:
         for key in ("rule_ref", "reason_ref", "approver_ref", "remediation_ref"):
             _ref(deviation.get(key), reasons, nullable=True)
         _timestamp(deviation.get("expires_at"), reasons) if deviation.get("expires_at") is not None else None
-        if deviation.get("status") != "NONE" and any(deviation.get(key) is None for key in ("rule_ref", "reason_ref", "approver_ref", "expires_at", "remediation_ref")):
+        deviation_fields = (
+            "rule_ref", "reason_ref", "approver_ref", "expires_at", "remediation_ref"
+        )
+        if deviation.get("status") == "NONE" and any(
+            deviation.get(key) is not None for key in deviation_fields
+        ):
+            reasons.append("DEVIATION_FIELDS_INVALID")
+        if deviation.get("status") != "NONE" and any(deviation.get(key) is None for key in deviation_fields):
             reasons.append("DEVIATION_FIELDS_INCOMPLETE")
 
     retention = record["retention"]
@@ -1337,7 +1345,7 @@ def project_session(records: list[dict[str, Any]], session_ref: str) -> dict[str
             actions.append({
                 "action_ref": record["event"]["summary_ref"], "owner_ref": record["ownership"]["assignee_ref"],
                 "source_event_ref": record["event_id"],
-                "status": "INVALIDATED" if record["event"]["state"] == "INVALIDATED" else "OPEN",
+                "status": "OPEN" if record["event"]["state"] == ACTION_ACTIVE_STATE else "INVALIDATED",
             })
         deviation = record["policy_deviation"]
         if deviation["status"] != "NONE":

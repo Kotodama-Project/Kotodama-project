@@ -663,7 +663,19 @@
         "approver_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
         "expires_at": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
         "remediation_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "NONE"}}},
+          "then": {"properties": {
+            "rule_ref": {"type": "null"},
+            "reason_ref": {"type": "null"},
+            "approver_ref": {"type": "null"},
+            "expires_at": {"type": "null"},
+            "remediation_ref": {"type": "null"}
+          }}
+        }
+      ]
     },
     "retention": {
       "type": "object",
@@ -801,6 +813,13 @@
         {
           "if": {"properties": {"restore_status": {"const": "NOT_REQUESTED"}}},
           "then": {"properties": {"restore_receipt_ref": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {
+            "deletion_state": {"const": "NOT_REQUESTED"},
+            "deletion_readback": {"const": "NOT_REQUESTED"}
+          }},
+          "then": {"properties": {"deletion_receipt_ref": {"type": "null"}}}
         }
       ]
     },

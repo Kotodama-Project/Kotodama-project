@@ -1120,6 +1120,43 @@ class SessionConversationLedgerTests(unittest.TestCase):
         ordinary_projection = ledger.project_session(_rechain(ordinary), _ref("session", "demo"))
         self.assertEqual(["OPEN"], [item["status"] for item in ordinary_projection["action_items"]])
 
+    def test_only_observed_actions_project_as_open(self) -> None:
+        for event_kind in ("tool_action", "agent_action"):
+            for event_state in sorted(ledger.EVENT_STATES):
+                with self.subTest(event_kind=event_kind, event_state=event_state):
+                    records = _valid_records()
+                    action = _event(
+                        f"{event_kind}-{event_state.lower()}",
+                        sequence=4,
+                        previous_hash=records[-1]["event_hash"],
+                        event_kind=event_kind,
+                        session_state="BOUND",
+                        session_ref=_ref("session", "demo"),
+                        event_state=event_state,
+                        source_type="system",
+                        actor_ref="ref/system/ledger",
+                        authority_role="SYSTEM",
+                        authority_ref="ref/authority/ledger",
+                    )
+                    action["ownership"]["assignee_ref"] = _ref(
+                        "assignee", f"{event_kind}-{event_state.lower()}"
+                    )
+                    records.append(action)
+
+                    projection = ledger.project_session(
+                        _rechain(records), _ref("session", "demo")
+                    )
+
+                    statuses = [
+                        item["status"]
+                        for item in projection["action_items"]
+                        if item["source_event_ref"] == action["event_id"]
+                    ]
+                    self.assertEqual(
+                        ["OPEN" if event_state == "OBSERVED" else "INVALIDATED"],
+                        statuses,
+                    )
+
     def test_invalidated_decision_candidate_is_not_actionable(self) -> None:
         records = _valid_records()
         records[-1]["event"]["state"] = "INVALIDATED"
@@ -1638,6 +1675,40 @@ class SessionConversationLedgerTests(unittest.TestCase):
                     "LEDGER_VALID",
                     ledger.validate_ledger(_rechain(records))["result"],
                 )
+
+    def test_schema_and_validator_agree_on_unrequested_deletion_receipts(self) -> None:
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema, format_checker=FormatChecker())
+
+        invalid = _valid_records()
+        invalid[-1]["retention"]["deletion_receipt_ref"] = _ref(
+            "deletion-receipt", "unrequested"
+        )
+        invalid = _rechain(invalid)
+        self.assertTrue(list(validator.iter_errors(invalid[-1])))
+        report = ledger.validate_ledger(invalid)
+        self.assertEqual("REFUSED", report["result"], report)
+        self.assertIn("DELETION_RECEIPT_STATE_INVALID", report["reason_codes"])
+
+        for deletion_state, deletion_readback in (
+            ("CONFIRMED", "CONFIRMED"),
+            ("PENDING", "PENDING"),
+            ("FAILED", "FAILED"),
+        ):
+            with self.subTest(schema_positive=deletion_state):
+                records = _valid_records()
+                records[-1]["retention"].update(
+                    {
+                        "deletion_state": deletion_state,
+                        "deletion_readback": deletion_readback,
+                        "deletion_receipt_ref": _ref(
+                            "deletion-receipt", f"schema-{deletion_state.lower()}"
+                        ),
+                    }
+                )
+                records = _rechain(records)
+                self.assertFalse(list(validator.iter_errors(records[-1])))
+                self.assertEqual("LEDGER_VALID", ledger.validate_ledger(records)["result"])
 
         for deletion_state, deletion_readback in (
             ("NOT_REQUESTED", "NOT_REQUESTED"),
@@ -3230,6 +3301,45 @@ class SessionConversationLedgerTests(unittest.TestCase):
 
                 self.assertEqual("REFUSED", report["result"], report)
                 self.assertIn("ACL_LOST_STATE_INVALID", report["reason_codes"])
+
+    def test_none_policy_deviation_requires_all_detail_fields_null(self) -> None:
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema, format_checker=FormatChecker())
+        values = {
+            "rule_ref": _ref("rule", "none"),
+            "reason_ref": _ref("reason", "none"),
+            "approver_ref": _ref("approver", "none"),
+            "expires_at": "2026-09-26T00:00:00Z",
+            "remediation_ref": _ref("remediation", "none"),
+        }
+        for field, value in values.items():
+            with self.subTest(field=field):
+                records = _valid_records()
+                records[-1]["policy_deviation"][field] = value
+                records = _rechain(records)
+                self.assertTrue(list(validator.iter_errors(records[-1])))
+                report = ledger.validate_ledger(records)
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertIn("DEVIATION_FIELDS_INVALID", report["reason_codes"])
+                with self.assertRaises(ledger.LedgerValidationError) as raised:
+                    ledger.project_session(records, _ref("session", "demo"))
+                self.assertIn("DEVIATION_FIELDS_INVALID", raised.exception.reason_codes)
+
+        approved = _valid_records()
+        approved[-1]["policy_deviation"].update(
+            {
+                "status": "APPROVED",
+                "rule_ref": _ref("rule", "approved"),
+                "reason_ref": _ref("reason", "approved"),
+                "approver_ref": _ref("approver", "approved"),
+                "expires_at": "2026-09-26T00:00:00Z",
+                "remediation_ref": _ref("remediation", "approved"),
+            }
+        )
+        approved = _rechain(approved)
+        self.assertFalse(list(validator.iter_errors(approved[-1])))
+        projection = ledger.project_session(approved, _ref("session", "demo"))
+        self.assertEqual("APPROVED", projection["policy_deviations"][0]["status"])
 
     def test_negative_controls_cover_closed_and_public_safe_boundaries(self) -> None:
         cases: list[tuple[str, dict, str]] = []
