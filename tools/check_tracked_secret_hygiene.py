@@ -283,7 +283,11 @@ LOOKUP_CALL_VALUE = re.compile(
 )
 ENVIRONMENT_SETTER_NAMES = {
     **{suffix: ("setenv",) for suffix in C_SOURCE_SUFFIXES},
-    ".cs": ("Environment.SetEnvironmentVariable",),
+    ".cs": (
+        "global::System.Environment.SetEnvironmentVariable",
+        "System.Environment.SetEnvironmentVariable",
+        "Environment.SetEnvironmentVariable",
+    ),
     ".go": ("os.Setenv",),
     ".py": ("os.putenv",),
     ".rs": ("std::env::set_var",),
@@ -2931,16 +2935,210 @@ def executable_code_mask(path: Path, text: str) -> str:
     return "".join(result)
 
 
-def decode_environment_setter_literal(raw: str) -> str | None:
-    literal = raw.strip()
-    if len(literal) < 2 or literal[0] not in {"'", '"', "`"}:
+def decode_triple_quoted_literal(
+    expression: str, start: int, delimiter: str
+) -> tuple[str, int] | None:
+    cursor = start + len(delimiter)
+    escaped = False
+    while cursor < len(expression):
+        character = expression[cursor]
+        if escaped:
+            escaped = False
+        elif character == "\\":
+            escaped = True
+        elif expression.startswith(delimiter, cursor):
+            return expression[start + len(delimiter):cursor], cursor + len(delimiter)
+        cursor += 1
+    return None
+
+
+def decode_basic_environment_literal(
+    expression: str, start: int, quote: str
+) -> tuple[str, int] | None:
+    end = javascript_literal_end(expression[start:])
+    if end is None:
         return None
-    end = javascript_literal_end(literal)
-    if end != len(literal) - 1:
+    end += start
+    decoded = (
+        expression[start + 1:end]
+        if quote == "`"
+        else decode_javascript_string_contents(
+            expression[start + 1:end], quote
+        )
+    )
+    return None if decoded is None else (decoded, end + 1)
+
+
+def decode_cpp_environment_literal(
+    expression: str, start: int
+) -> tuple[str, int] | None:
+    raw_start = CPP_RAW_STRING_START.match(expression, start)
+    if raw_start is not None:
+        terminator = ")" + raw_start.group("delimiter") + '"'
+        end = expression.find(terminator, raw_start.end())
+        if end < 0:
+            return None
+        return expression[raw_start.end():end], end + len(terminator)
+    prefix = re.match(r"(?:u8|u|U|L)?(?P<quote>[\"'])", expression[start:])
+    if prefix is None:
         return None
-    if literal[0] == "`":
-        return literal[1:-1]
-    return decode_javascript_string_contents(literal[1:-1], literal[0])
+    quote_start = start + prefix.start("quote")
+    return decode_basic_environment_literal(
+        expression, quote_start, prefix.group("quote")
+    )
+
+
+def decode_csharp_environment_literal(
+    expression: str, start: int
+) -> tuple[str, int] | None:
+    prefix = ""
+    cursor = start
+    for candidate in ("$@", "@$", "$", "@"):
+        if expression.startswith(candidate, cursor):
+            prefix = candidate
+            cursor += len(candidate)
+            break
+    if expression.startswith('"""', cursor):
+        decoded = decode_triple_quoted_literal(expression, cursor, '"""')
+        if decoded is None or any(character in decoded[0] for character in "{}"):
+            return None
+        return decoded[0], decoded[1]
+    if cursor >= len(expression) or expression[cursor] != '"':
+        return None
+    if prefix in {"@", "$@", "@$"}:
+        end = cursor + 1
+        characters: list[str] = []
+        while end < len(expression):
+            if expression[end] == '"':
+                if end + 1 < len(expression) and expression[end + 1] == '"':
+                    characters.append('"')
+                    end += 2
+                    continue
+                break
+            characters.append(expression[end])
+            end += 1
+        if end >= len(expression) or (prefix != "@" and any(
+            character in "{}" for character in characters
+        )):
+            return None
+        return "".join(characters), end + 1
+    decoded = decode_basic_environment_literal(expression, cursor, '"')
+    if decoded is None or (prefix == "$" and any(
+        character in "{}" for character in decoded[0]
+    )):
+        return None
+    return decoded
+
+
+def decode_python_environment_literal(
+    expression: str, start: int
+) -> tuple[str, int] | None:
+    prefix_match = re.match(r"(?i:[rubf]{0,2})", expression[start:])
+    if prefix_match is None:
+        return None
+    prefix = prefix_match.group()
+    cursor = start + len(prefix)
+    if cursor >= len(expression) or expression[cursor] not in {"'", '"'}:
+        return None
+    quote = expression[cursor]
+    if expression.startswith(quote * 3, cursor):
+        decoded = decode_triple_quoted_literal(
+            expression, cursor, quote * 3
+        )
+    else:
+        decoded = decode_basic_environment_literal(expression, cursor, quote)
+    if decoded is None:
+        return None
+    value, end = decoded
+    if "f" in prefix.lower() and any(character in "{}" for character in value):
+        return None
+    if "r" in prefix.lower():
+        value = expression[cursor + (3 if expression.startswith(quote * 3, cursor) else 1):
+                         end - (3 if expression.startswith(quote * 3, cursor) else 1)]
+    return value, end
+
+
+def decode_rust_environment_literal(
+    expression: str, start: int
+) -> tuple[str, int] | None:
+    raw_start = RUST_RAW_STRING_START.match(expression, start)
+    if raw_start is not None:
+        terminator = '"' + raw_start.group("hashes")
+        end = expression.find(terminator, raw_start.end())
+        if end < 0:
+            return None
+        return expression[raw_start.end():end], end + len(terminator)
+    if expression.startswith('"', start):
+        return decode_basic_environment_literal(expression, start, '"')
+    return None
+
+
+def decode_swift_environment_literal(
+    expression: str, start: int
+) -> tuple[str, int] | None:
+    extended = re.match(r"(?P<hashes>#+)(?P<quote>\"{1,3})", expression[start:])
+    if extended is not None:
+        hashes = extended.group("hashes")
+        quote = extended.group("quote")
+        opening_end = start + extended.end()
+        terminator = quote + hashes
+        end = expression.find(terminator, opening_end)
+        if end < 0:
+            return None
+        value = expression[opening_end:end]
+        if "\\#(" in value or "\\(" in value:
+            return None
+        return value, end + len(terminator)
+    if expression.startswith('"""', start):
+        decoded = decode_triple_quoted_literal(expression, start, '"""')
+        if decoded is None or "\\(" in decoded[0]:
+            return None
+        return decoded
+    if expression.startswith('"', start):
+        decoded = decode_basic_environment_literal(expression, start, '"')
+        if decoded is None or "\\(" in decoded[0]:
+            return None
+        return decoded
+    return None
+
+
+def decode_environment_setter_literal(
+    raw: str, suffix: str = ""
+) -> str | None:
+    expression = raw.strip()
+    if not expression or len(expression) > 512:
+        return None
+    values: list[str] = []
+    index = 0
+    while index < len(expression):
+        while index < len(expression) and expression[index].isspace():
+            index += 1
+        if index >= len(expression):
+            break
+        if suffix == ".cpp" or suffix in {".c", ".h", ".hh", ".hpp", ".hxx"}:
+            decoded = decode_cpp_environment_literal(expression, index)
+        elif suffix == ".cs":
+            decoded = decode_csharp_environment_literal(expression, index)
+        elif suffix == ".py":
+            decoded = decode_python_environment_literal(expression, index)
+        elif suffix == ".rs":
+            decoded = decode_rust_environment_literal(expression, index)
+        elif suffix == ".swift":
+            decoded = decode_swift_environment_literal(expression, index)
+        else:
+            decoded = None
+        if decoded is None:
+            if expression[index] not in {"'", '"', "`"}:
+                return None
+            decoded = decode_basic_environment_literal(
+                expression, index, expression[index]
+            )
+        value, index = decoded
+        values.append(value)
+        if len(values) > MAX_JAVASCRIPT_CONSTANT_PARTS:
+            return None
+    combined = "".join(values)
+    return combined if values and len(combined) <= 512 else None
 
 
 def split_environment_setter_arguments(body: str) -> list[str]:
@@ -2988,9 +3186,10 @@ def environment_setter_assignments(
         + "|".join(map(re.escape, names))
         + r")\s*\("
     )
+    sanitized = strip_block_comments(path, text)
     executable = executable_code_mask(path, text)
     findings: list[tuple[str, int]] = []
-    for match in pattern.finditer(text):
+    for match in pattern.finditer(sanitized):
         if executable[match.start()].isspace():
             continue
         close = javascript_matching_delimiter(
@@ -3003,8 +3202,8 @@ def environment_setter_assignments(
         )
         if len(arguments) < 2:
             continue
-        name = decode_environment_setter_literal(arguments[0])
-        value = decode_environment_setter_literal(arguments[1])
+        name = decode_environment_setter_literal(arguments[0], suffix)
+        value = decode_environment_setter_literal(arguments[1], suffix)
         if (
             name is None
             or value is None
@@ -3258,6 +3457,11 @@ def scan_text(
         if path.suffix.lower() in JAVASCRIPT_SOURCE_SUFFIXES
         else {}
     )
+    javascript_code_mask = (
+        javascript_executable_mask(path, text)
+        if path.suffix.lower() in JAVASCRIPT_SOURCE_SUFFIXES
+        else None
+    )
     non_javascript_bindings = non_javascript_alias_bindings(path, text)
     lines = text.splitlines()
     line_starts: list[int] = []
@@ -3291,6 +3495,17 @@ def scan_text(
                 name_spans.add(candidate.span("name"))
         reported_assignments: set[str] = set()
         for match in matches:
+            if javascript_code_mask is not None:
+                match_position = (
+                    line_starts[number - 1] + match.start()
+                    if number <= len(line_starts)
+                    else match.start()
+                )
+                if (
+                    match_position >= len(javascript_code_mask)
+                    or javascript_code_mask[match_position].isspace()
+                ):
+                    continue
             name = match.group("name").upper()
             raw_value = match.group("value")
             resolved_value = None
