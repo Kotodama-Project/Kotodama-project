@@ -2319,10 +2319,41 @@ def non_javascript_scope_aliases(
     return aliases
 
 
-def python_source_offset(line_offsets: list[int], node: ast.AST) -> int:
-    line = getattr(node, "lineno", 1)
-    column = getattr(node, "col_offset", 0)
-    return line_offsets[line - 1] + column
+def python_byte_column_to_offset(
+    text: str, line_offsets: list[int], line: int, byte_column: int
+) -> int:
+    if line <= 0 or line > len(line_offsets):
+        return 0
+    line_start = line_offsets[line - 1]
+    line_end = text.find("\n", line_start)
+    if line_end < 0:
+        line_end = len(text)
+    encoded = text[line_start:line_end].encode("utf-8")
+    byte_column = max(0, min(byte_column, len(encoded)))
+    try:
+        character_column = len(encoded[:byte_column].decode("utf-8"))
+    except UnicodeDecodeError:
+        character_column = len(encoded[:byte_column].decode("utf-8", "ignore"))
+    return line_start + character_column
+
+
+def python_source_offset(
+    text: str, line_offsets: list[int], node: ast.AST
+) -> int:
+    return python_byte_column_to_offset(
+        text,
+        line_offsets,
+        getattr(node, "lineno", 1),
+        getattr(node, "col_offset", 0),
+    )
+
+
+def python_source_end_offset(
+    text: str, line_offsets: list[int], node: ast.AST
+) -> int:
+    line = getattr(node, "end_lineno", getattr(node, "lineno", 1))
+    column = getattr(node, "end_col_offset", getattr(node, "col_offset", 0))
+    return python_byte_column_to_offset(text, line_offsets, line, column)
 
 
 def resolve_python_expression(
@@ -2383,11 +2414,12 @@ def python_alias_bindings(
             self._visit_function(node)
 
         def visit_Lambda(self, node: ast.Lambda) -> None:
-            start = python_source_offset(line_offsets, node)
-            end = start + 1
-            if getattr(node, "end_lineno", None) is not None:
-                end = line_offsets[node.end_lineno - 1] + node.end_col_offset
             parent = self.scope
+            for default in (*node.args.defaults, *node.args.kw_defaults):
+                if default is not None:
+                    self.visit(default)
+            start = python_source_offset(text, line_offsets, node.body)
+            end = python_source_end_offset(text, line_offsets, node)
             scopes.append([start, end, parent])
             self.scope = len(scopes) - 1
             for argument in (
@@ -2404,26 +2436,24 @@ def python_alias_bindings(
             self.scope = parent
 
         def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-            start = python_source_offset(line_offsets, node)
-            end = python_source_offset(line_offsets, node) + 1
-            if getattr(node, "end_lineno", None) is not None:
-                end = line_offsets[node.end_lineno - 1] + node.end_col_offset
+            start = python_source_offset(text, line_offsets, node)
+            end = python_source_end_offset(text, line_offsets, node)
             parent = self.scope
             scopes.append([start, end, parent])
             self.scope = len(scopes) - 1
             for argument in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs):
-                bindings.append((argument.arg, None, python_source_offset(line_offsets, argument), self.scope))
+                bindings.append((argument.arg, None, python_source_offset(text, line_offsets, argument), self.scope))
             if node.args.vararg is not None:
-                bindings.append((node.args.vararg.arg, None, python_source_offset(line_offsets, node.args.vararg), self.scope))
+                bindings.append((node.args.vararg.arg, None, python_source_offset(text, line_offsets, node.args.vararg), self.scope))
             if node.args.kwarg is not None:
-                bindings.append((node.args.kwarg.arg, None, python_source_offset(line_offsets, node.args.kwarg), self.scope))
+                bindings.append((node.args.kwarg.arg, None, python_source_offset(text, line_offsets, node.args.kwarg), self.scope))
             for child in node.body:
                 self.visit(child)
             self.scope = parent
 
         def visit_ClassDef(self, node: ast.ClassDef) -> None:
-            start = python_source_offset(line_offsets, node)
-            end = line_offsets[node.end_lineno - 1] + node.end_col_offset
+            start = python_source_offset(text, line_offsets, node)
+            end = python_source_end_offset(text, line_offsets, node)
             parent = self.scope
             scopes.append([start, end, parent])
             self.scope = len(scopes) - 1
@@ -2434,35 +2464,35 @@ def python_alias_bindings(
         def visit_Assign(self, node: ast.Assign) -> None:
             value = resolve_python_expression(
                 node.value, [tuple(scope) for scope in scopes], bindings,
-                python_source_offset(line_offsets, node.value),
+                python_source_offset(text, line_offsets, node.value),
             )
             for target in node.targets:
                 if isinstance(target, ast.Name):
-                    bindings.append((target.id, value, python_source_offset(line_offsets, target), self.scope))
+                    bindings.append((target.id, value, python_source_offset(text, line_offsets, target), self.scope))
             self.visit(node.value)
 
         def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
             value = resolve_python_expression(
                 node.value, [tuple(scope) for scope in scopes], bindings,
-                python_source_offset(line_offsets, node.value) if node.value else python_source_offset(line_offsets, node),
+                python_source_offset(text, line_offsets, node.value) if node.value else python_source_offset(text, line_offsets, node),
             ) if node.value is not None else None
             if isinstance(node.target, ast.Name):
-                bindings.append((node.target.id, value, python_source_offset(line_offsets, node.target), self.scope))
+                bindings.append((node.target.id, value, python_source_offset(text, line_offsets, node.target), self.scope))
             if node.value is not None:
                 self.visit(node.value)
 
         def visit_AugAssign(self, node: ast.AugAssign) -> None:
             if isinstance(node.target, ast.Name):
-                bindings.append((node.target.id, None, python_source_offset(line_offsets, node.target), self.scope))
+                bindings.append((node.target.id, None, python_source_offset(text, line_offsets, node.target), self.scope))
             self.visit(node.value)
 
         def visit_Import(self, node: ast.Import) -> None:
             for alias in node.names:
-                bindings.append((alias.asname or alias.name.split(".")[0], None, python_source_offset(line_offsets, node), self.scope))
+                bindings.append((alias.asname or alias.name.split(".")[0], None, python_source_offset(text, line_offsets, node), self.scope))
 
         def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
             for alias in node.names:
-                bindings.append((alias.asname or alias.name, None, python_source_offset(line_offsets, node), self.scope))
+                bindings.append((alias.asname or alias.name, None, python_source_offset(text, line_offsets, node), self.scope))
 
     Visitor().visit(tree)
     return [tuple(scope) for scope in scopes], bindings

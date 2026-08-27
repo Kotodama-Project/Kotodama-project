@@ -1616,6 +1616,49 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(value, repr(findings))
 
+        default_setter = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "(lambda secret=os.putenv(name, secret): secret)()\n"
+        )
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), default_setter),
+        )
+
+        keyword_default_setter = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "(lambda *, secret=os.putenv(name, secret): secret)()\n"
+        )
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), keyword_default_setter),
+        )
+
+        nested_default_setter = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "(lambda outer=(lambda secret=os.putenv(name, secret): secret)(): outer)()\n"
+        )
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), nested_default_setter),
+        )
+
+    def test_python_ast_utf8_columns_keep_lambda_and_outer_alias_scopes(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        unicode_prefix = "日本語" * 20
+        text = (
+            f'prefix = "{unicode_prefix}"; name = "{name}"; secret = "{value}"; '
+            "(lambda secret: os.putenv(name, secret))(secret); "
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), text)
+        self.assertEqual(
+            [("config.py", 1, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
     def test_environment_setter_values_decode_native_local_string_initializers(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
