@@ -2109,6 +2109,153 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertNotIn("Traceback", completed.stderr)
         self.assertIn("SCHEMA_INVALID", json.loads(completed.stdout)["reason_codes"])
 
+    def test_malformed_reference_targets_fail_closed_in_api_and_cli(self) -> None:
+        cases: list[tuple[str, list[dict]]] = []
+
+        binding_target_session = _valid_records()
+        binding_target_session[0]["session"] = []
+        cases.append(("session binding target session", binding_target_session))
+
+        binding_event = _valid_records()
+        binding_event[-1]["session"]["binding_event_ref"] = binding_event[1]["event_id"]
+        binding_event[1]["event"]["binding"] = []
+        cases.append(("binding event binding", binding_event))
+
+        binding_event_detail = _valid_records()
+        binding_event_detail[-1]["session"]["binding_event_ref"] = binding_event_detail[1]["event_id"]
+        binding_event_detail[1]["event"] = []
+        cases.append(("binding event detail", binding_event_detail))
+
+        lifecycle_target_event = _lifecycle_records(
+            "decision_confirmed", "HUMAN_CONFIRMED", "CONFIRMED"
+        )
+        lifecycle_target_event[-2]["event"] = []
+        cases.append(("lifecycle target event", lifecycle_target_event))
+
+        lifecycle_target_decision = _lifecycle_records(
+            "decision_confirmed", "HUMAN_CONFIRMED", "CONFIRMED"
+        )
+        lifecycle_target_decision[-2]["decision"] = []
+        cases.append(("lifecycle target decision", lifecycle_target_decision))
+
+        lineage_target_session = _valid_records()
+        parent = _event(
+            "malformed-lineage-parent",
+            sequence=4,
+            previous_hash=lineage_target_session[-1]["event_hash"],
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            artifact_stage="RAW_AUDIO",
+            content_hash="b" * 64,
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        child = _event(
+            "malformed-lineage-child",
+            sequence=5,
+            previous_hash=parent["event_hash"],
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            artifact_stage="RAW_ASR",
+            derived_from_event_refs=[parent["event_id"]],
+            content_hash="c" * 64,
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        parent["session"] = []
+        lineage_target_session.extend([parent, child])
+        cases.append(("lineage target session", lineage_target_session))
+
+        lineage_target_content = _valid_records()
+        parent = _event(
+            "malformed-content-parent",
+            sequence=4,
+            previous_hash=lineage_target_content[-1]["event_hash"],
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            artifact_stage="RAW_AUDIO",
+            content_hash="d" * 64,
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        child = _event(
+            "malformed-content-child",
+            sequence=5,
+            previous_hash=parent["event_hash"],
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            artifact_stage="RAW_ASR",
+            derived_from_event_refs=[parent["event_id"]],
+            content_hash="e" * 64,
+            source_type="system",
+            actor_ref="ref/system/ledger",
+            authority_role="SYSTEM",
+            authority_ref="ref/authority/ledger",
+        )
+        parent["content"] = []
+        lineage_target_content.extend([parent, child])
+        cases.append(("lineage target content", lineage_target_content))
+
+        binding_target_public_safety = _valid_records()
+        binding_target_public_safety[0]["public_safety"] = []
+        cases.append(("binding target public safety", binding_target_public_safety))
+
+        malformed_source = _event(
+            "malformed-source",
+            session_state="BOUND",
+            session_ref=_ref("session", "demo"),
+            event_kind="voice_reply",
+            source_type="discord_voice",
+            speaker_track_ref=_ref("track", "reply"),
+        )
+        malformed_source["source"] = []
+        cases.append(("voice reply source", [malformed_source]))
+
+        lifecycle_target_provenance = _lifecycle_records(
+            "decision_confirmed", "HUMAN_CONFIRMED", "CONFIRMED"
+        )
+        lifecycle_target_provenance[-2]["provenance"] = []
+        cases.append(("lifecycle target provenance", lifecycle_target_provenance))
+
+        for label, original_records in cases:
+            with self.subTest(case=label):
+                records = _rechain(original_records)
+                report = ledger.validate_ledger(records)
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertIn("SCHEMA_INVALID", report["reason_codes"])
+
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory) / "malformed-reference.jsonl"
+                    path.write_text(
+                        "\n".join(
+                            json.dumps(record, sort_keys=True, separators=(",", ":"))
+                            for record in records
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                        newline="\n",
+                    )
+                    completed = subprocess.run(
+                        [sys.executable, "-B", str(VALIDATOR), "validate", str(path)],
+                        cwd=ROOT,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        check=False,
+                    )
+                self.assertEqual(2, completed.returncode, completed.stderr)
+                self.assertNotIn("Traceback", completed.stderr)
+                self.assertNotIn("Traceback", completed.stdout)
+                cli_report = json.loads(completed.stdout)
+                self.assertEqual("REFUSED", cli_report["result"])
+                self.assertIn("SCHEMA_INVALID", cli_report["reason_codes"])
+
     def test_replay_and_session_binding_targets_must_be_strictly_earlier(self) -> None:
         self_replay = _valid_records()
         self_replay[2]["causation"]["replay_of_event_ref"] = self_replay[2]["event_id"]

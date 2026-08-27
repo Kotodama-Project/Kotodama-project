@@ -485,7 +485,7 @@ def _validate_event_shape(record: Any) -> list[str]:
 
     egress = record.get("egress")
     if detail_kind == "voice_reply":
-        if record.get("source", {}).get("channel_ref") is None:
+        if not isinstance(source, dict) or source.get("channel_ref") is None:
             reasons.append("VOICE_REPLY_SOURCE_CHANNEL_REQUIRED")
         if _keys(egress, EGRESS_KEYS, EGRESS_KEYS, "egress", reasons):
             for key in ("reply_artifact_ref", "delivery_receipt_ref"):
@@ -499,7 +499,9 @@ def _validate_event_shape(record: Any) -> list[str]:
                 reasons.append("VOICE_REPLY_EGRESS_INVALID")
     elif egress is not None:
         reasons.append("VOICE_REPLY_EGRESS_INVALID")
-    if detail_kind in {"voice_segment", "voice_reply"} and record.get("source", {}).get("type") != "discord_voice":
+    if detail_kind in {"voice_segment", "voice_reply"} and (
+        not isinstance(source, dict) or source.get("type") != "discord_voice"
+    ):
         reasons.append("VOICE_SOURCE_TYPE_INVALID")
 
     decision = record["decision"]
@@ -821,16 +823,20 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
         binding_event_ref = session.get("binding_event_ref")
         if binding_event_ref is not None:
             binding_record = known.get(binding_event_ref)
-            binding_session = binding_record.get("session", {}) if isinstance(binding_record, dict) else {}
-            binding_detail = binding_record.get("event", {}) if isinstance(binding_record, dict) else {}
+            binding_session = binding_record.get("session") if isinstance(binding_record, dict) else None
+            binding_detail = binding_record.get("event") if isinstance(binding_record, dict) else None
+            binding_payload = binding_detail.get("binding") if isinstance(binding_detail, dict) else None
             if (
                 not isinstance(binding_record, dict)
                 or _sequence_is_not_earlier(binding_record, sequence_number)
+                or not isinstance(binding_session, dict)
+                or not isinstance(binding_detail, dict)
+                or not isinstance(binding_payload, dict)
                 or binding_detail.get("kind") != "session_binding"
                 or binding_detail.get("state") == "INVALIDATED"
                 or binding_session.get("state") != "BOUND"
-                or binding_detail.get("binding", {}).get("destination_session_ref") != session.get("session_ref")
-                or binding_detail.get("binding", {}).get("destination_revision_ref") != session.get("revision_ref")
+                or binding_payload.get("destination_session_ref") != session.get("session_ref")
+                or binding_payload.get("destination_revision_ref") != session.get("revision_ref")
             ):
                 reasons.append("BINDING_EVENT_REF_INVALID")
         retention = record["retention"]
@@ -875,12 +881,18 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             if not isinstance(parent_content, dict):
                 reasons.append("CONTENT_LINEAGE_STAGE_INVALID")
                 continue
+            parent_session = parent.get("session") if isinstance(parent, dict) else None
+            parent_session_state = (
+                parent_session.get("state")
+                if isinstance(parent_session, dict)
+                else None
+            )
             if (
                 candidate_scope_by_event.get(parent_ref) is None
                 or candidate_scope_by_event.get(event_id) is None
                 or candidate_scope_by_event.get(parent_ref) != candidate_scope_by_event.get(event_id)
                 or (
-                    parent.get("session", {}).get("state") == "UNASSIGNED_INBOX"
+                    parent_session_state == "UNASSIGNED_INBOX"
                     and (
                         bound_sequence_for_target.get(parent_ref) is None
                         or bound_sequence_for_target[parent_ref] >= sequence_number
@@ -913,7 +925,12 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                     reasons.append("SESSION_BINDING_TARGET_REUSED")
                 seen_binding_targets.add(target_ref)
                 target = known.get(target_ref)
-                if target is None or target.get("session", {}).get("state") != "UNASSIGNED_INBOX":
+                target_session = target.get("session") if isinstance(target, dict) else None
+                if (
+                    target is None
+                    or not isinstance(target_session, dict)
+                    or target_session.get("state") != "UNASSIGNED_INBOX"
+                ):
                     reasons.append("SESSION_BINDING_TARGET_INVALID")
                 elif target_ref == event_id or _sequence_is_not_earlier(target, sequence_number):
                     reasons.append("SESSION_BINDING_TARGET_ORDER_INVALID")
@@ -946,29 +963,55 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                     reasons.append("LIFECYCLE_TARGET_SELF_REFERENCE")
                 elif _sequence_is_not_earlier(target, sequence_number):
                     reasons.append("LIFECYCLE_TARGET_ORDER_INVALID")
-                elif target.get("event", {}).get("kind") not in {"decision_candidate", "correction", "withdrawal", "confirmation", "decision_confirmed"}:
-                    reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
-                elif (
-                    candidate_scope_by_event.get(event_id) is None
-                    or candidate_scope_by_event.get(target_ref) is None
-                    or candidate_scope_by_event.get(event_id) != candidate_scope_by_event.get(target_ref)
-                    or (
-                        target.get("session", {}).get("state") == "UNASSIGNED_INBOX"
-                        and (
-                            bound_sequence_for_target.get(target_ref) is None
-                            or bound_sequence_for_target[target_ref] >= sequence_number
-                        )
+                else:
+                    target_event = target.get("event") if isinstance(target, dict) else None
+                    target_session = target.get("session") if isinstance(target, dict) else None
+                    target_decision = target.get("decision") if isinstance(target, dict) else None
+                    target_event_kind = (
+                        target_event.get("kind")
+                        if isinstance(target_event, dict)
+                        else None
                     )
-                ):
-                    reasons.append("LIFECYCLE_TARGET_SESSION_INVALID")
-                elif target.get("decision", {}).get("candidate_ref") is not None and record["decision"].get("candidate_ref") != target["decision"].get("candidate_ref"):
-                    reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
-                elif detail["kind"] == "decision_confirmed" and (
-                    target.get("event", {}).get("kind") != "decision_candidate"
-                    or target.get("decision", {}).get("status") != "LLM_CANDIDATE"
-                    or target.get("decision", {}).get("candidate_ref") is None
-                ):
-                    reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
+                    target_session_state = (
+                        target_session.get("state")
+                        if isinstance(target_session, dict)
+                        else None
+                    )
+                    target_candidate_ref = (
+                        target_decision.get("candidate_ref")
+                        if isinstance(target_decision, dict)
+                        else None
+                    )
+                    target_decision_status = (
+                        target_decision.get("status")
+                        if isinstance(target_decision, dict)
+                        else None
+                    )
+                    if target_event_kind not in {"decision_candidate", "correction", "withdrawal", "confirmation", "decision_confirmed"}:
+                        reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
+                    elif (
+                        candidate_scope_by_event.get(event_id) is None
+                        or candidate_scope_by_event.get(target_ref) is None
+                        or candidate_scope_by_event.get(event_id) != candidate_scope_by_event.get(target_ref)
+                        or (
+                            target_session_state == "UNASSIGNED_INBOX"
+                            and (
+                                bound_sequence_for_target.get(target_ref) is None
+                                or bound_sequence_for_target[target_ref] >= sequence_number
+                            )
+                        )
+                    ):
+                        reasons.append("LIFECYCLE_TARGET_SESSION_INVALID")
+                    elif not isinstance(target_decision, dict):
+                        reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
+                    elif target_candidate_ref is not None and record["decision"].get("candidate_ref") != target_candidate_ref:
+                        reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
+                    elif detail["kind"] == "decision_confirmed" and (
+                        target_event_kind != "decision_candidate"
+                        or target_decision_status != "LLM_CANDIDATE"
+                        or target_candidate_ref is None
+                    ):
+                        reasons.append("LIFECYCLE_TARGET_RELATION_INVALID")
 
         decision = record["decision"]
         extraction = record["provenance"]["extraction"]
