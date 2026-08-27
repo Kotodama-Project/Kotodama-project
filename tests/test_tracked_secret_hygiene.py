@@ -1213,6 +1213,51 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 )
                 self.assertNotIn(value, repr(findings))
 
+    def test_environment_setter_calls_allow_comments_inside_argument_lists(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        c_family = (
+            (
+                "config.c",
+                f'setenv( /* key\n */ "{name}" /* separator */, /* value */ "{value}", 1);\n',
+            ),
+            (
+                "config.cpp",
+                f'setenv( /* key */ "{name}" /* separator */, /* value */ "{value}", 1);\n',
+            ),
+            (
+                "config.cs",
+                f'Environment.SetEnvironmentVariable( /* key */ "{name}" /* separator */, /* value */ "{value}");\n',
+            ),
+            (
+                "config.go",
+                f'os.Setenv( /* key */ "{name}" /* separator */, /* value */ "{value}")\n',
+            ),
+            (
+                "config.rs",
+                f'std::env::set_var( /* key */ "{name}" /* separator */, /* value */ "{value}");\n',
+            ),
+            (
+                "config.swift",
+                f'setenv( /* key */ "{name}" /* separator */, /* value */ "{value}", 1)\n',
+            ),
+        )
+        python = (
+            "os.putenv(\n"
+            f"  # key\n  \"\"\"{name}\"\"\"\n"
+            "  # separator\n  ,\n"
+            f"  # value\n  \"\"\"{value}\"\"\"\n"
+            ")\n"
+        )
+        for filename, text in (*c_family, ("config.py", python)):
+            with self.subTest(filename=filename):
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(
+                    [(filename, 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
     def test_environment_setter_calls_detect_static_language_literals(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
@@ -1294,6 +1339,27 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     findings,
                 )
                 self.assertNotIn(value, repr(findings))
+
+    def test_unsupported_setter_literal_delimiters_fail_closed(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        cases = (
+            (
+                "config.cs",
+                f'Environment.SetEnvironmentVariable(""""{name}"""", """"{value}"""");\n',
+            ),
+            (
+                "config.cs",
+                f'Environment.SetEnvironmentVariable($$"""{name}""", $$"""{value}""");\n',
+            ),
+            (
+                "config.rs",
+                f'std::env::set_var(br#"{name}"#, br#"{value}"#);\n',
+            ),
+        )
+        for filename, text in cases:
+            with self.subTest(filename=filename, literal=text.split("(", 1)[1][:10]):
+                self.assertEqual([], SCANNER.scan_text(Path(filename), text))
 
     def test_supported_environment_setter_call_equivalents_detect_literals(
         self,
@@ -1458,6 +1524,56 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 self.assertEqual(
                     [], SCANNER.scan_text(Path("config" + suffix), source)
                 )
+
+    def test_executable_javascript_extensions_mask_multiline_template_text(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        template_text = (
+            "const source = `\n"
+            + name
+            + " =\n  \""
+            + value
+            + "\"\n`;\n"
+        )
+        bracket_template_text = (
+            "const source = `\nprocess.env[\""
+            + name
+            + "\"] =\n  \""
+            + value
+            + "\"\n`;\n"
+        )
+        executable_assignment = (
+            "const "
+            + name
+            + " =\n  \""
+            + value
+            + "\";\n"
+        )
+        for suffix in (".mjs", ".cjs"):
+            with self.subTest(suffix=suffix):
+                self.assertEqual(
+                    [], SCANNER.scan_text(Path("config" + suffix), template_text)
+                )
+                self.assertEqual(
+                    [],
+                    SCANNER.scan_text(
+                        Path("config" + suffix), bracket_template_text
+                    ),
+                )
+                findings = SCANNER.scan_text(
+                    Path("config" + suffix), executable_assignment
+                )
+                self.assertEqual(
+                    [
+                        (
+                            "config" + suffix,
+                            1,
+                            f"live-looking value assigned to {name}",
+                        )
+                    ],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
 
     def test_dynamic_javascript_environment_keys_and_references_remain_safe(self) -> None:
         name = "OPENAI_" + "API_KEY"

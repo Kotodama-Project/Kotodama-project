@@ -2952,6 +2952,49 @@ def decode_triple_quoted_literal(
     return None
 
 
+def strip_setter_comments(path: Path, text: str) -> str:
+    sanitized = strip_block_comments(path, text)
+    if path.suffix.lower() != ".py":
+        return sanitized
+    result = list(sanitized)
+
+    def blank(start: int, end: int) -> None:
+        for cursor in range(start, end):
+            if result[cursor] not in "\r\n":
+                result[cursor] = " "
+
+    index = 0
+    quote: str | None = None
+    escaped = False
+    while index < len(sanitized):
+        character = sanitized[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            index += 1
+            continue
+        if sanitized.startswith('"""', index) or sanitized.startswith("'''", index):
+            delimiter = sanitized[index:index + 3]
+            decoded = decode_triple_quoted_literal(sanitized, index, delimiter)
+            end = len(sanitized) if decoded is None else decoded[1]
+            index = end
+            continue
+        if character in {"'", '"'}:
+            quote = character
+        elif character == "#":
+            end = sanitized.find("\n", index)
+            end = len(sanitized) if end < 0 else end
+            blank(index, end)
+            index = end
+            continue
+        index += 1
+    return "".join(result)
+
+
 def decode_basic_environment_literal(
     expression: str, start: int, quote: str
 ) -> tuple[str, int] | None:
@@ -3062,7 +3105,7 @@ def decode_rust_environment_literal(
     expression: str, start: int
 ) -> tuple[str, int] | None:
     raw_start = RUST_RAW_STRING_START.match(expression, start)
-    if raw_start is not None:
+    if raw_start is not None and not expression.startswith("br", start):
         terminator = '"' + raw_start.group("hashes")
         end = expression.find(terminator, raw_start.end())
         if end < 0:
@@ -3133,6 +3176,8 @@ def decode_environment_setter_literal(
             decoded = decode_basic_environment_literal(
                 expression, index, expression[index]
             )
+            if decoded is None:
+                return None
         value, index = decoded
         values.append(value)
         if len(values) > MAX_JAVASCRIPT_CONSTANT_PARTS:
@@ -3186,19 +3231,19 @@ def environment_setter_assignments(
         + "|".join(map(re.escape, names))
         + r")\s*\("
     )
-    sanitized = strip_block_comments(path, text)
+    sanitized = strip_setter_comments(path, text)
     executable = executable_code_mask(path, text)
     findings: list[tuple[str, int]] = []
     for match in pattern.finditer(sanitized):
         if executable[match.start()].isspace():
             continue
         close = javascript_matching_delimiter(
-            text, match.end() - 1, "(", ")"
+            sanitized, match.end() - 1, "(", ")"
         )
         if close is None:
             continue
         arguments = split_environment_setter_arguments(
-            text[match.end():close]
+            sanitized[match.end():close]
         )
         if len(arguments) < 2:
             continue
@@ -3213,6 +3258,38 @@ def environment_setter_assignments(
             continue
         findings.append((name.upper(), text.count("\n", 0, match.start()) + 1))
     return list(dict.fromkeys(findings))
+
+
+def javascript_multiline_assignment_is_executable(
+    text: str,
+    line_starts: list[int],
+    executable: str,
+    name: str,
+    number: int,
+) -> bool:
+    if number <= 0 or number > len(line_starts):
+        return True
+    line_start = line_starts[number - 1]
+    line_end = text.find("\n", line_start)
+    line = text[line_start:] if line_end < 0 else text[line_start:line_end]
+    offset = 0
+    found = False
+    while True:
+        name_start = line.find(name, offset)
+        if name_start < 0:
+            return not found
+        absolute = line_start + name_start
+        found = True
+        if absolute < len(executable) and not executable[absolute].isspace():
+            return True
+        bracket_start = line.rfind("[", 0, name_start)
+        if (
+            bracket_start >= 0
+            and line_start + bracket_start < len(executable)
+            and not executable[line_start + bracket_start].isspace()
+        ):
+            return True
+        offset = name_start + len(name)
 
 
 def javascript_executable_mask(
@@ -3573,6 +3650,17 @@ def scan_text(
             f"live-looking value assigned to {name}",
         ))
     for name, number, value, strip_comments in multiline_assignments(path, text):
+        if (
+            javascript_code_mask is not None
+            and not javascript_multiline_assignment_is_executable(
+                text,
+                line_starts,
+                javascript_code_mask,
+                name,
+                number,
+            )
+        ):
+            continue
         resolved_value = None
         if javascript_scope_data:
             _, scopes, bindings = javascript_scope_data
