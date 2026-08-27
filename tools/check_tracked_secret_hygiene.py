@@ -2380,20 +2380,25 @@ def python_compare_values(
     primitive = (str, bool, int, float, complex)
     if not isinstance(left, primitive) or not isinstance(right, primitive):
         return None
+    both_strings = isinstance(left, str) and isinstance(right, str)
+    both_numbers = (
+        isinstance(left, (bool, int, float, complex))
+        and isinstance(right, (bool, int, float, complex))
+    )
     if isinstance(operator, (ast.Eq, ast.NotEq)):
+        if not (both_strings or both_numbers):
+            return None
         try:
             result = left == right
         except (TypeError, ValueError, OverflowError):
             return None
         return not result if isinstance(operator, ast.NotEq) else result
-    real_numbers = (int, float)
+    real_numbers = (bool, int, float)
     ordered = (
-        isinstance(left, str) and isinstance(right, str)
+        both_strings
     ) or (
         isinstance(left, real_numbers)
-        and not isinstance(left, bool)
         and isinstance(right, real_numbers)
-        and not isinstance(right, bool)
     )
     if not ordered:
         return None
@@ -2973,6 +2978,44 @@ def python_alias_bindings(
             self._visit_comprehension(
                 node, (node.elt,), node.generators
             )
+
+        def visit_BoolOp(self, node: ast.BoolOp) -> None:
+            ephemeral: dict[str, PythonResolvedValue | None] = {}
+            for operand in node.values:
+                resolved = resolve_python_value(
+                    operand,
+                    [tuple(scope) for scope in scopes],
+                    bindings,
+                    python_source_offset(text, line_offsets, operand),
+                    ephemeral,
+                )
+                self.visit(operand)
+                if resolved is None:
+                    return
+                truthiness = python_value_truthiness(resolved)
+                if truthiness is None:
+                    return
+                if isinstance(node.op, ast.And) and not truthiness:
+                    return
+                if isinstance(node.op, ast.Or) and truthiness:
+                    return
+
+        def visit_IfExp(self, node: ast.IfExp) -> None:
+            ephemeral: dict[str, PythonResolvedValue | None] = {}
+            test = resolve_python_value(
+                node.test,
+                [tuple(scope) for scope in scopes],
+                bindings,
+                python_source_offset(text, line_offsets, node.test),
+                ephemeral,
+            )
+            self.visit(node.test)
+            if test is None:
+                return
+            truthiness = python_value_truthiness(test)
+            if truthiness is None:
+                return
+            self.visit(node.body if truthiness else node.orelse)
 
         def visit_Compare(self, node: ast.Compare) -> None:
             ephemeral: dict[str, PythonResolvedValue | None] = {}

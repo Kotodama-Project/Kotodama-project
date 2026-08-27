@@ -2029,12 +2029,61 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(value, repr(findings))
 
+        bool_numeric_comparison = (
+            f'name = (True == 1) and "{name}"\n'
+            f'secret = (False < 1) and "{value}"\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), bool_numeric_comparison)
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
         comparison_short_circuit = (
             f'name = "{name}"\nsecret = "{value}"\n'
             'result = "z" < "a" < (name := "NOT_A_SECRET")\n'
             "os.putenv(name, secret)\n"
         )
         findings = SCANNER.scan_text(Path("config.py"), comparison_short_circuit)
+        self.assertEqual(
+            [("config.py", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        nested_bool_short_circuit = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            'result = "a" < ("" and (name := "NOT_A_SECRET")) < "z"\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), nested_bool_short_circuit)
+        self.assertEqual(
+            [("config.py", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        unselected_if_branch = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            'result = "a" < ("left" if True else (name := "NOT_A_SECRET")) < "z"\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), unselected_if_branch)
+        self.assertEqual(
+            [("config.py", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        unknown_branch_keeps_earlier_effect = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            'result = (prefix := "known") and '
+            '("left" if flag else (name := "NOT_A_SECRET"))\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), unknown_branch_keeps_earlier_effect)
         self.assertEqual(
             [("config.py", 4, f"live-looking value assigned to {name}")],
             findings,
