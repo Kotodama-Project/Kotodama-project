@@ -564,7 +564,8 @@ def _validate_event_shape(record: Any) -> list[str]:
             reasons.append("DELETION_READBACK_RECEIPT_INVALID")
         if retention.get("deletion_state") == "CONFIRMED" and (retention.get("deletion_readback") != "CONFIRMED" or retention.get("deletion_receipt_ref") is None):
             reasons.append("DELETION_STATE_RECEIPT_INVALID")
-        if record.get("content", {}).get("artifact_stage") in {
+        content_value = record.get("content")
+        if isinstance(content_value, dict) and content_value.get("artifact_stage") in {
             "RAW_AUDIO",
             "RAW_SOURCE_JSON",
             "RAW_ASR",

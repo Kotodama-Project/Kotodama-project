@@ -2871,6 +2871,36 @@ class SessionConversationLedgerTests(unittest.TestCase):
             with mock.patch.object(Path, "open", autospec=True, side_effect=open_short):
                 self.assertEqual([record], ledger.read_jsonl(short_read))
 
+    def test_nonobject_content_fails_closed_in_api_and_cli(self) -> None:
+        for content in ([], "private-content-marker", None, 7, True):
+            with self.subTest(content_type=type(content).__name__):
+                records = _valid_records()
+                records[0]["content"] = content
+                records = _rechain(records)
+                report = ledger.validate_ledger(records)
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertIn("SCHEMA_INVALID", report["reason_codes"])
+
+                with tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory) / "nonobject-content.jsonl"
+                    path.write_text(
+                        "\n".join(json.dumps(record, sort_keys=True, separators=(",", ":")) for record in records) + "\n",
+                        encoding="utf-8",
+                        newline="\n",
+                    )
+                    completed = subprocess.run(
+                        [sys.executable, "-B", str(VALIDATOR), "validate", str(path)],
+                        cwd=ROOT,
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        check=False,
+                    )
+                self.assertEqual(2, completed.returncode)
+                self.assertIn("SCHEMA_INVALID", json.loads(completed.stdout)["reason_codes"])
+                self.assertNotIn("Traceback", completed.stderr)
+                self.assertNotIn("private-content-marker", completed.stdout + completed.stderr)
+
     def test_offline_recovery_and_integrity_markers_are_explicit(self) -> None:
         records = _valid_records()
         recovered = _event(
