@@ -1720,6 +1720,119 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(prefix=text[:18]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.ps1"), text))
 
+    def test_powershell_alias_names_are_case_insensitive(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        cases = (
+            '$VaLuE = "' + value + '"\n$env:' + name + ' = $value\n',
+            '$value = "' + value + '"\n$env:' + name + ' = $VaLuE\n',
+            '$VaLuE = "' + value + '"\n$other = $VALUE\n'
+            '$env:' + name + ' = $OTHER\n',
+            '$value = Get-Secret\n$VALUE = "' + value + '"\n'
+            '$env:' + name + ' = $VaLuE\n',
+        )
+        for text in cases:
+            with self.subTest(prefix=text[:24]):
+                self.assertEqual(
+                    [("config.ps1", text.count("\n"),
+                      f"live-looking value assigned to {name}")],
+                    SCANNER.scan_text(Path("config.ps1"), text),
+                )
+
+        dynamic_latest = (
+            '$value = "' + value + '"\n$VALUE = Get-Secret\n'
+            '$env:' + name + ' = $VaLuE\n'
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.ps1"), dynamic_latest)
+        )
+
+        case_sensitive_controls = (
+            (
+                'value = "' + value + '"\n'
+                'os.environ["' + name + '"] = VALUE\n',
+                "config.py",
+            ),
+            (
+                'value = "' + value + '"\n'
+                'ENV["' + name + '"] = VALUE\n',
+                "config.rb",
+            ),
+        )
+        for text, filename in case_sensitive_controls:
+            with self.subTest(filename=filename):
+                self.assertEqual([], SCANNER.scan_text(Path(filename), text))
+
+        nested_dynamic = (
+            '$Value = "' + value + '"\nfunction f {\n'
+            '  $VALUE = Get-Secret\n  $env:' + name + ' = $value\n}\n'
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.ps1"), nested_dynamic)
+        )
+        nested_literal = (
+            '$value = Get-Secret\nfunction f {\n'
+            '  $VALUE = "' + value + '"\n'
+            '  $env:' + name + ' = $VaLuE\n}\n'
+        )
+        self.assertEqual(
+            [("config.ps1", 4, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.ps1"), nested_literal),
+        )
+
+    def test_powershell_braced_alias_reference_is_resolved(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        text = (
+            '$VaLuE = "' + value + '"\n'
+            '$env:' + name + ' = ${value}\n'
+        )
+        self.assertEqual(
+            [("config.ps1", 2, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.ps1"), text),
+        )
+
+    def test_powershell_interpolated_alias_reference_is_resolved(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        for reference in ('$value', '${VaLuE}'):
+            with self.subTest(reference=reference):
+                text = (
+                    '$VaLuE = "' + value + '"\n'
+                    '$env:' + name + ' = "' + reference + '"\n'
+                )
+                self.assertEqual(
+                    [("config.ps1", 2,
+                      f"live-looking value assigned to {name}")],
+                    SCANNER.scan_text(Path("config.ps1"), text),
+                )
+
+        controls = ("'${value}'",)
+        for expression in controls:
+            with self.subTest(control=expression):
+                text = (
+                    '$value = "' + value + '"\n'
+                    '$env:' + name + ' = ' + expression + '\n'
+                )
+                self.assertEqual(
+                    [], SCANNER.scan_text(Path("config.ps1"), text)
+                )
+
+    def test_powershell_braced_alias_declaration_is_resolved(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        for reference in ('$value', '${VaLuE}'):
+            with self.subTest(reference=reference):
+                text = (
+                    '${Value} = "' + value + '"\n'
+                    '$env:' + name + ' = ' + reference + '\n'
+                )
+                self.assertEqual(
+                    [("config.ps1", 2,
+                      f"live-looking value assigned to {name}")],
+                    SCANNER.scan_text(Path("config.ps1"), text),
+                )
+
     def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"

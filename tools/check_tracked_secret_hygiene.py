@@ -172,6 +172,10 @@ JAVASCRIPT_VARIABLE_DECLARATION = re.compile(
 )
 MAX_JAVASCRIPT_CONSTANT_DEPTH = 8
 MAX_JAVASCRIPT_CONSTANT_PARTS = 32
+POWERSHELL_VARIABLE_REFERENCE = re.compile(
+    r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|"
+    r"(?P<plain>[A-Za-z_][A-Za-z0-9_]*))"
+)
 BRACED_UNICODE_ESCAPE = re.compile(
     r"\\u\{(?P<digits>[0-9A-Fa-f]{1,6})\}"
 )
@@ -2290,10 +2294,11 @@ def non_javascript_scope_aliases(
                 and binding[2] <= position
             ]
             binding = max(candidates, key=lambda candidate: candidate[2])
+            if name in blocked or name in aliases:
+                continue
             if binding[1] is None:
                 blocked.add(name)
-                aliases.pop(name, None)
-            elif name not in blocked and name not in aliases:
+            else:
                 aliases[name] = binding[1]
         scope = scopes[scope][2]
     return aliases
@@ -2432,7 +2437,12 @@ def powershell_tokens(line: str) -> list[tuple[str, int]]:
     start = 0
     quote: str | None = None
     escaped = False
+    braced_variable = False
     for index, character in enumerate(line):
+        if braced_variable:
+            if character == "}":
+                braced_variable = False
+            continue
         if quote == "'":
             if character == "'":
                 quote = None
@@ -2447,6 +2457,8 @@ def powershell_tokens(line: str) -> list[tuple[str, int]]:
             continue
         if character in {"'", '"'}:
             quote = character
+        elif character == "$" and line[index:index + 2] == "${":
+            braced_variable = True
         elif character == "#":
             tokens.append((line[start:index], start))
             return tokens
@@ -2462,7 +2474,8 @@ def powershell_alias_bindings(
     path: Path, text: str
 ) -> tuple[list[tuple[int, int, int]], list[tuple[str, str | None, int, int]]]:
     declarations = re.compile(
-        r"^[ \t]*\$(?!env:)(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+        r"^[ \t]*(?P<variable>\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|"
+        r"[A-Za-z_][A-Za-z0-9_]*))"
         r"[ \t]*=[ \t]*(?P<value>.*?)\s*$"
     )
     scopes: list[list[int]] = [[0, len(text), -1]]
@@ -2520,7 +2533,17 @@ def powershell_alias_bindings(
                 ),
                 ".ps1",
             )
-            bindings.append((match.group("name"), value, position, stack[-1]))
+            variable = POWERSHELL_VARIABLE_REFERENCE.fullmatch(
+                match.group("variable")
+            )
+            if variable is None:
+                continue
+            bindings.append((
+                (variable.group("braced") or variable.group("plain")).casefold(),
+                value,
+                position,
+                stack[-1],
+            ))
         offset += len(raw_line)
     return [tuple(scope) for scope in scopes], bindings
 
@@ -2617,6 +2640,37 @@ def non_javascript_alias_bindings(
     return script_alias_bindings(path, text)
 
 
+def resolve_powershell_interpolated_string(
+    contents: str, aliases: dict[str, str]
+) -> str | None:
+    values: list[str] = []
+    index = 0
+    while index < len(contents):
+        character = contents[index]
+        if character == "`":
+            if index + 1 >= len(contents):
+                return None
+            values.append(contents[index + 1])
+            index += 2
+            continue
+        if character != "$":
+            values.append(character)
+            index += 1
+            continue
+        match = POWERSHELL_VARIABLE_REFERENCE.match(contents, index)
+        if match is None:
+            return None
+        alias_name = (
+            match.group("braced") or match.group("plain")
+        ).casefold()
+        if alias_name not in aliases:
+            return None
+        values.append(aliases[alias_name])
+        index = match.end()
+    resolved = "".join(values)
+    return resolved if len(resolved) <= 512 else None
+
+
 def resolve_non_javascript_literal(
     expression: str,
     aliases: dict[str, str],
@@ -2637,9 +2691,14 @@ def resolve_non_javascript_literal(
             if end is None:
                 return None
             literal = expression[index:index + end + 1]
-            decoded = decode_javascript_string_contents(
-                literal[1:-1], literal[0]
-            )
+            if suffix == ".ps1" and literal[0] == '"':
+                decoded = resolve_powershell_interpolated_string(
+                    literal[1:-1], aliases
+                )
+            else:
+                decoded = decode_javascript_string_contents(
+                    literal[1:-1], literal[0]
+                )
             if decoded is None:
                 return None
             values.append(decoded)
@@ -2648,13 +2707,26 @@ def resolve_non_javascript_literal(
         if suffix == ".ps1" and character == "`":
             index += 1
             continue
-        if suffix == ".ps1" and character == "$":
-            match = re.match(r"\$([A-Za-z_][A-Za-z0-9_]*)", expression[index:])
+        powershell_reference = suffix == ".ps1" and character == "$"
+        if powershell_reference:
+            match = POWERSHELL_VARIABLE_REFERENCE.match(expression, index)
         else:
             match = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", expression[index:])
-        if match is None or match.group(1) not in aliases:
+        if match is None:
             return None
-        values.append(aliases[match.group(1)])
+        matched_name = (
+            match.group("braced") or match.group("plain")
+            if powershell_reference
+            else match.group(1)
+        )
+        alias_name = (
+            matched_name.casefold()
+            if suffix == ".ps1"
+            else matched_name
+        )
+        if alias_name not in aliases:
+            return None
+        values.append(aliases[alias_name])
         index += match.end()
     combined = "".join(values)
     return combined if values and len(combined) <= 512 else None
@@ -2671,18 +2743,35 @@ def non_javascript_alias_value(
 ) -> str | None:
     if path.suffix.lower() not in NON_JAVASCRIPT_ALIAS_SUFFIXES:
         return None
-    name_match = re.fullmatch(
-        r"\$?([A-Za-z_][A-Za-z0-9_]*)", raw_value.strip().rstrip(";").strip()
-    )
+    suffix = path.suffix.lower()
+    if suffix == ".ps1":
+        raw_name = raw_value.strip().rstrip(";").strip()
+        name_match = POWERSHELL_VARIABLE_REFERENCE.fullmatch(raw_name)
+        if name_match is None:
+            name_match = re.fullmatch(
+                r"(?P<plain>[A-Za-z_][A-Za-z0-9_]*)", raw_name
+            )
+    else:
+        name_match = re.fullmatch(
+            r"([A-Za-z_][A-Za-z0-9_]*)",
+            raw_value.strip().rstrip(";").strip(),
+        )
     scopes, bindings = binding_state
     aliases = non_javascript_scope_aliases(scopes, bindings, position)
     if name_match is None:
         return resolve_non_javascript_literal(
             raw_value,
             aliases,
-            path.suffix.lower(),
+            suffix,
         )
-    return aliases.get(name_match.group(1))
+    alias_name = (
+        name_match.group("braced") or name_match.group("plain")
+        if suffix == ".ps1"
+        else name_match.group(1)
+    )
+    if suffix == ".ps1":
+        alias_name = alias_name.casefold()
+    return aliases.get(alias_name)
 
 
 def javascript_matching_bracket(text: str, start: int) -> int | None:
