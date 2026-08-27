@@ -1403,13 +1403,76 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             f'Environment.SetEnvironmentVariable(name: "{name}", value: "{value}");\n',
             f'Environment.SetEnvironmentVariable(variable: "{name}", variable: "OTHER", value: "{value}");\n',
             f'Environment.SetEnvironmentVariable(Variable: "{name}", Value: "{value}");\n',
-            f'Environment.SetEnvironmentVariable("{name}", value: "{value}");\n',
             f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", target: target);\n',
             f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", target: "Process");\n',
         )
         for text in negatives:
             with self.subTest(negative=text[:32]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.cs"), text))
+
+    def test_csharp_mixed_positional_named_setter_arguments_are_bounded(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        target = "EnvironmentVariableTarget.Process"
+        positives = (
+            f'Environment.SetEnvironmentVariable("{name}", value: "{value}");\n',
+            f'Environment.SetEnvironmentVariable("{name}", value: "{value}", target: {target});\n',
+            f'Environment.SetEnvironmentVariable("{name}", target: {target}, value: "{value}");\n',
+            f'Environment.SetEnvironmentVariable("{name}", "{value}", target: {target});\n',
+        )
+        for text in positives:
+            with self.subTest(positive=text[:36]):
+                findings = SCANNER.scan_text(Path("config.cs"), text)
+                self.assertEqual(
+                    [("config.cs", 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        negatives = (
+            f'Environment.SetEnvironmentVariable(variable: "{name}", "{value}");\n',
+            f'Environment.SetEnvironmentVariable("{name}", value: dynamicValue);\n',
+            f'Environment.SetEnvironmentVariable("{name}", value: "{value}", target: dynamicTarget);\n',
+            f'Environment.SetEnvironmentVariable("{name}", value: "{value}", value: "OTHER");\n',
+            f'Environment.SetEnvironmentVariable("{name}", variable: "OTHER", value: "{value}");\n',
+        )
+        for text in negatives:
+            with self.subTest(negative=text[:36]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.cs"), text))
+
+    def test_c_family_setter_calls_normalize_translation_phase_splices(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        positives = (
+            ("config.c", f'set\\\nenv("{name}", "{value}", 1);\n'),
+            ("config.cpp", f'set\\\nenv("{name}", "{value}", 1);\n'),
+            ("config.c", f'setenv\\\n("{name}", "{value}", 1);\n'),
+            ("config.cpp", f'setenv("OPENAI_API_\\\nKEY", "{value}", 1);\n'),
+        )
+        for filename, text in positives:
+            with self.subTest(positive=filename):
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(
+                    [(filename, 1, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        negatives = (
+            ("config.c", f'// setenv\\\n("{name}", "{value}", 1);\n'),
+            ("config.cpp", f'/* setenv\\\n("{name}", "{value}", 1); */\n'),
+            (
+                "config.c",
+                f'const char *source = "setenv\\\n(\\"{name}\\", \\"{value}\\", 1)";\n',
+            ),
+            (
+                "config.cpp",
+                f'auto source = R"(setenv\\\n("{name}", "{value}", 1))";\n',
+            ),
+        )
+        for filename, text in negatives:
+            with self.subTest(negative=filename):
+                self.assertEqual([], SCANNER.scan_text(Path(filename), text))
 
     def test_unsupported_setter_literal_delimiters_fail_closed(self) -> None:
         name = "OPENAI_" + "API_KEY"

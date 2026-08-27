@@ -3351,6 +3351,7 @@ def decode_csharp_setter_arguments(
 ) -> tuple[str, str] | None:
     positional: list[str] = []
     named: dict[str, str] = {}
+    saw_named = False
     for index, argument in enumerate(arguments):
         argument = argument.strip()
         if not argument and index == len(arguments) - 1:
@@ -3361,6 +3362,8 @@ def decode_csharp_setter_arguments(
             re.DOTALL,
         )
         if label is None:
+            if saw_named:
+                return None
             positional.append(argument)
             continue
         label_name = label.group("label")
@@ -3368,29 +3371,48 @@ def decode_csharp_setter_arguments(
             return None
         if label_name in named:
             return None
+        saw_named = True
         named[label_name] = label.group("value").strip()
-    if named:
-        if positional or not {"variable", "value"}.issubset(named):
+    if len(positional) > 3:
+        return None
+    slots: dict[str, str] = {}
+    parameter_order = ("variable", "value", "target")
+    for parameter, argument in zip(parameter_order, positional):
+        slots[parameter] = argument
+    for label_name, argument in named.items():
+        if label_name in slots:
             return None
-        if (
-            "target" in named
-            and named["target"] not in CSHARP_ENVIRONMENT_TARGETS
-        ):
-            return None
-        variable = decode_environment_setter_literal(
-            named["variable"], ".cs"
-        )
-        value = decode_environment_setter_literal(named["value"], ".cs")
-    else:
-        if len(positional) not in {2, 3}:
-            return None
-        if len(positional) == 3 and positional[2] not in CSHARP_ENVIRONMENT_TARGETS:
-            return None
-        variable = decode_environment_setter_literal(positional[0], ".cs")
-        value = decode_environment_setter_literal(positional[1], ".cs")
+        slots[label_name] = argument
+    if not {"variable", "value"}.issubset(slots):
+        return None
+    if (
+        "target" in slots
+        and slots["target"] not in CSHARP_ENVIRONMENT_TARGETS
+    ):
+        return None
+    variable = decode_environment_setter_literal(slots["variable"], ".cs")
+    value = decode_environment_setter_literal(slots["value"], ".cs")
     if variable is None or value is None:
         return None
     return variable, value
+
+
+def normalize_c_line_splices(text: str) -> tuple[str, list[int]]:
+    normalized: list[str] = []
+    origins: list[int] = []
+    index = 0
+    while index < len(text):
+        if text[index] == "\\":
+            if text.startswith("\\\r\n", index):
+                index += 3
+                continue
+            if text.startswith("\\\n", index) or text.startswith("\\\r", index):
+                index += 2
+                continue
+        normalized.append(text[index])
+        origins.append(index)
+        index += 1
+    return "".join(normalized), origins
 
 
 def environment_setter_assignments(
@@ -3405,8 +3427,13 @@ def environment_setter_assignments(
         + "|".join(map(re.escape, names))
         + r")\s*\("
     )
-    sanitized = strip_setter_comments(path, text)
-    executable = executable_code_mask(path, text)
+    if suffix in C_SOURCE_SUFFIXES:
+        source, origins = normalize_c_line_splices(text)
+    else:
+        source = text
+        origins = list(range(len(text)))
+    sanitized = strip_setter_comments(path, source)
+    executable = executable_code_mask(path, source)
     findings: list[tuple[str, int]] = []
     for match in pattern.finditer(sanitized):
         if executable[match.start()].isspace():
@@ -3438,7 +3465,11 @@ def environment_setter_assignments(
             or not live_assignment(value)
         ):
             continue
-        findings.append((name.upper(), text.count("\n", 0, match.start()) + 1))
+        original_start = origins[match.start()]
+        findings.append((
+            name.upper(),
+            text.count("\n", 0, original_start) + 1,
+        ))
     return list(dict.fromkeys(findings))
 
 
