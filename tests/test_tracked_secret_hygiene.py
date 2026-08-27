@@ -1659,6 +1659,121 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(value, repr(findings))
 
+    def test_python_function_defaults_and_annotations_use_enclosing_scope(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        default_setter = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "def use(secret=os.putenv(name, secret)):\n"
+            "    os.putenv(name, secret)\n"
+        )
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), default_setter),
+        )
+
+        keyword_default_setter = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "async def use(*, secret=os.putenv(name, secret)):\n"
+            "    os.putenv(name, secret)\n"
+        )
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), keyword_default_setter),
+        )
+
+        decorator = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "@decorate(os.putenv(name, secret))\n"
+            "def use(secret):\n"
+            "    os.putenv(name, secret)\n"
+        )
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), decorator),
+        )
+
+        annotation = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "def use(secret: os.putenv(name, secret) = \"default\") -> "
+            "os.putenv(name, secret):\n"
+            "    os.putenv(name, secret)\n"
+        )
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), annotation),
+        )
+
+    def test_python_named_expression_aliases_follow_scope_and_position(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        literal = (
+            "(name := \"OPENAI_API_KEY\")\n"
+            f'(secret := "{value}")\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), literal)
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        alias_chain = (
+            'prefix = "OPENAI_"\n'
+            '(name := prefix + "API_KEY")\n'
+            'base = "Synthetic"\n'
+            '(secret := base + "SecretValue2026")\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), alias_chain)
+        self.assertEqual(
+            [("config.py", 5, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        latest_rebind = (
+            '(name := "OPENAI_API_KEY")\n'
+            f'(secret := "{value}")\n'
+            "(secret := get_secret())\n"
+            "os.putenv(name, secret)\n"
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.py"), latest_rebind))
+
+        comprehension_dynamic = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "[ (secret := get_secret()) for _ in [0] ]\n"
+            "os.putenv(name, secret)\n"
+        )
+        self.assertEqual(
+            [], SCANNER.scan_text(Path("config.py"), comprehension_dynamic)
+        )
+
+        nested_function = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "def use():\n"
+            "    (secret := get_secret())\n"
+            "    os.putenv(name, secret)\n"
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), nested_function)
+        self.assertEqual(
+            [("config.py", 6, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        after_use = (
+            f'name = "{name}"\nsecret = "{value}"\n'
+            "os.putenv(name, secret)\n"
+            f'(secret := "{value}")\n'
+        )
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), after_use),
+        )
+
     def test_environment_setter_values_decode_native_local_string_initializers(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"

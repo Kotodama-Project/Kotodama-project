@@ -2436,17 +2436,35 @@ def python_alias_bindings(
             self.scope = parent
 
         def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
-            start = python_source_offset(text, line_offsets, node)
-            end = python_source_end_offset(text, line_offsets, node)
             parent = self.scope
+            for expression in node.decorator_list:
+                self.visit(expression)
+            for default in (*node.args.defaults, *node.args.kw_defaults):
+                if default is not None:
+                    self.visit(default)
+            for argument in (
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+            ):
+                if argument.annotation is not None:
+                    self.visit(argument.annotation)
+            if node.args.vararg is not None and node.args.vararg.annotation is not None:
+                self.visit(node.args.vararg.annotation)
+            if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
+                self.visit(node.args.kwarg.annotation)
+            if node.returns is not None:
+                self.visit(node.returns)
+            start = python_source_offset(text, line_offsets, node.body[0])
+            end = python_source_end_offset(text, line_offsets, node)
             scopes.append([start, end, parent])
             self.scope = len(scopes) - 1
             for argument in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs):
-                bindings.append((argument.arg, None, python_source_offset(text, line_offsets, argument), self.scope))
+                bindings.append((argument.arg, None, start, self.scope))
             if node.args.vararg is not None:
-                bindings.append((node.args.vararg.arg, None, python_source_offset(text, line_offsets, node.args.vararg), self.scope))
+                bindings.append((node.args.vararg.arg, None, start, self.scope))
             if node.args.kwarg is not None:
-                bindings.append((node.args.kwarg.arg, None, python_source_offset(text, line_offsets, node.args.kwarg), self.scope))
+                bindings.append((node.args.kwarg.arg, None, start, self.scope))
             for child in node.body:
                 self.visit(child)
             self.scope = parent
@@ -2484,6 +2502,22 @@ def python_alias_bindings(
         def visit_AugAssign(self, node: ast.AugAssign) -> None:
             if isinstance(node.target, ast.Name):
                 bindings.append((node.target.id, None, python_source_offset(text, line_offsets, node.target), self.scope))
+            self.visit(node.value)
+
+        def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
+            value = resolve_python_expression(
+                node.value,
+                [tuple(scope) for scope in scopes],
+                bindings,
+                python_source_offset(text, line_offsets, node.value),
+            )
+            if isinstance(node.target, ast.Name):
+                bindings.append((
+                    node.target.id,
+                    value,
+                    python_source_offset(text, line_offsets, node.target),
+                    self.scope,
+                ))
             self.visit(node.value)
 
         def visit_Import(self, node: ast.Import) -> None:
