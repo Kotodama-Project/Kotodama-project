@@ -94,8 +94,12 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
   General-purpose local LLMはdeferred、local ASR/VAD・speaker support・encoder・tiny deterministic
   specialistsは許容し、metered APIは除外です。
 - Archive Target interfaceはprovider-neutralのまま、private v1 backendはordinary encrypted-file
-  package + ZFS snapshotです。exactな適合dataset/mountがread-onlyで確認できるまで作成・書込みせず、
-  local restore testだけを先行します。Standing GitHub delegationとGoal Completion
+  package + ZFS snapshotです。dedicated synthetic ZFS test datasetでは、暗号化packageの
+  transfer、remount、authenticated restore、plaintext byte比較、8/8 file-hash restore readbackまで
+  `LOCAL/INFRA_PASS_SYNTHETIC`を確認しました。これはproduction dataset、key custody、retention、
+  deletion、Promotionの採用証拠ではありません。Production writeはexact target、ACL/snapshot、
+  key rotation/recovery、retention、rollbackを束縛した別Work Orderまで行いません。
+  Standing GitHub delegationとGoal Completion
   Loopは、独立review/testsとagent-executable revert pathが揃った場合に限り、agentsが
   branch/commit/open PR/mergeをautonomously実行できる設計です。reversible merge/revert、monitor、
   budget、cadence、kill、provenance、bounded authorityを必須にします。詳細な契約はcanonical docを参照してください。

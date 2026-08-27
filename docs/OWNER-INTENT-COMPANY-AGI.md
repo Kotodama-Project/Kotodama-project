@@ -208,13 +208,20 @@ redaction, and routing rules.
 
 The Archive Target interface remains provider-neutral. The owner-selected
 private v1 backend is an ordinary encrypted file package on a dedicated ZFS
-archive dataset with snapshot/restore. The exact suitable dataset and mount must
-be identified and read back before use; the current inspection found no safe
-dedicated existing target, so this direction creates nothing and writes
-nothing. Local package/restore tests proceed first. The final retention period
-and deletion policy remain OPEN; no automatic deletion is implied. Future
-Drive/S3/NAS replication or migration preserves the package manifest and
-digests rather than changing canonical raw evidence.
+archive dataset with snapshot/restore. A bounded infrastructure experiment has
+created a dedicated synthetic ZFS test dataset and transferred one encrypted
+synthetic package through remount, authenticated restore, and plaintext byte
+comparison; eight encrypted files matched 8/8 between the sealed source and
+fresh remote readback. This `LOCAL/INFRA_PASS_SYNTHETIC` result does not select
+or bind a production archive dataset, production key custody, retention,
+deletion authority, external replication, Promotion, or Current Truth.
+The final retention period and deletion policy remain OPEN; no automatic
+deletion is implied.
+Production use still requires an exact dataset/mount, ACL and snapshot policy,
+key owner, wrapping/rotation/recovery design, retention/deletion policy,
+rollback, and candidate-bound Work Order. No human audio, transcript, or
+identifier was admitted. Future Drive/S3/NAS replication or migration preserves
+the package manifest and digests rather than changing canonical raw evidence.
 
 ## Standing GitHub delegation
 
@@ -291,8 +298,8 @@ validation; false-neighbor and stale-index paths fail closed.
   attestation topology, causal-ledger storage/query and projection invalidation
   implementation, RAG, knowledge graph,
   encoder, and invalidation implementation remain under research.
-- Exact private ZFS dataset binding, external cold-archive replication, and the
-  retention/deletion period remain open. Query-plane, raw-source, and
+- Production private ZFS dataset binding, external cold-archive replication,
+  and the retention/deletion period remain open. Query-plane, raw-source, and
   operational-system roles must not be conflated with the Conversation Evidence Package.
 - Exact deployment, model/subscription capacity, specialist-sharing UX, and
   provider/runtime integration remain unresolved and separately governed.

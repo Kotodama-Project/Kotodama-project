@@ -330,6 +330,8 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             self.assertNotRegex(text, re.compile(r"(?i)ask(?:s)?\s+one\s+question\s+only"))
 
     def test_execution_model_archive_delegation_and_improvement_boundaries(self) -> None:
+        canonical_words = " ".join(self.canonical.split())
+        projection_words = " ".join(self.projection.split())
         for marker in (
             "## Bounded execution and agent authority",
             "auto-execute reversible work",
@@ -363,8 +365,6 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             "metered API architecture remains\nexcluded",
             "## Conversation archive boundary",
             "Archive Target interface remains provider-neutral",
-            "package manifest and\ndigests",
-            "retention period\nand deletion policy remain OPEN",
             "ordinary encrypted file package on a dedicated ZFS",
             "## Standing GitHub delegation",
             "agent-executable revert path",
@@ -422,7 +422,14 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
                     self.assertNotIn(marker, text)
 
         self.assertIn("owner-selected\nprivate v1 backend is an ordinary encrypted file package on a dedicated ZFS", self.canonical)
-        self.assertIn("current inspection found no safe\ndedicated existing target", self.canonical)
+        self.assertIn("dedicated synthetic ZFS test dataset", canonical_words)
+        self.assertIn("eight encrypted files matched 8/8", canonical_words)
+        self.assertIn("does not select or bind a production archive dataset", canonical_words)
+        self.assertIn("package manifest and digests", canonical_words)
+        self.assertIn("retention period and deletion policy remain OPEN", canonical_words)
+        self.assertIn("synthetic ZFS test dataset", projection_words)
+        self.assertIn("8/8 file-hash restore readback", projection_words)
+        self.assertNotIn("current inspection found no safe\ndedicated existing target", self.canonical)
         for backend in ("Blob Store", "AWS", "Drive", "MinIO", "NAS"):
             adopted_pattern = re.compile(
                 rf"(?i)(?:adopt(?:ed|ion)?|prefer(?:red|ence)?|select(?:ed|ion)?|chosen).{{0,60}}{re.escape(backend)}"
