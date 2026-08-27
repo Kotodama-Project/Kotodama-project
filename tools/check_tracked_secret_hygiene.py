@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import codecs
 from collections import deque
 import json
@@ -2256,63 +2257,269 @@ def javascript_constant_aliases(path: Path, text: str) -> dict[str, str]:
     return javascript_scope_aliases(scopes, bindings, len(sanitized))
 
 
-def non_javascript_alias_bindings(
+def non_javascript_scope_at(
+    scopes: list[tuple[int, int, int]], position: int
+) -> int:
+    candidates = [
+        (scope[1] - scope[0], index)
+        for index, scope in enumerate(scopes)
+        if scope[0] <= position <= scope[1]
+    ]
+    return min(candidates)[1] if candidates else 0
+
+
+def non_javascript_scope_aliases(
+    scopes: list[tuple[int, int, int]],
+    bindings: list[tuple[str, str | None, int, int]],
+    position: int,
+) -> dict[str, str]:
+    scope = non_javascript_scope_at(scopes, position)
+    aliases: dict[str, str] = {}
+    blocked: set[str] = set()
+    while scope >= 0:
+        names = {
+            binding[0]
+            for binding in bindings
+            if binding[3] == scope and binding[2] <= position
+        }
+        for name in names:
+            candidates = [
+                binding for binding in bindings
+                if binding[0] == name
+                and binding[3] == scope
+                and binding[2] <= position
+            ]
+            binding = max(candidates, key=lambda candidate: candidate[2])
+            if binding[1] is None:
+                blocked.add(name)
+                aliases.pop(name, None)
+            elif name not in blocked and name not in aliases:
+                aliases[name] = binding[1]
+        scope = scopes[scope][2]
+    return aliases
+
+
+def python_source_offset(line_offsets: list[int], node: ast.AST) -> int:
+    line = getattr(node, "lineno", 1)
+    column = getattr(node, "col_offset", 0)
+    return line_offsets[line - 1] + column
+
+
+def resolve_python_expression(
+    node: ast.AST,
+    scopes: list[tuple[int, int, int]],
+    bindings: list[tuple[str, str | None, int, int]],
+    position: int,
+) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value if len(node.value) <= 512 else None
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = resolve_python_expression(node.left, scopes, bindings, position)
+        right = resolve_python_expression(node.right, scopes, bindings, position)
+        return left + right if left is not None and right is not None and len(left + right) <= 512 else None
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                parts.append(value.value)
+            elif isinstance(value, ast.FormattedValue):
+                resolved = resolve_python_expression(value.value, scopes, bindings, position)
+                if resolved is None:
+                    return None
+                parts.append(resolved)
+            else:
+                return None
+        result = "".join(parts)
+        return result if len(result) <= 512 else None
+    if isinstance(node, ast.Name):
+        return non_javascript_scope_aliases(scopes, bindings, position).get(node.id)
+    return None
+
+
+def python_alias_bindings(
     path: Path, text: str
-) -> list[tuple[str, str | None, int]]:
+) -> tuple[list[tuple[int, int, int]], list[tuple[str, str | None, int, int]]]:
+    line_offsets: list[int] = []
+    offset = 0
+    for raw_line in text.splitlines(keepends=True):
+        line_offsets.append(offset)
+        offset += len(raw_line)
+    if not line_offsets:
+        line_offsets = [0]
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError, TypeError):
+        return [(0, len(text), -1)], []
+    scopes: list[list[int]] = [[0, len(text), -1]]
+    bindings: list[tuple[str, str | None, int, int]] = []
+
+    class Visitor(ast.NodeVisitor):
+        scope = 0
+
+        def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+            self._visit_function(node)
+
+        def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+            self._visit_function(node)
+
+        def _visit_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+            start = python_source_offset(line_offsets, node)
+            end = python_source_offset(line_offsets, node) + 1
+            if getattr(node, "end_lineno", None) is not None:
+                end = line_offsets[node.end_lineno - 1] + node.end_col_offset
+            parent = self.scope
+            scopes.append([start, end, parent])
+            self.scope = len(scopes) - 1
+            for argument in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs):
+                bindings.append((argument.arg, None, python_source_offset(line_offsets, argument), self.scope))
+            if node.args.vararg is not None:
+                bindings.append((node.args.vararg.arg, None, python_source_offset(line_offsets, node.args.vararg), self.scope))
+            if node.args.kwarg is not None:
+                bindings.append((node.args.kwarg.arg, None, python_source_offset(line_offsets, node.args.kwarg), self.scope))
+            for child in node.body:
+                self.visit(child)
+            self.scope = parent
+
+        def visit_ClassDef(self, node: ast.ClassDef) -> None:
+            start = python_source_offset(line_offsets, node)
+            end = line_offsets[node.end_lineno - 1] + node.end_col_offset
+            parent = self.scope
+            scopes.append([start, end, parent])
+            self.scope = len(scopes) - 1
+            for child in node.body:
+                self.visit(child)
+            self.scope = parent
+
+        def visit_Assign(self, node: ast.Assign) -> None:
+            value = resolve_python_expression(
+                node.value, [tuple(scope) for scope in scopes], bindings,
+                python_source_offset(line_offsets, node.value),
+            )
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    bindings.append((target.id, value, python_source_offset(line_offsets, target), self.scope))
+            self.visit(node.value)
+
+        def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+            value = resolve_python_expression(
+                node.value, [tuple(scope) for scope in scopes], bindings,
+                python_source_offset(line_offsets, node.value) if node.value else python_source_offset(line_offsets, node),
+            ) if node.value is not None else None
+            if isinstance(node.target, ast.Name):
+                bindings.append((node.target.id, value, python_source_offset(line_offsets, node.target), self.scope))
+            if node.value is not None:
+                self.visit(node.value)
+
+        def visit_AugAssign(self, node: ast.AugAssign) -> None:
+            if isinstance(node.target, ast.Name):
+                bindings.append((node.target.id, None, python_source_offset(line_offsets, node.target), self.scope))
+            self.visit(node.value)
+
+        def visit_Import(self, node: ast.Import) -> None:
+            for alias in node.names:
+                bindings.append((alias.asname or alias.name.split(".")[0], None, python_source_offset(line_offsets, node), self.scope))
+
+        def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+            for alias in node.names:
+                bindings.append((alias.asname or alias.name, None, python_source_offset(line_offsets, node), self.scope))
+
+    Visitor().visit(tree)
+    return [tuple(scope) for scope in scopes], bindings
+
+
+def script_alias_bindings(
+    path: Path, text: str
+) -> tuple[list[tuple[int, int, int]], list[tuple[str, str | None, int, int]]]:
     suffix = path.suffix.lower()
-    if suffix not in NON_JAVASCRIPT_ALIAS_SUFFIXES:
-        return []
+    if suffix == ".py":
+        return python_alias_bindings(path, text)
     if suffix == ".ps1":
         declarations = re.compile(
             r"^[ \t]*\$(?!env:)(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
-            r"[ \t]*=[ \t]*(?P<value>.*?)\s*$",
-            re.MULTILINE,
+            r"[ \t]*=[ \t]*(?P<value>.*?)\s*$"
         )
     else:
         declarations = re.compile(
             r"^[ \t]*(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
-            r"(?:[ \t]*:[^=\r\n]+)?[ \t]*=[ \t]*(?P<value>.*?)\s*$",
-            re.MULTILINE,
+            r"(?:[ \t]*:[^=\r\n]+)?[ \t]*=[ \t]*(?P<value>.*?)\s*$"
         )
-    bindings: list[tuple[str, str | None, int]] = []
+    scopes: list[list[int]] = [[0, len(text), -1]]
+    stack = [0]
+    bindings: list[tuple[str, str | None, int, int]] = []
     offset = 0
     quoted: str | None = None
+    block_comment = False
     for raw_line in text.splitlines(keepends=True):
         line = raw_line.rstrip("\r\n")
+        stripped = line.lstrip()
+        if suffix == ".rb" and block_comment:
+            if stripped.startswith("=end"):
+                block_comment = False
+            offset += len(raw_line)
+            continue
+        if suffix == ".ps1" and block_comment:
+            if "#>" in line:
+                block_comment = False
+            offset += len(raw_line)
+            continue
         if quoted is not None:
             if quoted in line:
                 quoted = None
             offset += len(raw_line)
             continue
-        if suffix == ".ps1" and line.lstrip().startswith(("@'", '@"')):
-            quoted = "'@" if line.lstrip().startswith("@'") else '"@'
+        if suffix == ".rb" and stripped.startswith("=begin"):
+            block_comment = True
             offset += len(raw_line)
             continue
-        if suffix in {".py", ".rb"} and line.lstrip().startswith(("'''", '"""')):
-            quoted = line.lstrip()[:3]
-            if line.lstrip()[3:].find(quoted) >= 0:
-                quoted = None
-            offset += len(raw_line)
-            continue
+        if suffix == ".ps1" and "<#" in line:
+            block_comment = "#>" not in line[line.find("<#") + 2:]
+            if block_comment:
+                offset += len(raw_line)
+                continue
+        if suffix == ".ps1" and "@'" in line:
+            marker = line.find("@'")
+            if "'@" not in line[marker + 2:]:
+                quoted = "'@"
+                offset += len(raw_line)
+                continue
+        if suffix == ".ps1" and '@"' in line:
+            marker = line.find('@"')
+            if '"@' not in line[marker + 2:]:
+                quoted = '"@'
+                offset += len(raw_line)
+                continue
+        if suffix == ".rb" and re.match(r"^[ \t]*(?:def\b|\{)", line):
+            scopes.append([offset, len(text), stack[-1]])
+            stack.append(len(scopes) - 1)
+        if suffix == ".ps1":
+            if "{" in line:
+                scopes.append([offset, len(text), stack[-1]])
+                stack.append(len(scopes) - 1)
+            if stripped.startswith("}") and len(stack) > 1:
+                scopes[stack.pop()][1] = offset
         match = declarations.match(line)
         if match is not None:
-            name = match.group("name")
-            prior: dict[str, str | None] = {}
-            for binding_name, binding_value, binding_start in bindings:
-                if binding_start <= offset + match.start():
-                    prior[binding_name] = binding_value
+            position = offset + match.start()
             value = resolve_non_javascript_literal(
                 match.group("value"),
-                {
-                    binding_name: binding_value
-                    for binding_name, binding_value in prior.items()
-                    if binding_value is not None
-                },
+                non_javascript_scope_aliases(
+                    [tuple(scope) for scope in scopes], bindings, position
+                ),
                 suffix,
             )
-            bindings.append((name, value, offset + match.start()))
+            bindings.append((match.group("name"), value, position, stack[-1]))
+        if suffix == ".rb" and stripped == "end" and len(stack) > 1:
+            scopes[stack.pop()][1] = offset + len(line)
         offset += len(raw_line)
-    return bindings
+    return [tuple(scope) for scope in scopes], bindings
+
+
+def non_javascript_alias_bindings(
+    path: Path, text: str
+) -> tuple[list[tuple[int, int, int]], list[tuple[str, str | None, int, int]]]:
+    if path.suffix.lower() not in NON_JAVASCRIPT_ALIAS_SUFFIXES:
+        return [], []
+    return script_alias_bindings(path, text)
 
 
 def resolve_non_javascript_literal(
@@ -2360,7 +2567,10 @@ def resolve_non_javascript_literal(
 
 def non_javascript_alias_value(
     path: Path,
-    bindings: list[tuple[str, str | None, int]],
+    binding_state: tuple[
+        list[tuple[int, int, int]],
+        list[tuple[str, str | None, int, int]],
+    ],
     raw_value: str,
     position: int,
 ) -> str | None:
@@ -2369,14 +2579,12 @@ def non_javascript_alias_value(
     name_match = re.fullmatch(
         r"\$?([A-Za-z_][A-Za-z0-9_]*)", raw_value.strip().rstrip(";").strip()
     )
-    aliases: dict[str, str | None] = {}
-    for name, value, start in bindings:
-        if start <= position:
-            aliases[name] = value
+    scopes, bindings = binding_state
+    aliases = non_javascript_scope_aliases(scopes, bindings, position)
     if name_match is None:
         return resolve_non_javascript_literal(
             raw_value,
-            {name: value for name, value in aliases.items() if value is not None},
+            aliases,
             path.suffix.lower(),
         )
     return aliases.get(name_match.group(1))
@@ -2727,7 +2935,7 @@ def scan_text(
                         + match.start("name"),
                     ),
                 )
-            elif non_javascript_bindings:
+            elif non_javascript_bindings[1]:
                 resolved_value = non_javascript_alias_value(
                     path,
                     non_javascript_bindings,
@@ -2785,7 +2993,7 @@ def scan_text(
                     line_starts[number - 1] if number <= len(line_starts) else 0,
                 ),
             )
-        elif non_javascript_bindings:
+        elif non_javascript_bindings[1]:
             resolved_value = non_javascript_alias_value(
                 path,
                 non_javascript_bindings,

@@ -1607,6 +1607,77 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(filename=filename, prefix=text[:16]):
                 self.assertEqual([], SCANNER.scan_text(Path(filename), text))
 
+    def test_non_javascript_alias_scope_and_multiline_literals_are_isolated(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        outer_python = (
+            'value = "' + value + '"\n'
+            "def inner():\n"
+            '    value = os.getenv("OTHER")\n'
+            'os.environ["' + name + '"] = value\n'
+        )
+        outer_ruby = (
+            'value = "' + value + '"\n'
+            "def inner\n"
+            '  value = ENV["OTHER"]\n'
+            "end\n"
+            'ENV["' + name + '"] = value\n'
+        )
+        for text, filename, line in (
+            (outer_python, "config.py", 4),
+            (outer_ruby, "config.rb", 5),
+        ):
+            with self.subTest(filename=filename):
+                self.assertEqual(
+                    [(filename, line, f"live-looking value assigned to {name}")],
+                    SCANNER.scan_text(Path(filename), text),
+                )
+
+        fake_python = (
+            'text = """\n'
+            'value = "' + value + '"\n'
+            '"""\n'
+            'os.environ["' + name + '"] = value\n'
+        )
+        fake_powershell = (
+            "@'\n"
+            '$value = "' + value + '"\n'
+            "'@\n"
+            '$env:' + name + ' = $value\n'
+        )
+        fake_powershell_block = (
+            "<#\n"
+            '$value = "' + value + '"\n'
+            "#>\n"
+            '$env:' + name + ' = $value\n'
+        )
+        fake_ruby = (
+            "=begin\n"
+            'value = "' + value + '"\n'
+            "=end\n"
+            'ENV["' + name + '"] = value\n'
+        )
+        for text, filename in (
+            (fake_python, "config.py"),
+            (fake_powershell, "config.ps1"),
+            (fake_powershell_block, "config.ps1"),
+            (fake_ruby, "config.rb"),
+        ):
+            with self.subTest(fake=filename, prefix=text[:12]):
+                self.assertEqual([], SCANNER.scan_text(Path(filename), text))
+
+        powershell_outer = (
+            '$value = "' + value + '"\n'
+            "function inner {\n"
+            "  $value = Get-Secret\n"
+            "}\n"
+            '$env:' + name + ' = $value\n'
+        )
+        self.assertEqual(
+            [("config.ps1", 5, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.ps1"), powershell_outer),
+        )
+
     def test_postgres_dollar_quote_does_not_hide_later_assignment(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
