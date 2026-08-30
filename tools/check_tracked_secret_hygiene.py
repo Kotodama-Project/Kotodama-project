@@ -2770,6 +2770,20 @@ def python_alias_bindings(
         walrus_scope = 0
         ephemeral: dict[str, PythonStateValue] | None = None
 
+        def _resolve_preflight(self, node: ast.AST) -> PythonStateValue:
+            # Resolution predicts control flow. Traversal owns the canonical
+            # state changes, so a prediction must not pre-apply walrus effects.
+            ephemeral = (
+                dict(self.ephemeral) if self.ephemeral is not None else {}
+            )
+            return resolve_python_value(
+                node,
+                [tuple(scope) for scope in scopes],
+                bindings,
+                python_source_offset(text, line_offsets, node),
+                ephemeral,
+            )
+
         def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
             self._visit_function(node)
 
@@ -3053,13 +3067,7 @@ def python_alias_bindings(
             self.ephemeral = ephemeral
             try:
                 for operand in node.values:
-                    resolved = resolve_python_value(
-                        operand,
-                        [tuple(scope) for scope in scopes],
-                        bindings,
-                        python_source_offset(text, line_offsets, operand),
-                        ephemeral,
-                    )
+                    resolved = self._resolve_preflight(operand)
                     self.visit(operand)
                     if resolved is UNRESOLVED:
                         return
@@ -3078,13 +3086,7 @@ def python_alias_bindings(
             ephemeral = self.ephemeral if self.ephemeral is not None else {}
             self.ephemeral = ephemeral
             try:
-                test = resolve_python_value(
-                    node.test,
-                    [tuple(scope) for scope in scopes],
-                    bindings,
-                    python_source_offset(text, line_offsets, node.test),
-                    ephemeral,
-                )
+                test = self._resolve_preflight(node.test)
                 self.visit(node.test)
                 if test is UNRESOLVED:
                     return
@@ -3100,22 +3102,10 @@ def python_alias_bindings(
             ephemeral = self.ephemeral if self.ephemeral is not None else {}
             self.ephemeral = ephemeral
             try:
-                left = resolve_python_value(
-                    node.left,
-                    [tuple(scope) for scope in scopes],
-                    bindings,
-                    python_source_offset(text, line_offsets, node.left),
-                    ephemeral,
-                )
+                left = self._resolve_preflight(node.left)
                 self.visit(node.left)
                 for operator, comparator in zip(node.ops, node.comparators):
-                    right = resolve_python_value(
-                        comparator,
-                        [tuple(scope) for scope in scopes],
-                        bindings,
-                        python_source_offset(text, line_offsets, comparator),
-                        ephemeral,
-                    )
+                    right = self._resolve_preflight(comparator)
                     self.visit(comparator)
                     result = python_compare_values(left, right, operator)
                     if result is not True:
@@ -3141,11 +3131,7 @@ def python_alias_bindings(
             previous_ephemeral = self.ephemeral
             if self.ephemeral is None:
                 self.ephemeral = {}
-            value = resolve_python_value(
-                node.value, [tuple(scope) for scope in scopes], bindings,
-                python_source_offset(text, line_offsets, node.value),
-                self.ephemeral,
-            )
+            value = self._resolve_preflight(node.value)
             self.visit(node.value)
             self.ephemeral = previous_ephemeral
             activation = python_source_end_offset(text, line_offsets, node.value)
@@ -3157,11 +3143,11 @@ def python_alias_bindings(
             previous_ephemeral = self.ephemeral
             if self.ephemeral is None:
                 self.ephemeral = {}
-            value = resolve_python_value(
-                node.value, [tuple(scope) for scope in scopes], bindings,
-                python_source_offset(text, line_offsets, node.value),
-                self.ephemeral,
-            ) if node.value is not None else UNRESOLVED
+            value = (
+                self._resolve_preflight(node.value)
+                if node.value is not None
+                else UNRESOLVED
+            )
             if node.value is not None:
                 self.visit(node.value)
             self.ephemeral = previous_ephemeral
@@ -3191,13 +3177,7 @@ def python_alias_bindings(
             previous_ephemeral = self.ephemeral
             if self.ephemeral is None:
                 self.ephemeral = {}
-            value = resolve_python_value(
-                node.value,
-                [tuple(scope) for scope in scopes],
-                bindings,
-                python_source_offset(text, line_offsets, node.value),
-                self.ephemeral,
-            )
+            value = self._resolve_preflight(node.value)
             self.visit(node.value)
             if isinstance(node.target, ast.Name):
                 self.ephemeral[node.target.id] = value

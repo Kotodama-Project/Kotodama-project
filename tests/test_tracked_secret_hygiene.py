@@ -2183,6 +2183,74 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertEqual([], SCANNER.scan_text(Path("config.py"), unknown_object))
 
+    def test_python_resolution_preflight_preserves_visitor_state(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        expression = '(x := x or (name := "OPENAI_API_KEY")) and True'
+
+        for initial in ('""', "None", "False", "0"):
+            with self.subTest(initial=initial):
+                text = (
+                    f"x = {initial}\n"
+                    f'secret = "{value}"\n'
+                    f"result = {expression}\n"
+                    "os.putenv(name, secret)\n"
+                )
+                findings = SCANNER.scan_text(Path("config.py"), text)
+                self.assertEqual(
+                    [("config.py", 4, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        wrappers = (
+            f"result = {expression}",
+            f"result: bool = {expression}",
+            f"(result := {expression})",
+            f'answer = "left" if {expression} else "right"',
+            f'result = ({expression}) == "OPENAI_API_KEY"',
+            f"consume({expression})",
+            expression,
+        )
+        for wrapped in wrappers:
+            with self.subTest(wrapper=wrapped.split("=", 1)[0].strip()):
+                text = (
+                    'x = ""\n'
+                    f'secret = "{value}"\n'
+                    f"{wrapped}\n"
+                    "os.putenv(name, secret)\n"
+                )
+                findings = SCANNER.scan_text(Path("config.py"), text)
+                self.assertEqual(
+                    [("config.py", 4, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        controls = (
+            (
+                'x = "already"\n'
+                f'secret = "{value}"\n'
+                f"result = {expression}\n"
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                "x = get_value()\n"
+                f'secret = "{value}"\n'
+                f"result = {expression}\n"
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                'x = ""\n'
+                f'secret = "{value}"\n'
+                'result = (x := x or (name := "NOT_A_SECRET")) and True\n'
+                "os.putenv(name, secret)\n"
+            ),
+        )
+        for text in controls:
+            with self.subTest(control=text.splitlines()[0]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
+
     def test_environment_setter_values_decode_native_local_string_initializers(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
