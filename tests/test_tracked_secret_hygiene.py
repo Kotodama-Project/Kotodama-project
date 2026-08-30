@@ -2361,6 +2361,46 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(mutated_dict=text.splitlines()[0]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
 
+        container_lifecycle_controls = (
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                "del mapping\n"
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                'mapping.update({"key": "example"})\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'values = ["{name}"]\n'
+                "values.clear()\n"
+                "name = values[0]\n"
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+        )
+        for text in container_lifecycle_controls:
+            with self.subTest(container_lifecycle=text.splitlines()[1]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
+
+        non_container_method = (
+            f'name = "{name}"\n'
+            "name.lower()\n"
+            f'secret = "{value}"\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), non_container_method)
+        self.assertEqual(
+            [("config.py", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
         pairwise_dict_order = (
             f'name = "{name}"\n'
             f'y = "{value}"\n'

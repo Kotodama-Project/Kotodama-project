@@ -3164,6 +3164,12 @@ def python_alias_bindings(
             previous_ephemeral = self.ephemeral
             if self.ephemeral is None:
                 self.ephemeral = {}
+            container_value = (
+                self._resolve_preflight(node.func.value)
+                if isinstance(node.func, ast.Attribute)
+                else UNRESOLVED
+            )
+            container_names = python_mutated_target_names(node.func)
             try:
                 self.visit(node.func)
                 for argument in node.args:
@@ -3172,6 +3178,10 @@ def python_alias_bindings(
                     self.visit(keyword.value)
             finally:
                 self.ephemeral = previous_ephemeral
+            if isinstance(container_value, (dict, list)):
+                activation = python_source_end_offset(text, line_offsets, node)
+                for name in container_names:
+                    bindings.append((name, UNRESOLVED, activation, self.scope))
 
         def visit_Assign(self, node: ast.Assign) -> None:
             previous_ephemeral = self.ephemeral
@@ -3248,7 +3258,11 @@ def python_alias_bindings(
             activation = python_source_end_offset(text, line_offsets, node)
             for target in node.targets:
                 self.visit(target)
-                for name in python_mutated_target_names(target):
+                names = [
+                    *python_target_names(target),
+                    *python_mutated_target_names(target),
+                ]
+                for name in dict.fromkeys(names):
                     bindings.append((name, UNRESOLVED, activation, self.scope))
 
         def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
