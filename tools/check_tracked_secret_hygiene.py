@@ -173,6 +173,7 @@ JAVASCRIPT_VARIABLE_DECLARATION = re.compile(
 )
 MAX_JAVASCRIPT_CONSTANT_DEPTH = 8
 MAX_JAVASCRIPT_CONSTANT_PARTS = 32
+MAX_PYTHON_CONSTANT_PARTS = 32
 POWERSHELL_VARIABLE_REFERENCE = re.compile(
     r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|"
     r"(?P<plain>[A-Za-z_][A-Za-z0-9_]*))"
@@ -2366,7 +2367,9 @@ class _Unresolved:
 
 
 UNRESOLVED = _Unresolved()
-PythonResolvedValue = type(None) | str | tuple | list | bool | int | float | complex
+PythonResolvedValue = (
+    type(None) | str | tuple | list | dict | bool | int | float | complex
+)
 PythonStateValue = PythonResolvedValue | _Unresolved
 
 
@@ -2411,7 +2414,7 @@ def python_value_truthiness(value: PythonStateValue) -> bool | _Unresolved:
         return UNRESOLVED
     if value is None:
         return False
-    if isinstance(value, (str, tuple, list, bool, int, float, complex)):
+    if isinstance(value, (str, tuple, list, dict, bool, int, float, complex)):
         return bool(value)
     return UNRESOLVED
 
@@ -2511,7 +2514,7 @@ def resolve_python_value(
         return result
     if isinstance(node, (ast.Tuple, ast.List)):
         values: list[PythonResolvedValue] = []
-        unknown = False
+        unknown = len(node.elts) > MAX_PYTHON_CONSTANT_PARTS
         for element in node.elts:
             if isinstance(element, ast.Starred):
                 resolve_python_value(
@@ -2589,6 +2592,8 @@ def resolve_python_value(
                 return base[index]
             except IndexError:
                 return UNRESOLVED
+        if isinstance(base, dict) and isinstance(index, str):
+            return base.get(index, UNRESOLVED)
         return UNRESOLVED
     if isinstance(node, ast.Call):
         resolve_python_value(node.func, scopes, bindings, position, ephemeral)
@@ -2602,11 +2607,26 @@ def resolve_python_value(
             )
         return UNRESOLVED
     if isinstance(node, ast.Dict):
+        resolved: dict[str, PythonStateValue] = {}
+        unknown = len(node.keys) > MAX_PYTHON_CONSTANT_PARTS
         for key, value in zip(node.keys, node.values):
-            if key is not None:
+            resolved_key = (
                 resolve_python_value(key, scopes, bindings, position, ephemeral)
-            resolve_python_value(value, scopes, bindings, position, ephemeral)
-        return UNRESOLVED
+                if key is not None
+                else UNRESOLVED
+            )
+            resolved_value = resolve_python_value(
+                value, scopes, bindings, position, ephemeral
+            )
+            if (
+                not isinstance(resolved_key, str)
+                or resolved_value is UNRESOLVED
+                or resolved_key in resolved
+            ):
+                unknown = True
+                continue
+            resolved[resolved_key] = resolved_value
+        return UNRESOLVED if unknown else resolved
     if isinstance(node, ast.Attribute):
         resolve_python_value(node.value, scopes, bindings, position, ephemeral)
         return UNRESOLVED
@@ -2669,7 +2689,7 @@ def resolve_python_literal_iterable(
     if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
         values: list[PythonResolvedValue] = []
         unknown = False
-        if len(node.elts) > MAX_JAVASCRIPT_CONSTANT_PARTS:
+        if len(node.elts) > MAX_PYTHON_CONSTANT_PARTS:
             return UNRESOLVED
         for element in node.elts:
             if isinstance(element, ast.Starred):
@@ -2689,7 +2709,7 @@ def resolve_python_literal_iterable(
     if isinstance(node, ast.Dict):
         values: list[PythonResolvedValue] = []
         unknown = False
-        if len(node.keys) > MAX_JAVASCRIPT_CONSTANT_PARTS:
+        if len(node.keys) > MAX_PYTHON_CONSTANT_PARTS:
             return UNRESOLVED
         for key in node.keys:
             if key is None:
@@ -2702,8 +2722,8 @@ def resolve_python_literal_iterable(
                 values.append(value)
         return UNRESOLVED if unknown else values
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return list(node.value[:MAX_JAVASCRIPT_CONSTANT_PARTS]) \
-            if len(node.value) <= MAX_JAVASCRIPT_CONSTANT_PARTS else UNRESOLVED
+        return list(node.value[:MAX_PYTHON_CONSTANT_PARTS]) \
+            if len(node.value) <= MAX_PYTHON_CONSTANT_PARTS else UNRESOLVED
     return UNRESOLVED
 
 
@@ -2729,7 +2749,7 @@ def python_target_bindings(
                 # retains the final element's value.
                 result[name] = resolved
         return result
-    return {}
+    return None
 
 
 def python_target_names(node: ast.AST) -> list[str]:
@@ -2741,6 +2761,20 @@ def python_target_names(node: ast.AST) -> list[str]:
         names: list[str] = []
         for element in node.elts:
             names.extend(python_target_names(element))
+        return names
+    return []
+
+
+def python_mutated_target_names(node: ast.AST) -> list[str]:
+    if isinstance(node, (ast.Attribute, ast.Subscript)):
+        base = node.value
+        while isinstance(base, (ast.Attribute, ast.Subscript)):
+            base = base.value
+        return [base.id] if isinstance(base, ast.Name) else []
+    if isinstance(node, (ast.List, ast.Tuple)):
+        names: list[str] = []
+        for element in node.elts:
+            names.extend(python_mutated_target_names(element))
         return names
     return []
 
@@ -3061,6 +3095,18 @@ def python_alias_bindings(
                 node, (node.elt,), node.generators
             )
 
+        def visit_Dict(self, node: ast.Dict) -> None:
+            previous_ephemeral = self.ephemeral
+            if self.ephemeral is None:
+                self.ephemeral = {}
+            try:
+                for key, value in zip(node.keys, node.values):
+                    if key is not None:
+                        self.visit(key)
+                    self.visit(value)
+            finally:
+                self.ephemeral = previous_ephemeral
+
         def visit_BoolOp(self, node: ast.BoolOp) -> None:
             previous_ephemeral = self.ephemeral
             ephemeral = self.ephemeral if self.ephemeral is not None else {}
@@ -3136,8 +3182,21 @@ def python_alias_bindings(
             self.ephemeral = previous_ephemeral
             activation = python_source_end_offset(text, line_offsets, node.value)
             for target in node.targets:
-                if isinstance(target, ast.Name):
-                    bindings.append((target.id, value, activation, self.scope))
+                self.visit(target)
+                target_names = python_target_names(target)
+                resolved_targets = (
+                    python_target_bindings(target, value)
+                    if value is not UNRESOLVED
+                    else None
+                )
+                if resolved_targets is None:
+                    resolved_targets = {
+                        name: UNRESOLVED for name in target_names
+                    }
+                for name, resolved in resolved_targets.items():
+                    bindings.append((name, resolved, activation, self.scope))
+                for name in python_mutated_target_names(target):
+                    bindings.append((name, UNRESOLVED, activation, self.scope))
 
         def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
             previous_ephemeral = self.ephemeral
@@ -3158,6 +3217,10 @@ def python_alias_bindings(
                     else python_source_end_offset(text, line_offsets, node)
                 )
                 bindings.append((node.target.id, value, activation, self.scope))
+            else:
+                activation = python_source_end_offset(text, line_offsets, node)
+                for name in python_mutated_target_names(node.target):
+                    bindings.append((name, UNRESOLVED, activation, self.scope))
 
         def visit_AugAssign(self, node: ast.AugAssign) -> None:
             previous_ephemeral = self.ephemeral
@@ -3172,6 +3235,21 @@ def python_alias_bindings(
                     python_source_end_offset(text, line_offsets, node.value),
                     self.scope,
                 ))
+            else:
+                for name in python_mutated_target_names(node.target):
+                    bindings.append((
+                        name,
+                        UNRESOLVED,
+                        python_source_end_offset(text, line_offsets, node),
+                        self.scope,
+                    ))
+
+        def visit_Delete(self, node: ast.Delete) -> None:
+            activation = python_source_end_offset(text, line_offsets, node)
+            for target in node.targets:
+                self.visit(target)
+                for name in python_mutated_target_names(target):
+                    bindings.append((name, UNRESOLVED, activation, self.scope))
 
         def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
             previous_ephemeral = self.ephemeral

@@ -2251,6 +2251,142 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(control=text.splitlines()[0]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
 
+    def test_python_static_destructuring_and_dict_aliases_are_bounded(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        positives = (
+            (
+                f'name, secret = ("{name}", "{value}")\n'
+                "os.putenv(name, secret)\n",
+                2,
+            ),
+            (
+                f'[name, secret] = ["{name}", "{value}"]\n'
+                "os.putenv(name, secret)\n",
+                2,
+            ),
+            (
+                f'(name, [secret]) = ("{name}", ["{value}"])\n'
+                "os.putenv(name, secret)\n",
+                2,
+            ),
+            (
+                f'name, secret, secret = ("{name}", "safe", "{value}")\n'
+                "os.putenv(name, secret)\n",
+                2,
+            ),
+            (
+                f'name = {{"key": "{name}"}}["key"]\n'
+                f'secret = {{"key": "{value}"}}["key"]\n'
+                "os.putenv(name, secret)\n",
+                3,
+            ),
+        )
+        for text, line in positives:
+            with self.subTest(positive=text.splitlines()[0]):
+                findings = SCANNER.scan_text(Path("config.py"), text)
+                self.assertEqual(
+                    [("config.py", line, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        controls = (
+            (
+                f'name = "{name}"\nsecret = "{value}"\n'
+                "name, secret = get_pair()\n"
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'name = "{name}"\nsecret = "{value}"\n'
+                'name, secret = ("safe",)\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'name, *rest, secret = ("{name}", "safe", "{value}")\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'name = {{get_key(): "{name}"}}["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'name = {{"key": get_name()}}["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'name = {{**mapping, "key": "{name}"}}["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'name = {{"key": "safe", "key": "{name}"}}["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'name = {{True: "{name}"}}[1]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'name = {{"other": "{name}"}}["missing"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+        )
+        for text in controls:
+            with self.subTest(control=text.splitlines()[0]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
+
+        mutated_dict_controls = (
+            (
+                'mapping = {"key": "safe"}\n'
+                f'mapping["key"] = "{name}"\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                'mapping["key"] = "safe"\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+        )
+        for text in mutated_dict_controls:
+            with self.subTest(mutated_dict=text.splitlines()[0]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
+
+        pairwise_dict_order = (
+            f'name = "{name}"\n'
+            f'y = "{value}"\n'
+            'result = {"first": (x := y), (y := "<PLACEHOLDER>"): "example"}\n'
+            "secret = x\n"
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), pairwise_dict_order)
+        self.assertEqual(
+            [("config.py", 5, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
+        pairwise_dict_order_control = (
+            f'name = "{name}"\n'
+            'y = "<PLACEHOLDER>"\n'
+            f'result = {{"first": (x := y), (y := "{value}"): "example"}}\n'
+            "secret = x\n"
+            "os.putenv(name, secret)\n"
+        )
+        self.assertEqual(
+            [],
+            SCANNER.scan_text(Path("config.py"), pairwise_dict_order_control),
+        )
+
     def test_environment_setter_values_decode_native_local_string_initializers(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
