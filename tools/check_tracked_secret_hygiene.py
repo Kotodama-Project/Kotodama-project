@@ -174,6 +174,12 @@ JAVASCRIPT_VARIABLE_DECLARATION = re.compile(
 MAX_JAVASCRIPT_CONSTANT_DEPTH = 8
 MAX_JAVASCRIPT_CONSTANT_PARTS = 32
 MAX_PYTHON_CONSTANT_PARTS = 32
+PYTHON_CONTAINER_MUTATING_METHOD_NAMES = frozenset({
+    "__delitem__", "__iadd__", "__imul__", "__init__", "__ior__",
+    "__setitem__",
+    "append", "clear", "extend", "insert", "pop", "popitem", "remove",
+    "reverse", "setdefault", "sort", "update",
+})
 POWERSHELL_VARIABLE_REFERENCE = re.compile(
     r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|"
     r"(?P<plain>[A-Za-z_][A-Za-z0-9_]*))"
@@ -2779,6 +2785,74 @@ def python_mutated_target_names(node: ast.AST) -> list[str]:
     return []
 
 
+def python_mutated_container_expressions(node: ast.AST) -> list[ast.AST]:
+    if isinstance(node, (ast.Attribute, ast.Subscript)):
+        expressions: list[ast.AST] = []
+        current = node.value
+        while True:
+            expressions.append(current)
+            if not isinstance(current, (ast.Attribute, ast.Subscript)):
+                break
+            current = current.value
+        return expressions
+    if isinstance(node, (ast.List, ast.Tuple)):
+        expressions: list[ast.AST] = []
+        for element in node.elts:
+            expressions.extend(python_mutated_container_expressions(element))
+        return expressions
+    return []
+
+
+def python_container_expression_root_names(node: ast.AST) -> list[str]:
+    current = node
+    while isinstance(current, (ast.Attribute, ast.Subscript)):
+        current = current.value
+    if isinstance(current, ast.Name):
+        return [current.id]
+    if isinstance(current, ast.NamedExpr) and isinstance(
+        current.target, ast.Name
+    ):
+        return [current.target.id]
+    return []
+
+
+def python_value_contains_identity(
+    value: PythonStateValue,
+    target: PythonResolvedValue,
+    origins: dict[int, tuple[PythonResolvedValue, int]],
+) -> bool:
+    target_record = origins.get(id(target))
+    target_origin = (
+        target_record[1]
+        if target_record is not None and target_record[0] is target
+        else None
+    )
+    pending: list[PythonStateValue] = [value]
+    visited: set[int] = set()
+    while pending:
+        current = pending.pop()
+        if current is target:
+            return True
+        if not isinstance(current, (tuple, list, dict)):
+            continue
+        current_record = origins.get(id(current))
+        if (
+            target_origin is not None
+            and current_record is not None
+            and current_record[0] is current
+            and current_record[1] == target_origin
+        ):
+            return True
+        marker = id(current)
+        if marker in visited:
+            continue
+        visited.add(marker)
+        pending.extend(
+            current.values() if isinstance(current, dict) else current
+        )
+    return False
+
+
 def python_alias_bindings(
     path: Path, text: str
 ) -> tuple[
@@ -2798,6 +2872,12 @@ def python_alias_bindings(
         return [(0, len(text), -1)], []
     scopes: list[list[int]] = [[0, len(text), -1]]
     bindings: list[tuple[str, PythonStateValue, int, int]] = []
+    class_outer_values: dict[
+        int, tuple[int, dict[str, PythonStateValue]]
+    ] = {}
+    container_origins: dict[
+        int, tuple[PythonResolvedValue, int]
+    ] = {}
 
     class Visitor(ast.NodeVisitor):
         scope = 0
@@ -2810,13 +2890,130 @@ def python_alias_bindings(
             ephemeral = (
                 dict(self.ephemeral) if self.ephemeral is not None else {}
             )
-            return resolve_python_value(
+            value = resolve_python_value(
                 node,
                 [tuple(scope) for scope in scopes],
                 bindings,
                 python_source_offset(text, line_offsets, node),
                 ephemeral,
             )
+            self._record_container_origins(node, value)
+            return value
+
+        def _record_container_origins(
+            self, node: ast.AST, value: PythonStateValue
+        ) -> None:
+            if value is UNRESOLVED:
+                return
+            if isinstance(node, ast.NamedExpr):
+                self._record_container_origins(node.value, value)
+            elif (
+                isinstance(node, (ast.Tuple, ast.List))
+                and isinstance(value, (tuple, list))
+                and len(node.elts) == len(value)
+            ):
+                container_origins[id(value)] = (value, id(node))
+                for element, element_value in zip(node.elts, value):
+                    self._record_container_origins(element, element_value)
+            elif isinstance(node, ast.Dict) and isinstance(value, dict):
+                container_origins[id(value)] = (value, id(node))
+                for value_node, element_value in zip(
+                    node.values, value.values()
+                ):
+                    self._record_container_origins(
+                        value_node, element_value
+                    )
+            if isinstance(value, (tuple, list, dict)):
+                record = container_origins.get(id(value))
+                if record is None or record[0] is not value:
+                    container_origins[id(value)] = (value, id(node))
+
+        def _resolved_mutation_containers(
+            self, node: ast.AST, *, include_target: bool = False
+        ) -> list[PythonResolvedValue]:
+            expressions = python_mutated_container_expressions(node)
+            if include_target:
+                expressions = [node, *expressions]
+            containers: list[PythonResolvedValue] = []
+            for expression in expressions:
+                value = self._resolve_preflight(expression)
+                if (
+                    isinstance(value, (dict, list))
+                    and not any(value is existing for existing in containers)
+                ):
+                    containers.append(value)
+            return containers
+
+        def _invalidate_container_views(
+            self,
+            containers: list[PythonResolvedValue],
+            activation: int,
+        ) -> None:
+            if not containers:
+                return
+            visible = python_scope_aliases(
+                [tuple(scope) for scope in scopes], bindings, activation
+            )
+            if self.ephemeral is not None:
+                visible.update(self.ephemeral)
+            for name, value in visible.items():
+                affected = any(
+                    python_value_contains_identity(
+                        value, container, container_origins
+                    )
+                    for container in containers
+                )
+                if not affected:
+                    continue
+                bindings.append((
+                    name, UNRESOLVED, activation, self.scope
+                ))
+                if self.ephemeral is not None and name in self.ephemeral:
+                    self.ephemeral[name] = UNRESOLVED
+                propagation_scope = self.scope
+                while propagation_scope in class_outer_values:
+                    parent_scope, outer_values = class_outer_values[
+                        propagation_scope
+                    ]
+                    outer_value = outer_values.get(name, UNRESOLVED)
+                    if not any(
+                        python_value_contains_identity(
+                            outer_value, container, container_origins
+                        )
+                        for container in containers
+                    ):
+                        break
+                    bindings.append((
+                        name, UNRESOLVED, activation, parent_scope
+                    ))
+                    propagation_scope = parent_scope
+
+        def _resolved_root_containers(
+            self, node: ast.AST, position: int
+        ) -> list[PythonResolvedValue]:
+            visible = python_scope_aliases(
+                [tuple(scope) for scope in scopes], bindings, position
+            )
+            if self.ephemeral is not None:
+                visible.update(self.ephemeral)
+            containers: list[PythonResolvedValue] = []
+            for name in python_container_expression_root_names(node):
+                value = visible.get(name, UNRESOLVED)
+                if (
+                    isinstance(value, (dict, list))
+                    and not any(value is existing for existing in containers)
+                ):
+                    containers.append(value)
+            return containers
+
+        @staticmethod
+        def _extend_unique_containers(
+            containers: list[PythonResolvedValue],
+            additions: list[PythonResolvedValue],
+        ) -> None:
+            for value in additions:
+                if not any(value is existing for existing in containers):
+                    containers.append(value)
 
         def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
             self._visit_function(node)
@@ -2896,10 +3093,14 @@ def python_alias_bindings(
             start = python_source_offset(text, line_offsets, node)
             end = python_source_end_offset(text, line_offsets, node)
             parent = self.scope
+            outer_values = python_scope_aliases(
+                [tuple(scope) for scope in scopes], bindings, start
+            )
             previous_walrus_scope = self.walrus_scope
             previous_ephemeral = self.ephemeral
             scopes.append([start, end, parent])
             self.scope = len(scopes) - 1
+            class_outer_values[self.scope] = (parent, outer_values)
             self.walrus_scope = self.scope
             self.ephemeral = None
             for child in node.body:
@@ -3164,24 +3365,68 @@ def python_alias_bindings(
             previous_ephemeral = self.ephemeral
             if self.ephemeral is None:
                 self.ephemeral = {}
-            container_value = (
+            mutating_call = (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr in PYTHON_CONTAINER_MUTATING_METHOD_NAMES
+            )
+            direct_container = (
                 self._resolve_preflight(node.func.value)
-                if isinstance(node.func, ast.Attribute)
+                if mutating_call
                 else UNRESOLVED
             )
-            container_names = python_mutated_target_names(node.func)
+            if isinstance(direct_container, (dict, list)):
+                containers = [direct_container]
+            elif mutating_call:
+                containers = self._resolved_mutation_containers(node.func)
+            else:
+                containers = []
+            unbound_target = (
+                node.args[0]
+                if (
+                    mutating_call
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id in {"dict", "list"}
+                    and node.args
+                )
+                else None
+            )
+            if unbound_target is not None:
+                target_value = self._resolve_preflight(unbound_target)
+                if isinstance(target_value, (dict, list)):
+                    self._extend_unique_containers(
+                        containers, [target_value]
+                    )
             try:
                 self.visit(node.func)
+                if mutating_call:
+                    self._extend_unique_containers(
+                        containers,
+                        self._resolved_root_containers(
+                            node.func.value,
+                            python_source_end_offset(
+                                text, line_offsets, node.func
+                            ),
+                        ),
+                    )
                 for argument in node.args:
                     self.visit(argument)
+                    if argument is unbound_target:
+                        self._extend_unique_containers(
+                            containers,
+                            self._resolved_root_containers(
+                                unbound_target,
+                                python_source_end_offset(
+                                    text, line_offsets, unbound_target
+                                ),
+                            ),
+                        )
                 for keyword in node.keywords:
                     self.visit(keyword.value)
             finally:
                 self.ephemeral = previous_ephemeral
-            if isinstance(container_value, (dict, list)):
+            if containers:
                 activation = python_source_end_offset(text, line_offsets, node)
-                for name in container_names:
-                    bindings.append((name, UNRESOLVED, activation, self.scope))
+                self._invalidate_container_views(containers, activation)
 
         def visit_Assign(self, node: ast.Assign) -> None:
             previous_ephemeral = self.ephemeral
@@ -3192,7 +3437,13 @@ def python_alias_bindings(
             self.ephemeral = previous_ephemeral
             activation = python_source_end_offset(text, line_offsets, node.value)
             for target in node.targets:
+                containers = self._resolved_mutation_containers(target)
                 self.visit(target)
+                if python_mutated_container_expressions(target):
+                    self._extend_unique_containers(
+                        containers,
+                        self._resolved_root_containers(target, activation),
+                    )
                 target_names = python_target_names(target)
                 resolved_targets = (
                     python_target_bindings(target, value)
@@ -3205,8 +3456,12 @@ def python_alias_bindings(
                     }
                 for name, resolved in resolved_targets.items():
                     bindings.append((name, resolved, activation, self.scope))
-                for name in python_mutated_target_names(target):
-                    bindings.append((name, UNRESOLVED, activation, self.scope))
+                if not containers:
+                    for name in python_mutated_target_names(target):
+                        bindings.append((
+                            name, UNRESOLVED, activation, self.scope
+                        ))
+                self._invalidate_container_views(containers, activation)
 
         def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
             previous_ephemeral = self.ephemeral
@@ -3229,13 +3484,38 @@ def python_alias_bindings(
                 bindings.append((node.target.id, value, activation, self.scope))
             else:
                 activation = python_source_end_offset(text, line_offsets, node)
-                for name in python_mutated_target_names(node.target):
-                    bindings.append((name, UNRESOLVED, activation, self.scope))
+                containers = self._resolved_mutation_containers(node.target)
+                self.visit(node.target)
+                if python_mutated_container_expressions(node.target):
+                    self._extend_unique_containers(
+                        containers,
+                        self._resolved_root_containers(node.target, activation),
+                    )
+                if not containers:
+                    for name in python_mutated_target_names(node.target):
+                        bindings.append((
+                            name, UNRESOLVED, activation, self.scope
+                        ))
+                self._invalidate_container_views(containers, activation)
 
         def visit_AugAssign(self, node: ast.AugAssign) -> None:
             previous_ephemeral = self.ephemeral
             if self.ephemeral is None:
                 self.ephemeral = {}
+            containers = self._resolved_mutation_containers(
+                node.target, include_target=True
+            )
+            self.visit(node.target)
+            if python_mutated_container_expressions(node.target):
+                self._extend_unique_containers(
+                    containers,
+                    self._resolved_root_containers(
+                        node.target,
+                        python_source_end_offset(
+                            text, line_offsets, node.target
+                        ),
+                    ),
+                )
             self.visit(node.value)
             self.ephemeral = previous_ephemeral
             if isinstance(node.target, ast.Name):
@@ -3246,24 +3526,35 @@ def python_alias_bindings(
                     self.scope,
                 ))
             else:
-                for name in python_mutated_target_names(node.target):
-                    bindings.append((
-                        name,
-                        UNRESOLVED,
-                        python_source_end_offset(text, line_offsets, node),
-                        self.scope,
-                    ))
+                if not containers:
+                    for name in python_mutated_target_names(node.target):
+                        bindings.append((
+                            name,
+                            UNRESOLVED,
+                            python_source_end_offset(text, line_offsets, node),
+                            self.scope,
+                        ))
+            self._invalidate_container_views(
+                containers,
+                python_source_end_offset(text, line_offsets, node),
+            )
 
         def visit_Delete(self, node: ast.Delete) -> None:
             activation = python_source_end_offset(text, line_offsets, node)
             for target in node.targets:
+                containers = self._resolved_mutation_containers(target)
                 self.visit(target)
-                names = [
-                    *python_target_names(target),
-                    *python_mutated_target_names(target),
-                ]
+                if python_mutated_container_expressions(target):
+                    self._extend_unique_containers(
+                        containers,
+                        self._resolved_root_containers(target, activation),
+                    )
+                names = [*python_target_names(target)]
+                if not containers:
+                    names.extend(python_mutated_target_names(target))
                 for name in dict.fromkeys(names):
                     bindings.append((name, UNRESOLVED, activation, self.scope))
+                self._invalidate_container_views(containers, activation)
 
         def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
             previous_ephemeral = self.ephemeral

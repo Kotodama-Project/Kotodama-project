@@ -2427,6 +2427,300 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             SCANNER.scan_text(Path("config.py"), pairwise_dict_order_control),
         )
 
+    def test_python_container_mutations_invalidate_all_static_views(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        controls = (
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                "alias = mapping\n"
+                'alias["key"] = "safe"\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                "alias = mapping\n"
+                "alias.clear()\n"
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'inner = {{"key": "{name}"}}\n'
+                'outer = {"inner": inner}\n'
+                'inner["key"] = "safe"\n'
+                'name = outer["inner"]["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'inner = {{"key": "{name}"}}\n'
+                "outer = (inner,)\n"
+                'inner["key"] = "safe"\n'
+                'name = outer[0]["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'values = ["{name}"]\n'
+                "alias = values\n"
+                "alias.clear()\n"
+                "name = values[0]\n"
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'values = ["{name}"]\n'
+                "alias = values\n"
+                'alias += ["safe"]\n'
+                "name = values[0]\n"
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                "alias = mapping\n"
+                'del alias["key"]\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                "alias = mapping\n"
+                'alias["key"]: str = "safe"\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                "def mutate():\n"
+                "    alias = mapping\n"
+                "    alias.clear()\n"
+                '    name = mapping["key"]\n'
+                f'    secret = "{value}"\n'
+                "    os.putenv(name, secret)\n"
+            ),
+            (
+                "result = (\n"
+                f'    (mapping := {{"key": "{name}"}}),\n'
+                "    (alias := mapping),\n"
+                '    alias.update({"key": "safe"}),\n'
+                '    (name := mapping["key"]),\n'
+                ")\n"
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'inner = {{"key": "{name}"}}\n'
+                "outer = [inner]\n"
+                "alias = outer\n"
+                "unknown = get_index()\n"
+                'outer[unknown]["key"] = "safe"\n'
+                'name = alias[0]["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'inner = {{"key": "{name}"}}\n'
+                "outer = [inner]\n"
+                "alias = outer\n"
+                "unknown = get_index()\n"
+                'outer[unknown].__init__({"key": "safe"})\n'
+                'name = alias[0]["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'inner = {{"key": "{name}"}}\n'
+                "outer = [inner]\n"
+                "alias = outer\n"
+                "unknown = get_index()\n"
+                "outer[unknown].clear()\n"
+                'name = alias[0]["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                "class Mutate:\n"
+                "    alias = mapping\n"
+                '    alias["key"] = "safe"\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                "class Outer:\n"
+                "    alias = mapping\n"
+                "    class Inner:\n"
+                "        nested = alias\n"
+                "        nested.clear()\n"
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                'dict.update(mapping, {"key": "safe"})\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'values = ["{name}"]\n'
+                'list.__setitem__(values, 0, "safe")\n'
+                "name = values[0]\n"
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'(mapping := {{"key": "{name}"}}).update('
+                '{"key": "safe"})\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'((mapping := {{"key": "{name}"}})["key"]) = "safe"\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'result = {{"x": (mapping := {{"key": "{name}"}})}}\n'
+                'mapping.update({"key": "safe"})\n'
+                'name = result["x"]["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                'dict.update(mapping, mapping := {"key": "safe"})\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+        )
+        for text in controls:
+            with self.subTest(mutation=text.splitlines()[2]):
+                self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
+
+        preserved = (
+            (
+                'mutated = {"key": "safe"}\n'
+                "alias = mutated\n"
+                f'protected = {{"key": "{name}"}}\n'
+                "alias.clear()\n"
+                'name = protected["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                "alias = mapping\n"
+                'alias = {"key": "safe"}\n'
+                "alias.clear()\n"
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                'mapping["key"].lower()\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n\n\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                "class Preserve:\n"
+                '    alias = {"key": "safe"}\n'
+                "    alias.clear()\n"
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'mapping = {{"key": "{name}"}}\n'
+                'mapping.get("key")\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n\n\n'
+                "os.putenv(name, secret)\n"
+            ),
+            (
+                f'values = ["{name}"]\n'
+                "values.count(name)\n"
+                "name = values[0]\n"
+                f'secret = "{value}"\n\n\n'
+                "os.putenv(name, secret)\n"
+            ),
+        )
+        for text in preserved:
+            with self.subTest(preserved=text.splitlines()[0]):
+                findings = SCANNER.scan_text(Path("config.py"), text)
+                self.assertEqual(
+                    [("config.py", 7, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        target_side_effects = (
+            (
+                f'key = "{name}"\n'
+                'mapping = {key: "safe"}\n'
+                'mapping[(alias := key)]: str = "safe"\n'
+                f'secret = "{value}"\n'
+                "os.putenv(alias, secret)\n"
+            ),
+            (
+                f'key = "{name}"\n'
+                'mapping = {key: "safe"}\n'
+                'mapping[(alias := key)] += "safe"\n'
+                f'secret = "{value}"\n'
+                "os.putenv(alias, secret)\n"
+            ),
+            (
+                'old = {"key": "safe"}\n'
+                f'new = "{name}"\n'
+                'old[(old := new)] = "safe"\n'
+                f'secret = "{value}"\n'
+                "os.putenv(old, secret)\n"
+            ),
+            (
+                'mapping = {"key": "safe"}\n'
+                f'dict.update(mapping, mapping := {{"key": "{name}"}})\n'
+                'name = mapping["key"]\n'
+                f'secret = "{value}"\n'
+                "os.putenv(name, secret)\n"
+            ),
+        )
+        for text in target_side_effects:
+            with self.subTest(target=text.splitlines()[2]):
+                findings = SCANNER.scan_text(Path("config.py"), text)
+                self.assertEqual(
+                    [("config.py", 5, f"live-looking value assigned to {name}")],
+                    findings,
+                )
+                self.assertNotIn(value, repr(findings))
+
+        aggregate_positive = (
+            f'result = {{"x": (mapping := {{"key": "{name}"}})}}\n'
+            'name = result["x"]["key"]\n'
+            f'secret = "{value}"\n'
+            "os.putenv(name, secret)\n"
+        )
+        findings = SCANNER.scan_text(Path("config.py"), aggregate_positive)
+        self.assertEqual(
+            [("config.py", 4, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
     def test_environment_setter_values_decode_native_local_string_initializers(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
