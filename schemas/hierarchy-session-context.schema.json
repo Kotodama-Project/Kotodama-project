@@ -17,13 +17,13 @@
     "evidence_refs"
   ],
   "properties": {
-    "$schema": {"const": "../../schemas/hierarchy-session-context.schema.json"},
+    "$schema": {"const": "https://github.com/Kotodama-Project/Kotodama-project/schemas/hierarchy-session-context.schema.json"},
     "schema_version": {"const": "1.0"},
     "kind": {"const": "session_context"},
     "session_id": {"type": "string", "minLength": 1, "maxLength": 160},
     "intent_ref": {"type": "string", "minLength": 1, "maxLength": 256},
     "owner_role": {"type": "string", "minLength": 1, "maxLength": 160},
-    "created_at": {"type": "string", "minLength": 1, "maxLength": 64},
+    "created_at": {"type": "string", "format": "date-time", "minLength": 1, "maxLength": 64},
     "status": {
       "enum": ["draft", "active", "blocked", "completed", "archived"]
     },

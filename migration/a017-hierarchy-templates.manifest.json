@@ -104,7 +104,7 @@
       "source_mode": "100644",
       "decision": "RE_AUTHORED",
       "destination_path": "templates/hierarchy/session-context.json",
-      "destination_blob_sha": "0af2d77c2c70b88df96486e432152ee274bfd4d1",
+      "destination_blob_sha": "8dcf7d13e90ca918403071bf72defcccd8d55523",
       "semantic_coverage": ["session_id", "intent_ref", "created_at", "status", "worktree_enabled", "owner_role", "parent_refs", "evidence_refs"],
       "rationale": "Retain the minimal context stub and add a public schema, owner role, and bounded reference arrays."
     },

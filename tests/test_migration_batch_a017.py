@@ -9,6 +9,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft202012Validator, FormatChecker, ValidationError
+
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR_PATH = ROOT / "tools" / "validate_migration_batch_a017.py"
@@ -96,6 +98,105 @@ class A017MigrationBatchTests(unittest.TestCase):
             )
             self.assertTrue(
                 any("private_runtime_path" in error for error in result["errors"]),
+                msg=result["errors"],
+            )
+
+    def test_catalog_and_guide_are_scanned_for_candidate_secrets_and_pii(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = self._candidate_copy(Path(temporary))
+            mutations = {
+                VALIDATOR.CATALOG_PATH: "contact@example.com",
+                VALIDATOR.GUIDE_PATH: "ghp_aaaaaaaaaaaaaaaaaaaa",
+            }
+            for relative, marker in mutations.items():
+                path = candidate / relative
+                path.write_text(
+                    path.read_text(encoding="utf-8") + f"\n{marker}\n",
+                    encoding="utf-8",
+                )
+
+            result = VALIDATOR.validate(candidate)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(
+                any("scan finding email" in error for error in result["errors"]),
+                msg=result["errors"],
+            )
+            self.assertTrue(
+                any("scan finding scm_access_token" in error for error in result["errors"]),
+                msg=result["errors"],
+            )
+            self.assertTrue(
+                any("templates/README.md" in error for error in result["errors"]),
+                msg=result["errors"],
+            )
+            self.assertTrue(
+                any("docs/TEMPLATE-GUIDE.md" in error for error in result["errors"]),
+                msg=result["errors"],
+            )
+
+    def test_session_context_schema_enforces_iso8601_timestamp(self) -> None:
+        schema = json.loads((ROOT / VALIDATOR.SCHEMA_PATH).read_text(encoding="utf-8"))
+        context = json.loads((ROOT / VALIDATOR.CONTEXT_PATH).read_text(encoding="utf-8"))
+        context["created_at"] = "yesterday"
+        validator = Draft202012Validator(schema, format_checker=FormatChecker())
+
+        with self.assertRaises(ValidationError):
+            validator.validate(context)
+
+    def test_schema_contract_is_bound_completely(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = self._candidate_copy(Path(temporary))
+            schema_path = candidate / VALIDATOR.SCHEMA_PATH
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+            schema["$id"] = "https://example.invalid/weakened-schema.json"
+            schema["properties"]["session_id"] = {}
+            schema_path.write_text(json.dumps(schema), encoding="utf-8")
+
+            result = VALIDATOR.validate(candidate)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(
+                any("schema" in error.lower() for error in result["errors"]),
+                msg=result["errors"],
+            )
+
+    def test_manifest_rollback_contract_is_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = self._candidate_copy(Path(temporary))
+            manifest_path = candidate / VALIDATOR.MANIFEST_PATH
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["rollback"]["strategy"] = "DELETE_SOURCE_HISTORY"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            result = VALIDATOR.validate(candidate)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(
+                any("rollback contract" in error for error in result["errors"]),
+                msg=result["errors"],
+            )
+
+    def test_session_context_uses_portable_absolute_schema_identifier(self) -> None:
+        schema = json.loads((ROOT / VALIDATOR.SCHEMA_PATH).read_text(encoding="utf-8"))
+        context = json.loads((ROOT / VALIDATOR.CONTEXT_PATH).read_text(encoding="utf-8"))
+
+        self.assertTrue(context["$schema"].startswith("https://"))
+        self.assertEqual(context["$schema"], schema["$id"])
+
+    def test_non_string_manifest_source_path_returns_structured_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = self._candidate_copy(Path(temporary))
+            manifest_path = candidate / VALIDATOR.MANIFEST_PATH
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["entries"][0]["source_path"] = ["forest/_templates/INDEX_TEMPLATE.md"]
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            result = VALIDATOR.validate(candidate)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(
+                any("source_path must be a string" in error for error in result["errors"]),
                 msg=result["errors"],
             )
 

@@ -18,6 +18,16 @@ LICENSE_PATH = Path("LICENSES/MIT.txt")
 SOURCE_COMMIT = "2fc1bf60b0dc8721c96875788447e34adc4c7216"
 SOURCE_LICENSE_BLOB = "8294a2a3706f3fd652b8c1bae22a1024ade9406c"
 SOURCE_PACKAGE_BLOB = "39804f52b523024c8b62eae678f897166ae0a47a"
+CONTEXT_SCHEMA_URI = (
+    "https://github.com/Kotodama-Project/Kotodama-project/"
+    "schemas/hierarchy-session-context.schema.json"
+)
+SCHEMA_BLOB_SHA = "d5dbb0586c700f29e7c0f5d7dafa501eea554809"
+EXPECTED_ROLLBACK = {
+    "strategy": "REMOVE_EXACT_CANDIDATE_COMMIT_BEFORE_MERGE",
+    "verification": "RESTORE_PR18_BASE_TREE_AND_RERUN_VALIDATION",
+    "source_retention": "PRIVATE_SOURCE_FIXED_POINT_UNCHANGED",
+}
 
 EXPECTED_ENTRIES = {
     "forest/_templates/INDEX_TEMPLATE.md": (
@@ -66,7 +76,7 @@ EXPECTED_ENTRIES = {
         "74963410019e8dd3ace9c38e5464fff72770e710",
         "RE_AUTHORED",
         "templates/hierarchy/session-context.json",
-        "0af2d77c2c70b88df96486e432152ee274bfd4d1",
+        "8dcf7d13e90ca918403071bf72defcccd8d55523",
     ),
     "forest/_templates/session/REQUIREMENT.md": (
         "e1b975d7e6b450d9cbed93438a89ecd276e5d898",
@@ -269,12 +279,22 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "independent_review": "PENDING",
     }:
         errors.append("admission gates must remain fail-closed")
+    if manifest.get("rollback") != EXPECTED_ROLLBACK:
+        errors.append("manifest rollback contract mismatch")
 
     entries = manifest.get("entries")
     if not isinstance(entries, list):
         entries = []
         errors.append("manifest entries must be an array")
-    paths = [entry.get("source_path") for entry in entries if isinstance(entry, dict)]
+    paths: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        source_path = entry.get("source_path")
+        if not isinstance(source_path, str):
+            errors.append("manifest source_path must be a string")
+            continue
+        paths.append(source_path)
     if paths != sorted(EXPECTED_ENTRIES):
         errors.append("source entries must be the exact sorted ten-path allowlist")
     if len(paths) != len(set(paths)):
@@ -285,6 +305,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
             errors.append("manifest entry is not an object")
             continue
         source_path = entry.get("source_path")
+        if not isinstance(source_path, str):
+            continue
         if source_path not in EXPECTED_ENTRIES:
             errors.append(f"unexpected source path: {source_path}")
             continue
@@ -319,7 +341,11 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     if len(destination_paths) != 8:
         errors.append("expected exactly eight unique public destinations")
 
-    by_source = {entry.get("source_path"): entry for entry in entries if isinstance(entry, dict)}
+    by_source = {
+        entry.get("source_path"): entry
+        for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get("source_path"), str)
+    }
     old_requirement = by_source.get("forest/_templates/session/REQUIREMENT.md", {})
     layer_requirement = by_source.get("forest/_templates/layers/L5_requirement_template.md", {})
     required_requirement_coverage = {
@@ -388,7 +414,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         errors.append("session context keys mismatch")
     else:
         expected_context_values = {
-            "$schema": "../../schemas/hierarchy-session-context.schema.json",
+            "$schema": CONTEXT_SCHEMA_URI,
             "schema_version": "1.0",
             "kind": "session_context",
             "status": "draft",
@@ -406,6 +432,9 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     if not isinstance(schema, dict):
         errors.append("session context schema missing")
     else:
+        schema_data = _read_bounded(root, SCHEMA_PATH, errors)
+        if schema_data is not None and git_blob_sha(schema_data) != SCHEMA_BLOB_SHA:
+            errors.append("session context schema blob mismatch")
         if set(schema.get("required", [])) != expected_context_keys:
             errors.append("session context schema required keys mismatch")
         if set(schema.get("properties", {})) != expected_context_keys:
@@ -431,6 +460,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
             errors.append("template catalog does not link hierarchy candidate")
         if "Issue #25の解決まではadmission不可" not in catalog:
             errors.append("template catalog omits hierarchy admission blocker")
+        errors.extend(_scan_text(CATALOG_PATH, catalog, include_private_refs=False))
 
     guide_data = _read_bounded(root, GUIDE_PATH, errors)
     if guide_data is not None:
@@ -441,6 +471,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
             errors.append("template guide omits the A017 admission blockers")
         if "session、requirement、plan、taskといった階層テンプレート" in guide:
             errors.append("template guide still classifies the hierarchy as local-only")
+        errors.extend(_scan_text(GUIDE_PATH, guide, include_private_refs=False))
 
     license_data = _read_bounded(root, LICENSE_PATH, errors)
     if license_data is not None and git_blob_sha(license_data) != SOURCE_LICENSE_BLOB:
