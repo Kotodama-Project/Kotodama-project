@@ -440,11 +440,13 @@ Promotion, Current Truth, and Final Human GO remain outside scope.
 
 ## Required before opening access
 
-- [ ] Fresh candidate-bound Voice cutover and rollback evidence (`PB-G4`)
+- [ ] Fresh candidate-bound Voice cutover, rollback, and exact post-deployment byte/revision readback proving deployed/candidate parity (`PB-G4`)
 - [ ] Real 15-minute rotation, transcription post, and deletion evidence (`PB-G2`, `PB-G3`)
-- [ ] Speaker attribution and Voice-to-Verified-Handoff E2E (`PB-G1`, `PB-G8`)
-- [ ] Separate-person verification and three-persona E2E (`PB-G5`)
+- [ ] Always-on listener continuity and forced-disconnect/rejoin E2E (`PB-G1`)
+- [ ] Speaker attribution and Voice-to-Verified-Handoff E2E (`PB-G5`)
+- [ ] Separate-person verification and three-persona E2E (`PB-G5`, `PB-G7`)
 - [ ] Protected reconciliation and independent verification receipts (`PB-G7`)
+- [ ] Public Discord invite and publicly reachable Voice Bot readback (`PB-G8`)
 - [ ] Candidate-bound Final Human GO (`PB-G9`)
 
 この一覧は進捗を透明にするためのものです。チェック項目は、対応する検証 receipt が揃うまで完了扱いにしません。

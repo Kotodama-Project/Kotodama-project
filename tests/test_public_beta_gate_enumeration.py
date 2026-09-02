@@ -8,10 +8,11 @@ README = ROOT / "README.md"
 ROADMAP = ROOT / "ROADMAP.md"
 
 GATE_SECTION = "### Public Beta 完成としてまだ証明されていないもの"
-GATE_LINE = re.compile(r"^- `(PB-G\d+)` (.+)$")
+GATE_LINE = re.compile(r"^- `(PB-G\d+)` \[(unproven|completed)\] (.+)$")
 GATE_TOKEN = re.compile(r"`(PB-G\d+)`")
 DECLARED_COUNT = re.compile(r"未証明の gate はちょうど \*\*(\d+) 件\*\* です")
 UNCHECKED_ROADMAP_ITEM = re.compile(r"^- \[ \] (.+)$", re.MULTILINE)
+EXPECTED_GATE_IDENTIFIERS = tuple(f"PB-G{index}" for index in range(1, 10))
 
 
 class PublicBetaGateEnumerationTests(unittest.TestCase):
@@ -27,14 +28,14 @@ class PublicBetaGateEnumerationTests(unittest.TestCase):
         self.readme = README.read_text(encoding="utf-8")
         self.roadmap = ROADMAP.read_text(encoding="utf-8")
 
-    def gate_lines(self) -> list[tuple[str, str]]:
+    def gate_lines(self) -> list[tuple[str, str, str]]:
         self.assertIn(GATE_SECTION, self.readme)
         section = self.readme.split(GATE_SECTION, 1)[1]
         gates: list[tuple[str, str]] = []
         for line in section.splitlines():
             match = GATE_LINE.match(line)
             if match:
-                gates.append((match.group(1), match.group(2)))
+                gates.append((match.group(1), match.group(2), match.group(3)))
             elif gates and line.startswith("#"):
                 break
         return gates
@@ -42,22 +43,24 @@ class PublicBetaGateEnumerationTests(unittest.TestCase):
     def test_gate_identifiers_are_unique_and_sequential(self) -> None:
         gates = self.gate_lines()
         self.assertTrue(gates)
-        identifiers = [identifier for identifier, _ in gates]
+        identifiers = [identifier for identifier, _, _ in gates]
         self.assertEqual(len(identifiers), len(set(identifiers)))
         self.assertEqual(
-            identifiers, [f"PB-G{index}" for index in range(1, len(gates) + 1)]
+            identifiers, list(EXPECTED_GATE_IDENTIFIERS)
         )
-        for identifier, description in gates:
+        for identifier, status, description in gates:
             with self.subTest(identifier=identifier):
+                self.assertIn(status, {"unproven", "completed"})
                 self.assertTrue(description.strip())
 
     def test_declared_count_matches_the_listed_gates(self) -> None:
         declared = DECLARED_COUNT.search(self.readme)
         self.assertIsNotNone(declared, "README must state the gate count explicitly")
-        self.assertEqual(int(declared.group(1)), len(self.gate_lines()))
+        unproven = sum(status == "unproven" for _, status, _ in self.gate_lines())
+        self.assertEqual(int(declared.group(1)), unproven)
 
     def test_every_unchecked_roadmap_item_cites_a_known_gate(self) -> None:
-        known = {identifier for identifier, _ in self.gate_lines()}
+        known = {identifier for identifier, _, _ in self.gate_lines()}
         items = UNCHECKED_ROADMAP_ITEM.findall(self.roadmap)
         self.assertTrue(items, "ROADMAP must still list unchecked gates")
         for item in items:
@@ -67,7 +70,11 @@ class PublicBetaGateEnumerationTests(unittest.TestCase):
                 self.assertTrue(cited.issubset(known), f"unknown gate cited: {cited - known}")
 
     def test_every_gate_is_cited_by_at_least_one_roadmap_item(self) -> None:
-        known = {identifier for identifier, _ in self.gate_lines()}
+        known = {
+            identifier
+            for identifier, status, _ in self.gate_lines()
+            if status == "unproven"
+        }
         cited: set[str] = set()
         for item in UNCHECKED_ROADMAP_ITEM.findall(self.roadmap):
             cited.update(GATE_TOKEN.findall(item))
