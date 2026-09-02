@@ -8,6 +8,7 @@
 | [Blocks](blocks/README.md) | 小さな実行・判断・検証部品 | Markdown design example |
 | [MOCs](mocs/README.md) | 目的別の入口と読み順 | Company / Public Release / Incident & Recovery examples |
 | [Records](records/README.md) | Block出力を証拠鎖へ残す記録契約 | 9種のJSON schema-backed starter available |
+| [Hierarchy](hierarchy/README.md) | project → phase → requirement → plan → task の候補階層 | A017 re-authored candidate; license/provenance admission blocked |
 | [Runtime profiles](company/README.md#runtime-profile-contracts) | Compose minimum / Proxmox segmentedの導入・検証・復旧境界 | [Installation Lifecycle](../docs/INSTALLATION-LIFECYCLE.md)でprofile選択と境界を確認し、sanitized lifecycle contracts and runbooksへ進む |
 | [Runtime candidates](../runtime/README.md) | profileをsecret-freeな実行候補へ接続する | Compose data-plane skeleton available; live receipt absent |
 
@@ -19,6 +20,7 @@
 | 層 | 理想で決めること | 現在の公開Previewでできること |
 |---|---|---|
 | Company Template | Vision、Boundary、owner、profile、採用する能力 | `examples/company-starter`を作業copyへ複製し、組織固有の候補へ編集 |
+| Hierarchy | project、phase、requirement、plan、taskの親子関係と証拠・rollback境界 | [A017 hierarchy candidate](hierarchy/README.md)をcopyし、標準ライブラリvalidatorで検査。Issue #25の解決まではadmission不可 |
 | Blocks | 入力・出力、authority、拒否条件、verification、rollback | 9 Blockの設計とschema/validatorを読み、flow接続を検査 |
 | Governed Records | Block出力の必須field、canonical owner、保持・検証境界 | 9種のJSON-backed Record契約を確認し、候補bytesを検証 |
 | MOCs | 目的別の入口と読み順。新しい正本や権限は作らない | Company Operations / Public Release / Incident & Recoveryをread-onlyで辿る |
