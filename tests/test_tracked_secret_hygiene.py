@@ -2251,6 +2251,23 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(control=text.splitlines()[0]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
 
+    def test_python_boolop_operand_traversal_uses_pre_evaluation_state(self) -> None:
+        name = "OPENAI_" + "API_KEY"
+        value = "SyntheticSecretValue2026"
+        text = (
+            'x = ""; result = (x := x or (name := "OPENAI_API_KEY")) and True\n'
+            f'secret = "{value}"\n'
+            "os.putenv(name, secret)\n"
+        )
+
+        findings = SCANNER.scan_text(Path("config.py"), text)
+
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            findings,
+        )
+        self.assertNotIn(value, repr(findings))
+
     def test_python_static_destructuring_and_dict_aliases_are_bounded(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
