@@ -1,10 +1,14 @@
 import copy
 import json
+import runpy
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -342,6 +346,27 @@ class AgentSwarmExecutionCandidateContractTests(unittest.TestCase):
                 self.assertEqual(code, 2)
                 self.assertIn(mutation["reason"], report["reason_codes"])
 
+    def test_cli_rejects_self_referential_and_cyclic_dependencies(self) -> None:
+        mutated = copy.deepcopy(candidate())
+        mutated["assignments"][0]["dependencies"] = [ref("attempt/root-builder")]
+        code, report = self.run_cli(mutated)
+        self.assertEqual(code, 2)
+        self.assertIn("DEPENDENCY_SELF_REFERENCE", report["reason_codes"])
+
+        mutated = copy.deepcopy(candidate())
+        mutated["assignments"][0]["dependencies"] = [ref("attempt/verifier")]
+        mutated["assignments"][1]["dependencies"] = [ref("attempt/root-builder")]
+        code, report = self.run_cli(mutated)
+        self.assertEqual(code, 2)
+        self.assertIn("DEPENDENCY_CYCLE", report["reason_codes"])
+
+    def test_cli_rejects_child_declarations_that_point_back_to_the_wrong_parent(self) -> None:
+        mutated = copy.deepcopy(candidate())
+        mutated["assignments"][1]["planned_child_attempt_refs"] = [ref("attempt/root-builder")]
+        code, report = self.run_cli(mutated)
+        self.assertEqual(code, 2)
+        self.assertIn("CHILD_PARENT_EDGE_MISMATCH", report["reason_codes"])
+
     def test_cli_refuses_state_and_structural_drift(self) -> None:
         code, report = self.run_cli(candidate(refused=True))
         self.assertEqual(code, 2)
@@ -386,6 +411,46 @@ class AgentSwarmExecutionCandidateContractTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 2)
             self.assertIn("INPUT_TOO_LARGE", json.loads(result.stdout)["reason_codes"])
+
+    def test_cli_checks_input_size_before_unbounded_path_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "oversized.json"
+            path.write_bytes(b"{" + b"a" * (1_048_576 + 1) + b"}")
+            module = runpy.run_path(str(VALIDATOR))
+            output = StringIO()
+            with patch.object(Path, "read_bytes", side_effect=AssertionError("full read forbidden")):
+                with redirect_stdout(output):
+                    code = module["main"]([str(VALIDATOR), str(path)])
+
+        self.assertEqual(code, 2)
+        self.assertIn("INPUT_TOO_LARGE", json.loads(output.getvalue())["reason_codes"])
+
+    def test_cli_converts_excessive_json_nesting_to_structured_refusal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "deep.json"
+            path.write_text('{"a":' * 20_000 + "0" + "}" * 20_000, encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(VALIDATOR), str(path)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=10,
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stderr, "")
+        report = json.loads(result.stdout)
+        self.assertEqual(report["result"], "REFUSED")
+        self.assertIn("INPUT_INVALID", report["reason_codes"])
+
+    def test_cli_reports_schema_match_for_semantic_refusal(self) -> None:
+        mutated = copy.deepcopy(candidate())
+        mutated["budget"]["wave_width_W"] = 5
+        code, report = self.run_cli(mutated)
+        self.assertEqual(code, 2)
+        self.assertIn("WAVE_WIDTH_EXCEEDS_CONCURRENCY", report["reason_codes"])
+        self.assertEqual(report["checks"]["schema"], "MATCH")
 
     def test_public_navigation_exposes_candidate_without_runtime_claim(self) -> None:
         self.assertTrue(DOC.is_file())
