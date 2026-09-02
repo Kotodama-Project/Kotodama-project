@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import stat
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas" / "public-migration-ledger.schema.json"
 MAX_INPUT_BYTES = 8_388_608
 GENESIS_HASH = "0" * 64
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 TERMINAL_CLASSIFICATIONS = [
     "PUBLIC_EXTRACT",
@@ -66,6 +70,14 @@ class DuplicateKeyError(ValueError):
     pass
 
 
+class InputTooLargeError(ValueError):
+    pass
+
+
+class InputNotRegularFileError(ValueError):
+    pass
+
+
 def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -87,6 +99,20 @@ def canonical_content_hash(record: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def read_bounded(path: Path) -> bytes:
+    """Read one regular ledger file without exceeding the input cap."""
+    metadata = path.stat()
+    if not stat.S_ISREG(metadata.st_mode):
+        raise InputNotRegularFileError
+    if metadata.st_size > MAX_INPUT_BYTES:
+        raise InputTooLargeError
+    with path.open("rb") as stream:
+        raw = stream.read(MAX_INPUT_BYTES + 1)
+    if len(raw) > MAX_INPUT_BYTES:
+        raise InputTooLargeError
+    return raw
+
+
 def _parse_lines(raw: bytes) -> list[dict[str, Any]]:
     text = raw.decode("utf-8")
     records: list[dict[str, Any]] = []
@@ -102,12 +128,23 @@ def _parse_lines(raw: bytes) -> list[dict[str, Any]]:
     return records
 
 
+def parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.endswith("Z"):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
+
+
 def _ordering_reasons(records: list[dict[str, Any]]) -> list[str]:
     reasons: list[str] = []
     seen_ids: set[str] = set()
-    seen_subjects: set[tuple[str, int]] = set()
     previous_sequence = 0
-    previous_recorded_at = ""
+    previous_recorded_at: datetime | None = None
     for record in records:
         sequence = record["sequence"]
         if sequence != previous_sequence + 1:
@@ -119,15 +156,13 @@ def _ordering_reasons(records: list[dict[str, Any]]) -> list[str]:
             reasons.append("DUPLICATE_RECORD_ID")
         seen_ids.add(record_id)
 
-        subject_key = (record["subject_ref"], sequence)
-        if subject_key in seen_subjects:
-            reasons.append("DUPLICATE_SUBJECT_SEQUENCE")
-        seen_subjects.add(subject_key)
-
-        recorded_at = record["recorded_at"]
-        if recorded_at < previous_recorded_at:
+        recorded_at = parse_timestamp(record["recorded_at"])
+        if recorded_at is None:
+            reasons.append("RECORDED_AT_INVALID")
+        elif previous_recorded_at is not None and recorded_at < previous_recorded_at:
             reasons.append("RECORDED_AT_NOT_MONOTONIC")
-        previous_recorded_at = recorded_at
+        if recorded_at is not None:
+            previous_recorded_at = recorded_at
     return reasons
 
 
@@ -165,7 +200,7 @@ def _vocabulary_reasons(record: dict[str, Any]) -> list[str]:
 
     if status == "BLOCKED" and terminal is not None:
         reasons.append("BLOCKED_RECORD_CARRIES_CLASSIFICATION")
-    if status in {"PROPOSED", "ACCEPTED"} and terminal is None:
+    if status != "BLOCKED" and terminal is None:
         reasons.append("UNBLOCKED_RECORD_MISSING_CLASSIFICATION")
     if terminal == "DROP" and transfer != "NO_COPY":
         reasons.append("DROP_REQUIRES_NO_COPY")
@@ -174,6 +209,21 @@ def _vocabulary_reasons(record: dict[str, Any]) -> list[str]:
     if record["supersession_reason"] is not None and status != "REJECTED":
         reasons.append("SUPERSESSION_WITHOUT_REJECTION")
     return reasons
+
+
+def _anchor_reasons(records: list[dict[str, Any]], trusted_head: str | None) -> list[str]:
+    if trusted_head is None:
+        return []
+    if SHA256_PATTERN.fullmatch(trusted_head) is None:
+        return ["ANCHOR_INVALID"]
+    matches = [
+        index for index, record in enumerate(records) if record["content_hash"] == trusted_head
+    ]
+    if not matches:
+        return ["CHAIN_ANCHOR_MISSING"]
+    if len(matches) != 1:
+        return ["CHAIN_ANCHOR_AMBIGUOUS"]
+    return []
 
 
 def _gate_reasons(record: dict[str, Any]) -> list[str]:
@@ -210,7 +260,10 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
 def _counts(records: list[dict[str, Any]]) -> dict[str, int]:
     counts = {name: 0 for name in TERMINAL_CLASSIFICATIONS}
     counts["UNCLASSIFIED_BLOCKED"] = 0
+    effective_records: dict[str, dict[str, Any]] = {}
     for record in records:
+        effective_records[record["subject_ref"]] = record
+    for record in effective_records.values():
         terminal = record["terminal_classification"]
         if terminal is None:
             counts["UNCLASSIFIED_BLOCKED"] += 1
@@ -223,25 +276,45 @@ def _payload(
     result: str,
     reason_codes: list[str],
     record_count: int,
-    counts: dict[str, int],
+    counts: dict[str, int] | None,
+    trusted_head: str | None = None,
+    anchor_matched: bool | None = None,
 ) -> dict[str, Any]:
     return {
         "contract": "kotodama.public-migration-ledger/v1",
         "result": result,
         "reason_codes": reason_codes,
         "record_count": record_count,
-        "terminal_classification_counts": counts,
-        "zero_unclassified": counts.get("UNCLASSIFIED_BLOCKED", 0) == 0,
+        "terminal_classification_counts": counts or {},
+        "zero_unclassified": (
+            None if counts is None else counts.get("UNCLASSIFIED_BLOCKED", 0) == 0
+        ),
+        "chain_anchor": {
+            "provided": trusted_head is not None,
+            "matched": anchor_matched,
+        },
         "claims": {field: False for field in CLAIM_FIELDS},
         "public_beta": "NO_GO_UNPUBLISHED",
     }
 
 
-def reject(reason_codes: list[str], record_count: int = 0) -> int:
+def reject(
+    reason_codes: list[str],
+    record_count: int = 0,
+    trusted_head: str | None = None,
+    anchor_matched: bool | None = None,
+) -> int:
     unique = list(dict.fromkeys(reason_codes)) or ["INPUT_INVALID"]
     print(
         json.dumps(
-            _payload("REFUSED", unique, record_count, {}),
+            _payload(
+                "REFUSED",
+                unique,
+                record_count,
+                None,
+                trusted_head,
+                anchor_matched,
+            ),
             indent=2,
             sort_keys=True,
         )
@@ -249,7 +322,9 @@ def reject(reason_codes: list[str], record_count: int = 0) -> int:
     return 2
 
 
-def success(records: list[dict[str, Any]]) -> int:
+def success(
+    records: list[dict[str, Any]], trusted_head: str | None, anchor_matched: bool | None
+) -> int:
     print(
         json.dumps(
             _payload(
@@ -257,6 +332,8 @@ def success(records: list[dict[str, Any]]) -> int:
                 [],
                 len(records),
                 _counts(records),
+                trusted_head,
+                anchor_matched,
             ),
             indent=2,
             sort_keys=True,
@@ -266,34 +343,60 @@ def success(records: list[dict[str, Any]]) -> int:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print(f"usage: {Path(argv[0]).name} LEDGER_JSONL", file=sys.stderr)
+    if len(argv) == 2:
+        ledger_path = Path(argv[1])
+        trusted_head = None
+    elif len(argv) == 4 and argv[2] in {"--anchor", "--trusted-head"}:
+        ledger_path = Path(argv[1])
+        trusted_head = argv[3]
+    else:
+        print(
+            f"usage: {Path(argv[0]).name} LEDGER_JSONL [--anchor TRUSTED_HEAD_SHA256]",
+            file=sys.stderr,
+        )
         return 2
 
-    ledger_path = Path(argv[1])
+    anchor_matched: bool | None = None
     try:
-        raw = ledger_path.read_bytes()
-        if len(raw) > MAX_INPUT_BYTES:
-            return reject(["INPUT_TOO_LARGE"])
+        raw = read_bounded(ledger_path)
         records = _parse_lines(raw)
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         if not isinstance(schema, dict):
             raise ValueError
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, DuplicateKeyError, ValueError):
-        return reject(["INPUT_INVALID"])
+    except InputTooLargeError:
+        return reject(["INPUT_TOO_LARGE"], trusted_head=trusted_head)
+    except (
+        OSError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        DuplicateKeyError,
+        InputNotRegularFileError,
+        ValueError,
+    ):
+        return reject(["INPUT_INVALID"], trusted_head=trusted_head)
 
     if Draft202012Validator is None or FormatChecker is None:
-        return reject(["VALIDATOR_UNAVAILABLE"])
+        return reject(["VALIDATOR_UNAVAILABLE"], trusted_head=trusted_head)
     try:
         validator = Draft202012Validator(schema, format_checker=FormatChecker())
         schema_errors = [error for record in records for error in validator.iter_errors(record)]
     except (TypeError, ValueError):
-        return reject(["VALIDATOR_UNAVAILABLE"])
+        return reject(["VALIDATOR_UNAVAILABLE"], trusted_head=trusted_head)
     if schema_errors:
-        return reject(["SCHEMA_INVALID"], len(records))
+        return reject(["SCHEMA_INVALID"], len(records), trusted_head)
 
     reasons = _semantic_reasons(records)
-    return reject(reasons, len(records)) if reasons else success(records)
+    anchor_reasons = _anchor_reasons(records, trusted_head)
+    reasons.extend(anchor_reasons)
+    if trusted_head is not None and not anchor_reasons:
+        anchor_matched = True
+    elif trusted_head is not None:
+        anchor_matched = False
+    return (
+        reject(reasons, len(records), trusted_head, anchor_matched)
+        if reasons
+        else success(records, trusted_head, anchor_matched)
+    )
 
 
 if __name__ == "__main__":

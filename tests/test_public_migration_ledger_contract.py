@@ -80,7 +80,9 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
             record["content_hash"] = previous
         return records
 
-    def run_validator(self, records: list[dict]) -> tuple[int, dict]:
+    def run_validator(
+        self, records: list[dict], anchor: str | None = None
+    ) -> tuple[int, dict]:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "ledger.jsonl"
             path.write_text(
@@ -92,8 +94,11 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
                 encoding="utf-8",
                 newline="\n",
             )
+            command = [sys.executable, "-B", str(VALIDATOR), str(path)]
+            if anchor is not None:
+                command.extend(["--anchor", anchor])
             completed = subprocess.run(
-                [sys.executable, "-B", str(VALIDATOR), str(path)],
+                command,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -107,6 +112,22 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         self.assertEqual(2, code, payload)
         self.assertEqual("REFUSED", payload["result"])
         self.assertIn(reason, payload["reason_codes"])
+
+    def run_validator_with_anchor(
+        self, records: list[dict], anchor: str
+    ) -> tuple[int, dict]:
+        return self.run_validator(records, anchor)
+
+    def run_validator_path(self, path: Path) -> tuple[int, dict]:
+        completed = subprocess.run(
+            [sys.executable, "-B", str(VALIDATOR), str(path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        return completed.returncode, json.loads(completed.stdout)
 
     # --- committed fixture ----------------------------------------------
 
@@ -126,6 +147,20 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         for field in CLAIM_FIELDS:
             with self.subTest(field=field):
                 self.assertIs(False, payload["claims"][field])
+
+    def test_unanchored_result_is_explicitly_not_append_only_evidence(self) -> None:
+        code, payload = self.run_validator(self.records)
+        self.assertEqual(0, code, payload)
+        self.assertEqual(
+            {"provided": False, "matched": None}, payload["chain_anchor"]
+        )
+
+    def test_refusal_does_not_report_zero_unclassified(self) -> None:
+        records = copy.deepcopy(self.records)
+        records[0]["claims"]["migration_executed"] = True
+        code, payload = self.run_validator(self.rechain(records))
+        self.assertEqual(2, code, payload)
+        self.assertIsNone(payload["zero_unclassified"])
 
     def test_unclassified_remainder_is_reported_not_hidden(self) -> None:
         _, payload = self.run_validator(self.records)
@@ -164,13 +199,29 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         self.assertEqual(TRANSFER_MODES, transfer)
         self.assertEqual(set(), set(terminal) & set(transfer))
 
+    def test_schema_requires_digest_shaped_opaque_references(self) -> None:
+        self.assertEqual(
+            r"^ref/[0-9a-f]{64}$", self.schema["$defs"]["opaque_ref"]["pattern"]
+        )
+        self.assertEqual(
+            "date-time", self.schema["$defs"]["timestamp"]["format"]
+        )
+
     def test_unknown_property_is_rejected(self) -> None:
         records = copy.deepcopy(self.records)
         records[0]["private_path"] = "C:/private/thing"
         self.assert_refused(self.rechain(records), "SCHEMA_INVALID")
 
     def test_non_opaque_subject_reference_is_rejected(self) -> None:
-        for value in ("/etc/passwd", "C:/private/thing", "https://example.invalid/x", "ref/"):
+        for value in (
+            "/etc/passwd",
+            "C:/private/thing",
+            "https://example.invalid/x",
+            "ref/",
+            "ref/participant/alice-smith",
+            "ref/host/prod-01",
+            "ref/provider/github/alice",
+        ):
             with self.subTest(value=value):
                 records = copy.deepcopy(self.records)
                 records[0]["subject_ref"] = value
@@ -205,6 +256,11 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         records[3]["recorded_at"] = "2026-08-23T00:00:00Z"
         self.assert_refused(self.rechain(records), "RECORDED_AT_NOT_MONOTONIC")
 
+    def test_timestamp_must_be_a_real_date(self) -> None:
+        records = copy.deepcopy(self.records)
+        records[0]["recorded_at"] = "2026-02-30T25:61:61Z"
+        self.assert_refused(self.rechain(records), "SCHEMA_INVALID")
+
     def test_duplicate_json_key_in_a_line_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "ledger.jsonl"
@@ -233,7 +289,7 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
 
     def test_content_digest_drift_is_detected(self) -> None:
         records = copy.deepcopy(self.records)
-        records[2]["owner_ref"] = "ref/owner/someone-else"
+        records[2]["owner_ref"] = "ref/" + "a" * 64
         self.assert_refused(records, "CONTENT_DIGEST_DRIFT")
 
     def test_broken_hash_chain_is_detected(self) -> None:
@@ -252,6 +308,42 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         records = copy.deepcopy(self.records)
         records[0]["prev_hash"] = "a" * 64
         self.assert_refused(records, "HASH_CHAIN_BROKEN")
+
+    def test_trusted_head_anchor_accepts_exact_prefix_and_append(self) -> None:
+        anchor = self.records[-1]["content_hash"]
+        code, payload = self.run_validator_with_anchor(self.records, anchor)
+        self.assertEqual(0, code, payload)
+        self.assertEqual({"provided": True, "matched": True}, payload["chain_anchor"])
+
+        appended = copy.deepcopy(self.records)
+        appended_record = copy.deepcopy(appended[-1])
+        appended_record["record_id"] = "ref/" + "a" * 64
+        appended_record["sequence"] = len(appended) + 1
+        appended_record["subject_ref"] = "ref/" + "b" * 64
+        appended_record["subject_digest"] = "c" * 64
+        appended_record["private_receipt_ref"] = "ref/" + "d" * 64
+        appended_record["private_receipt_digest"] = "e" * 64
+        appended_record["recorded_at"] = "2026-08-24T00:25:00Z"
+        appended.append(appended_record)
+        code, payload = self.run_validator_with_anchor(self.rechain(appended), anchor)
+        self.assertEqual(0, code, payload)
+        self.assertEqual({"provided": True, "matched": True}, payload["chain_anchor"])
+
+    def test_rewritten_prefix_is_rejected_by_trusted_head_anchor(self) -> None:
+        anchor = self.records[-1]["content_hash"]
+        records = copy.deepcopy(self.records)
+        del records[0]
+        for sequence, record in enumerate(records, start=1):
+            record["sequence"] = sequence
+        code, payload = self.run_validator_with_anchor(self.rechain(records), anchor)
+        self.assertEqual(2, code, payload)
+        self.assertIn("CHAIN_ANCHOR_MISSING", payload["reason_codes"])
+        self.assertEqual({"provided": True, "matched": False}, payload["chain_anchor"])
+
+    def test_invalid_anchor_is_rejected(self) -> None:
+        code, payload = self.run_validator_with_anchor(self.records, "not-a-sha256")
+        self.assertEqual(2, code, payload)
+        self.assertIn("ANCHOR_INVALID", payload["reason_codes"])
 
     # --- gate and vocabulary consistency ---------------------------------
 
@@ -280,7 +372,35 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         records = copy.deepcopy(self.records)
         records[1]["terminal_classification"] = None
         records[1]["transfer_mode"] = None
-        self.assert_refused(self.rechain(records), "UNBLOCKED_RECORD_MISSING_CLASSIFICATION")
+        self.assert_refused(self.rechain(records), "SCHEMA_INVALID")
+
+    def test_rejected_record_requires_a_terminal_classification(self) -> None:
+        records = copy.deepcopy(self.records)
+        records[0]["status"] = "REJECTED"
+        records[0]["terminal_classification"] = None
+        records[0]["transfer_mode"] = None
+        self.assert_refused(self.rechain(records), "SCHEMA_INVALID")
+
+    def test_counts_use_the_latest_disposition_per_subject(self) -> None:
+        records = copy.deepcopy(self.records)
+        latest = copy.deepcopy(records[0])
+        latest["record_id"] = "ref/" + "a" * 64
+        latest["sequence"] = len(records) + 1
+        latest["subject_digest"] = "b" * 64
+        latest["private_receipt_ref"] = "ref/" + "c" * 64
+        latest["private_receipt_digest"] = "d" * 64
+        latest["recorded_at"] = "2026-08-24T00:25:00Z"
+        latest["status"] = "ACCEPTED"
+        latest["terminal_classification"] = "PUBLIC_EXTRACT"
+        latest["transfer_mode"] = "REAUTHOR"
+        latest["gates"] = {name: "PASS" for name in GATE_NAMES}
+        latest["proposed_action"] = "ref/" + "e" * 64
+        records.append(latest)
+        code, payload = self.run_validator(self.rechain(records))
+        self.assertEqual(0, code, payload)
+        counts = payload["terminal_classification_counts"]
+        self.assertEqual(0, counts["UNCLASSIFIED_BLOCKED"])
+        self.assertEqual(2, counts["PUBLIC_EXTRACT"])
 
     def test_drop_and_regenerate_bind_their_transfer_mechanism(self) -> None:
         records = copy.deepcopy(self.records)
@@ -295,6 +415,23 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         records = copy.deepcopy(self.records)
         records[2]["supersession_reason"] = "WITHDRAWN"
         self.assert_refused(self.rechain(records), "SUPERSESSION_WITHOUT_REJECTION")
+
+    def test_oversized_input_is_rejected_before_full_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "oversized-ledger.jsonl"
+            path.write_bytes(b"x" * (validator_module.MAX_INPUT_BYTES + 1))
+            code, payload = self.run_validator_path(path)
+        self.assertEqual(2, code, payload)
+        self.assertIn("INPUT_TOO_LARGE", payload["reason_codes"])
+        self.assertIsNone(payload["zero_unclassified"])
+
+    def test_non_regular_input_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ledger-directory"
+            path.mkdir()
+            code, payload = self.run_validator_path(path)
+        self.assertEqual(2, code, payload)
+        self.assertIn("INPUT_INVALID", payload["reason_codes"])
 
     # --- documentation ---------------------------------------------------
 

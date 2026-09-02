@@ -1077,7 +1077,7 @@ read-only/candidate-only公開導線であり、validatorやrunbookがPASSして
 - [Agent Swarm × Kotodama Adoption Candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) — bounded root / worker / verifier plan only; no runner or dispatch
   Schema: `schemas/company-pack-agent-swarm-execution-candidate.schema.json`
   Read-only preflight: `tools/validate_company_pack_agent_swarm_execution_candidate.py`
-- [Public Migration Ledger](docs/PUBLIC-MIGRATION-LEDGER.md) — append-only disposition records only; no migration, copy, or publication
+- [Public Migration Ledger](docs/PUBLIC-MIGRATION-LEDGER.md) — append-only disposition records with optional trusted-head anchoring; no migration, copy, or publication
   Schema: `schemas/public-migration-ledger.schema.json`
   Read-only verifier: `tools/validate_public_migration_ledger.py`
 
