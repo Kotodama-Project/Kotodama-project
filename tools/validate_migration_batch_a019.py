@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 from typing import Any, Iterable
 from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
@@ -27,7 +28,7 @@ LICENSE_PATH = Path("LICENSES/MIT.txt")
 SOURCE_COMMIT = "2fc1bf60b0dc8721c96875788447e34adc4c7216"
 SOURCE_LICENSE_BLOB = "8294a2a3706f3fd652b8c1bae22a1024ade9406c"
 SOURCE_PACKAGE_BLOB = "39804f52b523024c8b62eae678f897166ae0a47a"
-SOURCE_MAPPING_DIGEST = "6042ed4eb73f673aeac7964d5855e23a3067617c8cefad71efe32f1c4e15a702"
+SOURCE_MAPPING_DIGEST = "6dcc74faa7736f38db8d8759214a579a2fee4e206d86832d0eade465af67aeeb"
 SOURCE_BLOBS = {
     "d96bc760b22eaa06a0729b6a1e1cd915b160dbf3",
     "f682d97d07ea6d3cf87d776d226e32921fdb2306",
@@ -41,7 +42,7 @@ DESTINATIONS = {
     "schemas/task-contract.schema.json": "efbf457f8d71581525250f0a187bfb102e059342",
     "schemas/task-decomposition.schema.json": "24da61da50dda406bdba3da6c20f669a313077a4",
     "schemas/worker-capability-catalog.schema.json": "e3d7dc72a46196354f58e140a63e4d437c37b6fd",
-    "schemas/worker-result.schema.json": "48d482e9a00e2af49a648cf1888020210d61f07b",
+    "schemas/worker-result.schema.json": "68767aa92a1415e6f9e7dcaeeba32c830eb142c7",
 }
 SCHEMA_IDS = {
     path: f"https://github.com/Kotodama-Project/Kotodama-project/{path}"
@@ -65,6 +66,8 @@ MAPPING_DIGEST_KEYS = (
     "semantic_coverage",
     "rationale",
 )
+MANIFEST_ENTRY_KEYS = frozenset(MAPPING_DIGEST_KEYS)
+IGNORED_SCAN_DIRECTORIES = {".git", "__pycache__"}
 
 EXPECTED_GATES = {
     "license_and_provenance": "BLOCKED_ISSUE_25",
@@ -148,6 +151,85 @@ def _load_json(root: Path, relative: Path, errors: list[str]) -> Any:
     except (UnicodeError, json.JSONDecodeError):
         errors.append(f"invalid UTF-8 JSON: {relative.as_posix()}")
         return None
+
+
+def _filesystem_paths(root: Path, errors: list[str]) -> set[Path]:
+    paths: set[Path] = set()
+    try:
+        candidates = root.rglob("*")
+        for candidate in candidates:
+            relative = candidate.relative_to(root)
+            if any(part in IGNORED_SCAN_DIRECTORIES for part in relative.parts):
+                continue
+            if candidate.is_file() or candidate.is_symlink():
+                paths.add(relative)
+    except (OSError, ValueError) as exc:
+        errors.append(f"candidate path scan failed: {type(exc).__name__}")
+    return paths
+
+
+def _git_candidate_paths(root: Path) -> set[Path] | None:
+    if not (root / ".git").exists():
+        return None
+
+    def git_bytes(*arguments: str) -> bytes:
+        return subprocess.run(
+            ["git", "-C", str(root), *arguments],
+            capture_output=True,
+            check=True,
+        ).stdout
+
+    try:
+        manifest_commit = git_bytes(
+            "log",
+            "-n",
+            "1",
+            "--format=%H",
+            "--diff-filter=A",
+            "--",
+            MANIFEST_PATH.as_posix(),
+        ).decode("utf-8").strip()
+        if not manifest_commit:
+            return None
+        base_commit = git_bytes("rev-parse", f"{manifest_commit}^")
+        base_commit = base_commit.decode("ascii").strip()
+        changed = git_bytes(
+            "diff",
+            "--name-only",
+            "--diff-filter=ACMRTUXB",
+            "-z",
+            f"{base_commit}..HEAD",
+        )
+        untracked = git_bytes("ls-files", "--others", "--exclude-standard", "-z")
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        return None
+
+    paths: set[Path] = set()
+    for raw in (*changed.split(b"\0"), *untracked.split(b"\0")):
+        if not raw:
+            continue
+        try:
+            relative = Path(raw.decode("utf-8"))
+        except UnicodeError:
+            continue
+        if not relative.is_absolute() and not any(
+            part in IGNORED_SCAN_DIRECTORIES for part in relative.parts
+        ):
+            paths.add(relative)
+    return paths
+
+
+def _candidate_scan_paths(root: Path, errors: list[str]) -> set[Path]:
+    paths = set(REQUIRED_PATHS)
+    discovered = _git_candidate_paths(root)
+    if discovered is None:
+        discovered = _filesystem_paths(root, errors)
+    paths.update(discovered)
+    return {
+        relative
+        for relative in paths
+        if not any(part in IGNORED_SCAN_DIRECTORIES for part in relative.parts)
+    }
 
 
 def _mapping_digest(entries: list[dict[str, Any]]) -> str:
@@ -241,12 +323,20 @@ def _json_pointer(document: Any, fragment: str) -> Any:
 
 def _offline_ref_errors(schemas: dict[str, dict[str, Any]]) -> list[str]:
     errors: list[str] = []
-    by_id = {schema.get("$id"): schema for schema in schemas.values()}
+    by_id: dict[str, dict[str, Any]] = {}
+    for schema in schemas.values():
+        schema_id = schema.get("$id")
+        if not isinstance(schema_id, str):
+            errors.append("schema resource ID must be a string")
+            continue
+        by_id[schema_id] = schema
     expected_ids = set(SCHEMA_IDS.values())
     if set(by_id) != expected_ids:
         return ["schema resource ID set mismatch"]
     for path, schema in schemas.items():
-        base = schema["$id"]
+        base = schema.get("$id")
+        if not isinstance(base, str):
+            continue
         for pointer, node in _iter_schema_nodes(schema):
             reference = node.get("$ref")
             if not isinstance(reference, str):
@@ -275,9 +365,13 @@ def _schema_validators(
     ):
         errors.append("jsonschema 2020-12 validation dependency unavailable")
         return {}
-    registry = Registry().with_resources(
-        (schema["$id"], Resource.from_contents(schema)) for schema in schemas.values()
-    )
+    try:
+        registry = Registry().with_resources(
+            (schema["$id"], Resource.from_contents(schema)) for schema in schemas.values()
+        )
+    except Exception as exc:  # fail closed without serializing schema contents
+        errors.append(f"schema registry construction failed: {type(exc).__name__}")
+        return {}
     validators: dict[str, Any] = {}
     for path, schema in schemas.items():
         try:
@@ -468,10 +562,15 @@ def validate_instance(
     validator = validators.get(schema_path)
     if validator is None:
         return [f"schema validator unavailable: {schema_path}"]
-    errors.extend(
-        f"schema validation failed at {'/'.join(str(part) for part in error.path) or '/'}"
-        for error in validator.iter_errors(instance)
-    )
+    try:
+        schema_errors = list(validator.iter_errors(instance))
+    except Exception as exc:  # fail closed without serializing instance contents
+        errors.append(f"schema validation failed: {type(exc).__name__}")
+    else:
+        errors.extend(
+            f"schema validation failed at {'/'.join(str(part) for part in error.path) or '/'}"
+            for error in schema_errors
+        )
     if schema_path == "schemas/task-contract.schema.json":
         errors.extend(_task_semantic_errors(instance))
     elif schema_path == "schemas/task-decomposition.schema.json":
@@ -628,7 +727,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "license_blob_sha": SOURCE_LICENSE_BLOB,
         "package_metadata_blob_sha": SOURCE_PACKAGE_BLOB,
     }
-    if manifest.get("source") != expected_source:
+    source = manifest.get("source")
+    if source != expected_source:
         errors.append("source fixed-point contract mismatch")
     if manifest.get("decision_contract") != {
         "PUBLIC_REAUTHOR": 4,
@@ -661,27 +761,45 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     if len(entries) != 6:
         errors.append("manifest must contain exactly 6 source entries")
     source_paths = [entry.get("source_path") for entry in entries]
-    if source_paths != sorted(source_paths):
-        errors.append("source entries must be sorted by exact path")
-    if len(source_paths) != len(set(source_paths)):
-        errors.append("duplicate source paths")
+    if not all(isinstance(source_path, str) for source_path in source_paths):
+        errors.append("every source path must be a string")
+    else:
+        if source_paths != sorted(source_paths):
+            errors.append("source entries must be sorted by exact path")
+        if len(source_paths) != len(set(source_paths)):
+            errors.append("duplicate source paths")
     mapping_digest = _mapping_digest(entries)
     if mapping_digest != SOURCE_MAPPING_DIGEST:
         errors.append("exact source path/blob/mode/decision mapping digest mismatch")
-    if manifest.get("source", {}).get("source_mapping_digest_sha256") != mapping_digest:
+    source_mapping_digest = (
+        source.get("source_mapping_digest_sha256") if isinstance(source, dict) else None
+    )
+    if source_mapping_digest != mapping_digest:
         errors.append("manifest source mapping digest is not self-consistent")
     if any(entry.get("source_mode") != "100644" for entry in entries):
         errors.append("every source mode must remain 100644")
-    source_blobs = {entry.get("source_blob_sha") for entry in entries}
-    if source_blobs != SOURCE_BLOBS:
+    source_blob_values = [entry.get("source_blob_sha") for entry in entries]
+    source_blobs = {
+        source_blob
+        for source_blob in source_blob_values
+        if isinstance(source_blob, str)
+    }
+    if len(source_blobs) != len(source_blob_values) or source_blobs != SOURCE_BLOBS:
         errors.append("exact current source-blob coverage mismatch")
     if any(entry.get("body_exported") is not False for entry in entries):
         errors.append("every source body export flag must remain false")
     for entry in entries:
+        unknown_fields = sorted(set(entry) - MANIFEST_ENTRY_KEYS)
+        missing_fields = sorted(MANIFEST_ENTRY_KEYS - set(entry))
+        for field in unknown_fields:
+            errors.append(f"unknown manifest entry field: {field}")
+        for field in missing_fields:
+            errors.append(f"manifest entry missing field: {field}")
         coverage = entry.get("semantic_coverage")
         if (
             not isinstance(coverage, list)
             or not coverage
+            or any(not isinstance(item, str) for item in coverage)
             or coverage != sorted(coverage)
             or len(coverage) != len(set(coverage))
         ):
@@ -690,17 +808,33 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         if not isinstance(rationale, str) or not 1 <= len(rationale) <= 512:
             errors.append("invalid decision rationale")
 
-    decisions = Counter(entry.get("decision") for entry in entries)
+    decision_values = [entry.get("decision") for entry in entries]
+    decisions = Counter(
+        decision for decision in decision_values if isinstance(decision, str)
+    )
+    if any(not isinstance(decision, str) for decision in decision_values):
+        errors.append("every decision must be a string")
     if decisions != Counter({"PUBLIC_REAUTHOR": 4, "PRIVATE_RETAIN": 2}):
         errors.append("actual decision counts mismatch")
     public = [entry for entry in entries if entry.get("decision") == "PUBLIC_REAUTHOR"]
     private = [entry for entry in entries if entry.get("decision") == "PRIVATE_RETAIN"]
     public_destinations = [entry.get("destination_path") for entry in public]
-    if set(public_destinations) != set(DESTINATIONS) or len(public_destinations) != 4:
+    public_destination_set = {
+        destination
+        for destination in public_destinations
+        if isinstance(destination, str)
+    }
+    if len(public_destination_set) != len(public_destinations):
+        errors.append("PUBLIC_REAUTHOR destinations must be strings")
+    if public_destination_set != set(DESTINATIONS) or len(public_destinations) != 4:
         errors.append("PUBLIC_REAUTHOR destination set or uniqueness mismatch")
     for entry in public:
         destination = entry.get("destination_path")
-        if destination in DESTINATIONS and entry.get("destination_blob_sha") != DESTINATIONS[destination]:
+        if (
+            isinstance(destination, str)
+            and destination in DESTINATIONS
+            and entry.get("destination_blob_sha") != DESTINATIONS[destination]
+        ):
             errors.append(f"PUBLIC_REAUTHOR destination blob mismatch: {destination}")
     for entry in private:
         if entry.get("destination_path") is not None or entry.get("destination_blob_sha") is not None:
@@ -725,6 +859,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
             source_blob_reuse_paths.append(relative.as_posix())
             errors.append(f"source registry blob copied unchanged: {relative.as_posix()}")
 
+    destination_blobs_verified = 0
     schemas: dict[str, dict[str, Any]] = {}
     for path, expected_sha in DESTINATIONS.items():
         data = _read_bounded(root, Path(path), errors)
@@ -732,6 +867,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
             continue
         if git_blob_sha(data) != expected_sha:
             errors.append(f"destination blob mismatch: {path}")
+        else:
+            destination_blobs_verified += 1
         try:
             schema = json.loads(data.decode("utf-8"))
         except (UnicodeError, json.JSONDecodeError):
@@ -747,7 +884,12 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
             errors.append(f"schema ID mismatch: {path}")
         if schema.get("additionalProperties") is not False:
             errors.append(f"schema root must be closed: {path}")
-        candidate_property = schema.get("properties", {}).get("candidate_status", {})
+        properties = schema.get("properties")
+        candidate_property = (
+            properties.get("candidate_status", {})
+            if isinstance(properties, dict)
+            else {}
+        )
         if candidate_property.get("const") != "candidate_only":
             errors.append(f"schema must remain candidate-only: {path}")
         for pointer, node in _iter_schema_nodes(schema):
@@ -774,20 +916,21 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         errors.append("MIT license bytes do not match pinned source license blob")
 
     manifest_data = _read_bounded(root, MANIFEST_PATH, errors)
+    candidate_scan_paths = _candidate_scan_paths(root, errors)
     source_path_leaks = 0
     for source_path in source_paths:
         if not isinstance(source_path, str):
             continue
         if manifest_data is None or manifest_data.decode("utf-8", errors="replace").count(source_path) != 1:
             errors.append("source path must appear exactly once in manifest")
-        for relative in REQUIRED_PATHS - {MANIFEST_PATH}:
+        for relative in candidate_scan_paths - {MANIFEST_PATH}:
             data = _read_bounded(root, relative, errors)
             if data is not None and source_path.encode("utf-8") in data:
                 source_path_leaks += 1
                 errors.append(f"source path leaked outside manifest: {relative.as_posix()}")
 
     errors.extend(_scan_manifest_strings(manifest))
-    for relative in REQUIRED_PATHS - {MANIFEST_PATH}:
+    for relative in candidate_scan_paths - {MANIFEST_PATH}:
         data = _read_bounded(root, relative, errors)
         if data is None:
             continue
@@ -810,10 +953,14 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "source_entries": len(entries),
         "source_mapping_digest_sha256": mapping_digest,
         "decisions": dict(sorted(decisions.items())),
-        "unique_reauthored_destinations": len(set(public_destinations)),
-        "destination_blobs_verified": len(DESTINATIONS) if not any(
-            error.startswith("destination blob mismatch") for error in errors
-        ) else 0,
+        "unique_reauthored_destinations": len(
+            {
+                destination
+                for destination in public_destinations
+                if isinstance(destination, str)
+            }
+        ),
+        "destination_blobs_verified": destination_blobs_verified,
         "schemas_meta_validated": len(validators),
         "offline_refs_resolved": not any("schema reference" in error for error in errors),
         "source_registry_blob_reuse": len(source_blob_reuse_paths),

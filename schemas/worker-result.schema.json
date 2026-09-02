@@ -131,6 +131,16 @@
           },
           "checks": {
             "minItems": 1,
+            "items": {
+              "properties": {
+                "status": {
+                  "const": "pass"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
             "contains": {
               "type": "object",
               "properties": {

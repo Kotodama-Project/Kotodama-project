@@ -6,7 +6,7 @@
   "source": {
     "fixed_commit": "2fc1bf60b0dc8721c96875788447e34adc4c7216",
     "expected_entries": 6,
-    "source_mapping_digest_sha256": "6042ed4eb73f673aeac7964d5855e23a3067617c8cefad71efe32f1c4e15a702",
+    "source_mapping_digest_sha256": "6dcc74faa7736f38db8d8759214a579a2fee4e206d86832d0eade465af67aeeb",
     "git_history_imported": false,
     "source_bodies_copied_unchanged": false,
     "license_expression": "MIT",
@@ -54,7 +54,7 @@
     },
     {
       "path": "schemas/worker-result.schema.json",
-      "blob_sha": "48d482e9a00e2af49a648cf1888020210d61f07b",
+      "blob_sha": "68767aa92a1415e6f9e7dcaeeba32c830eb142c7",
       "schema_id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/worker-result.schema.json",
       "candidate_status": "candidate_only"
     }
@@ -152,7 +152,7 @@
       "source_mode": "100644",
       "decision": "PUBLIC_REAUTHOR",
       "destination_path": "schemas/worker-result.schema.json",
-      "destination_blob_sha": "48d482e9a00e2af49a648cf1888020210d61f07b",
+      "destination_blob_sha": "68767aa92a1415e6f9e7dcaeeba32c830eb142c7",
       "body_exported": false,
       "semantic_coverage": [
         "candidate_and_evidence_receipts",

@@ -117,6 +117,46 @@ class A019MigrationBatchTests(unittest.TestCase):
                         result["errors"],
                     )
 
+    def test_manifest_entries_reject_unknown_fields(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            manifest = self._manifest(root)
+            manifest["entries"][0]["source_body"] = "unexported source prose"
+            self._write_manifest(root, manifest)
+
+            result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(
+                any("unknown manifest entry field" in error for error in result["errors"]),
+                result["errors"],
+            )
+
+    def test_malformed_manifest_entry_values_fail_closed(self) -> None:
+        mutations = (
+            ("source_path", [], "every source path must be a string"),
+            ("semantic_coverage", ["bounded", {}], "semantic coverage must be"),
+            ("decision", {}, "every decision must be a string"),
+            ("source_blob_sha", [], "source-blob coverage mismatch"),
+            ("destination_path", [], "PUBLIC_REAUTHOR destination set"),
+        )
+        for field, value, expected in mutations:
+            with self.subTest(field=field):
+                temporary, root = self._fixture()
+                with temporary:
+                    manifest = self._manifest(root)
+                    entry_index = 2 if field == "destination_path" else 0
+                    manifest["entries"][entry_index][field] = value
+                    self._write_manifest(root, manifest)
+
+                    result = VALIDATOR.validate(root)
+
+                    self.assertEqual(result["status"], "FAIL")
+                    self.assertTrue(
+                        any(expected in error for error in result["errors"]),
+                        result["errors"],
+                    )
+
     def test_schema_meta_validation_and_offline_refs_are_exact(self) -> None:
         schemas, validators = self._instance_context()
         self.assertEqual(set(schemas), set(VALIDATOR.DESTINATIONS))
@@ -427,6 +467,87 @@ class A019MigrationBatchTests(unittest.TestCase):
             result = VALIDATOR.validate(root)
             self.assertEqual(result["status"], "FAIL")
             self.assertGreater(result["candidate_scan_findings"], 0)
+
+    def test_candidate_scan_covers_unlisted_candidate_paths(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            extra = root / "docs" / "added-candidate.txt"
+            extra.parent.mkdir(parents=True)
+            extra.write_text(
+                "registry/" + "INDEX.md\n"
+                + "C:" + chr(47) + "Users/rambo/private-source.txt\n",
+                encoding="utf-8",
+            )
+
+            result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertGreater(result["source_path_leakage"], 0)
+            self.assertGreater(result["candidate_scan_findings"], 0)
+            self.assertTrue(
+                any("docs/added-candidate.txt" in error for error in result["errors"]),
+                result["errors"],
+            )
+
+    def test_non_object_manifest_source_returns_structured_failure(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            manifest = self._manifest(root)
+            manifest["source"] = []
+            self._write_manifest(root, manifest)
+
+            result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn("source fixed-point contract mismatch", result["errors"])
+
+    def test_destination_blob_count_only_includes_verified_bytes(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            missing = root / "schemas" / "worker-result.schema.json"
+            missing.unlink()
+
+            result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertEqual(result["destination_blobs_verified"], 3)
+
+    def test_worker_result_schema_rejects_mixed_succeeded_checks(self) -> None:
+        schemas, validators = self._instance_context()
+        result = copy.deepcopy(
+            VALIDATOR.positive_instances()["schemas/worker-result.schema.json"]
+        )
+        result["checks"].append(
+            {"check_id": "scope.bound", "status": "fail"}
+        )
+
+        direct_errors = list(
+            validators["schemas/worker-result.schema.json"].iter_errors(result)
+        )
+
+        self.assertTrue(direct_errors)
+
+    def test_malformed_schema_returns_structured_failure(self) -> None:
+        mutations = (
+            lambda schema: schema.__setitem__("$id", []),
+            lambda schema: schema.__setitem__("$schema", []),
+            lambda schema: schema.__setitem__("properties", []),
+        )
+        for mutate in mutations:
+            with self.subTest(mutation=mutate):
+                temporary, root = self._fixture()
+                with temporary:
+                    schema_path = root / "schemas" / "task-contract.schema.json"
+                    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+                    mutate(schema)
+                    schema_path.write_text(
+                        json.dumps(schema), encoding="utf-8"
+                    )
+
+                    result = VALIDATOR.validate(root)
+
+                    self.assertEqual(result["status"], "FAIL")
+                    self.assertTrue(result["errors"], result)
 
     def test_license_scope_destination_binding_and_gates_fail_closed(self) -> None:
         mutations = (
