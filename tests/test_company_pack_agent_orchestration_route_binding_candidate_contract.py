@@ -1,10 +1,14 @@
 import copy
 import json
+import runpy
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -245,6 +249,13 @@ class AgentOrchestrationRouteBindingCandidateContractTests(unittest.TestCase):
         self.assertEqual(report["result"], "REFUSED")
         self.assertIn("CANDIDATE_MARKED_REFUSED", report["reason_codes"])
 
+    def test_cli_rejects_a_refused_failure_state_on_a_defined_route(self) -> None:
+        mutated = candidate()
+        mutated["failure_and_rollback"]["failure_state"] = "REFUSED_UNVERIFIED"
+        code, report = self.run_cli(mutated)
+        self.assertEqual(code, 2)
+        self.assertIn("CANDIDATE_MARKED_REFUSED", report["reason_codes"])
+
     def test_cli_returns_unverified_candidate_only_result(self) -> None:
         code, report = self.run_cli(candidate())
         self.assertEqual(code, 0)
@@ -306,6 +317,47 @@ class AgentOrchestrationRouteBindingCandidateContractTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 2)
             self.assertIn("INPUT_TOO_LARGE", json.loads(result.stdout)["reason_codes"])
+
+    def test_cli_checks_input_size_before_unbounded_path_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "oversized.json"
+            path.write_bytes(b"{" + b"a" * (1_048_576 + 1) + b"}")
+            module = runpy.run_path(str(VALIDATOR))
+            output = StringIO()
+            with patch.object(Path, "read_bytes", side_effect=AssertionError("full read forbidden")):
+                with redirect_stdout(output):
+                    code = module["main"]([str(VALIDATOR), str(path)])
+
+        self.assertEqual(code, 2)
+        self.assertIn("INPUT_TOO_LARGE", json.loads(output.getvalue())["reason_codes"])
+
+    def test_cli_converts_excessive_json_nesting_to_structured_refusal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "deep.json"
+            path.write_text('{"a":' * 20_000 + "0" + "}" * 20_000, encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(VALIDATOR), str(path)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=10,
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stderr, "")
+        report = json.loads(result.stdout)
+        self.assertEqual(report["result"], "REFUSED")
+        self.assertIn("INPUT_INVALID", report["reason_codes"])
+
+    def test_cli_reports_schema_match_for_semantic_refusal(self) -> None:
+        mutated = candidate()
+        mutated["preview"]["expires_at"] = "2026-08-18T09:30:00+09:00"
+        mutated["expires_at"] = "2026-08-19T09:31:00+09:00"
+        code, report = self.run_cli(mutated)
+        self.assertEqual(code, 2)
+        self.assertIn("PREVIEW_WINDOW_UNBOUNDED", report["reason_codes"])
+        self.assertEqual(report["checks"]["schema"], "MATCH")
 
     def test_public_navigation_exposes_candidate_without_runtime_claim(self) -> None:
         self.assertTrue(DOC.is_file())

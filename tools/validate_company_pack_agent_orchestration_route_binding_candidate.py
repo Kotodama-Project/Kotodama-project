@@ -151,6 +151,10 @@ class DuplicateKeyError(ValueError):
     pass
 
 
+class InputTooLargeError(ValueError):
+    pass
+
+
 def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -158,6 +162,16 @@ def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise DuplicateKeyError
         result[key] = value
     return result
+
+
+def read_bounded(path: Path) -> bytes:
+    if path.stat().st_size > MAX_INPUT_BYTES:
+        raise InputTooLargeError
+    with path.open("rb") as stream:
+        raw = stream.read(MAX_INPUT_BYTES + 1)
+    if len(raw) > MAX_INPUT_BYTES:
+        raise InputTooLargeError
+    return raw
 
 
 def parse_timestamp(value: Any) -> datetime | None:
@@ -331,7 +345,9 @@ def _semantic_reasons(candidate: dict[str, Any]) -> list[str]:
 CLAIMS_FALSE = {name: False for name in sorted(CLAIM_FIELDS)}
 
 
-def _payload(*, result: str, reason_codes: list[str], matched: bool) -> dict[str, Any]:
+def _payload(
+    *, result: str, reason_codes: list[str], matched: bool, schema_matched: bool
+) -> dict[str, Any]:
     return {
         "kind": "company_pack_agent_orchestration_route_binding_candidate_preflight",
         "version": "1.0",
@@ -339,7 +355,7 @@ def _payload(*, result: str, reason_codes: list[str], matched: bool) -> dict[str
         "result": result,
         "reason_codes": reason_codes,
         "checks": {
-            "schema": "MATCH" if matched else "REFUSED",
+            "schema": "MATCH" if schema_matched else "REFUSED",
             "identity_shape": "MATCH_UNVERIFIED" if matched else "REFUSED",
             "resource_binding": "MATCH_UNVERIFIED" if matched else "REFUSED",
             "window_order": "MATCH_UNVERIFIED" if matched else "REFUSED",
@@ -351,9 +367,20 @@ def _payload(*, result: str, reason_codes: list[str], matched: bool) -> dict[str
     }
 
 
-def reject(reason_codes: list[str]) -> int:
+def reject(reason_codes: list[str], *, schema_matched: bool = False) -> int:
     unique = list(dict.fromkeys(reason_codes)) or ["INPUT_INVALID"]
-    print(json.dumps(_payload(result="REFUSED", reason_codes=unique, matched=False), indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            _payload(
+                result="REFUSED",
+                reason_codes=unique,
+                matched=False,
+                schema_matched=schema_matched,
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 2
 
 
@@ -364,6 +391,7 @@ def success() -> int:
                 result="PRECONDITIONS_MATCH_UNVERIFIED",
                 reason_codes=[],
                 matched=True,
+                schema_matched=True,
             ),
             indent=2,
             sort_keys=True,
@@ -379,14 +407,14 @@ def main(argv: list[str]) -> int:
 
     candidate_path = Path(argv[1])
     try:
-        raw = candidate_path.read_bytes()
-        if len(raw) > MAX_INPUT_BYTES:
-            return reject(["INPUT_TOO_LARGE"])
+        raw = read_bounded(candidate_path)
         candidate = json.loads(raw.decode("utf-8"), object_pairs_hook=reject_duplicate_keys)
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         if not isinstance(schema, dict):
             raise ValueError
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, DuplicateKeyError, ValueError):
+    except InputTooLargeError:
+        return reject(["INPUT_TOO_LARGE"])
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError, DuplicateKeyError, ValueError):
         return reject(["INPUT_INVALID"])
 
     if Draft202012Validator is None or FormatChecker is None:
@@ -401,10 +429,13 @@ def main(argv: list[str]) -> int:
         return reject(["SCHEMA_INVALID"])
     if not _shape_valid(candidate):
         return reject(["SCHEMA_INVALID"])
-    if candidate["route_state"] == "REFUSED_UNVERIFIED":
-        return reject(["CANDIDATE_MARKED_REFUSED"])
+    if (
+        candidate["route_state"] == "REFUSED_UNVERIFIED"
+        or candidate["failure_and_rollback"]["failure_state"] == "REFUSED_UNVERIFIED"
+    ):
+        return reject(["CANDIDATE_MARKED_REFUSED"], schema_matched=True)
     reasons = _semantic_reasons(candidate)
-    return reject(reasons) if reasons else success()
+    return reject(reasons, schema_matched=True) if reasons else success()
 
 
 if __name__ == "__main__":

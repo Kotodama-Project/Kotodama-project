@@ -84,6 +84,10 @@ class DuplicateKeyError(ValueError):
     pass
 
 
+class InputTooLargeError(ValueError):
+    pass
+
+
 def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -91,6 +95,16 @@ def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise DuplicateKeyError
         result[key] = value
     return result
+
+
+def read_bounded(path: Path) -> bytes:
+    if path.stat().st_size > MAX_INPUT_BYTES:
+        raise InputTooLargeError
+    with path.open("rb") as stream:
+        raw = stream.read(MAX_INPUT_BYTES + 1)
+    if len(raw) > MAX_INPUT_BYTES:
+        raise InputTooLargeError
+    return raw
 
 
 def parse_timestamp(value: Any) -> datetime | None:
@@ -245,8 +259,38 @@ def _semantic_reasons(candidate: dict[str, Any]) -> list[str]:
     if len(revisions) > 1:
         reasons.append("PUBLIC_REVISION_DRIFT")
 
+    for assignment in assignments:
+        if assignment["attempt_ref"] in assignment["dependencies"]:
+            reasons.append("DEPENDENCY_SELF_REFERENCE")
+
+    dependency_graph = {
+        assignment["attempt_ref"]: [
+            dependency
+            for dependency in assignment["dependencies"]
+            if dependency in attempt_set and dependency != assignment["attempt_ref"]
+        ]
+        for assignment in assignments
+    }
+
+    dependency_state: dict[str, int] = {}
+
+    def dependency_cycle(attempt_ref: str) -> bool:
+        state = dependency_state.get(attempt_ref, 0)
+        if state == 1:
+            return True
+        if state == 2:
+            return False
+        dependency_state[attempt_ref] = 1
+        cycle = any(dependency_cycle(dependency) for dependency in dependency_graph[attempt_ref])
+        dependency_state[attempt_ref] = 2
+        return cycle
+
+    for attempt_ref in dependency_graph:
+        if dependency_cycle(attempt_ref):
+            reasons.append("DEPENDENCY_CYCLE")
+
     # Parent/child edges are explicit: every non-root assignment must be listed
-    # by its parent, and a root must not claim an unknown parent edge.
+    # by its parent, and every child declaration must point back to its parent.
     by_ref = {assignment["attempt_ref"]: assignment for assignment in assignments}
     for assignment in assignments:
         parent_ref = assignment["parent_attempt_ref"]
@@ -256,6 +300,10 @@ def _semantic_reasons(candidate: dict[str, Any]) -> list[str]:
                 reasons.append("PARENT_CHILD_EDGE_UNVERIFIED")
             elif parent["depth"] >= assignment["depth"]:
                 reasons.append("PARENT_DEPTH_ORDER_INVALID")
+        for child_ref in assignment["planned_child_attempt_refs"]:
+            child = by_ref.get(child_ref)
+            if child is not None and child["parent_attempt_ref"] != assignment["attempt_ref"]:
+                reasons.append("CHILD_PARENT_EDGE_MISMATCH")
     if root_assignments:
         root_assignment = root_assignments[0]
         if root_assignment["source_task_ref"] != candidate["root_task_ref"]:
@@ -271,7 +319,9 @@ def _semantic_reasons(candidate: dict[str, Any]) -> list[str]:
 CLAIMS_FALSE = {name: False for name in CLAIM_FIELDS}
 
 
-def _payload(*, result: str, reason_codes: list[str], matched: bool) -> dict[str, Any]:
+def _payload(
+    *, result: str, reason_codes: list[str], matched: bool, schema_matched: bool
+) -> dict[str, Any]:
     return {
         "kind": "company_pack_agent_swarm_execution_candidate_preflight",
         "version": "1.0",
@@ -279,7 +329,7 @@ def _payload(*, result: str, reason_codes: list[str], matched: bool) -> dict[str
         "result": result,
         "reason_codes": reason_codes,
         "checks": {
-            "schema": "MATCH" if matched else "REFUSED",
+            "schema": "MATCH" if schema_matched else "REFUSED",
             "budget_and_wave": "MATCH_UNVERIFIED" if matched else "REFUSED",
             "assignment_identity": "MATCH_UNVERIFIED" if matched else "REFUSED",
             "parent_edges": "MATCH_UNVERIFIED" if matched else "REFUSED",
@@ -293,9 +343,20 @@ def _payload(*, result: str, reason_codes: list[str], matched: bool) -> dict[str
     }
 
 
-def reject(reason_codes: list[str]) -> int:
+def reject(reason_codes: list[str], *, schema_matched: bool = False) -> int:
     unique = list(dict.fromkeys(reason_codes)) or ["INPUT_INVALID"]
-    print(json.dumps(_payload(result="REFUSED", reason_codes=unique, matched=False), indent=2, sort_keys=True))
+    print(
+        json.dumps(
+            _payload(
+                result="REFUSED",
+                reason_codes=unique,
+                matched=False,
+                schema_matched=schema_matched,
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 2
 
 
@@ -306,6 +367,7 @@ def success() -> int:
                 result="PRECONDITIONS_MATCH_UNVERIFIED",
                 reason_codes=[],
                 matched=True,
+                schema_matched=True,
             ),
             indent=2,
             sort_keys=True,
@@ -321,14 +383,14 @@ def main(argv: list[str]) -> int:
 
     candidate_path = Path(argv[1])
     try:
-        raw = candidate_path.read_bytes()
-        if len(raw) > MAX_INPUT_BYTES:
-            return reject(["INPUT_TOO_LARGE"])
+        raw = read_bounded(candidate_path)
         candidate = json.loads(raw.decode("utf-8"), object_pairs_hook=reject_duplicate_keys)
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         if not isinstance(candidate, dict) or not isinstance(schema, dict):
             raise ValueError
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, DuplicateKeyError, ValueError):
+    except InputTooLargeError:
+        return reject(["INPUT_TOO_LARGE"])
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError, DuplicateKeyError, ValueError):
         return reject(["INPUT_INVALID"])
 
     if Draft202012Validator is None or FormatChecker is None:
@@ -342,9 +404,9 @@ def main(argv: list[str]) -> int:
     if schema_errors:
         return reject(["SCHEMA_INVALID"])
     if candidate["swarm_state"] == "REFUSED_UNVERIFIED":
-        return reject(["CANDIDATE_MARKED_REFUSED"])
+        return reject(["CANDIDATE_MARKED_REFUSED"], schema_matched=True)
     reasons = _semantic_reasons(candidate)
-    return reject(reasons) if reasons else success()
+    return reject(reasons, schema_matched=True) if reasons else success()
 
 
 if __name__ == "__main__":

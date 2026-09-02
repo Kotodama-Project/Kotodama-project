@@ -345,7 +345,9 @@ session、host、cwd、credentialは解決・出力せず、複数candidate間�
 証明しません。schemaの`REFUSED_UNVERIFIED`は構造上の拒否候補であり、CLIは
 `CANDIDATE_MARKED_REFUSED`で拒否します。Draft 2020-12検証には`requirements-test.txt`の
 `jsonschema`が必要で、未導入時は`VALIDATOR_UNAVAILABLE`にfail-closedします。成功・拒否の
-どちらも `CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED`を維持します。
+どちらも `CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED`を維持します。schema-validなsemantic拒否は
+`checks.schema=MATCH`を保ち、構造・parser・validatorの拒否だけを`REFUSED`とするため、
+修正対象を区別できますが、runtimeやauthorityの証明にはなりません。
 
 ## 14. Agent swarm execution candidate
 
@@ -375,7 +377,9 @@ prompt、private content を解決せず、複数candidate間の replay reservat
 `REFUSED_UNVERIFIED` は構造上の拒否候補であり、CLI は `CANDIDATE_MARKED_REFUSED` で
 拒否します。Draft 2020-12 検証には `requirements-test.txt` の `jsonschema` が必要で、
 未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。成功・拒否のどちらも
-`CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED` を維持します。
+`CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED` を維持します。schema-validなsemantic拒否は
+`checks.schema=MATCH`を保ち、構造・parser・validatorの拒否だけを`REFUSED`とするため、
+修正対象を区別できますが、runtimeやauthorityの証明にはなりません。
 
 ## Related guidance
 
