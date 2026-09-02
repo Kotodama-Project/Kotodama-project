@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import subprocess
 import unittest
 
@@ -25,9 +26,14 @@ MIGRATION_SSOT_MARKERS = (
 )
 HISTORICAL_GIT_BLOBS = {
     "README.md": "9a591992b1d74681fe8b011222625c6a0525c0c8",
-    "STATUS-R179-AND-EARLIER.md": "71877969c3eae7f32d928884a9e7766a6945a0ea",
-    "ROADMAP-R179-AND-EARLIER.md": "96bb07e5dff7612368b03943c6c0c6c5faaa51d9",
+    "STATUS-R179-AND-EARLIER.md": "b3382862f08cb31dfaec417d687a3d60099b1d1f",
+    "ROADMAP-R179-AND-EARLIER.md": "854d0e985fefe79cffc57068fbe6ba0483c034ab",
 }
+HISTORICAL_SNAPSHOTS = (
+    "docs/history/STATUS-R179-AND-EARLIER.md",
+    "docs/history/ROADMAP-R179-AND-EARLIER.md",
+)
+MARKDOWN_LINK_TARGET = re.compile(r"\[[^\]]+\]\(([^)\s]+)")
 
 
 def git_blob_sha(path: Path) -> str:
@@ -54,8 +60,22 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                 self.assertIn(PUBLISHED_MAIN, text)
             for candidate, sha in ACTIVE_CANDIDATES.items():
                 with self.subTest(surface=surface, candidate=candidate):
-                    self.assertIn(candidate, text)
-                    self.assertIn(sha, text)
+                    current_state = text.split("## Current public state", 1)[1].split(
+                        "\n## ", 1
+                    )[0]
+                    candidate_row = next(
+                        (
+                            row
+                            for row in current_state.splitlines()
+                            if row.startswith("|")
+                            and re.search(
+                                rf"(?<!\d){re.escape(candidate)}(?!\d)", row
+                            )
+                        ),
+                        None,
+                    )
+                    self.assertIsNotNone(candidate_row)
+                    self.assertIn(sha, candidate_row)
             for evidence, marker in GOVERNANCE_EVIDENCE.items():
                 with self.subTest(surface=surface, evidence=evidence):
                     self.assertIn(marker, text)
@@ -116,17 +136,34 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         exact_steps = (
             "1. **Validate PR #18 exactly.**",
             "2. **Complete issue #19.**",
+            "3. **Complete human gates for PR #18.**",
             "4. **Publish the operational status safely.**",
             "5. **Run migration batches under issue #24.**",
             "6. **Rebase and validate PR #17.**",
             "7. **Reconcile and validate PR #1.**",
             "8. **Prove runtime lifecycle.**",
             "9. **Prove Voice and privacy boundaries.**",
+            "10. **Reconcile independently.**",
             "11. **Final Human GO.**",
             "12. **Limited Public Beta.**",
         )
         positions = [ordered.index(step) for step in exact_steps]
         self.assertEqual(sorted(positions), positions)
+
+    def test_relocated_historical_snapshot_links_resolve(self) -> None:
+        for snapshot_name in HISTORICAL_SNAPSHOTS:
+            snapshot = ROOT / snapshot_name
+            text = snapshot.read_text(encoding="utf-8")
+            for match in MARKDOWN_LINK_TARGET.finditer(text):
+                target = match.group(1)
+                if target.startswith(("http://", "https://", "mailto:", "#")):
+                    continue
+                target = target.split("#", 1)[0]
+                if not target:
+                    continue
+                resolved = (snapshot.parent / target).resolve()
+                with self.subTest(snapshot=snapshot_name, target=target):
+                    self.assertTrue(resolved.is_file())
 
     def test_historical_revision_detail_is_preserved_outside_the_ssot(self) -> None:
         history_dir = ROOT / "docs/history"

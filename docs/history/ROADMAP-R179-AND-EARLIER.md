@@ -43,16 +43,16 @@ instead of duplicating it. This is documentation/static-regression evidence
 only. It does not add public Voice, Discord access, runtime, provider,
 authority, Promotion, Current Truth, Final Human GO, or Public Beta access;
 `NO_GO_UNPUBLISHED` remains unchanged. The story-map regression is
-[`test_readme_company_os_story_map.py`](tests/test_readme_company_os_story_map.py),
+[`test_readme_company_os_story_map.py`](../../tests/test_readme_company_os_story_map.py),
 and the orientation regression remains
-[`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
+[`test_public_status_roadmap_sync.py`](../../tests/test_public_status_roadmap_sync.py).
 
 R178 remains historical as the first-visitor tour revision and the
 Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
 published R177 fixed point at public `main` commit
 `d5d6187c7e5e7b6c4fe44e4b60a8aa096d4e8dc0` with tree
 `efeffdaa7147fd83d763398c1c205f3708a67630`. The new
-[5-minute tour](docs/FIVE-MINUTE-TOUR.md) gives a first-time visitor exact
+[5-minute tour](../FIVE-MINUTE-TOUR.md) gives a first-time visitor exact
 PowerShell/POSIX `git clone` -> repository root -> one-command smoke steps,
 explains the PASS/REFUSED report contract, and routes only to bounded public
 next choices. It does not install packages, persist review artifacts, or route
@@ -63,9 +63,9 @@ remains `read-only/candidate-only`; `NO_GO_UNPUBLISHED`, consent/privacy,
 protected review, identity/authority/approval, runtime, Voice/Discord,
 provider, Promotion, Current Truth, Final Human GO, and Public Beta boundaries
 remain unchanged. The reader regression is
-[`test_five_minute_tour.py`](tests/test_five_minute_tour.py), and the
+[`test_five_minute_tour.py`](../../tests/test_five_minute_tour.py), and the
 orientation regression remains
-[`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
+[`test_public_status_roadmap_sync.py`](../../tests/test_public_status_roadmap_sync.py).
 R178 is documentation/static-regression evidence only.
 
 R177 remains historical as the current public
@@ -73,7 +73,7 @@ Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
 published R176 candidate at public `main` commit
 `722345885b8767ee89a28e10f06db2de1ee73ace` with tree
 `4282baf4efc394ffa786720f3bfca68d3caf78c0`. The
-[Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) indexes
+[Company Pack CLI Reference](../COMPANY-PACK-CLI-REFERENCE.md) indexes
 fourteen public entrypoints. Its Smoke entry runs the exact thirteen existing
 Company Pack CLI steps inside a temporary workspace, removes that workspace,
 persists no intermediate artifacts, and emits one closed candidate-only JSON
@@ -84,7 +84,7 @@ report. Run it with
 identity/authority/approval, runtime, Voice/Discord, provider, Promotion,
 Current Truth, Final Human GO, and Public Beta boundaries remain unchanged.
 The orientation regression is
-[`test_public_status_roadmap_sync.py`](tests/test_public_status_roadmap_sync.py).
+[`test_public_status_roadmap_sync.py`](../../tests/test_public_status_roadmap_sync.py).
 R177 is documentation/static-regression evidence only.
 
 R176 remains historical as the one-command review-chain smoke revision at
@@ -97,11 +97,11 @@ Template/Company/Blocks/Records/MOCs/starter orientation surface, bound to the
 published R171 candidate at public `main` commit
 `c4a15b0e91a3bacd9125a24e1111521b467c174c` with tree
 `ec7b2f200b427b2f4ff6dc3cf228fe4a19c8dd08`. R172 synchronized STATUS and
-ROADMAP with R171's [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md)
-post-PASS path: [Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)
+ROADMAP with R171's [Public Preview Self-check](../PUBLIC-PREVIEW-SELF-CHECK.md)
+post-PASS path: [Company Pack Guided Next Steps](../COMPANY-PACK-NEXT-STEPS.md)
 then Review Bundle -> Review Request -> Review Response -> Decision Handoff.
 Its external-free smoke is
-[`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py),
+[`test_public_starter_runbook_smoke.py`](../../tests/test_public_starter_runbook_smoke.py),
 run as `python -m unittest tests.test_public_starter_runbook_smoke -v` or
 `python3 -m unittest tests.test_public_starter_runbook_smoke -v`. That revision
 remains `read-only/candidate-only`; `NO_GO_UNPUBLISHED`, runtime,
@@ -194,8 +194,8 @@ review-chain artifact-map publication at public `main` commit
 artifact map for Review Bundle, Review Request, Review Response, and Decision
 Handoff, with the Company Pack Catalog entry and before or after the
 external-free smoke guidance. The R149 regressions are
-[`test_starter_walkthrough_runbook_docs.py`](tests/test_starter_walkthrough_runbook_docs.py)
-and [`test_company_pack_catalog_entry_navigation.py`](tests/test_company_pack_catalog_entry_navigation.py).
+[`test_starter_walkthrough_runbook_docs.py`](../../tests/test_starter_walkthrough_runbook_docs.py)
+and [`test_company_pack_catalog_entry_navigation.py`](../../tests/test_company_pack_catalog_entry_navigation.py).
 R148 remains
 historical as the first-read review-chain entry wording revision at public
 `main` commit `a0c050aa6c7c7f40302e3cd9afffad65a61a3ae5` with tree
@@ -204,7 +204,7 @@ full review-chain smoke revision. R147 adds the **full
 review-chain smoke**: Review Request, Review Response, and Decision Handoff are
 saved and freshly verified after the starter Bundle in one temporary,
 external-free pack. The executable path is
-[`test_public_starter_runbook_smoke.py`](tests/test_public_starter_runbook_smoke.py),
+[`test_public_starter_runbook_smoke.py`](../../tests/test_public_starter_runbook_smoke.py),
 and the public runbook links are synchronized across README, Starter Walkthrough,
 Schema / Validator / Test Matrix, and Company Pack Next Steps at public `main`
 commit `1abcfd8f835f7d52627c194aacd8a62efb87875b` with tree
@@ -224,10 +224,10 @@ Company Pack review-chain documentation revision. R141 remains historical as
 the Company Pack Guided Next Steps and Installation Lifecycle revision at
 public `main` commit `ebcdd003d062c6bc90b5ea546da3d430911bda74` with tree
 `ec765b5f824a92d2efdc065b4a225d7779a6e9d2`; the changed surfaces were
-[`docs/COMPANY-PACK-NEXT-STEPS.md`](docs/COMPANY-PACK-NEXT-STEPS.md) and
-[`docs/INSTALLATION-LIFECYCLE.md`](docs/INSTALLATION-LIFECYCLE.md), covered by
-[`test_company_pack_next_steps_entry_navigation.py`](tests/test_company_pack_next_steps_entry_navigation.py)
-and [`test_installation_lifecycle_docs.py`](tests/test_installation_lifecycle_docs.py).
+[`docs/COMPANY-PACK-NEXT-STEPS.md`](../COMPANY-PACK-NEXT-STEPS.md) and
+[`docs/INSTALLATION-LIFECYCLE.md`](../INSTALLATION-LIFECYCLE.md), covered by
+[`test_company_pack_next_steps_entry_navigation.py`](../../tests/test_company_pack_next_steps_entry_navigation.py)
+and [`test_installation_lifecycle_docs.py`](../../tests/test_installation_lifecycle_docs.py).
 R140 remains historical as the
 Installation Lifecycle guided-next-steps revision at public `main` commit
 `2ad60c6eb24a33e125f658ff0be52a3d53b27fa3` with tree
@@ -250,8 +250,8 @@ Company Pack Next Steps entry navigation with a stable ideal/current/smoke
 first-stop at public `main` commit
 `1667007004f92ac65e0124355fda9b71d81d7e6b` with tree
 `aebd38c2012b745333e66348232dc88804181b65`. The changed surface is
-[`docs/COMPANY-PACK-NEXT-STEPS.md`](docs/COMPANY-PACK-NEXT-STEPS.md), covered by
-[`test_company_pack_next_steps_entry_navigation.py`](tests/test_company_pack_next_steps_entry_navigation.py),
+[`docs/COMPANY-PACK-NEXT-STEPS.md`](../COMPANY-PACK-NEXT-STEPS.md), covered by
+[`test_company_pack_next_steps_entry_navigation.py`](../../tests/test_company_pack_next_steps_entry_navigation.py),
 and links the ideal Company Template, Blocks, Governed Records, and MOCs
 layers to the current Company Pack Catalog / Starter Walkthrough and planner
 schema/regression smoke path. R130 is documentation/static-regression
@@ -264,8 +264,8 @@ Company Pack Catalog entry-navigation revision. R128 adds Company Pack
 Catalog entry navigation with a stable ideal/current/smoke first-stop at
 public `main` commit `752fa4b46246110757f01294b559c39412a0b4be` with tree
 `60ee3062bcd472562e01f03708cb1fd58c32f7f7`. The changed surface is
-[`docs/COMPANY-PACK-CATALOG.md`](docs/COMPANY-PACK-CATALOG.md), covered by
-[`test_company_pack_catalog_entry_navigation.py`](tests/test_company_pack_catalog_entry_navigation.py),
+[`docs/COMPANY-PACK-CATALOG.md`](../COMPANY-PACK-CATALOG.md), covered by
+[`test_company_pack_catalog_entry_navigation.py`](../../tests/test_company_pack_catalog_entry_navigation.py),
 and links the ideal Company Template, Blocks, Governed Records, and MOCs
 layers to the current Company starter/Catalog and Matrix/Walkthrough/regression
 smoke path. R128 is documentation/static-regression evidence only; the
@@ -280,8 +280,8 @@ Company Starter entry-navigation revision at public `main` commit
 Starter entry navigation with a stable ideal/current/smoke first-stop at
 public `main` commit `a5d052d425c9236a5cdb118a796b936ba74232aa` with tree
 `bca093039d31b3b0f7c595ec91d8224f7419bd7c`. The changed surface is
-[`examples/company-starter/README.md`](examples/company-starter/README.md),
-covered by [`test_company_starter_entry_navigation.py`](tests/test_company_starter_entry_navigation.py),
+[`examples/company-starter/README.md`](../../examples/company-starter/README.md),
+covered by [`test_company_starter_entry_navigation.py`](../../tests/test_company_starter_entry_navigation.py),
 and links the Company Template layers, Company Pack Catalog, Schema /
 Validator / Test Matrix, Starter Walkthrough, and Public Preview Self-check.
 R124 remains historical as the root Template Catalog entry-navigation
@@ -425,9 +425,9 @@ Promotion, Current Truth, and Final Human GO remain outside scope.
 
 ## Candidate contract included in this revision
 
-- [x] [Read-only Source binding candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md) with strict bounded parsing, stable terminal reread, non-reflective refusal, and non-emitted R30 projection digest. This line describes revision contents, not publication, protected verification, or Public Beta GO.
-- [x] [Protected Source binding receipt candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md) schema with private snapshot, clock, locator, evidence, replay, retention/deletion, and detached-attestation roles. This is an unpopulated schema contract, not protected execution or a verified receipt.
-- [x] [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) with opaque runner/input refs, bounded evaluation window, fixed stop/rollback shape, expected receipt, and independent-verification handoff. This is schema-only; no execution is requested or accepted.
+- [x] [Read-only Source binding candidate](../SOURCE-BINDING-VERIFIER-CANDIDATE.md) with strict bounded parsing, stable terminal reread, non-reflective refusal, and non-emitted R30 projection digest. This line describes revision contents, not publication, protected verification, or Public Beta GO.
+- [x] [Protected Source binding receipt candidate](../PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md) schema with private snapshot, clock, locator, evidence, replay, retention/deletion, and detached-attestation roles. This is an unpopulated schema contract, not protected execution or a verified receipt.
+- [x] [Protected execution request / handoff candidate](../PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) with opaque runner/input refs, bounded evaluation window, fixed stop/rollback shape, expected receipt, and independent-verification handoff. This is schema-only; no execution is requested or accepted.
 
 ## Runtime profiles still requiring live evidence
 
