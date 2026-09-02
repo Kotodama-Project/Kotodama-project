@@ -14,7 +14,7 @@ gate 結果だけです。
 
 | kind | 役割 |
 |---|---|
-| `agent_spec` | 再利用可能なエージェント定義。`policy_version`、capability 参照、`max_depth`、`max_fan_out` を持つ |
+| `agent_spec` | 再利用可能なエージェント定義。`policy_version`、capability 参照、`max_depth`、`max_fan_out` を持つ。leafは `max_fan_out: 0` で子delegationを禁止できる |
 | `agent_instance` | spec を具体化した実体の**観測**。restart をまたいで同じ `instance_ref` が複数回現れうる |
 | `agent_run` | 1 回の実行試行。親子 edge、depth、attempt、idempotency key、終端理由、証跡参照を持つ |
 | `worker_lease` | run に対する所有権。`epoch`、heartbeat、期限を持つ |
@@ -67,6 +67,9 @@ private 側の authority が要り、それはこの registry が持たないも
 - 子 run の `depth` は親 `depth` + 1 でなければなりません。root run は `depth` 0 で、
   親も parent edge も持ちません。
 - `depth` は spec の `max_depth` を、親ごとの子の数は `max_fan_out` を超えられません。
+- retry は同じidempotency keyの直前attemptが `failed` / `cancelled` / `expired` のいずれかで終端した時だけ許可され、completedまたは非終端runと重複実行できません。
+- `termination_reason` は終端stateに対応し、event/leaseのopaque参照はregistry内で一意です。timestampは実在するUTC date-timeとして検証されます。
+- verifierはregular fileだけを最大8 MiB + 1 byteのbounded readで受け取り、oversized/non-regular inputを処理前に拒否します。
 - `parent_run_ref` と `parent_edge_ref` は両方あるか両方ないかのどちらかです。
 - 同じ `idempotency_key_ref` の `attempt` は 1 から連続し、重複できません。
 - 同じ run の lease `epoch` は狭義単調増加で、heartbeat は期限を超えられません。

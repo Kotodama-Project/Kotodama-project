@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import stat
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -64,6 +65,12 @@ FAILURE_REASONS = [
     "CANCELLED_BY_PARENT",
     "LEASE_EXPIRED",
 ]
+TERMINATION_REASONS_BY_STATE = {
+    "completed": {"EVIDENCE_COMPLETE"},
+    "failed": {"WORKER_ERROR", "EMPTY_RESULT", "TIMEOUT", "UNKNOWN_STATE", "MISSING_EVIDENCE"},
+    "cancelled": {"CANCELLED_BY_PARENT"},
+    "expired": {"LEASE_EXPIRED"},
+}
 
 CONTINUITY_PRECONDITIONS = [
     "spec_ref",
@@ -92,6 +99,14 @@ class DuplicateKeyError(ValueError):
     pass
 
 
+class InputTooLargeError(ValueError):
+    pass
+
+
+class InputNotRegularFileError(ValueError):
+    pass
+
+
 def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -108,6 +123,19 @@ def canonical_content_hash(record: dict[str, Any]) -> str:
         payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def read_bounded(path: Path) -> bytes:
+    metadata = path.stat()
+    if not stat.S_ISREG(metadata.st_mode):
+        raise InputNotRegularFileError
+    if metadata.st_size > MAX_INPUT_BYTES:
+        raise InputTooLargeError
+    with path.open("rb") as stream:
+        raw = stream.read(MAX_INPUT_BYTES + 1)
+    if len(raw) > MAX_INPUT_BYTES:
+        raise InputTooLargeError
+    return raw
 
 
 def derived_success(run: dict[str, Any]) -> bool:
@@ -186,6 +214,8 @@ def _reference_reasons(grouped: dict[str, list[dict[str, Any]]]) -> list[str]:
     instances = {r["instance_ref"]: r for r in grouped["agent_instance"]}
     runs = {r["run_ref"]: r for r in grouped["agent_run"]}
     receipts = {r["receipt_ref"]: r for r in grouped["evidence_receipt"]}
+    leases = {r["lease_ref"]: r for r in grouped["worker_lease"]}
+    events = {r["event_ref"]: r for r in grouped["run_event"]}
 
     if len(specs) != len(grouped["agent_spec"]):
         reasons.append("DUPLICATE_SPEC_REF")
@@ -196,6 +226,10 @@ def _reference_reasons(grouped: dict[str, list[dict[str, Any]]]) -> list[str]:
         reasons.append("DUPLICATE_RUN_REF")
     if len(receipts) != len(grouped["evidence_receipt"]):
         reasons.append("DUPLICATE_RECEIPT_REF")
+    if len(leases) != len(grouped["worker_lease"]):
+        reasons.append("DUPLICATE_LEASE_REF")
+    if len(events) != len(grouped["run_event"]):
+        reasons.append("DUPLICATE_EVENT_REF")
 
     for instance in grouped["agent_instance"]:
         spec = specs.get(instance["spec_ref"])
@@ -254,6 +288,8 @@ def _outcome_reasons(grouped: dict[str, list[dict[str, Any]]]) -> list[str]:
                 reasons.append("TERMINAL_RUN_WITHOUT_TERMINATION_REASON")
             elif reason == "EVIDENCE_COMPLETE":
                 reasons.append("FAILED_RUN_CLAIMS_COMPLETION_REASON")
+            elif reason not in TERMINATION_REASONS_BY_STATE[state]:
+                reasons.append("TERMINATION_REASON_STATE_MISMATCH")
         if (run.get("parent_run_ref") is None) != (run.get("parent_edge_ref") is None):
             reasons.append("PARENT_EDGE_INCONSISTENT")
         if run.get("parent_run_ref") is None and run["depth"] != 0:
@@ -296,14 +332,19 @@ def _budget_reasons(grouped: dict[str, list[dict[str, Any]]]) -> list[str]:
 
 def _idempotency_reasons(grouped: dict[str, list[dict[str, Any]]]) -> list[str]:
     reasons: list[str] = []
-    attempts: dict[str, list[int]] = defaultdict(list)
+    attempts: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for run in grouped["agent_run"]:
-        attempts[run["idempotency_key_ref"]].append(run["attempt"])
-    for key, values in attempts.items():
+        attempts[run["idempotency_key_ref"]].append(run)
+    for key, runs in attempts.items():
+        values = [run["attempt"] for run in runs]
         if len(set(values)) != len(values):
             reasons.append("DUPLICATE_ATTEMPT_FOR_IDEMPOTENCY_KEY")
         if sorted(values) != list(range(1, len(values) + 1)):
             reasons.append("ATTEMPTS_NOT_CONTIGUOUS_FROM_ONE")
+        ordered = sorted(runs, key=lambda run: run["attempt"])
+        for previous, current in zip(ordered, ordered[1:]):
+            if previous["state"] not in {"failed", "cancelled", "expired"}:
+                reasons.append("RETRY_PREDECESSOR_NOT_UNSUCCESSFUL")
 
     epochs: dict[str, list[int]] = defaultdict(list)
     for lease in grouped["worker_lease"]:
@@ -451,14 +492,21 @@ def main(argv: list[str]) -> int:
 
     registry_path = Path(argv[1])
     try:
-        raw = registry_path.read_bytes()
-        if len(raw) > MAX_INPUT_BYTES:
-            return reject(["INPUT_TOO_LARGE"])
+        raw = read_bounded(registry_path)
         records = _parse_lines(raw)
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         if not isinstance(schema, dict):
             raise ValueError
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, DuplicateKeyError, ValueError):
+    except InputTooLargeError:
+        return reject(["INPUT_TOO_LARGE"])
+    except (
+        OSError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        DuplicateKeyError,
+        InputNotRegularFileError,
+        ValueError,
+    ):
         return reject(["INPUT_INVALID"])
 
     if Draft202012Validator is None or FormatChecker is None:

@@ -95,6 +95,17 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
             )
         return completed.returncode, json.loads(completed.stdout)
 
+    def run_validator_path(self, path: Path) -> tuple[int, dict]:
+        completed = subprocess.run(
+            [sys.executable, "-B", str(VALIDATOR), str(path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        return completed.returncode, json.loads(completed.stdout)
+
     def assert_refused(self, records: list[dict], reason: str) -> None:
         code, payload = self.run_validator(records)
         self.assertEqual(2, code, payload)
@@ -201,6 +212,23 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
         ] = None
         self.assert_refused(self.rechain(records), "TERMINAL_RUN_WITHOUT_TERMINATION_REASON")
 
+    def test_terminal_reason_matches_the_terminal_state(self) -> None:
+        cases = (
+            ("cancelled", "LEASE_EXPIRED"),
+            ("expired", "CANCELLED_BY_PARENT"),
+            ("failed", "CANCELLED_BY_PARENT"),
+        )
+        for state, reason in cases:
+            with self.subTest(state=state, reason=reason):
+                records = copy.deepcopy(self.records)
+                run = records[
+                    self.index_of(self.find("agent_run", "run_ref", "ref/run/worker-b-1"))
+                ]
+                run.update(state=state, termination_reason=reason)
+                self.assert_refused(
+                    self.rechain(records), "TERMINATION_REASON_STATE_MISMATCH"
+                )
+
     # --- state machine ---------------------------------------------------
 
     def test_illegal_transition_is_rejected(self) -> None:
@@ -268,6 +296,17 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
         ] = 2
         self.assert_refused(self.rechain(records), "FAN_OUT_BUDGET_EXCEEDED")
 
+    def test_leaf_spec_can_prohibit_all_child_delegation(self) -> None:
+        records = copy.deepcopy(self.records)
+        spec = records[
+            self.index_of(self.find("agent_spec", "spec_ref", "ref/spec/worker"))
+        ]
+        spec["max_fan_out"] = 0
+
+        code, payload = self.run_validator(self.rechain(records))
+
+        self.assertEqual(0, code, payload)
+
     def test_parent_edge_must_accompany_a_parent(self) -> None:
         records = copy.deepcopy(self.records)
         del records[self.index_of(self.find("agent_run", "run_ref", "ref/run/worker-a-1"))][
@@ -289,6 +328,21 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
             self.rechain(records), "DUPLICATE_ATTEMPT_FOR_IDEMPOTENCY_KEY"
         )
 
+    def test_retry_requires_a_terminal_unsuccessful_predecessor(self) -> None:
+        for predecessor_state in ("completed", "running"):
+            with self.subTest(predecessor_state=predecessor_state):
+                records = copy.deepcopy(self.records)
+                predecessor = records[
+                    self.index_of(self.find("agent_run", "run_ref", "ref/run/worker-b-1"))
+                ]
+                predecessor["state"] = predecessor_state
+                predecessor["termination_reason"] = (
+                    "EVIDENCE_COMPLETE" if predecessor_state == "completed" else None
+                )
+                self.assert_refused(
+                    self.rechain(records), "RETRY_PREDECESSOR_NOT_UNSUCCESSFUL"
+                )
+
     def test_lease_epoch_must_strictly_increase_and_outlive_its_heartbeat(self) -> None:
         records = copy.deepcopy(self.records)
         lease = self.find("worker_lease", "run_ref", "ref/run/root-1")
@@ -301,6 +355,24 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
         records = copy.deepcopy(self.records)
         records[self.index_of(lease)]["heartbeat_at"] = "2026-08-24T23:00:00Z"
         self.assert_refused(self.rechain(records), "LEASE_HEARTBEAT_AFTER_EXPIRY")
+
+    def test_lease_and_event_references_are_unique(self) -> None:
+        cases = (
+            ("worker_lease", "run_ref", "ref/run/root-1", "DUPLICATE_LEASE_REF"),
+            ("run_event", "event_ref", "ref/event/root-1/1", "DUPLICATE_EVENT_REF"),
+        )
+        for kind, key, value, reason in cases:
+            with self.subTest(reason=reason):
+                records = copy.deepcopy(self.records)
+                original = records[self.index_of(self.find(kind, key, value))]
+                duplicate = copy.deepcopy(original)
+                duplicate["record_id"] = "ref/record/duplicate-" + kind
+                if kind == "worker_lease":
+                    duplicate["epoch"] += 1
+                else:
+                    duplicate["subject_sequence"] += 100
+                records.append(duplicate)
+                self.assert_refused(self.rechain(records), reason)
 
     # --- referential integrity -------------------------------------------
 
@@ -441,6 +513,25 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
                 )
             self.assertEqual(2, completed.returncode)
             self.assertIn("INPUT_INVALID", json.loads(completed.stdout)["reason_codes"])
+
+    def test_timestamp_must_be_a_real_date(self) -> None:
+        records = copy.deepcopy(self.records)
+        records[0]["recorded_at"] = "2026-99-99T99:99:99Z"
+        self.assert_refused(self.rechain(records), "SCHEMA_INVALID")
+
+    def test_oversized_and_non_regular_inputs_fail_before_unbounded_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            oversized = Path(directory) / "oversized.jsonl"
+            oversized.write_bytes(b"x" * (validator_module.MAX_INPUT_BYTES + 1))
+            code, payload = self.run_validator_path(oversized)
+            self.assertEqual(2, code, payload)
+            self.assertIn("INPUT_TOO_LARGE", payload["reason_codes"])
+
+            non_regular = Path(directory) / "registry-directory"
+            non_regular.mkdir()
+            code, payload = self.run_validator_path(non_regular)
+            self.assertEqual(2, code, payload)
+            self.assertIn("INPUT_INVALID", payload["reason_codes"])
 
     # --- documentation ---------------------------------------------------
 
