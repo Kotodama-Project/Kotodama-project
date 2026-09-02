@@ -409,6 +409,34 @@ opaque 参照で、private path、provider handle、host、参加者識別子、
 `INPUT_INVALID` で fail-closed します。Draft 2020-12 検証には `requirements-test.txt` の
 `jsonschema` が必要で、未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。
 
+## 16. Public agent lifecycle registry
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [public-agent-lifecycle-registry.schema.json](../schemas/public-agent-lifecycle-registry.schema.json) | [`validate_public_agent_lifecycle_registry.py`](../tools/validate_public_agent_lifecycle_registry.py) | [`test_public_agent_lifecycle_registry_contract.py`](../tests/test_public_agent_lifecycle_registry_contract.py) | [Public Agent Lifecycle Registry](PUBLIC-AGENT-LIFECYCLE-REGISTRY.md)。agent spec / instance / run / lease / event / evidence receipt の追記専用記録を read-only で検査する。fail-closed な outcome contract、親子 edge と zero-capable depth / fan-out budget、失敗終端後だけのretry、lease/event identity、実日時、termination-state対応、bounded input、state machine、hash chainだけを対象にする。`REGISTRY_CONSISTENT_UNVERIFIED` は記録された lifecycle が内部整合しているという意味だけで、agent 起動、dispatch 実行、provider instance の再利用、証跡の独立検証、Human approval、Promotion、Current Truth、Public Beta GOではない。 |
+
+PowerShell:
+
+```powershell
+python tools\validate_public_agent_lifecycle_registry.py `
+  path\to\registry.jsonl
+```
+
+POSIX:
+
+```bash
+python3 tools/validate_public_agent_lifecycle_registry.py \
+  path/to/registry.jsonl
+```
+
+lifecycle state は `prepared -> dispatched -> running -> completed | failed | cancelled | expired` の 7 つだけです。
+`degraded` は state ではなく属性で、成功は保存されず `state == completed` かつ完了理由かつ証跡 1 件以上から導出します。
+継続性は決して verified になりません。再起動をまたいで前提条件がすべて一致しても結果は
+`PRECONDITIONS_MATCH_UNVERIFIED` で、1 つでも食い違えば `WORK_RESUME_ONLY` です。公開レコードは provider が
+同じ認可済み instance を再利用したことを証明できないためで、`claims.continuity_verified` と
+`claims.provider_instance_reused` は常に `false` です。Draft 2020-12 検証には `requirements-test.txt` の
+`jsonschema` が必要で、未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
