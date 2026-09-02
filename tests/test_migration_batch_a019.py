@@ -490,6 +490,29 @@ class A019MigrationBatchTests(unittest.TestCase):
                 result["errors"],
             )
 
+    def test_candidate_scan_rejects_source_blob_reuse_in_unlisted_path(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            extra = root / "docs" / "copied-source.md"
+            extra.parent.mkdir(parents=True)
+            copied_source = b"private source bytes copied unchanged\n"
+            extra.write_bytes(copied_source)
+            copied_blob = VALIDATOR.git_blob_sha(copied_source)
+
+            with mock.patch.object(
+                VALIDATOR,
+                "SOURCE_BLOBS",
+                VALIDATOR.SOURCE_BLOBS | {copied_blob},
+            ):
+                result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn(
+                "source registry blob copied unchanged: docs/copied-source.md",
+                result["errors"],
+            )
+            self.assertEqual(result["source_registry_blob_reuse"], 1)
+
     def test_merge_ref_scopes_candidate_scan_to_second_parent(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         with temporary:
@@ -605,6 +628,30 @@ class A019MigrationBatchTests(unittest.TestCase):
 
                     self.assertEqual(result["status"], "FAIL")
                     self.assertTrue(result["errors"], result)
+
+    def test_schema_invalid_types_are_structured_semantic_failures(self) -> None:
+        schemas, validators = self._instance_context()
+        cases = (
+            ("schemas/task-contract.schema.json", "scope", []),
+            ("schemas/worker-capability-catalog.schema.json", "workers", None),
+        )
+        for schema_path, field, value in cases:
+            with self.subTest(schema_path=schema_path, field=field):
+                instance = copy.deepcopy(VALIDATOR.positive_instances()[schema_path])
+                instance[field] = value
+
+                errors = VALIDATOR.validate_instance(
+                    schema_path,
+                    instance,
+                    schemas,
+                    validators,
+                )
+
+                self.assertTrue(errors)
+                self.assertTrue(
+                    any("semantic validation failed closed" in error for error in errors),
+                    errors,
+                )
 
     def test_license_scope_destination_binding_and_gates_fail_closed(self) -> None:
         mutations = (

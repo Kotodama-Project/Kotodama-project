@@ -583,14 +583,17 @@ def validate_instance(
             f"schema validation failed at {'/'.join(str(part) for part in error.path) or '/'}"
             for error in schema_errors
         )
-    if schema_path == "schemas/task-contract.schema.json":
-        errors.extend(_task_semantic_errors(instance))
-    elif schema_path == "schemas/task-decomposition.schema.json":
-        errors.extend(_decomposition_semantic_errors(instance))
-    elif schema_path == "schemas/worker-capability-catalog.schema.json":
-        errors.extend(_catalog_semantic_errors(instance))
-    elif schema_path == "schemas/worker-result.schema.json":
-        errors.extend(_result_semantic_errors(instance))
+    try:
+        if schema_path == "schemas/task-contract.schema.json":
+            errors.extend(_task_semantic_errors(instance))
+        elif schema_path == "schemas/task-decomposition.schema.json":
+            errors.extend(_decomposition_semantic_errors(instance))
+        elif schema_path == "schemas/worker-capability-catalog.schema.json":
+            errors.extend(_catalog_semantic_errors(instance))
+        elif schema_path == "schemas/worker-result.schema.json":
+            errors.extend(_result_semantic_errors(instance))
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        errors.append(f"semantic validation failed closed: {type(exc).__name__}")
     return sorted(set(errors))
 
 
@@ -864,8 +867,9 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     if manifest.get("destination_contract") != expected_destination_contract:
         errors.append("destination contract fixed-point mismatch")
 
+    candidate_scan_paths = _candidate_scan_paths(root, errors)
     source_blob_reuse_paths: list[str] = []
-    for relative in sorted(REQUIRED_PATHS):
+    for relative in sorted(candidate_scan_paths):
         data = _read_bounded(root, relative, errors)
         if data is not None and git_blob_sha(data) in SOURCE_BLOBS:
             source_blob_reuse_paths.append(relative.as_posix())
@@ -928,7 +932,6 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         errors.append("MIT license bytes do not match pinned source license blob")
 
     manifest_data = _read_bounded(root, MANIFEST_PATH, errors)
-    candidate_scan_paths = _candidate_scan_paths(root, errors)
     source_path_leaks = 0
     for source_path in source_paths:
         if not isinstance(source_path, str):
