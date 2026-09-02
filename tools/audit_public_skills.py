@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import re
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,9 +20,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS_ROOT = ROOT / ".agents" / "skills"
-FRONTMATTER = re.compile(r"\A---\r?\n(?P<body>.*?)\r?\n---(?:\r?\n|\Z)", re.DOTALL)
-FIELD = re.compile(r"^([A-Za-z0-9_-]+):\s*(.*)$")
+FRONTMATTER = re.compile(
+    r"\A---[ \t]*\r?\n(?P<body>.*?)\r?\n---[ \t]*(?:\r?\n|\Z)",
+    re.DOTALL,
+)
+FIELD = re.compile(r"^([A-Za-z0-9_-]+):(?:[ \t]+(.*))?$")
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
+FENCE = re.compile(r"^[ \t]{0,3}(?P<marker>`{3,}|~{3,})")
+H2 = re.compile(r"^[ \t]{0,3}##[ \t]+.+$")
 FORBIDDEN = {
     "private_absolute_path": re.compile(r"(?:[A-Za-z]:\\Users\\|/home/|/Users/)", re.I),
     "private_host": re.compile(r"\b(?:pve|ct)\s*20\d\b|\bdiscord\.gg\b", re.I),
@@ -30,11 +36,53 @@ FORBIDDEN = {
         r"\b(?:ssh|systemctl|curl|pip\s+install)\b", re.I
     ),
     "runtime_private_path": re.compile(r"\b(?:runtime\.app|platform\\runtime|BOT2)\b", re.I),
-    "fixed_model_claim": re.compile(
-        r"\b(?:gpt-5\.\d+|o4-mini|sonnet|opus|haiku)\b", re.I
-    ),
 }
+FIXED_MODEL_CLAIM = re.compile(
+    r"\b(?:"
+    r"gpt[-_ ]\d+(?:[._-]\d+)*[a-z0-9.-]*"
+    r"|o[1-9](?:[-_ ](?:mini|pro|preview))?"
+    r"|gemini(?:[-_ ]\d+(?:[._-]\d+)*(?:[-_ ](?:pro|flash|ultra|nano|preview))?)"
+    r"|claude[-_ ]\d+(?:[._-]\d+)*(?:[-_ ][a-z0-9]+)*"
+    r"|(?:sonnet|opus|haiku)(?:[-_ ]\d+(?:[._-]\d+)*)?"
+    r"|(?:llama|mistral|mixtral|qwen|deepseek|phi|falcon|grok|command|gemma|yi)"
+    r"[-_ ]\d+(?:[._-]\d+)*(?:[-_ ][a-z0-9]+)*"
+    r")\b",
+    re.I,
+)
+MODEL_ASSIGNMENT = re.compile(
+    r"\b(?:model|engine|llm)(?:[ _-]+(?:id|name))?[ \t]*(?:is[ \t]+|[:=])[ \t]*"
+    r"[`\"']?(?P<value>[a-z][a-z0-9._-]{2,})",
+    re.I,
+)
+MODEL_PLACEHOLDERS = {
+    "auto",
+    "configured",
+    "current",
+    "default",
+    "dynamic",
+    "env",
+    "environment",
+    "input",
+    "model-id",
+    "model_name",
+    "none",
+    "null",
+    "provided",
+    "runtime",
+    "selected",
+    "unknown",
+    "unset",
+    "user",
+    "value",
+    "your-model",
+}
+DIRECT_REPOSITORY_COMMAND = re.compile(
+    r"\b(?:git[ \t]+push\b|gh[ \t]+(?:release[ \t]+create|pr[ \t]+merge|"
+    r"repo[ \t]+(?:archive|delete|edit)))",
+    re.I,
+)
 REQUIRED_HEADINGS = ("## Intent", "## Triggers", "## Non-triggers", "## Completion")
+REQUIRED_SECTIONS = (*REQUIRED_HEADINGS[:3], "## Procedure", REQUIRED_HEADINGS[3])
 DESCRIPTION_SCOPE_PREFIX = "Use only for the Kotodama public repository "
 MAX_SKILL_BYTES = 64 * 1024
 MAX_SKILLS_PER_ROOT = 256
@@ -45,10 +93,48 @@ def _frontmatter(text: str) -> tuple[str | None, str | None, str | None]:
     if not match:
         return None, None, "missing frontmatter"
     fields: dict[str, str] = {}
-    for raw_line in match.group("body").splitlines():
-        item = FIELD.match(raw_line.strip())
-        if item:
-            fields[item.group(1)] = item.group(2).strip().strip("'\"")
+    for line_number, raw_line in enumerate(match.group("body").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        item = FIELD.fullmatch(line)
+        if not item:
+            return fields.get("name"), fields.get("description"), (
+                f"invalid frontmatter line {line_number}: expected key: value"
+            )
+        key = item.group(1)
+        if key in fields:
+            return fields.get("name"), fields.get("description"), (
+                f"invalid frontmatter: duplicate key {key}"
+            )
+        value = (item.group(2) or "").strip()
+        if value[:1] in {"'", '"'}:
+            quote = value[0]
+            closing_index: int | None = None
+            escaped = False
+            for index, character in enumerate(value[1:], start=1):
+                if quote == '"' and character == "\\" and not escaped:
+                    escaped = True
+                    continue
+                if character == quote and not escaped:
+                    closing_index = index
+                    break
+                escaped = False
+            if closing_index is None:
+                return fields.get("name"), fields.get("description"), (
+                    f"invalid frontmatter: unterminated {quote}quoted value for {key}"
+                )
+            trailing = value[closing_index + 1 :].strip()
+            if trailing and not trailing.startswith("#"):
+                return fields.get("name"), fields.get("description"), (
+                    f"invalid frontmatter: trailing content after {key}"
+                )
+            value = value[1:closing_index]
+        elif value[-1:] in {"'", '"'} or value.count('"') % 2:
+            return fields.get("name"), fields.get("description"), (
+                f"invalid frontmatter: unbalanced quote for {key}"
+            )
+        fields[key] = value
     name = fields.get("name")
     description = fields.get("description")
     if not name or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", name):
@@ -56,6 +142,54 @@ def _frontmatter(text: str) -> tuple[str | None, str | None, str | None]:
     if not description or len(description) > 1024:
         return name, description, "invalid description"
     return name, description, None
+
+
+def _markdown_lines(
+    text: str,
+    *,
+    include_fenced: bool = False,
+    excluded_section: str | None = None,
+):
+    current_section: str | None = None
+    fence: tuple[str, int] | None = None
+    for line in text.replace("\r\n", "\n").splitlines():
+        marker = FENCE.match(line)
+        if fence:
+            if (
+                marker
+                and marker.group("marker")[0] == fence[0]
+                and len(marker.group("marker")) >= fence[1]
+            ):
+                fence = None
+            elif include_fenced and current_section != excluded_section:
+                yield line
+            continue
+        if marker:
+            raw_marker = marker.group("marker")
+            fence = (raw_marker[0], len(raw_marker))
+            continue
+        stripped = line.strip()
+        if H2.fullmatch(line):
+            current_section = stripped
+        if current_section != excluded_section:
+            yield line
+
+
+def _unfenced_lines(text: str) -> list[str]:
+    return list(_markdown_lines(text))
+
+
+def _section_failures(text: str) -> list[str]:
+    headings = [line.strip() for line in _unfenced_lines(text) if H2.fullmatch(line)]
+    failures = [
+        f"missing heading: {heading}"
+        for heading in REQUIRED_SECTIONS
+        if heading not in headings
+    ]
+    ordered = [heading for heading in headings if heading in REQUIRED_SECTIONS]
+    if not failures and ordered != list(REQUIRED_SECTIONS):
+        failures.append(f"required headings must appear once and in order: {ordered}")
+    return failures
 
 
 def _relative_link_failures(path: Path, text: str) -> list[str]:
@@ -79,10 +213,23 @@ def _relative_link_failures(path: Path, text: str) -> list[str]:
 
 
 def _procedure_failures(text: str) -> list[str]:
-    if "## Procedure\n" not in text:
-        return ["missing heading: ## Procedure"]
-    procedure = text.split("## Procedure\n", 1)[1].split("\n## ", 1)[0]
-    matches = list(re.finditer(r"(?m)^(\d+)\. ", procedure))
+    lines = _unfenced_lines(text)
+    start = next(
+        (
+            index + 1
+            for index, line in enumerate(lines)
+            if H2.fullmatch(line) and line.strip() == "## Procedure"
+        ),
+        None,
+    )
+    if start is None:
+        return []
+    end = next(
+        (index for index in range(start, len(lines)) if H2.fullmatch(lines[index])),
+        len(lines),
+    )
+    procedure = "\n".join(lines[start:end])
+    matches = list(re.finditer(r"(?m)^[ \t]{0,3}(\d+)\. ", procedure))
     numbers = [int(match.group(1)) for match in matches]
     failures: list[str] = []
     if numbers != [1, 2, 3, 4]:
@@ -95,12 +242,32 @@ def _procedure_failures(text: str) -> list[str]:
     return failures
 
 
+def _fixed_model_failures(text: str) -> list[str]:
+    for line in _markdown_lines(include_fenced=True, excluded_section="## Non-triggers", text=text):
+        if FIXED_MODEL_CLAIM.search(line):
+            return ["forbidden pattern: fixed_model_claim"]
+        assignment = MODEL_ASSIGNMENT.search(line)
+        if assignment and assignment.group("value").lower() not in MODEL_PLACEHOLDERS:
+            return ["forbidden pattern: fixed_model_claim"]
+    return []
+
+
+def _direct_repository_command_failures(text: str) -> list[str]:
+    for line in _markdown_lines(include_fenced=True, excluded_section="## Non-triggers", text=text):
+        if DIRECT_REPOSITORY_COMMAND.search(line):
+            return ["forbidden pattern: direct_repository_mutation"]
+    return []
+
+
 def _bounded_skill_paths(root: Path) -> tuple[list[Path], str | None]:
     if not root.exists() or not root.is_dir():
         return [], "missing skill root"
-    paths = sorted(root.glob("*/SKILL.md"))
-    if len(paths) > MAX_SKILLS_PER_ROOT:
-        return [], f"skill count exceeds {MAX_SKILLS_PER_ROOT}"
+    paths: list[Path] = []
+    for path in root.glob("*/SKILL.md"):
+        paths.append(path)
+        if len(paths) > MAX_SKILLS_PER_ROOT:
+            return [], f"skill count exceeds {MAX_SKILLS_PER_ROOT}"
+    paths.sort()
     resolved_root = root.resolve()
     for path in paths:
         try:
@@ -112,6 +279,8 @@ def _bounded_skill_paths(root: Path) -> tuple[list[Path], str | None]:
 
 def _read_bounded(path: Path) -> tuple[str | None, str | None, str | None]:
     try:
+        if not stat.S_ISREG(path.lstat().st_mode):
+            return None, None, "skill is not a regular file"
         with path.open("rb") as handle:
             raw = handle.read(MAX_SKILL_BYTES + 1)
         if len(raw) > MAX_SKILL_BYTES:
@@ -120,6 +289,13 @@ def _read_bounded(path: Path) -> tuple[str | None, str | None, str | None]:
         return text, hashlib.sha256(raw).hexdigest(), None
     except (OSError, UnicodeError):
         return None, None, "skill is unreadable UTF-8"
+
+
+def _digest(value: object) -> str:
+    raw = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
 
 
 def audit(external_roots: tuple[Path, ...] = ()) -> dict[str, object]:
@@ -140,24 +316,27 @@ def audit(external_roots: tuple[Path, ...] = ()) -> dict[str, object]:
         findings: list[str] = []
         if frontmatter_error:
             findings.append(frontmatter_error)
-        if name and name in names:
+        if name and not frontmatter_error and not name.startswith("kotodama-"):
+            findings.append("name must use kotodama- namespace")
+        if name and not frontmatter_error and name in names:
             findings.append(
                 f"duplicate name: {name} ({names[name].relative_to(ROOT).as_posix()})"
             )
-        elif name:
+        elif name and not frontmatter_error:
             names[name] = path
         if description and not description.startswith(DESCRIPTION_SCOPE_PREFIX):
             findings.append("description is not scoped to the Kotodama public repository")
-        if description and description in descriptions:
+        if description and not frontmatter_error and description in descriptions:
             findings.append(
                 f"duplicate description: {descriptions[description].relative_to(ROOT).as_posix()}"
             )
-        elif description:
+        elif description and not frontmatter_error:
             descriptions[description] = path
-        missing = [heading for heading in REQUIRED_HEADINGS if heading not in text]
-        findings.extend(f"missing heading: {heading}" for heading in missing)
+        findings.extend(_section_failures(text))
         findings.extend(_procedure_failures(text))
         findings.extend(_relative_link_failures(path, text))
+        findings.extend(_fixed_model_failures(text))
+        findings.extend(_direct_repository_command_failures(text))
         for finding_name, pattern in FORBIDDEN.items():
             if pattern.search(text):
                 findings.append(f"forbidden pattern: {finding_name}")
@@ -188,13 +367,13 @@ def audit(external_roots: tuple[Path, ...] = ()) -> dict[str, object]:
             findings: list[str] = []
             if frontmatter_error:
                 findings.append(f"external {frontmatter_error}")
-            if name and name in names:
+            if name and not frontmatter_error and name in names:
                 findings.append(f"external duplicate name: {name}")
-            elif name:
+            elif name and not frontmatter_error:
                 names[name] = path
-            if description and description in descriptions:
+            if description and not frontmatter_error and description in descriptions:
                 findings.append("external duplicate description")
-            elif description:
+            elif description and not frontmatter_error:
                 descriptions[description] = path
             external_record = {
                 "path": label,
@@ -207,19 +386,41 @@ def audit(external_roots: tuple[Path, ...] = ()) -> dict[str, object]:
             failures.extend(
                 {"path": label, "finding": item} for item in external_record["findings"]
             )
-    return {
+    audit_payload = {
         "schema_version": "kotodama.public-skill-audit.v2",
         "status": "PASS" if not failures else "FAIL",
-        "evidence_tier": "LOCAL",
-        "changed": False,
-        "observed_at_utc": datetime.now(timezone.utc).isoformat(),
         "skill_count": len(records),
         "skills": records,
         "declared_external_roots": len(external_roots),
         "external_catalog_count": len(external_records),
         "external_skills": external_records,
         "failures": failures,
+    }
+    identity_digest = _digest(audit_payload)
+    digest = f"sha256:{identity_digest}"
+    return {
+        "schema_version": "kotodama.skill-receipt.v1",
+        "skill": "kotodama-surface-audit",
+        "status": "COMPLETED" if not failures else "FAILED",
+        "mode": "plan",
+        "changed": False,
+        "no_op": True,
+        "no_op_reason": "read-only audit; no files changed",
+        "evidence_tier": "LOCAL",
+        "target": {"identity_digest": digest},
+        "source_revision": digest,
+        "before_sha256": digest,
+        "after_sha256": digest,
+        "observed_at_utc": datetime.now(timezone.utc).isoformat(),
         "exit_code": 0 if not failures else 1,
+        "actor": "UNKNOWN",
+        "model_verification": "NOT_APPLICABLE",
+        "approval_ref": None,
+        "rollback_ref": None,
+        "evidence_refs": [],
+        "effect_counts": {"files_changed": 0, "network_writes": 0, "external_sends": 0},
+        "no_go_reasons": [f"{item['path']}: {item['finding']}" for item in failures],
+        "audit": audit_payload,
     }
 
 
