@@ -161,4 +161,3 @@ MOCの入口例:
 件数を再入力せずcandidateへ束縛できます。これらはレビューの入力形と
 readbackを整える契約であり、Human Decision、Promotion、Current Truth、
 runtime、Public Beta GOを生成しません。
-

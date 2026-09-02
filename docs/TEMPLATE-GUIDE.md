@@ -274,4 +274,3 @@ Company manifest、Block、MOCのvalidatorとnegative testに加え、A017階層
 | `promoted` | 定められた承認と検証を経てCurrent Truthへ反映済み |
 
 名前に`full`、`complete`、`all`が含まれていても、scopeとreceiptがなければ完成の証明にはしません。
-
