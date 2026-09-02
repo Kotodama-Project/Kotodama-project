@@ -59,6 +59,7 @@ Private Context, backup/restore, production behavior, Discord publication,
 Promotion, Current Truth, and Final Human GO remain open.
 `NO_GO_UNPUBLISHED` remains unchanged.
 - [x] [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) with README/STATUS/ROADMAP projections
+- [x] Agent orchestration route-binding candidate with opaque source / target / workspace / revision / route comparison, read-only preflight, and negative tests; no runner or dispatch
 
 ## Owner-confirmed Company AGI direction
 
@@ -78,6 +79,7 @@ candidate, not signed or independently verifiable governance approval,
 rightsholder proof, canonical adoption, launch decision, or Final Human GO, and
 no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25's
 contributor/provenance/NOTICE/accountable-rightsholder gaps remain open.
+- [x] Agent Swarm × Kotodama bounded root / worker / verifier candidate with parent-edge, assignment, workspace / revision, handoff, lease, stop-condition, and N/C/W/V budget contracts; schema / preflight / tests only, no runtime swarm or dispatch
 
 ## Current public documentation revision
 
@@ -479,6 +481,8 @@ Promotion, Current Truth, and Final Human GO remain outside scope.
 - [x] [Read-only Source binding candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md) with strict bounded parsing, stable terminal reread, non-reflective refusal, and non-emitted R30 projection digest. This line describes revision contents, not publication, protected verification, or Public Beta GO.
 - [x] [Protected Source binding receipt candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md) schema with private snapshot, clock, locator, evidence, replay, retention/deletion, and detached-attestation roles. This is an unpopulated schema contract, not protected execution or a verified receipt.
 - [x] [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) with opaque runner/input refs, bounded evaluation window, fixed stop/rollback shape, expected receipt, and independent-verification handoff. This is schema-only; no execution is requested or accepted.
+- [x] [Agent orchestration route-binding candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md) with opaque source / target identity, workspace / revision, route, preview, confirmation, and rollback comparison. This is schema / preflight / test documentation only; no Codex transport, subagent spawn, external effect, Promotion, or Current Truth.
+- [x] [Agent Swarm × Kotodama adoption candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) with bounded root / worker / verifier assignments, explicit parent edges, handoffs, leases, stop conditions, and N/C/W/V budgets. This is schema / preflight / test documentation only; no Codex transport, subagent spawn, external effect, Promotion, or Current Truth.
 
 ## Runtime profiles still requiring live evidence
 
