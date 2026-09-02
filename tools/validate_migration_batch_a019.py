@@ -180,25 +180,37 @@ def _git_candidate_paths(root: Path) -> set[Path] | None:
         ).stdout
 
     try:
-        manifest_commit = git_bytes(
-            "log",
-            "-n",
-            "1",
-            "--format=%H",
-            "--diff-filter=A",
-            "--",
-            MANIFEST_PATH.as_posix(),
-        ).decode("utf-8").strip()
-        if not manifest_commit:
+        head_parts = git_bytes(
+            "rev-list", "--parents", "-n", "1", "HEAD"
+        ).decode("ascii").split()
+        parents = head_parts[1:]
+        if len(parents) == 2:
+            base_commit = git_bytes("merge-base", parents[0], parents[1])
+            base_commit = base_commit.decode("ascii").strip()
+            candidate_commit = parents[1]
+        elif len(parents) == 1:
+            manifest_commit = git_bytes(
+                "log",
+                "-n",
+                "1",
+                "--format=%H",
+                "--diff-filter=A",
+                "--",
+                MANIFEST_PATH.as_posix(),
+            ).decode("utf-8").strip()
+            if not manifest_commit:
+                return None
+            base_commit = git_bytes("rev-parse", f"{manifest_commit}^")
+            base_commit = base_commit.decode("ascii").strip()
+            candidate_commit = "HEAD"
+        else:
             return None
-        base_commit = git_bytes("rev-parse", f"{manifest_commit}^")
-        base_commit = base_commit.decode("ascii").strip()
         changed = git_bytes(
             "diff",
             "--name-only",
             "--diff-filter=ACMRTUXB",
             "-z",
-            f"{base_commit}..HEAD",
+            f"{base_commit}..{candidate_commit}",
         )
         untracked = git_bytes("ls-files", "--others", "--exclude-standard", "-z")
     except (OSError, subprocess.SubprocessError, UnicodeError):

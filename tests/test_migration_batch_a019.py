@@ -5,6 +5,7 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -488,6 +489,62 @@ class A019MigrationBatchTests(unittest.TestCase):
                 any("docs/added-candidate.txt" in error for error in result["errors"]),
                 result["errors"],
             )
+
+    def test_merge_ref_scopes_candidate_scan_to_second_parent(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        with temporary:
+            repository = Path(temporary.name) / "merge-ref"
+            repository.mkdir()
+
+            def git(*arguments: str) -> str:
+                completed = subprocess.run(
+                    ["git", *arguments],
+                    cwd=repository,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                return completed.stdout.strip()
+
+            git("init", "--initial-branch=main")
+            git("config", "core.autocrlf", "false")
+            git("config", "user.name", "A019 test")
+            git("config", "user.email", "a019-test@" + "example.invalid")
+            git("commit", "--allow-empty", "-m", "common ancestor")
+            common = git("rev-parse", "HEAD")
+
+            base_only = repository / "base-only.txt"
+            base_only.write_text(
+                "C:" + chr(47) + "Users/base-only/private.txt\n",
+                encoding="utf-8",
+            )
+            git("add", "base-only.txt")
+            git("commit", "-m", "updated PR18 base")
+            parent_one = git("rev-parse", "HEAD")
+
+            git("switch", "-c", "candidate", common)
+            for relative in VALIDATOR.REQUIRED_PATHS:
+                destination = repository / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, destination)
+            git("add", ".")
+            git("commit", "-m", "A019 candidate")
+            parent_two = git("rev-parse", "HEAD")
+
+            git("switch", "main")
+            git("merge", "--no-ff", "--no-edit", "candidate")
+            parents = git("rev-list", "--parents", "-n", "1", "HEAD").split()
+
+            self.assertEqual(parents[1:], [parent_one, parent_two])
+            self.assertEqual(git("merge-base", parent_one, parent_two), common)
+            candidate_paths = VALIDATOR._git_candidate_paths(repository)
+            self.assertIsNotNone(candidate_paths)
+            self.assertNotIn(Path("base-only.txt"), candidate_paths)
+
+            result = VALIDATOR.validate(repository)
+
+            self.assertEqual(result["status"], "PASS", result["errors"])
+            self.assertEqual(result["candidate_scan_findings"], 0)
 
     def test_non_object_manifest_source_returns_structured_failure(self) -> None:
         temporary, root = self._fixture()
