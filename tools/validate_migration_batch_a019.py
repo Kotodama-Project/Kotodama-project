@@ -120,6 +120,10 @@ ALLOWED_PUBLIC_URLS = {
 }
 
 
+class CandidateScopeError(RuntimeError):
+    pass
+
+
 def git_blob_sha(data: bytes) -> str:
     header = f"blob {len(data)}\0".encode("ascii")
     return hashlib.sha1(header + data).hexdigest()  # noqa: S324 - Git identity
@@ -180,6 +184,8 @@ def _git_candidate_paths(root: Path) -> set[Path] | None:
         ).stdout
 
     try:
+        if git_bytes("rev-parse", "--is-shallow-repository").strip() == b"true":
+            raise CandidateScopeError("shallow repository")
         head_parts = git_bytes(
             "rev-list", "--parents", "-n", "1", "HEAD"
         ).decode("ascii").split()
@@ -213,8 +219,10 @@ def _git_candidate_paths(root: Path) -> set[Path] | None:
             f"{base_commit}..{candidate_commit}",
         )
         untracked = git_bytes("ls-files", "--others", "--exclude-standard", "-z")
-    except (OSError, subprocess.SubprocessError, UnicodeError):
-        return None
+    except CandidateScopeError:
+        raise
+    except (OSError, subprocess.SubprocessError, UnicodeError) as exc:
+        raise CandidateScopeError(type(exc).__name__) from exc
 
     paths: set[Path] = set()
     for raw in (*changed.split(b"\0"), *untracked.split(b"\0")):
@@ -233,7 +241,11 @@ def _git_candidate_paths(root: Path) -> set[Path] | None:
 
 def _candidate_scan_paths(root: Path, errors: list[str]) -> set[Path]:
     paths = set(REQUIRED_PATHS)
-    discovered = _git_candidate_paths(root)
+    try:
+        discovered = _git_candidate_paths(root)
+    except CandidateScopeError:
+        errors.append("candidate Git scope unavailable or shallow")
+        discovered = set()
     if discovered is None:
         discovered = _filesystem_paths(root, errors)
     paths.update(discovered)

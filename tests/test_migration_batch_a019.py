@@ -513,6 +513,33 @@ class A019MigrationBatchTests(unittest.TestCase):
             )
             self.assertEqual(result["source_registry_blob_reuse"], 1)
 
+    def test_unavailable_git_scope_fails_closed_without_full_tree_fallback(self) -> None:
+        errors: list[str] = []
+        with mock.patch.object(
+            VALIDATOR,
+            "_git_candidate_paths",
+            side_effect=VALIDATOR.CandidateScopeError("shallow repository"),
+        ), mock.patch.object(
+            VALIDATOR,
+            "_filesystem_paths",
+            side_effect=AssertionError("full-tree fallback forbidden"),
+        ):
+            paths = VALIDATOR._candidate_scan_paths(ROOT, errors)
+
+        self.assertEqual(set(VALIDATOR.REQUIRED_PATHS), paths)
+        self.assertEqual(["candidate Git scope unavailable or shallow"], errors)
+
+    def test_repository_validation_fetches_history_for_candidate_scope(self) -> None:
+        workflow = (
+            ROOT / ".github" / "workflows" / "repository-validation.yml"
+        ).read_text(encoding="utf-8")
+        checkout = workflow.split("uses: actions/checkout@", 1)[1].split(
+            "- name:", 1
+        )[0]
+
+        self.assertIn("persist-credentials: false", checkout)
+        self.assertIn("fetch-depth: 0", checkout)
+
     def test_merge_ref_scopes_candidate_scan_to_second_parent(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         with temporary:
