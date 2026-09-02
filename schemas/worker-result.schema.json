@@ -1,0 +1,360 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/worker-result.schema.json",
+  "title": "Worker Result",
+  "description": "A bounded result envelope that separates execution evidence from authority and release claims.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_version",
+    "candidate_status",
+    "result_id",
+    "task_ref",
+    "worker_ref",
+    "capability_ref",
+    "attempt",
+    "status",
+    "candidate_refs",
+    "evidence_refs",
+    "checks",
+    "omitted_work",
+    "authority_claims",
+    "rollback"
+  ],
+  "properties": {
+    "kind": {
+      "const": "worker_result"
+    },
+    "schema_version": {
+      "const": "1.0"
+    },
+    "candidate_status": {
+      "const": "candidate_only"
+    },
+    "result_id": {
+      "$ref": "#/$defs/resultId"
+    },
+    "task_ref": {
+      "$ref": "task-contract.schema.json#/$defs/taskId"
+    },
+    "worker_ref": {
+      "$ref": "worker-capability-catalog.schema.json#/$defs/workerId"
+    },
+    "capability_ref": {
+      "$ref": "worker-capability-catalog.schema.json#/$defs/capabilityId"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 32
+    },
+    "status": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "blocked",
+        "cancelled"
+      ]
+    },
+    "candidate_refs": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/artifactRef"
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/artifactRef"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/checkResult"
+      }
+    },
+    "omitted_work": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512,
+        "pattern": "\\S"
+      }
+    },
+    "error_category": {
+      "enum": [
+        "validation",
+        "authority",
+        "timeout",
+        "conflict",
+        "tool_failure",
+        "unknown"
+      ]
+    },
+    "authority_claims": {
+      "$ref": "#/$defs/authorityClaims"
+    },
+    "rollback": {
+      "$ref": "#/$defs/rollbackReceipt"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "succeeded"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "error_category"
+          ]
+        },
+        "properties": {
+          "evidence_refs": {
+            "minItems": 1
+          },
+          "checks": {
+            "minItems": 1,
+            "items": {
+              "properties": {
+                "status": {
+                  "const": "pass"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "contains": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "const": "pass"
+                }
+              },
+              "required": [
+                "status"
+              ]
+            },
+            "minContains": 1
+          },
+          "omitted_work": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "failed",
+              "blocked"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "error_category"
+        ],
+        "anyOf": [
+          {
+            "properties": {
+              "omitted_work": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "checks": {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "fail"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                },
+                "minContains": 1
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "resultId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,62}[a-z0-9]$"
+    },
+    "artifactRef": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160,
+      "pattern": "^[a-z][a-z0-9+.-]*:[A-Za-z0-9][A-Za-z0-9._/@+-]{1,150}$"
+    },
+    "checkResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check_id",
+        "status"
+      ],
+      "properties": {
+        "check_id": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9._-]{1,63}$"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "not_run"
+          ]
+        },
+        "evidence_ref": {
+          "$ref": "#/$defs/artifactRef"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "pass"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "required": [
+              "evidence_ref"
+            ]
+          }
+        }
+      ]
+    },
+    "authorityClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "promotion",
+        "current_truth",
+        "release"
+      ],
+      "properties": {
+        "promotion": {
+          "const": false
+        },
+        "current_truth": {
+          "const": false
+        },
+        "release": {
+          "const": false
+        }
+      }
+    },
+    "rollbackReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "receipt_refs"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "not_required",
+            "available",
+            "executed",
+            "failed"
+          ]
+        },
+        "receipt_refs": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/artifactRef"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "available",
+                  "executed",
+                  "failed"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "receipt_refs": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "not_required"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "receipt_refs": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

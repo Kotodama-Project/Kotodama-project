@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/task-decomposition.schema.json",
+  "title": "Task Decomposition",
+  "description": "A closed, bounded decomposition graph whose task references are resolved before execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_version",
+    "candidate_status",
+    "decomposition_id",
+    "root_task_id",
+    "tasks",
+    "edges"
+  ],
+  "properties": {
+    "kind": {
+      "const": "task_decomposition"
+    },
+    "schema_version": {
+      "const": "1.0"
+    },
+    "candidate_status": {
+      "const": "candidate_only"
+    },
+    "decomposition_id": {
+      "$ref": "#/$defs/decompositionId"
+    },
+    "root_task_id": {
+      "$ref": "task-contract.schema.json#/$defs/taskId"
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "task-contract.schema.json"
+      }
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/edge"
+      }
+    }
+  },
+  "$defs": {
+    "decompositionId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9._-]{1,62}[a-z0-9]$"
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_task_id",
+        "to_task_id",
+        "relation"
+      ],
+      "properties": {
+        "from_task_id": {
+          "$ref": "task-contract.schema.json#/$defs/taskId"
+        },
+        "to_task_id": {
+          "$ref": "task-contract.schema.json#/$defs/taskId"
+        },
+        "relation": {
+          "const": "requires"
+        }
+      }
+    }
+  }
+}
