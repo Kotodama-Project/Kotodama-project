@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +67,113 @@ class A022MigrationBatchTests(unittest.TestCase):
             result["no_go_reasons"],
         )
 
+    def test_candidate_hashes_are_stable_across_checkout_line_endings(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            text_paths = [*VALIDATOR.DESTINATIONS, VALIDATOR.LICENSE_PATH]
+            for relative in text_paths:
+                path = root / relative
+                path.write_bytes(
+                    path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+                )
+
+            result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "PASS", result["errors"])
+            self.assertEqual(result["admission_status"], "BLOCKED")
+
+    def test_required_document_symlink_is_rejected_before_resolution(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            destination = root / "docs" / "architecture" / "README.md"
+            target = root / "replacement.md"
+            shutil.copy2(destination, target)
+            destination.unlink()
+            try:
+                destination.symlink_to(target)
+            except OSError as error:
+                self.skipTest(f"symlink creation unavailable: {error}")
+
+            result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(
+                any("symlink" in error for error in result["errors"]),
+                result["errors"],
+            )
+
+    def test_oversized_required_file_is_rejected_before_unbounded_read(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            target = root / "docs" / "architecture" / "README.md"
+            target.write_bytes(b"x" * (256 * 1024 + 1))
+            original_read_bytes = Path.read_bytes
+
+            def reject_unbounded_read(path: Path) -> bytes:
+                if path == target:
+                    raise AssertionError("oversized file was read without a bound")
+                return original_read_bytes(path)
+
+            with patch.object(Path, "read_bytes", reject_unbounded_read):
+                result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(
+                any("exceeds 262144 bytes" in error for error in result["errors"]),
+                result["errors"],
+            )
+
+    def test_non_string_source_path_is_refused_without_sorting_error(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            manifest = self._manifest(root)
+            manifest["entries"][0]["source_path"] = None
+            self._write_manifest(root, manifest)
+
+            result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(
+                any("source paths must be strings" in error for error in result["errors"]),
+                result["errors"],
+            )
+
+    def test_source_path_scan_exemption_is_limited_to_manifest_entries(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            manifest = self._manifest(root)
+            manifest["metadata"] = {
+                "source_path": "https://private.example.invalid/unreviewed"
+            }
+            self._write_manifest(root, manifest)
+
+            result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertGreater(result["candidate_scan_findings"], 0)
+            self.assertTrue(
+                any("live_connection_url" in error for error in result["errors"]),
+                result["errors"],
+            )
+
+    def test_missing_null_contract_fields_are_not_equivalent_to_explicit_null(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            manifest = self._manifest(root)
+            private = next(
+                entry for entry in manifest["entries"] if entry["decision"] == "PRIVATE_RETAIN"
+            )
+            del private["destination_path"]
+            self._write_manifest(root, manifest)
+
+            result = VALIDATOR.validate(root)
+
+            self.assertEqual(result["status"], "FAIL")
+            self.assertTrue(
+                any("missing required entry fields" in error for error in result["errors"]),
+                result["errors"],
+            )
+
     def test_exact_sixteen_source_mapping_fails_closed_on_drift(self) -> None:
         mutations = (
             lambda manifest: manifest["entries"].append(copy.deepcopy(manifest["entries"][0])),
@@ -105,6 +213,8 @@ class A022MigrationBatchTests(unittest.TestCase):
             copied_destination = root / "docs" / "architecture" / "README.md"
             private["source_blob_sha"] = VALIDATOR.git_blob_sha(
                 copied_destination.read_bytes()
+                .replace(b"\r\n", b"\n")
+                .replace(b"\r", b"\n")
             )
             self._write_manifest(root, manifest)
 

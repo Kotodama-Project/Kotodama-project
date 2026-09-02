@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import stat
 from typing import Any
 
 
@@ -60,6 +61,7 @@ MAPPING_DIGEST_KEYS = (
     "semantic_coverage",
     "rationale",
 )
+MAX_FILE_BYTES = 256 * 1024
 
 SECRET_DETECTORS = {
     "aws_key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
@@ -96,19 +98,50 @@ def git_blob_sha(data: bytes) -> str:
     return hashlib.sha1(header + data).hexdigest()  # noqa: S324 - Git identity
 
 
+def _canonical_text_bytes(data: bytes) -> bytes:
+    """Match Git's LF blob bytes for the text files in this candidate."""
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def _candidate_blob_sha(data: bytes) -> str:
+    return git_blob_sha(_canonical_text_bytes(data))
+
+
 def _read_bounded(root: Path, relative: Path, errors: list[str]) -> bytes | None:
+    candidate = root / relative
     try:
-        resolved = (root / relative).resolve(strict=True)
+        candidate_stat = candidate.lstat()
+    except OSError:
+        errors.append(f"missing or escaping path: {relative.as_posix()}")
+        return None
+    if stat.S_ISLNK(candidate_stat.st_mode):
+        errors.append(f"symlink is not allowed: {relative.as_posix()}")
+        return None
+    try:
+        resolved = candidate.resolve(strict=True)
         resolved.relative_to(root.resolve(strict=True))
     except (OSError, ValueError):
         errors.append(f"missing or escaping path: {relative.as_posix()}")
         return None
-    if not resolved.is_file():
+    try:
+        resolved_stat = resolved.stat()
+    except OSError:
+        errors.append(f"missing or escaping path: {relative.as_posix()}")
+        return None
+    if not stat.S_ISREG(resolved_stat.st_mode):
         errors.append(f"not a regular file: {relative.as_posix()}")
         return None
-    data = resolved.read_bytes()
-    if len(data) > 256 * 1024:
-        errors.append(f"file exceeds 262144 bytes: {relative.as_posix()}")
+    if resolved_stat.st_size > MAX_FILE_BYTES:
+        errors.append(f"file exceeds {MAX_FILE_BYTES} bytes: {relative.as_posix()}")
+        return None
+    try:
+        with resolved.open("rb") as stream:
+            data = stream.read(MAX_FILE_BYTES + 1)
+    except OSError:
+        errors.append(f"unable to read file: {relative.as_posix()}")
+        return None
+    if len(data) > MAX_FILE_BYTES:
+        errors.append(f"file exceeds {MAX_FILE_BYTES} bytes: {relative.as_posix()}")
         return None
     return data
 
@@ -151,9 +184,15 @@ def _scan_manifest_strings(value: Any, path: tuple[str, ...] = ()) -> list[str]:
     findings: list[str] = []
     if isinstance(value, dict):
         for key, child in value.items():
-            if key == "source_path":
+            child_path = (*path, key)
+            if (
+                len(child_path) == 3
+                and child_path[0] == "entries"
+                and child_path[1].isdigit()
+                and child_path[2] == "source_path"
+            ):
                 continue
-            findings.extend(_scan_manifest_strings(child, (*path, key)))
+            findings.extend(_scan_manifest_strings(child, child_path))
     elif isinstance(value, list):
         for index, child in enumerate(value):
             findings.extend(_scan_manifest_strings(child, (*path, str(index))))
@@ -238,11 +277,21 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
 
     if len(entries) != 16:
         errors.append("manifest must contain exactly 16 source entries")
+    for index, entry in enumerate(entries):
+        missing_fields = [key for key in MAPPING_DIGEST_KEYS if key not in entry]
+        if missing_fields:
+            errors.append(
+                "missing required entry fields at index "
+                f"{index}: {', '.join(missing_fields)}"
+            )
     source_paths = [entry.get("source_path") for entry in entries]
-    if source_paths != sorted(source_paths):
-        errors.append("source entries must be sorted by exact path")
-    if len(source_paths) != len(set(source_paths)):
-        errors.append("duplicate source paths")
+    if any(not isinstance(path, str) for path in source_paths):
+        errors.append("source paths must be strings")
+    else:
+        if source_paths != sorted(source_paths):
+            errors.append("source entries must be sorted by exact path")
+        if len(source_paths) != len(set(source_paths)):
+            errors.append("duplicate source paths")
     if _mapping_digest(entries) != SOURCE_MAPPING_DIGEST:
         errors.append("exact source path/blob/mode/decision mapping digest mismatch")
     if any(entry.get("source_mode") != "100644" for entry in entries):
@@ -348,7 +397,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     source_blob_reuse_paths: list[str] = []
     for relative in sorted(REQUIRED_PATHS):
         data = _read_bounded(root, relative, errors)
-        if data is not None and git_blob_sha(data) in source_blob_shas:
+        if data is not None and _candidate_blob_sha(data) in source_blob_shas:
             source_blob_reuse_paths.append(relative.as_posix())
             errors.append(
                 f"source architecture blob copied unchanged: {relative.as_posix()}"
@@ -358,7 +407,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         data = _read_bounded(root, Path(path), errors)
         if data is None:
             continue
-        actual_sha = git_blob_sha(data)
+        actual_sha = _candidate_blob_sha(data)
         if actual_sha != expected_sha:
             errors.append(f"destination blob mismatch: {path}")
         try:
@@ -372,7 +421,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         errors.extend(_scan_text(Path(path), text))
 
     license_data = _read_bounded(root, LICENSE_PATH, errors)
-    if license_data is not None and git_blob_sha(license_data) != SOURCE_LICENSE_BLOB:
+    if license_data is not None and _candidate_blob_sha(license_data) != SOURCE_LICENSE_BLOB:
         errors.append("MIT license bytes do not match pinned source license blob")
 
     # Exact private source paths are allowed once in the manifest allowlist only.
