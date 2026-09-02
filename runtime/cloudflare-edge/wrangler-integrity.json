@@ -1,0 +1,12 @@
+{
+  "kind": "npm_supply_chain_binding",
+  "package": "wrangler",
+  "version": "4.120.0",
+  "npm_tarball": "https://registry.npmjs.org/wrangler/-/wrangler-4.120.0.tgz",
+  "npm_integrity": "sha512-cBmu/MeaB/fPacC0JpATs4duTOCagBxrZo+vBzuTX06tLzwSyAHE1drlHUZ8rP0VqVz1fy3ReGYTiHdKkoHltg==",
+  "npm_shasum": "8fe91bbdefb7c2bec861d76ed8a697c5ff6dea5d",
+  "slsa_subject": "pkg:npm/wrangler@4.120.0",
+  "slsa_subject_sha512": "7019aefcc79a07f7cf69c0b4269013b3876e4ce09a801c6b668faf073b935f4ead2f3c12c801c4d5dae51d467cacfd15a95cf57f2dd178661388774a9281e5b6",
+  "slsa_predicate_type": "https://slsa.dev/provenance/v1",
+  "observed_utc": "2026-08-07"
+}

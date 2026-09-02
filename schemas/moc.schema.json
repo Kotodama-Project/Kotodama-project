@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/moc.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/moc.schema.json",
   "title": "Kotodama Map of Content",
   "type": "object",
   "additionalProperties": false,

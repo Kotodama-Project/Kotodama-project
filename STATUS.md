@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-08-05
+Updated: 2026-08-26
 
 | Surface | Status |
 |---|---|
@@ -8,6 +8,8 @@ Updated: 2026-08-05
 | Product direction and roadmap | Public |
 | Company governance starter | Published and locally validated |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
+| [Cloudflare edge preview candidate](runtime/cloudflare-edge/README.md) | Draft PR candidate; content-free local validation only, no version upload or deployment |
+| [Official Cloudflare OS bounded runtime candidate](docs/CLOUDFLARE-OS-ADOPTION.md) | Draft PR candidate; exact source pin, six synthetic metadata projections, and content-free local runtime receipt; no provider execution |
 | Compose minimum data-plane skeleton | Published candidate; offline config only |
 | Resolved Compose candidate | Published credential-free configuration candidate |
 | Local image availability preflight | Published read-only tool; saved verification is historical binding only |
@@ -36,6 +38,7 @@ Updated: 2026-08-05
 | One-command review-chain smoke | Published standard-library-only local smoke; exact thirteen steps in a temporary workspace, no retained artifacts or GO |
 | [5-minute tour](docs/FIVE-MINUTE-TOUR.md) | Clone-to-result first-visit path; external-free local smoke and bounded next choices only |
 | README Company OS story map | Vision-to-Try-it reader map and eight-surface ideal/current boundary; documentation only |
+| [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) | Redacted owner-directed direction candidate; not signed/independently verified governance approval or rightsholder proof; runtime remains unimplemented, `NO_GO_UNPUBLISHED` |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
 | Public Discord invite | Not published |
@@ -43,9 +46,50 @@ Updated: 2026-08-05
 | Raw audio or transcript corpus | Not published |
 | Final Human GO | Not completed |
 
+## Latest Cloudflare candidate result
+
+The official Cloudflare OS candidate pins the current official starter and the
+core gitlink that starter actually uses. The separately observed current core
+head differs by 99 files and remains a mandatory independent-review boundary.
+The Gatekeeper validator passes six content-free synthetic projections and
+keeps provider, execution, Promotion, Current Truth, and Public Beta authority
+false.
+
+The saved [local runtime evaluation](docs/CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md)
+adds exact dependency/toolchain integrity, 1060 passing tests with 7 explicit
+skips, all 26 workspace package projects covered by build checks, three stable
+headers-only HTTP 200 responses in `LOOPBACK_ONLY` mode, and zero remaining
+evaluation processes/listeners. The result is `PASS_LOCAL_RUNTIME_WITH_GAPS`.
+
+P0/P1/P2 is 0/6/2. The open P1 set includes the independent drift review, one
+high `nanoid` advisory, Windows-only compatibility mitigation, unproven
+observability retention/readback, provider E2E, and package-manager attestation
+signature. Dynamic Workers, Workers Paid entitlement, KV, R2, Browser Rendering,
+Access, provider logs, private Context, backup, restore, Discord integration,
+and production remain unproven. The edge Worker was not uploaded or deployed.
+`NO_GO_UNPUBLISHED` remains unchanged.
+## Owner-confirmed Company AGI direction
+
+The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) records the
+Company AGI target, bounded autonomy, Voice Requirements Agent, per-Invocation authority, causal ledger, and unresolved design decisions. README, STATUS, and
+ROADMAP are projections of that source. Correction themes: one Kotodama product
+with BecomeOne as migration donor/control plane; OKF v0.2 as the central
+representation for governed curated knowledge, not sole Company truth; and
+separate raw/derived Voice evidence with adaptive GrillU. Luna-first routing,
+the provider-neutral archive interface/private ZFS v1 target, and a synthetic ZFS test dataset with authenticated restore and 8/8 file-hash restore readback are explicit.
+Production dataset/key custody/retention/deletion/replication binding remain pending. Reversible delegation and the bounded Goal Completion
+Improvement Loop remain requirements. This documentation does not activate
+Voice, Agent Swarm, provider, deployment, Promotion, or Current Truth; runtime
+remains unimplemented and Public Beta remains `NO_GO_UNPUBLISHED`. The public
+bytes preserve the user's working direction as a redacted owner-directed
+candidate, not a signed or independently verifiable governance approval,
+rightsholder proof, canonical adoption, launch decision, or Final Human GO; no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25
+contributor/provenance/NOTICE/accountable-rightsholder gaps remain open and are
+not marked closed.
+
 ## Latest runtime result
 
-最新の CT200 Voice cutover attempt は、read-only reconciliation 後に `BLOCKED_NO_EFFECT` と判定されました。候補ファイルの deploy は 0、外部 provider API の作用も 0 でした。
+最新の private Voice runtime cutover attempt は、read-only reconciliation 後に `BLOCKED_NO_EFFECT` と判定されました。候補ファイルの deploy は 0、外部 provider API の作用も 0 でした。
 
 これは安全に停止したことの証拠であり、Voice runtime が公開稼働していることの証明ではありません。
 

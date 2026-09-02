@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-response-verification.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-review-response-verification.schema.json",
   "title": "Kotodama Company Pack Review Response Verification",
   "$comment": "A match proves structural item-response binding only. It does not verify reviewer identity, authority, Human approval, an overall Decision, evidence, Promotion, Current Truth, or Public Beta GO.",
   "type": "object",

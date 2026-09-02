@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0.0",
+  "status": "ADOPT_BOUNDED_SOURCE_ONLY",
+  "observed_at": "2026-08-09T07:00:00Z",
+  "public_beta": "NO_GO_UNPUBLISHED",
+  "starter": {
+    "repository": "https://github.com/cloudflare/cloudflare-os-starter",
+    "commit": "9c18a2e8b0c3741e5f4813546bbf24be5bbb98ee",
+    "tree": "9d34f65f4f34b98febc57f8da86cfc045da0736e",
+    "package_manager": "pnpm@11.9.0",
+    "wrangler_requirement": "^4.115.0",
+    "license": "Apache-2.0"
+  },
+  "starter_core_gitlink": {
+    "commit": "bf7f762d7fa73553284d731ab6a978d3ea17be24",
+    "tree": "023da57719fa9744a4ca909f9c3863c93cb614fa",
+    "wrangler_requirement": "^4.115.0"
+  },
+  "current_core_observation": {
+    "repository": "https://github.com/cloudflare/cloudflare-os",
+    "commit": "1cb5e3d9096589e38f3fcfaf3f2191aa95a4c592",
+    "tree": "2f1eb7b69cf6cbc0e0da159bf2cd09ef9a2ce7e7",
+    "license": "Apache-2.0"
+  },
+  "selected_baseline": {
+    "kind": "starter_with_its_exact_core_gitlink",
+    "drift_review_required": true,
+    "exact_install_integrity_proven": false,
+    "runtime_state": "NOT_INSTALLED_NOT_DEPLOYED"
+  },
+  "runtime_observations": {
+    "release_stage": "EARLY_ACCESS_V2",
+    "traditional_computer_os": false,
+    "local_wrangler_workerd_mode": "EVALUATION_ONLY",
+    "proxmox_production_tooling": "COMING_SOON_UNPROVEN",
+    "dynamic_workers_plan": "WORKERS_PAID_REQUIRED",
+    "required_products": [
+      "Workers",
+      "KV",
+      "R2",
+      "Browser Rendering",
+      "Dynamic Worker Loaders"
+    ],
+    "access_default": "CLOUDFLARE_ACCESS",
+    "ai_default": "DISABLED",
+    "discord_gatekeeper_observed": false
+  },
+  "authority_boundary": {
+    "canonical_owner": "BECOMEONE_AND_HUMAN_INTENT",
+    "protected_runtime": "PROXMOX_LOCAL_TRUST_BOUNDARY",
+    "query_authority": "CONTEXT_GATEWAY",
+    "first_evaluation_data": "PUBLIC_OR_SYNTHETIC_CONTENT_FREE_ONLY",
+    "gatekeeper_output": "KOTODAMA_CANDIDATE_ONLY",
+    "provider_deploy_authorized": false,
+    "promotion_authorized": false,
+    "current_truth_change_authorized": false
+  },
+  "effects": {
+    "dependency_install": 0,
+    "upstream_execution": 0,
+    "credential_operation": 0,
+    "provider_mutation": 0,
+    "billing_change": 0,
+    "deployment": 0,
+    "external_post": 0
+  },
+  "official_sources": [
+    "https://os.cloudflare.app/",
+    "https://github.com/cloudflare/cloudflare-os",
+    "https://github.com/cloudflare/cloudflare-os-starter",
+    "https://developers.cloudflare.com/dynamic-workers/pricing/",
+    "https://raw.githubusercontent.com/cloudflare/cloudflare-os/bf7f762d7fa73553284d731ab6a978d3ea17be24/.agents/skills/write-gatekeeper/SKILL.md",
+    "https://raw.githubusercontent.com/cloudflare/cloudflare-os-starter/9c18a2e8b0c3741e5f4813546bbf24be5bbb98ee/docs/customization.md",
+    "https://raw.githubusercontent.com/cloudflare/cloudflare-os-starter/9c18a2e8b0c3741e5f4813546bbf24be5bbb98ee/docs/observability.md"
+  ]
+}

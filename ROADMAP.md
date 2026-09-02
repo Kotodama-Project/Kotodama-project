@@ -27,6 +27,57 @@
 - [x] Standard-library-only one-command review-chain smoke with temporary cleanup and closed report
 - [x] Clone-to-result five-minute tour with cross-shell commands, report interpretation, and bounded next choices
 - [x] README Company OS reader/story map from Vision through current reality to safe first use
+- [x] Draft Cloudflare edge candidate with exact Wrangler supply-chain binding and manual-only preview upload guard
+- [x] Draft official Cloudflare OS source pin and content-free Gatekeeper-to-Kotodama adapter contract
+- [x] Content-free official Cloudflare OS local runtime receipt with exact integrity, 1060 passing tests, loopback readback, and cleanup evidence
+
+## Current Cloudflare candidate
+
+The draft Cloudflare candidate now separates Cloudflare edge from the official
+Cloudflare OS project. The edge side remains a content-free Worker candidate;
+no preview version has been uploaded. The Cloudflare OS side pins the exact
+official starter, the core gitlink used by that starter, and the separately
+observed current core head. Because the gitlink and current head differ, an
+independent drift review is required before re-pinning.
+
+The local adapter covers observation, protected observation, submitted,
+simulated, rejected, and applied Gatekeeper events. It emits Kotodama candidate
+records only and cannot authorize execution, Promotion, or Current Truth.
+
+The bounded local runtime evaluation is now complete: exact lock/toolchain
+integrity is recorded, 1060 tests pass with 7 explicit skips, all 26 workspace
+package projects have build coverage, three stable headers-only HTTP 200
+readbacks were observed in `LOOPBACK_ONLY` mode, and cleanup left no evaluation
+process or listener. This is local evidence only; provider deployment remains
+`not_deployed`.
+
+The next dependency-ordered gates are independent review of the 99-file drift,
+remediation or explicit re-pin of the high `nanoid` advisory, default-deny
+observability retention/readback, package-manager attestation verification,
+paid-plan budget and entitlement, and provider readback/rollback/deletion.
+Private Context, backup/restore, production behavior, Discord publication,
+Promotion, Current Truth, and Final Human GO remain open.
+`NO_GO_UNPUBLISHED` remains unchanged.
+- [x] [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) with README/STATUS/ROADMAP projections
+
+## Owner-confirmed Company AGI direction
+
+The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) is the canonical product-direction source for Company AGI, bounded autonomy,
+Voice Requirements Agent, per-Invocation authority, and one Kotodama product /
+Company SSOT. Correction themes: BecomeOne is the migration donor/control plane;
+OKF v0.2 is central for governed curated knowledge, not sole Company truth; and
+Voice raw/derived evidence plus adaptive GrillU remain explicit. Luna-first
+routing, a provider-neutral archive interface with a private ZFS v1 target, and a synthetic ZFS test dataset with authenticated restore and 8/8 file-hash restore readback are distinct.
+Production dataset/key custody/retention/deletion/replication binding remain pending. Reversible review/revert delegation
+and the bounded Goal Completion Loop remain product requirements. This
+documentation milestone does not implement the runtime: Voice-to-Requirement,
+Agent Swarm, Context/encoder, provider, storage, and Promotion remain separate
+work. The runtime remains unimplemented and Public Beta remains
+`NO_GO_UNPUBLISHED`. The public bytes are a redacted owner-directed direction
+candidate, not signed or independently verifiable governance approval,
+rightsholder proof, canonical adoption, launch decision, or Final Human GO, and
+no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25's
+contributor/provenance/NOTICE/accountable-rightsholder gaps remain open.
 
 ## Current public documentation revision
 
