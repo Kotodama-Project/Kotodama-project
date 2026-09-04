@@ -298,13 +298,17 @@ function projectItems(value) {
   return result;
 }
 
-function sanitizeProjection(value) {
+export function sanitizeProjection(value) {
   if (!value || typeof value !== "object" || hasForbiddenGatewayKey(value)) return null;
   if (
     value.schema !== "kotodama.cloudflare_os.authorized_voice_projection"
     || value.schema_version !== "1.0.0"
     || value.route !== "cloudflare_os->context_gateway"
     || value.authority !== "candidate_only"
+    || typeof value.handoff_id !== "string"
+    || !SAFE_DOCUMENT_ID.test(value.handoff_id)
+    || !Number.isSafeInteger(value.revision)
+    || value.revision < 1
     || value.data_class !== "authorized_voice_handoff_projection"
     || value.raw_audio_transferred !== false
     || value.private_transcript_transferred !== false
@@ -341,6 +345,8 @@ function sanitizeProjection(value) {
     route: "cloudflare_os->context_gateway",
     data_class: "authorized_voice_handoff_projection",
     authority: "candidate_only",
+    handoff_id: value.handoff_id,
+    revision: value.revision,
     overview: value.overview,
     speaker_highlights: speakerHighlights,
     decisions,
@@ -456,9 +462,27 @@ async function boundedReviewBody(request) {
   } catch {
     return null;
   }
+  if (!validateReview(value)) return null;
+  // All allowed review values are scalars. Count only colons outside strings so
+  // JSON.parse cannot silently collapse duplicate request keys before forwarding.
+  let quoted = false;
+  let fields = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (quoted && text[i] === "\\") i += 1;
+    else if (text[i] === '"') quoted = !quoted;
+    else if (!quoted && text[i] === ":") fields += 1;
+  }
+  return fields === Object.keys(value).length ? value : null;
+}
+
+export function validateReview(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const keys = Object.keys(value);
-  if (!REVIEW_ACTIONS.includes(value.action) || keys.some((key) => !["action", "edited_overview"].includes(key))) {
+  if (!REVIEW_ACTIONS.includes(value.action)
+    || !Number.isSafeInteger(value.expected_revision)
+    || value.expected_revision < 1
+    || value.expected_revision >= Number.MAX_SAFE_INTEGER
+    || keys.some((key) => !["action", "expected_revision", "edited_overview"].includes(key))) {
     return null;
   }
   if (value.action === "edit") {
@@ -476,6 +500,8 @@ async function boundedReviewBody(request) {
 async function gatewayReadback(request, config, pathname, identity) {
   let target;
   let init;
+  let reviewedId;
+  let reviewedBody;
   if (request.method === "GET" && pathname === "/voice/review") {
     const query = new URL(request.url).searchParams.get("q");
     if (query !== null && utf8Bytes(query) > MAX_QUERY_BYTES) return deny("query_denied", 400);
@@ -486,6 +512,8 @@ async function gatewayReadback(request, config, pathname, identity) {
     if (!match || !SAFE_DOCUMENT_ID.test(match[1])) return deny("path_denied", 404);
     const body = await boundedReviewBody(request);
     if (!body) return deny("review_body_denied", 400);
+    reviewedId = match[1];
+    reviewedBody = body;
     target = `${config.gateway}/v1/voice/handoffs/${match[1]}/review`;
     init = {
       method: "POST",
@@ -507,7 +535,10 @@ async function gatewayReadback(request, config, pathname, identity) {
   } catch {
     return deny("context_gateway_unavailable", 502);
   }
-  if (!response.ok) return deny("context_gateway_refused", 502);
+  if (!response.ok) {
+    await cancelReadableBody(response.body, "gateway_refused");
+    return deny("context_gateway_refused", [400, 403, 404, 409].includes(response.status) ? response.status : 502);
+  }
   const bytes = await boundedGatewayBody(response, MAX_GATEWAY_BODY_BYTES);
   if (!bytes) return deny("context_gateway_body_denied", 502);
   const text = decodeUtf8(bytes);
@@ -519,6 +550,12 @@ async function gatewayReadback(request, config, pathname, identity) {
     return deny("context_gateway_body_denied", 502);
   }
   const projected = sanitizeProjection(value);
+  if (projected && reviewedId && (
+    projected.handoff_id !== reviewedId
+    || projected.revision !== reviewedBody.expected_revision + 1
+    || projected.human_review.state !== { accept: "accepted", edit: "edited", reject: "rejected" }[reviewedBody.action]
+    || (reviewedBody.action === "edit" && projected.overview !== reviewedBody.edited_overview)
+  )) return deny("context_gateway_projection_denied", 502);
   return projected ? json(projected, 200) : deny("context_gateway_projection_denied", 502);
 }
 
