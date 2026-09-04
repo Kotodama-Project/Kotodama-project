@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomBytes } from "node:crypto";
 
 import worker, { __testing } from "../../runtime/cloudflare-edge/src/index.js";
+import { startReviewGateway } from "../../runtime/local-review-gateway/server.mjs";
+import { syntheticSeed } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
 
 
 const ISSUER = "https://team.cloudflareaccess.com";
@@ -73,6 +79,8 @@ function projection(extra = {}) {
     route: "cloudflare_os->context_gateway",
     data_class: "authorized_voice_handoff_projection",
     authority: "candidate_only",
+    handoff_id: "doc-safe-1",
+    revision: 1,
     overview: "Synthetic overview.",
     speaker_highlights: [{ summary: "A highlight.", speaker_ref: "speaker-a" }],
     decisions: [{ summary: "Keep preview private." }],
@@ -221,6 +229,8 @@ test("Access-verified review readback can only come through Context Gateway", as
   assert.equal(response.status, 200);
   assert.equal(calls.length, 2);
   assert.equal(body.authority, "candidate_only");
+  assert.equal(body.handoff_id, "doc-safe-1");
+  assert.equal(body.revision, 1);
   assert.equal(body.context_gateway_bypass, false);
   assert.equal(body.raw_audio_transferred, false);
   assert.equal(body.private_transcript_transferred, false);
@@ -273,7 +283,7 @@ test("malformed UTF-8 in review JSON is denied before gateway forwarding", async
     __testing.reset();
     const fixture = await signingFixture();
     const body = malformedJsonBytes(
-      { action: "edit", edited_overview: "Synthetic overview." },
+      { action: "edit", expected_revision: 1, edited_overview: "Synthetic overview." },
       "edited_overview",
       malformed.bytes,
     );
@@ -550,7 +560,7 @@ test("review actions are bounded and forwarded only to the Context Gateway", asy
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
     observed = value;
-    return Response.json(projection({ human_review: {
+    return Response.json(projection({ revision: 2, human_review: {
       required: true,
       state: "accepted",
       actions: ["accept", "edit", "reject"],
@@ -561,14 +571,14 @@ test("review actions are bounded and forwarded only to the Context Gateway", asy
     withJwt("https://preview.example.test/voice/review/doc-safe-1", jwt, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "accept" }),
+      body: JSON.stringify({ action: "accept", expected_revision: 1 }),
     }),
     env(),
   );
   assert.equal(response.status, 200);
   assert.equal(observed.url, `${GATEWAY}/v1/voice/handoffs/doc-safe-1/review`);
   assert.equal(observed.method, "POST");
-  assert.deepEqual(await observed.clone().json(), { action: "accept" });
+  assert.deepEqual(await observed.clone().json(), { action: "accept", expected_revision: 1 });
 });
 
 test("GW-RED/GW-STREAM: oversized gateway responses use a bounded reader, not arrayBuffer", async () => {
@@ -807,4 +817,106 @@ test("unsafe gateway origin and invalid review input are denied before fetch", a
   );
   assert.equal(response.status, 503);
   assert.equal(calls, 0);
+});
+
+test("review requires a positive safe expected revision and denies private fields before forwarding", async () => {
+  __testing.reset();
+  const fixture = await signingFixture();
+  const jwt = await fixture.token();
+  const calls = installFetch(fixture);
+  for (const body of [
+    { action: "accept" },
+    ...[null, 0, -1, 1.5, "1", Number.MAX_SAFE_INTEGER].map((expected_revision) => ({ action: "accept", expected_revision })),
+    { action: "accept", expected_revision: 1, source_body: "private" },
+  ]) {
+    const response = await worker.fetch(withJwt("https://preview.example.test/voice/review/doc-safe-1", jwt, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    }), env());
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls.gateway, 0);
+});
+
+test("projection identity and review readback cannot silently drift", async () => {
+  const fixture = await signingFixture();
+  const jwt = await fixture.token();
+  for (const extra of [{ handoff_id: "../unsafe" }, { handoff_id: null }, { revision: 0 }, { revision: "1" }]) {
+    __testing.reset();
+    installFetch(fixture, { onGateway: () => Response.json(projection(extra)) });
+    assert.equal((await worker.fetch(withJwt("https://preview.example.test/voice/review", jwt), env())).status, 502);
+  }
+  for (const extra of [{ handoff_id: "different-id" }, { revision: 1 }, { human_review: projection().human_review }]) {
+    __testing.reset();
+    const accepted = { revision: 2, human_review: { ...projection().human_review, state: "accepted" } };
+    installFetch(fixture, { onGateway: () => Response.json(projection({ ...accepted, ...extra })) });
+    const response = await worker.fetch(withJwt("https://preview.example.test/voice/review/doc-safe-1", jwt, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "accept", expected_revision: 1 }),
+    }), env());
+    assert.equal(response.status, 502);
+  }
+});
+
+test("duplicate review keys cannot be normalized before reaching the Gateway", async () => {
+  __testing.reset();
+  const fixture = await signingFixture();
+  const calls = installFetch(fixture);
+  for (const body of [
+    '{"action":"accept","action":"reject","expected_revision":1}',
+    '{"action":"accept","expected_revision":1,"expected_revision":2}',
+    '{"action":"accept","expected_revision":1,"expected_\\u0072evision":2}',
+  ]) {
+    const response = await worker.fetch(withJwt("https://preview.example.test/voice/review/doc-safe-1", await fixture.token(), {
+      method: "POST", headers: { "content-type": "application/json" }, body,
+    }), env());
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls.gateway, 0);
+});
+
+test("Worker GET -> review -> restart -> GET uses the actual persistent local HTTP Gateway", async () => {
+  const stateRoot = mkdtempSync(join(tmpdir(), "kotodama-edge-roundtrip-"));
+  const config = env();
+  config.CONTEXT_GATEWAY_CLIENT_SECRET = randomBytes(32).toString("hex");
+  const gatewayConfig = { stateRoot, clientId: config.CONTEXT_GATEWAY_CLIENT_ID, clientSecret: config.CONTEXT_GATEWAY_CLIENT_SECRET };
+  const fixture = await signingFixture();
+  const jwt = await fixture.token();
+  let gateway;
+  try {
+    gateway = await startReviewGateway({ ...gatewayConfig, seeds: [syntheticSeed()] });
+    __testing.reset();
+    __testing.setFetch(async (request) => {
+      const url = new URL(request.url);
+      if (url.href === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [fixture.jwk] });
+      assert.equal(url.origin, GATEWAY);
+      // Transport substitution only: the production Worker remains HTTPS-only.
+      return fetch(new Request(`${gateway.origin}${url.pathname}${url.search}`, request));
+    });
+    const get = () => worker.fetch(withJwt("https://preview.example.test/voice/review", jwt), config);
+    const initial = await (await get()).json();
+    assert.equal(initial.handoff_id, "handoff-synthetic-1");
+    assert.equal(initial.revision, 1);
+    const review = (token, body) => worker.fetch(withJwt(`https://preview.example.test/voice/review/${initial.handoff_id}`, token, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    }), config);
+    const body = { action: "edit", expected_revision: initial.revision, edited_overview: "Worker から訂正した合成概要。" };
+    assert.equal((await review(await fixture.token({ sub: "other-reviewer" }), body)).status, 404);
+    const accepted = await review(jwt, body);
+    assert.equal(accepted.status, 200);
+    assert.equal((await accepted.json()).revision, 2);
+    assert.equal((await review(jwt, body)).status, 409);
+    assert.equal((await review(jwt, { ...body, expected_revision: 2, private_transcript: "forbidden" })).status, 400);
+    await gateway.close();
+    gateway = await startReviewGateway(gatewayConfig);
+    const persisted = await (await get()).json();
+    assert.equal(persisted.overview, body.edited_overview);
+    assert.equal(persisted.human_review.state, "edited");
+    assert.equal(persisted.revision, 2);
+    assert.equal(persisted.promotion, false);
+    assert.equal(persisted.current_truth_mutation, false);
+    assert.equal(persisted.public_beta, "NO_GO_UNPUBLISHED");
+  } finally {
+    __testing.reset();
+    if (gateway) await gateway.close();
+    rmSync(stateRoot, { recursive: true, force: true });
+  }
 });
