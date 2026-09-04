@@ -143,6 +143,8 @@ def create_company_pack(
     pack_id: str,
     target: Path,
     customization: StaticCustomization | None = None,
+    *,
+    preserve_incomplete: bool = False,
 ) -> dict[str, Any]:
     if ID_PATTERN.fullmatch(pack_id) is None:
         return failure(
@@ -245,7 +247,12 @@ def create_company_pack(
             "errors": [],
         }
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-        if created_destination and destination.is_dir() and not destination.is_symlink():
+        if (
+            not preserve_incomplete
+            and created_destination
+            and destination.is_dir()
+            and not destination.is_symlink()
+        ):
             shutil.rmtree(destination)
         return failure(pack_id, "pack generation failed safely")
 
