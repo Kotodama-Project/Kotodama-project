@@ -1,7 +1,8 @@
 # ローカル Voice review Gateway
 
 この小さな候補実装は、Cloudflare Worker が既に参照する二つの Gateway
-endpoint を localhost で実行します。認可された合成 handoff projection を読み、
+endpoint を localhost で実行します。合成 seed または operator が指定した sanitized
+handoff candidate のローカル JSON を読み、
 利用者の review 操作を revision に束縛して保存し、再起動後も読み直せます。
 依存 package、モデル呼出し、Cloudflare account、DB、provider 接続は不要です。
 
@@ -32,6 +33,39 @@ node runtime/local-review-gateway/server.mjs --state-root work/local-review-stat
 `seeds` は operator が渡す `{ actor: { subject, email }, projection }` の配列で、
 初期 revision は `1`、review state は `pending`、既存 Worker の allowlist に
 完全一致する projection だけが許可されます。HTTP に import endpoint はありません。
+
+### 手動候補ファイルの取り込み
+
+sanitized handoff candidate を自分で用意する場合は、`--seed-synthetic` の代わりに
+ファイルと、その **exact bytes の期待 SHA-256** を指定します。
+
+```text
+node runtime/local-review-gateway/server.mjs --state-root work/local-review-state --import-file work/review-candidates.json --expected-sha256 <64桁の小文字SHA-256>
+```
+
+UTF-8 JSON の root は `[{"actor": {...}, "projection": {...}}]` 形式の配列です。
+`actor` は明示した `subject` / `email` の組で、少なくとも片方を指定し、もう片方は
+`null` にします。`projection` は `synthetic-fixture.mjs` と同じ閉じた形式の候補で、
+`handoff_id`、`revision: 1`、`human_review.state: "pending"`、digest URN、
+`authority: "candidate_only"` と false の effect 境界を保持してください。actor を省略したり、private field や
+raw body を追加した候補は拒否します。入力を clone して使う場合も、明示した actor と
+内容を確認したあとで期待 digest を固定してください。秘密値を入力ファイルに含めません。
+
+最大 64 件・4 MiB、重複 key・不正 UTF-8・symlink/hardlink file・親 directory の
+symlink を拒否します。読み込む bytes 数も固定上限で制限し、digest は JSON 解析前に
+照合します。ファイルは変更せず、入力 path や actor 生値は store に保存しません。
+`--import-file` と `--expected-sha256` は両方必須で、`--seed-synthetic` との併用は拒否します。
+
+**import は新しい store の初期化専用**です。既存 state があれば同じ候補でも拒否し、
+上書き・自動 merge は行いません。再起動では import 引数を外し `--state-root` だけを
+指定します。API でも `startReviewGateway({ stateRoot, clientId, clientSecret,
+importFile, expectedSha256 })` で同じ検査を利用できます。
+
+この入口が確認するのは、operator が指定したファイルの bytes と候補の構造だけです。
+入力は認証済み Voice capture、原会話の真正性、source lineage、consent/retention、
+actor grant の独立証明にはなりません。JSON の自由文を意味解析して private content を
+検出する機能もありません。raw transcript を持ち込まず、利用許可と redaction を確認した
+candidate だけをローカルで渡してください。取込みは実行・承認・Promotion を起動しません。
 
 listen は `127.0.0.1` に固定され、public bind は拒否します。長時間動かす場合は
 作業環境の tracked process launcher で owner・PID・期限を記録してください。
@@ -108,7 +142,7 @@ GET → edit → restart → GET を検証します。test 内の HTTPS→loopba
 検証専用です。Worker 本体の HTTPS-only Gateway 制約を緩めません。
 
 次の connector seam は、認可済み Verified Handoff の exact source digest/revision と
-actor grant を seed/import に束縛する Context Gateway adapter と、返された ID/revision
+actor grant をこの手動 import へ検証付きで束縛する Context Gateway adapter と、返された ID/revision
 から review する公式 Cloudflare OS Gadget です。実装済みなのはローカル Gateway と
 Worker の契約だけです。OS Gadget/Blueprint/Gatekeeper の native 結線、実 Access/Tunnel、
 HTTPS private transport、Voice capture、専門 Agent 実行、provider deploy、モデル呼出し、

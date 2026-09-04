@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { linkSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
-import { startReviewGateway } from "../../runtime/local-review-gateway/server.mjs";
+import { createHash, randomBytes } from "node:crypto";
+import { startReviewGateway, startReviewGatewayFromCli } from "../../runtime/local-review-gateway/server.mjs";
 import { syntheticSeed } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
 
 function options(stateRoot) {
@@ -130,5 +130,105 @@ test("store paths cannot follow directory links or hardlinks; corrupt saved inpu
   } finally {
     rmSync(stateRoot, { recursive: true, force: true });
     rmSync(external, { recursive: true, force: true });
+  }
+});
+
+test("exact local candidate file import -> HTTP review -> restart preserves the manually supplied candidate", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "kotodama-review-import-"));
+  const stateRoot = join(directory, "state");
+  mkdirSync(stateRoot);
+  const config = options(stateRoot);
+  const candidate = syntheticSeed();
+  candidate.projection.handoff_id = "manual-candidate-1";
+  candidate.projection.overview = "手動で用意した sanitized candidate。";
+  const importFile = join(directory, "candidate.json");
+  const bytes = Buffer.from(JSON.stringify([candidate]), "utf8");
+  writeFileSync(importFile, bytes);
+  const expectedSha256 = createHash("sha256").update(bytes).digest("hex");
+  let gateway;
+  try {
+    gateway = await startReviewGatewayFromCli(["--state-root", stateRoot, "--import-file", importFile, "--expected-sha256", expectedSha256], {
+      CONTEXT_GATEWAY_CLIENT_ID: config.clientId, CONTEXT_GATEWAY_CLIENT_SECRET: config.clientSecret, LOCAL_REVIEW_PORT: "0",
+    });
+    const url = `${gateway.origin}/v1/voice/handoffs?q=manual-candidate-1`;
+    const initial = await (await fetch(url, { headers: headers(config) })).json();
+    assert.equal(initial.overview, "手動で用意した sanitized candidate。");
+    assert.equal((await fetch(url, { headers: headers(config, { subject: "other", email: "other@example.test" }) })).status, 404);
+    const reviewed = await fetch(`${gateway.origin}/v1/voice/handoffs/${initial.handoff_id}/review`, {
+      method: "POST", headers: headers(config), body: JSON.stringify({ action: "accept", expected_revision: initial.revision }),
+    });
+    assert.equal(reviewed.status, 200);
+    await gateway.close();
+    gateway = await startReviewGateway(config);
+    const saved = await (await fetch(`${gateway.origin}/v1/voice/handoffs`, { headers: headers(config) })).json();
+    assert.equal(saved.handoff_id, "manual-candidate-1");
+    assert.equal(saved.revision, 2);
+    assert.equal(saved.human_review.state, "accepted");
+    assert.equal(saved.promotion, false);
+    assert.equal(saved.current_truth_mutation, false);
+    assert.deepEqual(readFileSync(importFile), bytes);
+    await gateway.close();
+    const before = readFileSync(join(stateRoot, "voice-reviews.json"));
+    await assert.rejects(startReviewGateway({ ...config, importFile, expectedSha256 }), /import_existing_state_denied/);
+    assert.deepEqual(readFileSync(join(stateRoot, "voice-reviews.json")), before);
+  } finally {
+    if (gateway) await gateway.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("candidate import refuses digest drift, private keys, missing actor, non-pending state, oversized input and aliases", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "kotodama-review-import-"));
+  const stateRoot = join(directory, "state");
+  mkdirSync(stateRoot);
+  const config = options(stateRoot);
+  const importFile = join(directory, "candidate.json");
+  const valid = [syntheticSeed()];
+  const encode = (value) => Buffer.from(JSON.stringify(value), "utf8");
+  const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const privateCandidate = syntheticSeed();
+  privateCandidate.projection.private_transcript = "private-body-must-not-enter-store";
+  const missingActor = syntheticSeed();
+  missingActor.actor = { subject: null, email: null };
+  const revision = syntheticSeed();
+  revision.projection.revision = 2;
+  const accepted = syntheticSeed();
+  accepted.projection.human_review.state = "accepted";
+  try {
+    for (const [bytes, expectedSha256] of [
+      [encode(valid), "0".repeat(64)],
+      [encode([privateCandidate]), null],
+      [encode([missingActor]), null],
+      [encode([revision]), null],
+      [encode([accepted]), null],
+      [encode(Array.from({ length: 65 }, () => syntheticSeed())), null],
+      [Buffer.alloc(4_194_305, 0x20), null],
+      [Buffer.from([0x7b, 0xc3, 0x28, 0x7d]), null],
+    ]) {
+      writeFileSync(importFile, bytes);
+      await assert.rejects(startReviewGateway({ ...config, importFile, expectedSha256: expectedSha256 ?? digest(bytes) }));
+      assert.equal(existsSync(join(stateRoot, "voice-reviews.json")), false);
+      assert.equal(existsSync(join(stateRoot, ".voice-review-writer.lock")), false);
+      assert.deepEqual(readFileSync(importFile), bytes);
+    }
+    writeFileSync(importFile, encode(valid));
+    const expectedSha256 = digest(encode(valid));
+    const hardlink = join(directory, "hardlink.json");
+    linkSync(importFile, hardlink);
+    await assert.rejects(startReviewGateway({ ...config, importFile: hardlink, expectedSha256 }), /import_file_denied/);
+    rmSync(hardlink);
+    const linked = join(directory, "linked");
+    symlinkSync(directory, linked, process.platform === "win32" ? "junction" : "dir");
+    await assert.rejects(startReviewGateway({ ...config, importFile: join(linked, "candidate.json"), expectedSha256 }), /store_path_denied/);
+    const env = { CONTEXT_GATEWAY_CLIENT_ID: config.clientId, CONTEXT_GATEWAY_CLIENT_SECRET: config.clientSecret, LOCAL_REVIEW_PORT: "0" };
+    for (const args of [
+      ["--state-root", stateRoot, "--seed-synthetic", "--import-file", importFile, "--expected-sha256", expectedSha256],
+      ["--state-root", stateRoot, "--import-file", importFile],
+      ["--state-root", stateRoot, "--expected-sha256", expectedSha256],
+      ["--state-root", stateRoot, "--import-file", importFile, "--import-file", importFile],
+    ]) await assert.rejects(async () => startReviewGatewayFromCli(args, env));
+    assert.equal(existsSync(join(stateRoot, "voice-reviews.json")), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
