@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import {
-  closeSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync,
+  closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync,
   rmdirSync, unlinkSync, writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -69,6 +69,18 @@ function validateRecords(records) {
   return records;
 }
 
+function recordsFromSeeds(seeds) {
+  if (!Array.isArray(seeds)) throw new Error("seed_required");
+  if (!seeds.length || seeds.length > MAX_RECORDS) throw new Error("seed_denied");
+  try {
+    return validateRecords(seeds.map((seed) => {
+      if (!closed(seed, ["actor", "projection"]) || seed.projection?.revision !== 1
+        || seed.projection?.human_review?.state !== "pending") throw new Error("seed_denied");
+      return { actor_sha256: actorDigest(seed.actor), projection: seed.projection };
+    }));
+  } catch { throw new Error("seed_denied"); }
+}
+
 function checkedRoot(value) {
   if (typeof value !== "string" || !value) throw new Error("configuration_denied");
   const root = resolve(value);
@@ -86,6 +98,30 @@ function readStore(path) {
   const value = strictJson(readFileSync(path));
   if (!closed(value, ["schema", "records"]) || value.schema !== STORE_SCHEMA) throw new Error("store_denied");
   return validateRecords(value.records);
+}
+
+function readImport(path, expectedSha256) {
+  const absolute = resolve(path);
+  checkedRoot(dirname(absolute));
+  const before = lstatSync(absolute);
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1 || before.size > MAX_STORE_BYTES) throw new Error("import_file_denied");
+  const file = openSync(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try {
+    const opened = fstatSync(file);
+    if (!opened.isFile() || opened.nlink !== 1 || opened.dev !== before.dev || opened.ino !== before.ino
+      || opened.size !== before.size) throw new Error("import_file_denied");
+    const buffer = Buffer.alloc(MAX_STORE_BYTES + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const count = readSync(file, buffer, length, buffer.length - length, null);
+      if (!count) break;
+      length += count;
+    }
+    if (length > MAX_STORE_BYTES || length !== opened.size) throw new Error("import_file_denied");
+    const bytes = buffer.subarray(0, length);
+    if (hash(bytes).toString("hex") !== expectedSha256) throw new Error("import_digest_mismatch");
+    return recordsFromSeeds(strictJson(bytes));
+  } finally { closeSync(file); }
 }
 
 function persist(root, records) {
@@ -132,29 +168,26 @@ async function reviewBody(request) {
 }
 
 /** Trusted backend only. Actor headers are accepted only after exact service authentication. */
-export async function startReviewGateway({ stateRoot, clientId, clientSecret, seeds, host = "127.0.0.1", port = 0 } = {}) {
+export async function startReviewGateway({ stateRoot, clientId, clientSecret, seeds, importFile, expectedSha256, host = "127.0.0.1", port = 0 } = {}) {
+  const importing = importFile !== undefined || expectedSha256 !== undefined;
   if (host !== "127.0.0.1" || !Number.isInteger(port) || port < 0 || port > 65535
     || typeof clientId !== "string" || !/^[\x21-\x7e]{1,4096}$/.test(clientId)
-    || typeof clientSecret !== "string" || !/^[\x21-\x7e]{32,4096}$/.test(clientSecret)) throw new Error("configuration_denied");
+    || typeof clientSecret !== "string" || !/^[\x21-\x7e]{32,4096}$/.test(clientSecret)
+    || (importing && (typeof importFile !== "string" || !importFile || typeof expectedSha256 !== "string"
+      || !ACTOR_DIGEST.test(expectedSha256) || seeds !== undefined))) throw new Error("configuration_denied");
   const root = checkedRoot(stateRoot);
   const lock = join(root, ".voice-review-writer.lock");
   try { mkdirSync(lock, { mode: 0o700 }); }
   catch { throw new Error("store_locked"); }
   let records;
   try {
-    try { records = readStore(join(root, "voice-reviews.json")); }
+    try {
+      records = readStore(join(root, "voice-reviews.json"));
+      if (importing) throw new Error("import_existing_state_denied");
+    }
     catch (error) {
       if (error.code !== "ENOENT") throw error;
-      if (!Array.isArray(seeds)) throw new Error("seed_required");
-      if (!seeds.length || seeds.length > MAX_RECORDS) throw new Error("seed_denied");
-      try {
-        records = seeds.map((seed) => {
-          if (!closed(seed, ["actor", "projection"]) || seed.projection?.revision !== 1
-            || seed.projection?.human_review?.state !== "pending") throw new Error("seed_denied");
-          return { actor_sha256: actorDigest(seed.actor), projection: seed.projection };
-        });
-        validateRecords(records);
-      } catch { throw new Error("seed_denied"); }
+      records = importing ? readImport(importFile, expectedSha256) : recordsFromSeeds(seeds);
       persist(root, records);
     }
     // Detach operator input; callers cannot mutate an admitted in-memory projection.
@@ -216,16 +249,27 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
   };
 }
 
+export function startReviewGatewayFromCli(args, env = process.env) {
+  const values = new Map();
+  for (let index = 0; index < args.length; index += 1) {
+    const key = args[index];
+    if (!["--state-root", "--seed-synthetic", "--import-file", "--expected-sha256"].includes(key)
+      || values.has(key)) throw new Error("usage");
+    const value = key === "--seed-synthetic" ? true : args[++index];
+    if (value === undefined || value === "" || (typeof value === "string" && value.startsWith("--"))) throw new Error("usage");
+    values.set(key, value);
+  }
+  if (!values.has("--state-root")) throw new Error("usage");
+  return startReviewGateway({ stateRoot: values.get("--state-root"),
+    clientId: env.CONTEXT_GATEWAY_CLIENT_ID, clientSecret: env.CONTEXT_GATEWAY_CLIENT_SECRET,
+    port: Number(env.LOCAL_REVIEW_PORT ?? "8789"),
+    seeds: values.has("--seed-synthetic") ? [syntheticSeed()] : undefined,
+    importFile: values.get("--import-file"), expectedSha256: values.get("--expected-sha256") });
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
-    const args = process.argv.slice(2);
-    if (args.length < 2 || args[0] !== "--state-root" || args.length > 3
-      || (args.length === 3 && args[2] !== "--seed-synthetic")) throw new Error("usage");
-    const gateway = await startReviewGateway({ stateRoot: args[1],
-      clientId: process.env.CONTEXT_GATEWAY_CLIENT_ID,
-      clientSecret: process.env.CONTEXT_GATEWAY_CLIENT_SECRET,
-      port: Number(process.env.LOCAL_REVIEW_PORT ?? "8789"),
-      seeds: args[2] === "--seed-synthetic" ? [syntheticSeed()] : undefined });
+    const gateway = await startReviewGatewayFromCli(process.argv.slice(2));
     process.stdout.write(`Local candidate review Gateway listening on ${gateway.origin}\n`);
     for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { gateway.close().catch(() => { process.exitCode = 1; }); });
   } catch {
