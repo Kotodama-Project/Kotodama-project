@@ -212,10 +212,12 @@ def resolve_records(request: dict[str, Any], root: Path, binding_path: Path | No
         require(expires_at.tzinfo is not None and expires_at > datetime.now(timezone.utc), "BOUND_RECORD_EXPIRED")
         require(isinstance(record["rollback"], str) and bool(record["rollback"].strip()) and isinstance(record["stop_conditions"], list) and bool(record["stop_conditions"]) and all(isinstance(value, str) and bool(value.strip()) for value in record["stop_conditions"]), "BOUND_RECORD_SAFETY_FIELDS_INVALID")
     work_order, capability = records["work_order"], records["capability"]
-    require(request["work_order_ref"] == "work-order:" + str(work_order["work_order_id"]), "WORK_ORDER_REFERENCE_MISMATCH")
+    for identifier in (work_order["work_order_id"], capability["grant_id"]):
+        require(isinstance(identifier, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{1,127}", identifier) is not None, "RECORD_IDENTIFIER_INVALID")
+    require(request["work_order_ref"] == "work-order:" + work_order["work_order_id"], "WORK_ORDER_REFERENCE_MISMATCH")
     require(work_order["action"] == "CREATE_COMPANY_PACK" and work_order["candidate_revision"] == request["source"], "WORK_ORDER_ACTION_OR_REVISION_MISMATCH")
     require(isinstance(work_order["decision_ref"], str) and bool(work_order["decision_ref"].strip()) and work_order["effects"] == ["create_local_draft_pack_and_operation_receipt"], "WORK_ORDER_EFFECTS_INVALID")
-    require(request["capability_ref"] == "capability:" + str(capability["grant_id"]) and capability["work_order_ref"] == request["work_order_ref"], "CAPABILITY_REFERENCE_MISMATCH")
+    require(request["capability_ref"] == "capability:" + capability["grant_id"] and capability["work_order_ref"] == request["work_order_ref"], "CAPABILITY_REFERENCE_MISMATCH")
     require(capability["subject_ref"] == binding["owner_ref"], "CAPABILITY_OWNER_MISMATCH")
     require(capability["allowed_actions"] == ["CREATE_COMPANY_PACK"] and capability["denied_actions"] == ["external_write", "task_state_change", "promotion"], "CAPABILITY_ACTIONS_MISMATCH")
     require(isinstance(capability["issued_by_role"], str) and bool(capability["issued_by_role"].strip()) and capability["authority_evidence_ref"] == work_order["decision_ref"], "CAPABILITY_EVIDENCE_MISMATCH")

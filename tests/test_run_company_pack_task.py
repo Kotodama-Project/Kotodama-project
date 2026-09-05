@@ -135,6 +135,28 @@ class CompanyPackTaskTests(unittest.TestCase):
         self.assertEqual(repeated, original)
         self.assertEqual(executor.tree_bytes(self.operation), before)
 
+    def test_record_ids_are_strings_before_reference_matching(self):
+        for record_kind, field, prefix in (
+            ("work_order", "work_order_id", "work-order"),
+            ("capability", "grant_id", "capability"),
+        ):
+            for invalid in (True, 42, 1.0, None):
+                with self.subTest(record=record_kind, value=invalid):
+                    request = dict(self.request)
+                    work_order, capability = dict(self.work_order), dict(self.capability)
+                    if record_kind == "work_order":
+                        work_order[field] = invalid
+                        request["work_order_ref"] = prefix + ":" + str(invalid)
+                        capability["work_order_ref"] = request["work_order_ref"]
+                    else:
+                        capability[field] = invalid
+                        request["capability_ref"] = prefix + ":" + str(invalid)
+                    self.binding["records"]["work_order"] = self.save_record("work_order", work_order)
+                    self.binding["records"]["capability"] = self.save_record("capability", capability)
+                    self.save_binding()
+                    self.assert_refused(request, code="RECORD_IDENTIFIER_INVALID")
+                    self.assertFalse(self.operation.exists())
+
     def test_real_process_crash_after_generation_recovers_by_observation(self):
         request_path = self.root / "request.json"
         request_path.write_text(json.dumps(self.request), encoding="utf-8")
