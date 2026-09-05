@@ -13,6 +13,8 @@ Kotodama は、人間が普段どおり話し、相談し、アイデアを共�
 
 作業を再開する方は **[プロジェクトの地図](docs/PROJECT-MAP.md)** から、目標に対応する文書・実装・PR の関係を確認できます。エージェントの開始手順は [AGENTS.md](AGENTS.md) にまとめています。
 
+機能ごとの到達点と現在の実行経路は **[README の実装状況](docs/README-IMPLEMENTATION-ASSESSMENT.md)** を参照してください。[Task に結び付いた Company Pack 作成](docs/COMPANY-PACK-TASK-EXECUTION.md) と [ローカルの確認・訂正 Gateway](runtime/local-review-gateway/README.md) は実ファイル・実 HTTP の経路を持つ候補です。
+
 Kotodama は Voice や Company starter の単機能プロジェクトではなく、会話から
 会社の学習までを一つの証拠鎖でつなぐ Company OS を目指しています。この長い
 README は、最初から最後まで一枚の壁として読む必要はありません。
