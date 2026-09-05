@@ -22,7 +22,7 @@ const closed = (value, keys) => value && typeof value === "object" && !Array.isA
   && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 
 // JSON.parse validates grammar; this bounded lexical pass also rejects duplicate keys.
-function strictJson(bytes) {
+export function strictJson(bytes) {
   const text = decoder.decode(bytes);
   const stack = [];
   for (let i = 0; i < text.length; i += 1) {
@@ -278,6 +278,15 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
   let closePromise;
   return {
     origin: `http://127.0.0.1:${server.address().port}`,
+    // For a trusted in-process adapter that has authenticated a vendor principal.
+    // The snapshot is atomic and detached; it is not a new public HTTP endpoint.
+    inspectHandoff(principalRef, handoffId) {
+      if (closing) throw new Error("gateway_closed");
+      const principal = catalog.principals.find((item) => item.principal_ref === principalRef);
+      const record = catalog.records.find((item) => item.projection.handoff_id === handoffId);
+      if (!principal || !record || !canAccess(record.access_policy, principalRef, "read")) throw new Error("handoff_not_found");
+      return structuredClone({ projection: record.projection, policy_revision: record.access_policy.revision, principal_kind: principal.kind });
+    },
     // Trusted in-process operator surface only. Never forwarded as an HTTP/Worker action.
     updateAccessPolicy({ handoffId, expectedPolicyRevision, policy } = {}) {
       if (closing) throw new Error("gateway_closed");

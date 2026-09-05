@@ -58,7 +58,7 @@ jobs:
           -v
 
       - name: Run Worker and local Gateway review contracts
-        run: node --test tests/node/test_cloudflare_voice_review.mjs tests/node/test_local_review_gateway.mjs tests/node/test_information_access.mjs
+        run: node --test tests/node/test_cloudflare_voice_review.mjs tests/node/test_local_review_gateway.mjs tests/node/test_information_access.mjs tests/node/test_codex_brief_bridge.mjs
 
       - name: Run fail-closed candidate validators
         shell: bash
