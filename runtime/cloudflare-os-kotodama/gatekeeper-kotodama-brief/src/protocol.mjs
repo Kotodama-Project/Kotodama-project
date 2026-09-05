@@ -9,6 +9,17 @@ const text = (value, max = 8000) => typeof value === "string" && value.isWellFor
 const positive = (value) => Number.isSafeInteger(value) && value > 0;
 const hex = (value) => typeof value === "string" && HEX.test(value);
 const uuid = (value) => typeof value === "string" && UUID.test(value);
+const BRIDGE_STATES = ["running", "ready", "failed", "interrupted"];
+const APPROVAL_STATES = ["awaiting_approval", "approval_unknown", "rejected"];
+export const SESSION_STATE_TYPE = [...BRIDGE_STATES, ...APPROVAL_STATES].map((state) => JSON.stringify(state)).join(" | ");
+
+export function validateBridgeOrigin(value) {
+  if (typeof value !== "string") throw new Error("invalid_bridge_origin");
+  const origin = new URL(value);
+  if (origin.pathname !== "/" || origin.search || origin.hash || origin.username || origin.password
+    || !(origin.protocol === "https:" || (origin.protocol === "http:" && origin.hostname === "127.0.0.1"))) throw new Error("invalid_bridge_origin");
+  return origin;
+}
 
 export function validateBrief(value) {
   if (!closed(value, FIELDS) || !text(value.objective) || !text(value.deliverable)) throw new Error("invalid_brief");
@@ -30,16 +41,25 @@ export function validateSource(value) {
 }
 export function validateQueued(value, requestId) {
   if (!closed(value, ["request_id", "state", "task_state_changed"]) || !uuid(value.request_id) || value.request_id !== requestId
-    || !["running", "ready", "failed", "interrupted"].includes(value.state) || value.task_state_changed !== false) throw new Error("invalid_queue_response");
+    || !BRIDGE_STATES.includes(value.state) || value.task_state_changed !== false) throw new Error("invalid_queue_response");
   return value;
 }
 export function validateResult(value, requestId) {
   if (!closed(value, ["request_id", "state", "brief", "task_state_changed", "publication"]) || !uuid(value.request_id) || value.request_id !== requestId
-    || !["running", "ready", "failed", "interrupted"].includes(value.state)
+    || !BRIDGE_STATES.includes(value.state)
     || value.task_state_changed !== false || value.publication !== false) throw new Error("invalid_result");
   if (value.state === "ready") validateBrief(value.brief);
   else if (value.brief !== null) throw new Error("invalid_result");
   return value;
+}
+export function validateSessionResult(value, requestId) {
+  if (APPROVAL_STATES.includes(value?.state)) {
+    if (!closed(value, ["request_id", "state", "brief", "task_state_changed", "publication"])
+      || !uuid(value.request_id) || value.request_id !== requestId || value.brief !== null
+      || value.task_state_changed !== false || value.publication !== false) throw new Error("invalid_approval_result");
+    return value;
+  }
+  return validateResult(value, requestId);
 }
 export function validateRevoked(value) {
   if (!closed(value, ["revoked"]) || value.revoked !== true) throw new Error("invalid_revocation");

@@ -134,8 +134,16 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
     let state = "failed";
     try {
       const source = admitted(job.requester_ref);
-      result = await invoke({ ...runner, input: source.projection.overview, signal: controller.signal });
+      const p = source.projection;
+      const input = JSON.stringify({ overview: p.overview, speaker_highlights: p.speaker_highlights.map((v) => v.summary),
+        decision_candidates: p.decisions.map((v) => v.summary), todos: p.todos.map((v) => v.summary),
+        open_questions: p.open_questions.map((v) => v.summary) });
+      result = await invoke({ ...runner, input, signal: controller.signal });
       admitted(job.requester_ref);
+      validateBrief(result.brief);
+      // Source questions are unresolved evidence. A model cannot silently remove them.
+      result = { ...result, brief: { ...result.brief,
+        open_questions: [...new Set([...p.open_questions.map((v) => v.summary), ...result.brief.open_questions])] } };
       validateBrief(result.brief);
       state = "ready";
     } catch { result = null; }

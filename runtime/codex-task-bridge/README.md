@@ -39,7 +39,10 @@ lock merely to start another writer.
 The CLI executable and its SHA-256, private working directory and model are
 operator-selected. The runner requests read-only mode, no project docs, no user
 config, ephemeral runs and disabled shell, plugins, apps, browsers, memory and
-multi-agent features. Only the supplied overview is passed to the model.
+multi-agent features. The overview and all source summaries are passed to the
+model without actor IDs. Existing structured questions are retained even when
+the model omits them; this does not certify complete semantic extraction of
+every constraint from unrestricted natural language.
 It filters process environment variables and does not forward the bridge secret,
 API keys or endpoint overrides. Tool/error events and output overflow are refused;
 the known `skip_host_skill_discovery` development-feature advisory is separate.

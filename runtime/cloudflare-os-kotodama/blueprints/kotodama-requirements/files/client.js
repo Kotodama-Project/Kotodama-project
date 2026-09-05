@@ -29,6 +29,7 @@ const labels = {
   not_connected: "ConnectionsからKotodamaの接続を設定してください。",
   ready_to_request: "依頼を確認できました。要件案の作成を開始できます。",
   awaiting_approval: "OSの操作確認を待っています。確認欄から操作を許可してください。",
+  approval_unknown: "承認要求の受信を確認できません。OSの確認欄と接続を確認してください。自動で再送はしていません。",
   rejected: "操作は拒否されました。Codexでの実行は開始していません。",
   running: "Codexで要件案を作成しています。",
   ready: "要件案ができました。内容を確認してください。",
@@ -41,7 +42,7 @@ function section(title, value) {
   if (Array.isArray(value)) {
     const list = document.createElement("ul");
     for (const text of value) { const item = document.createElement("li"); item.textContent = text; list.appendChild(item); }
-    if (!value.length) { const note = document.createElement("p"); note.textContent = "追加の確認事項はありません。"; container.appendChild(note); }
+    if (!value.length) { const note = document.createElement("p"); note.textContent = "この要件案には追加の確認事項が挙がっていません。"; container.appendChild(note); }
     else container.appendChild(list);
   } else { const text = document.createElement("p"); text.textContent = value; container.appendChild(text); }
   result.appendChild(container);
@@ -57,7 +58,7 @@ function render(state) {
     section("未確定のこと", state.result.open_questions);
   }
   clearTimeout(timer);
-  if (["running", "awaiting_approval"].includes(state.state)) timer = setTimeout(refresh, 2500);
+  if (["running", "awaiting_approval", "approval_unknown"].includes(state.state)) timer = setTimeout(refresh, 2500);
 }
 function showError() {
   clearTimeout(timer); source.textContent = "現在、この依頼を表示できません。";

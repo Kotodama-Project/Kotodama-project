@@ -8,7 +8,7 @@ import { request as httpRequest } from "node:http";
 import { startBriefBridge, projectionDigest, grantDigest } from "../../runtime/codex-task-bridge/server.mjs";
 import { parseCodexEvents, codexArguments, validateBrief } from "../../runtime/codex-task-bridge/codex-runner.mjs";
 import { syntheticSeed, syntheticCatalog } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
-import { validateAdmission, validateSource, validateQueued, validateResult, validateRevoked } from "../../runtime/cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/protocol.mjs";
+import { validateAdmission, validateSource, validateQueued, validateResult, validateRevoked, validateSessionResult, validateBridgeOrigin } from "../../runtime/cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/protocol.mjs";
 
 const brief = { objective: "要件を整理する", deliverable: "要件案", constraints: ["公開しない"], acceptance_criteria: ["同じ画面で読み戻せる"], open_questions: [] };
 function fixture() {
@@ -55,7 +55,7 @@ test("actual HTTP admission, one invocation, deterministic replay, restart and g
     finish({ brief, tool_events: 0, model_requested: "synthetic" });
     await new Promise(setImmediate);
     let result = await (await call(bridge, config, `/v1/briefs/${request_id}`)).json();
-    assert.equal(result.state, "ready"); assert.deepEqual(result.brief, brief); assert.equal(result.task_state_changed, false);
+    assert.equal(result.state, "ready"); assert.deepEqual(result.brief, { ...brief, open_questions: config.seeds.records[0].projection.open_questions.map((q) => q.summary) }); assert.equal(result.task_state_changed, false);
     await bridge.close(); bridge = await startBriefBridge({ ...config, seeds: undefined }, { invoke: () => { throw new Error("must not rerun"); } });
     result = await (await call(bridge, config, `/v1/briefs/${request_id}`)).json();
     assert.equal(result.state, "ready");
@@ -188,6 +188,33 @@ test("OS wire validation refuses successful HTTP bodies with wrong identity, aut
     { state: "running" }, { brief: { ...brief, constraints: [] } }]) assert.throws(() => validateResult({ ...ready, ...patch }, requestId));
   assert.throws(() => validateSource({ ...samples[1][1], revision: 0 }));
   assert.throws(() => validateAdmission({ ...samples[0][1], allowed: false }));
+  for (const state of ["awaiting_approval", "approval_unknown", "rejected"]) {
+    const value = { ...ready, state, brief: null };
+    assert.deepEqual(validateSessionResult(value, requestId), value);
+    assert.throws(() => validateResult(value, requestId), "native approval states must not come from the model bridge");
+    assert.throws(() => validateSessionResult({ ...value, brief }, requestId));
+  }
+  for (const origin of ["http://bridge.example", "http://192.0.2.1", "http://localhost", "ftp://127.0.0.1", "https://user:pass@bridge.example", "https://bridge.example/path"]) {
+    assert.throws(() => validateBridgeOrigin(origin));
+  }
+  assert.equal(validateBridgeOrigin("http://127.0.0.1:18790").origin, "http://127.0.0.1:18790");
+  assert.equal(validateBridgeOrigin("https://bridge.example").protocol, "https:");
+});
+
+test("structured source questions survive a model omission and all source summaries reach the runner", async () => {
+  const { root, seed, config } = fixture(); let bridge; let input;
+  try {
+    bridge = await startBriefBridge(config, { invoke: async (args) => { input = JSON.parse(args.input); return { brief }; } });
+    const request_id = randomUUID();
+    await call(bridge, config, "/v1/briefs", { body: { request_id, source_revision: 1, binding_sha256: grantDigest(config.grant) } });
+    await new Promise(setImmediate);
+    assert.deepEqual(input.open_questions, seed.projection.open_questions.map((q) => q.summary));
+    assert.deepEqual(input.decision_candidates, seed.projection.decisions.map((q) => q.summary));
+    assert.deepEqual(input.todos, seed.projection.todos.map((q) => q.summary));
+    assert.deepEqual(input.speaker_highlights, seed.projection.speaker_highlights.map((q) => q.summary));
+    const result = await (await call(bridge, config, `/v1/briefs/${request_id}`)).json();
+    assert.deepEqual(result.brief.open_questions, input.open_questions);
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
 });
 
 test("the actual Gadget preserves delayed approval, rejection and restart without duplicate dispatch", async () => {

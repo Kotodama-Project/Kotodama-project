@@ -4,7 +4,8 @@ import type { AccountDescription, ActionKind, ApprovalQueue, Gatekeeper, Gatekee
   GatekeeperUser, GatekeeperUserVerifier, ResourceDescription, ResourceConfiguratorFrame,
   SupportedResource, VendorDescription } from "@gadgets/workshop-shared/gatekeeper";
 import CONFIGURATOR from "./generated/brief-configurator-ui.txt";
-import { validateAdmission, validateSource, validateQueued, validateResult, validateRevoked } from "./protocol.mjs";
+import { validateAdmission, validateSource, validateQueued, validateResult, validateRevoked, validateBridgeOrigin,
+  validateSessionResult, SESSION_STATE_TYPE, type SessionResult } from "./protocol.mjs";
 
 // Logical resource identity only; no request is ever sent to this reserved domain.
 const RESOURCE = "https://requirements.kotodama.invalid/current";
@@ -13,7 +14,7 @@ const ICON = { url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
 const TYPES = `
 interface KotodamaBriefSource { handoff_id: string; revision: number; overview: string; binding_sha256: string; }
 interface KotodamaBrief { objective: string; deliverable: string; constraints: string[]; acceptance_criteria: string[]; open_questions: string[]; }
-interface KotodamaBriefResult { request_id: string; state: string; brief: KotodamaBrief | null; task_state_changed: false; publication: false; }
+interface KotodamaBriefResult { request_id: string; state: ${SESSION_STATE_TYPE}; brief: KotodamaBrief | null; task_state_changed: false; publication: false; }
 interface KotodamaTaskBrief {
   getSource(): Promise<KotodamaBriefSource>;
   requestBrief(requestId: string, sourceRevision: number, bindingSha256: string): Promise<{actionId:number}>;
@@ -22,9 +23,8 @@ interface KotodamaTaskBrief {
 `;
 type Props = { principalRef: string };
 type BriefSource = { handoff_id: string; revision: number; overview: string; binding_sha256: string };
-type Brief = { objective: string; deliverable: string; constraints: string[]; acceptance_criteria: string[]; open_questions: string[] };
-type BriefResult = { request_id: string; state: string; brief: Brief | null; task_state_changed: false; publication: false };
-type Action = { requestId: string; sourceRevision: number; bindingSha256: string; state: "pending" | "submitted" | "rejected" };
+type BriefResult = SessionResult;
+type Action = { requestId: string; sourceRevision: number; bindingSha256: string; state: "pending" | "submitted" | "rejected"; submission: "queued" | "uncertain" };
 interface Session {
   getSource(): Promise<BriefSource>;
   requestBrief(requestId: string, sourceRevision: number, bindingSha256: string): Promise<{ actionId: number }>;
@@ -37,9 +37,8 @@ function accountState(exports: Cloudflare.Exports, principalRef: string) {
   return exports.AccountState.getByName(principalRef);
 }
 async function bridge(env: Cloudflare.Env, principalRef: string, path: string, body?: unknown): Promise<unknown> {
-  const origin = new URL(env.KOTODAMA_BRIDGE_ORIGIN);
-  if (!["http:", "https:"].includes(origin.protocol) || origin.pathname !== "/" || origin.search || origin.hash || origin.username || origin.password
-    || !/^[0-9a-f]{64}$/.test(env.KOTODAMA_BRIDGE_SECRET)) throw new Error("実行サービスの設定を確認してください。");
+  const origin = validateBridgeOrigin(env.KOTODAMA_BRIDGE_ORIGIN);
+  if (!/^[0-9a-f]{64}$/.test(env.KOTODAMA_BRIDGE_SECRET)) throw new Error("実行サービスの設定を確認してください。");
   const response = await fetch(new URL(path, origin), { method: body === undefined ? "GET" : "POST", redirect: "error",
     headers: { authorization: `Bearer ${env.KOTODAMA_BRIDGE_SECRET}`, "x-kotodama-principal": principalRef, "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15_000) });
@@ -126,8 +125,9 @@ class BriefSession extends RpcTarget implements Session {
     try {
       await this.#queue.submitAction(actionId, { title: "Codexで要件案を作る", description: "この依頼だけをCodex契約で整理します。ファイルや外部サービスの変更は行いません。",
         implementsRevert: false, awaitDecision: true, actionKind: { tag: "draft-requirements", label: "要件案の作成" } });
+      this.#gatekeeper.markSubmissionQueued(actionId);
       return { actionId };
-    } catch (error) { await this.#gatekeeper.rejectAction(actionId); throw error; }
+    } catch (error) { this.#gatekeeper.markSubmissionUncertain(actionId); throw error; }
   }
   async getResult(requestId: string): Promise<BriefResult> {
     if (!UUID.test(requestId)) throw new Error("依頼を確認してください。");
@@ -177,8 +177,9 @@ export class KotodamaGatekeeper extends DurableObject<Cloudflare.Env, Props> imp
     const id = this.ctx.storage.kv.get<number>(`request:${requestId}`);
     const action = id === undefined ? undefined : this.ctx.storage.kv.get<Action>(`action:${id}`);
     if (!action) throw new Error("依頼を確認してください。");
-    if (action.state !== "submitted") return { request_id: requestId,
-      state: action.state === "pending" ? "awaiting_approval" : "rejected", brief: null, task_state_changed: false, publication: false };
+    if (action.state !== "submitted") return validateSessionResult({ request_id: requestId,
+      state: action.state === "pending" ? (action.submission === "uncertain" ? "approval_unknown" : "awaiting_approval") : "rejected",
+      brief: null, task_state_changed: false, publication: false }, requestId);
     return validateResult(await bridge(this.env, this.ctx.props.principalRef, `/v1/briefs/${requestId}`), requestId);
   }
   async stage(requestId: string, sourceRevision: number, bindingSha256: string): Promise<number> {
@@ -195,9 +196,17 @@ export class KotodamaGatekeeper extends DurableObject<Cloudflare.Env, Props> imp
     const id = this.ctx.storage.kv.get<number>("next-action") ?? 1;
     if (id > 32) throw new Error("この接続の作業数の上限です。");
     this.ctx.storage.kv.put("next-action", id + 1);
-    this.ctx.storage.kv.put(`action:${id}`, { requestId, sourceRevision, bindingSha256, state: "pending" } satisfies Action);
+    this.ctx.storage.kv.put(`action:${id}`, { requestId, sourceRevision, bindingSha256, state: "pending", submission: "uncertain" } satisfies Action);
     this.ctx.storage.kv.put(`request:${requestId}`, id);
     return id;
+  }
+  markSubmissionUncertain(id: number): void {
+    const action = this.ctx.storage.kv.get<Action>(`action:${id}`);
+    if (action?.state === "pending") this.ctx.storage.kv.put(`action:${id}`, { ...action, submission: "uncertain" });
+  }
+  markSubmissionQueued(id: number): void {
+    const action = this.ctx.storage.kv.get<Action>(`action:${id}`);
+    if (action?.state === "pending") this.ctx.storage.kv.put(`action:${id}`, { ...action, submission: "queued" });
   }
   async applyAction(id: number): Promise<void> {
     await this.assertConnected();

@@ -41,6 +41,10 @@ Queued approval is persisted and displayed until native `applyAction` or
 `rejectAction` runs, including after Gadget restart. Every successful bridge
 response is checked against a closed wire contract. The Gatekeeper pins the
 complete source/grant binding; a replacement scope requires a fresh binding.
+An uncertain approval RPC is kept as unknown, never fabricated as a rejection.
+Only the native queue can subsequently apply or reject the retained action ID.
+Plain HTTP is accepted only for literal loopback `127.0.0.1`; remote transports
+must use HTTPS. The local operator still verifies the SSH/socket protection.
 An account revoke blocks local reads immediately and attempts to cancel/revoke its
 bridge grant; failed network delivery cannot guarantee remote cancellation.
 
