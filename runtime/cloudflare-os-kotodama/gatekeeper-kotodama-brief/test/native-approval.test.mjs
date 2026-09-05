@@ -4,12 +4,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import ts from "typescript";
+import { createRequire } from "node:module";
 
 const source = readFileSync(new URL("../src/kotodama.ts", import.meta.url), "utf8");
-let compiled = ts.transpileModule(source, { compilerOptions: {
-  target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, experimentalDecorators: true,
-} }).outputText;
+const { transformSync } = createRequire(import.meta.resolve("capnweb-validate"))("esbuild");
+let compiled = transformSync(source, { loader: "ts", target: "es2022", format: "esm",
+  tsconfigRaw: { compilerOptions: { experimentalDecorators: true } },
+}).code;
 compiled = compiled.replace(/import \{[^}]+\} from "cloudflare:workers";/, `
 class DurableObject { constructor(ctx, env) { this.ctx = ctx; this.env = env; } }
 class WorkerEntrypoint extends DurableObject {}
