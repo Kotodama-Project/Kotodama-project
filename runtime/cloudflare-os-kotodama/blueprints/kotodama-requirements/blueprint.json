@@ -1,0 +1,18 @@
+{
+  "blueprintId": "kotodama.requirements",
+  "title": "Kotodama 要件整理",
+  "description": "許可された依頼をCodexで整理し、同じ画面から要件案を読み戻します。",
+  "output": {"id": "document", "noun": "要件案", "plural": "要件案", "icon": "fileText"},
+  "author": {"type": "user", "name": "Kotodama Project", "id": "kotodama-template"},
+  "revision": 1,
+  "created": "2026-09-05T00:00:00.000Z",
+  "version": 1,
+  "lastUpdated": "2026-09-05T00:00:00.000Z",
+  "bindings": {
+    "KOTODAMA_BRIEF": {
+      "type": "gatekeeper", "gatekeeperName": "kotodama-brief",
+      "title": "Kotodamaの要件整理", "description": "この利用者に許可された一つの依頼を扱います。",
+      "typeUrlPattern": "kotodama://requirements/current", "resourceUrl": "kotodama://requirements/current"
+    }
+  }
+}
