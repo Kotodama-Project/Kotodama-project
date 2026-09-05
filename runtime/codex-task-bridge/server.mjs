@@ -13,6 +13,7 @@ const hash = (value) => createHash("sha256").update(value).digest("hex");
 const closed = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
   && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 const GRANT_KEYS = ["work_order_ref", "requester_ref", "worker_ref", "handoff_id", "source_revision", "source_sha256", "policy_revision", "expires_at", "max_invocations", "operation"];
+export const grantDigest = (grant) => hash(JSON.stringify(GRANT_KEYS.map((key) => [key, grant[key]])));
 export function projectionDigest(value) {
   const ordered = (item) => Array.isArray(item) ? item.map(ordered)
     : item && typeof item === "object" ? Object.fromEntries(Object.keys(item).sort().map((key) => [key, ordered(item[key])])) : item;
@@ -49,11 +50,11 @@ function loadJobs(root) {
       || !Array.isArray(store.jobs) || store.jobs.length > 32) throw new Error("job_store_denied");
     const ids = new Set();
     for (const job of store.jobs) {
-      if (!closed(job, ["request_id", "fingerprint", "requester_ref", "handoff_id", "source_revision", "policy_revision", "state", "result"])
+      if (!closed(job, ["request_id", "fingerprint", "requester_ref", "handoff_id", "source_revision", "policy_revision", "binding_sha256", "state", "result"])
         || !uuid.test(job.request_id) || ids.has(job.request_id) || !hex.test(job.fingerprint)
         || !principal.test(job.requester_ref) || typeof job.handoff_id !== "string" || !/^[a-z0-9][a-z0-9-]{0,127}$/.test(job.handoff_id)
         || !Number.isSafeInteger(job.source_revision) || job.source_revision < 1
-        || !Number.isSafeInteger(job.policy_revision) || job.policy_revision < 1
+        || !Number.isSafeInteger(job.policy_revision) || job.policy_revision < 1 || !hex.test(job.binding_sha256)
         || !["running", "ready", "failed", "interrupted"].includes(job.state)) throw new Error("job_store_denied");
       ids.add(job.request_id);
       if (job.state === "ready") validateBrief(job.result?.brief);
@@ -76,12 +77,12 @@ async function requestBody(request) {
     chunks.push(bytes);
   }
   const value = strictJson(Buffer.concat(chunks));
-  if (!closed(value, ["request_id", "source_revision"]) || !uuid.test(value.request_id)
+  if (!closed(value, ["request_id", "source_revision", "binding_sha256"]) || !uuid.test(value.request_id) || !hex.test(value.binding_sha256)
     || !Number.isSafeInteger(value.source_revision) || value.source_revision < 1) throw new Error("body_denied");
   return value;
 }
 
-export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serviceSecret, expectedHost, grant, runner, port = 0 }, { invoke = runCodexBrief } = {}) {
+export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serviceSecret, expectedHost, grant, runner, port = 0 }, { invoke = runCodexBrief, shutdownTimeoutMs = 5000 } = {}) {
   if (typeof serviceSecret !== "string" || !/^[0-9a-f]{64}$/.test(serviceSecret)
     || typeof expectedHost !== "string" || !expectedHost || /[\s/]/.test(expectedHost)
     || !closed(grant, GRANT_KEYS) || grant.operation !== "DRAFT_REQUIREMENTS"
@@ -97,7 +98,8 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
     || !Number.isInteger(port) || port < 0 || port > 65535) throw new Error("bridge_configuration_denied");
   const boundGrant = structuredClone(grant);
   const grantBinding = JSON.stringify(GRANT_KEYS.map((key) => [key, boundGrant[key]]));
-  const fingerprintFor = (requester, body) => hash(JSON.stringify([requester, body.request_id, body.source_revision, grantBinding]));
+  const bindingSha256 = grantDigest(boundGrant);
+  const fingerprintFor = (requester, body) => hash(JSON.stringify([requester, body.request_id, body.source_revision, body.binding_sha256, grantBinding]));
   const root = checkedDirectory(stateRoot);
   const lock = join(root, ".brief-writer.lock");
   mkdirSync(lock, { mode: 0o700 });
@@ -110,6 +112,7 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
   } catch (error) { if (gateway) await gateway.close(); rmdirSync(lock); throw error; }
   let active;
   let closing = false;
+  let sealedAfterShutdown = false;
   const revokeMarker = join(root, ".grant-revoked");
   let grantRevoked = false;
   try { const info = lstatSync(revokeMarker); if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("revocation_marker_denied"); grantRevoked = true; }
@@ -137,6 +140,7 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
       state = "ready";
     } catch { result = null; }
     finally {
+      if (sealedAfterShutdown) { active = null; return; }
       const next = jobs.map((item) => item.request_id === job.request_id ? { ...item, result, state } : item);
       try { saveJobs(root, next); jobs = next; }
       catch { closing = true; }
@@ -159,18 +163,18 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
       }
       let source;
       try { source = admitted(requester); } catch { return reply(response, 404, { error: "information_unavailable" }); }
-      if (request.method === "GET" && request.url === "/v1/admission") return reply(response, 200, { allowed: true });
-      if (request.method === "GET" && request.url === "/v1/handoff") return reply(response, 200, { handoff_id: boundGrant.handoff_id, revision: source.projection.revision, overview: source.projection.overview });
+      if (request.method === "GET" && request.url === "/v1/admission") return reply(response, 200, { allowed: true, binding_sha256: bindingSha256 });
+      if (request.method === "GET" && request.url === "/v1/handoff") return reply(response, 200, { handoff_id: boundGrant.handoff_id, revision: source.projection.revision, overview: source.projection.overview, binding_sha256: bindingSha256 });
       if (request.method === "POST" && request.url === "/v1/briefs") {
         let body; try { body = await requestBody(request); admitted(requester); } catch { return reply(response, 400, { error: "request_denied" }); }
-        if (body.source_revision !== boundGrant.source_revision) return reply(response, 409, { error: "revision_conflict" });
+        if (body.source_revision !== boundGrant.source_revision || body.binding_sha256 !== bindingSha256) return reply(response, 409, { error: "revision_conflict" });
         const fingerprint = fingerprintFor(requester, body);
         let job = jobs.find((item) => item.request_id === body.request_id);
         if (job && job.fingerprint !== fingerprint) return reply(response, 409, { error: "request_conflict" });
         if (!job) {
           if (active || jobs.length >= boundGrant.max_invocations) return reply(response, 409, { error: "invocation_budget_or_busy" });
           job = { request_id: body.request_id, fingerprint, requester_ref: requester, handoff_id: boundGrant.handoff_id,
-            source_revision: body.source_revision, policy_revision: boundGrant.policy_revision, state: "running", result: null };
+            source_revision: body.source_revision, policy_revision: boundGrant.policy_revision, binding_sha256: bindingSha256, state: "running", result: null };
           const next = [...jobs, job]; saveJobs(root, next); jobs = next;
           const promise = perform(job); if (active) active.promise = promise;
           promise.catch(() => {});
@@ -198,7 +202,22 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
     close() {
       if (!closePromise) {
         closing = true; const pending = active?.promise; active?.controller.abort();
-        closePromise = (async () => { await new Promise((accept) => server.close(accept)); if (pending) await pending.catch(() => {}); await gateway.close(); rmdirSync(lock); })();
+        closePromise = (async () => {
+          await new Promise((accept) => { server.close(accept); server.closeAllConnections(); });
+          let timer;
+          const finished = !pending || await Promise.race([pending.then(() => true, () => true),
+            new Promise((accept) => { timer = setTimeout(() => accept(false), shutdownTimeoutMs); })]);
+          clearTimeout(timer);
+          if (!finished) {
+            sealedAfterShutdown = true;
+            jobs = jobs.map((job) => job.state === "running" ? { ...job, state: "interrupted", result: null } : job);
+            saveJobs(root, jobs);
+            await gateway.close();
+            // Retain the bridge writer lock: a runner that ignored cancellation may still be active.
+            throw new Error("shutdown_termination_uncertain");
+          }
+          await gateway.close(); rmdirSync(lock);
+        })();
       }
       return closePromise;
     },

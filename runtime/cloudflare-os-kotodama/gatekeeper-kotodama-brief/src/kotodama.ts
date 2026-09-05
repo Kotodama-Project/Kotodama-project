@@ -4,28 +4,29 @@ import type { AccountDescription, ActionKind, ApprovalQueue, Gatekeeper, Gatekee
   GatekeeperUser, GatekeeperUserVerifier, ResourceDescription, ResourceConfiguratorFrame,
   SupportedResource, VendorDescription } from "@gadgets/workshop-shared/gatekeeper";
 import CONFIGURATOR from "./generated/brief-configurator-ui.txt";
+import { validateAdmission, validateSource, validateQueued, validateResult, validateRevoked } from "./protocol.mjs";
 
 const RESOURCE = "kotodama://requirements/current";
 const RESOURCES: SupportedResource[] = [{ urlPattern: RESOURCE, title: "Kotodamaの要件整理", description: "許可された依頼の要件案と検証結果。" }];
 const ICON = { url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23243e36'/%3E%3Cpath d='M9 8v16M10 17l12-9M10 17l12 7' stroke='white' stroke-width='3'/%3E%3C/svg%3E" };
 const TYPES = `
-interface KotodamaBriefSource { handoff_id: string; revision: number; overview: string; }
+interface KotodamaBriefSource { handoff_id: string; revision: number; overview: string; binding_sha256: string; }
 interface KotodamaBrief { objective: string; deliverable: string; constraints: string[]; acceptance_criteria: string[]; open_questions: string[]; }
 interface KotodamaBriefResult { request_id: string; state: string; brief: KotodamaBrief | null; task_state_changed: false; publication: false; }
 interface KotodamaTaskBrief {
   getSource(): Promise<KotodamaBriefSource>;
-  requestBrief(requestId: string, sourceRevision: number): Promise<{actionId:number}>;
+  requestBrief(requestId: string, sourceRevision: number, bindingSha256: string): Promise<{actionId:number}>;
   getResult(requestId: string): Promise<KotodamaBriefResult>;
 }
 `;
 type Props = { principalRef: string };
-type BriefSource = { handoff_id: string; revision: number; overview: string };
+type BriefSource = { handoff_id: string; revision: number; overview: string; binding_sha256: string };
 type Brief = { objective: string; deliverable: string; constraints: string[]; acceptance_criteria: string[]; open_questions: string[] };
 type BriefResult = { request_id: string; state: string; brief: Brief | null; task_state_changed: false; publication: false };
-type Action = { requestId: string; sourceRevision: number; state: "pending" | "submitted" | "rejected" };
+type Action = { requestId: string; sourceRevision: number; bindingSha256: string; state: "pending" | "submitted" | "rejected" };
 interface Session {
   getSource(): Promise<BriefSource>;
-  requestBrief(requestId: string, sourceRevision: number): Promise<{ actionId: number }>;
+  requestBrief(requestId: string, sourceRevision: number, bindingSha256: string): Promise<{ actionId: number }>;
   getResult(requestId: string): Promise<BriefResult>;
 }
 interface VerifierApi extends GatekeeperUserVerifier { identify(): Promise<string>; }
@@ -34,7 +35,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 function accountState(exports: Cloudflare.Exports, principalRef: string) {
   return exports.AccountState.getByName(principalRef);
 }
-async function bridge<T>(env: Cloudflare.Env, principalRef: string, path: string, body?: unknown): Promise<T> {
+async function bridge(env: Cloudflare.Env, principalRef: string, path: string, body?: unknown): Promise<unknown> {
   const origin = new URL(env.KOTODAMA_BRIDGE_ORIGIN);
   if (!["http:", "https:"].includes(origin.protocol) || origin.pathname !== "/" || origin.search || origin.hash || origin.username || origin.password
     || !/^[0-9a-f]{64}$/.test(env.KOTODAMA_BRIDGE_SECRET)) throw new Error("実行サービスの設定を確認してください。");
@@ -48,7 +49,7 @@ async function bridge<T>(env: Cloudflare.Env, principalRef: string, path: string
     if (size > 65536) { await reader.cancel(); throw new Error("応答が大きすぎます。"); } chunks.push(next.value); }
   const bytes = new Uint8Array(size); let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)) as T;
+  return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes));
 }
 
 @validateRpc()
@@ -94,7 +95,7 @@ export class UserAccount extends WorkerEntrypoint<Cloudflare.Env, Props> impleme
   }
   async revoke(): Promise<void> {
     await accountState(this.ctx.exports, this.ctx.props.principalRef).revoke();
-    await bridge(this.env, this.ctx.props.principalRef, "/v1/revoke", {});
+    validateRevoked(await bridge(this.env, this.ctx.props.principalRef, "/v1/revoke", {}));
   }
   async reconnect(): Promise<{ url: string }> { throw new Error("新しい内部IDと権限の確認が必要です。"); }
 }
@@ -119,8 +120,8 @@ class BriefSession extends RpcTarget implements Session {
     await this.#queue.authorizeObservation({ title: "依頼を読む", description: "閲覧を許可された依頼だけを取得します。" });
     return this.#gatekeeper.readSource();
   }
-  async requestBrief(requestId: string, sourceRevision: number): Promise<{ actionId: number }> {
-    const actionId = await this.#gatekeeper.stage(requestId, sourceRevision);
+  async requestBrief(requestId: string, sourceRevision: number, bindingSha256: string): Promise<{ actionId: number }> {
+    const actionId = await this.#gatekeeper.stage(requestId, sourceRevision, bindingSha256);
     try {
       await this.#queue.submitAction(actionId, { title: "Codexで要件案を作る", description: "この依頼だけをCodex契約で整理します。ファイルや外部サービスの変更は行いません。",
         implementsRevert: false, awaitDecision: true, actionKind: { tag: "draft-requirements", label: "要件案の作成" } });
@@ -149,19 +150,52 @@ export class KotodamaGatekeeper extends DurableObject<Cloudflare.Env, Props> imp
   async addObserver(id: string, user: Fetcher<VerifierApi>): Promise<void> {
     await this.assertConnected();
     if (await user.identify() !== this.ctx.props.principalRef) throw new Error("この利用者には共有できません。");
-    await bridge(this.env, this.ctx.props.principalRef, "/v1/admission");
+    await this.assertAdmission();
     this.ctx.storage.kv.put(`observer:${id}`, true);
   }
   async removeObserver(id: string): Promise<void> { this.ctx.storage.kv.delete(`observer:${id}`); }
-  async readSource(): Promise<BriefSource> { await this.assertConnected(); return bridge(this.env, this.ctx.props.principalRef, "/v1/handoff"); }
-  async readResult(requestId: string): Promise<BriefResult> { await this.assertConnected(); if (!UUID.test(requestId)) throw new Error("依頼を確認してください。"); return bridge(this.env, this.ctx.props.principalRef, `/v1/briefs/${requestId}`); }
-  async stage(requestId: string, sourceRevision: number): Promise<number> {
+  pinBinding(binding: string): void {
+    const pinned = this.ctx.storage.kv.get<string>("binding");
+    if (pinned && pinned !== binding) throw new Error("依頼または実行許可が変更されました。接続を確認してください。");
+    this.ctx.storage.kv.put("binding", binding);
+  }
+  async assertAdmission(): Promise<void> {
     await this.assertConnected();
-    if (!UUID.test(requestId) || !Number.isSafeInteger(sourceRevision) || sourceRevision < 1) throw new Error("依頼を確認してください。");
+    const result = validateAdmission(await bridge(this.env, this.ctx.props.principalRef, "/v1/admission"));
+    this.pinBinding(result.binding_sha256);
+  }
+  async readSource(): Promise<BriefSource> {
+    await this.assertConnected();
+    const source = validateSource(await bridge(this.env, this.ctx.props.principalRef, "/v1/handoff"));
+    this.pinBinding(source.binding_sha256);
+    return source;
+  }
+  async readResult(requestId: string): Promise<BriefResult> {
+    if (!UUID.test(requestId)) throw new Error("依頼を確認してください。");
+    await this.assertAdmission();
+    const id = this.ctx.storage.kv.get<number>(`request:${requestId}`);
+    const action = id === undefined ? undefined : this.ctx.storage.kv.get<Action>(`action:${id}`);
+    if (!action) throw new Error("依頼を確認してください。");
+    if (action.state !== "submitted") return { request_id: requestId,
+      state: action.state === "pending" ? "awaiting_approval" : "rejected", brief: null, task_state_changed: false, publication: false };
+    return validateResult(await bridge(this.env, this.ctx.props.principalRef, `/v1/briefs/${requestId}`), requestId);
+  }
+  async stage(requestId: string, sourceRevision: number, bindingSha256: string): Promise<number> {
+    await this.assertConnected();
+    if (!UUID.test(requestId) || !Number.isSafeInteger(sourceRevision) || sourceRevision < 1 || !/^[0-9a-f]{64}$/.test(bindingSha256)) throw new Error("依頼を確認してください。");
+    const source = await this.readSource();
+    if (source.revision !== sourceRevision || source.binding_sha256 !== bindingSha256) throw new Error("依頼が変更されました。");
+    const previous = this.ctx.storage.kv.get<number>(`request:${requestId}`);
+    if (previous !== undefined) {
+      const action = this.ctx.storage.kv.get<Action>(`action:${previous}`);
+      if (!action || action.sourceRevision !== sourceRevision || action.bindingSha256 !== bindingSha256) throw new Error("依頼が一致しません。");
+      return previous;
+    }
     const id = this.ctx.storage.kv.get<number>("next-action") ?? 1;
     if (id > 32) throw new Error("この接続の作業数の上限です。");
     this.ctx.storage.kv.put("next-action", id + 1);
-    this.ctx.storage.kv.put(`action:${id}`, { requestId, sourceRevision, state: "pending" } satisfies Action);
+    this.ctx.storage.kv.put(`action:${id}`, { requestId, sourceRevision, bindingSha256, state: "pending" } satisfies Action);
+    this.ctx.storage.kv.put(`request:${requestId}`, id);
     return id;
   }
   async applyAction(id: number): Promise<void> {
@@ -169,7 +203,9 @@ export class KotodamaGatekeeper extends DurableObject<Cloudflare.Env, Props> imp
     const action = this.ctx.storage.kv.get<Action>(`action:${id}`);
     if (!action || action.state === "rejected") throw new Error("この操作は利用できません。");
     if (action.state === "submitted") return;
-    await bridge(this.env, this.ctx.props.principalRef, "/v1/briefs", { request_id: action.requestId, source_revision: action.sourceRevision });
+    await this.assertAdmission();
+    validateQueued(await bridge(this.env, this.ctx.props.principalRef, "/v1/briefs", {
+      request_id: action.requestId, source_revision: action.sourceRevision, binding_sha256: action.bindingSha256 }), action.requestId);
     this.ctx.storage.kv.put(`action:${id}`, { ...action, state: "submitted" });
   }
   async rejectAction(id: number): Promise<void> {

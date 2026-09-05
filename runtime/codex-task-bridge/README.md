@@ -26,9 +26,15 @@ recall data already delivered to the model, but it withholds the new result.
 
 An invocation is persisted before starting the worker. Same-ID retries read the
 same invocation, while changed requests conflict. One model runs at a time.
+Requests return the source/grant digest obtained from admission; a queued request
+cannot silently switch to a replacement grant with the same numeric revision.
 Interrupted invocations do not automatically rerun on restart. This is a private
 invocation journal, not another Project/Task SSOT or an exactly-once provider
 transaction. Power-loss durability and malicious local writers are not certified.
+Shutdown cancels the active runner with a bounded wait. If termination remains
+uncertain, the invocation becomes interrupted and the writer lock remains in
+place until an operator verifies the old process has ended. Do not remove that
+lock merely to start another writer.
 
 The CLI executable and its SHA-256, private working directory and model are
 operator-selected. The runner requests read-only mode, no project docs, no user

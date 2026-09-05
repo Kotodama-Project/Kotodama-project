@@ -29,6 +29,7 @@ const labels = {
   not_connected: "ConnectionsからKotodamaの接続を設定してください。",
   ready_to_request: "依頼を確認できました。要件案の作成を開始できます。",
   awaiting_approval: "OSの操作確認を待っています。確認欄から操作を許可してください。",
+  rejected: "操作は拒否されました。Codexでの実行は開始していません。",
   running: "Codexで要件案を作成しています。",
   ready: "要件案ができました。内容を確認してください。",
   failed: "今回は要件案を作成できませんでした。自動で再実行はしていません。",

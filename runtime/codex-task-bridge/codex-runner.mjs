@@ -3,25 +3,13 @@ import { spawn } from "node:child_process";
 import { lstatSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateBrief } from "../cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/protocol.mjs";
+export { validateBrief };
 
 const SCHEMA = fileURLToPath(new URL("./brief.schema.json", import.meta.url));
-const FIELDS = ["objective", "deliverable", "constraints", "acceptance_criteria", "open_questions"];
 const DISABLED = ["shell_tool", "apps", "plugins", "browser_use", "computer_use", "memories", "multi_agent", "multi_agent_v2", "hooks", "image_generation", "view_image"];
 const ALLOWED_ENV = new Set(["PATH", "SYSTEMROOT", "WINDIR", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "COMSPEC", "PATHEXT", "PROGRAMDATA"]);
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
-
-export function validateBrief(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)
-    || Object.keys(value).length !== FIELDS.length || FIELDS.some((key) => !Object.hasOwn(value, key))) throw new Error("invalid_brief");
-  const validText = (text) => typeof text === "string" && text.isWellFormed()
-    && text.trim().length > 0 && Buffer.byteLength(text) <= 8000 && !/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(text);
-  if (!validText(value.objective) || !validText(value.deliverable)) throw new Error("invalid_brief");
-  for (const key of FIELDS.slice(2)) {
-    if (!Array.isArray(value[key]) || value[key].length > 32 || value[key].some((item) => !validText(item))) throw new Error("invalid_brief");
-  }
-  if (!value.constraints.length || !value.acceptance_criteria.length || Buffer.byteLength(JSON.stringify(value)) > 32768) throw new Error("invalid_brief");
-  return value;
-}
 
 export function parseCodexEvents(text) {
   const events = text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));

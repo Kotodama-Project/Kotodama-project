@@ -34,6 +34,10 @@ Reads use the native observation authorizer. Inference uses a distinct queued
 action with no auto-approvable kinds. Applying that action submits an invocation;
 it does not mean inference or the canonical Task is complete. The Gadget stores
 only its request locator and reads source/result through the Gatekeeper again.
+Queued approval is persisted and displayed until native `applyAction` or
+`rejectAction` runs, including after Gadget restart. Every successful bridge
+response is checked against a closed wire contract. The Gatekeeper pins the
+complete source/grant binding; a replacement scope requires a fresh binding.
 An account revoke blocks local reads immediately and attempts to cancel/revoke its
 bridge grant; failed network delivery cannot guarantee remote cancellation.
 
