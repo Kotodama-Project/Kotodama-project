@@ -43,6 +43,9 @@ multi-agent features. The overview and all source summaries are passed to the
 model without actor IDs. Existing structured questions are retained even when
 the model omits them; this does not certify complete semantic extraction of
 every constraint from unrestricted natural language.
+This pilot admits at most 16 KiB of rendered source input and 32 distinct source
+questions. Larger valid catalog records are refused before creating an invocation;
+the operator must select a smaller scope. Input is never silently truncated.
 It filters process environment variables and does not forward the bridge secret,
 API keys or endpoint overrides. Tool/error events and output overflow are refused;
 the known `skip_host_skill_discovery` development-feature advisory is separate.

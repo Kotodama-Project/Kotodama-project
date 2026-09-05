@@ -17,7 +17,8 @@ export function validateBridgeOrigin(value) {
   if (typeof value !== "string") throw new Error("invalid_bridge_origin");
   const origin = new URL(value);
   if (origin.pathname !== "/" || origin.search || origin.hash || origin.username || origin.password
-    || !(origin.protocol === "https:" || (origin.protocol === "http:" && origin.hostname === "127.0.0.1"))) throw new Error("invalid_bridge_origin");
+    || !(origin.protocol === "https:" || (origin.protocol === "http:" && origin.hostname === "127.0.0.1"
+      && /^http:\/\/127\.0\.0\.1(?::[0-9]+)?\/?$/.test(value)))) throw new Error("invalid_bridge_origin");
   return origin;
 }
 

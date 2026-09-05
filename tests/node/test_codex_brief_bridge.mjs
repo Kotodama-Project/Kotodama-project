@@ -194,7 +194,7 @@ test("OS wire validation refuses successful HTTP bodies with wrong identity, aut
     assert.throws(() => validateResult(value, requestId), "native approval states must not come from the model bridge");
     assert.throws(() => validateSessionResult({ ...value, brief }, requestId));
   }
-  for (const origin of ["http://bridge.example", "http://192.0.2.1", "http://localhost", "ftp://127.0.0.1", "https://user:pass@bridge.example", "https://bridge.example/path"]) {
+  for (const origin of ["http://bridge.example", "http://192.0.2.1", "http://localhost", "http://2130706433", "http://0x7f000001", "http://127.1", "ftp://127.0.0.1", "https://user:pass@bridge.example", "https://bridge.example/path"]) {
     assert.throws(() => validateBridgeOrigin(origin));
   }
   assert.equal(validateBridgeOrigin("http://127.0.0.1:18790").origin, "http://127.0.0.1:18790");
@@ -215,6 +215,25 @@ test("structured source questions survive a model omission and all source summar
     const result = await (await call(bridge, config, `/v1/briefs/${request_id}`)).json();
     assert.deepEqual(result.brief.open_questions, input.open_questions);
   } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("oversized but valid source projections are refused before consuming an invocation", async () => {
+  for (const mode of ["input-size", "question-count"]) {
+    const { root, seed, config } = fixture(); let bridge; let calls = 0;
+    if (mode === "input-size") {
+      seed.projection.overview = "a".repeat(7000);
+      seed.projection.decisions = [{ summary: "b".repeat(7000) }];
+      seed.projection.open_questions = [{ summary: "c".repeat(7000) }];
+    } else seed.projection.open_questions = Array.from({ length: 33 }, (_, n) => ({ summary: `未定 ${n}` }));
+    config.grant.source_sha256 = projectionDigest(seed.projection);
+    try {
+      bridge = await startBriefBridge(config, { invoke: async () => { calls += 1; return { brief }; } });
+      assert.equal((await call(bridge, config, "/v1/admission")).status, 404);
+      assert.equal((await call(bridge, config, "/v1/briefs", { body: { request_id: randomUUID(), source_revision: 1, binding_sha256: grantDigest(config.grant) } })).status, 404);
+      assert.equal(calls, 0);
+      assert.equal(JSON.parse(readFileSync(join(config.stateRoot, "invocations.json"))).jobs.length, 0);
+    } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+  }
 });
 
 test("the actual Gadget preserves delayed approval, rejection and restart without duplicate dispatch", async () => {

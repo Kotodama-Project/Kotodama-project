@@ -20,6 +20,14 @@ export function projectionDigest(value) {
   return hash(JSON.stringify(ordered(value)));
 }
 
+function prepareInput(p) {
+  const input = JSON.stringify({ overview: p.overview, speaker_highlights: p.speaker_highlights.map((v) => v.summary),
+    decision_candidates: p.decisions.map((v) => v.summary), todos: p.todos.map((v) => v.summary),
+    open_questions: p.open_questions.map((v) => v.summary) });
+  if (Buffer.byteLength(input) > 16384 || new Set(p.open_questions.map((v) => v.summary)).size > 32) throw new Error("source_exceeds_brief_scope");
+  return input;
+}
+
 function checkedDirectory(value) {
   const root = resolve(value);
   for (let p = root; ; p = dirname(p)) {
@@ -125,6 +133,7 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
     if (user.principal_kind !== "human" || worker.principal_kind !== "agent"
       || user.projection.revision !== boundGrant.source_revision || user.policy_revision !== boundGrant.policy_revision
       || worker.policy_revision !== user.policy_revision || projectionDigest(user.projection) !== boundGrant.source_sha256) throw new Error("source_or_grant_drift");
+    prepareInput(user.projection); // Refuse oversized scope before consuming an invocation.
     return user;
   }
   async function perform(job) {
@@ -135,9 +144,7 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
     try {
       const source = admitted(job.requester_ref);
       const p = source.projection;
-      const input = JSON.stringify({ overview: p.overview, speaker_highlights: p.speaker_highlights.map((v) => v.summary),
-        decision_candidates: p.decisions.map((v) => v.summary), todos: p.todos.map((v) => v.summary),
-        open_questions: p.open_questions.map((v) => v.summary) });
+      const input = prepareInput(p);
       result = await invoke({ ...runner, input, signal: controller.signal });
       admitted(job.requester_ref);
       validateBrief(result.brief);
