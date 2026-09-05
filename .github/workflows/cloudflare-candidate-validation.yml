@@ -57,8 +57,8 @@ jobs:
           tests.test_verify_wrangler_artifact
           -v
 
-      - name: Run Worker Voice review contract
-        run: node --test tests/node/test_cloudflare_voice_review.mjs
+      - name: Run Worker and local Gateway review contracts
+        run: node --test tests/node/test_cloudflare_voice_review.mjs tests/node/test_local_review_gateway.mjs
 
       - name: Run fail-closed candidate validators
         shell: bash
