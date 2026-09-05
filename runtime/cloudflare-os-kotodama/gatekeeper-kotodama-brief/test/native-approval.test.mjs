@@ -34,6 +34,7 @@ test("native class preserves delayed, rejected and uncertain queue delivery acro
         exports: { AccountState: { getByName: () => ({ isRevoked: async () => false }) } } };
       const env = { KOTODAMA_BRIDGE_ORIGIN: "http://127.0.0.1:18790", KOTODAMA_BRIDGE_SECRET: "b".repeat(64) };
       globalThis.fetch = async (url, init) => {
+        assert.equal(init.redirect, "manual", "Workers supports manual/follow; redirects must never be followed with the service credential");
         const path = new URL(url).pathname;
         if (path === "/v1/admission") return Response.json({ allowed: true, binding_sha256: binding });
         if (path === "/v1/handoff") return Response.json({ handoff_id: "fixture", revision: 1, overview: "検証", binding_sha256: binding });

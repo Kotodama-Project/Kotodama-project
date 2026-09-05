@@ -39,7 +39,7 @@ function accountState(exports: Cloudflare.Exports, principalRef: string) {
 async function bridge(env: Cloudflare.Env, principalRef: string, path: string, body?: unknown): Promise<unknown> {
   const origin = validateBridgeOrigin(env.KOTODAMA_BRIDGE_ORIGIN);
   if (!/^[0-9a-f]{64}$/.test(env.KOTODAMA_BRIDGE_SECRET)) throw new Error("実行サービスの設定を確認してください。");
-  const response = await fetch(new URL(path, origin), { method: body === undefined ? "GET" : "POST", redirect: "error",
+  const response = await fetch(new URL(path, origin), { method: body === undefined ? "GET" : "POST", redirect: "manual",
     headers: { authorization: `Bearer ${env.KOTODAMA_BRIDGE_SECRET}`, "x-kotodama-principal": principalRef, "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15_000) });
   if (!response.ok) { await response.body?.cancel(); throw new Error("この依頼を利用できません。権限・期限・接続を確認してください。"); }
