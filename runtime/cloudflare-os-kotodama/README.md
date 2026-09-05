@@ -22,6 +22,9 @@ Only this Gatekeeper's private environment receives `KOTODAMA_BRIDGE_ORIGIN` and
 `KOTODAMA_BRIDGE_SECRET`. The origin is fixed by the deployment operator and is not
 chosen by a user or Gadget. Keep both configuration and state outside the public
 source package. Do not enable the generic MCP_ALLOW_INSECURE bypass.
+The resource identifier uses a reserved `.invalid` HTTPS URL so the native
+connection UI preserves it. It is an identity, never a network destination.
+The vendor ID is the lowercased binding suffix `kotodama_brief`.
 
 OS account provisioning creates an opaque principal reference. The caller cannot
 choose it; the vendor's verifier returns that same reference. The operator must

@@ -12,7 +12,7 @@
     "KOTODAMA_BRIEF": {
       "type": "gatekeeper", "gatekeeperName": "kotodama_brief",
       "title": "Kotodamaの要件整理", "description": "この利用者に許可された一つの依頼を扱います。",
-      "typeUrlPattern": "kotodama://requirements/current", "resourceUrl": "kotodama://requirements/current"
+      "typeUrlPattern": "https://requirements.kotodama.invalid/current", "resourceUrl": "https://requirements.kotodama.invalid/current"
     }
   }
 }

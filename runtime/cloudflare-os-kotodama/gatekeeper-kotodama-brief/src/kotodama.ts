@@ -6,7 +6,8 @@ import type { AccountDescription, ActionKind, ApprovalQueue, Gatekeeper, Gatekee
 import CONFIGURATOR from "./generated/brief-configurator-ui.txt";
 import { validateAdmission, validateSource, validateQueued, validateResult, validateRevoked } from "./protocol.mjs";
 
-const RESOURCE = "kotodama://requirements/current";
+// Logical resource identity only; no request is ever sent to this reserved domain.
+const RESOURCE = "https://requirements.kotodama.invalid/current";
 const RESOURCES: SupportedResource[] = [{ urlPattern: RESOURCE, title: "Kotodamaの要件整理", description: "許可された依頼の要件案と検証結果。" }];
 const ICON = { url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23243e36'/%3E%3Cpath d='M9 8v16M10 17l12-9M10 17l12 7' stroke='white' stroke-width='3'/%3E%3C/svg%3E" };
 const TYPES = `
