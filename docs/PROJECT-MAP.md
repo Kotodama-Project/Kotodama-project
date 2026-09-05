@@ -32,6 +32,7 @@ source body をこの地図へ集めません。
 | 情報アクセス | [情報の分類と閲覧者](INFORMATION-ACCESS.md) | 情報IDと主体IDでread/reviewを検査し、取消・失効を反映する |
 | Workforce | [Company AGI direction](OWNER-INTENT-COMPANY-AGI.md)、下記 #34〜#36 | 一つの実行を owner、Task、effect、receipt に結ぶ |
 | Runtime | [Runtime overview](../runtime/README.md)、[Installation Lifecycle](INSTALLATION-LIFECYCLE.md) | install、restart、rollback、restore を実環境で検証する |
+| OS から要件案を作る | [native Gadget / Gatekeeper](../runtime/cloudflare-os-kotodama/README.md)、[Codex bridge](../runtime/codex-task-bridge/README.md) | privateな一往復の検証を、既存Task ownerへの実行契約と常時運用へつなぐ |
 | Business / Learning | [README の Business Loop](../README.md#ai-business-loop) | 一つの成果の有用性と feedback を確認する |
 
 ## 公開 PR の関係
