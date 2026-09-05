@@ -8,12 +8,13 @@ import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { sanitizeProjection, validateReview } from "../cloudflare-edge/src/index.js";
-import { syntheticSeed } from "./synthetic-fixture.mjs";
+import { syntheticCatalog } from "./synthetic-fixture.mjs";
+import { canAccess, validateAccessPolicy, validatePrincipals } from "./access-policy.mjs";
 
 const MAX_STORE_BYTES = 4_194_304;
 const MAX_RECORDS = 64;
 const MAX_REVIEW_BYTES = 16_384;
-const STORE_SCHEMA = "kotodama/local-voice-review-candidates/v1";
+const STORE_SCHEMA = "kotodama/local-voice-review-candidates/v2";
 const ACTOR_DIGEST = /^[0-9a-f]{64}$/;
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const hash = (value) => createHash("sha256").update(value).digest();
@@ -56,28 +57,46 @@ function actorDigest(actor) {
   return hash(JSON.stringify(values)).toString("hex");
 }
 
-function validateRecords(records) {
+function validateCatalog(catalog) {
+  if (!closed(catalog, ["principals", "records"])) throw new Error("store_denied");
+  const principalRefs = validatePrincipals(catalog.principals);
+  const { records } = catalog;
   if (!Array.isArray(records) || !records.length || records.length > MAX_RECORDS) throw new Error("store_denied");
   const identities = new Set();
+  const policies = new Set();
   for (const record of records) {
-    if (!closed(record, ["actor_sha256", "projection"]) || !ACTOR_DIGEST.test(record.actor_sha256)
+    if (!closed(record, ["projection", "access_policy", "policy_history"])
       || !isDeepStrictEqual(sanitizeProjection(record.projection), record.projection)) throw new Error("store_denied");
-    const key = `${record.actor_sha256}/${record.projection.handoff_id}`;
+    const policy = validateAccessPolicy(record.access_policy, principalRefs);
+    if (policies.has(policy.policy_id) || !Array.isArray(record.policy_history)
+      || record.policy_history.length !== policy.revision - 1) throw new Error("store_denied");
+    for (const [index, previous] of record.policy_history.entries()) {
+      validateAccessPolicy(previous, principalRefs);
+      if (previous.revision !== index + 1 || previous.policy_id !== policy.policy_id) throw new Error("store_denied");
+    }
+    policies.add(policy.policy_id);
+    const key = record.projection.handoff_id;
     if (identities.has(key)) throw new Error("store_denied");
     identities.add(key);
   }
-  return records;
+  return catalog;
 }
 
 function recordsFromSeeds(seeds) {
-  if (!Array.isArray(seeds)) throw new Error("seed_required");
-  if (!seeds.length || seeds.length > MAX_RECORDS) throw new Error("seed_denied");
+  if (!closed(seeds, ["principals", "records"])) throw new Error("seed_required");
   try {
-    return validateRecords(seeds.map((seed) => {
-      if (!closed(seed, ["actor", "projection"]) || seed.projection?.revision !== 1
-        || seed.projection?.human_review?.state !== "pending") throw new Error("seed_denied");
-      return { actor_sha256: actorDigest(seed.actor), projection: seed.projection };
-    }));
+    if (!Array.isArray(seeds.principals) || !Array.isArray(seeds.records)) throw new Error("seed_denied");
+    return validateCatalog({
+      principals: seeds.principals.map((principal) => {
+        if (!closed(principal, ["principal_ref", "kind", "actor"])) throw new Error("seed_denied");
+        return { principal_ref: principal.principal_ref, kind: principal.kind, actor_sha256: actorDigest(principal.actor) };
+      }),
+      records: seeds.records.map((seed) => {
+        if (!closed(seed, ["projection", "access_policy"]) || seed.projection?.revision !== 1
+          || seed.projection?.human_review?.state !== "pending" || seed.access_policy?.revision !== 1) throw new Error("seed_denied");
+        return { projection: seed.projection, access_policy: seed.access_policy, policy_history: [] };
+      }),
+    });
   } catch { throw new Error("seed_denied"); }
 }
 
@@ -96,8 +115,22 @@ function readStore(path) {
   const info = lstatSync(path);
   if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > MAX_STORE_BYTES) throw new Error("store_denied");
   const value = strictJson(readFileSync(path));
-  if (!closed(value, ["schema", "records"]) || value.schema !== STORE_SCHEMA) throw new Error("store_denied");
-  return validateRecords(value.records);
+  if (!closed(value, ["schema", "catalog"]) || value.schema !== STORE_SCHEMA) throw new Error("store_denied");
+  return validateCatalog(value.catalog);
+}
+
+/** Internal operator inspection: no projection body or authentication binding is returned. */
+export function readAccessMetadata(stateRoot) {
+  const catalog = readStore(join(checkedRoot(stateRoot), "voice-reviews.json"));
+  return {
+    schema: "kotodama/information-access-inventory/v1",
+    principals: catalog.principals.map(({ principal_ref, kind }) => ({ principal_ref, kind })),
+    information: catalog.records.map(({ projection, access_policy, policy_history }) => ({
+      information_ref: projection.handoff_id, information_revision: projection.revision,
+      access_policy, policy_history,
+    })),
+    internal_only: true, publication_authorized: false,
+  };
 }
 
 function readImport(path, expectedSha256) {
@@ -124,8 +157,8 @@ function readImport(path, expectedSha256) {
   } finally { closeSync(file); }
 }
 
-function persist(root, records) {
-  const bytes = Buffer.from(JSON.stringify({ schema: STORE_SCHEMA, records: validateRecords(records) }), "utf8");
+function persist(root, catalog) {
+  const bytes = Buffer.from(JSON.stringify({ schema: STORE_SCHEMA, catalog: validateCatalog(catalog) }), "utf8");
   if (bytes.length > MAX_STORE_BYTES) throw new Error("store_limit");
   const temporary = join(root, `.voice-reviews-${randomUUID()}.tmp`);
   const file = openSync(temporary, "wx", 0o600);
@@ -179,22 +212,23 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
   const lock = join(root, ".voice-review-writer.lock");
   try { mkdirSync(lock, { mode: 0o700 }); }
   catch { throw new Error("store_locked"); }
-  let records;
+  let catalog;
   try {
     try {
-      records = readStore(join(root, "voice-reviews.json"));
+      catalog = readStore(join(root, "voice-reviews.json"));
       if (importing) throw new Error("import_existing_state_denied");
     }
     catch (error) {
       if (error.code !== "ENOENT") throw error;
-      records = importing ? readImport(importFile, expectedSha256) : recordsFromSeeds(seeds);
-      persist(root, records);
+      catalog = importing ? readImport(importFile, expectedSha256) : recordsFromSeeds(seeds);
+      persist(root, catalog);
     }
     // Detach operator input; callers cannot mutate an admitted in-memory projection.
-    records = structuredClone(records);
+    catalog = structuredClone(catalog);
   } catch (error) { rmdirSync(lock); throw error; }
 
   const credentials = [hash(clientId), hash(clientSecret)];
+  let closing = false;
   const server = createServer({ maxHeaderSize: 16_384, requestTimeout: 5_000, headersTimeout: 5_000 }, async (request, response) => {
     try {
       if (request.headers.host !== `127.0.0.1:${server.address().port}` || request.headers.origin) return refuse(response, 403, "origin_denied");
@@ -204,31 +238,36 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
       let actor;
       try { actor = actorDigest({ subject: request.headers["x-kotodama-access-subject"] ?? null, email: request.headers["x-kotodama-access-email"] ?? null }); }
       catch { return refuse(response, 403, "actor_denied"); }
+      const principalRef = catalog.principals.find((principal) => principal.actor_sha256 === actor)?.principal_ref;
       if (!request.url.startsWith("/") || request.url.length > 2048) return refuse(response, 400, "path_denied");
       const url = new URL(request.url, "http://127.0.0.1");
       if (request.method === "GET" && url.pathname === "/v1/voice/handoffs") {
         const query = url.searchParams.get("q");
         if ([...url.searchParams.keys()].some((key) => key !== "q") || url.searchParams.getAll("q").length > 1
           || (query !== null && Buffer.byteLength(query, "utf8") > 256)) return refuse(response, 400, "query_denied");
-        const record = records.find((item) => item.actor_sha256 === actor && (query === null || query === item.projection.handoff_id));
+        const record = catalog.records.find((item) => canAccess(item.access_policy, principalRef, "read")
+          && (query === null || query === item.projection.handoff_id));
         return record ? reply(response, 200, record.projection) : refuse(response, 404, "handoff_not_found");
       }
       const match = url.pathname.match(/^\/v1\/voice\/handoffs\/([a-z0-9][a-z0-9-]{0,127})\/review$/);
       if (request.method !== "POST" || !match || url.search) return refuse(response, 404, "path_denied");
       const body = await reviewBody(request);
       if (!body) return refuse(response, 400, "review_body_denied");
-      const index = records.findIndex((item) => item.actor_sha256 === actor && item.projection.handoff_id === match[1]);
+      // Re-evaluate after reading the asynchronous body: a concurrent local revocation wins.
+      if (closing) return refuse(response, 503, "local_gateway_unavailable");
+      const index = catalog.records.findIndex((item) => canAccess(item.access_policy, principalRef, "review")
+        && item.projection.handoff_id === match[1]);
       if (index < 0) return refuse(response, 404, "handoff_not_found");
-      const current = records[index].projection;
+      const current = catalog.records[index].projection;
       if (body.expected_revision !== current.revision) return refuse(response, 409, "revision_conflict");
-      const next = structuredClone(records);
-      next[index].projection = { ...current, revision: current.revision + 1,
+      const next = structuredClone(catalog);
+      next.records[index].projection = { ...current, revision: current.revision + 1,
         overview: body.action === "edit" ? body.edited_overview : current.overview,
         human_review: { ...current.human_review, state: { accept: "accepted", edit: "edited", reject: "rejected" }[body.action] } };
       // No await between CAS, durable replacement and publication of the new state.
       persist(root, next);
-      records = next;
-      reply(response, 200, records[index].projection);
+      catalog = next;
+      reply(response, 200, catalog.records[index].projection);
     } catch { refuse(response, 503, "local_gateway_unavailable"); }
   });
   server.maxConnections = 16;
@@ -239,7 +278,24 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
   let closePromise;
   return {
     origin: `http://127.0.0.1:${server.address().port}`,
+    // Trusted in-process operator surface only. Never forwarded as an HTTP/Worker action.
+    updateAccessPolicy({ handoffId, expectedPolicyRevision, policy } = {}) {
+      if (closing) throw new Error("gateway_closed");
+      const index = catalog.records.findIndex((record) => record.projection.handoff_id === handoffId);
+      if (index < 0) throw new Error("policy_target_denied");
+      const current = catalog.records[index].access_policy;
+      if (!Number.isSafeInteger(expectedPolicyRevision) || expectedPolicyRevision !== current.revision) throw new Error("policy_revision_conflict");
+      validateAccessPolicy(policy, validatePrincipals(catalog.principals));
+      if (policy.policy_id !== current.policy_id || policy.revision !== current.revision + 1) throw new Error("policy_revision_conflict");
+      const next = structuredClone(catalog);
+      next.records[index].policy_history.push(structuredClone(current));
+      next.records[index].access_policy = structuredClone(policy);
+      persist(root, next);
+      catalog = next;
+      return { handoff_id: handoffId, policy_revision: policy.revision, publication: false };
+    },
     close() {
+      closing = true;
       closePromise ??= new Promise((accept, reject) => server.close((error) => {
         try { rmdirSync(lock); } catch (cleanupError) { reject(cleanupError); return; }
         if (error) reject(error); else accept();
@@ -263,15 +319,21 @@ export function startReviewGatewayFromCli(args, env = process.env) {
   return startReviewGateway({ stateRoot: values.get("--state-root"),
     clientId: env.CONTEXT_GATEWAY_CLIENT_ID, clientSecret: env.CONTEXT_GATEWAY_CLIENT_SECRET,
     port: Number(env.LOCAL_REVIEW_PORT ?? "8789"),
-    seeds: values.has("--seed-synthetic") ? [syntheticSeed()] : undefined,
+    seeds: values.has("--seed-synthetic") ? syntheticCatalog() : undefined,
     importFile: values.get("--import-file"), expectedSha256: values.get("--expected-sha256") });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
-    const gateway = await startReviewGatewayFromCli(process.argv.slice(2));
-    process.stdout.write(`Local candidate review Gateway listening on ${gateway.origin}\n`);
-    for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { gateway.close().catch(() => { process.exitCode = 1; }); });
+    const args = process.argv.slice(2);
+    if (args[0] === "--inspect-access") {
+      if (args.length !== 3 || args[1] !== "--state-root" || !args[2]) throw new Error("usage");
+      process.stdout.write(`${JSON.stringify(readAccessMetadata(args[2]), null, 2)}\n`);
+    } else {
+      const gateway = await startReviewGatewayFromCli(args);
+      process.stdout.write(`Local candidate review Gateway listening on ${gateway.origin}\n`);
+      for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { gateway.close().catch(() => { process.exitCode = 1; }); });
+    }
   } catch {
     process.stderr.write("Gateway start refused. Check the runbook, explicit auth, dedicated state directory and writer lock.\n");
     process.exitCode = 1;

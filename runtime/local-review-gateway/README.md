@@ -30,7 +30,7 @@ node runtime/local-review-gateway/server.mjs --state-root work/local-review-stat
 一件の合成候補だけを取り込みます。既存 store があれば seed は適用せず保存済み
 状態を読みます。再起動では `--seed-synthetic` を省略できます。API 利用時の
 `startReviewGateway({ stateRoot, clientId, clientSecret, seeds })` も同じ契約です。
-`seeds` は operator が渡す `{ actor: { subject, email }, projection }` の配列で、
+`seeds` は operator が渡す `{principals, records}` の閉じたcatalogで、
 初期 revision は `1`、review state は `pending`、既存 Worker の allowlist に
 完全一致する projection だけが許可されます。HTTP に import endpoint はありません。
 
@@ -43,8 +43,8 @@ sanitized handoff candidate を自分で用意する場合は、`--seed-syntheti
 node runtime/local-review-gateway/server.mjs --state-root work/local-review-state --import-file work/review-candidates.json --expected-sha256 <64桁の小文字SHA-256>
 ```
 
-UTF-8 JSON の root は `[{"actor": {...}, "projection": {...}}]` 形式の配列です。
-`actor` は明示した `subject` / `email` の組で、少なくとも片方を指定し、もう片方は
+UTF-8 JSON の root は `{principals, records}` objectです。principalは `{principal_ref, kind, actor}`、recordは `{projection, access_policy}`。分類・担当・明示reader/reviewer・期限が必要で、具体形は [情報アクセス手順](../../docs/INFORMATION-ACCESS.md) と `syntheticCatalog()` を参照します。
+`actor` は明示した `subject` / `email` の組で、片方だけを使う場合は、もう片方を
 `null` にします。`projection` は `synthetic-fixture.mjs` と同じ閉じた形式の候補で、
 `handoff_id`、`revision: 1`、`human_review.state: "pending"`、digest URN、
 `authority: "candidate_only"` と false の effect 境界を保持してください。actor を省略したり、private field や
@@ -85,13 +85,13 @@ Ctrl+C / SIGINT / SIGTERM は server を閉じ、writer lock を解放します�
 actor header 自体は認証証明ではありません。この秘密値をブラウザ・Gadget・一般の
 利用者へ渡してはいけません。実 Worker は署名検証済み Access identity から header を
 新規構築します。Gateway は subject/email の組を actor digest として照合し、
-別 actor の handoff は存在しない場合と同じ `404` を返します。
+主体IDへ一意に解決し、情報ごとの現在のpolicyでreader/reviewer・分類・取消・期限を検査します。権限のないhandoffは存在しない場合と同じ `404` を返します。
 ブラウザからの `Origin` 付き request、異なる Host、未認証 request は拒否します。
 
 | 操作 | 成功時の内容 |
 |---|---|
-| `GET /v1/voice/handoffs` | actor に許可された最初の一件の projection |
-| `GET /v1/voice/handoffs?q={handoff_id}` | 同じ actor 内の exact ID 一件。全文検索・一覧 API ではない |
+| `GET /v1/voice/handoffs` | 主体IDのread権限に一致する最初の一件のprojection |
+| `GET /v1/voice/handoffs?q={handoff_id}` | readerに明示された exact ID 一件。全文検索・一覧 API ではない |
 | `POST /v1/voice/handoffs/{handoff_id}/review` | revision を一つ進めた保存済み projection |
 
 GET と POST の応答には `handoff_id`、正整数の `revision`、既存の概要・話者別
@@ -116,7 +116,7 @@ revision + 1、指定 action の review state に一致しなければ `502` で
 - request body 16 KiB、edited overview 8000 UTF-8 bytes、query 256 UTF-8 bytes、
   同時接続 16、request/idle timeout 5 秒。
 - 最大 64 件、store 最大 4 MiB。保存先は明示したディレクトリ内の固定 filename
-  `voice-reviews.json`。request の ID を filesystem path に使用しません。
+  `voice-reviews.json`（v2）。v1は保全して起動を拒否し、分類・閲覧者を勝手に補完しません。request の ID を filesystem path に使用しません。
 - 親を含む symlink directory、symlink/hardlink store、破損 JSON、不正 projection、
   重複 JSON key、private field、malformed UTF-8 を拒否します。
 - 同じ store の二重起動は専用 writer lock で拒否します。CAS と fsync 済み一時ファイルの
@@ -133,7 +133,7 @@ rollback は Gateway を停止して、operator が保全した候補 store に�
 ## 検証と次の接続点
 
 ```text
-node --test tests/node/test_cloudflare_voice_review.mjs tests/node/test_local_review_gateway.mjs
+node --test tests/node/test_cloudflare_voice_review.mjs tests/node/test_local_review_gateway.mjs tests/node/test_information_access.mjs
 python -S -B tools/validate_cloudflare_edge_candidate.py
 ```
 

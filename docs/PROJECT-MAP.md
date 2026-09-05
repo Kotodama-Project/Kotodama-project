@@ -29,6 +29,7 @@ source body をこの地図へ集めません。
 | Governance / Evidence | [Session / Conversation ledger](SESSION-CONVERSATION-LEDGER.md)、[Review Workflow](REVIEW-WORKFLOW.md) | 訂正、根拠、権限、検証、採用の連続性を保つ |
 | Company Pack | [5-minute tour](FIVE-MINUTE-TOUR.md)、[Starter Walkthrough](STARTER-WALKTHROUGH.md) | 公開手順を手元で再現する |
 | Context | [README の Context](../README.md#context-platform--会社の共有記憶) | 許可された情報集合から根拠付きで取得する |
+| 情報アクセス | [情報の分類と閲覧者](INFORMATION-ACCESS.md) | 情報IDと主体IDでread/reviewを検査し、取消・失効を反映する |
 | Workforce | [Company AGI direction](OWNER-INTENT-COMPANY-AGI.md)、下記 #34〜#36 | 一つの実行を owner、Task、effect、receipt に結ぶ |
 | Runtime | [Runtime overview](../runtime/README.md)、[Installation Lifecycle](INSTALLATION-LIFECYCLE.md) | install、restart、rollback、restore を実環境で検証する |
 | Business / Learning | [README の Business Loop](../README.md#ai-business-loop) | 一つの成果の有用性と feedback を確認する |

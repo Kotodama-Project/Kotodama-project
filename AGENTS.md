@@ -36,6 +36,11 @@ and public access have different owners; do not create another status ledger her
   verified and adopted.
 - Keep private absolute paths, host identifiers, credentials, conversations,
   audio, and deployment details out of public files and PRs.
+- For information sharing, read [the access policy](docs/INFORMATION-ACCESS.md).
+  Bind the existing information reference, classification, custodian and explicit
+  reader/reviewer identities. Unknown classification never means public. Internal
+  IDs and relationship metadata remain private; synthetic examples are labelled.
+  Responsibility, read access, review and publication are separate permissions.
 - Run checks appropriate to the changed surface and the contribution policy.
   Report what was actually tested; local tests do not prove live operation.
 - End with the changed files, verification result, remaining boundary, and next

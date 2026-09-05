@@ -15,6 +15,8 @@ Kotodama は、人間が普段どおり話し、相談し、アイデアを共�
 
 機能ごとの到達点と現在の実行経路は **[README の実装状況](docs/README-IMPLEMENTATION-ASSESSMENT.md)** を参照してください。[Task に結び付いた Company Pack 作成](docs/COMPANY-PACK-TASK-EXECUTION.md) と [ローカルの確認・訂正 Gateway](runtime/local-review-gateway/README.md) は実ファイル・実 HTTP の経路を持つ候補です。
 
+情報を誰に見せるかは [情報の分類と閲覧者の管理](docs/INFORMATION-ACCESS.md) を使います。内部の主体ID・担当・read/review・期限・取消を分け、未分類や秘匿情報を通常のreview応答へ返さないローカル候補を実装しています。
+
 Kotodama は Voice や Company starter の単機能プロジェクトではなく、会話から
 会社の学習までを一つの証拠鎖でつなぐ Company OS を目指しています。この長い
 README は、最初から最後まで一枚の壁として読む必要はありません。

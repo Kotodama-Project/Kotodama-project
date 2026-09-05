@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 
 import worker, { __testing } from "../../runtime/cloudflare-edge/src/index.js";
 import { startReviewGateway } from "../../runtime/local-review-gateway/server.mjs";
-import { syntheticSeed } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
+import { syntheticSeed, syntheticCatalog } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
 
 
 const ISSUER = "https://team.cloudflareaccess.com";
@@ -882,7 +882,7 @@ test("Worker GET -> review -> restart -> GET uses the actual persistent local HT
   const jwt = await fixture.token();
   let gateway;
   try {
-    gateway = await startReviewGateway({ ...gatewayConfig, seeds: [syntheticSeed()] });
+    gateway = await startReviewGateway({ ...gatewayConfig, seeds: syntheticCatalog() });
     __testing.reset();
     __testing.setFetch(async (request) => {
       const url = new URL(request.url);
