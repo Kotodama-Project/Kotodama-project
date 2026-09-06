@@ -21,3 +21,9 @@
 個人の制作・開発Task管理とCompany本番は分ける。個人Taskのfreeze済み記録を、今回の継続方針だけで本番へ採用・同期・接続・公開しない。
 
 機械可読の公開projectionは [operating-policy.json](operating-policy.json)。運営意図の正本は既存の非公開Human Intent SSOTで、実装への反映状況は [68項目](acceptance/README.md) で確認する。基本ASRはlarge-v3、Turboへの自動切替は行わない。
+
+## 意図・担当・更新可能な作業コンテキスト
+
+[意図・現在位置・担当・動的コンテキスト](CONTEXT-AND-AGENT-RESPONSIBILITY.md)に、sessionを跨ぐ訂正保持、KPIとKGI、仮説検証・分析・ナレッジの責任、必要時の分業、毎回の独立監査、Wikiとcontextの更新方針をまとめています。機械可読projectionはv1.6.0です。関連9initiativeはpendingで、役割の定義をruntime稼働と扱いません。
+
+[Pro設計レビューの公開要点](CONTEXT-ARCHITECTURE-REVIEW-2026-09-06.md)は別の提案として参照します。固定規則と生成文書の分離、受信者別snapshot、依存版の比較更新、表示と最終送信内容の対応を、次の最小実装で具体化します。

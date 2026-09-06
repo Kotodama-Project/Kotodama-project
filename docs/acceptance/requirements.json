@@ -18,8 +18,8 @@
     "readme_review_lines": 1163,
     "closing_readme": {
       "path": "README.md",
-      "sha256": "0b368d737993c45418401f2695f58fc7254560171cee12f6cac53f91b742027a",
-      "lines": 1178,
+      "sha256": "78fc231b354a5352e80079e9b0dd4e073b5be97ffe15d045e3ef188d2d818599",
+      "lines": 1184,
       "hash_normalization": "UTF-8 with LF, same as committed Git text",
       "coverage": "Full fixed-point README review plus current Voice repair, initial-approval/topmost-agent/need-driven policy and continuation updates; personal Task/Company boundary retained.",
       "additional_requirement_ids": [

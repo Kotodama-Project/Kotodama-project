@@ -1176,3 +1176,9 @@ Promotion, Current Truth, or Public Beta GO.
 ## 最新の運営方針と音声修正
 
 [初回承認・上位存在・必要時実装](docs/OPERATING-POLICY-2026-09-06.md) と [large-v3・文脈訂正の修正](docs/VOICE-ACCURACY-2026-09-06.md) を参照してください。68項目の全受入を宣言せず、未完と必要な次の一手を保持します。
+
+### 意図・担当・コンテキストの継続
+
+元の「何をしたいか」と現在の幹・枝・葉の位置をsession間で保持し、KPIだけでなく求める成果への寄与を確かめます。仮説検証・分析・ナレッジ管理の担当は必要な子agentを選び、統合と分担の見直しまで受け持ちます。階層的な作業contextを表示・配信し、訂正や失効に合わせてWikiと整える方針です。
+
+[方針と関連9項目](docs/CONTEXT-AND-AGENT-RESPONSIBILITY.md) / [設計レビューの公開要点](docs/CONTEXT-ARCHITECTURE-REVIEW-2026-09-06.md)。常駐担当、動的表示・自動注入、DB自動更新は未配備です。

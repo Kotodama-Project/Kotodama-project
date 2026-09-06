@@ -579,3 +579,7 @@ segment transition candidate builderは、prior bundleとsuccessor checkpoint/si
 ## Current boundary
 
 このリポジトリは情報公開面です。Discord や外部 provider の Current Truth、Human Decision、production runtime の代替ではありません。
+
+## Context / agent policy projection — 2026-09-06
+
+[意図・現在位置・担当・動的context](docs/CONTEXT-AND-AGENT-RESPONSIBILITY.md)の方針と関連9件のpending initiativeを公開projectionへ反映しました。[Proレビュー要点](docs/CONTEXT-ARCHITECTURE-REVIEW-2026-09-06.md)は提案であり、runtime採用ではありません。自動担当割当、context表示・注入、継続的DB更新の実装受入は未完です。

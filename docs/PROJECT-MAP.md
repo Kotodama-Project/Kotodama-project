@@ -37,6 +37,10 @@ source body をこの地図へ集めません。
 | OS から要件案を作る | [native Gadget / Gatekeeper](../runtime/cloudflare-os-kotodama/README.md)、[Codex bridge](../runtime/codex-task-bridge/README.md) | privateな一往復の検証を、既存Task ownerへの実行契約と常時運用へつなぐ |
 | Business / Learning | [README の Business Loop](../README.md#ai-business-loop) | 一つの成果の有用性と feedback を確認する |
 
+## 意図・担当・動的contextの最新方針
+
+[公開方針と関連9initiative](CONTEXT-AND-AGENT-RESPONSIBILITY.md) → [Proレビューの提案](CONTEXT-ARCHITECTURE-REVIEW-2026-09-06.md) → [machine-readable projection](operating-policy.json) の順で参照します。runtime未配備、初回承認再利用、独立監査、必要時構築を維持します。
+
 ## 公開 PR の関係
 
 以下は **2026-09-05 の読取時点**の整理です。次に作業するときはリンク先を再取得してください。
