@@ -10,7 +10,9 @@ closed and its unverified preview window is internally ordered.
 from __future__ import annotations
 
 import json
+import os
 import re
+import stat
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -165,10 +167,23 @@ def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def read_bounded(path: Path) -> bytes:
-    if path.stat().st_size > MAX_INPUT_BYTES:
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode) or getattr(before, "st_file_attributes", 0) & 0x400:
+        raise OSError("regular file required")
+    if before.st_size > MAX_INPUT_BYTES:
         raise InputTooLargeError
-    with path.open("rb") as stream:
-        raw = stream.read(MAX_INPUT_BYTES + 1)
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            raise OSError("input changed before read")
+        if opened.st_size > MAX_INPUT_BYTES:
+            raise InputTooLargeError
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            raw = stream.read(MAX_INPUT_BYTES + 1)
+    finally:
+        os.close(descriptor)
     if len(raw) > MAX_INPUT_BYTES:
         raise InputTooLargeError
     return raw
