@@ -787,14 +787,12 @@
       {
         "id": "OUT-INTENT",
         "title": "Intent becomes audited work",
-        "description": "Authorized conversation can become a reviewed intent, bounded work, candidate artifact, evidence, and learning without semantic shortcuts.",
-        "success_definition": "At least one end-to-end vertical slice is reproducible from source reference through verification receipt."
+        "description": "Authorized conversation can become a reviewed intent, bounded work, candidate artifact, evidence, and learning without semantic shortcuts."
       },
       {
         "id": "OUT-LOCAL",
         "title": "Reproducible local-first company runtime",
-        "description": "Company truth, workers, workflows, search, CRM, evidence, backup, and kill controls can run inside an operator-controlled trust boundary.",
-        "success_definition": "A clean install, canonical run, kill drill, backup restore, and uninstall pass on one supported profile."
+        "description": "Company truth, workers, workflows, search, CRM, evidence, backup, and kill controls can run inside an operator-controlled trust boundary."
       }
     ],
     "kgis": [
