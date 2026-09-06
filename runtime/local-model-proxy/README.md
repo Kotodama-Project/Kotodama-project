@@ -24,6 +24,16 @@ receipt requires reconciliation before another writer starts. Redirects,
 provider/admin routes, unknown request fields, multiple choices and `store:true`
 are refused. `store:false` is accepted for the official OS's normal request.
 
+The upstream must be a loopback/private IP literal: IPv4 RFC1918, loopback,
+shared-address VPN space (`100.64.0.0/10`), or IPv6 loopback/ULA. `localhost`
+is pinned to `127.0.0.1`; other DNS names, public addresses and link-local
+metadata services are refused. This network-class check does not authenticate
+the model host: bind the selected host and transport in the private Work Order.
+The maximum lease is two hours. The exported API itself closes at expiry,
+aborts an in-flight request as failed, closes listeners, and releases its writer
+lock after the receipt is saved. Its `closed` promise reports cleanup failure;
+an uncertain persistence/cleanup result retains a reconciliation boundary.
+
 The receipt records request hashes, sizes and outcomes. It contains no prompts,
 responses or credentials. A completed transport does not verify a generated
 artifact or complete its Task. Repeated model requests are not certified as

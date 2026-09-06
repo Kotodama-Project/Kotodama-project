@@ -4,11 +4,21 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, renameSync, existsSync, lstatSync, mkdirSync, rmdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { isIP } from "node:net";
 import { strictJson } from "../local-review-gateway/server.mjs";
 
 const MAX_BODY = 262144;
 const MAX_OUTPUT = 8 * 1024 * 1024;
 const hash = data => createHash("sha256").update(data).digest("hex");
+const privateAddress = hostname => {
+  const host = hostname.replace(/^\[|\]$/g, "");
+  if (isIP(host) === 4) {
+    const [a, b] = host.split(".").map(Number);
+    return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
+  }
+  return isIP(host) === 6 && (host === "::1" || /^f[cd]/i.test(host));
+};
 const json = (res, status, value) => {
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
   res.end(JSON.stringify(value));
@@ -22,10 +32,15 @@ export async function startLocalModelProxy(config) {
     || !Number.isInteger(config.port) || config.port < 0 || config.port > 65535
     || !Number.isInteger(config.maxRequests) || config.maxRequests < 1 || config.maxRequests > 40
     || typeof config.expiresAt !== "string" || !Number.isFinite(Date.parse(config.expiresAt))
-    || Date.parse(config.expiresAt) <= Date.now()) throw new Error("invalid_model_proxy_config");
+    || Date.parse(config.expiresAt) <= Date.now()
+    || Date.parse(config.expiresAt) - Date.now() > 7200000) throw new Error("invalid_model_proxy_config");
   const upstream = new URL(config.upstream);
+  // Pin localhost without consulting DNS. All other upstreams must be private IP
+  // literals; mutable DNS names and link-local metadata services are not accepted.
+  if (upstream.hostname === "localhost") upstream.hostname = "127.0.0.1";
   if (!["http:", "https:"].includes(upstream.protocol) || upstream.username || upstream.password
-    || upstream.search || upstream.hash || !["/v1", "/v1/"].includes(upstream.pathname)) throw new Error("invalid_upstream");
+    || !privateAddress(upstream.hostname) || upstream.search || upstream.hash
+    || !["/v1", "/v1/"].includes(upstream.pathname)) throw new Error("invalid_upstream");
   const stateRoot = resolve(config.stateRoot);
   if (!lstatSync(stateRoot).isDirectory() || lstatSync(stateRoot).isSymbolicLink()) throw new Error("invalid_state_root");
   const binding = hash(JSON.stringify([config.upstream, config.model, config.expiresAt, config.maxRequests]));
@@ -91,6 +106,7 @@ export async function startLocalModelProxy(config) {
         }
         res.writeHead(200, { "content-type": contentType, "cache-control": "no-store" });
         reply.on("data", chunk => {
+          if (item.state !== "running") { reply.destroy(); return; }
           item.outputBytes += chunk.length;
           if (item.outputBytes > MAX_OUTPUT) { current.destroy(new Error("upstream_output_limit")); return; }
           if (!res.write(chunk)) reply.pause();
@@ -124,22 +140,40 @@ export async function startLocalModelProxy(config) {
   catch (error) { rmdirSync(lock); throw error; }
   save();
   let closePromise;
-  return { origin: `http://127.0.0.1:${server.address().port}`, close() {
-    return closePromise ??= (async () => {
-      closing = true; activeUpstream?.destroy(new Error("operator_stop"));
-      await new Promise(accept => { server.close(accept); server.closeAllConnections(); });
-      if (receipt.active) throw new Error("model_request_termination_uncertain");
-      rmdirSync(lock);
-    })();
-  } };
+  let expiryTimer;
+  let finishClosed;
+  const closed = new Promise(accept => { finishClosed = accept; });
+  const close = () => closePromise ??= (async () => {
+    closing = true; clearTimeout(expiryTimer);
+    let failure;
+    try {
+      // Persist cancellation before destroying sockets; later transport callbacks
+      // must not turn an expired invocation into a successful completion.
+      if (receipt.active) {
+        const item = receipt.requests.at(-1);
+        if (item?.state !== "running") throw new Error("model_request_termination_uncertain");
+        item.state = "failed"; receipt.failed++; receipt.active = false; save();
+      }
+    } catch (error) { failure = error; }
+    activeUpstream?.destroy(new Error("operator_stop")); activeUpstream = undefined;
+    await new Promise(accept => { server.close(accept); server.closeAllConnections(); });
+    if (!failure) {
+      try { rmdirSync(lock); } catch (error) { failure = error; }
+    }
+    finishClosed({ error: Boolean(failure) });
+    if (failure) throw failure;
+  })();
+  // The exported API owns its expiry, including active requests and writer lock.
+  expiryTimer = setTimeout(() => { void close().catch(() => {}); }, Math.max(1, Date.parse(config.expiresAt) - Date.now()));
+  return { origin: `http://127.0.0.1:${server.address().port}`, close, closed };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
     const config = strictJson(readFileSync(process.argv[2]));
     const proxy = await startLocalModelProxy(config);
-    const finish = () => { clearTimeout(timer); proxy.close().finally(() => process.stdin.pause()); };
-    const timer = setTimeout(finish, Math.max(1, Date.parse(config.expiresAt) - Date.now()));
+    const finish = () => { void proxy.close().catch(() => { process.exitCode = 1; }); };
+    proxy.closed.then(result => { if (result.error) process.exitCode = 1; process.stdin.pause(); });
     process.stdout.write("Local model bridge ready.\n");
     for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, finish);
     process.stdin.on("data", bytes => { if (bytes.toString().trim() === "stop") finish(); });

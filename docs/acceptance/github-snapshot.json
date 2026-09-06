@@ -1,0 +1,391 @@
+{
+  "observed_at": "2026-09-06T02:43:57.707015+00:00",
+  "default_commit": "be71f424689648b3ab1b1db15adbaddea374586b",
+  "pulls": [
+    {
+      "number": 45,
+      "title": "feat: connect a native OS requirements Gadget to private Codex",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/45",
+      "head": "36c7501a716ed3065a77c56a4ac22d8cbdaf6946",
+      "head_ref": "codex/cloudflare-os-codex-bridge-20260905",
+      "base": "d4b22ee387944c66e4009bc51a8124f55a6e01fa",
+      "base_ref": "codex/information-access-policy-20260905",
+      "draft": true,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33948567502/job/101258961903"
+        },
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33948567356/job/101258961327"
+        }
+      ],
+      "body_sha256": "990194e600ad1d267fbd73e65ab9e0f064ada45faf043e82288e2b1eeafafe0c"
+    },
+    {
+      "number": 44,
+      "title": "Classify information and enforce explicit reader and reviewer policies",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/44",
+      "head": "d4b22ee387944c66e4009bc51a8124f55a6e01fa",
+      "head_ref": "codex/information-access-policy-20260905",
+      "base": "f79347f62a633443a3b80ee13a64b511d1cbbf82",
+      "base_ref": "codex/company-agi-readme-implementation-20260905",
+      "draft": true,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33936835093/job/101226304291"
+        },
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33936835106/job/101226304276"
+        }
+      ],
+      "body_sha256": "ed2a5ec6cbfb08a39e975caa5becef0f73e8a31de08d69eb08e69aa6c8c436f1"
+    },
+    {
+      "number": 43,
+      "title": "Implement persistent handoff review and record-bound Company Pack execution",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/43",
+      "head": "f79347f62a633443a3b80ee13a64b511d1cbbf82",
+      "head_ref": "codex/company-agi-readme-implementation-20260905",
+      "base": "cb9c0875ec43aa51453dc72e5a399d9972497658",
+      "base_ref": "codex/project-navigation-20260905",
+      "draft": true,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33934449209/job/101219522949"
+        },
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33934449194/job/101219522926"
+        }
+      ],
+      "body_sha256": "4f199ffc87059c5648ecf0a242d99d64d551db0bc9675479fd591deed79bb452"
+    },
+    {
+      "number": 42,
+      "title": "docs: READMEから正本とPRへ辿る作業入口を追加",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/42",
+      "head": "cb9c0875ec43aa51453dc72e5a399d9972497658",
+      "head_ref": "codex/project-navigation-20260905",
+      "base": "70cb13df01fb7d6241cb827d26e2ad09ff0e5d05",
+      "base_ref": "codex/pretransfer-hardening-20260821",
+      "draft": true,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33925329109/job/101192481814"
+        },
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33925329063/job/101192481630"
+        }
+      ],
+      "body_sha256": "d85a621528ee0a0463cca240a5cd83d2856d0704d2bd00836e740a00ac805cd8"
+    },
+    {
+      "number": 37,
+      "title": "docs(status): give the unproven Public Beta gates stable identifiers",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/37",
+      "head": "76c13ba18c422830deaf5848ee4f5ac39bd7a483",
+      "head_ref": "codex/public-beta-gate-ids-20260824",
+      "base": "66ee794efe18ee35de2c437756c44b8217d8ad7c",
+      "base_ref": "codex/pretransfer-hardening-20260821",
+      "draft": false,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33581160904/job/100095557369"
+        },
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33581160838/job/100095556940"
+        }
+      ],
+      "body_sha256": "26e090e3236c2518c8ca3b7e3375c194bd270626d62e2aa4de03fbfe5276b00d"
+    },
+    {
+      "number": 36,
+      "title": "feat(agents): add the provider-neutral agent lifecycle registry contract",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/36",
+      "head": "29cad12dc20c6be07a6c9740cfc8b4ab1794d873",
+      "head_ref": "codex/public-agent-lifecycle-20260824",
+      "base": "d264dd9b77ebb62bd4978eee3df69fe4e7704e84",
+      "base_ref": "codex/public-migration-ledger-20260824",
+      "draft": false,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33581740560/job/100097269022"
+        }
+      ],
+      "body_sha256": "e564fb77c0fd21b42896f50c64035adb26434dff06d39330b99ddec9d711deef"
+    },
+    {
+      "number": 35,
+      "title": "feat(migration): add the append-only public migration ledger contract",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/35",
+      "head": "d264dd9b77ebb62bd4978eee3df69fe4e7704e84",
+      "head_ref": "codex/public-migration-ledger-20260824",
+      "base": "deaefebf029e83fd6e3cabe44285346dd5c0cfdf",
+      "base_ref": "codex/public-agent-swarm-20260824",
+      "draft": false,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33580739156/job/100094289617"
+        }
+      ],
+      "body_sha256": "a2f7d8efeb1340028f35418316069aab8a63e9c80ca5de284a2426beebded3db"
+    },
+    {
+      "number": 34,
+      "title": "feat(agents): propose the bounded agent swarm and route-binding contracts",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/34",
+      "head": "b3e3d868ccf16d840171282f9cff2b75ba8ef1bd",
+      "head_ref": "codex/public-agent-swarm-20260824",
+      "base": "8ef8d97627a9618d7b3f77e5c9d2063f8813531d",
+      "base_ref": "codex/pretransfer-hardening-20260821",
+      "draft": false,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/34004355530/job/101408751810"
+        },
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/34004355476/job/101408751691"
+        }
+      ],
+      "body_sha256": "3083d85c7b549c443fc6818ee3c56bec6aa577309796c90952302977f91c4cfc"
+    },
+    {
+      "number": 33,
+      "title": "feat(schemas): add blocked A019 contract candidate",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/33",
+      "head": "84f1ef08eda958ac4c1b3c930202591aaf3bef6f",
+      "head_ref": "codex/migrate-a019-registry-contracts-20260822",
+      "base": "fbb6da377edd2b726a854912eb17c964a1ec01e9",
+      "base_ref": "codex/pretransfer-hardening-20260821",
+      "draft": true,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33581477571/job/100096507265"
+        },
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33581477501/job/100096506715"
+        }
+      ],
+      "body_sha256": "546e1b322d236cd03475dfb5f9fcb3e8b12a33dc1ee42d7d1919090b2cdab06a"
+    },
+    {
+      "number": 29,
+      "title": "feat(architecture): migrate A022 public contracts (candidate)",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/29",
+      "head": "5cacbdaacf59cfd9ff7656bd6e3f659c4214d39e",
+      "head_ref": "codex/migrate-a022-public-architecture-20260822",
+      "base": "fbb6da377edd2b726a854912eb17c964a1ec01e9",
+      "base_ref": "codex/pretransfer-hardening-20260821",
+      "draft": true,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576765492/job/100082335811"
+        },
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576765441/job/100082335502"
+        }
+      ],
+      "body_sha256": "73f0b71717e001f65c2c20a7eec75aa79ac424aad80cb72274539d78a3f0eee9"
+    },
+    {
+      "number": 27,
+      "title": "feat(templates): migrate A017 hierarchy contracts (candidate)",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/27",
+      "head": "08293d58d226b4ea6c613286ae2022ba8aace38c",
+      "head_ref": "codex/migrate-a017-hierarchy-templates-20260821",
+      "base": "fbb6da377edd2b726a854912eb17c964a1ec01e9",
+      "base_ref": "codex/pretransfer-hardening-20260821",
+      "draft": true,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576750482/job/100082289581"
+        },
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576750471/job/100082289542"
+        }
+      ],
+      "body_sha256": "3afc0cdba07f8311d9bfe0b94bf6e0a7ae4de98bfd2eaca34aa59757192c9765"
+    },
+    {
+      "number": 21,
+      "title": "docs: make the public current state operational",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/21",
+      "head": "d586b1ba224f41ad904bd08eef2e6c8985052c57",
+      "head_ref": "codex/public-current-state-20260821",
+      "base": "9fe6b683abacc32b8c9b93b94668d00a4b44f854",
+      "base_ref": "codex/pretransfer-hardening-20260821",
+      "draft": false,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576734948/job/100082239532"
+        },
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576734966/job/100082239324"
+        }
+      ],
+      "body_sha256": "0ede7b0fb438fed99d242eae00ef7c87858ae1670c324385c08859bb628034f7"
+    },
+    {
+      "number": 18,
+      "title": "chore: establish the public repository governance baseline",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/18",
+      "head": "70cb13df01fb7d6241cb827d26e2ad09ff0e5d05",
+      "head_ref": "codex/pretransfer-hardening-20260821",
+      "base": "be71f424689648b3ab1b1db15adbaddea374586b",
+      "base_ref": "main",
+      "draft": false,
+      "review_decision": "REVIEW_REQUIRED",
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "CodeQL",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/runs/100082348944"
+        },
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576706072/job/100082151052"
+        },
+        {
+          "name": "Dependency review",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576706010/job/100082151017"
+        },
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576706011/job/100082150543"
+        },
+        {
+          "name": "Analyze (python)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576703116/job/100082144776"
+        }
+      ],
+      "body_sha256": "e3685cb42bc2becbb186e861f18e172455913e677419ec0083a502fb2c08c974"
+    },
+    {
+      "number": 17,
+      "title": "feat(skills): publish bounded Kotodama skill contract",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/17",
+      "head": "84e9951dd985924f388bf422b270988e9353269a",
+      "head_ref": "agent/public-skill-contract-refresh-20260817",
+      "base": "fbb6da377edd2b726a854912eb17c964a1ec01e9",
+      "base_ref": "codex/pretransfer-hardening-20260821",
+      "draft": false,
+      "review_decision": null,
+      "unresolved_threads": 0,
+      "checks": [
+        {
+          "name": "Trusted repository validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576720929/job/100082195768"
+        },
+        {
+          "name": "Trusted Cloudflare candidate validation",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/33576720906/job/100082195682"
+        }
+      ],
+      "body_sha256": "6b09e0f788b8c76963dd14d81ebb4825638d43d0f5300ba32b1668829fb6283a"
+    }
+  ],
+  "scope": "before this closing PR is opened; immutable observation, refresh on material drift"
+}

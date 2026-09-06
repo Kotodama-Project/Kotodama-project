@@ -1,5 +1,42 @@
 # Roadmap to Public Beta
 
+## Current public state — 2026-09-06
+
+This is a dated candidate snapshot. The current execution is closed pending explicit manual reopening; unmet acceptance remains open. It does not close other owners' projects or declare all requirements complete.
+
+Published main: `be71f424689648b3ab1b1db15adbaddea374586b`. This closing candidate is stacked on PR #45 and is not merged into main. `read-only/candidate-only` and `NO_GO_UNPUBLISHED` remain unchanged.
+
+[Closing report](docs/CLOSING-2026-09-06.md) · [68 acceptance groups](docs/acceptance/README.md) · [additional conditions](docs/acceptance/GAPS.md) · [evidence limits](docs/acceptance/EVIDENCE.md) · [25 Issue obligations](docs/acceptance/ISSUES.md).
+
+The bounded evaluation confirmed local Qwen chat, saved Document reload/restart, and a native Proxmox template/full clone. The Task metadata handoff was manual; automatic Task resolution/execution, natural multi-person Voice, always-on operation and production support remain unaccepted. Private evaluation processes/transports were stopped with saved account/document state retained; this is not a public runtime.
+
+All 22 previously outstanding review threads were resolved on the six checked PR heads. Independent approval, repository settings (#19), license/provenance (#25), integration (#30), protected evidence and Final Human GO remain distinct. PR #18 is still REVIEW_REQUIRED. Do not merge on this snapshot alone.
+
+| PR | Exact observed head | Base branch | Checks / review |
+|---|---|---|
+| [#45](https://github.com/Kotodama-Project/Kotodama-project/pull/45) | `36c7501a716ed3065a77c56a4ac22d8cbdaf6946` | `codex/information-access-policy-20260905` | success; unresolved=0; independent approval not established |
+| [#44](https://github.com/Kotodama-Project/Kotodama-project/pull/44) | `d4b22ee387944c66e4009bc51a8124f55a6e01fa` | `codex/company-agi-readme-implementation-20260905` | success; unresolved=0; independent approval not established |
+| [#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43) | `f79347f62a633443a3b80ee13a64b511d1cbbf82` | `codex/project-navigation-20260905` | success; unresolved=0; independent approval not established |
+| [#42](https://github.com/Kotodama-Project/Kotodama-project/pull/42) | `cb9c0875ec43aa51453dc72e5a399d9972497658` | `codex/pretransfer-hardening-20260821` | success; unresolved=0; independent approval not established |
+| [#37](https://github.com/Kotodama-Project/Kotodama-project/pull/37) | `76c13ba18c422830deaf5848ee4f5ac39bd7a483` | `codex/pretransfer-hardening-20260821` | success; unresolved=0; independent approval not established |
+| [#36](https://github.com/Kotodama-Project/Kotodama-project/pull/36) | `29cad12dc20c6be07a6c9740cfc8b4ab1794d873` | `codex/public-migration-ledger-20260824` | success; unresolved=0; independent approval not established |
+| [#35](https://github.com/Kotodama-Project/Kotodama-project/pull/35) | `d264dd9b77ebb62bd4978eee3df69fe4e7704e84` | `codex/public-agent-swarm-20260824` | success; unresolved=0; independent approval not established |
+| [#34](https://github.com/Kotodama-Project/Kotodama-project/pull/34) | `b3e3d868ccf16d840171282f9cff2b75ba8ef1bd` | `codex/pretransfer-hardening-20260821` | success; unresolved=0; independent approval not established |
+| [#33](https://github.com/Kotodama-Project/Kotodama-project/pull/33) | `84f1ef08eda958ac4c1b3c930202591aaf3bef6f` | `codex/pretransfer-hardening-20260821` | success; unresolved=0; independent approval not established |
+| [#29](https://github.com/Kotodama-Project/Kotodama-project/pull/29) | `5cacbdaacf59cfd9ff7656bd6e3f659c4214d39e` | `codex/pretransfer-hardening-20260821` | success; unresolved=0; independent approval not established |
+| [#27](https://github.com/Kotodama-Project/Kotodama-project/pull/27) | `08293d58d226b4ea6c613286ae2022ba8aace38c` | `codex/pretransfer-hardening-20260821` | success; unresolved=0; independent approval not established |
+| [#21](https://github.com/Kotodama-Project/Kotodama-project/pull/21) | `d586b1ba224f41ad904bd08eef2e6c8985052c57` | `codex/pretransfer-hardening-20260821` | success; unresolved=0; independent approval not established |
+| [#18](https://github.com/Kotodama-Project/Kotodama-project/pull/18) | `70cb13df01fb7d6241cb827d26e2ad09ff0e5d05` | `main` | success; unresolved=0; REVIEW_REQUIRED |
+| [#17](https://github.com/Kotodama-Project/Kotodama-project/pull/17) | `84e9951dd985924f388bf422b270988e9353269a` | `codex/pretransfer-hardening-20260821` | success; unresolved=0; independent approval not established |
+
+Observed at `2026-09-06T02:43:57.707015+00:00` before this closing PR is opened. Refresh head/base/checks/reviews only when resuming or when a material change requires it. The snapshot is [machine readable](docs/acceptance/github-snapshot.json).
+
+After explicit reopening, resolve the existing Task owner and current revision; follow #18 -> #19/#25 and independent review -> the #30 integration train. Do not retarget or overwrite the sibling #21 status work without reconciling its current contents. No merge is authorized by this ordering.
+
+## Historical observations below
+
+The following text is retained from the earlier candidate for provenance and existing runbook references. Its words “current”, “latest”, old PR heads, test counts and unavailable-runtime statements refer to those saved observations. Use the dated section above and its evidence links for the 2026-09-06 closing view. Historical checkboxes do not grant current acceptance.
+
 ## Published now
 
 - [x] Public repository and project direction

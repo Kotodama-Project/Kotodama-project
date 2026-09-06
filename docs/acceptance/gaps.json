@@ -1,0 +1,301 @@
+{
+  "gaps": [
+    {
+      "id": "ADD-R20-ENVELOPE",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R20"
+      ],
+      "source": "README.md:L65-70",
+      "summary": "64 events/900 seconds/10 ticks/STOP/digest-replay-restore-projection/deny-by-default MCPを一receiptに固定"
+    },
+    {
+      "id": "ADD-R38-OWNER-INVARIANTS",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R38"
+      ],
+      "source": "README.md:L77-83",
+      "summary": "max depth 2、N/C/W/V、work_key、same-writer、budget/TTL/kill/rollback、rerun抑止、auto-revert、bounded escalation"
+    },
+    {
+      "id": "ADD-R32-R36-AGENT-SEPARATION",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R32",
+        "R36"
+      ],
+      "source": "README.md:L84-89",
+      "summary": "Routing/Metadata agentsはexecute/truth promoteせず、reuse filter順を検証"
+    },
+    {
+      "id": "ADD-R39-DISPOSABLE-GRANT",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R39"
+      ],
+      "source": "README.md:L93-95",
+      "summary": "exact base/image、owner、data/network/tool grant、budget/TTL/kill/export/cleanup"
+    },
+    {
+      "id": "ADD-R40-R41-MODEL-POLICY",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R40",
+        "R41"
+      ],
+      "source": "README.md:L96-101,124-132",
+      "summary": "Luna-first、rationale、actual provenance、metered API除外、no hidden fallback"
+    },
+    {
+      "id": "ADD-R55-ZFS-PRODUCTION-BOUNDARY",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R55"
+      ],
+      "source": "README.md:L102-107",
+      "summary": "encrypted package/ZFS 8/8 syntheticとproduction key/retention/deletionを分離"
+    },
+    {
+      "id": "ADD-R39-R42-GITHUB-AUTONOMY",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R39",
+        "R42"
+      ],
+      "source": "README.md:L108-111",
+      "summary": "branch/commit/PR/mergeはindependent review/tests/revert pathが条件"
+    },
+    {
+      "id": "ADD-R09-R11-R57-15MIN-BOUNDARY",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R09",
+        "R10",
+        "R11",
+        "R57"
+      ],
+      "source": "README.md:L287-300",
+      "summary": "900秒確定、private post、rejoin、retention/delete receiptを別acceptanceに分解"
+    },
+    {
+      "id": "ADD-R24-R26-QUICKSTART-SAFETY",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R24",
+        "R26"
+      ],
+      "source": "README.md:L507-559,864-931",
+      "summary": "public example不変、existing bundle target拒否、同一candidate pathの後続検査"
+    },
+    {
+      "id": "ADD-R51-R59-DEPENDENCY-BOUNDARY",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R51",
+        "R59"
+      ],
+      "source": "README.md:L987-1004",
+      "summary": "stdlib CLI、test-only dependency、local PASSのlive拡張禁止"
+    },
+    {
+      "id": "ADD-R60-R62-ATTESTATION-MATRIX",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R60",
+        "R62"
+      ],
+      "source": "README.md:L964-978",
+      "summary": "toolごとの証明範囲/trust boundaryをreason-specific acceptanceへ束縛"
+    },
+    {
+      "id": "ADD-R24-R28-R63-EXAMPLE-COMPANY",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R24",
+        "R28",
+        "R63"
+      ],
+      "source": "README.md:L1006-1018",
+      "summary": "9段階のExample Company導線とplaceholder≠設立/権限/Promotionを受入化"
+    },
+    {
+      "id": "ADD-R67-SURFACE-MAP",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R67"
+      ],
+      "source": "README.md:L134-159",
+      "summary": "eight-surface mapのリンク、ideal/current分離、surface boundary"
+    },
+    {
+      "id": "ADD-R21-R68-PROJECTION-BOUNDARY",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R21",
+        "R68"
+      ],
+      "source": "README.md:L32-44",
+      "summary": "Owner-confirmed directionはprojectionであり、rightsholder/adoption/GOではない"
+    },
+    {
+      "id": "GAP-LICENSE-01",
+      "classification": "CROSS_CUTTING_RELEASE_OBLIGATION",
+      "attach_to": [
+        "R62",
+        "R68"
+      ],
+      "source": "README.md:L1044,1161-1163",
+      "summary": "Apache-2.0、NOTICE、contributor/rightsholder、source-specific compatibilityの独立受入"
+    },
+    {
+      "id": "GAP-DOC-MAP-01",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R67"
+      ],
+      "source": "README.md:L12-18,1061-1119",
+      "summary": "Project Map/implementation/status/runtime/evidence linksのfresh clone存在・anchor・revision検査"
+    },
+    {
+      "id": "GAP-PUBLIC-BOUNDARY-01",
+      "classification": "ADD_SUBCRITERION",
+      "attach_to": [
+        "R59",
+        "R61",
+        "R62",
+        "R63"
+      ],
+      "source": "README.md:L1140-1152",
+      "summary": "public invite/Voice/live deployment/Context/Agent/Business/protected reconciliation各NO-GOを個別Rへ反映"
+    },
+    {
+      "id": "D01",
+      "classification": "SUPPLEMENT_OR_OPERATIONAL_OBLIGATION",
+      "attach_to": [
+        "R40",
+        "R41"
+      ],
+      "title": "最新のmodel選択とprovenance",
+      "summary": "今回の一般chatは既存local Qwenを明示選択。旧READMEのgeneral-purpose local LLM deferredを今回の禁止へ流用しない。親modelの全体固定、metered API、cloud fallback、他Taskのモデル変更は認可していない。",
+      "source": "直接ユーザー訂正 2026-09-06"
+    },
+    {
+      "id": "D02",
+      "classification": "SUPPLEMENT_OR_OPERATIONAL_OBLIGATION",
+      "attach_to": [
+        "R13",
+        "R57"
+      ],
+      "title": "保存期間と使えるファイル",
+      "summary": "今回の運用方針は原音30日、transcript/要約/出典は期限なし。JSON/Markdown/VTTと添付本体の取得を分け、native exportのtimeoutとCDN403を未検証として残す。",
+      "source": "直接ユーザー訂正 2026-09-06"
+    },
+    {
+      "id": "D03",
+      "classification": "SUPPLEMENT_OR_OPERATIONAL_OBLIGATION",
+      "attach_to": [
+        "R45",
+        "R47",
+        "R50",
+        "R52"
+      ],
+      "title": "文書破損・既存instance・運用再開",
+      "summary": "default Blueprintのblocks検査を修正したが、既存Gadgetには旧codeが残る。本文を保全したinstance更新と不正入力拒否、PC停止・常設起動・backup/upgrade/recoveryを別受入にする。",
+      "source": "実OS評価 E09/E10"
+    },
+    {
+      "id": "D04",
+      "classification": "SUPPLEMENT_OR_OPERATIONAL_OBLIGATION",
+      "attach_to": [
+        "R30",
+        "R33",
+        "R58"
+      ],
+      "title": "実identityと派生先ACL",
+      "summary": "情報分類、opaque主体、担当、read/review、purpose、取消を元ownerへ結び、引用・export・index・embeddingへの継承も検査する。ID化/要約だけで公開分類へ下げない。",
+      "source": "直接ユーザー訂正と情報アクセス候補 E03"
+    },
+    {
+      "id": "D05",
+      "classification": "SUPPLEMENT_OR_OPERATIONAL_OBLIGATION",
+      "attach_to": [
+        "R59",
+        "R62",
+        "R63"
+      ],
+      "title": "repository管理面",
+      "summary": "required check名、最新push独立承認、bypass、会話解決、force push/deletion、CodeQL、private reporting、secret/push protection/history scanを実管理面で読み戻す。",
+      "source": "GitHub #19"
+    },
+    {
+      "id": "D06",
+      "classification": "SUPPLEMENT_OR_OPERATIONAL_OBLIGATION",
+      "attach_to": [
+        "R62",
+        "R68"
+      ],
+      "title": "packageと移植の完了定義",
+      "summary": "rights/NOTICE、公開/非公開namespace、二release互換、wheel/sdist allowlist、SBOM/provenance/signature、immutable pin、canary/rollback、zero residual consumersが必要。",
+      "source": "GitHub #24 #25 #26 #28 #30 #31 #32"
+    },
+    {
+      "id": "D07",
+      "classification": "SUPPLEMENT_OR_OPERATIONAL_OBLIGATION",
+      "attach_to": [
+        "R43",
+        "R48",
+        "R49",
+        "R50"
+      ],
+      "title": "provider/supply/supportの細目",
+      "summary": "body/residency/cache/log、trusted deploy runnerとdurable receipt、registry/source workflow trust、Windows/Linux契約、lint/chunk budget、独立security/support判断。古い別coreのPASSを新coreへ流用しない。",
+      "source": "GitHub #2–#16"
+    },
+    {
+      "id": "D08",
+      "classification": "SUPPLEMENT_OR_OPERATIONAL_OBLIGATION",
+      "attach_to": [
+        "R67",
+        "R68"
+      ],
+      "title": "関連repositoryのowner/lifecycle",
+      "summary": "7つのlegacy repositoryのowner・依存・support・successor分類は別Issue。今回のクロージングから一括archive/deleteや全社Project閉鎖を推定しない。",
+      "source": "GitHub #23"
+    },
+    {
+      "id": "D09",
+      "classification": "SUPPLEMENT_OR_OPERATIONAL_OBLIGATION",
+      "attach_to": [
+        "R01",
+        "R04",
+        "R08",
+        "R14",
+        "R29",
+        "R32",
+        "R64",
+        "R66"
+      ],
+      "title": "利用品質の判定値",
+      "summary": "音声の遅延/途切れ、ASR/話者/引用の誤り、検索漏れ、質問の有用性、成果採否を実fixtureと利用者で測る。閾値・対象母集団・評価期間は未決であり仮の数値を合意済みにしない。",
+      "source": "READMEの利用体験から導く未確定の測定条件"
+    },
+    {
+      "id": "D10",
+      "classification": "SUPPLEMENT_OR_OPERATIONAL_OBLIGATION",
+      "attach_to": [
+        "R03",
+        "R05",
+        "R37",
+        "R38",
+        "R54",
+        "R67"
+      ],
+      "title": "同じTaskの入口・閉鎖と手動再開",
+      "summary": "OS、Discord Voice・text、Telegram、Codex、Claudeは同じstable Task ID・revision・ownerを解決し、別のTask正本を作らない。再送・切断・再接続・訂正・duplicate writerを同じ記録で扱う。この作業は未受入を保持してクローズし、heartbeat等で自動再開せず、次の直接指示後に現在revision/ownerを解決する。サービス削除・データ削除・他owner閉鎖を含まない。 個人の制作・開発Taskを管理することと、Company本番業務へ組み込むことは別です。個人Taskの記録・owner対応・sourceを、本番へ自動採用・同期・接続・公開しません。共通の管理契約を再利用しても業務データの移行は別scopeの判断です。",
+      "source": "直接ユーザー訂正 2026-09-06"
+    }
+  ],
+  "not_newly_authorized_work": true,
+  "scope_limit": "README全文と68受入、今回直接指示、全25 open Issueに対する漏れ確認。将来仕様・未読資料の完全性は保証しない。"
+}

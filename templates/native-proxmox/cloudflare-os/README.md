@@ -9,10 +9,36 @@
 ## 含むもの
 
 - 公式core `c0b6f3e52ff0ab8d44d290647e256936e88e6b57`
-- Node `24.19.0`（公式SHA256確認）、pnpm `11.17.0`、frozen project lock
+- Node `24.19.0` と pnpm `11.17.0` のarchive digestを固定し、展開・実行前に検査する。project lockも固定
 - 初回instance markerがないと起動しないsystemd service
-- アカウント・会話データ・provider設定がないことを確認するseal check
+- fresh install時の保護inventoryと現在のtemplate-owned filesを照合し、未知・追加・変更されたdataを拒否するseal check
 - 新しいcloneにだけinstance IDを発行するactivation command
+
+## 保存と検証の境界
+
+`install.sh` は固定Node/pnpm archivesをダウンロードし、`verify-toolchain.py`で
+SHA-256/SHA-512を確認してから展開する。pnpmは検証済みのlocal tarballから
+offline/ignore-scriptsで導入する。pinの出典は同helper内の公式HTTPS metadata URLと
+観測hash。registry signature / provenanceの独立したtrust採用を証明するものではない。
+system packagesはUbuntu repositoryのinstall時点に依存し、OS全体のbit-reproducible imageを主張しない。
+
+fresh installの最後、instance activationより前に一度だけ
+`kotodama-os-seal-check --record-install` を実行して、root-ownedの
+`/var/lib/kotodama-template/install-inventory.json`へinventoryを作る。
+通常のsealはその保護inventoryと、`/opt/kotodama-os`、`/home/os-runtime`、
+空の`/etc/kotodama`を照合する。Gitの変更、未知file、追加・変更・削除、外向きlink、
+既知のinstance stateや実行中runtimeを拒否する。既存baselineの上書きや再生成で
+汚れたimageをcleanにしてはいけない。過去に作ったtemplateへ後からinventoryを作って
+この新しいproofを遡及させない。
+
+この照合はguest全体のsecret scanや、最初から含まれるdependency/cache内容の
+意味的な分類ではない。template化前に新規guestのSSH identity、operator access、
+network境界などを別途確認する。rendererの状態値も設計上の必要条件であり実guestの検証ではない。
+
+9月6日のnative clone観測は旧asset固定点`6bc0dae…`の限定評価である。
+その後のinventory/toolchain検査の修正はlocal regressionで検証し、今回のクロージングでは
+既存templateやguestへ再配備していない。新しいassetを採用する際にはfresh installと
+同じseal/clone/restore受入を別途通す。
 
 Discord token、モデル認証、利用者、録音、Task記録、Cloudflare account、既存`.wrangler/state`は含めません。必要な接続はcloneごとに導入します。
 
