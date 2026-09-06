@@ -381,6 +381,38 @@ prompt、private content を解決せず、複数candidate間の replay reservat
 `checks.schema=MATCH`を保ち、構造・parser・validatorの拒否だけを`REFUSED`とするため、
 修正対象を区別できますが、runtimeやauthorityの証明にはなりません。
 
+## 15. Public migration ledger
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [public-migration-ledger.schema.json](../schemas/public-migration-ledger.schema.json) | [`validate_public_migration_ledger.py`](../tools/validate_public_migration_ledger.py) | [`test_public_migration_ledger_contract.py`](../tests/test_public_migration_ledger_contract.py) | [Public Migration Ledger](PUBLIC-MIGRATION-LEDGER.md)。追記専用 JSONL の schema、連番、hash chain、trusted head anchor（`--anchor` 指定時）、終端分類と移送機構の語彙分離、gate 一貫性だけを read-only で検査する。`--anchor` なしの `LEDGER_CONSISTENT_UNVERIFIED` は内部整合性だけで、拒否時の `zero_unclassified` は `null`。移行の実行、private 継続性、公開抽出物の公開、依存切替、rollback 予行、独立検証、Human Decision、Promotion、Current Truth、Public Beta GOではない。 |
+
+PowerShell:
+
+```powershell
+python tools\validate_public_migration_ledger.py `
+  migration\public-migration-ledger.v1.jsonl `
+  --anchor <trusted-previous-head-sha256>
+```
+
+POSIX:
+
+```bash
+python3 tools/validate_public_migration_ledger.py \
+  migration/public-migration-ledger.v1.jsonl \
+  --anchor <trusted-previous-head-sha256>
+```
+
+台帳は `terminal_classification`（`PUBLIC_EXTRACT` / `PRIVATE_RETAIN` / `REGENERATE` /
+`DROP`、blocked 中だけ `null`）と `transfer_mode`（`REAUTHOR` / `GENERATE` / `NO_COPY`）を
+別フィールドとして持ち、片方の語彙をもう片方へ入れることを拒否します。これがないと
+unclassified 0 件を機械検証できません。すべての識別子は `ref/<64桁小文字 digest>` の
+opaque 参照で、private path、provider handle、host、参加者識別子、素材そのものは記録
+しません。各 subject の集計は最新 sequence の record に束縛されます。
+`migration/public-migration-ledger.v1.jsonl` は現時点で未作成であり、空・不在の入力は
+`INPUT_INVALID` で fail-closed します。Draft 2020-12 検証には `requirements-test.txt` の
+`jsonschema` が必要で、未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
