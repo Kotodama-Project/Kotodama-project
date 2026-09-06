@@ -530,7 +530,14 @@
         "KPI改善だけでKGIが進まない合成例を独立監査が検出し、継続・変更・停止の判断を残す",
         "上位リンク不明のとき推測で埋めず未解決として示す"
       ],
-      "deadline": null
+      "deadline": null,
+      "accountable_role_ref": "AI-CHIEF",
+      "collaborator_role_refs": [
+        "AI-ANALYST"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
     },
     {
       "id": "INIT-CONTEXT-HANDOFF",
@@ -551,7 +558,14 @@
         "別のfresh sessionが元の資料から要求と現在位置を復元し、古い指示と取消済み資料を混ぜない",
         "単なる要約長や保存数でなく、要求達成に必要な情報の保持を正負fixtureで検証する"
       ],
-      "deadline": null
+      "deadline": null,
+      "accountable_role_ref": "AI-LIBRARIAN",
+      "collaborator_role_refs": [
+        "AI-BUILDER"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
     },
     {
       "id": "INIT-KNOWLEDGE-FORMAT",
@@ -572,7 +586,15 @@
         "embeddingを原文の可逆保存と見なさず、decodeが指す再取得・再構成・生成を区別する",
         "既存ContextGatewayと情報ID・ACLを再利用し、必要な上位文脈が類似検索だけで落ちない読出しを検証する"
       ],
-      "deadline": null
+      "deadline": null,
+      "accountable_role_ref": "AI-LIBRARIAN",
+      "collaborator_role_refs": [
+        "AI-RESEARCH",
+        "AI-ANALYST"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
     },
     {
       "id": "INIT-KNOWLEDGE-REFRESH",
@@ -593,7 +615,14 @@
         "資料更新、矛盾、削除・アクセス取消の際に影響するprojectionを失効・再構築し、二重登録・古い引用を防ぐ",
         "既存grant内で取込・照合・独立監査・更新・readbackの一つの経路を通す。単なる文書化を稼働としない"
       ],
-      "deadline": null
+      "deadline": null,
+      "accountable_role_ref": "AI-LIBRARIAN",
+      "collaborator_role_refs": [
+        "AI-BUILDER"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
     },
     {
       "id": "INIT-CONTEXT-AUDIT",
@@ -614,7 +643,14 @@
         "自己監査、古いreview、監査未実行、KPIだけの成功判定をPASSにしない",
         "指摘へcontinue/revise/experiment/change_approach/stopの処置と追跡先を付け、重要な更新を最上位agentから知らせる。人の再承認へ置き換えない"
       ],
-      "deadline": null
+      "deadline": null,
+      "accountable_role_ref": "AI-AUDITOR",
+      "collaborator_role_refs": [
+        "AI-CHIEF"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
     },
     {
       "id": "INIT-METHOD-RENEWAL",
@@ -635,7 +671,14 @@
         "quality・intent保持・cost/latency・ACL・復旧性を比較し、有利ならbounded trialとmigration/rollbackを用意する",
         "既存方式への固執と新奇性だけの全面置換を避け、実際の必要に沿って採用・延期・不採用を記録する"
       ],
-      "deadline": null
+      "deadline": null,
+      "accountable_role_ref": "AI-RESEARCH",
+      "collaborator_role_refs": [
+        "AI-ANALYST"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
     },
     {
       "id": "INIT-AGENT-OWNERSHIP",
@@ -657,7 +700,16 @@
         "チーム変更の前後で目的達成・品質・費用・遅延・調整負担を比較し、不要な分業を整理する",
         "同じexecutorや仮説作者が独立監査を兼ねない。役割定義だけを常駐稼働としない"
       ],
-      "deadline": null
+      "deadline": null,
+      "accountable_role_ref": "AI-CHIEF",
+      "collaborator_role_refs": [
+        "AI-RESEARCH",
+        "AI-ANALYST",
+        "AI-LIBRARIAN"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
     },
     {
       "id": "INIT-CONTEXT-END-TO-END",
@@ -680,7 +732,15 @@
         "成果が悪ければcontext取得・知識形式・agent分担のどこが原因か分析し、その箇所から直す",
         "動的contextの表示とagentへの受渡しを同じrevisionへ結び、条件訂正による表示更新と実際の行動変更を確認する"
       ],
-      "deadline": null
+      "deadline": null,
+      "accountable_role_ref": "AI-RESEARCH",
+      "collaborator_role_refs": [
+        "AI-BUILDER",
+        "AI-ANALYST"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
     },
     {
       "id": "INIT-DYNAMIC-AGENT-CONTEXT",
@@ -703,7 +763,15 @@
         "古い制約、取消資料、取得文書中の命令を再注入せず、上位の権限規則を可変MDで上書きしない",
         "実際の表示・context受渡し・訂正後の行動変化を検証し、規約ファイルを作っただけで接続済みとしない"
       ],
-      "deadline": null
+      "deadline": null,
+      "accountable_role_ref": "AI-LIBRARIAN",
+      "collaborator_role_refs": [
+        "AI-CHIEF",
+        "AI-BUILDER"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
     }
   ],
   "context_agent_runtime_adoption": "not_deployed_policy_and_contract_only",
@@ -711,5 +779,60 @@
     "Owner-authorized public subset of the existing Human Intent effective view; not a separate Task registry.",
     "Role and initiative IDs are logical contract names; no private actor, session or operational identity is included.",
     "Pro review recommendations are separate proposals and do not automatically amend this policy."
-  ]
+  ],
+  "initiative_role_projection_rule": "Separate the lead domain responsibility from collaborators in the existing owner_role description. These are functional routing references, not instantiated owner identities or grants; independent review requires a distinct runtime actor even when the role name is the same.",
+  "goal_reference_definitions": {
+    "scope": "Definitions needed to resolve this public subset; no current measurements, old deadlines or numerical targets are published here.",
+    "outcomes": [
+      {
+        "id": "OUT-INTENT",
+        "title": "Intent becomes audited work",
+        "description": "Authorized conversation can become a reviewed intent, bounded work, candidate artifact, evidence, and learning without semantic shortcuts.",
+        "success_definition": "At least one end-to-end vertical slice is reproducible from source reference through verification receipt."
+      },
+      {
+        "id": "OUT-LOCAL",
+        "title": "Reproducible local-first company runtime",
+        "description": "Company truth, workers, workflows, search, CRM, evidence, backup, and kill controls can run inside an operator-controlled trust boundary.",
+        "success_definition": "A clean install, canonical run, kill drill, backup restore, and uninstall pass on one supported profile."
+      }
+    ],
+    "kgis": [
+      {
+        "id": "KGI-INTENT",
+        "outcome_refs": [
+          "OUT-INTENT"
+        ],
+        "metric": "verified intent-to-artifact vertical slices",
+        "evidence_source": "source, decision, work, candidate, and receipt bundle"
+      }
+    ],
+    "kpis": [
+      {
+        "id": "KPI-RECEIPTS",
+        "kgi_refs": [
+          "KGI-INTENT"
+        ],
+        "outcome_refs": [
+          "OUT-INTENT"
+        ],
+        "metric": "admitted work units with complete receipts",
+        "unit": "ratio",
+        "evidence_source": "verification receipt ledger"
+      },
+      {
+        "id": "KPI-INTENT-ACCEPT",
+        "kgi_refs": [
+          "KGI-INTENT"
+        ],
+        "outcome_refs": [
+          "OUT-INTENT"
+        ],
+        "metric": "reviewed intent candidates accepted without material correction",
+        "unit": "ratio",
+        "evidence_source": "intent review ledger"
+      }
+    ],
+    "metric_guard": "KPI values and receipt counts are proxies; they do not prove the original outcome. No target or historical deadline is revived by this projection."
+  }
 }

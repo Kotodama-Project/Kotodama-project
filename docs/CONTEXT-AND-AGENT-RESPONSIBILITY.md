@@ -19,7 +19,9 @@ KPIはKGIと求める成果への寄与を検証する指標です。「この�
 | ナレッジ管理 | AI-LIBRARIAN | 原資料・ページ・索引・embeddingの出典関係、鮮度、取消、検索品質 |
 | 独立監査 | AI-AUDITOR | 原意図・入力・出力・全体文脈・approachと指摘の処置 |
 | 担当間の調整 | AI-CHIEF | 既存owner、依存と優先順位、最上位agentへの重要な更新 |
-| 実装 | AI-BUILDER | 現在の範囲内での実装と検証、担当への成果返却 |
+| 実装の協力役 | AI-BUILDER | domain ownerから渡された範囲で実装・検証し、担当へ成果を返す |
+
+`agent_responsibility_policy.owners` は5つのdomain責任、AI-BUILDERはその依頼を実行する協力役です。各initiativeには一つの `accountable_role_ref` と別の `collaborator_role_refs` を置き、元の `owner_role` 説明も保持します。これは機能上の責任の対応で、実行主体へのbindingはpendingです。独立reviewはrole名の一致/不一致ではなく別のruntime主体で確保します。
 
 担当は必要な子agentを選び、限定scope、保持context、grant、予算、期限、受入条件を定めます。親が結果の統合、衝突解消、失敗の分析、後継への引継ぎまで受け持ちます。同じmutable surfaceのwriterを重複させず、権限や予算を子へ拡大しません。
 
@@ -46,6 +48,10 @@ LLM Wikiの [原案](https://gist.github.com/karpathy/442a6bf555914893e9891c1151
 短い表示には元の意図、現在位置と理由、担当、制約・範囲、次の一手と未解決、版と鮮度を置きます。人が作業中に参照でき、agentにも開始・再開・圧縮・作業境界で必要情報が渡るようにします。常時参照と、モデル内部の永久記憶は区別します。
 
 訂正、出典変更、古さ、矛盾、失効を検出し、影響するwiki/page/index/contextを整えます。古さだけを誤り・削除の根拠にせず、入力と根拠が不変なら再生成しません。表示と実際に渡したcontextの版、訂正後の行動変化まで受入で確認します。
+
+## 参照する目標と指標
+
+`goal_reference_definitions` に公開範囲の定義を収録しています。`OUT-INTENT` は会話から根拠付きの仕事・成果へつながること、`OUT-LOCAL` は管理された範囲で再現可能に運用できることです。`KGI-INTENT` は検証済みのintent-to-artifact経路、`KPI-RECEIPTS` は証拠の揃った仕事の割合、`KPI-INTENT-ACCEPT` は重大な訂正なしで受け入れられた意図候補の割合を扱います。現在値・過去の期限・数値目標をここで新たに採用していません。KPI達成だけを成果とはしません。
 
 ## 既存initiativeの公開投影
 
