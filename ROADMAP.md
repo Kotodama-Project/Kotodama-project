@@ -2,7 +2,7 @@
 
 ## Current public state — 2026-09-06
 
-This is a dated candidate snapshot. The current execution is closed pending explicit manual reopening; unmet acceptance remains open. It does not close other owners' projects or declare all requirements complete.
+This is a dated candidate snapshot. The current execution is active with need-driven continuation after the current checkpoint; unmet acceptance remains open. It does not close other owners' projects or declare all requirements complete.
 
 Published main: `be71f424689648b3ab1b1db15adbaddea374586b`. This closing candidate is stacked on PR #45 and is not merged into main. `read-only/candidate-only` and `NO_GO_UNPUBLISHED` remain unchanged.
 
@@ -31,7 +31,7 @@ All 22 previously outstanding review threads were resolved on the six checked PR
 
 Observed at `2026-09-06T02:43:57.707015+00:00` before this closing PR is opened. Refresh head/base/checks/reviews only when resuming or when a material change requires it. The snapshot is [machine readable](docs/acceptance/github-snapshot.json).
 
-After explicit reopening, resolve the existing Task owner and current revision; follow #18 -> #19/#25 and independent review -> the #30 integration train. Do not retarget or overwrite the sibling #21 status work without reconciling its current contents. No merge is authorized by this ordering.
+After completing the current work and reconciling the whole system, resolve the existing Task owner and current revision; follow #18 -> #19/#25 and independent review -> the #30 integration train. Do not retarget or overwrite the sibling #21 status work without reconciling its current contents. No merge is authorized by this ordering.
 
 最新の直接指示により、現在の作業後は全体を照合して必要時に継続する。初回承認と上位存在の方針は [運営方針](docs/OPERATING-POLICY-2026-09-06.md)、音声の配備診断は [Voice修正](docs/VOICE-ACCURACY-2026-09-06.md) を参照。新しいscheduler/sessionをこの文書で作成したとは主張しない。
 
