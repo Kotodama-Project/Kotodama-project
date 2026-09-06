@@ -10,10 +10,13 @@ const SCHEMA = fileURLToPath(new URL("./brief.schema.json", import.meta.url));
 const DISABLED = ["shell_tool", "apps", "plugins", "browser_use", "computer_use", "memories", "multi_agent", "multi_agent_v2", "hooks", "image_generation", "view_image"];
 const ALLOWED_ENV = new Set(["PATH", "SYSTEMROOT", "WINDIR", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "COMSPEC", "PATHEXT", "PROGRAMDATA"]);
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+export const isCodexThreadId = (value) => typeof value === "string"
+  && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
 
 export function parseCodexEvents(text) {
   const events = text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-  if (!events.length || events[0].type !== "thread.started" || !/^[0-9a-f-]{36}$/.test(events[0].thread_id)
+  if (!events.length || events[0].type !== "thread.started" || !isCodexThreadId(events[0].thread_id)
+    || events.filter((event) => event.type === "thread.started").length !== 1
     || events.at(-1).type !== "turn.completed" || events.filter((e) => e.type === "turn.completed").length !== 1) throw new Error("incomplete_codex_turn");
   const messages = [];
   const warnings = [];
@@ -44,11 +47,12 @@ export function codexArguments({ model }) {
   return args;
 }
 
-export async function runCodexBrief({ executable, expectedExecutableSha256, cwd, model, input, signal }, { spawnImpl = spawn } = {}) {
+export async function runCodexBrief({ executable, expectedExecutableSha256, cwd, model, input, signal, onSessionStarted }, { spawnImpl = spawn } = {}) {
   if (typeof executable !== "string" || !isAbsolute(executable) || typeof cwd !== "string" || !isAbsolute(cwd)
     || !/^[0-9a-f]{64}$/.test(expectedExecutableSha256 ?? "") || !lstatSync(executable).isFile()
     || lstatSync(executable).isSymbolicLink() || !lstatSync(cwd).isDirectory()
-    || typeof input !== "string" || !input.isWellFormed() || Buffer.byteLength(input) > 16384 || !input.trim()) throw new Error("codex_configuration_denied");
+    || typeof input !== "string" || !input.isWellFormed() || Buffer.byteLength(input) > 16384 || !input.trim()
+    || (onSessionStarted !== undefined && typeof onSessionStarted !== "function")) throw new Error("codex_configuration_denied");
   if (digest(readFileSync(executable)) !== expectedExecutableSha256) throw new Error("codex_binary_drift");
   if (signal?.aborted) throw new Error("codex_aborted");
   const args = codexArguments({ model });
@@ -62,6 +66,8 @@ export async function runCodexBrief({ executable, expectedExecutableSha256, cwd,
     let errorBytes = 0;
     let refused;
     let partial = "";
+    let sessionId;
+    let eventCount = 0;
     const decoder = new TextDecoder("utf-8", { fatal: true });
     const stop = (reason) => { refused ??= reason; child.kill(); };
     const abort = () => stop("codex_aborted");
@@ -80,6 +86,18 @@ export async function runCodexBrief({ executable, expectedExecutableSha256, cwd,
           const line = partial.slice(0, newline).trim(); partial = partial.slice(newline + 1);
           if (!line) continue;
           const event = JSON.parse(line);
+          if (eventCount++ === 0 && event.type !== "thread.started") return stop("codex_session_start_missing");
+          if (event.type === "thread.started") {
+            if (sessionId || !isCodexThreadId(event.thread_id)) return stop("codex_session_start_invalid");
+            sessionId = event.thread_id;
+            // Synchronous persistence occurs before accepting later events. A
+            // failed observer cancels the run instead of claiming a tracked session.
+            const observed = onSessionStarted?.(Object.freeze({ thread_id: sessionId }));
+            if (observed && typeof observed.then === "function") {
+              observed.catch?.(() => {});
+              return stop("codex_session_observer_must_be_synchronous");
+            }
+          }
           const item = event.item;
           if (["error", "turn.failed"].includes(event.type)) return stop("codex_provider_failed");
           if (item && !["agent_message", "reasoning"].includes(item.type)

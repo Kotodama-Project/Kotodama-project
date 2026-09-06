@@ -4,7 +4,7 @@ import { lstatSync, mkdirSync, openSync, closeSync, fsyncSync, readFileSync, wri
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { startReviewGateway, strictJson } from "../local-review-gateway/server.mjs";
-import { runCodexBrief, validateBrief } from "./codex-runner.mjs";
+import { runCodexBrief, validateBrief, isCodexThreadId } from "./codex-runner.mjs";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const principal = /^urn:kotodama:principal:[0-9a-f-]{36}$/;
@@ -39,7 +39,7 @@ function checkedDirectory(value) {
 }
 
 function saveJobs(root, jobs) {
-  const body = Buffer.from(JSON.stringify({ schema: "kotodama/brief-invocations/v1", jobs }));
+  const body = Buffer.from(JSON.stringify({ schema: "kotodama/brief-invocations/v2", jobs }));
   if (body.length > 2_097_152) throw new Error("job_store_limit");
   const temporary = join(root, `.${randomUUID()}.tmp`);
   const fd = openSync(temporary, "wx", 0o600);
@@ -53,20 +53,39 @@ function loadJobs(root) {
     const path = join(root, "invocations.json");
     const info = lstatSync(path);
     if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > 2_097_152) throw new Error("job_store_denied");
-    const store = strictJson(readFileSync(path));
-    if (!closed(store, ["schema", "jobs"]) || store.schema !== "kotodama/brief-invocations/v1"
+    const raw = readFileSync(path);
+    const store = strictJson(raw);
+    const legacy = store?.schema === "kotodama/brief-invocations/v1";
+    if (!closed(store, ["schema", "jobs"]) || !["kotodama/brief-invocations/v1", "kotodama/brief-invocations/v2"].includes(store.schema)
       || !Array.isArray(store.jobs) || store.jobs.length > 32) throw new Error("job_store_denied");
     const ids = new Set();
     for (const job of store.jobs) {
-      if (!closed(job, ["request_id", "fingerprint", "requester_ref", "handoff_id", "source_revision", "policy_revision", "binding_sha256", "state", "result"])
+      const keys = ["request_id", "fingerprint", "requester_ref", "handoff_id", "source_revision", "policy_revision", "binding_sha256", "state", "result"];
+      if (!legacy) keys.push("session");
+      if (!closed(job, keys)
         || !uuid.test(job.request_id) || ids.has(job.request_id) || !hex.test(job.fingerprint)
         || !principal.test(job.requester_ref) || typeof job.handoff_id !== "string" || !/^[a-z0-9][a-z0-9-]{0,127}$/.test(job.handoff_id)
         || !Number.isSafeInteger(job.source_revision) || job.source_revision < 1
         || !Number.isSafeInteger(job.policy_revision) || job.policy_revision < 1 || !hex.test(job.binding_sha256)
         || !["running", "ready", "failed", "interrupted"].includes(job.state)) throw new Error("job_store_denied");
       ids.add(job.request_id);
+      if (legacy) job.session = null;
+      if (job.session !== null && (!closed(job.session, ["thread_id", "kind", "started_at", "model_requested"])
+        || !isCodexThreadId(job.session.thread_id) || job.session.kind !== "ephemeral_codex"
+        || !Number.isFinite(Date.parse(job.session.started_at)) || new Date(job.session.started_at).toISOString() !== job.session.started_at
+        || (job.session.model_requested !== null && (typeof job.session.model_requested !== "string" || !/^[a-z0-9][a-z0-9.-]{0,79}$/.test(job.session.model_requested))))) throw new Error("job_session_denied");
       if (job.state === "ready") validateBrief(job.result?.brief);
       else if (job.result !== null) throw new Error("job_store_denied");
+      if (job.state === "ready" && job.session && job.result.thread_id !== job.session.thread_id) throw new Error("job_session_result_mismatch");
+    }
+    if (legacy) {
+      const backup = join(root, "invocations.v1.backup.json");
+      try { writeFileSync(backup, raw, { flag: "wx", mode: 0o600 }); }
+      catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        const existing = lstatSync(backup);
+        if (!existing.isFile() || existing.isSymbolicLink() || existing.nlink !== 1 || existing.size !== raw.length || hash(readFileSync(backup)) !== hash(raw)) throw new Error("legacy_job_backup_conflict");
+      }
     }
     return store.jobs;
   } catch (error) { if (error.code === "ENOENT") return []; throw error; }
@@ -145,8 +164,20 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
       const source = admitted(job.requester_ref);
       const p = source.projection;
       const input = prepareInput(p);
-      result = await invoke({ ...runner, input, signal: controller.signal });
+      result = await invoke({ ...runner, input, signal: controller.signal,
+        onSessionStarted({ thread_id }) {
+          admitted(job.requester_ref);
+          if (controller.signal.aborted || sealedAfterShutdown || active?.request_id !== job.request_id
+            || jobs.find((item) => item.request_id === job.request_id)?.state !== "running"
+            || job.session || !isCodexThreadId(thread_id)
+            || (runner.model !== undefined && (typeof runner.model !== "string" || !/^[a-z0-9][a-z0-9.-]{0,79}$/.test(runner.model)))) throw new Error("session_start_denied");
+          const session = { thread_id, kind: "ephemeral_codex", started_at: new Date().toISOString(), model_requested: runner.model ?? null };
+          const next = jobs.map((item) => item.request_id === job.request_id ? { ...item, session } : item);
+          saveJobs(root, next); jobs = next; job.session = session;
+        },
+      });
       admitted(job.requester_ref);
+      if (job.session && result.thread_id !== job.session.thread_id) throw new Error("session_result_mismatch");
       validateBrief(result.brief);
       // Source questions are unresolved evidence. A model cannot silently remove them.
       result = { ...result, brief: { ...result.brief,
@@ -189,18 +220,22 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
         if (!job) {
           if (active || jobs.length >= boundGrant.max_invocations) return reply(response, 409, { error: "invocation_budget_or_busy" });
           job = { request_id: body.request_id, fingerprint, requester_ref: requester, handoff_id: boundGrant.handoff_id,
-            source_revision: body.source_revision, policy_revision: boundGrant.policy_revision, binding_sha256: bindingSha256, state: "running", result: null };
+            source_revision: body.source_revision, policy_revision: boundGrant.policy_revision, binding_sha256: bindingSha256, state: "running", result: null, session: null };
           const next = [...jobs, job]; saveJobs(root, next); jobs = next;
           const promise = perform(job); if (active) active.promise = promise;
           promise.catch(() => {});
         }
         return reply(response, 202, { request_id: job.request_id, state: job.state, task_state_changed: false });
       }
-      const match = request.url.match(/^\/v1\/briefs\/([0-9a-f-]{36})$/);
+      const match = request.url.match(/^\/v1\/briefs\/([0-9a-f-]{36})(\/session)?$/);
       if (request.method === "GET" && match && uuid.test(match[1])) {
         const job = jobs.find((item) => item.request_id === match[1] && item.requester_ref === requester);
         if (!job || job.handoff_id !== boundGrant.handoff_id || job.fingerprint !== fingerprintFor(requester, job)
           || job.source_revision !== source.projection.revision || job.policy_revision !== source.policy_revision) return reply(response, 404, { error: "information_unavailable" });
+        if (match[2]) return reply(response, 200, { request_id: job.request_id, state: job.state, session: job.session,
+          work_order_ref: boundGrant.work_order_ref, handoff_id: job.handoff_id, source_revision: job.source_revision,
+          policy_revision: job.policy_revision, binding_sha256: job.binding_sha256,
+          task_binding: "not_connected", task_state_changed: false, resumable: false, publication: false });
         return reply(response, 200, { request_id: job.request_id, state: job.state,
           brief: job.state === "ready" ? job.result.brief : null, task_state_changed: false, publication: false });
       }

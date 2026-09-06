@@ -36,6 +36,34 @@ uncertain, the invocation becomes interrupted and the writer lock remains in
 place until an operator verifies the old process has ended. Do not remove that
 lock merely to start another writer.
 
+## Started-session evidence
+
+When the existing CLI emits a validated `thread.started` event, the bridge
+persists its private thread ID, observation time, requested model and
+`ephemeral_codex` kind before accepting later output. The session stays bound to
+the existing invocation's request, handoff, source revision and startup-grant
+digest. A later failure or interruption preserves that evidence; replaying the
+same request never starts another model invocation.
+
+An authenticated `GET /v1/briefs/<request_id>/session` returns this narrow execution
+view under the same current access checks. It reports `session: null` when a
+start was not observed, `task_binding: "not_connected"`, `resumable: false`, and
+never marks a canonical Task complete. A model cannot supply the thread ID in
+its brief or attach a new session after the invocation ends.
+
+The journal is now `kotodama/brief-invocations/v2`. Existing v1 files are accepted,
+kept byte-for-byte as `invocations.v1.backup.json`, and upgraded with unknown
+session evidence rather than invented starts. A conflicting backup refuses the
+upgrade. Before rolling back to old code, retain the v2 journal separately and
+restore the pre-upgrade copy; do not discard new evidence to make old code start.
+
+This implements observable automatic **ephemeral CLI execution** within the
+existing startup grant. It does not create a new Task registry, persistent
+conversation, sidebar task, automatic task assignment, or a general session
+resumption service. The official [non-interactive mode documentation](https://learn.chatgpt.com/docs/non-interactive-mode)
+describes JSONL start events and the distinction between ephemeral execution and
+persisted sessions.
+
 The CLI executable and its SHA-256, private working directory and model are
 operator-selected. The runner requests read-only mode, no project docs, no user
 config, ephemeral runs and disabled shell, plugins, apps, browsers, memory and
