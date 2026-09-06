@@ -1,6 +1,6 @@
 # プロジェクトの地図
 
-**2026-09-06 closing view:** [68項目](acceptance/README.md) → [READMEの現在地](CLOSING-2026-09-06.md) → [追加条件](acceptance/GAPS.md) → [Issue対応](acceptance/ISSUES.md)。この実行は手動再開待ち。以下の9月5日PR表は履歴で、現headとreviewは[9月6日snapshot](acceptance/github-snapshot.json)を使う。
+**2026-09-06 closing view:** [68項目](acceptance/README.md) → [READMEの現在地](CLOSING-2026-09-06.md) → [追加条件](acceptance/GAPS.md) → [Issue対応](acceptance/ISSUES.md)。最新の直接指示により、全体照合後に必要な仕事を継続する。以下の9月5日PR表は履歴で、現headとreviewは[9月6日snapshot](acceptance/github-snapshot.json)を使う。
 
 Kotodama は、会話から意図・仕事・成果・学習へつなぐ Company OS を目指します。
 この地図は、README の目標から既存の実装・文書・レビューへ進むための入口です。

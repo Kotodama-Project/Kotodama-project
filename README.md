@@ -1,5 +1,8 @@
 # Kotodama
 
+> **最新方針（後続指示）:** 現在の音声修正・SSOT更新・68項目とGitHub反映を終えた後、全体を照合し、必要な仕事を継続する。先行の「整理後に停止」は更新された。承認は初回に一度、必要な更新は最上位エージェントから通知する。
+
+
 **会話を、監査可能な意図・仕事・成果・学習へ。**
 
 Kotodama は、人間が普段どおり話し、相談し、アイデアを共有するところから、その中にある意図を AI と人間が一緒に理解し、要件、判断、仕事、成果物、検証証拠へ接続する **Local-first Company OS** を目指すプロジェクトです。
@@ -11,7 +14,7 @@ Kotodama は、人間が普段どおり話し、相談し、アイデアを共�
 
 ## この README の読み方
 
-**2026-09-06 のクロージング:** [68個の受入条件](docs/acceptance/README.md)を全件見直し、[READMEとの現在地・未完](docs/CLOSING-2026-09-06.md)と[補足条件](docs/acceptance/GAPS.md)へ整理しました。この実行は明示的な再開まで停止します。製品全体の完了、他ownerの一括閉鎖、Public Betaの開始ではありません。
+**2026-09-06 のクロージング:** [68個の受入条件](docs/acceptance/README.md)を全件見直し、[READMEとの現在地・未完](docs/CLOSING-2026-09-06.md)と[補足条件](docs/acceptance/GAPS.md)へ整理しました。現在の作業を区切った後、最新の直接指示に従い、全体を照合して必要な仕事を継続します。製品全体の完了、他ownerの一括閉鎖、Public Betaの開始ではありません。
 
 今回の限定評価では、既存local Qwenによる一般chat、Document保存・再読込・再起動、native Proxmox template/full cloneまで確認しました。Task情報は手動入力で、自動Task接続は未実装です。以下の設計節の古いlocal LLM deferredは今回の明示選択を禁止するものではありません。現況の詳細は上記クロージングとSTATUSを優先してください。
 
@@ -1169,3 +1172,7 @@ Promotion, Current Truth, or Public Beta GO.
 ## License
 
 この repository は [Apache License 2.0](LICENSE)（SPDX identifier: `Apache-2.0`）で提供します。
+
+## 最新の運営方針と音声修正
+
+[初回承認・上位存在・必要時実装](docs/OPERATING-POLICY-2026-09-06.md) と [large-v3・文脈訂正の修正](docs/VOICE-ACCURACY-2026-09-06.md) を参照してください。68項目の全受入を宣言せず、未完と必要な次の一手を保持します。

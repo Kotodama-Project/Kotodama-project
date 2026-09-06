@@ -33,6 +33,8 @@ Observed at `2026-09-06T02:43:57.707015+00:00` before this closing PR is opened.
 
 After explicit reopening, resolve the existing Task owner and current revision; follow #18 -> #19/#25 and independent review -> the #30 integration train. Do not retarget or overwrite the sibling #21 status work without reconciling its current contents. No merge is authorized by this ordering.
 
+最新の直接指示により、現在の作業後は全体を照合して必要時に継続する。初回承認と上位存在の方針は [運営方針](docs/OPERATING-POLICY-2026-09-06.md)、音声の配備診断は [Voice修正](docs/VOICE-ACCURACY-2026-09-06.md) を参照。新しいscheduler/sessionをこの文書で作成したとは主張しない。
+
 ## Historical observations below
 
 The following text is retained from the earlier candidate for provenance and existing runbook references. Its words “current”, “latest”, old PR heads, test counts and unavailable-runtime statements refer to those saved observations. Use the dated section above and its evidence links for the 2026-09-06 closing view. Historical checkboxes do not grant current acceptance.

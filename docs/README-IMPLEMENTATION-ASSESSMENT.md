@@ -5,7 +5,7 @@
 
 実測済みの限定範囲は、Company Pack実生成・local review/CAS、公式OSの要件案往復、選択local Qwenの一般chatと文書保存/reload/restart、空native Proxmox templateと別clone、保存済みVoice記録の派生・引用検索・本文返却である。Task自動接続、自然な多人Voice、常時運用、全社ACL、事業成果は未受入。
 
-手動でTask情報を渡した試験や合成入力のPASSを、既存Taskの自律実行、複数人の受入、本番提供としない。保存済み観測は[Evidence](acceptance/EVIDENCE.md)に時点・範囲を分けた。今回の実行はクローズし、自動で続けない。
+手動でTask情報を渡した試験や合成入力のPASSを、既存Taskの自律実行、複数人の受入、本番提供としない。保存済み観測は[Evidence](acceptance/EVIDENCE.md)に時点・範囲を分けた。現在の作業後は、全体を照合して必要になった作業から継続する。
 
 ## 配置の選択
 

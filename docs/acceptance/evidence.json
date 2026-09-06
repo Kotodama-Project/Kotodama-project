@@ -126,6 +126,18 @@
       "observed_at": "2026-09-06T02:43:57.707015+00:00",
       "public_context": "https://github.com/Kotodama-Project/Kotodama-project",
       "scope": "全14 open PRのhead/base/checks/review threadsと25 open Issue本文。独立全差分監査ではない。"
+    },
+    {
+      "id": "E14",
+      "title": "large-v3とraw保持・文脈訂正の非公開配備診断",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "abb5ea49ebf1ad9364cdfb62c42cfc7e6c3e4141b458c1a0082acfd0172de43a",
+      "public_context": "../VOICE-ACCURACY-2026-09-06.md",
+      "scope": "実1人の保存済み録音から配備ASR/local Qwen/immutable出力まで。新録音のDiscord全自動返却ではない。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true,
+      "receipt_visibility": "redacted_public_summary_only",
+      "public_summary": "voice-repair-observation.json"
     }
   ],
   "disclosure": "本文・認証値・private host/path/participant/provider identifiersは含めない。private receipt hashは参照の固定であり独立真正性証明ではない。"

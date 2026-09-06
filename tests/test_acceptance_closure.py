@@ -15,7 +15,8 @@ class AcceptanceClosureTests(unittest.TestCase):
         self.assertEqual([r['id'] for r in rows], [f'R{i:02}' for i in range(1, 69)])
         self.assertFalse(data['all_requirements_accepted'])
         self.assertFalse(data['automatic_resume'])
-        self.assertEqual(data['work_state'], 'CLOSED_PENDING_EXPLICIT_REOPEN')
+        self.assertEqual(data['work_state'], 'ACTIVE_NEED_DRIVEN')
+        self.assertEqual(data['approval_policy_ref'], 'docs/OPERATING-POLICY-2026-09-06.md')
         current_readme = (ROOT / 'README.md').read_text(encoding='utf-8')
         self.assertEqual(data['source']['closing_readme']['sha256'], hashlib.sha256(current_readme.encode('utf-8')).hexdigest())
         self.assertEqual(data['source']['closing_readme']['lines'], len(current_readme.splitlines()))
@@ -26,6 +27,7 @@ class AcceptanceClosureTests(unittest.TestCase):
                     self.assertTrue(r[key])
                 self.assertLessEqual(set(r['evidence_refs']), evidence)
                 self.assertEqual(r['overall_acceptance'], 'NOT_DECLARED')
+                self.assertEqual(r['approval_timing'], 'initial_usage_once_then_reuse')
                 page = (ROOT / f'docs/acceptance/{r["group"]}.md').read_text(encoding='utf-8')
                 self.assertIn(f'<a id="{r["id"].lower()}"></a>', page)
                 self.assertIn(r['positive_acceptance'], page)
@@ -56,6 +58,16 @@ class AcceptanceClosureTests(unittest.TestCase):
             self.assertRegex(i['body_sha256'], r'^[0-9a-f]{64}$')
             self.assertTrue(i['remaining_obligation'])
             self.assertTrue(i['requirement_ids'])
+
+    def test_latest_owner_policy_does_not_reintroduce_repeat_approval_or_prebuilding(self):
+        policy = json.loads((ROOT / 'docs/operating-policy.json').read_text(encoding='utf-8'))
+        self.assertFalse(policy['usage_approval_policy']['subsequent_human_reapproval_required'])
+        self.assertEqual(policy['usage_approval_policy']['update_notification_sender'], 'topmost_supervising_agent')
+        self.assertTrue(policy['development_policy']['build_when_concrete_need_emerges'])
+        self.assertFalse(policy['development_policy']['upfront_exhaustive_capability_build'])
+        self.assertEqual(policy['batch_transcription_model']['preferred_model'], 'large-v3')
+        self.assertFalse(policy['batch_transcription_model']['turbo_fallback'])
+        self.assertFalse(policy['initial_grant_created_by_this_projection'])
 
     def test_closing_markdown_links_resolve_locally(self):
         files = list((ROOT / 'docs/acceptance').glob('*.md')) + [ROOT / 'docs/CLOSING-2026-09-06.md']

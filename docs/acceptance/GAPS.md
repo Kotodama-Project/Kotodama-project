@@ -218,6 +218,30 @@ body/residency/cache/log、trusted deploy runnerとdurable receipt、registry/so
 
 分類: SUPPLEMENT_OR_OPERATIONAL_OBLIGATION。対応: R03, R05, R37, R38, R54, R67。
 
-OS、Discord Voice・text、Telegram、Codex、Claudeは同じstable Task ID・revision・ownerを解決し、別のTask正本を作らない。再送・切断・再接続・訂正・duplicate writerを同じ記録で扱う。この作業は未受入を保持してクローズし、heartbeat等で自動再開せず、次の直接指示後に現在revision/ownerを解決する。サービス削除・データ削除・他owner閉鎖を含まない。 個人の制作・開発Taskを管理することと、Company本番業務へ組み込むことは別です。個人Taskの記録・owner対応・sourceを、本番へ自動採用・同期・接続・公開しません。共通の管理契約を再利用しても業務データの移行は別scopeの判断です。
+OS、Discord Voice・text、Telegram、Codex、Claudeは同じstable Task ID・revision・ownerを解決し、別のTask正本を作らない。再送・切断・再接続・訂正・duplicate writerを同じ記録で扱う。現在の作業を区切った後、全体と現在revision/ownerを照合し、必要な作業を継続する。サービス削除・データ削除・他owner閉鎖を含まない。 個人の制作・開発Taskを管理することと、Company本番業務へ組み込むことは別です。個人Taskの記録・owner対応・sourceを、本番へ自動採用・同期・接続・公開しません。共通の管理契約を再利用しても業務データの移行は別scopeの判断です。
 
 出典: 直接ユーザー訂正 2026-09-06。READMEの行はレビュー固定点 `f168a2ebd52d0eb62fbd491c403effdefcb9aa97` に対応。
+
+## D11 ASR精度・文脈訂正・旧n8nとの対応
+
+分類: DIRECT_USER_REQUIREMENT。対応: R04, R08, R11, R61。
+
+large-v3を基本とし、話者/時刻/rawを保全して文脈訂正と不明区間を分ける。音響指標や一録音の部分比較で全体精度や幻覚ゼロを宣言しない。
+
+出典: 直接ユーザー指示と実録音への補足 2026-09-06。
+
+## D12 初回承認・上位存在・必要時実装
+
+分類: DIRECT_USER_POLICY。対応: R01, R32, R37, R64, R67。
+
+承認は利用開始時に一度得て再利用する。更新通知は最上位エージェントから行う。日常業務で人が知るべき情報とビジョンを扱い、具体的な必要が生じてから能力を作る。
+
+出典: 後続の直接ユーザー指示 2026-09-06。
+
+## D13 セッション自動作成を含む全体照合
+
+分類: RECONCILIATION_TARGET_NOT_COMPLETION_CLAIM。対応: R03, R05, R37, R54, R67。
+
+現在の作業後、セッション自動作成を含む既存実装・未完・依存・ownerを確認する。便利そうな基盤を先に増やさず、必要な一手を選んで継続する。
+
+出典: 後続の直接ユーザー指示 2026-09-06。

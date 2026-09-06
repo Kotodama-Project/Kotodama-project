@@ -1,10 +1,10 @@
 {
   "kind": "kotodama.acceptance.closure.projection",
-  "version": 2,
+  "version": 3,
   "observed_at": "2026-09-06T02:43:57.707015+00:00",
   "scope": "R01-R68 semantic review plus full README and all 25 open Issue bodies; not complete implementation/provider audit",
-  "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-  "closure_meaning": "この実行を閉じる。全要件受入、全Project閉鎖、public adoptionを意味しない。",
+  "work_state": "ACTIVE_NEED_DRIVEN",
+  "closure_meaning": "Current implementation and reconciliation form a checkpoint; latest direct user instruction authorizes whole-system understanding and need-driven continuation afterward.",
   "source": {
     "matrix_origin": {
       "repository": "Kotodama-Project/Kotodama-project",
@@ -18,23 +18,33 @@
     "readme_review_lines": 1163,
     "closing_readme": {
       "path": "README.md",
-      "sha256": "28ed63ad94d5277b870d24c64c63f23287e21a5518f8d8b30599c1e588830a79",
-      "lines": 1171,
+      "sha256": "0b368d737993c45418401f2695f58fc7254560171cee12f6cac53f91b742027a",
+      "lines": 1178,
       "hash_normalization": "UTF-8 with LF, same as committed Git text",
-      "coverage": "Full fixed-point README review plus the current closing/Qwen/Telegram/manual-Task additions and current-state corrections; personal Task management versus Company production boundary",
+      "coverage": "Full fixed-point README review plus current Voice repair, initial-approval/topmost-agent/need-driven policy and continuation updates; personal Task/Company boundary retained.",
       "additional_requirement_ids": [
+        "R01",
         "R03",
+        "R04",
         "R05",
+        "R08",
+        "R11",
+        "R12",
+        "R32",
         "R37",
         "R40",
         "R41",
         "R47",
         "R50",
         "R54",
+        "R57",
+        "R61",
+        "R64",
         "R67"
       ],
       "historical_source_urls_retained": true
-    }
+    },
+    "latest_operating_policy": "docs/operating-policy.json"
   },
   "requirements": [
     {
@@ -59,8 +69,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R02",
@@ -83,8 +94,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R03",
@@ -105,8 +117,9 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R04",
@@ -115,7 +128,7 @@
       "readme_end": 271,
       "acceptance": "Discord Voiceの人の発話へ継続して応答する",
       "stage": "実聴未確認",
-      "evidence_summary": "修正前は利用者失敗。修復後native合成2回の開始/返答/停止を確認。人間の3往復は未確認",
+      "evidence_summary": "修正前は利用者失敗。修復後native合成2回の開始/返答/停止を確認。人間の3往復は未確認 large-v3を基本として配備。個別話者・語ごとの時刻・raw原文を保持し、mixedの誤帰属と無条件置換を拒否。実1人録音の限定診断、local Qwen候補検証と聞き直し表示を確認。",
       "next_action": "同じVCで自然な3往復を確認",
       "whole_company_agi_complete": false,
       "source_url": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/README.md#L254-L275",
@@ -126,12 +139,14 @@
       "negative_and_recovery": "割込み、無音、STOP、切断で発話・受信・バックプレッシャーを安全に止め復帰できる。",
       "evidence_refs": [
         "E06",
-        "E07"
+        "E07",
+        "E14"
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R05",
@@ -154,8 +169,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Task契約の既存ownerと各adapter担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R06",
@@ -176,8 +192,9 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R07",
@@ -198,8 +215,9 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R08",
@@ -208,7 +226,7 @@
       "readme_end": 269,
       "acceptance": "参加者別の音声・発話・時刻・出典を対応させる",
       "stage": "部分実装",
-      "evidence_summary": "保存済み実1人4区間から話者・時刻・出典付きJSON/Markdown/VTTを生成し原bytes snapshotを保持",
+      "evidence_summary": "保存済み実1人4区間から話者・時刻・出典付きJSON/Markdown/VTTを生成し原bytes snapshotを保持 large-v3を基本として配備。個別話者・語ごとの時刻・raw原文を保持し、mixedの誤帰属と無条件置換を拒否。実1人録音の限定診断、local Qwen候補検証と聞き直し表示を確認。",
       "next_action": "複数人の実録でattributionを確認",
       "whole_company_agi_complete": false,
       "source_url": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/README.md#L259-L273",
@@ -219,12 +237,14 @@
       "negative_and_recovery": "ASRや声色を本人認証にせず、mixed音声を個別trackの正本へ昇格しない。",
       "evidence_refs": [
         "E06",
-        "E07"
+        "E07",
+        "E14"
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R09",
@@ -248,8 +268,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R10",
@@ -273,8 +294,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R11",
@@ -283,7 +305,7 @@
       "readme_end": 296,
       "acceptance": "話者・時刻付きtranscriptをprivate channelへ返す",
       "stage": "部分実装",
-      "evidence_summary": "保存済み記録から要点・全文の非公開投稿と本文readbackを確認。添付本体はCDN403で未確認。",
+      "evidence_summary": "保存済み記録から要点・全文の非公開投稿と本文readbackを確認。添付本体はCDN403で未確認。 large-v3を基本として配備。個別話者・語ごとの時刻・raw原文を保持し、mixedの誤帰属と無条件置換を拒否。実1人録音の限定診断、local Qwen候補検証と聞き直し表示を確認。",
       "next_action": "新規録音の全自動返却、多人readback、正常な添付取得を別々に確認する。",
       "whole_company_agi_complete": false,
       "source_url": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/README.md#L287-L300",
@@ -294,12 +316,14 @@
       "negative_and_recovery": "投稿再試行の重複、別audience、添付取得失敗を検知し、未取得をhash一致としない。",
       "evidence_refs": [
         "E06",
-        "E07"
+        "E07",
+        "E14"
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R12",
@@ -308,7 +332,7 @@
       "readme_end": 327,
       "acceptance": "発話根拠からIntent/ToDo/Goal/Verified Handoffへ進む",
       "stage": "部分実装",
-      "evidence_summary": "source/handoff/pipeline契約と非公開実装",
+      "evidence_summary": "source/handoff/pipeline契約と非公開実装 large-v3を基本として配備。個別話者・語ごとの時刻・raw原文を保持し、mixedの誤帰属と無条件置換を拒否。実1人録音の限定診断、local Qwen候補検証と聞き直し表示を確認。",
       "next_action": "実発話から確認された一Taskへ",
       "whole_company_agi_complete": false,
       "source_url": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/README.md#L302-L331",
@@ -319,12 +343,14 @@
       "negative_and_recovery": "未確認ASR、bot記録、撤回済み発話だけからHuman Decisionや実行権限を作らない。",
       "evidence_refs": [
         "E06",
-        "E07"
+        "E07",
+        "E14"
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R13",
@@ -348,8 +374,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R14",
@@ -372,8 +399,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R15",
@@ -396,8 +424,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R16",
@@ -420,8 +449,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Task契約の既存ownerと各adapter担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R17",
@@ -444,8 +474,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R18",
@@ -468,8 +499,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Task契約の既存ownerと各adapter担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R19",
@@ -490,8 +522,9 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R20",
@@ -512,8 +545,9 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Task契約の既存ownerと各adapter担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R21",
@@ -536,8 +570,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R22",
@@ -560,8 +595,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R23",
@@ -584,8 +620,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R24",
@@ -608,8 +645,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R25",
@@ -632,8 +670,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R26",
@@ -656,8 +695,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R27",
@@ -680,8 +720,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R28",
@@ -704,8 +745,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R29",
@@ -728,8 +770,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R30",
@@ -752,8 +795,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R31",
@@ -777,8 +821,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R32",
@@ -799,8 +844,9 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R33",
@@ -823,8 +869,9 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R34",
@@ -845,8 +892,9 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
-      "issue_refs": []
+      "work_state": "ACTIVE_NEED_DRIVEN",
+      "issue_refs": [],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R35",
@@ -871,10 +919,11 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R36",
@@ -899,11 +948,12 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         31,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R37",
@@ -926,12 +976,13 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         20,
         24,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R38",
@@ -954,10 +1005,11 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R39",
@@ -980,13 +1032,14 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         24,
         28,
         30,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R40",
@@ -1011,11 +1064,12 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         11,
         13
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R41",
@@ -1039,11 +1093,12 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         31,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R42",
@@ -1068,12 +1123,13 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Task契約の既存ownerと各adapter担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         19,
         30,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R43",
@@ -1094,7 +1150,7 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Cloudflare担当 / GitHub #2〜#16",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         3,
@@ -1103,7 +1159,8 @@
         6,
         9,
         10
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R44",
@@ -1126,12 +1183,13 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         4,
         6,
         20
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R45",
@@ -1155,11 +1213,12 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         11
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R46",
@@ -1183,11 +1242,12 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         10
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R47",
@@ -1212,13 +1272,14 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         11,
         14,
         16
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R48",
@@ -1243,7 +1304,7 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         11,
         12,
@@ -1252,7 +1313,8 @@
         15,
         25,
         28
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R49",
@@ -1273,7 +1335,7 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Cloudflare担当 / GitHub #2〜#16",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         3,
@@ -1281,7 +1343,8 @@
         8,
         9,
         10
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R50",
@@ -1306,13 +1369,14 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         11,
         14,
         16
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R51",
@@ -1333,11 +1397,12 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         11,
         16
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R52",
@@ -1362,11 +1427,12 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         11,
         16
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R53",
@@ -1391,13 +1457,14 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Proxmox / OS運用担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         5,
         6,
         16
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R54",
@@ -1420,12 +1487,13 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Task契約の既存ownerと各adapter担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         20,
         24,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R55",
@@ -1446,13 +1514,14 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         24,
         25,
         26,
         28
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R56",
@@ -1476,13 +1545,14 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         6,
         9,
         24
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R57",
@@ -1491,7 +1561,7 @@
       "readme_end": 715,
       "acceptance": "音声/文字起こし/derivedの保持期限と削除を実行する",
       "stage": "部分実装",
-      "evidence_summary": "今回の運用方針: 原音30日・文字起こし/要約/出典期限なし。新raw-only timer初回成功、実削除0、旧timer停止",
+      "evidence_summary": "今回の運用方針: 原音30日・文字起こし/要約/出典期限なし。新raw-only timer初回成功、実削除0、旧timer停止 large-v3を基本として配備。個別話者・語ごとの時刻・raw原文を保持し、mixedの誤帰属と無条件置換を拒否。実1人録音の限定診断、local Qwen候補検証と聞き直し表示を確認。",
       "next_action": "30日後の新session対象と実運用を確認。過去原音migrationは別作業",
       "whole_company_agi_complete": false,
       "source_url": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/README.md#L708-L719",
@@ -1502,16 +1572,18 @@
       "negative_and_recovery": "過去原音の勝手なmigration、derived誤削除、誤clock、再実行で対象外データを壊さない。",
       "evidence_refs": [
         "E06",
-        "E07"
+        "E07",
+        "E14"
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         9,
         24
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R58",
@@ -1534,7 +1606,7 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "情報アクセス・Context担当（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         3,
@@ -1543,7 +1615,8 @@
         9,
         10,
         19
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R59",
@@ -1568,12 +1641,13 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         19,
         24,
         25
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R60",
@@ -1598,11 +1672,12 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         24,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R61",
@@ -1611,7 +1686,7 @@
       "readme_end": 800,
       "acceptance": "distinct real peopleを含むVoice受入を通す",
       "stage": "実聴未確認",
-      "evidence_summary": "修正前のユーザー不通報告を保持。修復後合成2回は確認、多人数自然会話の受入は未確認",
+      "evidence_summary": "修正前のユーザー不通報告を保持。修復後合成2回は確認、多人数自然会話の受入は未確認 large-v3を基本として配備。個別話者・語ごとの時刻・raw原文を保持し、mixedの誤帰属と無条件置換を拒否。実1人録音の限定診断、local Qwen候補検証と聞き直し表示を確認。",
       "next_action": "自然会話と人間の確認",
       "whole_company_agi_complete": false,
       "source_url": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/README.md#L779-L804",
@@ -1622,16 +1697,18 @@
       "negative_and_recovery": "一人の声色変更、合成/bot試験、過去成功を複数実人の受入に代用しない。",
       "evidence_refs": [
         "E06",
-        "E07"
+        "E07",
+        "E14"
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Voice実装・運用の担当（認可されたprivate Task resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         24,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R62",
@@ -1656,7 +1733,7 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Cloudflare担当 / GitHub #2〜#16",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         19,
         20,
@@ -1664,7 +1741,8 @@
         25,
         30,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R63",
@@ -1689,14 +1767,15 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "Cloudflare担当 / GitHub #2〜#16",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         8,
         19,
         24,
         25
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R64",
@@ -1717,11 +1796,12 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "成果受入の既存owner（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         23
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R65",
@@ -1742,11 +1822,12 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "成果受入の既存owner（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         2,
         7
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R66",
@@ -1767,13 +1848,14 @@
       "evidence_refs": [],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "成果受入の既存owner（private resolverで解決）",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         24,
         30,
         31,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R67",
@@ -1798,12 +1880,13 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         19,
         20,
         30
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     },
     {
       "id": "R68",
@@ -1828,7 +1911,7 @@
       ],
       "evidence_limit": "参照先が示す限定検証・候補の範囲。項目全体の受入、採用、Public GOとは別。",
       "owner_route": "公開統合の担当 / GitHub #24 #30",
-      "work_state": "CLOSED_PENDING_EXPLICIT_REOPEN",
+      "work_state": "ACTIVE_NEED_DRIVEN",
       "issue_refs": [
         23,
         24,
@@ -1838,7 +1921,8 @@
         30,
         31,
         32
-      ]
+      ],
+      "approval_timing": "initial_usage_once_then_reuse"
     }
   ],
   "stage_counts": {
@@ -1855,5 +1939,8 @@
   },
   "all_requirements_accepted": false,
   "automatic_resume": false,
-  "task_record_updates": "NOT_PERFORMED_DURING_CLOSURE_FROZEN_PERSONAL_CANDIDATE"
+  "task_record_updates": "NOT_PERFORMED_DURING_CLOSURE_FROZEN_PERSONAL_CANDIDATE",
+  "continuation": "Authorized continuation in the current goal; this document creates no scheduler or new session.",
+  "approval_policy_ref": "docs/OPERATING-POLICY-2026-09-06.md",
+  "updated_at": "2026-09-06T07:45:38.287132+00:00"
 }

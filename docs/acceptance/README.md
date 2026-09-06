@@ -1,12 +1,13 @@
 # 68項目の受入チェックリスト
 
-2026-09-06。**今回の実行はクロージングし、明示的な手動再開まで新規実装を進めない。** 製品全体の完了、各Taskの全受入、mainへの統合、Public Betaの開始を宣言する資料ではない。
+2026-09-06。**現在の作業を区切った後、全体を照合して必要な仕事を継続する。** 製品全体の完了、各Taskの全受入、mainへの統合、Public Betaの開始を宣言する資料ではない。
 
 既存のR01–R68を維持して全件読解した。68はREADMEを重複排除してまとめた受入群で、細かな条件の総数や完成率ではない。各詳細に、正常系、拒否・復旧、根拠、未完、既存ownerへの再開経路を置く。
 
 「ローカル検証済」「評価で実測済」は、その限定範囲の証拠を表す。全体受入のチェックは未宣言のまま残す。過去receiptには時刻とsourceを保ち、現在稼働の証明に読み替えない。
 
-- [READMEとの対応・クロージング](../CLOSING-2026-09-06.md)
+- [最新の運営方針](../OPERATING-POLICY-2026-09-06.md)
+- [READMEとの対応・段階整理](../CLOSING-2026-09-06.md)
 - [要件漏れと追加条件](GAPS.md)
 - [根拠と読取範囲](EVIDENCE.md)
 - [全Issue対応](ISSUES.md)
@@ -100,4 +101,4 @@
 
 ## 再開するagentへ
 
-最初にREADME → この索引 → 対象詳細 → Evidence/Issueを読む。Taskの状態は既存record/eventsへ解決する。ここにあるownerは経路であって、現在のleaseを保証しない。手動再開時だけGitHub head/base/checks、実Task revision/owner、必要なruntimeと権限を確認し、対象一件のWork Orderへ固定する。古いPID、期限切れgrant、過去のレビュー承認を再利用しない。
+最初にREADME → この索引 → 対象詳細 → Evidence/Issueを読む。Taskの状態は既存record/eventsへ解決する。ここにあるownerは経路であって、現在のleaseを保証しない。次の作業を選ぶ際にGitHub head/base/checks、実Task revision/owner、必要なruntimeと権限を確認し、対象一件のWork Orderへ固定する。古いPID、期限切れgrant、過去のレビュー承認を再利用しない。

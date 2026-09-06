@@ -1,0 +1,47 @@
+{
+  "kind": "kotodama_operating_policy_projection",
+  "policy_version": "1.3.0",
+  "source": "Direct owner instructions and clarifications on 2026-09-06; existing private Human Intent SSOT",
+  "usage_approval_policy": {
+    "policy_id": "USAGE-APPROVAL-ONCE-20260906",
+    "initial_human_approval": "once_at_start_of_use",
+    "subsequent_human_reapproval_required": false,
+    "autonomous_operation_within_initial_grant": true,
+    "updates_require_human_reapproval": false,
+    "update_notification_sender": "topmost_supervising_agent",
+    "update_notification_mode": "inform_not_request_approval",
+    "approval_expiry_by_default": false,
+    "reuse_existing_valid_approval": true,
+    "automatic_scope_and_revocation_checks": true,
+    "overrides_legacy_per_action_reapproval_rules": true,
+    "source_evidence_ref": "EVID-USAGE-APPROVAL-20260906",
+    "statement_ja": "Kotodamaは利用開始時に人の承認を一度得る。以後は承認を繰り返し求めず自律的に進める。日常業務・ビジョンに関して人が知るべき更新は、一番上の上位存在エージェントから知らせる。"
+  },
+  "topmost_agent_role": {
+    "position": "topmost_agent_without_forcing_an_existing_role_mapping",
+    "responsibilities_ja": [
+      "日常業務で組織の人が本当に知るべき情報を判断して伝える",
+      "ビジョンを保持し、組織へ伝える",
+      "社長的・それを超える監督的・エバンジェリスト的な側面を持つ"
+    ],
+    "notification_selection": "relevant_information_for_daily_work_and_vision",
+    "source_evidence_ref": "EVID-TOPMOST-ROLE-20260906"
+  },
+  "development_policy": {
+    "build_when_concrete_need_emerges": true,
+    "upfront_exhaustive_capability_build": false,
+    "after_current_work": "understand_whole_system_then_continue_necessary_work",
+    "include_in_reconciliation": [
+      "automatic_session_creation",
+      "existing_implementations_and_unfinished_acceptance"
+    ],
+    "source_evidence_ref": "EVID-TOPMOST-ROLE-20260906"
+  },
+  "batch_transcription_model": {
+    "preferred_model": "large-v3",
+    "turbo_fallback": false,
+    "source_evidence_ref": "EVID-ASR-MODEL-20260906"
+  },
+  "runtime_adoption": "partial_see_acceptance",
+  "initial_grant_created_by_this_projection": false
+}

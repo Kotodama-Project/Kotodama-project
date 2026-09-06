@@ -124,3 +124,10 @@ local HTTPで主体・分類・read/review・期限・取消を検査。全社AC
 runtime code固定点 `f168a2ebd52d0eb62fbd491c403effdefcb9aa97` でPython 874 tests PASS / 4 skips。Node 52 tests PASSには、別途取得したmanifest-bound Document sourceによる2件を含む。通常のsource未取得runではその2件はskipになる。default Blueprint修正のNode検証は、既存Gadget instanceの実workerd拒否の証明ではない。PR34の654 testsとPOSIX FIFOは別headの証拠。最終文書変更の検証はPRのexact-head CIとprivate closing receiptを読む。
 
 配布前レビュー後の追加修正は別のlocal/CI検証へ束縛する。旧実環境receiptを新seal/toolchain/proxyの配備証明へ流用しない。最終候補のCIと公開readbackはGitHub PRへ記録し、個人Task記録の状態更新には結び付けない。
+
+<a id="e14"></a>
+## E14 large-v3・raw保持・文脈訂正
+
+large-v3を基本として配備し、個別話者・語時刻・raw原文を保全した。local Qwenの候補検証と聞き直し表示を設け、不確かな区間を要点に採用しない。新録音の全自動返却・多人自然会話・認識完全性は未受入。
+
+[修正内容と制限](../VOICE-ACCURACY-2026-09-06.md) / [公開用の観測要約](voice-repair-observation.json)。公開要約 SHA-256: `abb5ea49ebf1ad9364cdfb62c42cfc7e6c3e4141b458c1a0082acfd0172de43a`。原音・発話本文・本人ID・private receiptのlocatorとdigestは公開しない。これは公開ファイルだけによる実環境の独立再現を意味しない。
