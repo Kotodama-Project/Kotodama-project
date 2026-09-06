@@ -164,14 +164,15 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
       const source = admitted(job.requester_ref);
       const p = source.projection;
       const input = prepareInput(p);
-      result = await invoke({ ...runner, input, signal: controller.signal,
+      const invocationRunner = Object.freeze({ ...runner });
+      result = await invoke({ ...invocationRunner, input, signal: controller.signal,
         onSessionStarted({ thread_id }) {
           admitted(job.requester_ref);
           if (controller.signal.aborted || sealedAfterShutdown || active?.request_id !== job.request_id
             || jobs.find((item) => item.request_id === job.request_id)?.state !== "running"
             || job.session || !isCodexThreadId(thread_id)
-            || (runner.model !== undefined && (typeof runner.model !== "string" || !/^[a-z0-9][a-z0-9.-]{0,79}$/.test(runner.model)))) throw new Error("session_start_denied");
-          const session = { thread_id, kind: "ephemeral_codex", started_at: new Date().toISOString(), model_requested: runner.model ?? null };
+            || (invocationRunner.model !== undefined && (typeof invocationRunner.model !== "string" || !/^[a-z0-9][a-z0-9.-]{0,79}$/.test(invocationRunner.model)))) throw new Error("session_start_denied");
+          const session = { thread_id, kind: "ephemeral_codex", started_at: new Date().toISOString(), model_requested: invocationRunner.model ?? null };
           const next = jobs.map((item) => item.request_id === job.request_id ? { ...item, session } : item);
           saveJobs(root, next); jobs = next; job.session = session;
         },

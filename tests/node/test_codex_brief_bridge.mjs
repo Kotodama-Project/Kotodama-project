@@ -13,6 +13,72 @@ import { syntheticSeed, syntheticCatalog } from "../../runtime/local-review-gate
 import { validateAdmission, validateSource, validateQueued, validateResult, validateRevoked, validateSessionResult, validateBridgeOrigin } from "../../runtime/cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/protocol.mjs";
 
 const brief = { objective: "要件を整理する", deliverable: "要件案", constraints: ["公開しない"], acceptance_criteria: ["同じ画面で読み戻せる"], open_questions: [] };
+test("session provenance retains the model passed to invoke when caller configuration changes", async () => {
+  const { root, config } = fixture();
+  config.runner.model = "gpt-6-astra";
+  let bridge;
+  try {
+    bridge = await startBriefBridge(config, { invoke: async ({ model, onSessionStarted }) => {
+      config.runner.model = "gpt-5.6-luna";
+      const thread_id = randomUUID();
+      onSessionStarted({ thread_id });
+      const stored = JSON.parse(readFileSync(join(config.stateRoot, "invocations.json")));
+      assert.equal(stored.jobs[0].session.model_requested, model);
+      return { brief, thread_id };
+    } });
+    const request_id = randomUUID();
+    await call(bridge, config, "/v1/briefs", { body: { request_id, source_revision: 1, binding_sha256: grantDigest(config.grant) } });
+    const result = await (await call(bridge, config, `/v1/briefs/${request_id}/session`)).json();
+    assert.equal(result.state, "ready");
+    assert.equal(result.session.model_requested, "gpt-6-astra");
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a conflicting legacy backup refuses migration and preserves both originals", async () => {
+  const { root, config } = fixture();
+  const path = join(config.stateRoot, "invocations.json");
+  const backup = join(config.stateRoot, "invocations.v1.backup.json");
+  const legacy = JSON.stringify({ schema: "kotodama/brief-invocations/v1", jobs: [] });
+  writeFileSync(path, legacy);
+  writeFileSync(backup, "existing backup");
+  try {
+    await assert.rejects(startBriefBridge(config), /legacy_job_backup_conflict/);
+    assert.equal(readFileSync(path, "utf8"), legacy);
+    assert.equal(readFileSync(backup, "utf8"), "existing backup");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("mismatched completion is failed and invalid persisted session metadata refuses restart", async () => {
+  const { root, config } = fixture();
+  let bridge;
+  try {
+    bridge = await startBriefBridge(config, { invoke: async ({ onSessionStarted }) => {
+      onSessionStarted({ thread_id: randomUUID() });
+      return { brief, thread_id: randomUUID() };
+    } });
+    const request_id = randomUUID();
+    await call(bridge, config, "/v1/briefs", { body: { request_id, source_revision: 1, binding_sha256: grantDigest(config.grant) } });
+    const result = await (await call(bridge, config, `/v1/briefs/${request_id}/session`)).json();
+    assert.equal(result.state, "failed");
+    await bridge.close(); bridge = null;
+    const path = join(config.stateRoot, "invocations.json");
+    const valid = JSON.parse(readFileSync(path));
+    for (const mode of ["invalid-id", "invalid-time", "result-mismatch"]) {
+      const store = structuredClone(valid);
+      if (mode === "invalid-id") store.jobs[0].session.thread_id = "not-a-session";
+      if (mode === "invalid-time") store.jobs[0].session.started_at = "not-a-date";
+      if (mode === "result-mismatch") {
+        store.jobs[0].state = "ready";
+        store.jobs[0].result = { brief, thread_id: randomUUID() };
+      }
+      const bytes = JSON.stringify(store);
+      writeFileSync(path, bytes);
+      await assert.rejects(startBriefBridge({ ...config, seeds: undefined }), /job_session/);
+      assert.equal(readFileSync(path, "utf8"), bytes);
+    }
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
 test('an observed session survives failed execution and restart without another invocation',async()=>{
  const {root,config}=fixture();const thread_id=randomUUID();config.runner.model='gpt-6-astra';let bridge,calls=0;
  try {
