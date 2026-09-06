@@ -20,6 +20,11 @@ and public access have different owners; do not create another status ledger her
 
 ## Work and evidence
 
+- Read [intent, responsibility and dynamic context](docs/CONTEXT-AND-AGENT-RESPONSIBILITY.md)
+  for purpose/position continuity, existing role ownership and independent review.
+  Its pending initiatives and generated context do not establish runtime activation
+  or override fixed authority rules. Review proposals remain separate from adopted policy.
+
 - Tie each change to one README outcome and one observable acceptance result.
 - Keep source evidence, intent candidates, decisions, work orders, changes,
   verification, promotion, and Current Truth distinct.

@@ -538,3 +538,7 @@ Promotion, Current Truth, and Final Human GO remain outside scope.
 - [ ] Candidate-bound Final Human GO
 
 この一覧は進捗を透明にするためのものです。チェック項目は、対応する検証 receipt が揃うまで完了扱いにしません。
+
+## Context / agent policy projection — 2026-09-06
+
+[意図・現在位置・担当・動的context](docs/CONTEXT-AND-AGENT-RESPONSIBILITY.md)の方針と関連9件のpending initiativeを公開projectionへ反映しました。[Proレビュー要点](docs/CONTEXT-ARCHITECTURE-REVIEW-2026-09-06.md)は提案であり、runtime採用ではありません。自動担当割当、context表示・注入、継続的DB更新の実装受入は未完です。

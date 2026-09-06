@@ -194,6 +194,14 @@ explicit and is never silently approved.
 The current ledger can carry opaque owner, assignee, knowledge-scope,
 invocation/provenance, and evidence refs without granting those capabilities.
 
+The [existing requirements bridge](../runtime/codex-task-bridge/README.md#started-session-evidence)
+now records an observed ephemeral CLI start in its existing invocation journal,
+including failure/interruption and grant-bound readback without duplicate
+execution. That bounded implementation does not activate the general Task-bound
+Session contract above; a missing Task binding remains explicit. This distinction
+keeps the next implementation driven by an actual need rather than a new parallel
+registry.
+
 Voice Requirements / GrillU is a case-dependent, channel-neutral facilitator
 projection. Natural continuous voice conversation may form requirements; it is
 not a rigid UI or mandatory one-question ritual. A facilitator hook should ask

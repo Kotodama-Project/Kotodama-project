@@ -1,6 +1,6 @@
 {
   "kind": "kotodama_operating_policy_projection",
-  "policy_version": "1.3.0",
+  "policy_version": "1.6.0",
   "source": "Direct owner instructions and clarifications on 2026-09-06; existing private Human Intent SSOT",
   "usage_approval_policy": {
     "policy_id": "USAGE-APPROVAL-ONCE-20260906",
@@ -43,5 +43,794 @@
     "source_evidence_ref": "EVID-ASR-MODEL-20260906"
   },
   "runtime_adoption": "partial_see_acceptance",
-  "initial_grant_created_by_this_projection": false
+  "initial_grant_created_by_this_projection": false,
+  "intent_context_policy": {
+    "policy_id": "INTENT-CONTEXT-CONTINUITY-20260906",
+    "scope": "existing_eight_layer_structure_without_reopening_constitution_or_company_vision",
+    "intent_priority": "preserve_requested_outcome_and_meaning_over_local_tasks_or_proxy_metrics",
+    "position_required": [
+      "originating_intent_ref_and_revision",
+      "ancestor_purpose_path",
+      "current_scope_and_layer",
+      "trunk_branch_or_leaf_role",
+      "parent_and_relevant_dependency_refs",
+      "intended_contribution_to_kgi",
+      "current_progress_evidence_and_next_step",
+      "unknown_or_missing_links"
+    ],
+    "continuity_triggers": [
+      "session_start",
+      "session_resume",
+      "compaction",
+      "delegation",
+      "handoff",
+      "work_cycle_completion"
+    ],
+    "retained_context": [
+      "original_intent_and_correction_chain",
+      "desired_outcome_and_why",
+      "constraints_and_stop_conditions",
+      "scope_and_authority",
+      "decisions_and_rejected_alternatives_with_reasons",
+      "source_revision_span_and_access_restrictions",
+      "current_work_position_dependencies_and_owner",
+      "progress_evidence_unresolved_questions_and_next_action"
+    ],
+    "retrieval_policy": {
+      "required_ancestor_context_cannot_be_displaced_by_similarity_only": true,
+      "progressive_index_then_pages_then_original_source": true,
+      "no_silent_loss_of_constraints_on_compression": true,
+      "explicit_unknown_when_source_or_link_missing": true,
+      "current_access_and_revocation_checks": true
+    },
+    "metric_guard": {
+      "kpi_is_proxy_not_goal": true,
+      "require_kpi_to_kgi_causal_hypothesis": true,
+      "evaluate_requested_outcome_and_side_effects": true,
+      "kpi_improvement_alone_proves_success": false,
+      "when_proxy_improves_but_outcome_does_not": "independent_review_then_reframe_experiment_or_stop_the_approach"
+    },
+    "knowledge_policy": {
+      "reuse_existing_authority_and_context_gateway": true,
+      "source_records_and_derived_pages_indexes_embeddings_are_distinct": true,
+      "preserve_source_revision_citation_acl_and_invalidation_lineage": true,
+      "page_index_vector_relation_and_database_views_rebuildable": true,
+      "encoder_and_retriever_adapters_exchangeable": true,
+      "embedding_is_not_a_lossless_source_archive": true,
+      "decode_semantics": "reconcile_prior_spec; distinguish source-backed retrieval/reconstruction from model decoding; do not assert embedding inversion",
+      "llm_wiki_loop": [
+        "read_authorized_primary_sources",
+        "extract_and_link_candidate_knowledge",
+        "update_affected_pages_index_and_database_projections",
+        "detect_conflicts_staleness_and_orphans",
+        "independent_audit",
+        "apply_within_existing_grant_and_record_evidence"
+      ],
+      "learning_sources": [
+        "BecomeOne current source with provenance",
+        "historical encoder and knowledge-format records",
+        "LLM Wiki primary concept and implementation sources"
+      ],
+      "automatic_db_updater_deployed_by_this_policy": false,
+      "existing_knowledge_direction": {
+        "transactional_core": "append_only_causal_ledger_target_architecture",
+        "curated_read_model": "Google_Cloud_Open_Knowledge_Format_OKF",
+        "search_and_embeddings": "optional_support_evaluated_against_original_source_and_context_recall",
+        "does_not_adopt_new_storage_or_model": true
+      }
+    },
+    "innovation_policy": {
+      "continuous_method_reconsideration": true,
+      "replace_when_demonstrably_better_for_original_intent": true,
+      "evaluate": [
+        "intent_retention",
+        "retrieval_and_citation_quality",
+        "outcome_contribution",
+        "latency_cost_and_operational_complexity",
+        "acl_revocation_and_recovery"
+      ],
+      "migration_requires": [
+        "comparison_evidence",
+        "bounded_trial",
+        "compatible_contract_or_explicit_migration",
+        "rollback_and_source_preservation"
+      ],
+      "no_upfront_exhaustive_build": true
+    },
+    "independent_audit": {
+      "required_every_session_and_logical_work_cycle": true,
+      "input_and_output_and_whole_context": true,
+      "reviewer_distinct_from_executor": true,
+      "fresh_source_and_revision_read_required": true,
+      "questions": [
+        "Does this work still serve the originating intent and KGI?",
+        "Where is this work in the overall dependency and purpose structure?",
+        "What necessary context or corrections were lost?",
+        "Are outputs supported by inputs and evidence?",
+        "Would another architecture or approach better serve the outcome?"
+      ],
+      "dispositions": [
+        "continue",
+        "revise",
+        "experiment",
+        "change_approach",
+        "stop"
+      ],
+      "findings_require_explicit_disposition_and_followup": true,
+      "missing_review_must_not_be_reported_as_pass": true,
+      "review_depth_scales_with_risk_without_skipping_context_check": true,
+      "does_not_require_repeated_human_approval": true,
+      "runtime_audit_scheduler_deployed_by_this_policy": false
+    },
+    "execution_list_ref": "initiatives:INIT-CONTEXT-POSITION,INIT-CONTEXT-HANDOFF,INIT-KNOWLEDGE-FORMAT,INIT-KNOWLEDGE-REFRESH,INIT-CONTEXT-AUDIT,INIT-METHOD-RENEWAL"
+  },
+  "agent_responsibility_policy": {
+    "policy_id": "AGENT-RESPONSIBILITY-20260906",
+    "assignment_state": "functional_responsibilities_assigned_runtime_bindings_pending",
+    "owners": [
+      {
+        "domain": "hypothesis_validation",
+        "role_ref": "AI-RESEARCH",
+        "deliverables": [
+          "hypothesis_and_causal_rationale",
+          "falsifiers_and_comparison_plan",
+          "experiment_results_including_negative_and_inconclusive",
+          "continue_change_or_stop_recommendation"
+        ],
+        "subagent_examples": [
+          "primary_source_scout",
+          "experiment_runner",
+          "counterexample_scout"
+        ]
+      },
+      {
+        "domain": "analysis",
+        "role_ref": "AI-ANALYST",
+        "deliverables": [
+          "data_quality_and_uncertainty_assessment",
+          "alternative_explanations",
+          "outcome_and_side_effect_analysis"
+        ],
+        "subagent_examples": [
+          "data_quality_checker",
+          "comparison_analyst",
+          "causal_alternative_analyst"
+        ]
+      },
+      {
+        "domain": "knowledge_database",
+        "role_ref": "AI-LIBRARIAN",
+        "deliverables": [
+          "source_to_page_index_embedding_lineage",
+          "freshness_conflict_and_revocation_status",
+          "context_retrieval_quality",
+          "bounded_refresh_and_recovery_plan"
+        ],
+        "subagent_examples": [
+          "source_ingestion_worker",
+          "page_and_link_maintainer",
+          "index_and_encoder_worker",
+          "retrieval_evaluator"
+        ]
+      },
+      {
+        "domain": "independent_audit",
+        "role_ref": "AI-AUDITOR",
+        "deliverables": [
+          "independent_input_output_context_review",
+          "approach_challenge",
+          "finding_disposition_readback"
+        ],
+        "subagent_examples": [
+          "intent_coverage_reviewer",
+          "evidence_and_architecture_reviewer"
+        ]
+      },
+      {
+        "domain": "cross_domain_coordination",
+        "role_ref": "AI-CHIEF",
+        "deliverables": [
+          "existing_owner_resolution",
+          "cross_domain_dependencies_and_priority",
+          "material_updates_to_topmost_agent"
+        ],
+        "subagent_examples": [
+          "bounded_dependency_resolver"
+        ]
+      }
+    ],
+    "owner_accountability": [
+      "preserve_originating_intent_position_and_required_context",
+      "select_the_smallest_useful_team",
+      "define_nonoverlapping_scope_and_acceptance",
+      "integrate_child_outputs_and_resolve_conflicts",
+      "verify_actual_outcomes_and_failure_cases",
+      "retain_lessons_and_reassess_team_shape",
+      "handoff_role_state_across_session_or_model_change"
+    ],
+    "delegation_policy": {
+      "children_are_optional_and_need_driven": true,
+      "parent_owns_integration_and_outcome": true,
+      "each_child_inherits_bounded_intent_context_and_grant": true,
+      "one_writer_per_mutable_surface": true,
+      "one_global_budget_depth_deadline_and_stop_policy": true,
+      "no_ambient_authority_expansion": true,
+      "reviewer_independent_of_executor_and_hypothesis_author": true,
+      "subagent_counts_are_not_success_metrics": true,
+      "no_permanent_agent_per_every_small_task": true
+    },
+    "team_optimization": {
+      "trigger": [
+        "concrete_capability_gap",
+        "repeated_failure",
+        "poor_outcome_quality",
+        "excessive_cost_latency_or_coordination",
+        "better_method_with_evidence"
+      ],
+      "choices": [
+        "continue_current_team",
+        "perform_locally",
+        "split_a_bounded_task",
+        "combine_overlapping_responsibilities",
+        "change_method",
+        "retire_an_unneeded_assignment"
+      ],
+      "evaluation": [
+        "requested_outcome_contribution",
+        "intent_and_constraint_retention",
+        "knowledge_quality_and_freshness",
+        "cost_latency_and_coordination_overhead",
+        "revocation_and_recovery_safety"
+      ],
+      "safeguards": [
+        "retain_source_and_role_handoff",
+        "compare_before_and_after",
+        "bounded_trial_and_rollback",
+        "do_not_dissolve_independent_audit"
+      ]
+    },
+    "role_activation_requires": [
+      "existing_owner_and_duplicate_work_check",
+      "actual_runtime_identity_and_model",
+      "source_scope_and_current_grant",
+      "work_order_and_resource_lease",
+      "input_output_contract_and_acceptance",
+      "budget_deadline_stop_and_handoff"
+    ],
+    "encoder_steward_relation": "existing_specialist_candidate_under_knowledge_responsibility; current eligibility and activation must be verified separately",
+    "topmost_agent_relation": "AI-CHIEF coordinates; it is not automatically identical to the topmost supervising agent",
+    "runtime_agents_started_by_this_policy": false,
+    "execution_list_ref": [
+      "INIT-AGENT-OWNERSHIP",
+      "INIT-CONTEXT-END-TO-END"
+    ]
+  },
+  "context_improvement_policy": {
+    "position_card": [
+      "whose_requested_outcome",
+      "why_this_work_now",
+      "contribution_to_parent_goal",
+      "constraints_to_preserve",
+      "current_unknowns_and_next_action"
+    ],
+    "context_budget": "short mandatory intent/constraints/position plus links to detailed sources; do not load all eight layers indiscriminately",
+    "intent_updates": "separate adopted directions, tentative proposals and AI inferences; preserve corrections and make contradictions visible",
+    "causal_hypothesis": "state why this KPI or task should advance the KGI; revise when real outcomes fail to improve",
+    "knowledge_uncertainty": [
+      "known_results",
+      "scope_and_limitations",
+      "failed_alternatives",
+      "contradictions",
+      "conditions_that_would_change_the_decision"
+    ],
+    "audit_effect": "findings must change or explicitly justify the next action, not merely add review records",
+    "first_experiment": "one actual authorized request carried to another fresh session with one changed condition; verify correction retention, abandonment of obsolete work, and useful final outcome",
+    "experiment_status": "pending_actual_request_owner_and_runtime_binding"
+  },
+  "dynamic_agent_context_policy": {
+    "policy_id": "DYNAMIC-AGENT-CONTEXT-20260906",
+    "intent": "Function-like explicit inputs produce a hierarchical, updatable agent context document that remains available during work.",
+    "document_form": "AGENTS.md-style generated contextual projection; exact filename/runtime integration remains open",
+    "composition_layers": [
+      "applicable_fixed_policy_references",
+      "upstream_intent_and_purpose_path",
+      "responsible_agent_role_and_scope",
+      "current_task_session_position",
+      "relevant_source_and_knowledge_references"
+    ],
+    "function_contract": {
+      "inputs": [
+        "original_intent_and_corrections_with_revisions",
+        "required_purpose_ancestors_and_dependencies",
+        "responsible_role_manifest_ref",
+        "current_task_session_owner_and_progress",
+        "current_source_and_knowledge_refs",
+        "access_scope_and_grant_refs",
+        "context_budget_and_required_fields",
+        "change_and_freshness_signals"
+      ],
+      "outputs": [
+        "compact_always_available_working_context",
+        "source_and_parent_references_for_expansion",
+        "context_revision_and_dependency_manifest",
+        "freshness_conflicts_and_missing_information",
+        "ready_or_needs_resolution_or_stale_or_denied_state"
+      ],
+      "input_coverage_and_semantic_constraints_checked": true,
+      "missing_required_context_not_silently_filled": true,
+      "function_is_contract_not_implemented_runtime": true
+    },
+    "always_available": {
+      "agent_side": "the compact required context is available/reinjected at session start, resume, compaction and work-boundary refresh",
+      "human_side": "a current-context view keeps purpose, responsibility, position, constraints, next action and freshness inspectable during work",
+      "required_fields": [
+        "originating_intent",
+        "current_position_and_why",
+        "responsible_owner",
+        "active_constraints_and_scope",
+        "next_action_and_unresolved",
+        "context_revision_and_freshness"
+      ],
+      "detailed_sources_progressively_loaded": true,
+      "not_all_history_or_all_layers_pasted_each_time": true,
+      "continuous_visibility_not_literal_permanent_model_memory": true
+    },
+    "refresh_policy": {
+      "triggers": [
+        "source_or_policy_revision_change",
+        "intent_correction_or_withdrawal",
+        "owner_role_or_task_state_change",
+        "dependency_or_grant_revocation",
+        "detected_contradiction",
+        "stale_or_expired_context_signal",
+        "session_or_work_boundary"
+      ],
+      "flow": [
+        "compare_current_dependencies_and_access",
+        "mark_affected_projection_stale",
+        "rebuild_only_affected_context_and_wiki_views",
+        "check_required_intent_and_constraint_retention",
+        "record_diff_source_bindings_and_review_disposition",
+        "replace_current_projection_after_checks"
+      ],
+      "old_looking_content_is_a_review_trigger_not_falsehood_proof": true,
+      "no_rebuild_when_inputs_and_evidence_unchanged": true,
+      "preserve_original_sources_and_prior_revisions": true,
+      "stale_restricted_content_not_reintroduced": true
+    },
+    "knowledge_wiki_integration": {
+      "owner_role_ref": "AI-LIBRARIAN",
+      "context_and_wiki_share_source_revision_and_invalidation_lineage": true,
+      "update_pages_indexes_and_context_from_same_authorized_sources": true,
+      "no_parallel_company_truth": true,
+      "projection_does_not_self_promote_to_policy_or_approval": true
+    },
+    "trust_boundary": {
+      "fixed_authority_rules_not_overwritten_by_generated_context": true,
+      "lower_layer_cannot_relax_parent_constraints_or_expand_grants": true,
+      "retrieved_content_is_evidence_not_executable_instruction": true,
+      "conflicts_require_explicit_resolution": true,
+      "actor_scoped_access_checked_before_context_delivery": true
+    },
+    "runtime_status": "policy_and_required_contract_only_not_deployed",
+    "initiative_ref": "INIT-DYNAMIC-AGENT-CONTEXT"
+  },
+  "agent_roles": [
+    {
+      "id": "AI-CHIEF",
+      "role": "Chief of Staff",
+      "capability_scope": [
+        "intent proposal",
+        "priority proposal",
+        "work routing"
+      ],
+      "cannot_do": [
+        "approve own proposal",
+        "change human intent",
+        "expand grants"
+      ]
+    },
+    {
+      "id": "AI-RESEARCH",
+      "role": "Researcher",
+      "capability_scope": [
+        "source collection",
+        "market research",
+        "hypothesis falsification",
+        "own falsifiable hypotheses and experiment design",
+        "bind hypothesis to originating intent and KGI",
+        "compare alternatives and retain failed or inconclusive experiments"
+      ],
+      "cannot_do": [
+        "invent evidence",
+        "contact customers outside the initial grant or required recipient consent",
+        "treat estimates as sales"
+      ]
+    },
+    {
+      "id": "AI-BUILDER",
+      "role": "Builder",
+      "capability_scope": [
+        "local code",
+        "documents",
+        "workflow candidates",
+        "preview artifacts"
+      ],
+      "cannot_do": [
+        "publish outside the initial grant",
+        "production write outside the initial grant",
+        "skip the required policy/evidence chain or exceed the initial grant"
+      ]
+    },
+    {
+      "id": "AI-AUDITOR",
+      "role": "Evidence Auditor",
+      "capability_scope": [
+        "receipt validation",
+        "policy comparison",
+        "exception detection",
+        "independently review originating intent, context position and approach",
+        "require disposition of findings and reassess changed approaches"
+      ],
+      "cannot_do": [
+        "execute reviewed work",
+        "approve own work",
+        "alter evidence"
+      ]
+    },
+    {
+      "id": "AI-LIBRARIAN",
+      "role": "Librarian",
+      "capability_scope": [
+        "typed links",
+        "projection refresh",
+        "source provenance",
+        "own knowledge quality, freshness, retrieval and lifecycle coordination",
+        "design bounded ingestion, indexing, page maintenance and retrieval subagent tasks",
+        "integrate Encoder Steward capability only after current contract and activation checks"
+      ],
+      "cannot_do": [
+        "promote unreviewed claims",
+        "regenerate tombstoned personal data",
+        "rewrite history"
+      ]
+    },
+    {
+      "id": "AI-ANALYST",
+      "role": "Analysis steward",
+      "capability_scope": [
+        "analyze authorized inputs and outcomes",
+        "check data quality, uncertainty, bias and causal alternatives",
+        "measure whether KPI movement contributes to KGI and requested outcome"
+      ],
+      "cannot_do": [
+        "treat correlation or estimates as proven causation",
+        "approve own evidence as independent audit",
+        "expand source access or execution grants"
+      ]
+    }
+  ],
+  "initiatives": [
+    {
+      "id": "INIT-CONTEXT-POSITION",
+      "title": "意図から現在の幹・枝・葉までの位置を既存の仕事へ結ぶ",
+      "outcome_refs": [
+        "OUT-INTENT",
+        "OUT-LOCAL"
+      ],
+      "kpi_refs": [
+        "KPI-INTENT-ACCEPT",
+        "KPI-RECEIPTS"
+      ],
+      "status": "pending",
+      "priority": "P0",
+      "owner_role": "AI-CHIEF with AI-ANALYST; independent review AI-AUDITOR",
+      "acceptance": [
+        "元intentとrevision、上位目的、現在scope、依存・ownerを既存recordから解決し、別のTask正本を作らない",
+        "KPI改善だけでKGIが進まない合成例を独立監査が検出し、継続・変更・停止の判断を残す",
+        "上位リンク不明のとき推測で埋めず未解決として示す"
+      ],
+      "deadline": null,
+      "accountable_role_ref": "AI-CHIEF",
+      "collaborator_role_refs": [
+        "AI-ANALYST"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
+    },
+    {
+      "id": "INIT-CONTEXT-HANDOFF",
+      "title": "セッション再開・圧縮・委任で必要な意図と文脈を保持する",
+      "outcome_refs": [
+        "OUT-INTENT",
+        "OUT-LOCAL"
+      ],
+      "kpi_refs": [
+        "KPI-INTENT-ACCEPT",
+        "KPI-RECEIPTS"
+      ],
+      "status": "pending",
+      "priority": "P0",
+      "owner_role": "AI-LIBRARIAN with AI-BUILDER; independent review AI-AUDITOR",
+      "acceptance": [
+        "現在のSession契約・開始追跡を再利用し、原意図・訂正・制約・出典・位置・次の一手を引き継ぐ",
+        "別のfresh sessionが元の資料から要求と現在位置を復元し、古い指示と取消済み資料を混ぜない",
+        "単なる要約長や保存数でなく、要求達成に必要な情報の保持を正負fixtureで検証する"
+      ],
+      "deadline": null,
+      "accountable_role_ref": "AI-LIBRARIAN",
+      "collaborator_role_refs": [
+        "AI-BUILDER"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
+    },
+    {
+      "id": "INIT-KNOWLEDGE-FORMAT",
+      "title": "以前のナレッジ形式とBecomeOneを照合し、ページ・索引・embedding・decodeの役割を定める",
+      "outcome_refs": [
+        "OUT-INTENT",
+        "OUT-LOCAL"
+      ],
+      "kpi_refs": [
+        "KPI-INTENT-ACCEPT",
+        "KPI-RECEIPTS"
+      ],
+      "status": "pending",
+      "priority": "P1",
+      "owner_role": "AI-LIBRARIAN; hypothesis/evaluation AI-RESEARCH and AI-ANALYST",
+      "acceptance": [
+        "過去のOKF・追記型因果台帳・encoderの発言と訂正を照合した記録を使い、既存source/page/index契約と結ぶ。decodeの未回収の原仕様は推測しない。",
+        "embeddingを原文の可逆保存と見なさず、decodeが指す再取得・再構成・生成を区別する",
+        "既存ContextGatewayと情報ID・ACLを再利用し、必要な上位文脈が類似検索だけで落ちない読出しを検証する"
+      ],
+      "deadline": null,
+      "accountable_role_ref": "AI-LIBRARIAN",
+      "collaborator_role_refs": [
+        "AI-RESEARCH",
+        "AI-ANALYST"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
+    },
+    {
+      "id": "INIT-KNOWLEDGE-REFRESH",
+      "title": "LLM Wikiから学び、出典付き知識を継続更新する経路を作る",
+      "outcome_refs": [
+        "OUT-INTENT",
+        "OUT-LOCAL"
+      ],
+      "kpi_refs": [
+        "KPI-INTENT-ACCEPT",
+        "KPI-RECEIPTS"
+      ],
+      "status": "pending",
+      "priority": "P1",
+      "owner_role": "AI-LIBRARIAN; implementation AI-BUILDER; independent review AI-AUDITOR",
+      "acceptance": [
+        "一次GitHub sourceを読み、原資料・派生ページ・索引・DB・vectorの所有者と更新依存を区別する",
+        "資料更新、矛盾、削除・アクセス取消の際に影響するprojectionを失効・再構築し、二重登録・古い引用を防ぐ",
+        "既存grant内で取込・照合・独立監査・更新・readbackの一つの経路を通す。単なる文書化を稼働としない"
+      ],
+      "deadline": null,
+      "accountable_role_ref": "AI-LIBRARIAN",
+      "collaborator_role_refs": [
+        "AI-BUILDER"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
+    },
+    {
+      "id": "INIT-CONTEXT-AUDIT",
+      "title": "独立エージェントによる入力・出力・全体文脈監査を実行面へ結ぶ",
+      "outcome_refs": [
+        "OUT-INTENT",
+        "OUT-LOCAL"
+      ],
+      "kpi_refs": [
+        "KPI-INTENT-ACCEPT",
+        "KPI-RECEIPTS"
+      ],
+      "status": "pending",
+      "priority": "P0",
+      "owner_role": "AI-AUDITOR; integration coordination AI-CHIEF",
+      "acceptance": [
+        "各sessionとlogical work cycleでexecutorと別のreviewerが原要求とcurrent bytesを読み、目的・位置・文脈漏れ・根拠・代替approachを確認する",
+        "自己監査、古いreview、監査未実行、KPIだけの成功判定をPASSにしない",
+        "指摘へcontinue/revise/experiment/change_approach/stopの処置と追跡先を付け、重要な更新を最上位agentから知らせる。人の再承認へ置き換えない"
+      ],
+      "deadline": null,
+      "accountable_role_ref": "AI-AUDITOR",
+      "collaborator_role_refs": [
+        "AI-CHIEF"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
+    },
+    {
+      "id": "INIT-METHOD-RENEWAL",
+      "title": "新手法を評価し大きな改善があれば刷新できる体制を保つ",
+      "outcome_refs": [
+        "OUT-INTENT",
+        "OUT-LOCAL"
+      ],
+      "kpi_refs": [
+        "KPI-INTENT-ACCEPT",
+        "KPI-RECEIPTS"
+      ],
+      "status": "pending",
+      "priority": "P1",
+      "owner_role": "AI-RESEARCH with AI-ANALYST; domain adoption by existing responsible owner",
+      "acceptance": [
+        "現在の制約と原意図に対する改善仮説を新手法の一次情報から記録し、比較対象と反証条件を決める",
+        "quality・intent保持・cost/latency・ACL・復旧性を比較し、有利ならbounded trialとmigration/rollbackを用意する",
+        "既存方式への固執と新奇性だけの全面置換を避け、実際の必要に沿って採用・延期・不採用を記録する"
+      ],
+      "deadline": null,
+      "accountable_role_ref": "AI-RESEARCH",
+      "collaborator_role_refs": [
+        "AI-ANALYST"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
+    },
+    {
+      "id": "INIT-AGENT-OWNERSHIP",
+      "title": "担当agentの責任と必要時のサブエージェント編成を既存実行面へ結ぶ",
+      "outcome_refs": [
+        "OUT-INTENT",
+        "OUT-LOCAL"
+      ],
+      "kpi_refs": [
+        "KPI-INTENT-ACCEPT",
+        "KPI-RECEIPTS"
+      ],
+      "status": "pending",
+      "priority": "P0",
+      "owner_role": "AI-CHIEF and domain stewards; independent review AI-AUDITOR",
+      "acceptance": [
+        "既存担当とruntime identityを解決し、仮説検証・分析・ナレッジの責任を重複なく割り当てる",
+        "担当が必要な子のscope/context/grant/予算/受入を定め、出力統合・失敗・後継への引継ぎを受け持つ",
+        "チーム変更の前後で目的達成・品質・費用・遅延・調整負担を比較し、不要な分業を整理する",
+        "同じexecutorや仮説作者が独立監査を兼ねない。役割定義だけを常駐稼働としない"
+      ],
+      "deadline": null,
+      "accountable_role_ref": "AI-CHIEF",
+      "collaborator_role_refs": [
+        "AI-RESEARCH",
+        "AI-ANALYST",
+        "AI-LIBRARIAN"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
+    },
+    {
+      "id": "INIT-CONTEXT-END-TO-END",
+      "title": "一つの依頼を条件変更を挟んで別sessionへ引き継ぎ完遂する",
+      "outcome_refs": [
+        "OUT-INTENT",
+        "OUT-LOCAL"
+      ],
+      "kpi_refs": [
+        "KPI-INTENT-ACCEPT",
+        "KPI-RECEIPTS"
+      ],
+      "status": "pending",
+      "priority": "P0",
+      "owner_role": "AI-RESEARCH designs; AI-BUILDER executes; AI-ANALYST measures; AI-AUDITOR independently reviews",
+      "acceptance": [
+        "実際の認可済み依頼とowner、元の意図、完了条件を固定する",
+        "短い現在位置と原資料参照を次のfresh sessionへ渡し、途中の条件訂正を反映する",
+        "不要になった作業を止め、求める成果を返せることと反証例を確認する",
+        "成果が悪ければcontext取得・知識形式・agent分担のどこが原因か分析し、その箇所から直す",
+        "動的contextの表示とagentへの受渡しを同じrevisionへ結び、条件訂正による表示更新と実際の行動変更を確認する"
+      ],
+      "deadline": null,
+      "accountable_role_ref": "AI-RESEARCH",
+      "collaborator_role_refs": [
+        "AI-BUILDER",
+        "AI-ANALYST"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
+    },
+    {
+      "id": "INIT-DYNAMIC-AGENT-CONTEXT",
+      "title": "階層的で更新可能なagent用コンテキストを生成し、作業中の表示・参照と刷新へ結ぶ",
+      "outcome_refs": [
+        "OUT-INTENT",
+        "OUT-LOCAL"
+      ],
+      "kpi_refs": [
+        "KPI-INTENT-ACCEPT",
+        "KPI-RECEIPTS"
+      ],
+      "status": "pending",
+      "priority": "P0",
+      "owner_role": "AI-LIBRARIAN owns knowledge/context; AI-CHIEF resolves purpose and ownership; AI-BUILDER connects runtime/UI; independent review AI-AUDITOR",
+      "acceptance": [
+        "必要入力を定義した一つの既存context生成窓口から、上位目的→担当→現在作業のcompact文書とsource/dependency manifestを出す",
+        "通常作業で目的・位置・制約・次の一手・鮮度を表示し、start/resume/compaction後もagentへ必要情報が渡る",
+        "訂正・出典変更・失効・古さ・矛盾を検出し、影響するwiki/page/index/contextだけを整え直す。入力不変では再生成しない",
+        "古い制約、取消資料、取得文書中の命令を再注入せず、上位の権限規則を可変MDで上書きしない",
+        "実際の表示・context受渡し・訂正後の行動変化を検証し、規約ファイルを作っただけで接続済みとしない"
+      ],
+      "deadline": null,
+      "accountable_role_ref": "AI-LIBRARIAN",
+      "collaborator_role_refs": [
+        "AI-CHIEF",
+        "AI-BUILDER"
+      ],
+      "independent_review_role_ref": "AI-AUDITOR",
+      "runtime_owner_binding_status": "pending",
+      "independent_runtime_identity_required": true
+    }
+  ],
+  "context_agent_runtime_adoption": "not_deployed_policy_and_contract_only",
+  "projection_notes": [
+    "Owner-authorized public subset of the existing Human Intent effective view; not a separate Task registry.",
+    "Role and initiative IDs are logical contract names; no private actor, session or operational identity is included.",
+    "Pro review recommendations are separate proposals and do not automatically amend this policy."
+  ],
+  "initiative_role_projection_rule": "Separate the lead domain responsibility from collaborators in the existing owner_role description. These are functional routing references, not instantiated owner identities or grants; independent review requires a distinct runtime actor even when the role name is the same.",
+  "goal_reference_definitions": {
+    "scope": "Definitions needed to resolve this public subset; no current measurements, old deadlines or numerical targets are published here.",
+    "outcomes": [
+      {
+        "id": "OUT-INTENT",
+        "title": "Intent becomes audited work",
+        "description": "Authorized conversation can become a reviewed intent, bounded work, candidate artifact, evidence, and learning without semantic shortcuts."
+      },
+      {
+        "id": "OUT-LOCAL",
+        "title": "Reproducible local-first company runtime",
+        "description": "Company truth, workers, workflows, search, CRM, evidence, backup, and kill controls can run inside an operator-controlled trust boundary."
+      }
+    ],
+    "kgis": [
+      {
+        "id": "KGI-INTENT",
+        "outcome_refs": [
+          "OUT-INTENT"
+        ],
+        "metric": "verified intent-to-artifact vertical slices",
+        "evidence_source": "source, decision, work, candidate, and receipt bundle"
+      }
+    ],
+    "kpis": [
+      {
+        "id": "KPI-RECEIPTS",
+        "kgi_refs": [
+          "KGI-INTENT"
+        ],
+        "outcome_refs": [
+          "OUT-INTENT"
+        ],
+        "metric": "admitted work units with complete receipts",
+        "unit": "ratio",
+        "evidence_source": "verification receipt ledger"
+      },
+      {
+        "id": "KPI-INTENT-ACCEPT",
+        "kgi_refs": [
+          "KGI-INTENT"
+        ],
+        "outcome_refs": [
+          "OUT-INTENT"
+        ],
+        "metric": "reviewed intent candidates accepted without material correction",
+        "unit": "ratio",
+        "evidence_source": "intent review ledger"
+      }
+    ],
+    "metric_guard": "KPI values and receipt counts are proxies; they do not prove the original outcome. No target or historical deadline is revived by this projection."
+  }
 }

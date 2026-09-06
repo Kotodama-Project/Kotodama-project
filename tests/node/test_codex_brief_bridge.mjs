@@ -1,16 +1,119 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { randomBytes, randomUUID } from "node:crypto";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { request as httpRequest } from "node:http";
 import { startBriefBridge, projectionDigest, grantDigest } from "../../runtime/codex-task-bridge/server.mjs";
-import { parseCodexEvents, codexArguments, validateBrief } from "../../runtime/codex-task-bridge/codex-runner.mjs";
+import { parseCodexEvents, codexArguments, validateBrief, runCodexBrief } from "../../runtime/codex-task-bridge/codex-runner.mjs";
 import { syntheticSeed, syntheticCatalog } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
 import { validateAdmission, validateSource, validateQueued, validateResult, validateRevoked, validateSessionResult, validateBridgeOrigin } from "../../runtime/cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/protocol.mjs";
 
 const brief = { objective: "要件を整理する", deliverable: "要件案", constraints: ["公開しない"], acceptance_criteria: ["同じ画面で読み戻せる"], open_questions: [] };
+test("session provenance retains the model passed to invoke when caller configuration changes", async () => {
+  const { root, config } = fixture();
+  config.runner.model = "gpt-6-astra";
+  let bridge;
+  try {
+    bridge = await startBriefBridge(config, { invoke: async ({ model, onSessionStarted }) => {
+      config.runner.model = "gpt-5.6-luna";
+      const thread_id = randomUUID();
+      onSessionStarted({ thread_id });
+      const stored = JSON.parse(readFileSync(join(config.stateRoot, "invocations.json")));
+      assert.equal(stored.jobs[0].session.model_requested, model);
+      return { brief, thread_id };
+    } });
+    const request_id = randomUUID();
+    await call(bridge, config, "/v1/briefs", { body: { request_id, source_revision: 1, binding_sha256: grantDigest(config.grant) } });
+    const result = await (await call(bridge, config, `/v1/briefs/${request_id}/session`)).json();
+    assert.equal(result.state, "ready");
+    assert.equal(result.session.model_requested, "gpt-6-astra");
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a conflicting legacy backup refuses migration and preserves both originals", async () => {
+  const { root, config } = fixture();
+  const path = join(config.stateRoot, "invocations.json");
+  const backup = join(config.stateRoot, "invocations.v1.backup.json");
+  const legacy = JSON.stringify({ schema: "kotodama/brief-invocations/v1", jobs: [] });
+  writeFileSync(path, legacy);
+  writeFileSync(backup, "existing backup");
+  try {
+    await assert.rejects(startBriefBridge(config), /legacy_job_backup_conflict/);
+    assert.equal(readFileSync(path, "utf8"), legacy);
+    assert.equal(readFileSync(backup, "utf8"), "existing backup");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("mismatched completion is failed and invalid persisted session metadata refuses restart", async () => {
+  const { root, config } = fixture();
+  let bridge;
+  try {
+    bridge = await startBriefBridge(config, { invoke: async ({ onSessionStarted }) => {
+      onSessionStarted({ thread_id: randomUUID() });
+      return { brief, thread_id: randomUUID() };
+    } });
+    const request_id = randomUUID();
+    await call(bridge, config, "/v1/briefs", { body: { request_id, source_revision: 1, binding_sha256: grantDigest(config.grant) } });
+    const result = await (await call(bridge, config, `/v1/briefs/${request_id}/session`)).json();
+    assert.equal(result.state, "failed");
+    await bridge.close(); bridge = null;
+    const path = join(config.stateRoot, "invocations.json");
+    const valid = JSON.parse(readFileSync(path));
+    for (const mode of ["invalid-id", "invalid-time", "result-mismatch"]) {
+      const store = structuredClone(valid);
+      if (mode === "invalid-id") store.jobs[0].session.thread_id = "not-a-session";
+      if (mode === "invalid-time") store.jobs[0].session.started_at = "not-a-date";
+      if (mode === "result-mismatch") {
+        store.jobs[0].state = "ready";
+        store.jobs[0].result = { brief, thread_id: randomUUID() };
+      }
+      const bytes = JSON.stringify(store);
+      writeFileSync(path, bytes);
+      await assert.rejects(startBriefBridge({ ...config, seeds: undefined }), /job_session/);
+      assert.equal(readFileSync(path, "utf8"), bytes);
+    }
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test('an observed session survives failed execution and restart without another invocation',async()=>{
+ const {root,config}=fixture();const thread_id=randomUUID();config.runner.model='gpt-6-astra';let bridge,calls=0;
+ try {
+  bridge=await startBriefBridge(config,{invoke:async({onSessionStarted})=>{calls++;onSessionStarted({thread_id});const saved=JSON.parse(readFileSync(join(config.stateRoot,'invocations.json')));assert.equal(saved.jobs[0].session.thread_id,thread_id);throw Error('provider failed after session start');}});
+  const request_id=randomUUID(),body={request_id,source_revision:1,binding_sha256:grantDigest(config.grant)};
+  await call(bridge,config,'/v1/briefs',{body});await new Promise(setImmediate);
+  let response=await call(bridge,config,`/v1/briefs/${request_id}/session`);assert.equal(response.status,200);let result=await response.json();assert.equal(result.session.thread_id,thread_id);assert.equal(result.session.kind,'ephemeral_codex');assert.equal(result.state,'failed');assert.equal(result.task_state_changed,false);assert.equal(result.work_order_ref,config.grant.work_order_ref);
+  await bridge.close();bridge=await startBriefBridge({...config,seeds:undefined},{invoke:async()=>{calls++;throw Error('must not rerun');}});
+  await call(bridge,config,'/v1/briefs',{body});response=await call(bridge,config,`/v1/briefs/${request_id}/session`);result=await response.json();assert.equal(result.session.thread_id,thread_id);assert.equal(calls,1);
+  assert.equal((await call(bridge,config,`/v1/briefs/${request_id}/session`,{who:`urn:kotodama:principal:${randomUUID()}`})).status,404);
+ }finally{if(bridge)await bridge.close();rmSync(root,{recursive:true,force:true});}
+});
+test('the runner observes a valid start before a later failure and refuses duplicate starts',async()=>{
+ const root=mkdtempSync(join(tmpdir(),'codex-session-stream-'));const executable=join(root,'synthetic-codex');writeFileSync(executable,'synthetic binary');
+ const options={executable,expectedExecutableSha256:createHash('sha256').update(readFileSync(executable)).digest('hex'),cwd:root,model:'gpt-6-astra',input:'synthetic request'};
+ try {for(const duplicate of [false,true]){
+  const seen=[];let child;
+  const spawnImpl=()=>{child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.stderr=new PassThrough();let killed=false;child.kill=()=>{if(!killed){killed=true;setImmediate(()=>child.emit('close',1));}return true;};setImmediate(()=>{const id=randomUUID();child.stdout.write(JSON.stringify({type:'thread.started',thread_id:id})+'\n');assert.equal(seen[0].thread_id,id);child.stdout.write(JSON.stringify(duplicate?{type:'thread.started',thread_id:randomUUID()}:{type:'turn.failed'})+'\n');});return child;};
+  await assert.rejects(runCodexBrief({...options,onSessionStarted:s=>{seen.push(s);}},{spawnImpl}),duplicate?/session_start_invalid/:/provider_failed/);assert.equal(seen.length,1);
+ }}finally{rmSync(root,{recursive:true,force:true});}
+});
+test('legacy invocation journals are backed up and migrated without inventing session evidence',async()=>{
+ const {root,config}=fixture();let bridge;
+ const path=join(config.stateRoot,'invocations.json'),legacy=JSON.stringify({schema:'kotodama/brief-invocations/v1',jobs:[]});writeFileSync(path,legacy);
+ try {bridge=await startBriefBridge(config,{invoke:async()=>({brief})});assert.equal(readFileSync(join(config.stateRoot,'invocations.v1.backup.json'),'utf8'),legacy);assert.equal(JSON.parse(readFileSync(path)).schema,'kotodama/brief-invocations/v2');assert.deepEqual(JSON.parse(readFileSync(path)).jobs,[]);}
+ finally{if(bridge)await bridge.close();rmSync(root,{recursive:true,force:true});}
+});
+test('a session cannot be reassigned or attached after the invocation has ended',async()=>{
+ const {root,config}=fixture();let bridge,late;const thread_id=randomUUID();
+ try {bridge=await startBriefBridge(config,{invoke:async({onSessionStarted})=>{late=onSessionStarted;onSessionStarted({thread_id});assert.throws(()=>onSessionStarted({thread_id:randomUUID()}),/session_start_denied/);return {brief,thread_id};}});
+  const request_id=randomUUID();await call(bridge,config,'/v1/briefs',{body:{request_id,source_revision:1,binding_sha256:grantDigest(config.grant)}});await new Promise(setImmediate);assert.throws(()=>late({thread_id:randomUUID()}),/session_start_denied/);
+  const before=await(await call(bridge,config,`/v1/briefs/${request_id}/session`)).json();assert.equal(before.session.thread_id,thread_id);assert.equal(before.resumable,false);
+  await call(bridge,config,'/v1/revoke',{body:{}});assert.equal((await call(bridge,config,`/v1/briefs/${request_id}/session`)).status,404);
+ }finally{if(bridge)await bridge.close();rmSync(root,{recursive:true,force:true});}
+});
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "kotodama-brief-"));
   const stateRoot = join(root, "jobs"); const reviewStateRoot = join(root, "review");
