@@ -1,0 +1,425 @@
+{
+  "observed_at": "2026-09-06T02:43:57.707015+00:00",
+  "issues": [
+    {
+      "number": 2,
+      "title": "[Cloudflare] Hybrid edge + official Cloudflare OS adoption epic",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/2",
+      "updated_at": "2026-08-24T22:22:20Z",
+      "body_sha256": "2f079dc37f558155c13392f6938a02a3a9b348112f49cad3ae21b74bc5bf525d",
+      "requirement_ids": [
+        "R43",
+        "R45",
+        "R46",
+        "R47",
+        "R49",
+        "R50",
+        "R53",
+        "R56",
+        "R57",
+        "R58",
+        "R61",
+        "R63",
+        "R64",
+        "R65"
+      ],
+      "remaining_obligation": "二plane順序、provider/data/cost/production boundary、independent E2E/Human decision",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 3,
+      "title": "[Cloudflare OS][CFOS-01] Inventory account, zone, plan, and current services read-only",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/3",
+      "updated_at": "2026-08-24T22:29:14Z",
+      "body_sha256": "51647695d7850e514286d43fe5377380433489c91f618fb52c4ee85bf52b4a36",
+      "requirement_ids": [
+        "R43",
+        "R49",
+        "R58"
+      ],
+      "remaining_obligation": "opaque locator、plan/cost、service status、unknown/stopのauthenticated readback",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 4,
+      "title": "[Cloudflare OS][CFOS-02] Verify guarded Worker preview-version pipeline",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/4",
+      "updated_at": "2026-08-25T00:00:44Z",
+      "body_sha256": "90f483994724d7081b0f46b49f6ffe8b66eeea4a25cf93385b908b97fd2b5bcb",
+      "requirement_ids": [
+        "R43",
+        "R44"
+      ],
+      "remaining_obligation": "exact SHA/manual upload、Environment/token、HTTP/log/quota/rollback",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 5,
+      "title": "[Cloudflare OS][CFOS-03] Add Tunnel and Access ingress with default-deny policy",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/5",
+      "updated_at": "2026-08-25T00:12:55Z",
+      "body_sha256": "0eb79a61701bac83163676a1bfb4360b7403f39a353de2d4ce3a993daf39032c",
+      "requirement_ids": [
+        "R43",
+        "R53",
+        "R58"
+      ],
+      "remaining_obligation": "outbound-only/default-deny、auth negatives、direct-origin拒否、separate apply/readback",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 6,
+      "title": "[Cloudflare OS][CFOS-04] Integrate Context Gateway and search through a metadata-safe edge contract",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/6",
+      "updated_at": "2026-08-25T00:11:42Z",
+      "body_sha256": "2a100d94e3314f9131cf04cf0d588d4bd66ab26c18d979cbe8a12eb7f678028e",
+      "requirement_ids": [
+        "R43",
+        "R44",
+        "R53",
+        "R56",
+        "R58"
+      ],
+      "remaining_obligation": "Gateway-only scope、consent/cache/body-free logs、timeout/backend negatives",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 7,
+      "title": "[Cloudflare OS][CFOS-05] Evaluate AI Gateway and Vectorize under data and cost gates",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/7",
+      "updated_at": "2026-08-21T07:19:23Z",
+      "body_sha256": "aebdaa681eb7548a289a77cf67040c7d0ee88bfc4cf8010d52fc1527b9a81d6f",
+      "requirement_ids": [
+        "R49",
+        "R65"
+      ],
+      "remaining_obligation": "synthetic-only data/retention/cache/region/cost/deletion/rollback",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 8,
+      "title": "[Cloudflare OS][CFOS-06] Prove observability, quota, rollback, and promotion gates",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/8",
+      "updated_at": "2026-08-25T00:12:22Z",
+      "body_sha256": "b965bb2be6b6663a8fb50cfbf7e06871baf07a79f8a8f360fcab8c177af982a1",
+      "requirement_ids": [
+        "R49",
+        "R63"
+      ],
+      "remaining_obligation": "content-free logs、quota/stop、data rollback、exact candidate promotion",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 9,
+      "title": "[Cloudflare OS][CFOS-07] Decide request-body processing, residency, and log boundary",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/9",
+      "updated_at": "2026-08-25T00:13:38Z",
+      "body_sha256": "874ae4a389d0f58eee0292ae914d1fe71305701750e8462a1cb5d49d5ab272d8",
+      "requirement_ids": [
+        "R43",
+        "R49",
+        "R56",
+        "R57",
+        "R58"
+      ],
+      "remaining_obligation": "payload class/region/log/cache/retention/cost decision before private body",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 10,
+      "title": "[Cloudflare OS][CFOS-02A] Prove protected deployment identity, runner, and receipt sink",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/10",
+      "updated_at": "2026-08-24T22:30:25Z",
+      "body_sha256": "ef2b3011d7ef9ff7337048ef7a082fbd0a8662566475d1eee287cf0ee170d2c1",
+      "requirement_ids": [
+        "R43",
+        "R46",
+        "R49",
+        "R58"
+      ],
+      "remaining_obligation": "least privilege、reviewer/runner、nonce/clock、durable receipt",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 11,
+      "title": "[Official Cloudflare OS][CFOS-UPSTREAM-05] Review pinned drift and prove local runtime",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/11",
+      "updated_at": "2026-08-25T00:10:52Z",
+      "body_sha256": "4a43ecf39691d5d0e299fbce7865db2fbf20cf2b727b9d83d0eb9f85da304a5b",
+      "requirement_ids": [
+        "R40",
+        "R45",
+        "R47",
+        "R48",
+        "R50",
+        "R51",
+        "R52"
+      ],
+      "remaining_obligation": "current-head drift、exact dependency、independent review、#12-16/#9/#10/#19",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 12,
+      "title": "[Official Cloudflare OS][CFOS-SECURITY-06] Remove vulnerable nanoid from pinned production graph",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/12",
+      "updated_at": "2026-08-25T00:16:24Z",
+      "body_sha256": "0078fa46e054d2099fcd837eb05072fdad653cd0332a8139d92a4f8e1938c851",
+      "requirement_ids": [
+        "R48"
+      ],
+      "remaining_obligation": "independent remediation/adopted pin、zero vulnerable graph、review",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 13,
+      "title": "[Official Cloudflare OS][CFOS-SUPPLY-10] Verify pnpm registry signatures and provenance",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/13",
+      "updated_at": "2026-08-09T07:38:01Z",
+      "body_sha256": "f3f3ada238fb3345feef8cb826d3e11531f89078763ede9bc3716e8c13293f8f",
+      "requirement_ids": [
+        "R40",
+        "R48"
+      ],
+      "remaining_obligation": "trust root/source workflow identity、independent review、upstream adoption",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 14,
+      "title": "[Official Cloudflare OS][CFOS-WINDOWS-07] Replace local shim with a reviewed cross-platform contract",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/14",
+      "updated_at": "2026-08-09T02:36:08Z",
+      "body_sha256": "cfeda673a80b4c44fdf009b90aa7243ed869571e230fa94f5d94c62b0b5ec7ae",
+      "requirement_ids": [
+        "R47",
+        "R48",
+        "R50"
+      ],
+      "remaining_obligation": "support lane、cross-platform bytes/launcher、negative tests/cleanup",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 15,
+      "title": "[Official Cloudflare OS][CFOS-QUALITY-12] Budget frontend chunks and eliminate lint warning drift",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/15",
+      "updated_at": "2026-08-09T02:36:10Z",
+      "body_sha256": "9c26d3e82e7381d59b7d289d2de8933e0830d7979fe505dd14304bdeaafa4c3c",
+      "requirement_ids": [
+        "R48"
+      ],
+      "remaining_obligation": "baseline、non-increasing budgets、growth checks、warning disposition",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 16,
+      "title": "[Official Cloudflare OS][CFOS-WORKERD-13] Define the Proxmox workerd production-support boundary",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/16",
+      "updated_at": "2026-08-09T02:36:13Z",
+      "body_sha256": "7cc9d2226f503f91484a5a6842ddc61e01f45f94c7e4398ebb962a9934124a26",
+      "requirement_ids": [
+        "R47",
+        "R50",
+        "R51",
+        "R52",
+        "R53"
+      ],
+      "remaining_obligation": "hosted vs Proxmox、ops lifecycle、support owner、independent operational E2E",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 19,
+      "title": "[Governance] Rebind main protection and security controls after organization transfer",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/19",
+      "updated_at": "2026-08-25T00:10:13Z",
+      "body_sha256": "d321fe55a8b7ddfaaef912986744b34617ba23746421fb1a591865dda05c15bd",
+      "requirement_ids": [
+        "R42",
+        "R58",
+        "R59",
+        "R62",
+        "R63",
+        "R67"
+      ],
+      "remaining_obligation": "neutral checks、review/force-push/deletion、security settings、admin readback",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 20,
+      "title": "[Documentation] Refresh STATUS and ROADMAP to the current public control plane",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/20",
+      "updated_at": "2026-08-24T10:42:03Z",
+      "body_sha256": "2adca1aadebdd4a31b06ad1c4898b5e8a47bac55ffc92326d61c36f024d7905d",
+      "requirement_ids": [
+        "R37",
+        "R44",
+        "R54",
+        "R62",
+        "R67"
+      ],
+      "remaining_obligation": "refresh exact heads/runs/date、candidate/public/settings/human lanes、smoke and history",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 23,
+      "title": "ops: confirm ownership and lifecycle for dormant or legacy repositories",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/23",
+      "updated_at": "2026-08-21T10:22:19Z",
+      "body_sha256": "f6118b960a3e187748bcbc1a9dc58554b4e3af5c5bc7382dceab4cb3672f22ec",
+      "requirement_ids": [
+        "R64",
+        "R68"
+      ],
+      "remaining_obligation": "owner/lifecycle/dependencies/successor/support for seven repositories; no archive before readback",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 24,
+      "title": "[Epic] Complete BecomeOne → Kotodama dual-repository migration",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/24",
+      "updated_at": "2026-08-21T16:07:33Z",
+      "body_sha256": "a673958f5e9ac5f0490ae785c3cb1311c7000d44408e3353c828f6fcbf728280",
+      "requirement_ids": [
+        "R37",
+        "R39",
+        "R54",
+        "R55",
+        "R56",
+        "R57",
+        "R59",
+        "R60",
+        "R61",
+        "R62",
+        "R63",
+        "R66",
+        "R68"
+      ],
+      "remaining_obligation": "canonical ledger、four terminal classes、license/history/privacy、immutable export、canary/rollback、zero residual",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 25,
+      "title": "[Governance] Decide public license and record export provenance",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/25",
+      "updated_at": "2026-08-24T10:26:25Z",
+      "body_sha256": "abc80c899a58191346d6498dcf8b0ba962356eff4a368980826a65bac3deb4de",
+      "requirement_ids": [
+        "R48",
+        "R55",
+        "R59",
+        "R62",
+        "R63",
+        "R68"
+      ],
+      "remaining_obligation": "rightsholder/license/notices/SBOM/provenance manifest/independent review",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 26,
+      "title": "[Architecture] Fix public package and CLI namespace before control-plane cutover",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/26",
+      "updated_at": "2026-08-21T15:30:52Z",
+      "body_sha256": "2de04899b78fc71d79aee9a8ba1e361e6ade744b261a9a7f0acbcd4adc857486",
+      "requirement_ids": [
+        "R55",
+        "R68"
+      ],
+      "remaining_obligation": "public/private namespace、compatibility bridge、consumer inventory、collision/canary/rollback",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 28,
+      "title": "[Release] Build an immutable kotodama-core candidate with SBOM and provenance",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/28",
+      "updated_at": "2026-08-21T15:38:26Z",
+      "body_sha256": "877063f709364aa6e5f468fd67c2e39458bab9c43b539c9a3ecabb6336e25cd2",
+      "requirement_ids": [
+        "R39",
+        "R48",
+        "R55",
+        "R68"
+      ],
+      "remaining_obligation": "clean build/allowlist/SBOM/signature/provenance/vulnerability disposition/artifact pin",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 30,
+      "title": "[Migration] Linearize public sibling Drafts after PR #18",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/30",
+      "updated_at": "2026-08-24T10:31:11Z",
+      "body_sha256": "e71981385b84d2acbfce98c7122821aca9c9d93cb19b396fd18d7f3ef65ca6f5",
+      "requirement_ids": [
+        "R39",
+        "R42",
+        "R62",
+        "R66",
+        "R67",
+        "R68"
+      ],
+      "remaining_obligation": "retarget/rebase exact parents、manifest reconciliation、rerun checks、independent review; no merge authorization",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 31,
+      "title": "migration(A019): re-author provider-neutral registry schemas",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/31",
+      "updated_at": "2026-08-21T15:51:02Z",
+      "body_sha256": "f02b030ad2572b6e675c618ae96c8417b0daf86dd434127b80d202f3d13a0638",
+      "requirement_ids": [
+        "R36",
+        "R41",
+        "R66",
+        "R68"
+      ],
+      "remaining_obligation": "six rows、schema/negative/history receipt、#25/#30/private receipt gates",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    },
+    {
+      "number": 32,
+      "title": "migration: prove restart-safe agent continuity and converge swarm receipts",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/issues/32",
+      "updated_at": "2026-08-24T10:25:59Z",
+      "body_sha256": "e1e74946d6a00ddb971e92ad895b55e76012dba3a4968e4d89a23e7b9dec61ea",
+      "requirement_ids": [
+        "R35",
+        "R36",
+        "R37",
+        "R38",
+        "R39",
+        "R41",
+        "R42",
+        "R54",
+        "R60",
+        "R61",
+        "R62",
+        "R66",
+        "R68"
+      ],
+      "remaining_obligation": "separate resume/instance/ledger、lease/idempotency/tamper、no fallback/private import、blocked aggregate",
+      "state": "OPEN",
+      "issue_body_is_not_current_execution_proof": true
+    }
+  ]
+}

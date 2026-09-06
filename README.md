@@ -1,5 +1,8 @@
 # Kotodama
 
+> **最新方針（後続指示）:** 現在の音声修正・SSOT更新・68項目とGitHub反映を終えた後、全体を照合し、必要な仕事を継続する。先行の「整理後に停止」は更新された。承認は初回に一度、必要な更新は最上位エージェントから通知する。
+
+
 **会話を、監査可能な意図・仕事・成果・学習へ。**
 
 Kotodama は、人間が普段どおり話し、相談し、アイデアを共有するところから、その中にある意図を AI と人間が一緒に理解し、要件、判断、仕事、成果物、検証証拠へ接続する **Local-first Company OS** を目指すプロジェクトです。
@@ -10,6 +13,14 @@ Kotodama は、人間が普段どおり話し、相談し、アイデアを共�
 > このリポジトリは **Incomplete Public Preview** です。公開している Company starter、schema、validator、runtime/evidence candidate は試せますが、Public Beta の利用受付、Discord 招待、公開 Voice Bot はまだ提供していません。公開アクセスを開くための Final Human GO も完了していません。最新の境界は [Project Status](STATUS.md) を確認してください。
 
 ## この README の読み方
+
+**2026-09-06 のクロージング:** [68個の受入条件](docs/acceptance/README.md)を全件見直し、[READMEとの現在地・未完](docs/CLOSING-2026-09-06.md)と[補足条件](docs/acceptance/GAPS.md)へ整理しました。現在の作業を区切った後、最新の直接指示に従い、全体を照合して必要な仕事を継続します。製品全体の完了、他ownerの一括閉鎖、Public Betaの開始ではありません。
+
+今回の限定評価では、既存local Qwenによる一般chat、Document保存・再読込・再起動、native Proxmox template/full cloneまで確認しました。Task情報は手動入力で、自動Task接続は未実装です。以下の設計節の古いlocal LLM deferredは今回の明示選択を禁止するものではありません。現況の詳細は上記クロージングとSTATUSを優先してください。
+
+OS、Discord Voice・text、Telegram、Codex、Claudeは、同じstable Task ID・revision・ownerを解決する入口として扱います。各入口に別のTask正本を作らず、切断・再送・訂正・閉鎖も同じ記録へ結びます。実adapterの通し接続は未受入です。
+
+個人の制作・開発Taskを管理することと、Company本番業務へ組み込むことは別です。個人Taskの記録・owner対応・sourceを、本番へ自動採用・同期・接続・公開しません。共通の管理契約を再利用しても業務データの移行は別scopeの判断です。
 
 作業を再開する方は **[プロジェクトの地図](docs/PROJECT-MAP.md)** から、目標に対応する文書・実装・PR の関係を確認できます。エージェントの開始手順は [AGENTS.md](AGENTS.md) にまとめています。
 
@@ -112,7 +123,7 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
 
 ### Current reality
 
-- この変更はpublic documentation/schema/validator candidateで、private runtime/deployは未実装・未証明です。
+- この節が初めに扱った範囲はpublic documentation/schema/validator candidateです。後続の限定private runtime評価は[クロージング](docs/CLOSING-2026-09-06.md)へ分け、全経路の採用・本番稼働とは区別します。
 - private Voice/Intent/Swarm pathはcontinuous capture、rotation、transcription、Requirement、
   delegation、execution、verificationを結ぶend-to-endとして未証明です。Agent Swarm、provider E2E、
   Public Betaも未証明です。
@@ -669,10 +680,10 @@ Local-first は、すべてを一台へ詰め込むことではありません�
 | Evidence metadata Store | receipt、hash、provenance の候補 | Compose skeleton は公開、live E2E は未証明 |
 | Context Gateway | Authorized Corpus への governed query plane | design / local candidate |
 | TiDB | Context Platform の第一評価候補 | 未採用、未配備 |
-| Proxmox | segmented local runtime の基準候補 | lifecycle contract 公開、live receipt なし |
+| Proxmox | segmented local runtime の基準候補 | lifecycle contract とnative template候補。限定評価の結果と本番未受入は[クロージング](docs/CLOSING-2026-09-06.md)を参照 |
 | Compose minimum | 小さな導入 profile | secret-free skeleton / candidate 公開 |
 | Cloudflare edge | bounded public ingress / application delivery | 採用方向。content-free Worker と guarded preview workflow は draft candidate、未 upload |
-| Official Cloudflare OS | AI workspace、Gadgets、Blueprints、Gatekeepers の実装基盤 | 採用方向。official starter/core source pin と local synthetic adapter は candidate、未 install／未 deploy |
+| Official Cloudflare OS | AI workspace、Gadgets、Blueprints、Gatekeepers の実装基盤 | 採用方向。固定coreで一般chat/文書のprivate評価を実測。public deployment・本番採用は未完 |
 
 provider を利用する場合も、exact artifact、participant scope、purpose、provider/model、expiry、cancellation、retention を持つ transfer grant の後ろに置く方針です。
 
@@ -1143,7 +1154,7 @@ Promotion, Current Truth, or Public Beta GO.
 - Voice capture、ASR、15分 rotation、post、delete の公開 E2E はありません
 - raw audio、transcript corpus、credential、private infrastructure identifier は公開しません
 - Company starter は governance candidate であり、会社、契約、権限を自動作成しません
-- Compose / Proxmox artifacts は planning / validation candidate であり、live deployment receipt ではありません
+- Compose / Proxmoxのplanning契約と、今回のnative template/OS限定評価を分けます。どちらも全体の本番deployment・運用受入を証明しません
 - Context Platform、TiDB、GrillU、Resident Clone、Agent Foundry、AI Business Loop は完成済み公開機能ではありません
 - attestation tooling は、それぞれ明示した trust boundary を超えて runtime truth を証明しません
 - Source Binding の local match は point-in-time candidate であり、protected snapshot、authenticity、consent、retention enforcement を証明しません
@@ -1161,3 +1172,7 @@ Promotion, Current Truth, or Public Beta GO.
 ## License
 
 この repository は [Apache License 2.0](LICENSE)（SPDX identifier: `Apache-2.0`）で提供します。
+
+## 最新の運営方針と音声修正
+
+[初回承認・上位存在・必要時実装](docs/OPERATING-POLICY-2026-09-06.md) と [large-v3・文脈訂正の修正](docs/VOICE-ACCURACY-2026-09-06.md) を参照してください。68項目の全受入を宣言せず、未完と必要な次の一手を保持します。

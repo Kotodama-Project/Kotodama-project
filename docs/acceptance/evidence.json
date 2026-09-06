@@ -1,0 +1,144 @@
+{
+  "observations": [
+    {
+      "id": "E01",
+      "title": "Company Pack / review / record-bound local execution",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "111ea32d7ab448f692374e84ff688848c0435cb5219baeb3cbcd00f671b8798c",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/docs/COMPANY-PACK-TASK-EXECUTION.md",
+      "scope": "実ファイルによるPack生成、検証、再送拒否。入力Taskはsynthetic candidate。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E02",
+      "title": "非公開の意図・制約保持候補",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "111ea32d7ab448f692374e84ff688848c0435cb5219baeb3cbcd00f671b8798c",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/docs/README-IMPLEMENTATION-ASSESSMENT.md",
+      "scope": "限定文法で制約・訂正・保留と出典を保持。一般的な意味理解や実Task実行ではない。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E03",
+      "title": "情報分類とread/review Gateway",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "241af9ad3280c1ee20dd52964779d20cba6f4b9446bd54490fccc5e604b6b79d",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/docs/INFORMATION-ACCESS.md",
+      "scope": "local HTTPで主体・分類・read/review・期限・取消を検査。全社ACL未接続。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E04",
+      "title": "公式OSの文書・復元評価",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "7f36a6605a80777471c2a689228dac2c3118af210ffc619418779d6877e092a6",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/docs/README-IMPLEMENTATION-ASSESSMENT.md",
+      "scope": "認証済み文書とrestart、別state restoreの限定評価。本番保証ではない。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E05",
+      "title": "native Gadget / Codex drafting",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "707fa69f307da99a7f0d6bb261d8a9bcaaaf69ff29c31572eb288eb651ff7694",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/runtime/codex-task-bridge/README.md",
+      "scope": "承認前0回、承認後1回、同画面/reload readback。既存Task owner未接続。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E06",
+      "title": "Voice knowledgeと検索・本文返却",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "352e52adda6baaec85e70e469be6c1f861fc9de770ddecb80ec5448e9b1f3aef",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/docs/README-IMPLEMENTATION-ASSESSMENT.md",
+      "scope": "保存済み実記録の話者付き派生、引用検索、本文返却を限定検証。新録音の全自動返却・多人自然会話は未検証。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E07",
+      "title": "Voiceのファイル返却の制限",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "91d3eba7f7f3555ad00e1d25bcef34ca96108c45a0c3e62e0fa205670d39f530",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/docs/README-IMPLEMENTATION-ASSESSMENT.md",
+      "scope": "添付投稿のmetadataを確認。本体取得はCDN403で未確認、hash一致や再試行成功は主張しない。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E08",
+      "title": "既存Taskと私有証拠の参照解決",
+      "kind": "redacted_navigation_boundary_only",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/docs/README-IMPLEMENTATION-ASSESSMENT.md",
+      "scope": "個人向けTask管理候補でのlocal参照照合は、Company本番Taskの採用・同期・実行とは別。個人TaskのID、owner対応、receipt digestや記録内容はこの公開資料へ載せない。OSの自動Task接続は未実装。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E09",
+      "title": "native Proxmox template / clone",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "c356ffd1739ee4317bb9987c179e00bd61372a750eb1f6f189898c4b97259f1d",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/templates/native-proxmox/cloudflare-os/README.md",
+      "scope": "空の公式source templateから別clone、起動/restart/DB検査。cloneの文書・Task受入と別host復旧は未検証。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E10",
+      "title": "Qwen OS chat / Document readback",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "53a1976e0328514328433ac6198bfe6655352146eec35797daa6fe0cc01ce06d",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/runtime/local-model-proxy/README.md",
+      "scope": "選択local modelの実応答、文書保存/reload/restart。手動Task metadata入力と不正blocksの人による訂正を含む。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E11",
+      "title": "PR34 special-file修正と公開readback",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "ec674671779b19d907524141c8b6ecc53c0897f971baa4d68ca75c62d10c2868",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/b3e3d868ccf16d840171282f9cff2b75ba8ef1bd/tools/validate_company_pack_agent_swarm_execution_candidate.py",
+      "scope": "正規file以外のread拒否を修正しPOSIX FIFOも検証。PR34 headへの限定証拠で、このbranchへの統合ではない。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E12",
+      "title": "既存22 review threadsの解決",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "57ae9fd707ebe79e9ed76824443a18115a7858c9b7b09f5a99d793fd9a941d7a",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project/blob/f168a2ebd52d0eb62fbd491c403effdefcb9aa97/docs/PROJECT-MAP.md",
+      "scope": "6 PRの22原指摘をcurrent headで確認して解決。独立approval・merge・Human GOは別。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true
+    },
+    {
+      "id": "E13",
+      "title": "クロージング開始時のGitHub読取",
+      "kind": "public_api_snapshot",
+      "observed_at": "2026-09-06T02:43:57.707015+00:00",
+      "public_context": "https://github.com/Kotodama-Project/Kotodama-project",
+      "scope": "全14 open PRのhead/base/checks/review threadsと25 open Issue本文。独立全差分監査ではない。"
+    },
+    {
+      "id": "E14",
+      "title": "large-v3とraw保持・文脈訂正の非公開配備診断",
+      "kind": "operator_report_of_bounded_observation",
+      "receipt_sha256": "abb5ea49ebf1ad9364cdfb62c42cfc7e6c3e4141b458c1a0082acfd0172de43a",
+      "public_context": "../VOICE-ACCURACY-2026-09-06.md",
+      "scope": "実1人の保存済み録音から配備ASR/local Qwen/immutable出力まで。新録音のDiscord全自動返却ではない。",
+      "private_receipt_publicly_reproducible": false,
+      "not_current_runtime_attestation": true,
+      "receipt_visibility": "redacted_public_summary_only",
+      "public_summary": "voice-repair-observation.json"
+    }
+  ],
+  "disclosure": "本文・認証値・private host/path/participant/provider identifiersは含めない。private receipt hashは参照の固定であり独立真正性証明ではない。"
+}

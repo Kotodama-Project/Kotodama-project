@@ -1,0 +1,27 @@
+{
+  "upstreamRepository": "cloudflare/cloudflare-os",
+  "upstreamRevision": "c0b6f3e52ff0ab8d44d290647e256936e88e6b57",
+  "scope": "local evaluation source fixes; existing Gadget instances require a separate code update",
+  "files": [
+    {
+      "path": "packages/workshop-backend/format-blueprints/workspace-docs/files/server.js",
+      "beforeSha256": "3a7dfc321af5fcb7268fbbfb170ec70d1bf807e05bfb30441e14523e4800c7a7",
+      "afterSha256": "043f36fb8165e8d64833b3ee9d67ffa03d9bf7ba1496af3181d62cfd6b292223",
+      "patch": "document-block-validation.patch",
+      "patchSha256": "ac5fab859a2876061caaecdc0f6f6836e5b014a19d61d403e197e7dde4d96f2f",
+      "changedPaths": [
+        "packages/workshop-backend/format-blueprints/workspace-docs/files/server.js"
+      ]
+    },
+    {
+      "path": "packages/workshop-shared/src/api.ts",
+      "beforeSha256": "6b96dcf9c69dddd74bddb7942ae4c355710ee9d5a5debde97f9009cac32027e3",
+      "afterSha256": "11a680d38681cd4c563ac8b6430d099d06d5db473ebe62db39d55f98b351527d",
+      "patch": "local-qwen-window.patch",
+      "patchSha256": "17344ed0947977428251611690e022d18c9e34e6969c6d21f85a6d180e53a9c6",
+      "changedPaths": [
+        "packages/workshop-shared/src/api.ts"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "kind": "redacted_operator_observation",
+  "observed_on": "2026-09-06",
+  "scope": "Private Discord ASR and transcript quality repair",
+  "default_asr": "large-v3",
+  "turbo_fallback": false,
+  "node_tests": 140,
+  "python_tests_on_asr_runtime": 6,
+  "independent_review_findings": {
+    "P0": 0,
+    "P1": 0,
+    "P2": 0
+  },
+  "single_owner_recording_diagnostic": {
+    "audio_duration_approx_seconds": 23,
+    "asr_calls": 1,
+    "asr_elapsed_approx_seconds": 97,
+    "word_timestamps": 71,
+    "unclear_segments": 3,
+    "accepted_model_corrections": 0,
+    "raw_preserved": true,
+    "human_reference_not_in_model_prompt": true
+  },
+  "summary_unclear_quotes_excluded": true,
+  "new_recording_discord_e2e_verified": false,
+  "multi_speaker_and_long_duration_verified": false,
+  "raw_speech_and_identity_published": false,
+  "private_source_bindings": "retained privately; this summary is not independent public reproduction of the private receipts"
+}

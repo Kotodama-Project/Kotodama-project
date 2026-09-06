@@ -1,5 +1,7 @@
 # プロジェクトの地図
 
+**2026-09-06 closing view:** [68項目](acceptance/README.md) → [READMEの現在地](CLOSING-2026-09-06.md) → [追加条件](acceptance/GAPS.md) → [Issue対応](acceptance/ISSUES.md)。最新の直接指示により、全体照合後に必要な仕事を継続する。以下の9月5日PR表は履歴で、現headとreviewは[9月6日snapshot](acceptance/github-snapshot.json)を使う。
+
 Kotodama は、会話から意図・仕事・成果・学習へつなぐ Company OS を目指します。
 この地図は、README の目標から既存の実装・文書・レビューへ進むための入口です。
 機能の採用、Task 状態、実環境の稼働を決める台帳ではありません。
@@ -54,7 +56,7 @@ source body をこの地図へ集めません。
 | [#34](https://github.com/Kotodama-Project/Kotodama-project/pull/34) → [#35](https://github.com/Kotodama-Project/Kotodama-project/pull/35) → [#36](https://github.com/Kotodama-Project/Kotodama-project/pull/36) | swarm → migration ledger → agent lifecycle | この順番の stack。契約が存在することは実行の証明ではない |
 | [#37](https://github.com/Kotodama-Project/Kotodama-project/pull/37) | Public Beta gate の識別子 | #18 に積まれた候補。gate は未証明のまま |
 
-#18 の checks は読取時点で成功していましたが、独立した最新push承認と未解決レビューが残っています。
+#18 の checks は読取時点で成功していました。9月6日に既存22 threadsの解決を確認しましたが、独立した最新push承認は未完です。
 [出典・ライセンス判断 #25](https://github.com/Kotodama-Project/Kotodama-project/issues/25) も別の受入条件です。
 現在のレビュー指摘を確認せず、古い本文の「全件解決」や `mergeable` だけから統合を判断しません。
 

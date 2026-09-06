@@ -1,0 +1,7 @@
+--- a/packages/workshop-shared/src/api.ts
++++ b/packages/workshop-shared/src/api.ts
+@@ -1219,2 +1219,4 @@
+   "ollama": {
++    // Conservative local profile: 56k input plus 4096 output in a 65536-token deployment.
++    "qwen3.6-35b-a3b": {name: "Qwen 3.6 35B A3B (local)", contextWindow: 60096, outputLimit: 4096},
+   },
