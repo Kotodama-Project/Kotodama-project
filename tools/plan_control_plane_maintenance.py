@@ -119,14 +119,14 @@ def plan(root: Path, as_of: date, include_info: bool = False) -> dict[str, Any]:
         "candidate_work_count": len(work),
         "candidate_work": work,
         "claims": {
-            "issue_created": false,
-            "work_order_promoted": false,
-            "agent_activated": false,
-            "capability_grant_created": false,
-            "current_truth_changed": false,
-            "runtime_deployed": false,
-            "public_beta_go_created": false
-        }
+            "issue_created": False,
+            "work_order_promoted": False,
+            "agent_activated": False,
+            "capability_grant_created": False,
+            "current_truth_changed": False,
+            "runtime_deployed": False,
+            "public_beta_go_created": False,
+        },
     }
 
 
