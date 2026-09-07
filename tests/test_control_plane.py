@@ -61,6 +61,33 @@ class ControlPlaneTest(unittest.TestCase):
         self.assertEqual(0, report["summary"]["active_agent_count"])
         self.assertTrue(all(value is False for value in report["claims"].values()))
 
+    def test_maintenance_planner_turns_findings_into_proposals_only(self) -> None:
+        process = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "tools" / "plan_control_plane_maintenance.py"),
+                "--root",
+                str(ROOT),
+                "--as-of",
+                "2026-09-07",
+                "--format",
+                "json",
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(0, process.returncode, process.stdout + process.stderr)
+        plan = json.loads(process.stdout)
+        self.assertGreaterEqual(plan["candidate_work_count"], 1)
+        self.assertTrue(all(value is False for value in plan["claims"].values()))
+        self.assertTrue(all(item["authority"] == "proposal_only" for item in plan["candidate_work"]))
+        stale = [item for item in plan["candidate_work"] if item["source_finding"]["code"] == "stale-canonical-source"]
+        self.assertTrue(stale)
+        self.assertTrue(all(item["assigned_agent_role"] == "knowledge-curator" for item in stale))
+
     def test_agents_are_pre_activation_candidates(self) -> None:
         registry = self.load("governance/agent-registry.json")
         for agent in registry["agents"]:
