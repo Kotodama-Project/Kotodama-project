@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/audit-policy.schema.json",
+  "title": "Kotodama Control Plane Audit Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "status", "reviewed_at", "optimization_priority", "cadence", "gates", "finding_lifecycle", "autonomy_boundaries"],
+  "properties": {
+    "version": {"const": 1},
+    "status": {"enum": ["candidate_only", "promoted"]},
+    "reviewed_at": {"type": "string", "format": "date"},
+    "optimization_priority": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "cadence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "frequency", "mode", "authority", "outputs"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "frequency": {"enum": ["on_pull_request", "daily", "weekly", "monthly"]},
+          "mode": {"enum": ["deterministic", "agentic", "human_plus_agent"]},
+          "authority": {"enum": ["read_only", "proposal_only", "bounded_execute"]},
+          "outputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "severity", "condition"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "severity": {"enum": ["info", "warning", "error", "critical"]},
+          "condition": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "finding_lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["states", "critical_owner_sla_days", "high_resolution_target_days", "required_fields"],
+      "properties": {
+        "states": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "critical_owner_sla_days": {"type": "integer", "minimum": 0},
+        "high_resolution_target_days": {"type": "integer", "minimum": 0},
+        "required_fields": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+      }
+    },
+    "autonomy_boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deterministic_checks_may_run_automatically", "agentic_maintenance_default", "automatic_outputs_allowed", "automatic_outputs_forbidden"],
+      "properties": {
+        "deterministic_checks_may_run_automatically": {"type": "boolean"},
+        "agentic_maintenance_default": {"enum": ["read_only", "proposal_only", "bounded_execute"]},
+        "automatic_outputs_allowed": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "automatic_outputs_forbidden": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+      }
+    }
+  }
+}
