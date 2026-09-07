@@ -21,7 +21,7 @@ jobs:
           python-version: "3.12"
       - name: Install test dependencies
         run: python -m pip install -r requirements-test.txt
-      - name: Validate control plane
-        run: python -m unittest tests.test_control_plane -v
+      - name: Run full regression suite
+        run: python -m unittest discover -s tests -v
       - name: Emit control-plane audit
         run: python tools/audit_control_plane.py --format markdown --fail-on error
