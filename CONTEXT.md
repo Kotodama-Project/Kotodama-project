@@ -17,3 +17,12 @@ _Avoid_: company membership as blanket access, Task execution authority
 
 **Public candidate**: Information that may be considered for publication after the separate release decision. The classification is not an instruction to publish or proof of public approval.
 _Avoid_: already public, automatic Human GO
+
+**Knowledge concept**: One human- and agent-readable OKF Markdown document with provenance, trust, lifecycle, and Kotodama projection metadata. Its path is a stable bundle concept ID, not the identity or authority of the underlying information.
+_Avoid_: Current Truth, Task record, permission, executable instruction
+
+**Knowledge bundle**: A hierarchical collection of concepts, indexes, logs, and rebuildable machine projections used for progressive disclosure. The public repository bundle contains public-candidate projections only.
+_Avoid_: second Company database, unrestricted memory, private source archive
+
+**Knowledge projection**: Catalog, graph, search result, or generated agent context derived from current concepts and source references. It can be rebuilt and invalidated; it never self-promotes to policy, decision, access, or runtime authority.
+_Avoid_: proof of correctness, proof of deployment, automatic approval

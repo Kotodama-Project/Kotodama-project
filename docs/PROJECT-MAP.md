@@ -31,11 +31,18 @@ source body をこの地図へ集めません。
 | Governance / Evidence | [Session / Conversation ledger](SESSION-CONVERSATION-LEDGER.md)、[Review Workflow](REVIEW-WORKFLOW.md) | 訂正、根拠、権限、検証、採用の連続性を保つ |
 | Company Pack | [5-minute tour](FIVE-MINUTE-TOUR.md)、[Starter Walkthrough](STARTER-WALKTHROUGH.md) | 公開手順を手元で再現する |
 | Context | [README の Context](../README.md#context-platform--会社の共有記憶) | 許可された情報集合から根拠付きで取得する |
+| Knowledge Base | [OKF knowledge bundle](../knowledge/index.md)、[運用設計](KNOWLEDGE-BASE.md) | 正本を複製せず、出典・鮮度・矛盾・Goal/KGIを保った検索と限定contextを実タスクで検証する |
 | 情報アクセス | [情報の分類と閲覧者](INFORMATION-ACCESS.md) | 情報IDと主体IDでread/reviewを検査し、取消・失効を反映する |
 | Workforce | [Company AGI direction](OWNER-INTENT-COMPANY-AGI.md)、下記 #34〜#36 | 一つの実行を owner、Task、effect、receipt に結ぶ |
 | Runtime | [Runtime overview](../runtime/README.md)、[Installation Lifecycle](INSTALLATION-LIFECYCLE.md) | install、restart、rollback、restore を実環境で検証する |
 | OS から要件案を作る | [native Gadget / Gatekeeper](../runtime/cloudflare-os-kotodama/README.md)、[Codex bridge](../runtime/codex-task-bridge/README.md) | privateな一往復の検証を、既存Task ownerへの実行契約と常時運用へつなぐ |
 | Business / Learning | [README の Business Loop](../README.md#ai-business-loop) | 一つの成果の有用性と feedback を確認する |
+
+## ナレッジベース
+
+[`knowledge/index.md`](../knowledge/index.md) は、人とagent向けのOKF v0.2公開投影です。Goal、現在地、成功指標、権限境界、知識ライフサイクル、担当、refresh、retrieval、contextを段階的に辿れます。`catalog.json` と `graph.json` はConceptから再生成され、正本・権限・Task・Decision・配備を置き換えません。
+
+更新時は [`KNOWLEDGE-BASE.md`](KNOWLEDGE-BASE.md) の手順に従い、sourceとrevisionを確認し、影響Conceptだけを変更し、別のreviewerによる確認、projection再生成、query/context readbackまで行います。公開bundleへinternal/restricted/secret/unclassified情報を入れません。
 
 ## 意図・担当・動的contextの最新方針
 

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/kotodama-okf-profile.schema.json",
+  "title": "Kotodama OKF bundle profile",
+  "description": "A stricter producer profile layered on Open Knowledge Format v0.2. It governs the public, rebuildable knowledge projection and does not make it a source authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile_version",
+    "okf_version",
+    "bundle_id",
+    "bundle_root",
+    "public_repository",
+    "required_frontmatter",
+    "allowed_classifications",
+    "roles",
+    "quality",
+    "generated_outputs"
+  ],
+  "properties": {
+    "profile_version": {"const": "0.1"},
+    "okf_version": {"const": "0.2"},
+    "bundle_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{2,127}$"
+    },
+    "bundle_root": {"const": "knowledge"},
+    "public_repository": {"const": true},
+    "required_frontmatter": {
+      "type": "array",
+      "minItems": 7,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "type"}},
+        {"contains": {"const": "title"}},
+        {"contains": {"const": "description"}},
+        {"contains": {"const": "status"}},
+        {"contains": {"const": "generated"}},
+        {"contains": {"const": "sources"}},
+        {"contains": {"const": "kotodama"}}
+      ]
+    },
+    "allowed_classifications": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "unclassified",
+          "public_candidate",
+          "internal",
+          "restricted",
+          "secret"
+        ]
+      }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["librarian", "reviewer", "coordinator", "builder"],
+      "properties": {
+        "librarian": {"type": "string", "minLength": 1},
+        "reviewer": {"type": "string", "minLength": 1},
+        "coordinator": {"type": "string", "minLength": 1},
+        "builder": {"type": "string", "minLength": 1}
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "require_sources",
+        "require_independent_review_for_confirmed",
+        "fail_on_broken_internal_links",
+        "fail_on_missing_repository_sources",
+        "max_context_concepts",
+        "critical_tags"
+      ],
+      "properties": {
+        "require_sources": {"const": true},
+        "require_independent_review_for_confirmed": {"const": true},
+        "fail_on_broken_internal_links": {"type": "boolean"},
+        "fail_on_missing_repository_sources": {"type": "boolean"},
+        "max_context_concepts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "critical_tags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "generated_outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog", "graph"],
+      "properties": {
+        "catalog": {
+          "type": "string",
+          "pattern": "^knowledge/_generated/[a-z0-9._-]+\\.json$"
+        },
+        "graph": {
+          "type": "string",
+          "pattern": "^knowledge/_generated/[a-z0-9._-]+\\.json$"
+        }
+      }
+    }
+  }
+}
