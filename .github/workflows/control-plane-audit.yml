@@ -25,3 +25,5 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Emit control-plane audit
         run: python tools/audit_control_plane.py --format markdown --fail-on error
+      - name: Emit proposal-only maintenance plan
+        run: python tools/plan_control_plane_maintenance.py --format markdown
