@@ -1,0 +1,74 @@
+name: Digital Fly - Real v630 Brian2
+
+on:
+  push:
+    branches: ['research/digital-fly-real-brain-20260908']
+    paths:
+      - '.github/workflows/digital-fly-real-brain.yml'
+      - 'research/digital-fly/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digital-fly-real-brain-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full-brain:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Install original Python version
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.10.11'
+      - name: Fetch this commit's research runner
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p digital-fly-output/evidence
+          python - <<'PY'
+          import os, urllib.request
+          url = 'https://raw.githubusercontent.com/Kotodama-Project/Kotodama-project/' + os.environ['SOURCE_SHA'] + '/research/digital-fly/run_full_brain.py'
+          urllib.request.urlretrieve(url, 'run_full_brain.py')
+          PY
+          cp run_full_brain.py digital-fly-output/run_full_brain.py
+      - name: Download and verify actual source data first
+        run: python run_full_brain.py --out digital-fly-output --acquire-only
+      - name: Install pinned reference dependencies
+        run: |
+          python -m pip install 'pip==23.2.1' 'setuptools==68.2.2' 'wheel==0.41.2'
+          python -m pip install 'numpy==1.22.3' 'scipy==1.8.1' 'pandas==1.4.3' 'Cython==0.29.33' 'sympy==1.12' 'joblib==1.2.0' 'pyarrow==11.0.0' 'matplotlib==3.7.1' 'packaging==23.1' 'pyparsing==3.0.9' 'jinja2==3.1.2'
+          python -m pip install --no-build-isolation 'brian2==2.5.1'
+          python -m pip check
+      - name: Full graph audit, two Brian2 backends, and 90 native trials
+        run: |
+          set -o pipefail
+          python run_full_brain.py --out digital-fly-output --trials 30 --duration-ms 1000 --parity-ms 1000 2>&1 | tee digital-fly-output/evidence/execution.log
+      - name: Preserve actual original data
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: digital-fly-v630-actual-source-data
+          path: digital-fly-output/raw/
+          retention-days: 14
+          compression-level: 0
+          if-no-files-found: warn
+      - name: Preserve graph, spikes, and evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: digital-fly-actual-brian2-results
+          path: |
+            digital-fly-output/
+            !digital-fly-output/raw/**
+          retention-days: 14
+          compression-level: 6
+          if-no-files-found: error
