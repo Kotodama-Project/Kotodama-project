@@ -155,6 +155,7 @@
           "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
         },
         "resource": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "Optional Kotodama producer pin for exact repository-local source bytes; not a remote freshness or semantic verification claim."},
         "title": {"type": "string", "minLength": 1, "maxLength": 512},
         "author": {"$ref": "#/$defs/actor"},
         "usage_count": {"type": "integer", "minimum": 0},

@@ -149,8 +149,24 @@ def load_bundle(repository_root: Path, *, as_of: dt.datetime | None = None) -> B
             if resolved_source == Path("/__OUTSIDE_REPOSITORY__"):
                 issues.append(Issue("error", "SOURCE_PATH_ESCAPE", relative_repo_path, f"source leaves repository: {resource}"))
             elif resolved_source is not None and not resolved_source.exists():
-                level = "error" if profile.get("quality", {}).get("fail_on_missing_repository_sources", True) else "warning"
+                level = "error" if "sha256" in source or profile.get("quality", {}).get("fail_on_missing_repository_sources", True) else "warning"
                 issues.append(Issue(level, "MISSING_SOURCE", relative_repo_path, f"source does not exist: {resource}"))
+            elif "sha256" in source:
+                # Optional producer pin for local source bytes. Remote sources
+                # must first be captured by an authorized adapter; no network here.
+                expected = source["sha256"]
+                if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
+                    issues.append(Issue("error", "SOURCE_DIGEST_INVALID", relative_repo_path, "source sha256 must be 64 lowercase hex characters"))
+                elif resolved_source is None or not resolved_source.is_file():
+                    issues.append(Issue("error", "SOURCE_DIGEST_UNAVAILABLE", relative_repo_path, "source sha256 requires a repository-local file"))
+                else:
+                    try:
+                        actual = hashlib.sha256(resolved_source.read_bytes()).hexdigest()
+                    except OSError:
+                        issues.append(Issue("error", "SOURCE_DIGEST_UNAVAILABLE", relative_repo_path, "cannot read pinned source"))
+                    else:
+                        if actual != expected:
+                            issues.append(Issue("error", "SOURCE_DIGEST_MISMATCH", relative_repo_path, f"pinned source changed: {resource}; review the concept before rebinding"))
 
         used_footnotes = set(FOOTNOTE_RE.findall(_without_code_fences(document.body)))
         defined_footnotes = set(
