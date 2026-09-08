@@ -1,0 +1,44 @@
+name: Digital Fly - Verified inputs for local audit
+on:
+  push:
+    branches: ['research/digital-fly-real-brain-20260908']
+    paths: ['.github/workflows/digital-fly-local-materials.yml']
+permissions:
+  contents: read
+jobs:
+  materialize:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13.5'
+      - name: Obtain the same pinned public inputs
+        run: |
+          python - <<'PY'
+          import urllib.request
+          urllib.request.urlretrieve('https://raw.githubusercontent.com/Kotodama-Project/Kotodama-project/8c5e410b3eda9f814b8445df5dc1619fab40abb4/research/digital-fly/run_full_brain.py', 'run_full_brain.py')
+          PY
+          python run_full_brain.py --acquire-only --out transfer
+      - name: Preserve verified raw data for download
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: digital-fly-v630-verified-raw-transfer
+          path: transfer/raw/
+          compression-level: 0
+          retention-days: 14
+      - name: Download official wheels for local re-audit environment
+        run: |
+          python -m pip download --only-binary=:all: --no-deps --dest wheelhouse 'pyarrow==20.0.0' 'brian2==2.9.0'
+          python - <<'PY'
+          import hashlib, json, pathlib
+          files={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in pathlib.Path('wheelhouse').glob('*.whl')}
+          pathlib.Path('wheelhouse/SHA256.json').write_text(json.dumps(files,indent=2))
+          PY
+      - name: Preserve dependency wheels separately
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: digital-fly-local-audit-wheels-cp313
+          path: wheelhouse/
+          compression-level: 0
+          retention-days: 14
