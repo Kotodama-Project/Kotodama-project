@@ -1,0 +1,270 @@
+{
+  "version": 1,
+  "status": "candidate_only",
+  "reviewed_at": "2026-09-08",
+  "upstream": {
+    "repository": "milind-soni/OpenMausBot",
+    "pinned_commit": "600e315cb7c3f61c214488678f7e6a99a7be157d",
+    "license": "Apache-2.0",
+    "verified_surfaces": [
+      "README.md",
+      "docs/mcp-server.md",
+      "docs/byo-vps.md",
+      "docs/deploy-vps.md"
+    ],
+    "adoption_mode": "integrate_and_extend_not_replace_kotodama_authority"
+  },
+  "management_model": {
+    "principle": "one_management_plane_multiple_execution_boundaries",
+    "primary_human_surface": "openmausbot_kotodama_control_surface",
+    "grouping_semantics": "view_and_routing_only_not_authority_silos",
+    "no_parallel_authority": true,
+    "canonical_owners": {
+      "goal_and_kgi": "governance/okf.json",
+      "knowledge": "governance/knowledge-registry.json",
+      "agent_portfolio": "governance/agent-registry.json",
+      "audit_policy": "governance/audit-policy.json"
+    },
+    "management_scope": [
+      "projects_and_goals",
+      "agent_inventory",
+      "agent_assignment",
+      "work_dispatch",
+      "work_status",
+      "handoff",
+      "artifact_and_evidence_links",
+      "approval_queue_visibility",
+      "runtime_location_visibility",
+      "resource_and_cost_visibility",
+      "interrupt_and_disable_controls"
+    ]
+  },
+  "agent_groups": [
+    {
+      "id": "intake-orchestration",
+      "label": "Intake / Orchestration",
+      "purpose": "Human intent, objective, constraints, task decomposition, assignment, and cross-agent handoff.",
+      "may_share_work_across_groups": true
+    },
+    {
+      "id": "knowledge-research",
+      "label": "Knowledge / Research",
+      "purpose": "Research, provenance, freshness, contradiction detection, and context preparation.",
+      "may_share_work_across_groups": true
+    },
+    {
+      "id": "build-execution",
+      "label": "Build / Execution",
+      "purpose": "Code, browser, computer, document, and bounded external workflow execution.",
+      "may_share_work_across_groups": true
+    },
+    {
+      "id": "verification-audit",
+      "label": "Verification / Audit",
+      "purpose": "Independent verification, evidence binding, policy checks, quality review, and red teaming.",
+      "may_share_work_across_groups": true
+    },
+    {
+      "id": "operations-improvement",
+      "label": "Operations / Improvement",
+      "purpose": "Runtime health, capacity, cost, incident analysis, and agent portfolio improvement proposals.",
+      "may_share_work_across_groups": true
+    }
+  ],
+  "common_agent_view": {
+    "required_fields": [
+      "kotodama_agent_id",
+      "display_name",
+      "group_ids",
+      "project_ids",
+      "purpose",
+      "authority",
+      "activation_state",
+      "runtime_kind",
+      "runtime_location_ref",
+      "connection_state",
+      "current_work_ref",
+      "parent_work_ref",
+      "last_observed_at",
+      "artifact_refs",
+      "verification_state",
+      "cost_observation_ref"
+    ],
+    "connection_states": [
+      "unknown",
+      "offline",
+      "idle",
+      "running",
+      "needs_user",
+      "failed",
+      "stalled",
+      "interrupted"
+    ],
+    "execution_completion_is_not_verification": true
+  },
+  "work_contract": {
+    "shared_work_identity_required": true,
+    "copy_paste_handoff_is_not_canonical": true,
+    "handoff_preserves": [
+      "objective",
+      "constraints",
+      "source_refs",
+      "decision_refs",
+      "artifact_refs",
+      "open_questions",
+      "verification_requirements",
+      "authority_boundary"
+    ],
+    "idempotency_required_for_dispatch": true,
+    "stop_request_requires_stop_observation": true,
+    "result_states": [
+      "queued",
+      "running",
+      "needs_user",
+      "execution_settled",
+      "verification_pending",
+      "verified_candidate",
+      "failed",
+      "cancelled",
+      "stalled"
+    ]
+  },
+  "adapters": {
+    "openmaus_mcp": {
+      "state": "candidate",
+      "role": "team_control_adapter",
+      "supported_for_integration": [
+        "inspect_bots_and_channels",
+        "inspect_activity",
+        "read_bounded_transcript_pages",
+        "create_and_edit_bots_channels_tasks",
+        "send_work",
+        "wait_for_conversation",
+        "interrupt_turn",
+        "switch_idle_bot_model"
+      ],
+      "not_exposed_by_upstream_v1_mcp": [
+        "approve_requests",
+        "remember_permission_grants",
+        "delete_data",
+        "import_teams",
+        "change_credentials",
+        "computer_or_vm_lifecycle"
+      ],
+      "kotodama_policy": "missing_mcp_capability_must_not_be_simulated_as_success"
+    },
+    "external_agents": {
+      "state": "planned",
+      "role": "federated_runtime_adapter",
+      "minimum_contract": [
+        "stable_agent_identity",
+        "health_observation",
+        "work_dispatch_or_explicit_read_only_mode",
+        "status_observation",
+        "artifact_or_result_binding",
+        "interrupt_or_explicitly_unsupported",
+        "authority_binding"
+      ],
+      "read_only_agents_must_not_render_mutating_controls": true
+    },
+    "proxmox": {
+      "state": "planned",
+      "role": "execution_isolation_and_runtime_lifecycle",
+      "direct_agent_access_to_proxmox_management": false,
+      "management_adapter_required": true,
+      "minimum_controls": [
+        "allowlisted_vm_or_container_scope",
+        "allowlisted_operations",
+        "separate_management_credential",
+        "network_boundary",
+        "resource_limits",
+        "audit_receipt",
+        "readback_after_mutation",
+        "emergency_admin_recovery_path"
+      ],
+      "openmaus_byo_vps_pattern": {
+        "recommended_initial_target": "dedicated_linux_vm_on_proxmox",
+        "agent_process_location_note": "BYO VPS moves the managed computer container; the agent process remains on the OpenMausBot host.",
+        "docker_group_is_root_equivalent": true,
+        "dedicated_worker_required": true,
+        "worker_filesystem_is_disposable": true
+      }
+    }
+  },
+  "execution_zones": [
+    {
+      "id": "management",
+      "purpose": "Kotodama control records and the unified management surface.",
+      "may_hold_canonical_authority_records": true,
+      "work_agent_execution_allowed": false
+    },
+    {
+      "id": "worker",
+      "purpose": "OpenMausBot harness, approved agent CLIs, browser/computer workers, and external execution adapters.",
+      "may_hold_canonical_authority_records": false,
+      "work_agent_execution_allowed": true
+    },
+    {
+      "id": "verification",
+      "purpose": "Independent validation, evidence preservation, and monitoring that work agents cannot rewrite.",
+      "may_hold_canonical_authority_records": false,
+      "work_agent_execution_allowed": false
+    }
+  ],
+  "rollout": [
+    {
+      "id": "P0",
+      "name": "Inventory and visibility",
+      "status": "planned",
+      "exit_criteria": [
+        "all managed agents have stable Kotodama identities",
+        "all agents render in the unified surface or are explicitly classified as unsupported",
+        "connection state cannot remain falsely running after observation timeout",
+        "no canonical authority moves into OpenMausBot transcripts"
+      ]
+    },
+    {
+      "id": "P1",
+      "name": "Governed dispatch and handoff",
+      "status": "planned",
+      "exit_criteria": [
+        "shared work identity survives cross-agent handoff",
+        "dispatch is idempotent",
+        "interrupt requests require observed stop",
+        "unsupported adapter actions fail closed"
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Artifact, evidence, and verification binding",
+      "status": "planned",
+      "exit_criteria": [
+        "execution settlement is distinct from verification",
+        "artifacts and evidence bind to work and agent run identity",
+        "producer cannot self-promote a verified result where independence is required"
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Bounded Proxmox lifecycle integration",
+      "status": "planned",
+      "exit_criteria": [
+        "runtime lifecycle operations use a dedicated least-privilege adapter",
+        "agents do not receive Proxmox management credentials",
+        "runtime mutations are read back and recorded",
+        "isolation and emergency recovery are exercised"
+      ]
+    }
+  ],
+  "claims": {
+    "openmaus_runtime_deployed": false,
+    "all_agents_integrated": false,
+    "proxmox_adapter_deployed": false,
+    "runtime_isolation_verified": false,
+    "capability_grant_created": false,
+    "promotion_created": false,
+    "current_truth_changed": false,
+    "final_human_go": false,
+    "public_beta_go": false
+  }
+}
