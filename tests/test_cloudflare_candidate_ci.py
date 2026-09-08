@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pathlib
 import re
+import shlex
 import unittest
+import yaml
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -45,6 +47,16 @@ class CloudflareCandidateCIContractTests(unittest.TestCase):
         self.assertIn("validate_cloudflare_os_security_candidate.py", workflow)
         self.assertIn("git status --porcelain", workflow)
         self.assertIn("node --test tests/node/test_cloudflare_voice_review.mjs", workflow)
+        jobs = yaml.safe_load(workflow)["jobs"]
+        node_tests = []
+        for job in jobs.values():
+            for step in job.get("steps", []):
+                if isinstance(step.get("run"), str):
+                    command = shlex.split(step["run"])
+                    if command and command[0] == "node" and "--test" in command:
+                        node_tests.extend(command)
+        for test_path in (ROOT / "tests/node").glob("test_codex_*.mjs"):
+            self.assertIn(test_path.relative_to(ROOT).as_posix(), node_tests, "Codex bridge regression is missing from CI")
 
         forbidden = (
             "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "secrets.",

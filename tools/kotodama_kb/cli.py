@@ -16,7 +16,7 @@ def _add_common_root(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(__file__).resolve().parents[1],
+        default=Path(__file__).resolve().parents[2],
         help="repository root (default: inferred from tools/knowledge_base.py)",
     )
     parser.add_argument(
@@ -74,6 +74,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     errors = [issue for issue in bundle.issues if issue.level == "error"]
     warnings = [issue for issue in bundle.issues if issue.level == "warning"]
+
+    if args.command in {"query", "context"} and errors:
+        # Do not render invalid (possibly non-public) concept metadata or bodies.
+        print("ERROR: invalid knowledge bundle; run validate before retrieval", file=sys.stderr)
+        return 1
 
     if args.command == "validate":
         _print_issues(bundle.issues)
@@ -156,6 +161,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "context":
+        if args.max_concepts is not None and not 1 <= args.max_concepts <= int(bundle.profile["quality"]["max_context_concepts"]):
+            print("ERROR: --max-concepts is outside the profile budget", file=sys.stderr)
+            return 2
+        if not any((args.goal, args.kgi, args.initiative, args.tag)):
+            print("ERROR: context requires a goal, kgi, initiative, or tag", file=sys.stderr)
+            return 2
         selection = select_context(
             bundle,
             goals=args.goal,

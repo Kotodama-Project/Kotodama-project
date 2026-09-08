@@ -251,6 +251,21 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
                 self.assertEqual(1, len(violations), violations)
                 self.assertIn("Docker action image", violations[0][2])
 
+    def test_nested_fixture_directory_is_not_mistaken_for_ancestor_git_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            subprocess.run(["git", "init", "-q", str(parent)], check=True, capture_output=True)
+            nested = parent / "nested"
+            workflows = nested / ".github/workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "candidate.yml").write_text(
+                "name: Nested\non: push\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: owner/action@v1\n", encoding="utf-8")
+            self.assertTrue(WORKFLOW_SCANNER.is_git_repository(parent))
+            self.assertFalse(WORKFLOW_SCANNER.is_git_repository(nested))
+            violations = WORKFLOW_SCANNER.scan_workflows(nested)
+            self.assertEqual(len(violations), 1)
+            self.assertIn("full commit SHA", violations[0][2])
+
     def test_workflow_reference_gate_accepts_structured_immutable_references(
         self,
     ) -> None:

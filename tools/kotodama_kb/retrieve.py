@@ -4,6 +4,20 @@ from .foundation import *  # noqa: F401,F403
 from .reserved import *  # noqa: F401,F403
 from .load import *  # noqa: F401,F403
 
+def _require_valid_bundle(bundle: Bundle) -> None:
+    if any(issue.level == "error" for issue in bundle.issues):
+        raise KnowledgeBaseError("invalid knowledge bundle; run validate before retrieval")
+
+
+def _eligible_context(concept: Concept) -> bool:
+    return (
+        concept.extension.get("agent_use", {}).get("discoverable", False)
+        and concept.extension.get("knowledge_state") in {"candidate", "confirmed"}
+        and concept.metadata.get("status") != "deprecated"
+        and not concept.is_stale
+    )
+
+
 def _search_haystacks(concept: Concept) -> dict[str, str]:
     metadata = concept.metadata
     extension = concept.extension
@@ -32,6 +46,7 @@ def query_bundle(
     tag_filter: str | None = None,
     include_stale: bool = False,
 ) -> tuple[SearchResult, ...]:
+    _require_valid_bundle(bundle)
     normalized_query = _normalized_text(query.strip())
     if not normalized_query:
         raise KnowledgeBaseError("query must not be empty")
@@ -42,7 +57,7 @@ def query_bundle(
         agent_use = extension.get("agent_use", {})
         if not agent_use.get("discoverable", False):
             continue
-        if extension.get("knowledge_state") in {"revoked", "deprecated"}:
+        if extension.get("knowledge_state") in {"revoked", "deprecated"} or concept.metadata.get("status") == "deprecated":
             continue
         if concept.is_stale and not include_stale:
             continue
@@ -72,6 +87,9 @@ def query_bundle(
                 if token in text:
                     score += weight
                     reasons.append(f"token-in-{field}")
+        # Trust and priority may rank real matches, never manufacture a match.
+        if not reasons:
+            continue
         if concept.trust_tier == "human-reviewed":
             score += 2.0
         elif concept.trust_tier == "machine-confirmed":
@@ -108,6 +126,7 @@ def select_context(
     tags: Sequence[str],
     max_concepts: int | None,
 ) -> ContextSelection:
+    _require_valid_bundle(bundle)
     filters = {
         "goals": tuple(sorted(set(goals))),
         "kgis": tuple(sorted(set(kgis))),
@@ -117,7 +136,7 @@ def select_context(
     if not any(filters.values()):
         raise KnowledgeBaseError("context requires at least one --goal, --kgi, --initiative, or --tag")
 
-    limit = max_concepts or int(bundle.profile["quality"]["max_context_concepts"])
+    limit = max_concepts if max_concepts is not None else int(bundle.profile["quality"]["max_context_concepts"])
     configured_max = int(bundle.profile["quality"]["max_context_concepts"])
     if limit < 1 or limit > configured_max:
         raise KnowledgeBaseError(f"--max-concepts must be between 1 and {configured_max}")
@@ -128,10 +147,16 @@ def select_context(
     requested_tags = {_normalized_text(tag) for tag in tags}
     matches: dict[str, Concept] = {}
     unresolved: set[str] = set()
+    required: set[str] = set()
+    seen_filters: dict[str, set[str]] = {key: set() for key in filters}
 
     for concept in bundle.concepts:
         extension = concept.extension
         concept_tags = {_normalized_text(str(tag)) for tag in concept.metadata.get("tags", [])}
+        seen_filters["goals"].update(requested_goals & set(extension.get("goal_refs", [])))
+        seen_filters["kgis"].update(requested_kgis & set(extension.get("kgi_refs", [])))
+        seen_filters["initiatives"].update(requested_initiatives & set(extension.get("initiative_refs", [])))
+        seen_filters["tags"].update(requested_tags & concept_tags)
         direct = bool(
             requested_goals & set(extension.get("goal_refs", []))
             or requested_kgis & set(extension.get("kgi_refs", []))
@@ -140,24 +165,26 @@ def select_context(
         )
         if not direct:
             continue
-        agent_use = extension.get("agent_use", {})
-        if not agent_use.get("discoverable", False):
-            unresolved.add(concept.concept_id)
-            continue
-        if extension.get("knowledge_state") in {"revoked", "deprecated", "conflicted", "unknown"}:
-            unresolved.add(concept.concept_id)
-            continue
         critical = bool(set(concept.metadata.get("tags", [])) & set(bundle.profile["quality"].get("critical_tags", [])))
-        if concept.is_stale and critical:
+        if critical:
+            required.add(concept.concept_id)
+        if not _eligible_context(concept):
             unresolved.add(concept.concept_id)
             continue
         matches[concept.concept_id] = concept
 
+    for key, requested in filters.items():
+        for value in requested:
+            normalized = _normalized_text(value) if key == "tags" else value
+            if normalized not in seen_filters[key]:
+                unresolved.add(f"filter:{key}:{value}")
+
     by_id = bundle.by_id
     mandatory = _mandatory_governance_ids(bundle)
+    required.update(mandatory)
     for concept_id in mandatory:
         concept = by_id[concept_id]
-        if not concept.is_stale and concept.extension.get("knowledge_state") not in {"revoked", "deprecated", "conflicted", "unknown"}:
+        if _eligible_context(concept):
             matches.setdefault(concept_id, concept)
         else:
             unresolved.add(concept_id)
@@ -174,12 +201,20 @@ def select_context(
         concept = by_id.get(linked_id)
         if not concept:
             continue
-        if concept.extension.get("agent_use", {}).get("discoverable", False) and concept.extension.get("knowledge_state") not in {"revoked", "deprecated", "conflicted", "unknown"}:
+        if _eligible_context(concept):
             matches.setdefault(linked_id, concept)
+        else:
+            unresolved.add(linked_id)
 
     ordered = sorted(
         matches.values(),
         key=lambda concept: (
+            concept.concept_id not in required,
+            not bool(
+                requested_initiatives & set(concept.extension.get("initiative_refs", []))
+                or requested_kgis & set(concept.extension.get("kgi_refs", []))
+                or requested_tags & {_normalized_text(str(tag)) for tag in concept.metadata.get("tags", [])}
+            ),
             int(concept.extension.get("context_priority", 1000)),
             concept.is_stale,
             concept.concept_id,
@@ -187,6 +222,7 @@ def select_context(
     )
     selected = tuple(ordered[:limit])
     omitted = tuple(concept.concept_id for concept in ordered[limit:])
+    unresolved.update(required - {concept.concept_id for concept in selected})
     return ContextSelection(
         selected=selected,
         omitted_ids=omitted,
