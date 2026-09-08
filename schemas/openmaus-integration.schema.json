@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/openmaus-integration.schema.json",
+  "title": "Kotodama OpenMaus Unified Agent Control Plane",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "status",
+    "reviewed_at",
+    "upstream",
+    "management_model",
+    "agent_groups",
+    "common_agent_view",
+    "work_contract",
+    "adapters",
+    "execution_zones",
+    "rollout",
+    "claims"
+  ],
+  "properties": {
+    "version": {"const": 1},
+    "status": {"const": "candidate_only"},
+    "reviewed_at": {"type": "string", "format": "date"},
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "pinned_commit", "license", "verified_surfaces", "adoption_mode"],
+      "properties": {
+        "repository": {"const": "milind-soni/OpenMausBot"},
+        "pinned_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "license": {"const": "Apache-2.0"},
+        "verified_surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "adoption_mode": {"const": "integrate_and_extend_not_replace_kotodama_authority"}
+      }
+    },
+    "management_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principle", "primary_human_surface", "grouping_semantics", "no_parallel_authority", "canonical_owners", "management_scope"],
+      "properties": {
+        "principle": {"const": "one_management_plane_multiple_execution_boundaries"},
+        "primary_human_surface": {"const": "openmausbot_kotodama_control_surface"},
+        "grouping_semantics": {"const": "view_and_routing_only_not_authority_silos"},
+        "no_parallel_authority": {"const": true},
+        "canonical_owners": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["goal_and_kgi", "knowledge", "agent_portfolio", "audit_policy"],
+          "properties": {
+            "goal_and_kgi": {"const": "governance/okf.json"},
+            "knowledge": {"const": "governance/knowledge-registry.json"},
+            "agent_portfolio": {"const": "governance/agent-registry.json"},
+            "audit_policy": {"const": "governance/audit-policy.json"}
+          }
+        },
+        "management_scope": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "agent_groups": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "purpose", "may_share_work_across_groups"],
+        "properties": {
+          "id": {"enum": ["intake-orchestration", "knowledge-research", "build-execution", "verification-audit", "operations-improvement"]},
+          "label": {"type": "string", "minLength": 1},
+          "purpose": {"type": "string", "minLength": 1},
+          "may_share_work_across_groups": {"const": true}
+        }
+      }
+    },
+    "common_agent_view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_fields", "connection_states", "execution_completion_is_not_verification"],
+      "properties": {
+        "required_fields": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "connection_states": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "execution_completion_is_not_verification": {"const": true}
+      }
+    },
+    "work_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shared_work_identity_required", "copy_paste_handoff_is_not_canonical", "handoff_preserves", "idempotency_required_for_dispatch", "stop_request_requires_stop_observation", "result_states"],
+      "properties": {
+        "shared_work_identity_required": {"const": true},
+        "copy_paste_handoff_is_not_canonical": {"const": true},
+        "handoff_preserves": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "idempotency_required_for_dispatch": {"const": true},
+        "stop_request_requires_stop_observation": {"const": true},
+        "result_states": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "adapters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["openmaus_mcp", "external_agents", "proxmox"],
+      "properties": {
+        "openmaus_mcp": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "role", "supported_for_integration", "not_exposed_by_upstream_v1_mcp", "kotodama_policy"],
+          "properties": {
+            "state": {"const": "candidate"},
+            "role": {"const": "team_control_adapter"},
+            "supported_for_integration": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "not_exposed_by_upstream_v1_mcp": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "kotodama_policy": {"const": "missing_mcp_capability_must_not_be_simulated_as_success"}
+          }
+        },
+        "external_agents": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "role", "minimum_contract", "read_only_agents_must_not_render_mutating_controls"],
+          "properties": {
+            "state": {"const": "planned"},
+            "role": {"const": "federated_runtime_adapter"},
+            "minimum_contract": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "read_only_agents_must_not_render_mutating_controls": {"const": true}
+          }
+        },
+        "proxmox": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "role", "direct_agent_access_to_proxmox_management", "management_adapter_required", "minimum_controls", "openmaus_byo_vps_pattern"],
+          "properties": {
+            "state": {"const": "planned"},
+            "role": {"const": "execution_isolation_and_runtime_lifecycle"},
+            "direct_agent_access_to_proxmox_management": {"const": false},
+            "management_adapter_required": {"const": true},
+            "minimum_controls": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+            "openmaus_byo_vps_pattern": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["recommended_initial_target", "agent_process_location_note", "docker_group_is_root_equivalent", "dedicated_worker_required", "worker_filesystem_is_disposable"],
+              "properties": {
+                "recommended_initial_target": {"const": "dedicated_linux_vm_on_proxmox"},
+                "agent_process_location_note": {"type": "string", "minLength": 1},
+                "docker_group_is_root_equivalent": {"const": true},
+                "dedicated_worker_required": {"const": true},
+                "worker_filesystem_is_disposable": {"const": true}
+              }
+            }
+          }
+        }
+      }
+    },
+    "execution_zones": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "purpose", "may_hold_canonical_authority_records", "work_agent_execution_allowed"],
+        "properties": {
+          "id": {"enum": ["management", "worker", "verification"]},
+          "purpose": {"type": "string", "minLength": 1},
+          "may_hold_canonical_authority_records": {"type": "boolean"},
+          "work_agent_execution_allowed": {"type": "boolean"}
+        }
+      }
+    },
+    "rollout": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "status", "exit_criteria"],
+        "properties": {
+          "id": {"enum": ["P0", "P1", "P2", "P3"]},
+          "name": {"type": "string", "minLength": 1},
+          "status": {"const": "planned"},
+          "exit_criteria": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["openmaus_runtime_deployed", "all_agents_integrated", "proxmox_adapter_deployed", "runtime_isolation_verified", "capability_grant_created", "promotion_created", "current_truth_changed", "final_human_go", "public_beta_go"],
+      "properties": {
+        "openmaus_runtime_deployed": {"const": false},
+        "all_agents_integrated": {"const": false},
+        "proxmox_adapter_deployed": {"const": false},
+        "runtime_isolation_verified": {"const": false},
+        "capability_grant_created": {"const": false},
+        "promotion_created": {"const": false},
+        "current_truth_changed": {"const": false},
+        "final_human_go": {"const": false},
+        "public_beta_go": {"const": false}
+      }
+    }
+  }
+}
