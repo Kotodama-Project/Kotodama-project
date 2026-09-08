@@ -13,6 +13,21 @@ python -m unittest discover -s tests -p test_knowledge_work_validation.py -v
 
 auditは`examples/knowledge-work/`と`knowledge-work/`内を、最大64package・4096entryで探索する。symlink/reparse pointを拒否し、`--require-package`でゼロ件を拒否する。見つからない検証をskipしない。
 
+`audit --root LOCAL_ROOT --workspace outputs/package-a --workspace outputs/package-b`は、root相対の明示workspaceを既定探索へ追加する。各directory直下の`knowledge-work.json`を読む。未知・不正・重複workspaceは拒否し、黙ってskipしない。既存の64package/4096entry上限を増やさない。
+
+原資料をpackage directoryへコピーできない場合は、operatorが`--source-root LOCAL_SOURCE_ROOT`を明示する。manifestは引き続きworkspaceから読み、sourceとdeliverableの相対pathだけをこのsource-rootへ束縛する。省略時は従来どおり各workspaceがsource-rootとなる。明示rootで見つからないfileをworkspaceや親directoryへ探し直さない。auditでは指定source-rootをそのrunの全packageへ共通適用するため、既定探索で見つかるpackageも同じrootに適合する必要がある。
+
+```sh
+python tools/audit_knowledge_workspaces.py --root LOCAL_ROOT --workspace outputs/package-a --workspace outputs/package-b --workspace outputs/package-c --source-root LOCAL_ROOT --ceiling restricted --format json --require-package
+python tools/validate_knowledge_work_package.py PACKAGE_DIRECTORY --source-root LOCAL_ROOT --ceiling restricted
+python tools/compile_knowledge_context.py PACKAGE_DIRECTORY --source-root LOCAL_ROOT --ceiling restricted
+```
+
+validate/auditにもcompilerと同じ`--ceiling public|internal|restricted`を設け、既定は`public`。package・source・claimの宣言が上限を超えると、source/deliverable本文を読む前に拒否し、package ID/digestやbindingsを出力しない。上限を広げてもsource→claim/packageの感度下げを許さない。これはoperatorの検査範囲の指定であり、元資料の分類認定、実ACL、本人認証、read/export権限の付与ではない。
+
+workspace/source-rootは全祖先を含めsymlink/reparse pointとUNCを拒否する。rootに`..`を含む指定やdrive相対指定も使わず、選択したlocal directoryを明示する。schema、package形式、source最大32件・claim最大64件等の既存quotaは変更しない。複数packageへ分ける場合も、それぞれ既存Workの限定した成果候補として根拠を保持する。
+
+
 `python tools/create_knowledge_work_package.py NEW_DIRECTORY PACKAGE_ID`は、既存の親directory内に新しいdraftを作る。既存targetは上書きしない。作成時はWork未束縛・Promotion blockedで、contextへは使えない。失敗したdirectoryも自動削除しない。
 
 ## 入力と構造条件
@@ -25,13 +40,13 @@ candidateにはWork参照・主張・受入条件・対応する成果物が必�
 
 ## 実bytesと鮮度
 
-- workspace内の通常fileのみ。絶対path、親への逸脱、symlink/reparse point、hardlinkを拒否する。
+- manifestはworkspace内、source/deliverableは選択したsource-root内の通常fileのみ。絶対path、親への逸脱、symlink/reparse point、hardlinkを拒否する。
 - 1file最大1 MiB、manifest最大256 KiB、合計8 MiB。読取前後のfile identity・size・mtime、最後の再読とSHA-256を照合する。
 - `local_snapshot`はtimezone付き期限が必要。期限切れsourceのclaimはcontextへ進めない。claim独自の鮮度や内容の真実性を証明するものではない。
 - `synthetic_fixture`は合成だと明示された不変例で、期限なしを許す。実情報をfixtureと名付けるだけで鮮度を証明できない。source種別・分類の正しさと本人性は認証しない。
 - `--as-of`はその評価時刻の結果を作る。過去時刻でPASSしても現在の準備完了として使わない。
 
-信頼されたoperatorが選ぶworkspaceが前提。同権限の敵対的processを隔離するOS sandboxではない。実運用では現行ACL、保存先、single writer、取消を既存のアクセス窓口で照合する。
+信頼されたoperatorが選ぶworkspace/source-rootが前提。同権限の敵対的processを隔離するOS sandboxではない。実運用では現行ACL、保存先、single writer、取消を既存のアクセス窓口で照合する。
 
 ## Bounded Context
 
@@ -54,3 +69,5 @@ source/成果物変更、path、symlink/hardlink、根拠欠落、重複ID、期
 独立点検で「非material claimを省いてassumption/contradictionだけ残す」問題を発見し、実fixtureで再現して必須集合へ修正した。deterministicな成功は自然言語の理解や本物の仕事の完了ではない。
 
 次は既存のknowledge context/Work ownerから、executorへ送る最終payloadまでを束縛する。ナレッジbundleは参照・探索、このpackageは一つの作業成果と根拠の固定であり、新しい会社SSOTではない。
+
+明示source-rootの追加検証は`tests/test_knowledge_work_source_roots.py`。原資料コピーなしの3 draft監査、既定互換、root越境・UNC・祖先reparse・未知workspace・分類上限・感度下げ拒否を確認する。draftのblocking questionは残し、構造PASSをcandidateへの昇格や実Company完了にしない。

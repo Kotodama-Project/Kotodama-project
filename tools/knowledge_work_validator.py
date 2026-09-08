@@ -47,7 +47,26 @@ def evaluation_time(value=None):
     return result.astimezone(timezone.utc)
 
 
+def selected_root(value: Path):
+    """Validate an operator-selected local directory without resolving links away."""
+    path = Path(value)
+    spelling = str(path)
+    if spelling.startswith(("\\\\", "//")) or ".." in path.parts or (path.drive and not path.is_absolute()):
+        raise Refusal("ROOT_REFUSED")
+    path = Path(os.path.abspath(path))
+    current = Path(path.anchor)
+    for part in [None, *path.parts[1:]]:
+        if part is not None:
+            current /= part
+        details = current.lstat()
+        if (not stat.S_ISDIR(details.st_mode) or stat.S_ISLNK(details.st_mode)
+                or getattr(details, "st_file_attributes", 0) & 0x400):
+            raise Refusal("ROOT_REFUSED")
+    return path
+
+
 def _plain_path(root: Path, relative: str):
+    root = selected_root(root)
     if not isinstance(relative, str) or not relative or len(relative) > 512 or any(c in relative for c in "\\:\x00"):
         raise Refusal("PATH_REFUSED")
     parts = relative.split("/")
@@ -97,7 +116,7 @@ def subject_digest(package):
     return hashlib.sha256(json.dumps(subject, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")).hexdigest()
 
 
-def validate_package(root: Path, now=None):
+def validate_package(root: Path, now=None, *, source_root: Path | None = None, ceiling="public"):
     now = now or evaluation_time()
     errors, warnings = [], []
     report = {"kind": "knowledge_work_validation", "version": 1, "status": "FAIL", "package_id": None,
@@ -105,11 +124,21 @@ def validate_package(root: Path, now=None):
               "errors": errors, "warnings": warnings, "bindings": [], "claims": dict(FALSE_CLAIMS)}
     package = None
     try:
+        if ceiling not in SENSITIVITY:
+            raise Refusal("SENSITIVITY_CEILING_INVALID")
+        root = selected_root(root)
+        evidence_root = selected_root(source_root) if source_root is not None else root
         raw = read_bound(root, MANIFEST, MAX_PACKAGE_BYTES)
         package = load_strict_json_bytes(raw)
         schema = load_strict_json_bytes((ROOT / "schemas/knowledge-work-package.schema.json").read_bytes())
         if not Draft202012Validator(schema, format_checker=FormatChecker()).is_valid(package):
             raise Refusal("SCHEMA_INVALID")
+        declared = [package["sensitivity"], *[item["sensitivity"] for key in ["sources", "claims"] for item in package[key]]]
+        if any(SENSITIVITY[value] > SENSITIVITY[package["sensitivity"]] for value in declared):
+            errors.append("SENSITIVITY_DOWNGRADE")
+        # Refuse before reading bound evidence or reporting private identifiers.
+        if any(SENSITIVITY[value] > SENSITIVITY[ceiling] for value in declared):
+            raise Refusal("SENSITIVITY_CEILING")
         report.update(package_id=package["package_id"], package_sha256=hashlib.sha256(raw).hexdigest(), subject_sha256=subject_digest(package))
         names = [item["id"] for key in ["sources", "claims", "assumptions", "questions", "contradictions", "criteria", "deliverables"] for item in package[key]]
         if len(names) != len(set(names)):
@@ -123,7 +152,7 @@ def validate_package(root: Path, now=None):
         total = len(raw)
         for category in ["sources", "deliverables"]:
             for item in package[category]:
-                content = read_bound(root, item["path"], MAX_ARTIFACT_BYTES)
+                content = read_bound(evidence_root, item["path"], MAX_ARTIFACT_BYTES)
                 total += len(content)
                 if total > MAX_TOTAL_BYTES:
                     raise Refusal("AGGREGATE_LIMIT")
@@ -192,7 +221,7 @@ def validate_package(root: Path, now=None):
         # cannot prove that a source did not change during the rest of the audit.
         for category in ["sources", "deliverables"]:
             for item in package[category]:
-                if hashlib.sha256(read_bound(root, item["path"], MAX_ARTIFACT_BYTES)).hexdigest() != item["sha256"]:
+                if hashlib.sha256(read_bound(evidence_root, item["path"], MAX_ARTIFACT_BYTES)).hexdigest() != item["sha256"]:
                     errors.append("SOURCE_DRIFT")
         report["status"] = "PASS" if not errors else "FAIL"
     except (OSError, ValueError, TypeError, RecursionError) as error:

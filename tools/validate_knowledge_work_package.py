@@ -1,16 +1,18 @@
 """Validate a package's exact local evidence, with no authority-producing path."""
 from pathlib import Path
-from knowledge_work_validator import QuietParser, emit, evaluation_time, validate_package
+from knowledge_work_validator import SENSITIVITY, QuietParser, emit, evaluation_time, validate_package
 
 
 def main():
     parser = QuietParser(description=__doc__)
     parser.add_argument("workspace", type=Path)
+    parser.add_argument("--source-root", type=Path, help="Operator-selected evidence root; defaults to workspace")
+    parser.add_argument("--ceiling", choices=list(SENSITIVITY), default="public")
     parser.add_argument("--as-of")
     parser.add_argument("--format", choices=["json", "markdown"], default="json")
     args = parser.parse_args()
     try:
-        report, _ = validate_package(args.workspace, evaluation_time(args.as_of))
+        report, _ = validate_package(args.workspace, evaluation_time(args.as_of), source_root=args.source_root, ceiling=args.ceiling)
     except (ValueError, TypeError):
         parser.error("invalid clock")
     emit(report, args.format)
