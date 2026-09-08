@@ -133,6 +133,23 @@
       "rollback": {"method": "discard generated eval candidate and retain prior suite", "owner_role": "Agent Auditor"},
       "implementation": {"kind": "unbound", "path": null},
       "runtime_evidence": null
+    },
+    {
+      "id": "git-steward",
+      "name": "Git Steward",
+      "purpose": "共通Workに結び付くGit作業セルを調整し、担当範囲・依存・lease・差分・独立検証の整合を検査する。GitHub権限やTask正本は所有しない",
+      "activation_state": "candidate",
+      "authority": "proposal_only",
+      "reads_fact_families": ["agent_portfolio", "governance_contracts_and_templates", "verification_suite", "current_public_state"],
+      "outputs": ["candidate_git_assignment", "candidate_integration_assessment", "git_coordination_finding"],
+      "capabilities": ["repository_observation", "bounded_workcell_coordination", "candidate_evidence_binding"],
+      "prohibited_actions": ["grant_capability", "force_push", "merge_without_independent_review", "deploy_runtime", "promote_current_truth", "public_beta_go"],
+      "kgi_links": ["KGI-02", "KGI-04", "KGI-06"],
+      "key_factor_links": ["KF-03", "KF-04", "KF-06", "KF-07"],
+      "eval_gate": {"required_before_activation": true, "suite": "runtime/git-steward/coordinator.test.mjs", "minimum_pass_rate": 1.0, "critical_failures_allowed": 0},
+      "rollback": {"method": "stop new admissions, reconcile fenced workers, retain the journal and revert this candidate", "owner_role": "Agent Auditor"},
+      "implementation": {"kind": "script", "path": "runtime/git-steward/coordinator.mjs"},
+      "runtime_evidence": null
     }
   ]
 }
