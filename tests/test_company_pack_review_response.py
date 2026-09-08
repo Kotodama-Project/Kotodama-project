@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 from pathlib import Path
 
@@ -46,6 +47,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
 
     def create_saved_request(self, parent: Path) -> tuple[Path, dict, bytes]:
         pack = parent / "review-response-pack"
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat().replace("+00:00", "Z")
         creation = subprocess.run(
             [
                 sys.executable,
@@ -55,7 +57,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 "--human-intent-ref",
                 "human-intent:private-review-response-source",
                 "--authority-expires-at",
-                "2026-08-20T00:00:00Z",
+                expires_at,
                 "--retention-policy-ref",
                 "retention-policy:private-review-response-policy",
             ],
@@ -107,10 +109,11 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
         manifest["human_intent_ref"] = human_intent_ref
         manifest.pop("records")
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat().replace("+00:00", "Z")
         for relative in manifest["blocks"]:
             path = pack / relative
             document = json.loads(path.read_text(encoding="utf-8"))
-            document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+            document["authority"]["expires_at"] = expires_at
             path.write_text(json.dumps(document), encoding="utf-8")
 
         bundle = subprocess.run(

@@ -211,11 +211,13 @@ test('two SQLite connections see one repository-wide claim owner', () => {
     rejects(() => hb.claim('beta', {}, 'other-client'), 'SCOPE_BUSY'); a.close(); b.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
-test('SQLite transaction rolls back rejected mutations and command ids', () => {
+test('SQLite rolls back rejected business changes but persists trusted observation time', () => {
   const db = new DatabaseSync(':memory:'); const h = setup(new CloudflareSqliteStore(sqliteStorage(db)));
   h.add(); const before = db.prepare('SELECT payload FROM git_steward_state').get().payload;
   rejects(() => h.claim('alpha', { base_sha: HEAD }, 'retry-after-repair'), 'BASE_MOVED');
-  assert.equal(db.prepare('SELECT payload FROM git_steward_state').get().payload, before);
+  const after = JSON.parse(db.prepare('SELECT payload FROM git_steward_state').get().payload);
+  const expected = JSON.parse(before); expected.last_now = after.last_now;
+  assert.deepEqual(after, expected); assert.equal(after.last_now, 11);
   h.claim('alpha', {}, 'retry-after-repair'); db.close();
 });
 test('corrupt journal never silently resets coordination history', () => {

@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 from pathlib import Path
 
@@ -72,6 +73,7 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
     def create_complete_chain(self, root: Path, *, recordless: bool = False) -> dict:
         pack_id = "recordless-decision-handoff-pack" if recordless else "decision-handoff-pack"
         pack = root / pack_id
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat().replace("+00:00", "Z")
         creation_args = [sys.executable, str(CREATOR), pack_id, str(pack)]
         if not recordless:
             creation_args.extend(
@@ -79,7 +81,7 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
                     "--human-intent-ref",
                     "human-intent:private-decision-handoff-source",
                     "--authority-expires-at",
-                    "2026-08-20T00:00:00Z",
+                    expires_at,
                     "--retention-policy-ref",
                     "retention-policy:private-decision-handoff-policy",
                 ]
@@ -103,7 +105,7 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
             for relative in manifest["blocks"]:
                 path = pack / relative
                 document = json.loads(path.read_text(encoding="utf-8"))
-                document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+                document["authority"]["expires_at"] = expires_at
                 path.write_text(json.dumps(document), encoding="utf-8")
 
         paths = {
@@ -360,23 +362,23 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
                 mutate(chain)
                 result = self.run_builder(chain)
 
-            self.assertEqual(result.returncode, 1)
-            self.assertEqual(result.stderr, b"")
-            self.assertNotIn(b"private-decision-handoff", result.stdout)
-            self.assertNotIn(b"tampered-private-reason", result.stdout)
-            refusal = json.loads(result.stdout)
-            self.assertEqual(refusal["status"], "HANDOFF_BUILD_REFUSED")
-            self.assertIn(
-                refusal["reason"],
-                {"SOURCE_INVALID", "CHAIN_MISMATCH", "SOURCE_DRIFT_DETECTED"},
-            )
-            self.assertIsNone(refusal["pack_id"])
-            self.assertIsNone(refusal["artifact_bindings"])
-            self.assertIsNone(refusal["candidate_binding"])
-            self.assertEqual(refusal["review_summary"]["completed_items"], 0)
-            self.assertEqual(refusal["decision_requirements"]["required_fields"], [])
-            self.assertTrue(all(value is False for value in refusal["claims"].values()))
-            self.assertEqual(refusal["public_beta"], "NO_GO_UNPUBLISHED")
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stderr, b"")
+                self.assertNotIn(b"private-decision-handoff", result.stdout)
+                self.assertNotIn(b"tampered-private-reason", result.stdout)
+                refusal = json.loads(result.stdout)
+                self.assertEqual(refusal["status"], "HANDOFF_BUILD_REFUSED")
+                self.assertIn(
+                    refusal["reason"],
+                    {"SOURCE_INVALID", "CHAIN_MISMATCH", "SOURCE_DRIFT_DETECTED"},
+                )
+                self.assertIsNone(refusal["pack_id"])
+                self.assertIsNone(refusal["artifact_bindings"])
+                self.assertIsNone(refusal["candidate_binding"])
+                self.assertEqual(refusal["review_summary"]["completed_items"], 0)
+                self.assertEqual(refusal["decision_requirements"]["required_fields"], [])
+                self.assertTrue(all(value is False for value in refusal["claims"].values()))
+                self.assertEqual(refusal["public_beta"], "NO_GO_UNPUBLISHED")
 
     def test_saved_handoff_matches_current_chain_without_becoming_a_decision(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

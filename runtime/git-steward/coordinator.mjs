@@ -26,9 +26,16 @@ export function validPath(path, directory = true) {
   return p.split('/').every(s => s && s !== '.' && s !== '..' && s.toLowerCase() !== '.git');
 }
 const covers = (scope, path) => scope === path || (scope.endsWith('/') && path.startsWith(scope));
-const overlaps = (a, b) => covers(a, b) || covers(b, a);
+// Reservations are deliberately conservative across case-insensitive hosts.
+// A file and a directory at the same path cannot coexist in a Git tree. Keep
+// write admission (covers) exact: reserving a file does not grant its children.
+const reservationPath = p => p.replace(/\/$/, '').toLowerCase();
+const overlaps = (a, b) => {
+  const x = reservationPath(a), y = reservationPath(b);
+  return x === y || x.startsWith(y + '/') || y.startsWith(x + '/');
+};
 function conflicts(a, b) {
-  return a.conflict_keys.some(k => b.conflict_keys.includes(k)) ||
+  return a.work_ref === b.work_ref || a.conflict_keys.some(k => b.conflict_keys.includes(k)) ||
     a.write_paths.some(p => [...b.write_paths, ...b.read_paths].some(q => overlaps(p, q))) ||
     a.read_paths.some(p => b.write_paths.some(q => overlaps(p, q)));
 }
@@ -85,14 +92,24 @@ export class GitSteward {
     requireThat(id(command.request_id) && id(command.cell_id));
     const fingerprint = canonical({ actor, command });
     requireThat(new TextEncoder().encode(fingerprint).byteLength <= 65536, 'INPUT_TOO_LARGE');
-    return this.store.transaction(stored => {
-      const state = stored === null ? { version: 1, policy: this.policy, last_now: 0, epoch: 0, cells: {}, commands: {}, events: [] } : stored;
-      requireThat(state.version === 1 && canonical(state.policy) === canonical(this.policy), 'JOURNAL_BINDING_MISMATCH');
+    const transaction = this.store.transaction(stored => {
+      const state = stored === null ? { version: 2, policy: this.policy, last_now: 0, epoch: 0, cells: {}, commands: {}, events: [] } : stored;
+      requireThat(state.version === 2, 'JOURNAL_VERSION_UNSUPPORTED');
+      requireThat(canonical(state.policy) === canonical(this.policy), 'JOURNAL_BINDING_MISMATCH');
       requireThat(integer(state.last_now, 0, now) && plain(state.cells) && plain(state.commands) && Array.isArray(state.events), 'JOURNAL_INVALID');
+      const observationOnly = structuredClone(state);
+      observationOnly.last_now = now;
+      // A business refusal rolls back cell changes and deduplication, while the
+      // trusted clock observation must survive. Otherwise expiry can be undone
+      // by a backwards timestamp after a refused submit, not just after replay.
+      try {
       const previous = Object.hasOwn(state.commands, command.request_id) ? state.commands[command.request_id] : null;
       if (previous) {
         requireThat(previous === fingerprint, 'IDEMPOTENCY_CONFLICT');
-        return { state, result: this.project(state, command.cell_id, now, true) };
+        // Replays also observe time. Persist that high-water mark atomically so
+        // a restart/backwards clock cannot resurrect an already expired lease.
+        state.last_now = now;
+        return { state, result: { projection: this.project(state, command.cell_id, now, true) } };
       }
       requireThat(Object.keys(state.commands).length < this.policy.max_commands, 'JOURNAL_FULL');
       const c = command;
@@ -110,7 +127,39 @@ export class GitSteward {
         requireThat(Object.keys(state.cells).length < this.policy.max_cells, 'CELL_BUDGET');
         requireThat(c.spec.producer_ref !== this.policy.attester_ref, 'ATTESTER_NOT_INDEPENDENT');
         requireThat(!Object.values(state.cells).some(x => x.spec.work_ref === c.spec.work_ref && x.spec.work_revision === c.spec.work_revision), 'WORK_ALREADY_BOUND');
+        const prior = Object.values(state.cells).filter(x => x.spec.work_ref === c.spec.work_ref);
+        requireThat(prior.every(x => x.spec.work_revision < c.spec.work_revision), 'WORK_REVISION_STALE');
         requireThat(c.spec.depends_on.every(d => Object.hasOwn(state.cells, d)), 'DEPENDENCY_INVALID');
+        requireThat(c.spec.depends_on.every(d => !state.cells[d].superseded_by && !state.cells[d].invalidated_by &&
+          state.cells[d].state !== 'cancelled' && state.cells[d].spec.work_ref !== c.spec.work_ref), 'DEPENDENCY_SUPERSEDED');
+        // The protected Work owner admits only an authoritative current revision.
+        // A correction invalidates earlier work atomically, but never pretends
+        // that an old executor stopped. Keep its reservation until attested stop.
+        for (const older of prior) {
+          older.superseded_by = c.cell_id;
+          if (!['integrated', 'cancelled'].includes(older.state)) older.state = older.state === 'queued' ? 'cancelled' : 'stopping';
+          state.events.push({ sequence: state.events.length + 1, request_id: c.request_id, actor_ref: actor,
+            type: 'superseded', cell_id: older.spec.id, at: now, epoch: older.epoch, state: older.state,
+            superseded_by: c.cell_id, receipt_ref: null, output: older.output ? structuredClone(older.output) : null });
+        }
+        // A recorded integration stays historical evidence. Its consumers must
+        // nevertheless rebind after an upstream correction, even across several
+        // dependency levels. This is a bounded DAG traversal, not Work creation.
+        const invalidated = new Set(prior.map(x => x.spec.id));
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const consumer of Object.values(state.cells)) {
+            if (invalidated.has(consumer.spec.id) || !consumer.spec.depends_on.some(d => invalidated.has(d))) continue;
+            invalidated.add(consumer.spec.id); changed = true;
+            consumer.invalidated_by = c.cell_id;
+            if (!['integrated', 'cancelled'].includes(consumer.state)) consumer.state = consumer.state === 'queued' ? 'cancelled' : 'stopping';
+            state.events.push({ sequence: state.events.length + 1, request_id: c.request_id, actor_ref: actor,
+              type: 'dependency_invalidated', cell_id: consumer.spec.id, at: now, epoch: consumer.epoch,
+              state: consumer.state, invalidated_by: c.cell_id, receipt_ref: null,
+              output: consumer.output ? structuredClone(consumer.output) : null });
+          }
+        }
         cell = { spec: structuredClone(c.spec), state: 'queued', epoch: 0, attempts: 0, until: 0, started: 0, output: null, verification: null };
         state.cells[c.cell_id] = cell;
       } else {
@@ -118,6 +167,8 @@ export class GitSteward {
         switch (c.type) {
           case 'claim': {
             requireThat(actor === cell.spec.producer_ref, 'ACTOR_FORBIDDEN');
+            requireThat(!cell.superseded_by, 'WORK_REVISION_STALE');
+            requireThat(!cell.invalidated_by, 'DEPENDENCY_SUPERSEDED');
             requireThat(cell.state === 'queued', 'CELL_NOT_QUEUED');
             requireThat(sha(c.base_sha) && c.base_sha === cell.spec.base_sha, 'BASE_MOVED');
             requireThat(cell.spec.depends_on.every(d => state.cells[d].state === 'integrated'), 'DEPENDENCY_NOT_INTEGRATED');
@@ -144,6 +195,8 @@ export class GitSteward {
             attester(); requireThat(['stopping', 'reconciling'].includes(effective(cell, now)), 'STOP_NOT_PENDING');
             requireThat(integer(c.epoch, 1, Number.MAX_SAFE_INTEGER) && c.epoch === cell.epoch, 'STALE_FENCE');
             requireThat(ref(c.receipt_ref) && ['cancelled', 'queued'].includes(c.disposition));
+            requireThat(!cell.superseded_by || c.disposition === 'cancelled', 'WORK_REVISION_STALE');
+            requireThat(!cell.invalidated_by || c.disposition === 'cancelled', 'DEPENDENCY_SUPERSEDED');
             // The adapter must prove the previous executor is stopped/fenced and
             // preserve its output before asking to release these scopes.
             cell.state = c.disposition; cell.output = null; cell.verification = null; break;
@@ -187,8 +240,14 @@ export class GitSteward {
         type: c.type, cell_id: c.cell_id, at: now, epoch: cell.epoch, state: cell.state,
         receipt_ref: c.receipt_ref ?? null, output: cell.output ? structuredClone(cell.output) : null });
       requireThat(new TextEncoder().encode(JSON.stringify(state)).byteLength <= 4 * 1024 * 1024, 'JOURNAL_FULL');
-      return { state, result: this.project(state, c.cell_id, now, false) };
+      return { state, result: { projection: this.project(state, c.cell_id, now, false) } };
+      } catch (error) {
+        if (!(error instanceof Refusal)) throw error;
+        return { state: observationOnly, result: { refusal: error.code } };
+      }
     });
+    if (Object.hasOwn(transaction, 'refusal')) throw new Refusal(transaction.refusal);
+    return transaction.projection;
   }
   bindOutput(cell, c) {
     requireThat(sha(c.base_sha) && c.base_sha === cell.output.base_sha, 'BASE_MOVED');
@@ -199,6 +258,9 @@ export class GitSteward {
     const cell = state.cells[cellId];
     requireThat(cell !== undefined, 'JOURNAL_INVALID');
     return { repository_ref: this.policy.repository_ref, cell_id: cellId, work_ref: cell.spec.work_ref,
+      work_revision: cell.spec.work_revision, context_digest: cell.spec.context_digest,
+      superseded_by: cell.superseded_by ?? null,
+      invalidated_by: cell.invalidated_by ?? null,
       state: effective(cell, now), epoch: cell.epoch, attempts: cell.attempts, expires_at: cell.until,
       lease_usable: cell.state === 'running' && now < cell.until,
       branch: cell.epoch ? `work/${cellId}-e${cell.epoch}` : null,
