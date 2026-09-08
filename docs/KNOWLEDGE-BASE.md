@@ -134,6 +134,33 @@ python tools/knowledge_base.py audit --root . --format markdown
 
 ## CLI
 
+### 一件のキャッチアップを試す
+
+```bash
+python tools/knowledge_base.py query --root . "現在の候補" --json
+python tools/knowledge_base.py context --root . --goal OUT-INTENT --max-concepts 8
+python -m unittest discover -s tests -p 'test_knowledge*.py' -v
+```
+
+`project/catchup` は2026-09-09の公開GitHub観測に基づく候補で、翌日には再確認が必要になる。
+これは本文を読んで答えるための入口であり、PR統合・配備・実受入の証明ではない。
+日時を再現する試験では `--as-of 2026-09-09T02:00:00+09:00` を使えるが、過去の評価時刻で現在の鮮度を装わない。
+
+検索語に一致しない場合は空の結果を返し、優先度やtrustだけで無関係な候補を補わない。
+日本語は現段階では字句一致であり、自由な言い換えへの意味検索品質は未評価。
+contextは直接参照でもリンク経由でも、古い・非公開・失効・競合した情報を復活させない。
+構造エラーのあるbundleはquery/contextを拒否する。必須governanceと直接対象のcritical conceptを
+予算内に保持できない場合や、指定selectorが存在しない場合は `needs_resolution`（終了コード3）を返す。
+`unresolved_ids` の `filter:<kind>:<value>` は未解決selectorを表し、concept IDではない。
+任意conceptの省略は `omitted_ids` へ明示する。concept数の上限はtoken/byte予算の証明ではない。
+
+sourcesの任意 `sha256` はKotodama固有のローカルファイル用pin。exact bytesが変わると
+`SOURCE_DIGEST_MISMATCH` でquery/contextを止める。remote URLは直接hash検証せず、認可済みadapterで
+取得したローカル観測をpinする。pinのない既存sourceは従来どおり存在確認のみであり、
+bundle全体のsource freshnessや意味検証が完成したとは扱わない。
+訂正時は出典とconceptを読み直し、必要箇所を更新した後でpinを更新する。hashだけの自動更新は禁止。
+検査はCLI起動時のローカル観測であり、長寿命cache、実ACL取消、最終agent入力やruntimeの競合制御は別の受入である。
+
 ### 構造・安全境界を検証
 
 ```bash
