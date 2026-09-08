@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kotodama.example/schemas/executor-runtime-candidate.schema.json",
+  "title": "Kotodama Executor Runtime Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "spec_version",
+    "id",
+    "status",
+    "purpose",
+    "upstream",
+    "kotodama_role",
+    "runtime",
+    "request_contract",
+    "result_contract",
+    "prohibited_operations",
+    "promotion_gates",
+    "evaluation"
+  ],
+  "properties": {
+    "kind": {"const": "executor_runtime_candidate"},
+    "spec_version": {"const": "0.1"},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,62}$"},
+    "status": {"enum": ["example", "candidate_only"]},
+    "purpose": {"type": "string", "minLength": 1},
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "revision", "license", "entrypoint", "browser_runtime"],
+      "properties": {
+        "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "license": {"type": "string", "minLength": 1},
+        "entrypoint": {"type": "string", "minLength": 1},
+        "browser_runtime": {"type": "string", "minLength": 1}
+      }
+    },
+    "kotodama_role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "canonical_authority", "may_promote_current_truth", "may_modify_capability_grants"],
+      "properties": {
+        "role": {"const": "bounded_executor"},
+        "canonical_authority": {"const": "kotodama"},
+        "may_promote_current_truth": {"const": false},
+        "may_modify_capability_grants": {"const": false}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "guest_type",
+        "vcpu",
+        "memory_mib",
+        "disk_gib",
+        "max_concurrency",
+        "management_plane_access",
+        "outbound_network",
+        "shared_filesystem"
+      ],
+      "properties": {
+        "profile": {"const": "proxmox_segmented"},
+        "guest_type": {"const": "kvm"},
+        "vcpu": {"type": "integer", "minimum": 1},
+        "memory_mib": {"type": "integer", "minimum": 2048},
+        "disk_gib": {"type": "integer", "minimum": 20},
+        "max_concurrency": {"type": "integer", "minimum": 1},
+        "management_plane_access": {"enum": ["deny", "read_only_via_broker", "bounded_via_broker"]},
+        "outbound_network": {"enum": ["deny", "gateway_allowlist_only"]},
+        "shared_filesystem": {"enum": ["deny", "task_scoped_only"]}
+      }
+    },
+    "request_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_bindings", "payload_mode", "stop_on_scope_mismatch"],
+      "properties": {
+        "required_bindings": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "payload_mode": {"const": "task_scoped_locator_or_rendered_prompt"},
+        "stop_on_scope_mismatch": {"const": true}
+      }
+    },
+    "result_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_outputs", "completion_is_promotion"],
+      "properties": {
+        "required_outputs": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "completion_is_promotion": {"const": false}
+      }
+    },
+    "prohibited_operations": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "promotion_gates": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_count", "trials_per_task", "human_time_reduction_hypothesis", "authority_breaches_allowed"],
+      "properties": {
+        "task_count": {"type": "integer", "minimum": 1},
+        "trials_per_task": {"type": "integer", "minimum": 1},
+        "human_time_reduction_hypothesis": {"type": "number", "minimum": 0, "maximum": 1},
+        "authority_breaches_allowed": {"const": 0}
+      }
+    }
+  }
+}
