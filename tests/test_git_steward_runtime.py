@@ -16,7 +16,8 @@ class GitStewardRuntimeTests(unittest.TestCase):
         self.assertIsNotNone(node, "Git Steward tests require Node >=22.13 with node:sqlite")
         self.assertIsNotNone(shutil.which("git"), "Git Steward tests require Git")
         result = subprocess.run(
-            [node, "--test", "runtime/git-steward/coordinator.test.mjs"],
+            [node, "--test", "--test-reporter=tap", "runtime/git-steward/coordinator.test.mjs",
+             "runtime/git-steward/business-simulation.test.mjs"],
             cwd=ROOT, text=True, encoding="utf-8", errors="replace",
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120, check=False,
         )

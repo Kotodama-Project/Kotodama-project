@@ -169,7 +169,12 @@ class CloudflareOSIntegrationTests(unittest.TestCase):
     def test_symlink_input_refused(self):
         path = self.root / module.CONFIG
         path.unlink()
-        path.symlink_to(self.root / module.SCHEMA)
+        try:
+            path.symlink_to(self.root / module.SCHEMA)
+        except OSError as error:
+            if os.name == "nt" and getattr(error, "winerror", None) == 1314:
+                self.skipTest("Windows symlink privilege unavailable; no permission change attempted")
+            raise
         self.refused("INPUT_INVALID")
 
     @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO unavailable")

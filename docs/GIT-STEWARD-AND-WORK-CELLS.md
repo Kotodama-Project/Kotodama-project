@@ -122,6 +122,8 @@ OS画面ではproviderの会話履歴だけでなく、共通Workの目的、今
 
 ## 5. 今回の実装と検証範囲
 
+追加の[業務演習・訂正/復旧の修正と本番接続案](BUSINESS-REHEARSAL.md)は、2人から複数担当へ条件を変え、実Git/SQLite/processを使う連続ケースを含む。journal v2はv1を暗黙移行しない。実組織・実機・GitHub送達の受入とは分ける。
+
 [`runtime/git-steward/`](../runtime/git-steward/README.md) に調整コア、
 SQLite adapter、read-only Git observer、実行テストを追加した。
 実行手順・各command・入力契約・制限はそのREADMEを参照する。
