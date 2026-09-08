@@ -32,7 +32,7 @@ python -B tools/smoke_company_pack_review_chain.py > company-review-chain.json
 | H7 一件を訂正から引継ぎ・実行・reviewまで通せる | 動作中旧processの遅延結果／協調停止、SQLite close/reopen、別process | 旧結果採用、目的・BLE除外の消失、割当branchの不一致 | 実Git/worktree、実SQLite、実child process、合成contextのdigest照合 |
 | H8 開発委任を会社全体の権限と取り違えない | 購入・返金・顧客送信・配備・merge要求 | Git担当がその命令を実行、または完了を主張 | 未定義command拒否とtask_completed=false。実組織のACL試験ではない |
 
-最初の6回帰ケースは基準コードで失敗しました。追加の独立レビューから、拒否時刻・旧journal・統合済み依存の訂正の3ケースも失敗を再現して修正しています。元37ケースは残し、意味を変えた「拒否時の保存」試験だけを、業務変更のrollbackと時刻観測の保存へ更新しています。
+最初の6回帰ケースは基準コードで失敗しました。追加の独立レビューから、拒否時刻・旧journal・統合済み依存の訂正の3ケースも失敗を再現して修正しています。最終点検では、訂正版自身が失効させる推移的consumerへ依存するケースも拒否するよう修正しました。元37ケースは残し、意味を変えた「拒否時の保存」試験だけを、業務変更のrollbackと時刻観測の保存へ更新しています。
 
 基準コード`1b5d79c`へ同じ69シナリオを適用した比較では27成功・42失敗となり、修正候補では69成功でした。これはこの演習に対する比較で、既存の全68製品要件の達成率や実利用成功率ではありません。追加回帰を含むNodeのトップレベルテスト数と、その中のシナリオ数も加算しません。
 
@@ -107,3 +107,5 @@ GitHubには[webhook](https://docs.github.com/en/webhooks/about-webhooks)があ�
 本番の最初の試行は一つの認可済みrepository、一つの既存Work、二つの担当、合成または明示的に認可された入力に限定します。read-only observationから開始し、限定実行を経て対象候補を採用します。受付停止、旧worker隔離、外部作用照合、旧candidateへの切戻しを準備し、journalを消してやり直しません。
 
 PRはこの順序の実装候補と検証です。baseの#57、その下の#56/#49、別stackのnative OS/context候補の統合とCI状態は、それぞれ確認が必要です。このPRが成功しても、未接続の本番環境を稼働済みとはしません。
+
+既存全体監査には分類inventoryの不足が残り、baseのworkflowが参照する`tools/audit_knowledge_workspaces.py`はそのbaseに存在しません。新しいBusiness Rehearsalチェックを全体監査の代用にせず、Checks欄の実結果と区別します。欠落したKnowledge Work実装を検査名の変更や無条件skipで隠していません。

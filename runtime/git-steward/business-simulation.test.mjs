@@ -136,3 +136,19 @@ test('the executable rehearsal covers a continuous local flow and refuses produc
   for (const value of Object.values(report.claims)) assert.equal(value, false);
   assert.equal(report.coverage.device_audio_distribution, 'not_executed');
 });
+
+test('a correction cannot depend on a transitive consumer it would invalidate', () => {
+  const h = harness();
+  function integrate(id, epoch, start) {
+    h.claim(id, start); h.submit(id, epoch, start + 1);
+    h.send('verify', id, { base_sha: BASE, head_sha: HEAD, diff_sha256: DIFF, receipt_ref: 'ref/receipt/review',
+      checks: [{ name: 'regression', issuer_ref: 'ref/issuer/test', head_sha: HEAD, conclusion: 'success', receipt_ref: 'ref/receipt/check' }] }, start + 2, `ref/reviewer/${id}`);
+    h.send('integrated', id, { base_sha: BASE, head_sha: HEAD, merge_sha: 'f'.repeat(40), receipt_ref: 'ref/receipt/merge' }, start + 3, ATTESTER);
+  }
+  h.add('mobile'); integrate('mobile', 1, 20);
+  h.add('audio', { depends_on: ['mobile'] }, 24); integrate('audio', 2, 25);
+  refuses(() => h.add('corrected', { work_ref: 'ref/work/mobile', work_revision: 2, depends_on: ['audio'] }, 30), 'DEPENDENCY_SUPERSEDED');
+  assert.equal(h.store.state.cells.mobile.superseded_by, undefined);
+  assert.equal(h.store.state.cells.audio.invalidated_by, undefined);
+  assert.equal(h.store.state.cells.corrected, undefined);
+});

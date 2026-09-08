@@ -160,6 +160,7 @@ export class GitSteward {
               output: consumer.output ? structuredClone(consumer.output) : null });
           }
         }
+        requireThat(c.spec.depends_on.every(d => !invalidated.has(d)), 'DEPENDENCY_SUPERSEDED');
         cell = { spec: structuredClone(c.spec), state: 'queued', epoch: 0, attempts: 0, until: 0, started: 0, output: null, verification: null };
         state.cells[c.cell_id] = cell;
       } else {
@@ -171,6 +172,7 @@ export class GitSteward {
             requireThat(!cell.invalidated_by, 'DEPENDENCY_SUPERSEDED');
             requireThat(cell.state === 'queued', 'CELL_NOT_QUEUED');
             requireThat(sha(c.base_sha) && c.base_sha === cell.spec.base_sha, 'BASE_MOVED');
+            requireThat(cell.spec.depends_on.every(d => !state.cells[d].superseded_by && !state.cells[d].invalidated_by), 'DEPENDENCY_SUPERSEDED');
             requireThat(cell.spec.depends_on.every(d => state.cells[d].state === 'integrated'), 'DEPENDENCY_NOT_INTEGRATED');
             requireThat(cell.attempts < this.policy.max_attempts, 'ATTEMPT_BUDGET');
             requireThat(integer(c.lease_ms, 1, this.policy.max_lease_ms));
