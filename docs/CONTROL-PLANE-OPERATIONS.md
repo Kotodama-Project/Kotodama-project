@@ -209,3 +209,16 @@ P0 が complete と言えるのは、少なくとも以下が evidence で確認
 - [Offline contract tests](../tests/test_cloudflare_os_integration.py)
 
 These are design candidates, not deployment configuration, live inventory, Cloudflare account changes, or runtime acceptance. Existing native OS dependencies and the C0–C3 implementation gates are documented in the design.
+
+## 9. Git Steward and bounded work cells
+
+[Git担当と必要単位のエージェントシステム](GIT-STEWARD-AND-WORK-CELLS.md) adds
+one candidate Git role to the existing registry, not another Task authority.
+The [executable coordination kernel](../runtime/git-steward/README.md) covers
+scope reservations, dependencies, durable leases/fences, independent candidate
+verification and read-only Git observation. Native OS/GitHub/executor adapters
+remain separate acceptance work; no running agent or deployment is claimed.
+
+```sh
+python -m unittest discover -s tests -p 'test_git_steward_runtime.py' -v
+```
