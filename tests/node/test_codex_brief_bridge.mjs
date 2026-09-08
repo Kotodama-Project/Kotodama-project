@@ -315,7 +315,15 @@ test("structured source questions survive a model omission and all source summar
     assert.deepEqual(input.decision_candidates, seed.projection.decisions.map((q) => q.summary));
     assert.deepEqual(input.todos, seed.projection.todos.map((q) => q.summary));
     assert.deepEqual(input.speaker_highlights, seed.projection.speaker_highlights.map((q) => q.summary));
-    const result = await (await call(bridge, config, `/v1/briefs/${request_id}`)).json();
+    let result;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const response = await call(bridge, config, `/v1/briefs/${request_id}`);
+      result = await response.json();
+      assert.ok([200, 503].includes(response.status), JSON.stringify(result));
+      if (response.status === 200 && result.state !== "running") break;
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    assert.equal(result.state, "ready", JSON.stringify(result));
     assert.deepEqual(result.brief.open_questions, input.open_questions);
   } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
 });

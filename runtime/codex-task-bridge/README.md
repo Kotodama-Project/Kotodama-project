@@ -1,5 +1,11 @@
 # Private Codex requirements bridge
 
+The [knowledge-to-executor input binding](../../docs/KNOWLEDGE-EXECUTOR-INPUT-BINDING.md)
+composes a validated KB projection as explicit data for the existing runner.
+`onInputPrepared` observes the exact UTF-8 stdin/schema binding before spawn;
+the start observer and successful result carry the same digests. This is not a
+new Task authority, a KB-enabled Voice HTTP route, or persistent resume.
+
 This bounded adapter turns one previously admitted handoff into a requirements
 brief using the operator's existing local Codex CLI account. It does not execute
 arbitrary commands or mark a canonical Task complete. The official OS integration
