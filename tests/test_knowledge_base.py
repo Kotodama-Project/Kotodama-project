@@ -171,9 +171,10 @@ class KnowledgeBaseTests(unittest.TestCase):
             path = root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("test fixture\n", encoding="utf-8")
-        source = "docs/knowledge-observations/2026-09-09-catchup.json"
-        (root / source).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(ROOT / source, root / source)
+        for source in ("docs/knowledge-observations/2026-09-09-catchup.json",
+                       "docs/knowledge-observations/2026-09-09-business-continuation.json"):
+            (root / source).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / source, root / source)
         return root
 
 

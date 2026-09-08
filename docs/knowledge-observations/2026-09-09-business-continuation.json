@@ -1,0 +1,87 @@
+{
+  "kind": "public_github_fixed_point_observation",
+  "observed_at": "2026-09-08T20:38:10.518303+00:00",
+  "repository": "Kotodama-Project/Kotodama-project",
+  "pull_requests": [
+    {
+      "baseRefName": "feat/git-steward-workcells",
+      "baseRefOid": "1b5d79cea54a1d17c34b359a177cd5a5671a7862",
+      "headRefName": "codex/business-simulation-20260909",
+      "headRefOid": "297c7718911dafbca6efd54eb545b87f2609db5b",
+      "number": 58,
+      "state": "OPEN",
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-08T19:58:03Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/34271932110/job/102215368186",
+          "name": "rehearsal (ubuntu-latest)",
+          "startedAt": "2026-09-08T19:57:08Z",
+          "status": "COMPLETED",
+          "workflowName": "Business Rehearsal"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-08T19:59:57Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/34271931978/job/102215367491",
+          "name": "audit",
+          "startedAt": "2026-09-08T19:57:09Z",
+          "status": "COMPLETED",
+          "workflowName": "Control Plane Audit"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-08T19:58:58Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/34271932110/job/102215367931",
+          "name": "rehearsal (windows-latest)",
+          "startedAt": "2026-09-08T19:57:09Z",
+          "status": "COMPLETED",
+          "workflowName": "Business Rehearsal"
+        }
+      ],
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/58"
+    },
+    {
+      "baseRefName": "codex/knowledge-base-control-plane-20260907",
+      "baseRefOid": "9df1cb934aea4db28a67d723b327d32e69a3f05f",
+      "headRefName": "codex/context-session-binding-20260909",
+      "headRefOid": "d809811e18f7c9515bfe9fca98c0ed2e79b22369",
+      "number": 59,
+      "state": "OPEN",
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-08T20:19:27Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/34274005416/job/102222407247",
+          "name": "Trusted Cloudflare candidate validation",
+          "startedAt": "2026-09-08T20:18:17Z",
+          "status": "COMPLETED",
+          "workflowName": "Cloudflare candidate validation"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-09-08T20:26:20Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/34274005174/job/102222406042",
+          "name": "Trusted repository validation",
+          "startedAt": "2026-09-08T20:18:17Z",
+          "status": "COMPLETED",
+          "workflowName": "Repository validation"
+        }
+      ],
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/59"
+    }
+  ],
+  "scope": "Code/CI fixed points only; later heads require live resolution.",
+  "not_proven": [
+    "main integration",
+    "real Work owner binding",
+    "runtime deployment",
+    "device/distribution acceptance",
+    "Human GO"
+  ]
+}

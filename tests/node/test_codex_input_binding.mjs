@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { runCodexBrief } from '../../runtime/codex-task-bridge/codex-runner.mjs';
 import { prepareKnowledgeBriefInput } from '../../runtime/codex-task-bridge/knowledge-input.mjs';
 
@@ -82,5 +83,32 @@ test('cancellation during input persistence prevents spawning', async () => {
       model: 'gpt-6-astra', input: 'test', signal: controller.signal, onInputPrepared: () => controller.abort() },
       { spawnImpl: () => { calls++; throw new Error('must not spawn'); } }), /codex_aborted/);
     assert.equal(calls, 0);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('schema drift after preparation refuses a successful-looking result', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'schema-binding-'));
+  try {
+    for (const relative of ['runtime/codex-task-bridge/codex-runner.mjs', 'runtime/codex-task-bridge/brief.schema.json',
+      'runtime/cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/protocol.mjs']) {
+      const path = join(root, relative); mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, readFileSync(new URL('../../' + relative, import.meta.url)));
+    }
+    const { runCodexBrief: isolated } = await import(pathToFileURL(join(root, 'runtime/codex-task-bridge/codex-runner.mjs')));
+    const executable = join(root, 'synthetic-executable'); writeFileSync(executable, 'synthetic binary');
+    const schema = join(root, 'runtime/codex-task-bridge/brief.schema.json');
+    const spawnImpl = () => {
+      const child = new EventEmitter(); child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+      child.kill = () => { setImmediate(() => child.emit('close', 1)); return true; };
+      child.stdin.on('finish', () => setImmediate(() => {
+        writeFileSync(schema, readFileSync(schema, 'utf8') + '\n');
+        for (const event of [{ type: 'thread.started', thread_id: randomUUID() }, { type: 'turn.started' },
+          { type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify({ objective: '要件', deliverable: '案', constraints: [], acceptance_criteria: [], open_questions: [] }) } },
+          { type: 'turn.completed' }]) child.stdout.write(JSON.stringify(event) + '\n');
+        child.emit('close', 0);
+      }));
+      return child;
+    };
+    await assert.rejects(isolated({ executable, expectedExecutableSha256: hash('synthetic binary'), cwd: root, model: 'gpt-6-astra', input: 'test' }, { spawnImpl }), /codex_result_refused/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
