@@ -1,5 +1,7 @@
 # プロジェクトの地図
 
+[既存ナレッジからexecutorへの入力binding](KNOWLEDGE-EXECUTOR-INPUT-BINDING.md): contextの現行pin、訂正後の入力、実stdinのdigest、開始sessionへの対応を検証する限定候補。Task自動接続・永続resume・配備とは分ける。
+
 **2026-09-06 closing view:** [68項目](acceptance/README.md) → [READMEの現在地](CLOSING-2026-09-06.md) → [追加条件](acceptance/GAPS.md) → [Issue対応](acceptance/ISSUES.md)。最新の直接指示により、全体照合後に必要な仕事を継続する。以下の9月5日PR表は履歴で、現headとreviewは[9月6日snapshot](acceptance/github-snapshot.json)を使う。
 
 Kotodama は、会話から意図・仕事・成果・学習へつなぐ Company OS を目指します。
