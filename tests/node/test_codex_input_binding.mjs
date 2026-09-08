@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { runCodexBrief } from '../../runtime/codex-task-bridge/codex-runner.mjs';
+import { runCodexBrief, validateBrief } from '../../runtime/codex-task-bridge/codex-runner.mjs';
 import { prepareKnowledgeBriefInput } from '../../runtime/codex-task-bridge/knowledge-input.mjs';
 
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -97,13 +97,14 @@ test('schema drift after preparation refuses a successful-looking result', async
     const { runCodexBrief: isolated } = await import(pathToFileURL(join(root, 'runtime/codex-task-bridge/codex-runner.mjs')));
     const executable = join(root, 'synthetic-executable'); writeFileSync(executable, 'synthetic binary');
     const schema = join(root, 'runtime/codex-task-bridge/brief.schema.json');
+    const validReply = validateBrief({ objective: '要件', deliverable: '案', constraints: ['変更しない'], acceptance_criteria: ['同じ版を確認する'], open_questions: [] });
     const spawnImpl = () => {
       const child = new EventEmitter(); child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
       child.kill = () => { setImmediate(() => child.emit('close', 1)); return true; };
       child.stdin.on('finish', () => setImmediate(() => {
         writeFileSync(schema, readFileSync(schema, 'utf8') + '\n');
         for (const event of [{ type: 'thread.started', thread_id: randomUUID() }, { type: 'turn.started' },
-          { type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify({ objective: '要件', deliverable: '案', constraints: [], acceptance_criteria: [], open_questions: [] }) } },
+          { type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify(validReply) } },
           { type: 'turn.completed' }]) child.stdout.write(JSON.stringify(event) + '\n');
         child.emit('close', 0);
       }));
