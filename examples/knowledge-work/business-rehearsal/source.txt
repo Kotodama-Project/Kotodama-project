@@ -1,0 +1,4 @@
+Synthetic scenario, not a real conversation or decision.
+The intended outcome is resuming voice conversation after moving.
+The current scope is smartphone only; BLE changes are excluded.
+A source-code merge does not establish device audio or distribution acceptance.

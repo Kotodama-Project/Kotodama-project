@@ -10,6 +10,12 @@ on:
       - 'tests/test_cloudflare_os_integration.py'
       - 'docs/BUSINESS-REHEARSAL.md'
       - '.github/workflows/business-rehearsal.yml'
+      - 'tools/*knowledge*.py'
+      - 'tools/validate_resolved_compose_candidate.py'
+      - 'tests/test_knowledge_work_validation.py'
+      - 'tests/test_strict_json_depth.py'
+      - 'schemas/knowledge-*.schema.json'
+      - 'examples/knowledge-work/**'
   workflow_dispatch:
 
 permissions:
@@ -45,6 +51,14 @@ jobs:
         run: python -B -m unittest discover -s tests -p test_company_pack_review_decision_handoff.py -v
       - name: Check OS integration input boundaries
         run: python -B -m unittest discover -s tests -p test_cloudflare_os_integration.py -v
+      - name: Check portable strict JSON depth
+        run: python -B -m unittest discover -s tests -p test_strict_json_depth.py -v
+      - name: Check knowledge evidence and context boundaries
+        run: python -B -m unittest discover -s tests -p test_knowledge_work_validation.py -v
+      - name: Record knowledge work audit
+        run: python -B tools/audit_knowledge_workspaces.py --format json --fail-on error --require-package > knowledge-work-audit.json
+      - name: Record bounded knowledge context
+        run: python -B tools/compile_knowledge_context.py examples/knowledge-work/business-rehearsal > knowledge-context.json
       - name: Preserve synthetic evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -53,5 +67,7 @@ jobs:
           path: |
             business-rehearsal.json
             company-review-chain.json
+            knowledge-work-audit.json
+            knowledge-context.json
           if-no-files-found: error
           retention-days: 7

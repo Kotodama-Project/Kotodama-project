@@ -1,5 +1,7 @@
 # Control Plane Operations
 
+[Knowledge Workの実検証](KNOWLEDGE-WORK-ENGINEERING.md): 出典・主張・受入・成果物を固定し、CIでbytesと参照を検査する。candidate限定で、意味評価・承認・Promotionとは分ける。
+
 > Status: **candidate-only / read-only + proposal-only**
 
 このページは、Kotodama の戦略・Knowledge・Agent portfolio を継続監査するための運用入口です。

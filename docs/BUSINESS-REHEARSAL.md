@@ -108,4 +108,6 @@ GitHubには[webhook](https://docs.github.com/en/webhooks/about-webhooks)があ�
 
 PRはこの順序の実装候補と検証です。baseの#57、その下の#56/#49、別stackのnative OS/context候補の統合とCI状態は、それぞれ確認が必要です。このPRが成功しても、未接続の本番環境を稼働済みとはしません。
 
-既存全体監査には分類inventoryの不足が残り、baseのworkflowが参照する`tools/audit_knowledge_workspaces.py`はそのbaseに存在しません。新しいBusiness Rehearsalチェックを全体監査の代用にせず、Checks欄の実結果と区別します。欠落したKnowledge Work実装を検査名の変更や無条件skipで隠していません。
+後続の残件修正で、実行環境に依存していた深いJSONの拒否を共通の64段上限へ揃え、既存fixtureとruntime契約をfact familyへ結びました。分類基準は下げず、用途が確定しない既存probe 4件は未分類のまま表示します。
+
+baseに欠けていた`tools/audit_knowledge_workspaces.py`も、[Knowledge Workの実検証](KNOWLEDGE-WORK-ENGINEERING.md)として追加しました。source/成果物のbytes、material主張の根拠参照、鮮度、留保・矛盾、受入、感度、予算、review bindingを検査します。意味評価や本物の承認とは別です。専用チェックを全体監査の代用にせず、現在headのChecks欄で両方の実結果を確認します。

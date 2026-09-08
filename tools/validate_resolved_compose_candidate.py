@@ -74,6 +74,7 @@ CLAIM_FIELDS = {
 PROJECT_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{1,62}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 IMAGE_DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+MAX_JSON_DEPTH = 64
 EXPECTED_BINDING_PATHS = [
     "README.md",
     "company-db/001-company-core.sql",
@@ -103,7 +104,7 @@ EXPECTED_SERVICE_BASE = {
 
 
 class StrictJsonError(ValueError):
-    """Raised for duplicate keys, non-finite numbers, or a non-object root."""
+    """Raised for excessive nesting, duplicate keys, non-finite numbers or root type."""
 
 
 def reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -120,6 +121,28 @@ def reject_non_finite(_value: str) -> None:
 
 
 def loads_strict_json(text: str) -> dict[str, Any]:
+    # Bound nesting before decoding, independently of CPython's platform/C-stack
+    # limits. Strings (including escaped quotes/backslashes) are not containers.
+    # Syntax, matching delimiters and escapes remain the JSON decoder's job.
+    depth = 0
+    in_string = False
+    escaped = False
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+        elif character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            if depth > MAX_JSON_DEPTH:
+                raise StrictJsonError("JSON nesting exceeds the supported depth")
+        elif character in "]}":
+            depth -= 1
     value = json.loads(
         text,
         object_pairs_hook=reject_duplicate_pairs,
