@@ -6,6 +6,7 @@ from .load import *  # noqa: F401,F403
 from .project import *  # noqa: F401,F403
 from .retrieve import *  # noqa: F401,F403
 from .audit import *  # noqa: F401,F403
+from .verdicts import *  # noqa: F401,F403
 
 def _print_issues(issues: Iterable[Issue]) -> None:
     for issue in issues:
@@ -32,6 +33,7 @@ def _parser() -> argparse.ArgumentParser:
     validate_parser = subparsers.add_parser("validate", help="validate OKF and Kotodama profile invariants")
     _add_common_root(validate_parser)
     validate_parser.add_argument("--warnings-as-errors", action="store_true")
+    validate_parser.add_argument("--json", action="store_true")
 
     build_parser = subparsers.add_parser("build", help="build deterministic catalog and graph projections")
     _add_common_root(build_parser)
@@ -60,6 +62,15 @@ def _parser() -> argparse.ArgumentParser:
     context_parser.add_argument("--tag", action="append", default=[])
     context_parser.add_argument("--max-concepts", type=int)
     context_parser.add_argument("--json", action="store_true")
+
+    readiness_parser = subparsers.add_parser(
+        "readiness", help="audit purpose-scoped decision readiness without granting authority"
+    )
+    _add_common_root(readiness_parser)
+    readiness_parser.add_argument("--actor", required=True)
+    readiness_parser.add_argument("--purpose", required=True)
+    readiness_parser.add_argument("--concept", action="append", default=[])
+    readiness_parser.add_argument("--format", choices=("json", "markdown"), default="json")
     return parser
 
 
@@ -76,8 +87,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     warnings = [issue for issue in bundle.issues if issue.level == "warning"]
 
     if args.command == "validate":
-        _print_issues(bundle.issues)
-        print(f"Validated {len(bundle.concepts)} concepts: {len(errors)} errors, {len(warnings)} warnings")
+        verdicts = validation_verdicts(bundle)
+        if args.json:
+            print(json.dumps(verdicts, ensure_ascii=False, indent=2))
+        else:
+            _print_issues(bundle.issues)
+            print(f"OKF_CONFORMANT: {verdicts['OKF_CONFORMANT']['verdict']}")
+            print(f"KOTODAMA_PROFILE_PASS: {verdicts['KOTODAMA_PROFILE_PASS']['verdict']}")
+            print("DECISION_READY: NOT_EVALUATED (run `readiness` with --actor and --purpose)")
+            print(f"Validated {len(bundle.concepts)} concepts: {len(errors)} profile errors, {len(warnings)} warnings")
         if errors or (args.warnings_as_errors and warnings):
             return 1
         return 0
@@ -170,6 +188,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             print(context_markdown(context), end="")
         return 0 if context["state"] == "ready_candidate" else 3
+
+    if args.command == "readiness":
+        report = decision_readiness_report(
+            bundle,
+            actor=args.actor,
+            purpose=args.purpose,
+            concept_ids=args.concept,
+        )
+        if args.format == "markdown":
+            print(readiness_markdown(report), end="")
+        else:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["DECISION_READY"] == "READY" else 3
 
     raise AssertionError(f"unsupported command: {args.command}")
 

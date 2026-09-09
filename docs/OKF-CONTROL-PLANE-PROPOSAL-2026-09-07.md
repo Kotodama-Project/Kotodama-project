@@ -54,7 +54,7 @@ Human Intent / Source / Decision / Task / Evidence の既存正本
 | ID | Severity | 所見 | 問題 | 提案 |
 |---|---|---|---|---|
 | OKF-01 | Critical | OKF standard conformanceとKotodama strict profileが同じvalidator結果に見える | OKF v0.2は`type`のみ常時必須で、optional fieldやbroken cross-linkだけでは非準拠にならない。現行profileは追加項目やlink/sourceの存在を必須化している | `standard`、`profile`、`decision-ready`の3判定へ分離する |
-| OKF-02 | High | `stale_after`、`sources[].last_modified`、`usage_window`がdate-time schemaである | OKF v0.2はこれらを絶対日付または日付範囲として定義する | profile schemaとConcept値を`YYYY-MM-DD`へ移行する |
+| OKF-02 | Resolved in current foundation | `stale_after`、`sources[].last_modified`、`usage_window`はoffset付きISO 8601 datetimeである | OKF v0.2 §5は全timestamp-valued keyを明示UTC offset付きdatetimeとし、`stale_after`をrelative TTLではなくabsolute instantと定義する | 現行date-time schemaを維持し、offsetなし値を拒否する |
 | OKF-03 | Critical | `KGI-INTENT`は名前・metric・evidence sourceだけで、計算契約がない | numerator、denominator、window、exclusion、owner、baseline、target、guardrail、calculation revisionがないため測れない | Metric ConceptとAttested Computation Conceptへ分離する |
 | OKF-04 | Critical | `retrieval readiness`が未検証candidateもreadyとして数える | source/freshnessが100%でもindependent verificationが0%であり、意思決定可能性と構造的取得可能性を混同する | `structural_retrieval_eligibility`と`decision_ready_ratio`を別指標にする |
 | OKF-05 | Critical | Sourceがpath/URL中心でrevision-boundではない | 同じpathの内容変更、force replacement、external driftを検出できず、どのbytesから生成したか再現できない | Source Bindingにrevision、digest、observed_at、authority scope、access/invalidation refを追加する |

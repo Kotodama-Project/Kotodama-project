@@ -116,7 +116,7 @@ python tools/knowledge_base.py audit --root . --format markdown
 - freshness coverage
 - 独立verification coverage
 - human review coverage
-- retrieval readiness
+- structural retrieval eligibility（構造上取得できる割合。decision readinessではない）
 - orphan、missing source、broken link、stale、conflict件数
 
 これらは制御指標です。値が高くても、元の依頼が達成されたことや `KGI-INTENT` が達成されたことを単独では証明しません。
@@ -139,6 +139,28 @@ python tools/knowledge_base.py audit --root . --format markdown
 ```bash
 python tools/knowledge_base.py validate --root .
 ```
+
+出力は次の3判定を混同しません。
+
+- `OKF_CONFORMANT`：OKF v0.2の最小conformance（parse可能なfrontmatter、非空`type`、reserved file構造）
+- `KOTODAMA_PROFILE_PASS`：出典、公開分類、owner/reviewer分離、link/source等を含むKotodama producer policy
+- `DECISION_READY`：`validate`では常に`NOT_EVALUATED`。actorとpurposeを明示した別auditが必要
+
+OKF v0.2では`type`だけが常時必須で、optional field、未知type、broken cross-link、missing indexだけを理由に非準拠とはしません。Kotodamaのより厳しい拒否はprofile判定にだけ反映します。
+
+```bash
+python tools/knowledge_base.py validate --root . --json
+python tools/knowledge_base.py readiness \
+  --root . \
+  --actor human:reviewer \
+  --purpose "review project direction" \
+  --concept project/goal \
+  --format markdown
+```
+
+`readiness`は文書のstable/confirmed/verification/source/freshnessを検査しますが、accessやdecision authorityを付与できません。現行public candidateにはauthoritativeなactor/purpose access resolverがないため、解決されるまでは`NEEDS_RESOLUTION`を返します。
+
+監査JSONはこの指標名変更に伴い`schema_revision: v2`です。旧`retrieval_readiness_ratio`は意味が強すぎるため互換aliasを残さず、`structural_retrieval_eligibility_ratio`へ置き換えています。
 
 検査対象：
 
