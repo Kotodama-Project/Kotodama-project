@@ -98,12 +98,46 @@ class KnowledgeBaseTests(unittest.TestCase):
     def test_audit_exposes_unverified_state_without_claiming_failure(self) -> None:
         report = KB.audit_report(self.bundle, as_of=AS_OF)
         metrics = report["metrics"]
+        self.assertEqual("v2", report["schema_revision"])
         self.assertEqual(0, metrics["error_count"])
         self.assertEqual(9, metrics["concept_count"])
         self.assertEqual(1.0, metrics["source_coverage_ratio"])
         self.assertEqual(0.0, metrics["independent_verification_ratio"])
-        self.assertEqual(1.0, metrics["retrieval_readiness_ratio"])
+        self.assertEqual(1.0, metrics["structural_retrieval_eligibility_ratio"])
+        self.assertNotIn("retrieval_readiness_ratio", metrics)
         self.assertGreater(metrics["warning_count"], 0)
+
+    def test_standard_profile_and_decision_verdicts_are_separate(self) -> None:
+        verdicts = KB.validation_verdicts(self.bundle)
+        self.assertEqual("PASS", verdicts["OKF_CONFORMANT"]["verdict"])
+        self.assertEqual("PASS", verdicts["KOTODAMA_PROFILE_PASS"]["verdict"])
+        self.assertEqual("NOT_EVALUATED", verdicts["DECISION_READY"]["verdict"])
+
+        report = KB.decision_readiness_report(
+            self.bundle,
+            actor="human:reviewer",
+            purpose="review project direction",
+            concept_ids=["project/goal"],
+        )
+        self.assertEqual("NEEDS_RESOLUTION", report["DECISION_READY"])
+        self.assertEqual(0.0, report["content_ready_ratio"])
+        self.assertIn("NO_INDEPENDENT_VERIFICATION", report["concepts"][0]["blockers"])
+        self.assertIn("ACTOR_PURPOSE_ACCESS_NOT_RESOLVED", report["global_blockers"])
+
+    def test_okf_conformance_does_not_inherit_strict_profile_requirements(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self._minimal_copy(Path(temporary))
+            goal = root / "knowledge" / "project" / "goal.md"
+            goal.write_text("---\ntype: Unknown Producer Type\n---\n\nMinimal OKF concept.\n", encoding="utf-8")
+            bundle = KB.load_bundle(root, as_of=AS_OF)
+            verdicts = KB.validation_verdicts(bundle)
+            self.assertEqual("PASS", verdicts["OKF_CONFORMANT"]["verdict"])
+            self.assertEqual("FAIL", verdicts["KOTODAMA_PROFILE_PASS"]["verdict"])
+
+            goal.write_text("---\ntype: ''\n---\n", encoding="utf-8")
+            invalid_bundle = KB.load_bundle(root, as_of=AS_OF)
+            invalid_verdicts = KB.validation_verdicts(invalid_bundle)
+            self.assertEqual("FAIL", invalid_verdicts["OKF_CONFORMANT"]["verdict"])
 
     def test_public_profile_rejects_internal_concept(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

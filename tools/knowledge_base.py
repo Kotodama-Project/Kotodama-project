@@ -15,6 +15,7 @@ from kotodama_kb.load import *  # noqa: F401,F403,E402
 from kotodama_kb.project import *  # noqa: F401,F403,E402
 from kotodama_kb.retrieve import *  # noqa: F401,F403,E402
 from kotodama_kb.audit import *  # noqa: F401,F403,E402
+from kotodama_kb.verdicts import *  # noqa: F401,F403,E402
 from kotodama_kb.cli import main  # noqa: E402
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ def _audit_metrics(bundle: Bundle) -> dict[str, Any]:
     human_reviewed = count(lambda concept: concept.trust_tier == "human-reviewed")
     conflicted = count(lambda concept: concept.extension.get("knowledge_state") == "conflicted")
     discoverable = count(lambda concept: bool(concept.extension.get("agent_use", {}).get("discoverable", False)))
-    retrieval_ready = count(
+    structurally_retrievable = count(
         lambda concept: bool(concept.source_resources)
         and not concept.is_stale
         and concept.extension.get("knowledge_state") in {"candidate", "confirmed"}
@@ -50,8 +50,8 @@ def _audit_metrics(bundle: Bundle) -> dict[str, Any]:
         "confirmed_count": confirmed,
         "conflict_count": conflicted,
         "discoverable_count": discoverable,
-        "retrieval_ready_count": retrieval_ready,
-        "retrieval_readiness_ratio": ratio(retrieval_ready),
+        "structurally_retrievable_count": structurally_retrievable,
+        "structural_retrieval_eligibility_ratio": ratio(structurally_retrievable),
         "orphan_count": issue_counts.get("ORPHAN_CONCEPT", 0),
         "missing_source_count": issue_counts.get("MISSING_SOURCE", 0),
         "broken_link_count": issue_counts.get("BROKEN_LINK", 0) + issue_counts.get("BROKEN_INDEX_LINK", 0),
@@ -63,7 +63,7 @@ def _audit_metrics(bundle: Bundle) -> dict[str, Any]:
 def audit_report(bundle: Bundle, *, as_of: dt.datetime) -> dict[str, Any]:
     return {
         "kind": "kotodama.okf-audit",
-        "schema_revision": "v1",
+        "schema_revision": "v2",
         "bundle_id": bundle.profile["bundle_id"],
         "source_digest": bundle.source_digest,
         "as_of": as_of.isoformat().replace("+00:00", "Z"),
@@ -96,7 +96,7 @@ def audit_markdown(report: Mapping[str, Any]) -> str:
         "freshness_coverage_ratio",
         "independent_verification_ratio",
         "human_review_ratio",
-        "retrieval_readiness_ratio",
+        "structural_retrieval_eligibility_ratio",
         "orphan_count",
         "missing_source_count",
         "broken_link_count",
@@ -118,7 +118,7 @@ def audit_markdown(report: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "Coverage and retrieval-readiness measurements are control signals, not proof that the project outcome or KGI has been achieved.",
+            "Coverage and structural-retrieval measurements are control signals, not decision readiness or proof that the project outcome or KGI has been achieved.",
             "",
         ]
     )

@@ -151,6 +151,15 @@ class KnowledgeBaseError(RuntimeError):
     """Expected user-facing failure."""
 
 
+OKF_RESERVED_CONFORMANCE_CODES = frozenset(
+    {
+        "NESTED_INDEX_FRONTMATTER",
+        "LOG_FRONTMATTER",
+        "LOG_DATE",
+    }
+)
+
+
 def _normalize_yaml(value: Any) -> Any:
     """Convert PyYAML timestamp objects into JSON-schema-compatible strings."""
     if isinstance(value, dt.datetime):
