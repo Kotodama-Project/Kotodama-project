@@ -20,11 +20,13 @@
     "questions",
     "contradictions",
     "omitted_ids",
-    "context_sha256"
+    "context_sha256",
+    "acceptance_criteria",
+    "deliverable_bindings"
   ],
   "properties": {
     "version": {
-      "const": 1
+      "const": 2
     },
     "package_sha256": {
       "anyOf": [
@@ -196,6 +198,61 @@
           "type": "null"
         }
       ]
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "description",
+          "reported_state",
+          "deliverable_refs"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/id"
+          },
+          "description": {
+            "$ref": "#/$defs/text"
+          },
+          "deliverable_refs": {
+            "$ref": "#/$defs/refs"
+          },
+          "reported_state": {
+            "enum": [
+              "pending",
+              "met"
+            ]
+          }
+        }
+      }
+    },
+    "deliverable_bindings": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sha256",
+          "criterion_refs"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/id"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "criterion_refs": {
+            "$ref": "#/$defs/refs"
+          }
+        }
+      }
     }
   },
   "$defs": {

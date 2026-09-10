@@ -345,19 +345,32 @@ def project(registry: dict[str, Any], contract: dict[str, Any],
     }
 
 
-def markdown(report: dict[str, Any]) -> str:
-    # JSON string escaping keeps controls/newlines inert; HTML and pipes are escaped.
+def markdown(report: dict[str, Any], *, include_context: bool = False) -> str:
+    require(type(include_context) is bool, "invalid display scope")
+    # Explicit local display is NOT an authorization check. Default hides narrative text.
+    # Human-readable details must preserve Work/run/stop/verification boundaries.
+    # Encode Markdown syntax too: a display name must not become a link or image.
     def cell(value: Any) -> str:
         import html
-        return html.escape(json.dumps(value, ensure_ascii=False)).replace("|", "&#124;")
+        text = html.escape(json.dumps(value, ensure_ascii=False))
+        return "".join(f"&#{ord(c)};" if c in "|`[]()*_!\\" else c for c in text)
     lines = ["# Agent status — offline diagnostic projection", "",
              "Not live evidence, authorization, or independent verification. No mutation controls.", "",
-             "| Agent | Registry | Connection | Execution | Freshness | Diagnostics | Next step |",
-             "| --- | --- | --- | --- | --- | --- | --- |"]
+             "評価時刻 / As of: " + cell(report["as_of"]),
+             "鮮度の有効範囲（秒） / Max age: " + cell(report["max_age_seconds"]), ""]
+    labels = (("kotodama_agent_id", "Agent ID"), ("display_name", "担当名 / Name"),
+              ("purpose", "担当目的 / Purpose"), ("activation_state", "Registry"),
+              ("connection_state", "Connection"), ("current_work_ref", "Work"),
+              ("run_ref", "Run"), ("execution_state", "Execution"),
+              ("stop_state", "停止確認 / Stop"), ("verification_state", "独立検証 / Verification"),
+              ("observation_freshness", "Freshness"), ("last_observed_at", "Last observed"),
+              ("diagnostics", "Diagnostics"), ("next_steps", "次に確認すること / Next step"))
     for row in report["agents"]:
-        lines.append("| " + " | ".join(cell(row[k]) for k in
-                     ("kotodama_agent_id", "activation_state", "connection_state", "execution_state",
-                      "observation_freshness", "diagnostics", "next_steps")) + " |")
+        lines.extend(["## Agent", "", "| 項目 / Field | 値 / Value |", "| --- | --- |"])
+        lines.extend("| " + title + " | " + cell(row[key] if include_context or key not in
+                     ("display_name", "purpose", "current_work_ref", "run_ref") else "withheld") + " |"
+                     for key, title in labels)
+        lines.append("")
     return "\n".join(lines) + "\n"
 
 
@@ -375,6 +388,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--as-of", help="RFC3339 instant; pin for reproducible output")
     parser.add_argument("--max-age-seconds", type=int, default=120)
     parser.add_argument("--format", choices=("json", "markdown"), default="json")
+    parser.add_argument("--include-context", action="store_true", help="Explicit local Markdown display of potentially sensitive names, purposes and Work/run IDs; not authorization")
     parser.add_argument("--bundle-sha256", action="store_true")
     parser.add_argument("--expected-bundle-sha256")
     args = parser.parse_args(argv)
@@ -399,7 +413,7 @@ def main(argv: list[str] | None = None) -> int:
             "contract": hashlib.sha256(contract_data).hexdigest(),
             "observations": hashlib.sha256(observation_data).hexdigest() if observation_data is not None else None,
         }
-        print(json.dumps(report, ensure_ascii=False, indent=2) if args.format == "json" else markdown(report), end="\n" if args.format == "json" else "")
+        print(json.dumps(report, ensure_ascii=False, indent=2) if args.format == "json" else markdown(report, include_context=args.include_context), end="\n" if args.format == "json" else "")
         # Exit 0 means projection succeeded, not healthy/deployed/authorized.
         return 0
     except (InputError, OSError, ValueError, TypeError, RecursionError) as exc:

@@ -1,12 +1,9 @@
 name: Persona Intent Audit
-
 on:
   pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   offline:
     runs-on: ubuntu-latest
@@ -15,21 +12,6 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-          fetch-depth: 0
-      - name: Record immutable public review inputs without claiming test success
-        run: |
-          mkdir -p review-inputs audit-evidence
-          git archive --format=zip --output=review-inputs/public-baseline-e0460b3.zip e0460b31da0032e7028559b7aa184c737784a833
-          git archive --format=zip --output=review-inputs/separate-native-candidate-9a5b616.zip 9a5b616c7974a37b123e024334a69dd4964ad017
-          git rev-parse HEAD > audit-evidence/checkout-sha.txt
-          git ls-files > audit-evidence/tracked-files.txt
-      - name: Preserve immutable public review inputs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: persona-review-inputs-${{ github.run_id }}
-          path: review-inputs/
-          if-no-files-found: error
-          retention-days: 7
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
@@ -37,10 +19,21 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install existing test dependencies
+        id: dependencies
         run: python -m pip install -r requirements-test.txt
+      - name: Record test inventory without claiming semantic completeness
+        run: |
+          mkdir -p audit-evidence
+          git rev-parse HEAD > audit-evidence/checkout-sha.txt
+          python tools/run_persona_intent_audit.py --inventory > audit-evidence/test-inventory.json
+      - name: Execute persona intent checks and expose blocked journeys
+        id: personas
+        run: python tools/run_persona_intent_audit.py > audit-evidence/personas.json
       - name: Run full regression without converting failure to success
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        shell: bash
         run: python -B -m unittest discover -s tests -v 2>&1 | tee audit-evidence/regression.log
-      - name: Preserve bounded offline review evidence
+      - name: Preserve exact offline evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
