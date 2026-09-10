@@ -33,3 +33,16 @@ Windowsがopen fileのunlinkを禁止する試験やsymlink権限不足だけを
 native GUI、認可済みobserver、実Work接続、本番deployの受入は別です。#45–#48/
 #59/#61をこの候補へ無差別に取り込んだものではありません。切戻しは本候補のscoped
 revertで、旧PR、既存Knowledge Work、Git journalやprivate evidenceを削除しません。
+
+## Windows実機CIからの追加修正
+
+初回のWindows診断CIは、正常なファイルを変更中と誤判定しました。CPython v3.12.10
+の `Modules/posixmodule.c:win32_xstat` はpathのctimeにbirthtimeをコピーし、
+`Python/fileutils.c:_Py_fstat_noraise` のdescriptor経路とは意味が異なります。
+また、path側のmodeには拡張子に由来する実行ビットの補正があります。
+
+pathとdescriptorの照合はdevice/inode/file type/size/mtimeで結び付け、ctimeと
+permissionを含む完全な比較はpathの前後同士、descriptorの前後同士で行います。
+変更検出を無効化するのではなく、異なるAPI同士の誤比較を除いています。
+ctimeの意味差を模した正常系、path/descriptorそれぞれのctime変化の拒否、同じ
+サイズの差替えを回帰試験に含めています。

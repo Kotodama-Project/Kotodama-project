@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -126,7 +127,7 @@ class StableReadTests(unittest.TestCase):
             path = Path(tmp) / "input"
             path.write_bytes(b"original")
             replacement = Path(tmp) / "replacement"
-            replacement.write_bytes(b"replacement")
+            replacement.write_bytes(b"swapped!")
             real_open = os.open
 
             def swapped(*args, **kwargs):
@@ -136,6 +137,64 @@ class StableReadTests(unittest.TestCase):
             with patch.object(M.os, "open", side_effect=swapped):
                 with self.assertRaises(M.InputError):
                     M.regular_bytes(path)
+
+    def test_path_descriptor_ctime_and_mode_can_have_different_semantics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "input"
+            path.write_bytes(b"same input")
+            original = os.fstat
+
+            def bridged(fd):
+                info = original(fd)
+                fields = {name: getattr(info, name) for name in
+                          ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns", "st_ctime_ns")}
+                fields["st_ctime_ns"] += 1000
+                fields["st_mode"] ^= 0o100
+                return SimpleNamespace(**fields)
+
+            with patch.object(M.os, "fstat", side_effect=bridged):
+                self.assertEqual(M.regular_bytes(path), b"same input")
+
+    def test_descriptor_ctime_change_still_refuses_the_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "input"
+            path.write_bytes(b"same input")
+            original = os.fstat
+            calls = 0
+
+            def changing(fd):
+                nonlocal calls
+                calls += 1
+                info = original(fd)
+                fields = {name: getattr(info, name) for name in
+                          ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns", "st_ctime_ns")}
+                fields["st_ctime_ns"] += calls
+                return SimpleNamespace(**fields)
+
+            with patch.object(M.os, "fstat", side_effect=changing), self.assertRaises(M.InputError):
+                M.regular_bytes(path)
+
+    def test_path_ctime_change_still_refuses_the_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "input"
+            path.write_bytes(b"same input")
+            original = Path.lstat
+            calls = 0
+
+            def changing(entry, *args, **kwargs):
+                nonlocal calls
+                info = original(entry, *args, **kwargs)
+                if entry == path:
+                    calls += 1
+                    if calls == 3:  # ancestor check, pre-open, post-read
+                        fields = {name: getattr(info, name) for name in
+                                  ("st_dev", "st_ino", "st_mode", "st_size", "st_mtime_ns", "st_ctime_ns")}
+                        fields["st_ctime_ns"] += 1
+                        return SimpleNamespace(**fields)
+                return info
+
+            with patch.object(Path, "lstat", changing), self.assertRaises(M.InputError):
+                M.regular_bytes(path)
 
     def test_file_removed_during_read_is_refused(self):
         # Removing open files is supported on POSIX; Windows denies it itself.

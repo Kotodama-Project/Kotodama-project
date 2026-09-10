@@ -69,9 +69,17 @@ def token(value: Any) -> bool:
 
 
 def file_identity(info: os.stat_result) -> tuple[int, ...]:
+    # Bridge path/descriptor metadata using fields with matching semantics.
+    # CPython 3.12 Windows path stat copies birthtime into ctime; fstat does not.
+    # Path stat also adds executable bits based on the filename extension.
+    return (info.st_dev, info.st_ino, stat.S_IFMT(info.st_mode), info.st_size,
+            info.st_mtime_ns)
+
+
+def file_snapshot(info: os.stat_result) -> tuple[int, ...]:
+    # Retain ctime and permission change detection within each metadata API.
     # Do not include atime: reading a file may legitimately update it.
-    return (info.st_dev, info.st_ino, info.st_mode, info.st_size,
-            info.st_mtime_ns, info.st_ctime_ns)
+    return file_identity(info) + (info.st_mode, info.st_ctime_ns)
 
 
 def regular_bytes(path: Path) -> bytes:
@@ -101,8 +109,8 @@ def regular_bytes(path: Path) -> bytes:
             data = stream.read(MAX_BYTES + 1)
         require(len(data) <= MAX_BYTES, "input exceeds size limit")
         require(len(data) == opened.st_size
-                and file_identity(os.fstat(fd)) == file_identity(opened)
-                and file_identity(absolute.lstat()) == file_identity(opened),
+                and file_snapshot(os.fstat(fd)) == file_snapshot(opened)
+                and file_snapshot(absolute.lstat()) == file_snapshot(before),
                 "input changed during read")
         return data
     finally:
