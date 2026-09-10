@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/task-swarm-plan.schema.json",
+  "title": "Owner-bound local Task swarm plan",
+  "description": "An immutable, provider-neutral execution DAG. Owner binding and resource identities are resolved outside this scheduler.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "task_id", "binding_digest", "budget", "jobs"],
+  "properties": {
+    "run_id": { "$ref": "#/$defs/ref" },
+    "task_id": { "$ref": "#/$defs/ref" },
+    "binding_digest": { "$ref": "#/$defs/digest" },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt_budget", "concurrency", "deadline"],
+      "properties": {
+        "attempt_budget": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "concurrency": { "type": "integer", "minimum": 1, "maximum": 40 },
+        "verifier_reserve": { "type": "integer", "minimum": 0, "maximum": 1000,
+          "description": "Attempts protected from work jobs. Defaults to review-job count capped by total attempts; runtime checks cross-field bounds." },
+        "deadline": {
+          "oneOf": [
+            { "type": "number", "minimum": 0 },
+            { "type": "string", "format": "date-time", "minLength": 1, "maxLength": 128 }
+          ]
+        }
+      }
+    },
+    "jobs": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/job" }
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[^\\u0000-\\u001f]*$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_id", "kind", "dependencies", "exclusive_keys", "payload_ref", "payload_digest"],
+      "properties": {
+        "job_id": { "$ref": "#/$defs/ref" },
+        "kind": { "enum": ["work", "review"] },
+        "dependencies": {
+          "type": "array",
+          "maxItems": 1000,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/ref" }
+        },
+        "exclusive_keys": {
+          "type": "array",
+          "maxItems": 1000,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/ref" }
+        },
+        "payload_ref": { "$ref": "#/$defs/ref" },
+        "payload_digest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

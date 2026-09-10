@@ -902,6 +902,7 @@ MOCs）が理想のCompany Template層を読む順番です。
 - [Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) — 公開14 CLIの入力、状態、次handoff、共通helpを一覧する
 - [Review-chain artifact map](docs/STARTER-WALKTHROUGH.md#review-chain-artifact-map) — Review Bundle、Review Request、Review Response、Decision Handoffのartifact states and next handoffs
 - [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md) — runtime profileを選ぶ前のread-only導線
+- [Luna Task Swarm](docs/LUNA-TASK-SWARM.md) — owner-bound packet、native/CLI route、peer ACK/reply、独立 review の bounded 導線
 
 Catalog以降は現在の
 read-only/candidate-only公開導線であり、validatorやrunbookがPASSしても
