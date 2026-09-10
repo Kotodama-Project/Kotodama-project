@@ -1,0 +1,66 @@
+name: Native Intent Browser
+on:
+  pull_request:
+    paths:
+      - 'runtime/cloudflare-os-kotodama/**'
+      - 'tools/test_native_intent_browser.py'
+      - 'tests/node/test_company_persona_journeys.mjs'
+      - 'tests/node/test_local_review_gateway.mjs'
+      - 'tests/node/test_information_access.mjs'
+      - 'runtime/local-review-gateway/**'
+      - '.github/workflows/native-intent-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Install pinned browser test harness
+        run: |
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Exercise shipped client with isolated synthetic RPC
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/kotodama-browser-evidence"
+          python tools/test_native_intent_browser.py --evidence-dir "$RUNNER_TEMP/kotodama-browser-evidence" > "$RUNNER_TEMP/kotodama-browser-evidence/results.json"
+      - name: Preserve component evidence without claiming full OS E2E
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: native-intent-browser-${{ github.run_id }}
+          path: ${{ runner.temp }}/kotodama-browser-evidence/
+          if-no-files-found: error
+          retention-days: 7
+  local-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Exercise real local HTTP and persistence with synthetic identities
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/kotodama-persona-http"
+          git rev-parse HEAD > "$RUNNER_TEMP/kotodama-persona-http/checkout-sha.txt"
+          node --test tests/node/test_local_review_gateway.mjs tests/node/test_information_access.mjs tests/node/test_company_persona_journeys.mjs 2>&1 | tee "$RUNNER_TEMP/kotodama-persona-http/results.log"
+      - name: Preserve local HTTP evidence without claiming live company E2E
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: company-persona-http-${{ github.run_id }}
+          path: ${{ runner.temp }}/kotodama-persona-http/
+          if-no-files-found: error
+          retention-days: 7
