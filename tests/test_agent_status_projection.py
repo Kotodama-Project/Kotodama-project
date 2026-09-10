@@ -279,7 +279,7 @@ class InputAndCliTests(unittest.TestCase):
 
     def test_cli_on_repository_registry_without_live_observations(self):
         result = subprocess.run([sys.executable, str(ROOT / "tools/project_agent_status.py"),
-                                 "--as-of", "2026-09-10T09:00:30Z"], capture_output=True, text=True, timeout=10)
+                                 "--as-of", "2026-09-10T09:00:30Z"], capture_output=True, text=True, encoding="utf-8", timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
         report = json.loads(result.stdout)
         self.assertEqual(report["summary"]["supplied_observations"], 0)
@@ -295,7 +295,7 @@ class InputAndCliTests(unittest.TestCase):
                 (root / path).write_text(json.dumps(data), encoding="utf-8")
             result = subprocess.run([sys.executable, str(ROOT / "tools/project_agent_status.py"),
                                      "--root", str(root), "--observations", str(root / "obs.json"),
-                                     "--as-of", "2026-09-10T09:00:30Z"], capture_output=True, text=True, timeout=10)
+                                     "--as-of", "2026-09-10T09:00:30Z"], capture_output=True, text=True, encoding="utf-8", timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
             report = json.loads(result.stdout)
             self.assertEqual(report["input_sha256"]["registry"], hashlib.sha256((root / MODULE.REGISTRY).read_bytes()).hexdigest())
@@ -303,7 +303,7 @@ class InputAndCliTests(unittest.TestCase):
 
     def test_cli_mismatched_skill_bundle_fails_before_projection(self):
         result = subprocess.run([sys.executable, str(ROOT / "tools/project_agent_status.py"),
-                                 "--expected-bundle-sha256", "0" * 64], capture_output=True, text=True, timeout=10)
+                                 "--expected-bundle-sha256", "0" * 64], capture_output=True, text=True, encoding="utf-8", timeout=10)
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
         self.assertIn("bundle mismatch", result.stderr)
@@ -313,7 +313,7 @@ class InputAndCliTests(unittest.TestCase):
                           ("--max-age-seconds", "PRIVATE-MARKER")):
             with self.subTest(arguments=arguments):
                 result = subprocess.run([sys.executable, str(ROOT / "tools/project_agent_status.py"),
-                                         *arguments], capture_output=True, text=True, timeout=10)
+                                         *arguments], capture_output=True, text=True, encoding="utf-8", timeout=10)
                 self.assertEqual(result.returncode, 2)
                 self.assertEqual(result.stdout, "")
                 self.assertNotIn("PRIVATE-MARKER", result.stderr)
