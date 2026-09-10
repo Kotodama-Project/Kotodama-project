@@ -63,7 +63,7 @@
       "description": "Agent purpose, lifecycle, authority, eval gates, rollback and retirement",
       "canonical_path": "governance/agent-registry.json",
       "human_projection_paths": ["docs/AGENT-FOUNDRY-OPERATIONS.md"],
-      "classification_patterns": ["governance/agent-registry.json", "docs/AGENT-FOUNDRY-OPERATIONS.md", "schemas/agent-registry.schema.json"],
+      "classification_patterns": ["governance/agent-registry.json", "docs/AGENT-FOUNDRY-OPERATIONS.md", "schemas/agent-registry.schema.json", "skills/kotodama-agent-status/SKILL.md"],
       "freshness": {"mode": "json_field", "field": "reviewed_at", "max_age_days": 14, "severity": "warning"},
       "owner_role": "Agent Auditor",
       "required_provenance": ["eval evidence", "capability grants", "runtime evidence before activation"]
