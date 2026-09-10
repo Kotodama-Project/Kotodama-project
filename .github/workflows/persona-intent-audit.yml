@@ -8,8 +8,6 @@ jobs:
   offline:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      AUDIT_EVIDENCE: ${{ runner.temp }}/kotodama-persona-evidence
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -25,21 +23,21 @@ jobs:
         run: python -m pip install -r requirements-test.txt
       - name: Record test inventory outside the audited repository
         run: |
-          mkdir -p "$AUDIT_EVIDENCE"
-          git rev-parse HEAD > "$AUDIT_EVIDENCE/checkout-sha.txt"
-          python tools/run_persona_intent_audit.py --inventory > "$AUDIT_EVIDENCE/test-inventory.json"
+          mkdir -p "$RUNNER_TEMP/kotodama-persona-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/kotodama-persona-evidence/checkout-sha.txt"
+          python tools/run_persona_intent_audit.py --inventory > "$RUNNER_TEMP/kotodama-persona-evidence/test-inventory.json"
       - name: Execute persona intent checks and expose blocked journeys
         id: personas
-        run: python tools/run_persona_intent_audit.py > "$AUDIT_EVIDENCE/personas.json"
+        run: python tools/run_persona_intent_audit.py > "$RUNNER_TEMP/kotodama-persona-evidence/personas.json"
       - name: Run full regression without converting failure to success
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         shell: bash
-        run: python -B -m unittest discover -s tests -v 2>&1 | tee "$AUDIT_EVIDENCE/regression.log"
+        run: python -B -m unittest discover -s tests -v 2>&1 | tee "$RUNNER_TEMP/kotodama-persona-evidence/regression.log"
       - name: Preserve exact offline evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: persona-intent-audit-${{ github.run_id }}
-          path: ${{ env.AUDIT_EVIDENCE }}/
+          path: ${{ runner.temp }}/kotodama-persona-evidence/
           if-no-files-found: error
           retention-days: 7
