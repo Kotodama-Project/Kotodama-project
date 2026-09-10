@@ -52,3 +52,13 @@ not healthy-agent counts. No new command, retry, grant, or mutation is authorize
 Consumers of v1 must explicitly accept v2 before using these additional fields.
 Input mutation detected across stat/open/read/post-stat is refused. Use immutable,
 access-controlled snapshots: these checks are not an atomic directory snapshot.
+
+## Local human-readable view
+
+Markdown keeps names, purposes and Work/run identifiers withheld by default. An
+operator who already has access to the input can use `--include-context` for an
+explicit local view. This is not an authorization check or a safe-to-publish flag.
+Read the evaluation time, freshness, stop state, independent verification and
+next steps together. A stop report remains unauthenticated runtime evidence;
+`not_evaluated` is never a successful verification. See
+`docs/TEST-INTENT-AUDIT.md` for the scope and regression evidence.

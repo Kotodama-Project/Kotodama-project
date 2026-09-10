@@ -13,11 +13,11 @@ def compile_context(workspace, *, ceiling="public", max_claims=8, max_bytes=1638
     if validation["status"] == "PASS":
         required_ids = {c["id"] for c in package["claims"] if c["material"]}
         required_ids.update(c for a in package["assumptions"] + package["contradictions"] for c in a["claim_refs"])
-    result = {"kind": "knowledge_context_bundle", "version": 1, "status": "REFUSED", "errors": [],
+    result = {"kind": "knowledge_context_bundle", "version": 2, "status": "REFUSED", "errors": [],
               "package_sha256": validation["package_sha256"], "subject_sha256": validation["subject_sha256"],
               "as_of": validation["as_of"], "sensitivity_ceiling": ceiling, "work_ref": None,
               "objective": None, "selected_claims": [], "sources": [], "assumptions": [], "questions": [],
-              "contradictions": [], "omitted_ids": [], "context_sha256": None, "claims": dict(FALSE_CLAIMS)}
+              "contradictions": [], "acceptance_criteria": [], "deliverable_bindings": [], "omitted_ids": [], "context_sha256": None, "claims": dict(FALSE_CLAIMS)}
     if validation["status"] != "PASS":
         result["errors"] = ["SENSITIVITY_CEILING"] if "SENSITIVITY_CEILING" in validation["errors"] else ["PACKAGE_INVALID"]
     elif package["state"] != "candidate":
@@ -34,6 +34,13 @@ def compile_context(workspace, *, ceiling="public", max_claims=8, max_bytes=1638
                       selected_claims=selected, sources=[{k: s[k] for k in ["id", "sha256", "kind", "sensitivity", "expires_at"]}
                                                         for s in package["sources"] if s["id"] in source_ids],
                       assumptions=package["assumptions"], questions=package["questions"], contradictions=package["contradictions"],
+                      # Preserve the user's definition of done, not just background claims.
+                      # A producer's reported criterion state is NOT independent verification.
+                      acceptance_criteria=[{"id": c["id"], "description": c["description"],
+                                            "reported_state": c["state"], "deliverable_refs": c["deliverable_refs"]}
+                                           for c in package["criteria"]],
+                      deliverable_bindings=[{k: d[k] for k in ("id", "sha256", "criterion_refs")}
+                                            for d in package["deliverables"]],
                       omitted_ids=[c["id"] for c in ordered[max_claims:]])
         raw = json.dumps(result, ensure_ascii=False, sort_keys=True).encode("utf-8")
         # Reserve room for the 64-byte digest that replaces null before emission.
@@ -43,7 +50,7 @@ def compile_context(workspace, *, ceiling="public", max_claims=8, max_bytes=1638
             result["context_sha256"] = hashlib.sha256(raw).hexdigest()
     if result["status"] == "REFUSED":
         result.update(package_sha256=None, subject_sha256=None, work_ref=None, objective=None, context_sha256=None,
-                      selected_claims=[], sources=[], assumptions=[], questions=[], contradictions=[], omitted_ids=[])
+                      selected_claims=[], sources=[], assumptions=[], questions=[], contradictions=[], acceptance_criteria=[], deliverable_bindings=[], omitted_ids=[])
     return result
 
 
@@ -60,7 +67,8 @@ def main():
         result = compile_context(args.workspace, ceiling=args.ceiling, max_claims=args.max_claims, max_bytes=args.max_bytes, now=evaluation_time(args.as_of), source_root=args.source_root)
     except (ValueError, TypeError):
         parser.error("invalid limits")
-    emit(result)
+    # Match the UTF-8 serialization used for the context budget (plus one newline).
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0 if result["status"] == "READY_CANDIDATE" else 1
 
 
