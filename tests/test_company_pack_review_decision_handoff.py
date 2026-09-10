@@ -1,4 +1,5 @@
 import hashlib
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import subprocess
@@ -26,6 +27,7 @@ RESPONSE_BUILDER = ROOT / "tools" / "build_company_pack_review_response.py"
 RESPONSE_VERIFIER = ROOT / "tools" / "verify_company_pack_review_response.py"
 HANDOFF_BUILDER = ROOT / "tools" / "build_company_pack_review_decision_handoff.py"
 HANDOFF_VERIFIER = ROOT / "tools" / "verify_company_pack_review_decision_handoff.py"
+FIXTURE_AUTHORITY_EXPIRY = (datetime.now(timezone.utc) + timedelta(days=7)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 EXPECTED_DECISION_FIELDS = [
@@ -79,7 +81,7 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
                     "--human-intent-ref",
                     "human-intent:private-decision-handoff-source",
                     "--authority-expires-at",
-                    "2026-08-20T00:00:00Z",
+                    FIXTURE_AUTHORITY_EXPIRY,
                     "--retention-policy-ref",
                     "retention-policy:private-decision-handoff-policy",
                 ]
@@ -103,7 +105,7 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
             for relative in manifest["blocks"]:
                 path = pack / relative
                 document = json.loads(path.read_text(encoding="utf-8"))
-                document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+                document["authority"]["expires_at"] = FIXTURE_AUTHORITY_EXPIRY
                 path.write_text(json.dumps(document), encoding="utf-8")
 
         paths = {
