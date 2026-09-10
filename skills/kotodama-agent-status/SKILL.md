@@ -41,3 +41,14 @@ It identifies content, not trust, signatures, a Capability Grant, or human appro
 It does not check an arbitrary external copy of this skill unless that copy's recorded
 digest is supplied. Output contains no mutation controls. Do not reinterpret it as
 permission to operate OpenMaus, Cloudflare, Proxmox, or any agent.
+
+## Version 2 diagnostic output
+
+Read [the integration and v2 contract](../../docs/AGENT-DIAGNOSTICS-INTEGRATION.md).
+
+The output is `agent-status-v2`: each diagnostic code has a fixed read-only
+`next_steps` explanation. Fresh/missing/stale/future counts are observation counts,
+not healthy-agent counts. No new command, retry, grant, or mutation is authorized.
+Consumers of v1 must explicitly accept v2 before using these additional fields.
+Input mutation detected across stat/open/read/post-stat is refused. Use immutable,
+access-controlled snapshots: these checks are not an atomic directory snapshot.

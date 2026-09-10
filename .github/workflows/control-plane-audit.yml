@@ -14,18 +14,68 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, verified 2026-09-08
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5, verified 2026-09-08
         with:
           python-version: "3.12"
       - name: Install test dependencies
+        id: dependencies
         run: python -m pip install -r requirements-test.txt
       - name: Run full regression suite
+        id: regression
         run: python -m unittest discover -s tests -v
       - name: Run Knowledge Work CI
+        id: knowledge
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: python tools/audit_knowledge_workspaces.py --format markdown --fail-on error --require-package
       - name: Emit control-plane audit
+        id: control_plane
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: python tools/audit_control_plane.py --format markdown --fail-on error
       - name: Emit proposal-only maintenance plan
+        id: maintenance
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: python tools/plan_control_plane_maintenance.py --format markdown
+      - name: Summarize each gate without hiding failures
+        if: ${{ !cancelled() }}
+        env:
+          DEPENDENCIES: ${{ steps.dependencies.outcome }}
+          REGRESSION: ${{ steps.regression.outcome }}
+          KNOWLEDGE: ${{ steps.knowledge.outcome }}
+          CONTROL_PLANE: ${{ steps.control_plane.outcome }}
+          MAINTENANCE: ${{ steps.maintenance.outcome }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          lines = ["## Control-plane validation", "", "| Gate | Outcome |", "| --- | --- |"]
+          for gate in ("DEPENDENCIES", "REGRESSION", "KNOWLEDGE", "CONTROL_PLANE", "MAINTENANCE"):
+              outcome = os.environ.get(gate, "")
+              if outcome not in {"success", "failure", "cancelled", "skipped"}:
+                  outcome = "not_reported"
+              lines.append(f"| {gate} | {outcome} |")
+          lines.extend(["", "Passing checks do not activate agents, authorize access, or approve deployment.", ""])
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as stream:
+              stream.write("\n".join(lines))
+          PY
+  diagnostics:
+    name: Offline diagnostics (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, verified 2026-09-08
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5, verified 2026-09-08
+        with:
+          python-version: "3.12"
+      - name: Run offline diagnostics against combined repository inputs
+        run: python -B -m unittest discover -s tests -p "test_agent_status*.py" -v

@@ -24,6 +24,18 @@ SKILL = "skills/kotodama-agent-status/SKILL.md"
 BUNDLE = ("tools/project_agent_status.py", CONTRACT, SKILL)
 MAX_BYTES = 1_048_576
 MAX_ITEMS = 1000
+MAX_NODES = 50_000
+NEXT_STEPS = {
+    "runtime_unbound": "Inspect the existing implementation binding; do not activate a runtime from this report.",
+    "registry_not_active": "Review the registry activation gates with the existing owner; do not change authority here.",
+    "observation_missing": "Obtain a snapshot only through an already-authorized observer; absence is not offline.",
+    "adapter_report_not_authenticated": "Check provenance and source access with the trusted observer; freshness is not authenticity.",
+    "observation_future": "Reconcile the observer timestamp and evaluation clock before using this observation.",
+    "observation_stale": "Request a current authorized snapshot; do not reuse this expired state for decisions.",
+    "cancellation_not_observed": "Reconcile the exact Work/run stop observation; a cancelled label is not stop confirmation.",
+    "producer_verification_not_accepted": "Route the exact result to the independent verifier; do not accept producer self-verification.",
+    "stop_confirmation_missing": "Reconcile the existing stop request and exact Work/run; do not blindly retry or restart.",
+}
 TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/@#-]{0,255}\Z")
 TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)\Z")
 OBS_FIELDS = {
@@ -56,37 +68,80 @@ def token(value: Any) -> bool:
     return isinstance(value, str) and TOKEN.fullmatch(value) is not None
 
 
+def file_identity(info: os.stat_result) -> tuple[int, ...]:
+    # Do not include atime: reading a file may legitimately update it.
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_size,
+            info.st_mtime_ns, info.st_ctime_ns)
+
+
 def regular_bytes(path: Path) -> bytes:
-    """Bound reads and reject non-regular inputs without blocking on a FIFO."""
+    """Bound a stable regular-file read; reject observed replacement or mutation.
+
+    This is not an atomic filesystem snapshot or an authorization boundary against
+    a hostile process swapping ancestors. Use trusted, access-controlled inputs.
+    """
     absolute = path.absolute()
-    require(not any(p.is_symlink() for p in (absolute, *absolute.parents)),
-            "symlink input is not supported")
+    for entry in (absolute, *absolute.parents):
+        info = entry.lstat()
+        require(not stat.S_ISLNK(info.st_mode)
+                and not (getattr(info, "st_file_attributes", 0)
+                         & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)),
+                "linked input is not supported")
+    before = absolute.lstat()
+    require(stat.S_ISREG(before.st_mode), "input must be a regular file")
+    require(before.st_size <= MAX_BYTES, "input exceeds size limit")
     flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
+    # Binary mode matters when reading Windows files through an OS descriptor.
+    flags |= getattr(os, "O_BINARY", 0)
     fd = os.open(absolute, flags)
     try:
-        info = os.fstat(fd)
-        require(stat.S_ISREG(info.st_mode), "input must be a regular file")
-        require(info.st_size <= MAX_BYTES, "input exceeds size limit")
+        opened = os.fstat(fd)
+        require(file_identity(opened) == file_identity(before), "input changed during read")
         with os.fdopen(fd, "rb", closefd=False) as stream:
             data = stream.read(MAX_BYTES + 1)
         require(len(data) <= MAX_BYTES, "input exceeds size limit")
+        require(len(data) == opened.st_size
+                and file_identity(os.fstat(fd)) == file_identity(opened)
+                and file_identity(absolute.lstat()) == file_identity(opened),
+                "input changed during read")
         return data
     finally:
         os.close(fd)
 
 
 def bounded(value: Any, depth: int = 0) -> None:
-    require(depth <= 24, "JSON nesting exceeds limit")
-    if isinstance(value, float):
-        require(math.isfinite(value), "non-finite JSON value")
-    if isinstance(value, dict):
-        require(len(value) <= MAX_ITEMS, "JSON object exceeds limit")
-        for child in value.values():
-            bounded(child, depth + 1)
-    elif isinstance(value, list):
-        require(len(value) <= MAX_ITEMS, "JSON array exceeds limit")
-        for child in value:
-            bounded(child, depth + 1)
+    """Bound aggregate work as well as depth/width, including the pure API.
+
+    A repeated-reference DAG or cycle supplied directly must not cause unbounded
+    traversal. Only JSON values and Unicode scalar strings are accepted.
+    """
+    stack = [(value, depth)]
+    nodes = 0
+    text_bytes = 0
+    while stack:
+        item, level = stack.pop()
+        nodes += 1
+        require(nodes <= MAX_NODES, "JSON node count exceeds limit")
+        require(level <= 24, "JSON nesting exceeds limit")
+        if isinstance(item, str):
+            require(len(item) <= MAX_BYTES, "JSON text exceeds limit")
+            try:
+                text_bytes += len(item.encode("utf-8"))
+            except UnicodeError as exc:
+                raise InputError("invalid Unicode scalar string") from exc
+            require(text_bytes <= MAX_BYTES, "JSON text exceeds limit")
+        elif isinstance(item, dict):
+            require(len(item) <= MAX_ITEMS, "JSON object exceeds limit")
+            require(all(isinstance(key, str) for key in item), "JSON keys must be strings")
+            stack.extend((key, level + 1) for key in item)
+            stack.extend((child, level + 1) for child in item.values())
+        elif isinstance(item, list):
+            require(len(item) <= MAX_ITEMS, "JSON array exceeds limit")
+            stack.extend((child, level + 1) for child in item)
+        elif isinstance(item, float):
+            require(math.isfinite(item), "non-finite JSON value")
+        else:
+            require(item is None or type(item) in (int, bool), "non-JSON value")
 
 
 def parse_json(data: bytes) -> dict[str, Any]:
@@ -104,7 +159,7 @@ def parse_json(data: bytes) -> dict[str, Any]:
     try:
         value = json.loads(data.decode("utf-8"),
                            object_pairs_hook=pairs, parse_constant=constant)
-    except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
+    except (ValueError, RecursionError) as exc:
         raise InputError("invalid JSON input") from exc
     require(isinstance(value, dict), "JSON root must be an object")
     bounded(value)
@@ -161,6 +216,8 @@ def project(registry: dict[str, Any], contract: dict[str, Any],
             <= set(work["result_states"]), "required states missing")
     require(isinstance(view.get("required_fields"), list)
             and all(token(v) for v in view["required_fields"]), "invalid common view fields")
+    require(len(view["required_fields"]) == len(set(view["required_fields"])),
+            "duplicate common view fields")
     agents = registry.get("agents")
     require(isinstance(agents, list) and bool(agents), "registry agents must be a nonempty array")
     by_id: dict[str, dict[str, Any]] = {}
@@ -264,15 +321,19 @@ def project(registry: dict[str, Any], contract: dict[str, Any],
                 codes.append("producer_verification_not_accepted")
             if obs["stop_requested_at"] is not None and obs["stop_observed_at"] is None:
                 codes.append("stop_confirmation_missing")
+        row["next_steps"] = [{"code": code, "action": NEXT_STEPS[code]} for code in codes]
         rows.append(row)
     return {
-        "schema_revision": "agent-status-v1", "projection_kind": "offline_diagnostic_only",
+        "schema_revision": "agent-status-v2", "projection_kind": "offline_diagnostic_only",
         "as_of": now.isoformat(), "max_age_seconds": max_age_seconds,
         "access_evaluation": "not_evaluated_do_not_serve", "runtime_evidence_verified": False,
         "mutations_enabled": False, "independent_verification_performed": False,
         "agents": rows,
         "summary": {"registered_agents": len(rows), "supplied_observations": len(entries),
-                    "agents_with_diagnostics": sum(bool(r["diagnostics"]) for r in rows)},
+                    "agents_with_diagnostics": sum(bool(r["diagnostics"]) for r in rows),
+                    "observation_freshness": {
+                        state: sum(r["observation_freshness"] == state for r in rows)
+                        for state in ("missing", "stale", "future", "fresh")}},
     }
 
 
@@ -283,12 +344,12 @@ def markdown(report: dict[str, Any]) -> str:
         return html.escape(json.dumps(value, ensure_ascii=False)).replace("|", "&#124;")
     lines = ["# Agent status — offline diagnostic projection", "",
              "Not live evidence, authorization, or independent verification. No mutation controls.", "",
-             "| Agent | Registry | Connection | Execution | Freshness | Diagnostics |",
-             "| --- | --- | --- | --- | --- | --- |"]
+             "| Agent | Registry | Connection | Execution | Freshness | Diagnostics | Next step |",
+             "| --- | --- | --- | --- | --- | --- | --- |"]
     for row in report["agents"]:
         lines.append("| " + " | ".join(cell(row[k]) for k in
                      ("kotodama_agent_id", "activation_state", "connection_state", "execution_state",
-                      "observation_freshness", "diagnostics")) + " |")
+                      "observation_freshness", "diagnostics", "next_steps")) + " |")
     return "\n".join(lines) + "\n"
 
 

@@ -239,10 +239,6 @@ class InputAndCliTests(unittest.TestCase):
             normal = root / "normal"
             normal.write_bytes(b'{}')
             self.assertEqual(MODULE.load_json(normal), {})
-            link = root / "link"
-            link.symlink_to(normal)
-            with self.assertRaises((MODULE.InputError, OSError)):
-                MODULE.load_json(link)
             with self.assertRaises((MODULE.InputError, OSError)):
                 MODULE.load_json(root)
             if hasattr(os, "mkfifo"):
@@ -250,6 +246,21 @@ class InputAndCliTests(unittest.TestCase):
                 os.mkfifo(fifo)
                 with self.assertRaises((MODULE.InputError, OSError)):
                     MODULE.load_json(fifo)
+
+    def test_symlink_input_is_refused_when_supported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            normal = root / "normal"
+            normal.write_bytes(b'{}')
+            link = root / "link"
+            try:
+                link.symlink_to(normal)
+            except (NotImplementedError, OSError) as exc:
+                if isinstance(exc, NotImplementedError) or getattr(exc, "winerror", None) == 1314:
+                    self.skipTest("symlink creation is unavailable for this test principal")
+                raise
+            with self.assertRaises((MODULE.InputError, OSError)):
+                MODULE.load_json(link)
 
     def test_bundle_changes_for_code_skill_or_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
