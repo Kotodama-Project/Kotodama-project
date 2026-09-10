@@ -27,3 +27,13 @@ HTTPはブラウザ境界で遮断し、合成`gadget`が記録する呼出数�
 ## 検出感度
 
 同一スクリプトの`--root`を固定基準checkoutへ向け、修正前と修正後を比べられる。失敗したから期待値を現在の実装へ合わせない。既存のAPI、UUID予約、承認キュー、サーバーの認可条件は変更しない。
+
+## ローカルHTTPと永続化を通す連続した利用
+
+別の試験で実際の`local-review-gateway`を起動し、12職務の合成入力について、閲覧→権限のないreview拒否→同版の訂正競合→再起動→古い画面のaccept拒否→読取権限取消→再起動後の取消維持を通す。対象は自分が作成した一時領域とlocalhostだけ。元の意図と訂正文を実際のHTTP応答・保存から照合する。これは**1つのライフサイクルを12入力で試す**もので、12実会社の業務成功ではない。
+
+```sh
+node --test tests/node/test_local_review_gateway.mjs tests/node/test_information_access.mjs tests/node/test_company_persona_journeys.mjs
+```
+
+既存12試験と追加12試験を実行する。サーバー・保存処理・HTTPは実物だが、外側の認証issuerと会社identityは合成。Cloudflare Access自体の認証、会話理解、実組織の権限変更、実顧客への送達、画面からサーバーまでの一続きのE2Eは成立させていない。CI証拠はリポジトリ監査へ混入しないrunner一時領域に保存する。

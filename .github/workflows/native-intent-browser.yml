@@ -4,6 +4,10 @@ on:
     paths:
       - 'runtime/cloudflare-os-kotodama/**'
       - 'tools/test_native_intent_browser.py'
+      - 'tests/node/test_company_persona_journeys.mjs'
+      - 'tests/node/test_local_review_gateway.mjs'
+      - 'tests/node/test_information_access.mjs'
+      - 'runtime/local-review-gateway/**'
       - '.github/workflows/native-intent-browser.yml'
   workflow_dispatch:
 permissions:
@@ -34,5 +38,31 @@ jobs:
         with:
           name: native-intent-browser-${{ github.run_id }}
           path: browser-evidence/
+          if-no-files-found: error
+          retention-days: 7
+  local-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HTTP_EVIDENCE: ${{ runner.temp }}/kotodama-persona-http
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Exercise real local HTTP and persistence with synthetic identities
+        shell: bash
+        run: |
+          mkdir -p "$HTTP_EVIDENCE"
+          git rev-parse HEAD > "$HTTP_EVIDENCE/checkout-sha.txt"
+          node --test tests/node/test_local_review_gateway.mjs tests/node/test_information_access.mjs tests/node/test_company_persona_journeys.mjs 2>&1 | tee "$HTTP_EVIDENCE/results.log"
+      - name: Preserve local HTTP evidence without claiming live company E2E
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: company-persona-http-${{ github.run_id }}
+          path: ${{ env.HTTP_EVIDENCE }}/
           if-no-files-found: error
           retention-days: 7
