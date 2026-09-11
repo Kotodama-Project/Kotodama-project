@@ -63,6 +63,7 @@ class LiveSession:
         self.finalized = False
         self.serving = False
         self.close_sent = False
+        self.output_tail = b""
         self.delegations: set[str] = set()
         self.seen: set[str] = set()
 
@@ -146,9 +147,9 @@ class LiveSession:
                 self.delegations.add(identifier)
                 self.on_delegation(identifier, event["offset_ms"])
         elif kind == "session.output_audio.delta" and not self.closing:
-            pcm = base64.b64decode(event["delta"], validate=True)
-            if len(pcm) % 2:
-                raise Denied("incomplete PCM16 output sample")
+            raw = self.output_tail + base64.b64decode(event["delta"], validate=True)
+            boundary = len(raw) - len(raw) % 2
+            pcm, self.output_tail = raw[:boundary], raw[boundary:]
             if self.playback_gate is not None:
                 allowed = self.playback_gate.filter(self.id or "", pcm)
                 if allowed:
@@ -186,6 +187,7 @@ class LiveSession:
         """Stop unsent input and callbacks immediately; host must also close()."""
         self.consented = False
         self.closing = True
+        self.output_tail = b""
         if self.playback_gate is not None:
             self.playback_gate.revoke()
 
@@ -197,13 +199,15 @@ class LiveSession:
             return
         if not self.started.is_set() or self.connection is None:
             raise Denied("session has not started")
+        connection = self.connection
         try:
-            if not self.close_sent:
-                self.close_sent = True
-                await self.connection.session.close()
-            await asyncio.wait_for(self.closed.wait(), timeout)
-            if not self.finalized:
-                raise RuntimeError("session closed without final usage")
+            async with asyncio.timeout(timeout):
+                if not self.close_sent:
+                    self.close_sent = True
+                    await connection.session.close()
+                await self.closed.wait()
+                if not self.finalized:
+                    raise RuntimeError("session closed without final usage")
         except (TimeoutError, asyncio.CancelledError):
-            await self.connection.close()
+            await connection.close()
             raise
