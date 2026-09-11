@@ -364,9 +364,13 @@ class LiveProtocolTests(unittest.IsolatedAsyncioTestCase):
         gate.open("live-1", addressed=True)
         session.handle(event)
         self.assertEqual(self.audio, [("live-1", b"\x00\x00")])
+        session.handle({"type": "session.output_audio.delta", "delta": "YQ=="})
+        self.assertEqual(len(self.audio), 1)
+        session.handle({"type": "session.output_audio.delta", "delta": "Yg=="})
+        self.assertEqual(self.audio[-1], ("live-1", b"ab"))
         session.revoke_consent()
         session.handle(event)
-        self.assertEqual(len(self.audio), 1)
+        self.assertEqual(len(self.audio), 2)
         session.handle({"type": "session.input_transcript.delta", "delta": "private",
                         "start_ms": 0, "end_ms": 1})
         self.assertEqual(self.fragments, [])
@@ -395,7 +399,7 @@ class LiveProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_close_timeout_terminates_transport_without_claiming_usage(self):
         session, conn = self.make(), FakeConnection()
         async def no_ack():
-            return None
+            await asyncio.Event().wait()
         conn.session.close = no_ack
         task = asyncio.create_task(session.serve(SimpleNamespace(
             live=SimpleNamespace(connect=lambda: conn))))
