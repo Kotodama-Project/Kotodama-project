@@ -1,0 +1,499 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-agent-orchestration-route-binding-candidate.schema.json",
+  "title": "Company Pack Agent Orchestration Route Binding Candidate",
+  "description": "Opaque, public-preview-only route comparison contract. It fixes source/target identity, workspace/revision, route, preview, and rollback fields without invoking a runner or granting authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "status",
+    "route_state",
+    "route_id_ref",
+    "operation_id_ref",
+    "source_task",
+    "target_task",
+    "resource_binding",
+    "route_policy",
+    "preview",
+    "confirmation",
+    "failure_and_rollback",
+    "recorded_at",
+    "expires_at",
+    "review_trigger",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {
+      "const": "company_pack_agent_orchestration_route_binding_candidate"
+    },
+    "version": {
+      "const": "1.0"
+    },
+    "status": {
+      "const": "CANDIDATE_ONLY"
+    },
+    "route_state": {
+      "enum": [
+        "ROUTE_DEFINED_UNVERIFIED",
+        "REFUSED_UNVERIFIED"
+      ]
+    },
+    "route_id_ref": {
+      "$ref": "#/$defs/opaque_ref"
+    },
+    "operation_id_ref": {
+      "$ref": "#/$defs/opaque_ref"
+    },
+    "source_task": {
+      "$ref": "#/$defs/task_identity"
+    },
+    "target_task": {
+      "$ref": "#/$defs/task_identity"
+    },
+    "resource_binding": {
+      "$ref": "#/$defs/resource_binding"
+    },
+    "route_policy": {
+      "$ref": "#/$defs/route_policy"
+    },
+    "preview": {
+      "$ref": "#/$defs/preview"
+    },
+    "confirmation": {
+      "$ref": "#/$defs/confirmation"
+    },
+    "failure_and_rollback": {
+      "$ref": "#/$defs/failure_and_rollback"
+    },
+    "recorded_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "expires_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "review_trigger": {
+      "$ref": "#/$defs/review_triggers"
+    },
+    "claims": {
+      "$ref": "#/$defs/claims"
+    },
+    "public_beta": {
+      "const": "NO_GO_UNPUBLISHED"
+    }
+  },
+  "$defs": {
+    "opaque_ref": {
+      "type": "string",
+      "minLength": 6,
+      "maxLength": 512,
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "bytes"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        }
+      }
+    },
+    "task_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_ref",
+        "thread_ref",
+        "host_ref",
+        "title_ref",
+        "workspace_ref",
+        "workspace_binding"
+      ],
+      "properties": {
+        "task_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "thread_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "host_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "title_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "workspace_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "workspace_binding": {
+          "$ref": "#/$defs/binding"
+        }
+      }
+    },
+    "resource_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_ref",
+        "public_revision",
+        "candidate_manifest_binding",
+        "resource_scope_ref",
+        "verification_status"
+      ],
+      "properties": {
+        "repository_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "public_revision": {
+          "$ref": "#/$defs/sha1"
+        },
+        "candidate_manifest_binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "resource_scope_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "route_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_action",
+        "effect_class",
+        "expected_effects",
+        "source_target_correlation_ref",
+        "route_policy_ref",
+        "route_policy_binding",
+        "external_effects_allowed",
+        "provider_effects_allowed",
+        "device_effects_allowed",
+        "public_effects_allowed",
+        "verification_status"
+      ],
+      "properties": {
+        "allowed_action": {
+          "enum": [
+            "INTERNAL_AGENT_HANDOFF"
+          ]
+        },
+        "effect_class": {
+          "const": "INTERNAL_CANDIDATE_ONLY"
+        },
+        "expected_effects": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "INTERNAL_CANDIDATE_RECORD_ONLY"
+            }
+          ],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "source_target_correlation_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "route_policy_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "route_policy_binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "external_effects_allowed": {
+          "const": false
+        },
+        "provider_effects_allowed": {
+          "const": false
+        },
+        "device_effects_allowed": {
+          "const": false
+        },
+        "public_effects_allowed": {
+          "const": false
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "preview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preview_binding",
+        "observed_at",
+        "expires_at",
+        "preview_status",
+        "confirmation_required",
+        "verification_status"
+      ],
+      "properties": {
+        "preview_binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "expires_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "preview_status": {
+          "const": "PREVIEW_RECORDED_UNVERIFIED"
+        },
+        "confirmation_required": {
+          "const": true
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confirmation_ref",
+        "confirmation_binding",
+        "confirmation_status",
+        "human_gate",
+        "verification_status"
+      ],
+      "properties": {
+        "confirmation_ref": {
+          "const": null
+        },
+        "confirmation_binding": {
+          "const": null
+        },
+        "confirmation_status": {
+          "const": "NOT_CONFIRMED"
+        },
+        "human_gate": {
+          "const": false
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "failure_and_rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stop_conditions",
+        "rollback_policy_ref",
+        "rollback_policy_binding",
+        "rollback_receipt_ref",
+        "rollback_receipt_binding",
+        "failure_state",
+        "no_external_effects_expected",
+        "execution_receipt_ref",
+        "verification_status"
+      ],
+      "properties": {
+        "stop_conditions": {
+          "$ref": "#/$defs/stop_conditions"
+        },
+        "rollback_policy_ref": {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        "rollback_policy_binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "rollback_receipt_ref": {
+          "const": null
+        },
+        "rollback_receipt_binding": {
+          "const": null
+        },
+        "failure_state": {
+          "enum": [
+            "NOT_EXECUTED",
+            "REFUSED_UNVERIFIED"
+          ]
+        },
+        "no_external_effects_expected": {
+          "const": true
+        },
+        "execution_receipt_ref": {
+          "const": null
+        },
+        "verification_status": {
+          "const": "NOT_VERIFIED"
+        }
+      }
+    },
+    "stop_conditions": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "source_target_mismatch"
+        },
+        {
+          "const": "workspace_or_revision_drift"
+        },
+        {
+          "const": "route_policy_drift"
+        },
+        {
+          "const": "preview_stale_or_expired"
+        },
+        {
+          "const": "confirmation_missing_or_mismatch"
+        },
+        {
+          "const": "external_effect_detected"
+        },
+        {
+          "const": "operation_replay_conflict"
+        }
+      ],
+      "items": false,
+      "minItems": 7,
+      "maxItems": 7
+    },
+    "review_triggers": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "source_or_target_identity_change"
+        },
+        {
+          "const": "workspace_or_revision_change"
+        },
+        {
+          "const": "route_policy_or_allowed_action_change"
+        },
+        {
+          "const": "candidate_manifest_or_preview_change"
+        },
+        {
+          "const": "clock_or_expiry_change"
+        },
+        {
+          "const": "rollback_or_stop_condition_change"
+        },
+        {
+          "const": "confirmation_or_authority_change"
+        },
+        {
+          "const": "schema_change"
+        },
+        {
+          "const": "request_expiry"
+        }
+      ],
+      "items": false,
+      "minItems": 9,
+      "maxItems": 9
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "route_verified",
+        "source_target_correlated",
+        "workspace_binding_verified",
+        "revision_current_verified",
+        "candidate_manifest_verified",
+        "preview_verified",
+        "confirmation_verified",
+        "reobserve_verified",
+        "replay_prevented",
+        "dispatch_executed",
+        "external_effect_authorized",
+        "external_effect_executed",
+        "human_decision_verified",
+        "work_order_authority_granted",
+        "promotion_verified",
+        "current_truth_changed",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "route_verified": {
+          "const": false
+        },
+        "source_target_correlated": {
+          "const": false
+        },
+        "workspace_binding_verified": {
+          "const": false
+        },
+        "revision_current_verified": {
+          "const": false
+        },
+        "candidate_manifest_verified": {
+          "const": false
+        },
+        "preview_verified": {
+          "const": false
+        },
+        "confirmation_verified": {
+          "const": false
+        },
+        "reobserve_verified": {
+          "const": false
+        },
+        "replay_prevented": {
+          "const": false
+        },
+        "dispatch_executed": {
+          "const": false
+        },
+        "external_effect_authorized": {
+          "const": false
+        },
+        "external_effect_executed": {
+          "const": false
+        },
+        "human_decision_verified": {
+          "const": false
+        },
+        "work_order_authority_granted": {
+          "const": false
+        },
+        "promotion_verified": {
+          "const": false
+        },
+        "current_truth_changed": {
+          "const": false
+        },
+        "final_human_go": {
+          "const": false
+        },
+        "public_beta_go": {
+          "const": false
+        }
+      }
+    }
+  }
+}

@@ -326,6 +326,68 @@ python3 tools/validate_session_conversation_ledger.py validate path/to/ledger.js
 python3 tools/validate_session_conversation_ledger.py project path/to/ledger.jsonl ref/session/example
 ```
 
+## 13. Agent orchestration route-binding candidate
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-agent-orchestration-route-binding-candidate.schema.json](../schemas/company-pack-agent-orchestration-route-binding-candidate.schema.json) | [`validate_company_pack_agent_orchestration_route_binding_candidate.py`](../tools/validate_company_pack_agent_orchestration_route_binding_candidate.py) | [`test_company_pack_agent_orchestration_route_binding_candidate_contract.py`](../tests/test_company_pack_agent_orchestration_route_binding_candidate_contract.py) | [Agent Orchestration Route-Binding Candidate](AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md)。source / target、workspace / revision、route、preview / confirmation、rollback の opaque comparison と順序だけを read-only で検査する。`PRECONDITIONS_MATCH_UNVERIFIED` は構造・時間窓の候補一致であり、Codex transport、subagent spawn、task send、provider / device / public effect、Human approval、Promotion、Current Truth、Public Beta GOではない。 |
+
+PowerShell:
+
+```powershell
+python tools\validate_company_pack_agent_orchestration_route_binding_candidate.py `
+  path\to\route-binding-candidate.json
+```
+
+POSIX:
+
+```bash
+python3 tools/validate_company_pack_agent_orchestration_route_binding_candidate.py \
+  path/to/route-binding-candidate.json
+```
+
+この candidate は既存の Protected Execution Request / Handoff Candidate schemaを
+変更せず、public previewの opaque contractとして追加されます。入力値、private path、
+session、host、cwd、credentialは解決・出力せず、複数candidate間のreplay reservationも
+証明しません。schemaの`REFUSED_UNVERIFIED`は構造上の拒否候補であり、CLIは
+`CANDIDATE_MARKED_REFUSED`で拒否します。Draft 2020-12検証には`requirements-test.txt`の
+`jsonschema`が必要で、未導入時は`VALIDATOR_UNAVAILABLE`にfail-closedします。成功・拒否の
+どちらも `CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED`を維持します。schema-validなsemantic拒否は
+`checks.schema=MATCH`を保ち、構造・parser・validatorの拒否だけを`REFUSED`とするため、
+修正対象を区別できますが、runtimeやauthorityの証明にはなりません。
+
+## 14. Agent swarm execution candidate
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [company-pack-agent-swarm-execution-candidate.schema.json](../schemas/company-pack-agent-swarm-execution-candidate.schema.json) | [`validate_company_pack_agent_swarm_execution_candidate.py`](../tools/validate_company_pack_agent_swarm_execution_candidate.py) | [`test_company_pack_agent_swarm_execution_candidate_contract.py`](../tests/test_company_pack_agent_swarm_execution_candidate_contract.py) | [Agent Swarm × Kotodama Adoption Candidate](AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md)。root / worker / verifier、N/C/W/V budget、parent edge、assignment identity、workspace / revision、handoff binding、lease / TTL、stop conditions の opaque plan を read-only で検査する。`PRECONDITIONS_MATCH_UNVERIFIED` は候補 bytes の構造と内部比較が整ったという意味だけで、Codex transport、subagent spawn、runtime model verification、provider / device / public effect、Human approval、Promotion、Current Truth、Public Beta GOではない。 |
+
+PowerShell:
+
+```powershell
+python tools\validate_company_pack_agent_swarm_execution_candidate.py `
+  path\to\agent-swarm-execution-candidate.json
+```
+
+POSIX:
+
+```bash
+python3 tools/validate_company_pack_agent_swarm_execution_candidate.py \
+  path/to/agent-swarm-execution-candidate.json
+```
+
+この contract は既存 v1 / route-binding schema を変更せず、public preview に bounded
+swarm の比較項目を追加します。opaque ref から thread、host、cwd、credential、raw
+prompt、private content を解決せず、複数candidate間の replay reservation、実際の child
+起動、モデル identity、handoff の送達、lease fencing を証明しません。`V` は verifier の
+予約数として記録するだけで、独立検証が実行済みという意味ではありません。schema の
+`REFUSED_UNVERIFIED` は構造上の拒否候補であり、CLI は `CANDIDATE_MARKED_REFUSED` で
+拒否します。Draft 2020-12 検証には `requirements-test.txt` の `jsonschema` が必要で、
+未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。成功・拒否のどちらも
+`CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED` を維持します。schema-validなsemantic拒否は
+`checks.schema=MATCH`を保ち、構造・parser・validatorの拒否だけを`REFUSED`とするため、
+修正対象を区別できますが、runtimeやauthorityの証明にはなりません。
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
