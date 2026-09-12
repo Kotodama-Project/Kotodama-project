@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import {
-  closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync,
+  closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readlinkSync, readSync, renameSync,
   rmdirSync, unlinkSync, writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -93,24 +93,21 @@ function checkedRoot(value) {
   return root;
 }
 
-function readStore(path) {
-  const info = lstatSync(path);
-  if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || info.size > MAX_STORE_BYTES) throw new Error("store_denied");
-  const value = strictJson(readFileSync(path));
-  if (!closed(value, ["schema", "records"]) || value.schema !== STORE_SCHEMA) throw new Error("store_denied");
-  return validateRecords(value.records);
-}
-
-function readImport(path, expectedSha256) {
-  const absolute = resolve(path);
-  checkedRoot(dirname(absolute));
-  const before = lstatSync(absolute);
-  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1 || before.size > MAX_STORE_BYTES) throw new Error("import_file_denied");
-  const file = openSync(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+function readPinnedFile(path, denied) {
+  // Reject existing links before opening, including platforms without O_NOFOLLOW.
+  try {
+    readlinkSync(path);
+    throw new Error(denied);
+  } catch (error) {
+    if (error.code !== "EINVAL") throw error;
+  }
+  const file = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   try {
     const opened = fstatSync(file);
-    if (!opened.isFile() || opened.nlink !== 1 || opened.dev !== before.dev || opened.ino !== before.ino
-      || opened.size !== before.size) throw new Error("import_file_denied");
+    // Inspect the opened object; the pathname may have been replaced during open.
+    const named = lstatSync(path);
+    if (!opened.isFile() || opened.nlink !== 1 || opened.size > MAX_STORE_BYTES
+      || !named.isFile() || named.isSymbolicLink() || named.dev !== opened.dev || named.ino !== opened.ino) throw new Error(denied);
     const buffer = Buffer.alloc(MAX_STORE_BYTES + 1);
     let length = 0;
     while (length < buffer.length) {
@@ -118,11 +115,25 @@ function readImport(path, expectedSha256) {
       if (!count) break;
       length += count;
     }
-    if (length > MAX_STORE_BYTES || length !== opened.size) throw new Error("import_file_denied");
-    const bytes = buffer.subarray(0, length);
-    if (hash(bytes).toString("hex") !== expectedSha256) throw new Error("import_digest_mismatch");
-    return recordsFromSeeds(strictJson(bytes));
+    const after = fstatSync(file);
+    if (length > MAX_STORE_BYTES || length !== opened.size || after.size !== opened.size
+      || after.mtimeMs !== opened.mtimeMs || after.nlink !== 1) throw new Error(denied);
+    return buffer.subarray(0, length);
   } finally { closeSync(file); }
+}
+
+function readStore(path) {
+  const value = strictJson(readPinnedFile(path, "store_denied"));
+  if (!closed(value, ["schema", "records"]) || value.schema !== STORE_SCHEMA) throw new Error("store_denied");
+  return validateRecords(value.records);
+}
+
+function readImport(path, expectedSha256) {
+  const absolute = resolve(path);
+  checkedRoot(dirname(absolute));
+  const bytes = readPinnedFile(absolute, "import_file_denied");
+  if (hash(bytes).toString("hex") !== expectedSha256) throw new Error("import_digest_mismatch");
+  return recordsFromSeeds(strictJson(bytes));
 }
 
 function persist(root, records) {

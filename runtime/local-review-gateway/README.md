@@ -122,6 +122,8 @@ revision + 1、指定 action の review state に一致しなければ `502` で
 - 親を含む symlink directory、symlink/hardlink store、破損 JSON、不正 projection、
   重複 JSON key、private field、malformed UTF-8 を拒否します。
 - UNC・device・network形式の保存先は、filesystemへ触れる前に拒否します。
+- store/importは開いたdescriptorを検査し、pathnameとの同一性と上限を確認して
+  同じdescriptorから限定読取します。importのsource digest検証は保持します。
 - 同じ store の二重起動は専用 writer lock で拒否します。CAS と fsync 済み一時ファイルの
   rename を await なしの一つの処理で行い、成功後にのみ新 revision を返します。
 - 保存済み状態の再起動 persistence は検証しています。停電耐性・OS crash recovery・

@@ -37,6 +37,48 @@ test("network and device roots are rejected before filesystem access", async (co
   }
 });
 
+test("a store swapped to a symlink while opening is rejected", async (context) => {
+  const temporary = mkdtempSync(join(tmpdir(), "kotodama-file-race-"));
+  const stateRoot = join(temporary, "state");
+  mkdirSync(stateRoot);
+  const config = options(stateRoot);
+  let gateway;
+  let open;
+  try {
+    gateway = await startReviewGateway({ ...config, seeds: [syntheticSeed()] });
+    await gateway.close();
+    gateway = null;
+    const path = join(stateRoot, "voice-reviews.json");
+    const outside = join(temporary, "outside.json");
+    writeFileSync(outside, readFileSync(path));
+    const probe = join(temporary, "link-probe");
+    try { symlinkSync(outside, probe, "file"); }
+    catch (error) {
+      if (["EPERM", "EACCES", "ENOSYS"].includes(error.code)) return context.skip("symlink privilege unavailable");
+      throw error;
+    }
+    fs.unlinkSync(probe);
+    const originalOpen = fs.openSync;
+    let swapped = false;
+    open = context.mock.method(fs, "openSync", (file, ...args) => {
+      if (file === path && !swapped) {
+        swapped = true;
+        fs.renameSync(path, join(temporary, "original.json"));
+        symlinkSync(outside, path, "file");
+      }
+      return originalOpen(file, ...args);
+    });
+    syncBuiltinESMExports();
+    await assert.rejects(async () => { gateway = await startReviewGateway(config); }, /store_denied|ELOOP/);
+    assert.equal(swapped, true);
+  } finally {
+    open?.mock.restore();
+    syncBuiltinESMExports();
+    if (gateway) await gateway.close();
+    rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
 test("local HTTP review survives restart; another actor and stale writers cannot change it", async () => {
   const stateRoot = mkdtempSync(join(tmpdir(), "kotodama-local-review-"));
   const config = options(stateRoot);
