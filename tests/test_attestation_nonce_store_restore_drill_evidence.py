@@ -501,12 +501,13 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
         )
         self.assertTrue(all(not value for value in report["claims"].values()))
 
+    # 550,001 bytes: below 1 MiB; 5,000 levels parse on Linux CPython 3.12.14.
     def test_deep_json_is_a_structured_refusal_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             material = self.make_case(Path(directory))
             evidence = Path(material["evidence"])
             evidence.write_bytes(
-                (b'{"nested":' * 5000) + b"0" + (b"}" * 5000)
+                (b'{"nested":' * 50_000) + b"0" + (b"}" * 50_000)
             )
             result = self.verify(material)
 
