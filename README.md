@@ -112,7 +112,7 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
   Public Betaも未証明です。
 - 公開repositoryはcandidate contractsとvalidatorを提供するIncomplete Public
   Previewであり、`NO_GO_UNPUBLISHED`を維持します。
-- PR #18はApache-2.0のcandidate bytesを供給しますが、Issue #25のcontributor
+- PR #18はMITのcandidate bytesを供給しますが、Issue #25のcontributor
   attribution、provenance、NOTICE、accountable rightsholderのgapは未解決です。
 
 ### Open design decisions
@@ -1035,7 +1035,7 @@ machine-readable な完了境界ではありません。最新チェックリス
 - local PASS を live / deployed / production / Public GO と表現していないか
 - 新しい SSOT を増やさず、既存の canonical owner を尊重しているか
 
-公開 repository への変更は [Contributing](CONTRIBUTING.md) を確認してください。再利用・改変・再配布には、下記の Apache-2.0 の条件が適用されます。
+公開 repository への変更は [Contributing](CONTRIBUTING.md) を確認してください。再利用・改変・再配布には、下記の MIT の条件が適用されます。
 
 ## 用語
 
@@ -1154,4 +1154,4 @@ Promotion, Current Truth, or Public Beta GO.
 
 ## License
 
-この repository は [Apache License 2.0](LICENSE)（SPDX identifier: `Apache-2.0`）で提供します。
+Kotodamaがライセンスを設定できるコードは [MIT License](LICENSE)（SPDX identifier: `MIT`）で提供します。第三者の条件と、既存移植部分の出典・表示は保持します。[適用範囲と未解決の出典確認](docs/LICENSE-SCOPE.md)を確認してください。

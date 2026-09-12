@@ -313,7 +313,7 @@ This record does not grant Final Human GO.
 Credentials are never pooled or shared.
 One personal seat is not unlimited multi-tenant capacity.
 
-PR #18 supplies Apache-2.0 candidate bytes for this public repository. Issue #25 remains open for contributor attribution, complete provenance, NOTICE
+PR #18 supplies MIT candidate bytes for this public repository. Issue #25 remains open for contributor attribution, complete provenance, NOTICE
 handling, and an accountable rightsholder decision; those gaps are not closed
 by this redacted direction candidate or by local tests.
 

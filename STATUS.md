@@ -83,7 +83,7 @@ Voice, Agent Swarm, provider, deployment, Promotion, or Current Truth; runtime
 remains unimplemented and Public Beta remains `NO_GO_UNPUBLISHED`. The public
 bytes preserve the user's working direction as a redacted owner-directed
 candidate, not a signed or independently verifiable governance approval,
-rightsholder proof, canonical adoption, launch decision, or Final Human GO; no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25
+rightsholder proof, canonical adoption, launch decision, or Final Human GO; no receipt is fabricated. PR #18 supplies MIT candidate bytes; Issue #25
 contributor/provenance/NOTICE/accountable-rightsholder gaps remain open and are
 not marked closed.
 

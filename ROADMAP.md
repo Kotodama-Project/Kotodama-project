@@ -76,7 +76,7 @@ work. The runtime remains unimplemented and Public Beta remains
 `NO_GO_UNPUBLISHED`. The public bytes are a redacted owner-directed direction
 candidate, not signed or independently verifiable governance approval,
 rightsholder proof, canonical adoption, launch decision, or Final Human GO, and
-no receipt is fabricated. PR #18 supplies Apache-2.0 candidate bytes; Issue #25's
+no receipt is fabricated. PR #18 supplies MIT candidate bytes; Issue #25's
 contributor/provenance/NOTICE/accountable-rightsholder gaps remain open.
 
 ## Current public documentation revision

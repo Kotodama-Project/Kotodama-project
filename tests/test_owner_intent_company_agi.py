@@ -520,7 +520,7 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             "redacted public candidate",
             "not a signed or independently verifiable governance",
             "Issue #25 remains open",
-            "Apache-2.0 candidate bytes",
+            "MIT candidate bytes",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.canonical)

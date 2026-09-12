@@ -109,23 +109,24 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
                 self.assertTrue((ROOT / relative).is_file())
                 self.assertIn(f"]({relative})", readme)
 
-    def test_repository_is_explicitly_apache_2_0_licensed(self) -> None:
+    def test_repository_owned_code_is_explicitly_mit_licensed(self) -> None:
         license_bytes = (ROOT / "LICENSE").read_bytes()
-        license_text = license_bytes.decode("utf-8")
-        self.assertEqual(len(license_bytes), 11357)
+        self.assertEqual(len(license_bytes), 1078)
         self.assertEqual(
             hashlib.sha256(license_bytes).hexdigest(),
-            "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+            "d8e89570376e4689abf02a60a12b5c68837dba6140c282f43306644fcd8c5c20",
         )
-        self.assertTrue(license_text.lstrip().startswith("Apache License\n"))
-        self.assertIn("Version 2.0, January 2004", license_text)
-        self.assertIn("http://www.apache.org/licenses/", license_text)
-        self.assertIn("END OF TERMS AND CONDITIONS", license_text)
-        self.assertIn("Copyright [yyyy] [name of copyright owner]", license_text)
+        license_text = license_bytes.decode("utf-8")
+        self.assertTrue(license_text.startswith("MIT License\n"))
+        self.assertIn("Copyright (c) 2026 Kotodama contributors", license_text)
+        self.assertIn("The above copyright notice and this permission notice", license_text)
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("## License", readme)
-        self.assertIn("[Apache License 2.0](LICENSE)", readme)
-        self.assertIn("`Apache-2.0`", readme)
+        self.assertIn("[MIT License](LICENSE)", readme)
+        self.assertIn("`MIT`", readme)
+        self.assertIn("docs/LICENSE-SCOPE.md", readme)
+        scope = (ROOT / "docs/LICENSE-SCOPE.md").read_text(encoding="utf-8")
+        self.assertIn("Third-party conditions remain in force", scope)
+        self.assertIn("Issue #25 remains open", scope)
 
     def test_license_bytes_are_pinned_to_lf_on_every_checkout(self) -> None:
         attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
