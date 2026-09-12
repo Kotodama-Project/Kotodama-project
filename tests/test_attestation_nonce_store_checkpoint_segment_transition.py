@@ -762,11 +762,12 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
         self.assertIs(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
         self.assertNotIn("capture_output", run.call_args.kwargs)
 
+    # 550,001 bytes: below 1 MiB; 5,000 levels parse on Linux CPython 3.12.14.
     def test_strict_and_deep_transition_json_are_structured_refusals(self) -> None:
         payloads = {
             "duplicate": b'{"kind":"one","kind":"two"}',
             "nonfinite": b'{"kind":NaN}',
-            "deep": (b'{"nested":' * 5000) + b"0" + (b"}" * 5000),
+            "deep": (b'{"nested":' * 50_000) + b"0" + (b"}" * 50_000),
         }
         results: list[tuple[str, subprocess.CompletedProcess[str]]] = []
         for name, payload in payloads.items():
