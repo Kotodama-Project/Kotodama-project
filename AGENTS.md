@@ -27,7 +27,14 @@ and public access have different owners; do not create another status ledger her
   unresolved review threads. A SHA or CI result embedded in a description may
   belong to a predecessor. An outdated review thread can still be unresolved.
 - A PR merged into another development branch is not merged into `main`.
-  Respect the existing stack and required independent review.
+  Respect the existing stack, configured branch protections and technical review.
+- Reuse an initial permission within its recorded scope. Recheck current scope,
+  expiry and revocation without repeatedly asking for the same approval.
+  Human login/identity confirmation stays with the user; prepare the entrypoint
+  and verify the result, then reuse the valid authenticated session.
+- Understand the requirements in the project map before selecting work. Reuse
+  valid evidence for unchanged bytes and review changed inputs and unresolved
+  risks. Do not repeat full history dumps or identical expensive checks.
 - Keep one writer per checkout or shared resource. Use an isolated checkout
   for concurrent edits; never reset or move someone else's working tree.
 - Private migration sources remain controlled inputs. Migrate one capability

@@ -1,72 +1,48 @@
 # プロジェクトの地図
 
-Kotodama は、会話から意図・仕事・成果・学習へつなぐ Company OS を目指します。
-この地図は、README の目標から既存の実装・文書・レビューへ進むための入口です。
-機能の採用、Task 状態、実環境の稼働を決める台帳ではありません。
+Kotodamaの目的は、会話から意図・仕事・成果・学習をつなぎ、人とAIが同じ目的・文脈・権限を共有して働けることです。これはREADMEから実装と検証へ進む入口であり、Taskや会社のCurrent Truthを所有する台帳ではありません。
 
-## 何を確認するか
+## 要件と確認する場所
 
-| 知りたいこと | 根拠 | 読み方 |
+| 要件 | 実装・文書の入口 | 受入で確かめること |
 |---|---|---|
-| なぜ作るか、どんな体験を目指すか | [README](../README.md)、[Company AGI direction](OWNER-INTENT-COMPANY-AGI.md) | 方向と実装済みの範囲を分ける |
-| この checkout で使えるもの | exact commit のファイル、[STATUS](../STATUS.md) | 別 branch の機能を含めない |
-| 次に統合する候補 | PR の head / base / diff / review / checks | 本文内の古い SHA と現在の API 値を照合する |
-| 公開までに必要なこと | [ROADMAP](../ROADMAP.md) | テスト成功だけで gate を閉じない |
-| 既存能力の移植 | [migration Epic #24](https://github.com/Kotodama-Project/Kotodama-project/issues/24) | private source と consumer を保全し、能力単位で移す |
-| 実際の配備 | 非公開の operator runbook と対象環境の検証記録 | repository の状態から稼働を推測しない |
+| 普段の相談から仕事を始める | [README](../README.md)、[Company AGI direction](OWNER-INTENT-COMPANY-AGI.md) | カジュアルな単体利用と組織利用が共存し、必要のない基盤を必須にしない |
+| 日本語の原文、話者、時刻、訂正を保持する | [Voice](../README.md#voice--最初に価値を体感する入口)、[Session / Conversation ledger](SESSION-CONVERSATION-LEDGER.md) | 文字起こし断片を確定した意図とせず、原文と後続訂正へ戻れる |
+| 意図を同じ仕事と成果へ結ぶ | [Review Workflow](REVIEW-WORKFLOW.md)、[Company Pack](STARTER-WALKTHROUGH.md) | Source、Intent、Decision、Work、Verification、Promotionを区別し、選択した一つのTask ownerへ戻す |
+| 初回の許可範囲で自律的に進める | [Agent entrypoint](../AGENTS.md)、[Security](../SECURITY.md) | 同じ許可を聞き直さず、期限・取消・対象は再確認する。ログインの本人操作は人が行う |
+| 必要な文脈を小さく渡す | [Context](../README.md#context-platform--会社の共有記憶)、[Session ledger](SESSION-CONVERSATION-LEDGER.md) | 出典・訂正・現在の担当を落とさず、アクセス不可や古い資料を再注入しない |
+| 話す・録音する・仕事を止める操作を分ける | [Voice](../README.md#voice--最初に価値を体感する入口)、Voice候補 [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69) / [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) | 呼びかけ、長時間・複数人、切断復帰、音質、負荷、背景の仕事の継続を同じ実経路で確かめる |
+| 小さな成果を検証して学習へ戻す | [5-minute tour](FIVE-MINUTE-TOUR.md)、[Runtime](../runtime/README.md)、[Business Loop](../README.md#ai-business-loop) | テスト件数だけでなく成果の有用性、失敗、rollbackと次の改善を確認する |
+| 手元の環境で再現・停止・復旧できる | [Installation lifecycle](INSTALLATION-LIFECYCLE.md)、[Runtime](../runtime/README.md) | 対象profileでinstall、実行、停止、backup/restoreを検証する。構成検査を実稼働としない |
+| 参加者と事業に価値を返す | [Community / Office](../README.md#discord-の中に会社を作る)、[Business Loop](../README.md#ai-business-loop) | 参加・相談・通報・復旧の体験と、顧客需要や費用を含む成果を実測する |
+| 公開と非公開、権利の範囲を守る | [License scope](LICENSE-SCOPE.md)、[STATUS](../STATUS.md)、[ROADMAP](../ROADMAP.md) | Kotodamaが扱える範囲のMITと第三者条件を区別し、private source・認証・実会話を公開候補へ混ぜない |
 
-公開製品の repository は `Kotodama-Project/Kotodama-project` です。
-既存の private donor/control-plane と operator workspace には別の source と
-運用記録があります。公開向けには必要な契約と出典を選別し、接続情報や private
-source body をこの地図へ集めません。
+これは要件の地図です。各項目が運用済みであることは意味しません。このcheckoutで実行できるものは現在のファイルとSTATUS、実稼働は担当環境の証拠で確認します。新しい正式な決定・訂正があれば、その対象行と根拠を更新します。
 
-## README の領域から進む
+## 採用済みの土台と残る候補
 
-| 領域 | この branch の入口 | 次に証明すること |
+[共通基盤 #18](https://github.com/Kotodama-Project/Kotodama-project/pull/18)と[必須CIの修復 #73](https://github.com/Kotodama-Project/Kotodama-project/pull/73)が、この地図の前提です。mainへ入った範囲は、MITとその適用範囲、公開repoの基本規則、再現可能なCI、Company PackとSession/Conversationの検証、Cloudflare等の限定candidateです。実運用の一括採用ではありません。
+
+後続作業は、PRの本文だけでなく現在のhead/base、差分、レビュー、必須CIを確認して選びます。古いSHAや承認待ちの記述を、現在の停止条件として使い回しません。
+
+| 系統 | 次に確認する候補 | 判断の要点 |
 |---|---|---|
-| Office / Voice | [README の Voice](../README.md#voice--最初に価値を体感する入口) | consent、話者、継続、応答、保持を実際の同じ経路で結ぶ |
-| Intent / GrillU | [Company AGI direction](OWNER-INTENT-COMPANY-AGI.md) | 会話から重要な曖昧さを閉じ、一つの仕事に接続する |
-| Governance / Evidence | [Session / Conversation ledger](SESSION-CONVERSATION-LEDGER.md)、[Review Workflow](REVIEW-WORKFLOW.md) | 訂正、根拠、権限、検証、採用の連続性を保つ |
-| Company Pack | [5-minute tour](FIVE-MINUTE-TOUR.md)、[Starter Walkthrough](STARTER-WALKTHROUGH.md) | 公開手順を手元で再現する |
-| Context | [README の Context](../README.md#context-platform--会社の共有記憶) | 許可された情報集合から根拠付きで取得する |
-| Workforce | [Company AGI direction](OWNER-INTENT-COMPANY-AGI.md)、下記 #34〜#36 | 一つの実行を owner、Task、effect、receipt に結ぶ |
-| Runtime | [Runtime overview](../runtime/README.md)、[Installation Lifecycle](INSTALLATION-LIFECYCLE.md) | install、restart、rollback、restore を実環境で検証する |
-| Business / Learning | [README の Business Loop](../README.md#ai-business-loop) | 一つの成果の有用性と feedback を確認する |
+| 仕事・文脈の継続 | [#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43) → [#44](https://github.com/Kotodama-Project/Kotodama-project/pull/44) → [#45](https://github.com/Kotodama-Project/Kotodama-project/pull/45) → [#46](https://github.com/Kotodama-Project/Kotodama-project/pull/46) → [#47](https://github.com/Kotodama-Project/Kotodama-project/pull/47) | 引継ぎ、reader権限、実行入力、訂正の接続を前提順に確認する |
+| 知識と検索 | [#48](https://github.com/Kotodama-Project/Kotodama-project/pull/48)、[#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)、[#59](https://github.com/Kotodama-Project/Kotodama-project/pull/59) | schema適合と、判断に使える根拠・鮮度を分ける |
+| 音声 | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)、[#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) | 二つのruntime ownerを並立させず、Task・原文の既存ownerへ接続する |
+| 並列実行 | [#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67) | 非candidateの受入、拒否後のpayload増加などの未解決点を修正してから採用する |
+| 別系統のcontrol-plane | [#49](https://github.com/Kotodama-Project/Kotodama-project/pull/49)と後続stack | 記載された実装の欠落やownerの重複を解消し、既存の知識系と合流する |
+| 既存能力の移植 | [Migration Epic #24](https://github.com/Kotodama-Project/Kotodama-project/issues/24)、[出典と権利 #25](https://github.com/Kotodama-Project/Kotodama-project/issues/25) | capabilityごとに出典・第三者条件・consumerを確認する |
 
-## 公開 PR の関係
-
-以下は **2026-09-05 の読取時点**の整理です。次に作業するときはリンク先を再取得してください。
-
-公開 `main` は `be71f424689648b3ab1b1db15adbaddea374586b`。
-基盤 [#18](https://github.com/Kotodama-Project/Kotodama-project/pull/18) は
-`70cb13df01fb7d6241cb827d26e2ad09ff0e5d05` で、まだ `main` に統合されていません。
-この地図を含む変更も、その基盤に対する候補です。
-
-| PR | 役割 | 対象 branch / 関係 |
-|---|---|---|
-| [#18](https://github.com/Kotodama-Project/Kotodama-project/pull/18) | governance、validation、公開基盤 | `main` に対する未統合候補 |
-| [#40](https://github.com/Kotodama-Project/Kotodama-project/pull/40)、[#41](https://github.com/Kotodama-Project/Kotodama-project/pull/41) | Cloudflare、Company AGI / ledger | #18 の branch に統合済み。`main` には未到達 |
-| [#17](https://github.com/Kotodama-Project/Kotodama-project/pull/17) | bounded skills | #18 に積まれた候補 |
-| [#21](https://github.com/Kotodama-Project/Kotodama-project/pull/21) | status / roadmap の整理 | #18 に積まれた候補 |
-| [#27](https://github.com/Kotodama-Project/Kotodama-project/pull/27)、[#29](https://github.com/Kotodama-Project/Kotodama-project/pull/29)、[#33](https://github.com/Kotodama-Project/Kotodama-project/pull/33) | hierarchy、architecture、schemas の移植 | #18 に積まれた候補。出典と採用条件を持つ |
-| [#34](https://github.com/Kotodama-Project/Kotodama-project/pull/34) → [#35](https://github.com/Kotodama-Project/Kotodama-project/pull/35) → [#36](https://github.com/Kotodama-Project/Kotodama-project/pull/36) | swarm → migration ledger → agent lifecycle | この順番の stack。契約が存在することは実行の証明ではない |
-| [#37](https://github.com/Kotodama-Project/Kotodama-project/pull/37) | Public Beta gate の識別子 | #18 に積まれた候補。gate は未証明のまま |
-
-#18 の checks は読取時点で成功していましたが、独立した最新push承認と未解決レビューが残っています。
-[出典・ライセンス判断 #25](https://github.com/Kotodama-Project/Kotodama-project/issues/25) も別の受入条件です。
-現在のレビュー指摘を確認せず、古い本文の「全件解決」や `mergeable` だけから統合を判断しません。
+PR一覧は作業選択のための入口です。件数やリンクの存在で全履歴読了、採用、配備を主張しません。元のPRが別branch向けでも、最終的にどのbytesがmainへ入ったかを確認します。
 
 ## 作業を一つ進める
 
-1. README のどの利用体験を前進させるか、一文で決める。
-2. 上の入口から exact source と既存の Task / Issue / PR を選ぶ。
-3. checkout、owner、対象ファイル、受入、停止、rollback を固定する。
-4. 小さな変更を実装し、その利用経路と拒否経路を検証する。
-5. 結果を対象の記録へ戻し、PR の本文を現在の head と検証結果に揃える。
+1. 上のどの要件と利用体験を前進させるか、一文で固定する。
+2. 正本、現在の担当、対象commitと作業範囲を確認する。既存Taskを別台帳へ複製しない。
+3. 変更部分と未解決点を検証する。同じ入力と有効な証拠を何度も読み直さない。
+4. 必須CIと対象に合った技術レビューを確認して統合し、結果を元の仕事へ返す。
 
-Task contract を持つ checkout では、そこの `AGENTS.md` と Task resolver / records /
-events / restart checkpoint を読みます。この branch に無い contract をあるものとして扱わず、
-session の要約から別の Task 台帳を作りません。
+Task契約を持つcheckoutでは、そのresolver / records / events / restart checkpointを使います。ない契約をあるものとして扱わず、別のTask正本を先に作りません。
 
-運用記録を追加しただけで runtime が配備されたことにはしません。
-`read-only/candidate-only`、`NO_GO_UNPUBLISHED` と Final Human GO の境界を維持します。
+公開Botの提供、配備、会社のCurrent Truth、Public Betaへの移行は、それぞれの対象に合う実行証拠と決定で判断します。コードのmain統合だけでそれらを完了扱いにしません。
