@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 from pathlib import Path
 
@@ -24,6 +25,9 @@ BUNDLE_BUILDER = ROOT / "tools" / "build_company_pack_review_bundle.py"
 REQUEST_BUILDER = ROOT / "tools" / "build_company_pack_review_request.py"
 RESPONSE_BUILDER = ROOT / "tools" / "build_company_pack_review_response.py"
 RESPONSE_VERIFIER = ROOT / "tools" / "verify_company_pack_review_response.py"
+AUTHORITY_EXPIRES_AT = (
+    datetime.now(timezone.utc) + timedelta(days=7)
+).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 class CompanyPackReviewResponseCliTests(unittest.TestCase):
@@ -55,7 +59,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 "--human-intent-ref",
                 "human-intent:private-review-response-source",
                 "--authority-expires-at",
-                "2026-08-20T00:00:00Z",
+                AUTHORITY_EXPIRES_AT,
                 "--retention-policy-ref",
                 "retention-policy:private-review-response-policy",
             ],
@@ -110,7 +114,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
         for relative in manifest["blocks"]:
             path = pack / relative
             document = json.loads(path.read_text(encoding="utf-8"))
-            document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+            document["authority"]["expires_at"] = AUTHORITY_EXPIRES_AT
             path.write_text(json.dumps(document), encoding="utf-8")
 
         bundle = subprocess.run(
