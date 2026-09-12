@@ -22,6 +22,7 @@ jobs:
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PIP_NO_INPUT: "1"
       PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUTF8: "1"
       ACTIONLINT_VERSION: "1.7.12"
       ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
     steps:
@@ -76,6 +77,8 @@ jobs:
       - name: Run the public test suite
         run: python -m unittest discover -s tests -v
 
-      - name: Refuse generated changes
+      - name: Refuse whitespace errors and generated changes
         shell: bash
-        run: test -z "$(git status --porcelain)"
+        run: |
+          git diff --check
+          test -z "$(git status --porcelain)"
