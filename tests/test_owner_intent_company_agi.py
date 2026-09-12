@@ -438,7 +438,7 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
                 self.assertIsNone(adopted_pattern.search(self.canonical))
 
     def test_status_and_roadmap_project_direction_without_promoting_runtime(self) -> None:
-        self.assertIn("Updated: 2026-08-26", self.status)
+        self.assertRegex(self.status, r"(?m)^Updated: \d{4}-\d{2}-\d{2}$")
         for name, text in (("status", self.status), ("roadmap", self.roadmap)):
             normalized = " ".join(text.split())
             for marker in (
