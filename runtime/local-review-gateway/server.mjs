@@ -209,7 +209,10 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
   const credentials = [hash(clientId), hash(clientSecret)];
   const server = createServer({ maxHeaderSize: 16_384, requestTimeout: 5_000, headersTimeout: 5_000 }, async (request, response) => {
     try {
-      if (request.headers.host !== `127.0.0.1:${server.address().port}` || request.headers.origin) return refuse(response, 403, "origin_denied");
+      const port = server.address().port;
+      const host = request.headers.host;
+      if ((host !== `127.0.0.1:${port}` && !(port === 80 && host === "127.0.0.1"))
+        || request.headers.origin) return refuse(response, 403, "origin_denied");
       const provided = [request.headers["cf-access-client-id"], request.headers["cf-access-client-secret"]];
       if (provided.some((value, i) => typeof value !== "string" || value.length > 4096
         || !timingSafeEqual(hash(value), credentials[i]))) return refuse(response, 401, "backend_auth_denied");

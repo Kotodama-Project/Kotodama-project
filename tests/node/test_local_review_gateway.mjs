@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
+import { Server as NetServer } from "node:net";
+import { request as httpRequest } from "node:http";
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -76,6 +78,36 @@ test("a store swapped to a symlink while opening is rejected", async (context) =
     syncBuiltinESMExports();
     if (gateway) await gateway.close();
     rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+test("default HTTP port accepts canonical Host without binding privileged port", async (context) => {
+  const stateRoot = mkdtempSync(join(tmpdir(), "kotodama-default-port-"));
+  const config = options(stateRoot);
+  let gateway;
+  let address;
+  try {
+    gateway = await startReviewGateway({ ...config, seeds: [syntheticSeed()] });
+    const original = NetServer.prototype.address;
+    address = context.mock.method(NetServer.prototype, "address", function () {
+      const value = original.call(this);
+      return value && typeof value === "object" ? { ...value, port: 80 } : value;
+    });
+    for (const [host, status] of [["127.0.0.1", 200], ["127.0.0.1:80", 200], ["localhost", 403], ["127.0.0.1:81", 403]]) {
+      const received = await new Promise((accept, reject) => {
+        const request = httpRequest(`${gateway.origin}/v1/voice/handoffs`, { headers: { ...headers(config), host }, agent: false }, (response) => {
+          response.resume();
+          response.once("end", () => accept(response.statusCode));
+        });
+        request.once("error", reject);
+        request.end();
+      });
+      assert.equal(received, status, host);
+    }
+  } finally {
+    address?.mock.restore();
+    if (gateway) await gateway.close();
+    rmSync(stateRoot, { recursive: true, force: true });
   }
 });
 
