@@ -500,11 +500,15 @@ export function validateReview(value) {
 async function gatewayReadback(request, config, pathname, identity) {
   let target;
   let init;
+  let requestedId;
   let reviewedId;
   let reviewedBody;
   if (request.method === "GET" && pathname === "/voice/review") {
-    const query = new URL(request.url).searchParams.get("q");
-    if (query !== null && utf8Bytes(query) > MAX_QUERY_BYTES) return deny("query_denied", 400);
+    const parameters = new URL(request.url).searchParams;
+    if ([...parameters.keys()].some((key) => key !== "q") || parameters.getAll("q").length > 1) return deny("query_denied", 400);
+    const query = parameters.get("q");
+    if (query !== null && (utf8Bytes(query) > MAX_QUERY_BYTES || !SAFE_DOCUMENT_ID.test(query))) return deny("query_denied", 400);
+    requestedId = query;
     target = `${config.gateway}/v1/voice/handoffs${query === null ? "" : `?q=${encodeURIComponent(query)}`}`;
     init = { method: "GET" };
   } else if (request.method === "POST") {
@@ -550,6 +554,7 @@ async function gatewayReadback(request, config, pathname, identity) {
     return deny("context_gateway_body_denied", 502);
   }
   const projected = sanitizeProjection(value);
+  if (projected && requestedId && projected.handoff_id !== requestedId) return deny("context_gateway_projection_denied", 502);
   if (projected && reviewedId && (
     projected.handoff_id !== reviewedId
     || projected.revision !== reviewedBody.expected_revision + 1

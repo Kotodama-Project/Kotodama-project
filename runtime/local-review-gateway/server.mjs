@@ -83,6 +83,7 @@ function recordsFromSeeds(seeds) {
 
 function checkedRoot(value) {
   if (typeof value !== "string" || !value) throw new Error("configuration_denied");
+  if (value.replaceAll("\\", "/").startsWith("//")) throw new Error("configuration_denied");
   const root = resolve(value);
   for (let path = root; ; path = dirname(path)) {
     const info = lstatSync(path);

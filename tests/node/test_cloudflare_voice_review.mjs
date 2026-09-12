@@ -208,7 +208,7 @@ test("Access-verified review readback can only come through Context Gateway", as
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) {
       return Response.json({ keys: [jwk] });
     }
-    assert.equal(value.url, `${GATEWAY}/v1/voice/handoffs?q=synthetic`);
+    assert.equal(value.url, `${GATEWAY}/v1/voice/handoffs?q=doc-safe-1`);
     assert.equal(value.headers.get("cf-access-client-id"), "synthetic-client-id");
     assert.equal(value.headers.get("cf-access-client-secret"), "synthetic-client-secret");
     assert.equal(value.headers.get("x-kotodama-access-subject"), "reviewer-synthetic");
@@ -217,7 +217,7 @@ test("Access-verified review readback can only come through Context Gateway", as
   });
 
   const response = await worker.fetch(
-    withJwt("https://preview.example.test/voice/review?q=synthetic", jwt, {
+    withJwt("https://preview.example.test/voice/review?q=doc-safe-1", jwt, {
       headers: {
         "x-kotodama-access-subject": "spoofed-subject",
         "x-kotodama-access-email": "spoofed@example.test",
@@ -235,6 +235,34 @@ test("Access-verified review readback can only come through Context Gateway", as
   assert.equal(body.raw_audio_transferred, false);
   assert.equal(body.private_transcript_transferred, false);
   assert.equal(JSON.stringify(body).includes("synthetic-client-secret"), false);
+});
+
+test("GET handoff readback rejects a different requested ID", async () => {
+  __testing.reset();
+  const fixture = await signingFixture();
+  const calls = installFetch(fixture);
+  const response = await worker.fetch(
+    withJwt("https://preview.example.test/voice/review?q=other-handoff", await fixture.token()),
+    env(),
+  );
+  assert.equal(calls.gateway, 1);
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).error, "context_gateway_projection_denied");
+});
+
+test("GET handoff query rejects ambiguous and unknown keys before forwarding", async () => {
+  const fixture = await signingFixture();
+  const jwt = await fixture.token();
+  for (const query of ["q=doc-safe-1&q=other", "q=doc-safe-1&q=doc-safe-1", "q=doc-safe-1&extra=1", "extra=1", "q=", "q=two%20words"]) {
+    __testing.reset();
+    const calls = installFetch(fixture);
+    const response = await worker.fetch(
+      withJwt(`https://preview.example.test/voice/review?${query}`, jwt), env(),
+    );
+    assert.equal(response.status, 400, query);
+    assert.equal((await response.json()).error, "query_denied", query);
+    assert.equal(calls.gateway, 0, query);
+  }
 });
 
 test("malformed UTF-8 in Access JWT and JWKS JSON is denied", async () => {

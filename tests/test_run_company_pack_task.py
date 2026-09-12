@@ -425,6 +425,26 @@ operation.execute(operation.read_json(pathlib.Path(sys.argv[2])), pathlib.Path(s
         self.assertTrue((self.pack / "manifest.json").exists())
         self.assertFalse((self.operation / "receipt.json").exists())
 
+    def test_validator_pass_report_must_match_the_observed_pack(self):
+        real_run = subprocess.run
+        for replacement in (
+            {"validated_files": "x"}, {"validated_files": True},
+            {"validated_files": 0}, {"validated_files": 1_000_000},
+            {"pack_id": "unrelated-pack"}, {"errors": ["failure"]},
+            {"unexpected": "field"},
+        ):
+            with self.subTest(replacement=replacement):
+                def substituted_validator(args, **kwargs):
+                    result = real_run(args, **kwargs)
+                    if "-I" in args:
+                        report = json.loads(result.stdout)
+                        report.update(replacement)
+                        return subprocess.CompletedProcess(args, 0, json.dumps(report).encode("utf-8"), b"")
+                    return result
+                with patch.object(executor.subprocess, "run", side_effect=substituted_validator):
+                    self.assert_refused(code="VALIDATOR_RESPONSE_INVALID")
+                self.assertFalse((self.operation / "receipt.json").exists())
+
     def test_os_lock_excludes_second_process(self):
         self.execute()
         with executor.operation_lock(self.operation / ".lock"):

@@ -98,6 +98,8 @@ GET と POST の応答には `handoff_id`、正整数の `revision`、既存の�
 ハイライト・判断候補・ToDo・質問・digest URN・review state を含みます。
 Worker の `GET /voice/review` も ID と revision を保持します。利用者は返された値から
 `POST /voice/review/{handoff_id}` を構成できます。
+`q` を指定したGETは応答IDとの一致を検査し、別IDの応答を拒否します。
+重複した `q`、未知のquery key、空または不正なIDは転送前に拒否します。
 
 POST は `application/json`、次の閉じた body だけを受け付けます。
 
@@ -119,6 +121,7 @@ revision + 1、指定 action の review state に一致しなければ `502` で
   `voice-reviews.json`。request の ID を filesystem path に使用しません。
 - 親を含む symlink directory、symlink/hardlink store、破損 JSON、不正 projection、
   重複 JSON key、private field、malformed UTF-8 を拒否します。
+- UNC・device・network形式の保存先は、filesystemへ触れる前に拒否します。
 - 同じ store の二重起動は専用 writer lock で拒否します。CAS と fsync 済み一時ファイルの
   rename を await なしの一つの処理で行い、成功後にのみ新 revision を返します。
 - 保存済み状態の再起動 persistence は検証しています。停電耐性・OS crash recovery・

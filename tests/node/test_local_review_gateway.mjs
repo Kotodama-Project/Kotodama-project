@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +22,20 @@ function headers(config, actor = syntheticSeed().actor) {
     "content-type": "application/json",
   };
 }
+
+test("network and device roots are rejected before filesystem access", async (context) => {
+  const access = context.mock.method(fs, "lstatSync", () => { throw new Error("filesystem_accessed"); });
+  syncBuiltinESMExports();
+  try {
+    for (const stateRoot of ["\\\\server\\share\\state", "//server/share/state", "\\\\?\\C:\\state", "\\\\.\\pipe\\state"]) {
+      await assert.rejects(() => startReviewGateway(options(stateRoot)), /configuration_denied/);
+    }
+    assert.equal(access.mock.calls.length, 0);
+  } finally {
+    access.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
 
 test("local HTTP review survives restart; another actor and stale writers cannot change it", async () => {
   const stateRoot = mkdtempSync(join(tmpdir(), "kotodama-local-review-"));

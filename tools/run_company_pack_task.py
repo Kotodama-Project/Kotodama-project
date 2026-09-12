@@ -276,10 +276,14 @@ def verify_output(pack: Path, request: dict[str, Any]) -> dict[str, Any]:
         capture_output=True, timeout=30, check=False,
     )
     try:
-        report = json.loads(result.stdout.decode("utf-8"))
-    except (ValueError, UnicodeError, RecursionError) as exc:
+        report = json.loads(result.stdout.decode("utf-8"), object_pairs_hook=no_duplicates)
+    except (ValueError, UnicodeError, RecursionError, Refused) as exc:
         raise Refused("VALIDATOR_RESPONSE_INVALID") from exc
     require(result.returncode == 0 and isinstance(report, dict) and report.get("status") == "PASS", "OUTPUT_VALIDATION_FAILED")
+    require(set(report) == {"status", "pack_id", "validated_files", "errors"}
+            and type(report["validated_files"]) is int
+            and report["errors"] == [] and report["pack_id"] == request["pack_id"],
+            "VALIDATOR_RESPONSE_INVALID")
     after_files = tree_bytes(pack)
     after = byte_manifest(after_files)
     require(before == after, "OUTPUT_CHANGED_DURING_VALIDATION")
@@ -311,6 +315,7 @@ def verify_output(pack: Path, request: dict[str, Any]) -> dict[str, Any]:
             require(document == expected, "OUTPUT_SOURCE_MISMATCH")
             checked.add(name)
     require(all(after_files[name] == starter_files[name] for name in set(after_files) - checked), "OUTPUT_SOURCE_MISMATCH")
+    require(report["validated_files"] == len(checked), "VALIDATOR_RESPONSE_INVALID")
     require(request["source"] == source_binding(), "SOURCE_DRIFT")
     require(validate_static_customization(StaticCustomization(request["human_intent_ref"], request["authority_expires_at"], request["retention_policy_ref"])) is None, "EXPIRED_DURING_EXECUTION")
     return {"files": after, "sha256": digest(after), "validated_files": report["validated_files"]}
