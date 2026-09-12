@@ -2,14 +2,16 @@
 
 Updated: 2026-09-13
 
-This update records the #18 source integration. It does not refresh or promote
-the separately scoped runtime/deployment evidence below.
+Repository entries describe the source in this revision. They do not refresh
+or promote the separately scoped runtime/deployment evidence below.
 
 | Surface | Status |
 |---|---|
 | Public repository | Published preview |
 | Product direction and roadmap | Public |
 | Company governance starter | Published and locally validated |
+| [Task-bound Company Pack execution](docs/COMPANY-PACK-TASK-EXECUTION.md) | Included local CREATE_COMPANY_PACK adapter; existing-record binding and checked output receipt; no Task-state write or agent dispatch |
+| [Persistent local review gateway](runtime/local-review-gateway/README.md) | Included local review/restart candidate; actor-scoped projections; live Access/Tunnel and automatic Voice-to-Task connection remain unverified |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
 | [Cloudflare edge preview candidate](runtime/cloudflare-edge/README.md) | Merged source candidate via #18; content-free validation only, no version upload or deployment established |
 | [Official Cloudflare OS bounded runtime candidate](docs/CLOUDFLARE-OS-ADOPTION.md) | Merged source candidate via #18; exact source pin, six synthetic metadata projections, and content-free runtime receipt; no provider execution established |

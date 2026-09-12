@@ -25,9 +25,11 @@ Kotodamaの目的は、会話から意図・仕事・成果・学習をつなぎ
 
 後続作業は、PRの本文だけでなく現在のhead/base、差分、レビュー、必須CIを確認して選びます。古いSHAや承認待ちの記述を、現在の停止条件として使い回しません。
 
+このrevisionには、[#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43)由来の[ローカル確認・訂正Gateway](../runtime/local-review-gateway/README.md)と[既存Taskに束縛したCompany Pack作成](COMPANY-PACK-TASK-EXECUTION.md)も含まれます。二つは限定された別の実行経路であり、会話からTaskを自動作成・実行するconnectorはまだ接続されていません。
+
 | 系統 | 次に確認する候補 | 判断の要点 |
 |---|---|---|
-| 仕事・文脈の継続 | [#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43) → [#44](https://github.com/Kotodama-Project/Kotodama-project/pull/44) → [#45](https://github.com/Kotodama-Project/Kotodama-project/pull/45) → [#46](https://github.com/Kotodama-Project/Kotodama-project/pull/46) → [#47](https://github.com/Kotodama-Project/Kotodama-project/pull/47) | 引継ぎ、reader権限、実行入力、訂正の接続を前提順に確認する |
+| 仕事・文脈の継続 | [#44](https://github.com/Kotodama-Project/Kotodama-project/pull/44) → [#45](https://github.com/Kotodama-Project/Kotodama-project/pull/45) → [#46](https://github.com/Kotodama-Project/Kotodama-project/pull/46) → [#47](https://github.com/Kotodama-Project/Kotodama-project/pull/47) | 引継ぎ、reader権限、実行入力、訂正の接続を前提順に確認する |
 | 知識と検索 | [#48](https://github.com/Kotodama-Project/Kotodama-project/pull/48)、[#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)、[#59](https://github.com/Kotodama-Project/Kotodama-project/pull/59) | schema適合と、判断に使える根拠・鮮度を分ける |
 | 音声 | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)、[#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) | 二つのruntime ownerを並立させず、Task・原文の既存ownerへ接続する |
 | 並列実行 | [#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67) | 非candidateの受入、拒否後のpayload増加などの未解決点を修正してから採用する |

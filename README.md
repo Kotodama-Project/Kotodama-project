@@ -127,6 +127,8 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
   private data、保持、費用、authorityの検証後に決めます。No hidden fallbackを許さず、
   routing rationaleとruntime provenanceを残します。
 
+機能ごとの到達点と現在の実行経路は **[README の実装状況](docs/README-IMPLEMENTATION-ASSESSMENT.md)** を参照してください。[Task に結び付いた Company Pack 作成](docs/COMPANY-PACK-TASK-EXECUTION.md) と [ローカルの確認・訂正 Gateway](runtime/local-review-gateway/README.md) は実ファイル・実 HTTP の経路を持つ候補です。
+
 ## Company OS system map
 
 詳細へ入る前に、Kotodama 全体を八つの面として見ると位置関係が分かります。
