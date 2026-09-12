@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-bundle-verification.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-review-bundle-verification.schema.json",
   "title": "Kotodama Company Pack Review Bundle Verification",
   "$comment": "MATCH proves only that the saved bindings equal the current review-ready pack bytes. It is not approval, authority, signature, Promotion, Current Truth, runtime readiness, Final Human GO, or Public Beta GO.",
   "type": "object",

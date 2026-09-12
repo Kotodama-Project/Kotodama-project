@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/block.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/block.schema.json",
   "title": "Kotodama Reusable Block",
   "type": "object",
   "additionalProperties": false,

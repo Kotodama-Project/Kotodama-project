@@ -1,10 +1,12 @@
 import hashlib
+import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 from pathlib import Path
 
@@ -22,6 +24,9 @@ BUNDLE_BUILDER = ROOT / "tools" / "build_company_pack_review_bundle.py"
 CREATOR = ROOT / "tools" / "create_company_pack.py"
 REQUEST_SCHEMA = ROOT / "schemas" / "company-pack-review-request.schema.json"
 REVIEW_REQUEST_DOC = ROOT / "docs" / "REVIEW-REQUEST.md"
+AUTHORITY_EXPIRES_AT = (
+    datetime.now(timezone.utc) + timedelta(days=7)
+).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 class CompanyPackReviewRequestCliTests(unittest.TestCase):
@@ -47,7 +52,7 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
                 path = pack / relative
                 document = json.loads(path.read_text(encoding="utf-8"))
                 if collection == "blocks":
-                    document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+                    document["authority"]["expires_at"] = AUTHORITY_EXPIRES_AT
                 else:
                     document["retention"]["policy_ref"] = retention_policy_ref
                 path.write_text(json.dumps(document), encoding="utf-8")
@@ -73,7 +78,7 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         for relative in manifest["blocks"]:
             path = pack / relative
             document = json.loads(path.read_text(encoding="utf-8"))
-            document["authority"]["expires_at"] = "2026-08-20T00:00:00Z"
+            document["authority"]["expires_at"] = AUTHORITY_EXPIRES_AT
             path.write_text(json.dumps(document), encoding="utf-8")
         return pack, human_intent_ref
 
@@ -283,6 +288,83 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         self.assertEqual(request["reason"], "SOURCE_DRIFT_DETECTED")
         self.assertIsNone(request["candidate_binding"])
         self.assertEqual(request["review_request"]["items"], [])
+
+    def test_deep_json_replacement_during_request_read_is_a_safe_refusal(self) -> None:
+        marker = "SYNTHETIC_PRIVATE_REPLACEMENT_BODY"
+        data = (
+            b'{"nested":' + b'[' * 5000
+            + json.dumps(marker).encode("utf-8") + b']' * 5000 + b'}'
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            pack, _human_intent_ref, _retention_policy_ref = self.create_ready_pack(root)
+            bundle_path = root / "synthetic-private-bundle.json"
+            _bundle, original_bytes = self.save_bundle(pack, bundle_path)
+            original_open = Path.open
+            bundle_reads = 0
+
+            def open_with_replaced_bundle(path: Path, *args, **kwargs):
+                nonlocal bundle_reads
+                mode = args[0] if args else kwargs.get("mode", "r")
+                if path == bundle_path and mode == "rb":
+                    bundle_reads += 1
+                    if bundle_reads > 1:
+                        return io.BytesIO(data)
+                return original_open(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "open", new=open_with_replaced_bundle):
+                request = request_builder.build_review_request(bundle_path, pack)
+
+            self.assertEqual(bundle_path.read_bytes(), original_bytes)
+        self.assertEqual(request["status"], "REQUEST_REFUSED")
+        self.assertEqual(request["reason"], "SOURCE_DRIFT_DETECTED")
+        self.assertIsNone(request["candidate_binding"])
+        self.assertEqual(request["review_request"]["items"], [])
+        self.assertEqual(request["unresolved_evidence"]["items"], [])
+        self.assertTrue(all(value is False for value in request["claims"].values()))
+        self.assertEqual(request["public_beta"], "NO_GO_UNPUBLISHED")
+        encoded = json.dumps(request)
+        self.assertNotIn(marker, encoded)
+        self.assertNotIn(str(bundle_path), encoded)
+        self.assertNotIn(str(pack), encoded)
+
+    def test_deep_saved_json_is_a_non_reflective_request_refusal(self) -> None:
+        marker = "SYNTHETIC_PRIVATE_REQUEST_BODY"
+        leaf = json.dumps(marker).encode("utf-8")
+        payloads = {
+            "shallow invalid": b'{"nested":' + leaf + b'}',
+            "deep array": (
+                b'{"nested":' + b'[' * 5000 + leaf + b']' * 5000 + b'}'
+            ),
+            "deep object": b'{"nested":' * 5000 + leaf + b'}' * 5000,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle_path = root / "synthetic-private-bundle.json"
+            pack = root / "unused-private-pack"
+            for label, data in payloads.items():
+                with self.subTest(payload=label):
+                    self.assertLess(len(data), 1024 * 1024)
+                    bundle_path.write_bytes(data)
+                    result = self.run_builder(bundle_path, pack)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stderr, b"")
+                    self.assertEqual(len(result.stdout.splitlines()), 1)
+                    self.assertNotIn(marker.encode("utf-8"), result.stdout)
+                    self.assertNotIn(str(bundle_path).encode("utf-8"), result.stdout)
+                    self.assertNotIn(str(pack).encode("utf-8"), result.stdout)
+                    request = json.loads(result.stdout)
+                    self.assertEqual(request["status"], "REQUEST_REFUSED")
+                    self.assertEqual(request["reason"], "BUNDLE_VERIFICATION_FAILED")
+                    self.assertIsNone(request["candidate_binding"])
+                    self.assertEqual(request["review_request"]["items"], [])
+                    self.assertEqual(request["unresolved_evidence"]["items"], [])
+                    self.assertTrue(
+                        all(value is False for value in request["claims"].values())
+                    )
+                    self.assertEqual(request["public_beta"], "NO_GO_UNPUBLISHED")
+                    self.assertEqual(bundle_path.read_bytes(), data)
+                    self.assertFalse(pack.exists())
 
     def test_unexpected_verifier_read_failure_is_a_safe_refusal(self) -> None:
         with mock.patch.object(

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-source-record-instance.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-source-record-instance.schema.json",
   "title": "Kotodama Company Pack Source Record Instance",
   "$comment": "Schema-only private candidate contract. Validation does not retrieve source content, create the external R30 record-byte binding, verify record or content bytes, origin, completeness, media type, encoding, acquisition provenance, lineage, identity, attribution, access or consent, retention, deletion, redaction, trusted time, Human Intent, authority, a Decision, execution, Promotion, Current Truth, runtime readiness, Final Human GO, or Public Beta GO.",
   "type": "object",

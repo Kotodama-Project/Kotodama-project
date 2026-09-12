@@ -77,7 +77,9 @@ def load_valid_saved_bundle(path: Path) -> tuple[dict[str, Any], bytes] | None:
             object_pairs_hook=reject_duplicate_keys,
             parse_constant=reject_non_finite_constant,
         )
-    except (OSError, UnicodeDecodeError, ValueError, json.JSONDecodeError):
+    except (
+        OSError, UnicodeDecodeError, ValueError, RecursionError, json.JSONDecodeError
+    ):
         return None
     error, _trusted_digest = validate_saved_bundle(bundle)
     if error is not None:

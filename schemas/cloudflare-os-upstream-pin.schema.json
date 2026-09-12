@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kotodama.invalid/schemas/cloudflare-os-upstream-pin.schema.json",
+  "title": "Kotodama official Cloudflare OS source pin",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "observed_at",
+    "public_beta",
+    "starter",
+    "starter_core_gitlink",
+    "current_core_observation",
+    "selected_baseline",
+    "runtime_observations",
+    "authority_boundary",
+    "effects",
+    "official_sources"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "status": {"const": "ADOPT_BOUNDED_SOURCE_ONLY"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"},
+    "starter": {"$ref": "#/$defs/starter"},
+    "starter_core_gitlink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "wrangler_requirement"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/gitObject"},
+        "tree": {"$ref": "#/$defs/gitObject"},
+        "wrangler_requirement": {"type": "string", "minLength": 1}
+      }
+    },
+    "current_core_observation": {"$ref": "#/$defs/core"},
+    "selected_baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "drift_review_required", "exact_install_integrity_proven", "runtime_state"],
+      "properties": {
+        "kind": {"const": "starter_with_its_exact_core_gitlink"},
+        "drift_review_required": {"const": true},
+        "exact_install_integrity_proven": {"const": false},
+        "runtime_state": {"const": "NOT_INSTALLED_NOT_DEPLOYED"}
+      }
+    },
+    "runtime_observations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["release_stage", "traditional_computer_os", "local_wrangler_workerd_mode", "proxmox_production_tooling", "dynamic_workers_plan", "required_products", "access_default", "ai_default", "discord_gatekeeper_observed"],
+      "properties": {
+        "release_stage": {"const": "EARLY_ACCESS_V2"},
+        "traditional_computer_os": {"const": false},
+        "local_wrangler_workerd_mode": {"const": "EVALUATION_ONLY"},
+        "proxmox_production_tooling": {"const": "COMING_SOON_UNPROVEN"},
+        "dynamic_workers_plan": {"const": "WORKERS_PAID_REQUIRED"},
+        "required_products": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "access_default": {"const": "CLOUDFLARE_ACCESS"},
+        "ai_default": {"const": "DISABLED"},
+        "discord_gatekeeper_observed": {"const": false}
+      }
+    },
+    "authority_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical_owner", "protected_runtime", "query_authority", "first_evaluation_data", "gatekeeper_output", "provider_deploy_authorized", "promotion_authorized", "current_truth_change_authorized"],
+      "properties": {
+        "canonical_owner": {"const": "BECOMEONE_AND_HUMAN_INTENT"},
+        "protected_runtime": {"const": "PROXMOX_LOCAL_TRUST_BOUNDARY"},
+        "query_authority": {"const": "CONTEXT_GATEWAY"},
+        "first_evaluation_data": {"const": "PUBLIC_OR_SYNTHETIC_CONTENT_FREE_ONLY"},
+        "gatekeeper_output": {"const": "KOTODAMA_CANDIDATE_ONLY"},
+        "provider_deploy_authorized": {"const": false},
+        "promotion_authorized": {"const": false},
+        "current_truth_change_authorized": {"const": false}
+      }
+    },
+    "effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dependency_install", "upstream_execution", "credential_operation", "provider_mutation", "billing_change", "deployment", "external_post"],
+      "properties": {
+        "dependency_install": {"const": 0},
+        "upstream_execution": {"const": 0},
+        "credential_operation": {"const": 0},
+        "provider_mutation": {"const": 0},
+        "billing_change": {"const": 0},
+        "deployment": {"const": 0},
+        "external_post": {"const": 0}
+      }
+    },
+    "official_sources": {
+      "type": "array",
+      "minItems": 7,
+      "uniqueItems": true,
+      "items": {"type": "string", "format": "uri"}
+    }
+  },
+  "$defs": {
+    "gitObject": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "starter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "tree", "package_manager", "wrangler_requirement", "license"],
+      "properties": {
+        "repository": {"const": "https://github.com/cloudflare/cloudflare-os-starter"},
+        "commit": {"$ref": "#/$defs/gitObject"},
+        "tree": {"$ref": "#/$defs/gitObject"},
+        "package_manager": {"type": "string", "minLength": 1},
+        "wrangler_requirement": {"type": "string", "minLength": 1},
+        "license": {"const": "Apache-2.0"}
+      }
+    },
+    "core": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "tree", "license"],
+      "properties": {
+        "repository": {"const": "https://github.com/cloudflare/cloudflare-os"},
+        "commit": {"$ref": "#/$defs/gitObject"},
+        "tree": {"$ref": "#/$defs/gitObject"},
+        "license": {"const": "Apache-2.0"}
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-catalog.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-catalog.schema.json",
   "title": "Kotodama Company Pack Catalog",
   "$comment": "A deterministic read-only inventory of a structurally valid Pack. It is navigation and planning data, not a Company SSOT, Human approval, authority grant, runtime receipt, Promotion, Current Truth, or Public Beta GO.",
   "type": "object",

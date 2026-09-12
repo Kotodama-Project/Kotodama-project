@@ -1,0 +1,41 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "kotodama-edge-candidate",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-07",
+  "workers_dev": false,
+  "preview_urls": false,
+  "send_metrics": false,
+  "observability": {
+    "enabled": false,
+    "logs": {
+      "enabled": false,
+      "invocation_logs": false
+    }
+  },
+  "vars": {
+    "DEPLOYMENT_STAGE": "production-disabled",
+    "PUBLIC_BETA_STATUS": "NO_GO_UNPUBLISHED"
+  },
+  "env": {
+    "preview": {
+      "name": "kotodama-edge-preview-candidate",
+      "workers_dev": false,
+      "preview_urls": true,
+      "secrets": {
+        "required": [
+          "ACCESS_AUD",
+          "ACCESS_ISSUER",
+          "CONTEXT_GATEWAY_CLIENT_ID",
+          "CONTEXT_GATEWAY_CLIENT_SECRET",
+          "CONTEXT_GATEWAY_ORIGIN",
+          "PREVIEW_HOST"
+        ]
+      },
+      "vars": {
+        "DEPLOYMENT_STAGE": "preview-candidate",
+        "PUBLIC_BETA_STATUS": "NO_GO_UNPUBLISHED"
+      }
+    }
+  }
+}

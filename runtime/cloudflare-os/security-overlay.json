@@ -1,0 +1,164 @@
+{
+  "kind": "kotodama/cloudflare-os-security-overlay/v1",
+  "status": "LOCAL_MATERIALIZATION_VERIFIED_NOT_DEPLOYED",
+  "observed_at": "2026-08-21T00:00:49Z",
+  "source": {
+    "pinned_core": {
+      "commit": "bf7f762d7fa73553284d731ab6a978d3ea17be24",
+      "tree": "023da57719fa9744a4ca909f9c3863c93cb614fa"
+    },
+    "current_core_observation": {
+      "commit": "1cb5e3d9096589e38f3fcfaf3f2191aa95a4c592",
+      "tree": "2f1eb7b69cf6cbc0e0da159bf2cd09ef9a2ce7e7",
+      "still_vulnerable": true
+    },
+    "workspace": {
+      "path": "pnpm-workspace.yaml",
+      "blob_oid": "a6d915454aad18b607cd5242b7c8e31369cd248d",
+      "canonical_sha256": "ce7204ec08398d097c98b3b4f953d5a80e6d0572ffd848b77c70def1e2976843",
+      "canonical_bytes": 1066,
+      "line_endings": "LF"
+    },
+    "lock": {
+      "path": "pnpm-lock.yaml",
+      "blob_oid": "df0720a64cbda3efbc598fcbfdef2c7bf8977edc",
+      "canonical_sha256": "efd6eb15379a2d02b1bdf0db776c50d421193ef78199baa043f93d99a1307258",
+      "canonical_bytes": 285775,
+      "line_endings": "LF"
+    },
+    "target_integrity_reference": {
+      "repository": "cloudflare/cloudflare-os-starter",
+      "commit": "9c18a2e8b0c3741e5f4813546bbf24be5bbb98ee",
+      "tree": "9d34f65f4f34b98febc57f8da86cfc045da0736e",
+      "path": "pnpm-lock.yaml",
+      "blob_oid": "784ad17e03f89902eaaf611eba10635ba941933d",
+      "canonical_sha256": "48154f079d3710a518878a29a1a149c037f39a15e0fd03f4dd325c508fefecfc"
+    }
+  },
+  "graph": {
+    "package": "nanoid",
+    "installed_version": "3.3.16",
+    "parent_package": "postcss",
+    "parent_version": "8.5.25",
+    "route_tail": "vite",
+    "affected_paths": 19,
+    "unique_projects": 18,
+    "package_path_multiset_sha256": "1d4a74b72bd8d7decd26c2a7c1fbb7786017ad35a385f4360f0762618b25d326",
+    "advisory": {
+      "id": "GHSA-2v37-7h3g-55p8",
+      "severity": "high",
+      "vulnerable_range": "<3.3.18",
+      "url": "https://github.com/advisories/GHSA-2v37-7h3g-55p8"
+    }
+  },
+  "remediation": {
+    "strategy": "ROOT_PARENT_SCOPED_PNPM_OVERRIDE_AND_GENERATED_FROZEN_LOCK",
+    "selector": "postcss@8.5.25>nanoid",
+    "target_version": "3.3.18",
+    "package_manager": "pnpm@11.9.0",
+    "old_integrity": "sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==",
+    "new_integrity": "sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==",
+    "ambient_latest_allowed": false,
+    "manual_lock_edit_accepted": false,
+    "companion": {
+      "advisory": {
+        "id": "GHSA-jmr9-qjv8-65gv",
+        "severity": "high",
+        "vulnerable_range": "<=2.0.1",
+        "patched_direct_versions": [],
+        "url": "https://github.com/advisories/GHSA-jmr9-qjv8-65gv"
+      },
+      "vulnerable_package": "extract-zip",
+      "installed_version": "2.0.1",
+      "parent_package": "@puppeteer/browsers",
+      "parent_version": "2.2.4",
+      "strategy": "PARENT_SCOPED_PARENT_REPLACEMENT_NO_PATCHED_DIRECT_RELEASE",
+      "selector": "@cloudflare/puppeteer@1.2.0>@puppeteer/browsers",
+      "target_package": "@puppeteer/browsers",
+      "target_version": "3.0.4",
+      "target_integrity": "sha512-HGM8iAmGTf+Y7t0373szVbTmt3d7vPkYL/1bpOkOFO0YUYLgSeuYBCzESklogNPvOBnZ/MRD5f07OkpqH1trtA==",
+      "target_archive_package": "modern-tar",
+      "target_archive_version": "0.7.7",
+      "target_archive_integrity": "sha512-t9VmxaqrmANnEOBhpSDI6HD192Ge48k8vmWqQQL7hSFEqHEYwZbbsu49+aKLWZeRvFs3j1pMhXOqqF4kPlvjkQ=="
+    },
+    "expected_input": {
+      "workspace_override": 0,
+      "companion_workspace_override": 0,
+      "lock_override": 0,
+      "companion_lock_override": 0,
+      "vulnerable_lock_markers": 4,
+      "target_lock_markers": 0,
+      "source_browser_package_key_markers": 2,
+      "source_browser_dependency_edge_markers": 1,
+      "vulnerable_extract_zip_package_key_markers": 2,
+      "vulnerable_extract_zip_dependency_edge_markers": 1
+    },
+    "expected_workspace_output": {
+      "workspace_override": 1,
+      "companion_workspace_override": 1,
+      "canonical_sha256": "1fab3067c776f02e5b86e6dd78428ddba73ec25e0ccde91828743f79f86caff5",
+      "canonical_bytes": 1159
+    },
+    "observed_generated_lock": {
+      "evidence_status": "EXACT_PNPM_11_9_LOCAL_OUTPUT_BOUND_WITH_PROVENANCE_RECEIPT",
+      "package_manager": "pnpm@11.9.0",
+      "generation_mode": "LOCKFILE_ONLY_PREFER_OFFLINE_FIXED_PUBLIC_REGISTRY_IGNORE_SCRIPTS_NO_RUNTIME",
+      "registry": "https://registry.npmjs.org/",
+      "generated_at": "2026-08-21T00:00:49Z",
+      "node": "24.19.0",
+      "package_manager_archive_sha1": "10da06e30a629cc94ecf7ca009c6ce696f55fbf1",
+      "package_manager_archive_sha512": "bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b",
+      "frozen_install_ignore_scripts": true,
+      "production_audit_high": 0,
+      "recursive_build_projects": 26,
+      "focused_test_passed": 279,
+      "focused_test_skipped": 4,
+      "lock_override": 1,
+      "companion_lock_override": 1,
+      "vulnerable_lock_markers": 0,
+      "target_lock_markers": 5,
+      "new_package_key_markers": 2,
+      "new_dependency_edge_markers": 2,
+      "new_integrity_markers": 1,
+      "source_browser_package_key_markers": 0,
+      "source_browser_dependency_edge_markers": 0,
+      "vulnerable_extract_zip_package_key_markers": 0,
+      "vulnerable_extract_zip_dependency_edge_markers": 0,
+      "target_browser_package_key_markers": 2,
+      "target_browser_dependency_edge_markers": 1,
+      "target_browser_integrity_markers": 1,
+      "target_archive_package_key_markers": 2,
+      "target_archive_dependency_edge_markers": 1,
+      "target_archive_integrity_markers": 1,
+      "canonical_sha256": "1e5d81f81c5a65bf797780148cb1f2bc806455330a541263751857a9275a81d5",
+      "canonical_bytes": 268881,
+      "canonical_lines": 8040
+    }
+  },
+  "gates": {
+    "preflight": true,
+    "materialized": true,
+    "pinned_pnpm_11_9": true,
+    "generated_lock_verified": true,
+    "frozen_lock_install_ignore_scripts": true,
+    "production_audit_zero_high": true,
+    "focused_tests_and_build": true,
+    "independent_review": false
+  },
+  "effects": {
+    "dependency_update": 0,
+    "source_write": 0,
+    "install": 1,
+    "provider_call": 0,
+    "workflow_run": 0,
+    "deploy": 0,
+    "merge": 0,
+    "promotion": 0,
+    "current_truth_change": 0
+  },
+  "unproven": [
+    "independent review of exact candidate bytes",
+    "provider deployment or production remediation"
+  ],
+  "public_beta": "NO_GO_UNPUBLISHED"
+}

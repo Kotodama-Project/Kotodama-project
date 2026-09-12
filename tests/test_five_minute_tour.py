@@ -16,7 +16,7 @@ class FiveMinuteTourTests(unittest.TestCase):
         text = TOUR.read_text(encoding="utf-8")
 
         for marker in (
-            "git clone https://github.com/dj-thank/Kotodama-project.git",
+            "git clone https://github.com/Kotodama-Project/Kotodama-project.git",
             "Set-Location Kotodama-project",
             "python -S -B tools/smoke_company_pack_review_chain.py",
             "cd Kotodama-project",

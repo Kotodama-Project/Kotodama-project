@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/record.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/record.schema.json",
   "$comment": "This portable schema is not a standalone safety verdict. Run tools/validate_template_pack.py to enforce cross-field role separation and pack-wide invariants.",
   "title": "Kotodama Governed Record Template",
   "type": "object",

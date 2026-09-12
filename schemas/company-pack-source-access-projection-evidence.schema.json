@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-source-access-projection-evidence.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-source-access-projection-evidence.schema.json",
   "title": "Kotodama Company Pack Source Access Projection Evidence Candidate",
   "$comment": "Candidate-only lossless projection input. It does not verify consent, access authority, identity, authenticity, retention, trusted time, Human Intent, a Decision, runtime readiness, or Public Beta GO.",
   "type": "object",

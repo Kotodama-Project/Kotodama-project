@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/compose-image-availability-preflight.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/compose-image-availability-preflight.schema.json",
   "title": "Kotodama Compose Image Availability Preflight",
   "$comment": "A time-bound read-only observation that one candidate manifest digest was present in one fingerprinted local Docker daemon. It is not pull, start, migration, health, restart, restore, Promotion, Current Truth, or Public Beta GO evidence.",
   "type": "object",

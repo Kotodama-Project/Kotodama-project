@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/installation-lifecycle-profile.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/installation-lifecycle-profile.schema.json",
   "title": "Kotodama Installation Lifecycle Profile",
   "$comment": "A valid profile is only a sanitized planning and evidence contract. It does not prove installation, deployment, restart, restore, provider E2E, Promotion, Current Truth, Final Human GO, or Public Beta GO.",
   "type": "object",

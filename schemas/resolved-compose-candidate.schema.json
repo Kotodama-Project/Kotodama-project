@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/resolved-compose-candidate.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/resolved-compose-candidate.schema.json",
   "title": "Kotodama Resolved Compose Candidate",
   "$comment": "A credential-free configuration-resolution candidate. It is not image availability, daemon, pull, start, migration, health, restart, backup, restore, Promotion, Current Truth, or Public Beta GO evidence.",
   "type": "object",

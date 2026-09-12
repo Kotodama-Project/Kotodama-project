@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/compose-clean-install-migration-evidence-candidate.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/compose-clean-install-migration-evidence-candidate.schema.json",
   "title": "Kotodama Compose Clean Install and Migration Evidence Candidate",
   "$comment": "An unattested saved evidence candidate. Reported effects and checks are not authenticated, fresh, atomic, current runtime state, Promotion, Current Truth, Final Human GO, or Public Beta GO evidence.",
   "type": "object",

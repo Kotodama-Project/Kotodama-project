@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-decision-handoff.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-review-decision-handoff.schema.json",
   "title": "Kotodama Company Pack Review Decision Handoff Candidate",
   "$comment": "This artifact only binds a verified review chain for later Human entry. It does not verify identity, authority, independence, approval, an overall Decision, evidence, Promotion, Current Truth, runtime readiness, Final Human GO, or Public Beta GO.",
   "type": "object",

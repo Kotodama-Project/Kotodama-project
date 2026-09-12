@@ -1,3 +1,33 @@
 __pycache__/
 *.py[cod]
+.pytest_cache/
 /work/
+
+# Local secret and environment material
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+!.dev.vars.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+credentials.*.json
+credentials.local.json
+service-account*.json
+service_account*.json
+id_rsa
+id_ed25519
+
+# Local provider and infrastructure state
+*.tfstate
+*.tfstate.*
+.terraform/
+.wrangler/

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-creation-report.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-creation-report.schema.json",
   "title": "Kotodama Company Pack Creation Report",
   "$comment": "PASS proves only that a new non-overwritten draft Pack was generated and locally checked. READY_FOR_GOVERNED_REVIEW means static placeholders are closed; it does not prove Human approval, authority, retention enforcement, Promotion, Current Truth, runtime readiness, or Public Beta GO.",
   "type": "object",

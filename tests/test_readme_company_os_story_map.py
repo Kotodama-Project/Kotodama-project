@@ -68,7 +68,7 @@ class ReadmeCompanyOsStoryMapTests(unittest.TestCase):
         for target in (
             "#discord-の中に会社を作る",
             "#voice--最初に価値を体感する入口",
-            "#grillu--一度に一つだけ深掘りする",
+            "#grillu-adaptive-requirements",
             "#evidence-chain--会話から-current-truth-まで",
             "#company-template--会社を再現できる部品",
             "#context-platform--会社の共有記憶",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/customization-report.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/customization-report.schema.json",
   "title": "Kotodama Company Pack Customization Report",
   "$comment": "READY_FOR_GOVERNED_REVIEW proves only that static example placeholders were replaced. It does not prove Human approval, authority, Promotion, Current Truth, runtime readiness, or Public Beta GO.",
   "type": "object",

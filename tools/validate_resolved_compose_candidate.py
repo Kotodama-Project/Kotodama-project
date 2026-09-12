@@ -103,7 +103,35 @@ EXPECTED_SERVICE_BASE = {
 
 
 class StrictJsonError(ValueError):
-    """Raised for duplicate keys, non-finite numbers, or a non-object root."""
+    """Raised for unsafe depth, duplicate keys, non-finite numbers, or a non-object root."""
+
+
+MAX_JSON_NESTING_DEPTH = 64
+
+
+def reject_excessive_json_nesting(text: str) -> None:
+    """Reject deep JSON before the platform's decoder stack becomes evidence."""
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            if depth > MAX_JSON_NESTING_DEPTH:
+                raise StrictJsonError("JSON nesting exceeds the explicit limit")
+        elif character in "]}":
+            depth -= 1
 
 
 def reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -120,6 +148,7 @@ def reject_non_finite(_value: str) -> None:
 
 
 def loads_strict_json(text: str) -> dict[str, Any]:
+    reject_excessive_json_nesting(text)
     value = json.loads(
         text,
         object_pairs_hook=reject_duplicate_pairs,

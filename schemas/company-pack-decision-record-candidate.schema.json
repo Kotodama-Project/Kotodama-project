@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-decision-record-candidate.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-decision-record-candidate.schema.json",
   "title": "Kotodama Company Pack Decision Record Candidate",
   "$comment": "Schema-only candidate contract. Validation does not recompute source bindings, authenticate a Human, verify identity, authority, independence, time, evidence, retention, an overall Decision, Promotion, Current Truth, runtime readiness, Final Human GO, or Public Beta GO.",
   "type": "object",

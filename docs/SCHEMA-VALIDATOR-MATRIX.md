@@ -214,6 +214,13 @@ python3 tools/verify_company_pack_review_decision_handoff.py \
 解決、runtime、Promotion、Current Truth、Final Human GOを作らず、公開状態は
 `NO_GO_UNPUBLISHED`のままです。
 
+## 13. Official Cloudflare OS bounded candidates
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [cloudflare-os-upstream-pin.schema.json](../schemas/cloudflare-os-upstream-pin.schema.json) | [`validate_cloudflare_os_candidate.py`](../tools/validate_cloudflare_os_candidate.py) | [`test_cloudflare_os_candidate.py`](../tests/test_cloudflare_os_candidate.py) | [Cloudflare OS adoption](CLOUDFLARE-OS-ADOPTION.md)。official starter/core の exact source pin と content-free Gatekeeper projection を検査する。install、provider execution、billing、private Context、Promotion、Current Truth、Public Beta GO は証明しない。 |
+| [cloudflare-os-local-runtime-evaluation.schema.json](../schemas/cloudflare-os-local-runtime-evaluation.schema.json) | [`validate_cloudflare_os_local_runtime_evaluation.py`](../tools/validate_cloudflare_os_local_runtime_evaluation.py) | [`test_cloudflare_os_local_runtime_evaluation.py`](../tests/test_cloudflare_os_local_runtime_evaluation.py) | [Cloudflare OS local runtime evaluation](CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md)。保存済み content-free local receipt の source pin、integrity、1060-test totals、loopback/body/cleanup、P0/P1/P2、zero effect を検査する。再実行freshness、provider deployment、private Context、production、Public Beta GO は証明しない。 |
+
 ## Public starterの同じ実行順
 
 既存exampleを変更せず、必ず新しい作業copyで実行します。
@@ -302,6 +309,22 @@ The smoke asserts pending request state, structural item response matching, and
 `decision: null` / `selected_outcome: null` in the handoff. All claims remain
 false and `NO_GO_UNPUBLISHED` remains in force; this does not create reviewer
 identity, Human approval, runtime, Promotion, Current Truth, or Public Beta GO.
+
+## Session Conversation/Event Ledger Candidate 2
+
+| Schema | Validator / projector | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [session-conversation-event-ledger.schema.json](../schemas/session-conversation-event-ledger.schema.json)、[session-knowledge-projection.schema.json](../schemas/session-knowledge-projection.schema.json) | [`validate_session_conversation_ledger.py`](../tools/validate_session_conversation_ledger.py) | [`test_session_conversation_ledger.py`](../tests/test_session_conversation_ledger.py) | [Session Conversation/Event Ledger](SESSION-CONVERSATION-LEDGER.md)。append-only event、unassigned inboxからの後付けbinding、embedded provider ID/tokenも拒否するpublic-safe refs、actor-kind/authority整合、`UNVERIFIED_PUBLIC_CLAIM`のHuman-shaped identity、非system consent、discord_voiceのspeaker/source/evidence parityとreceipt-bound `voice_reply`、hash chain、idempotency、causal/lifecycle target、raw/derived artifact lineageとstorage-class parity、Session/Task/Invocation/grant provenance、tiered provider-neutral Archive Target、invalidation、候補とHuman evidenceの分離、projection digest/head再構築だけを標準ライブラリで検査する。Schemaとvalidatorはderived parent、archive/delete tuple、integrity marker、offline recovery、model provenanceの同じ負例を拒否する。`LEDGER_VALID` は構造上の `LOCAL_PASS` のみで、person authentication、promotion eligibility、device/provider/public/Human GO、Current Truth、live connector、compaction summaryのsource authorityを意味しない。 |
+
+```powershell
+python tools\validate_session_conversation_ledger.py validate path\to\ledger.jsonl
+python tools\validate_session_conversation_ledger.py project path\to\ledger.jsonl ref/session/example
+```
+
+```bash
+python3 tools/validate_session_conversation_ledger.py validate path/to/ledger.jsonl
+python3 tools/validate_session_conversation_ledger.py project path/to/ledger.jsonl ref/session/example
+```
 
 ## Related guidance
 
