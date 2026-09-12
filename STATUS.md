@@ -1,6 +1,9 @@
 # Project Status
 
-Updated: 2026-08-26
+Updated: 2026-09-13
+
+This update records the #18 source integration. It does not refresh or promote
+the separately scoped runtime/deployment evidence below.
 
 | Surface | Status |
 |---|---|
@@ -8,8 +11,8 @@ Updated: 2026-08-26
 | Product direction and roadmap | Public |
 | Company governance starter | Published and locally validated |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
-| [Cloudflare edge preview candidate](runtime/cloudflare-edge/README.md) | Draft PR candidate; content-free local validation only, no version upload or deployment |
-| [Official Cloudflare OS bounded runtime candidate](docs/CLOUDFLARE-OS-ADOPTION.md) | Draft PR candidate; exact source pin, six synthetic metadata projections, and content-free local runtime receipt; no provider execution |
+| [Cloudflare edge preview candidate](runtime/cloudflare-edge/README.md) | Merged source candidate via #18; content-free validation only, no version upload or deployment established |
+| [Official Cloudflare OS bounded runtime candidate](docs/CLOUDFLARE-OS-ADOPTION.md) | Merged source candidate via #18; exact source pin, six synthetic metadata projections, and content-free runtime receipt; no provider execution established |
 | Compose minimum data-plane skeleton | Published candidate; offline config only |
 | Resolved Compose candidate | Published credential-free configuration candidate |
 | Local image availability preflight | Published read-only tool; saved verification is historical binding only |

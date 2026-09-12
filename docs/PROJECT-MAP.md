@@ -8,7 +8,7 @@ Kotodamaの目的は、会話から意図・仕事・成果・学習をつなぎ
 |---|---|---|
 | 普段の相談から仕事を始める | [README](../README.md)、[Company AGI direction](OWNER-INTENT-COMPANY-AGI.md) | カジュアルな単体利用と組織利用が共存し、必要のない基盤を必須にしない |
 | 日本語の原文、話者、時刻、訂正を保持する | [Voice](../README.md#voice--最初に価値を体感する入口)、[Session / Conversation ledger](SESSION-CONVERSATION-LEDGER.md) | 文字起こし断片を確定した意図とせず、原文と後続訂正へ戻れる |
-| 意図を同じ仕事と成果へ結ぶ | [Review Workflow](REVIEW-WORKFLOW.md)、[Company Pack](STARTER-WALKTHROUGH.md) | Source、Intent、Decision、Work、Verification、Promotionを区別し、選択した一つのTask ownerへ戻す |
+| 意図を同じ仕事と成果へ結ぶ | [Task / Session契約](SESSION-CONVERSATION-LEDGER.md)、[Review Workflow](REVIEW-WORKFLOW.md)、[Company Pack](STARTER-WALKTHROUGH.md) | Source、Intent、Decision、Work、Verification、Promotionを区別し、選択した一つのTask ownerへ戻す |
 | 初回の許可範囲で自律的に進める | [Agent entrypoint](../AGENTS.md)、[Security](../SECURITY.md) | 同じ許可を聞き直さず、期限・取消・対象は再確認する。ログインの本人操作は人が行う |
 | 必要な文脈を小さく渡す | [Context](../README.md#context-platform--会社の共有記憶)、[Session ledger](SESSION-CONVERSATION-LEDGER.md) | 出典・訂正・現在の担当を落とさず、アクセス不可や古い資料を再注入しない |
 | 話す・録音する・仕事を止める操作を分ける | [Voice](../README.md#voice--最初に価値を体感する入口)、Voice候補 [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69) / [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) | 呼びかけ、長時間・複数人、切断復帰、音質、負荷、背景の仕事の継続を同じ実経路で確かめる |

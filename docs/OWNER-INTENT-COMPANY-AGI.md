@@ -17,6 +17,34 @@ Truth.
 
 ## Target
 
+### 2026-09-13 usage and interaction refinement
+
+The owner's direct template implementation plan and subsequent usage instructions
+add the following working requirements. The private source conversation and its
+corrections remain operator-controlled; this is their redacted product-direction
+projection under the evidence limits above.
+
+- Casual standalone use and organizational use coexist within Kotodama. A
+  standalone template can be introduced without Cloudflare or a full company
+  control plane. An organization selects its existing Task owner; the same work
+  must not acquire two independently writable canonical Task ledgers.
+- Reuse initial permission within its recorded purpose and scope. Check current
+  targets, expiry and revocation mechanically. New scope or revoked authority
+  follows the applicable authorization policy.
+- Human login and identity confirmation remain human actions. Agents prepare
+  the entrypoint, verify the result and reuse a still-valid authenticated session.
+- Preserve Japanese source transcripts, speaker/time bindings and correction
+  lineage. Transcript fragments are inputs to intent finalization, not confirmed
+  execution requests by themselves.
+- Speech, recording and background work have distinct stop conditions. An
+  addressed request for an opinion authorizes an answer; it does not by itself
+  authorize a development job. Stopping speech does not cancel an otherwise
+  permitted background job.
+
+These requirements guide the templates and adapters; listing them does not claim
+that every current runtime has implemented them. Their implementation and live
+acceptance remain separately observable.
+
 The promise remains: **conversation can become governed, reviewable work and
 learning without losing its evidence, authority, or human boundary.** Kotodama
 may pursue bounded autonomy across conversation ingress, speaker attribution,
