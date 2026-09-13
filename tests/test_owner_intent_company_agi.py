@@ -122,7 +122,7 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             "## Conversation ingress and evidence",
             "Discord text and Voice",
             "Codex",
-            "Claude",
+            "Conversation ingress includes",
             "Notion",
             "GitHub",
             "Google Drive",
