@@ -20,6 +20,7 @@ function pidRunning(pid){
 }
 
 export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,log=value=>console.log(JSON.stringify(redact(value)))}={}){
+  if(runtimeDomain==='')runtimeDomain=undefined;
   if(runtimeDomain!==undefined)check(typeof runtimeDomain==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(runtimeDomain),'RUNTIME_DOMAIN_INVALID');
   const config=await loadConfig(filename);let current=config;const store=new Store(config.dataDir),ownerId=uid('host'),startedAt=new Date().toISOString();
   let owner,claimed=false;
