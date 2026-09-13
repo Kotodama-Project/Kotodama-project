@@ -11,6 +11,8 @@ Kotodama は、人とagentが同じ場で話し、理解を共有できる一つ
 > [!IMPORTANT]
 > このリポジトリは **Incomplete Public Preview** です。公開している Company starter、schema、validator、runtime/evidence candidate は試せますが、Public Beta の利用受付、Discord 招待、公開 Voice Bot はまだ提供していません。公開アクセスを開くための Final Human GO も完了していません。最新の境界は [Project Status](STATUS.md) を確認してください。
 
+自分のサーバーで試す **[Discord Botテンプレート](runtime/discord-template/README.md)** を同梱しています。OpenAI GPT-Live 1によるVC会話の設定手順、MITライセンス、未受入の範囲を確認できます。
+
 ## この README の読み方
 
 作業を再開する方は **[プロジェクトの地図](docs/PROJECT-MAP.md)** から、目標に対応する文書・実装・PR の関係を確認できます。エージェントの開始手順は [AGENTS.md](AGENTS.md) にまとめています。
