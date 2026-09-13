@@ -15,9 +15,11 @@
 - 訂正、仕事の停止・再開、成果の取得、別の人やチャンネルとの分離を扱います。
 - 任意でLumaのイベント運営とn8nをつなげます。無料Lumaではブラウザ・CSVを使います。
 
-単なる提案・質問を実行依頼に変えません。音声では「ことだま、」と呼びかけ、テキストではBotをメンションするか `/kotodama do` を使います。録音の停止と仕事の停止は別です。
+単なる提案・質問を実行依頼に変えません。既定の音声開始方式では「ことだま、」と呼びかけ、テキストではBotをメンションするか `/kotodama do` を使います。録音の停止と仕事の停止は別です。
 
 ## 最初の設定
+
+この公開リポジトリを取得して `runtime/discord-template` へ移動してから、以下のコマンドを実行します。GPT-Live 1で自然会話を試す設定は[音声の設定例](docs/DISCORD-SETUP.md#自然会話を試す設定例)にまとめています。
 
 最初に[新しいBotの作成手順](docs/DISCORD-SETUP.md)を確認してください。CLIでできる準備と、ログイン・本人確認・サーバー認証を人が行う箇所を分けています。
 
@@ -53,7 +55,7 @@ node bin/kotodama.mjs doctor --json
 }
 ```
 
-固定ラウンジへ自動で入退室させる場合は `voice.autoJoin` を `true` にします（既定は `false`）。設定したサーバー・VCに人がいて、全員が現在の音声処理対象なら接続します。ローカルASR構成ではBotがVCにいてもAPI接続は作らず、「ことだま、」という呼びかけ後だけLive会話を始めます。無人が15秒続いた後の確認で、最後の文字起こしを確定して退出します。別のVCへ利用者を追いかけません。
+固定ラウンジへ自動で入退室させる場合は `voice.autoJoin` を `true` にします（既定は `false`）。設定したサーバー・VCに人がいて、全員が現在の音声処理対象なら接続します。ローカルASRと既定の `conversationStart: "wake"` では、BotがVCにいても呼びかけ前のLive接続は作りません。`speech` では操作者の発話検出から開始します。無人が15秒続いた後の確認で、最後の文字起こしを確定して退出します。別のVCへ利用者を追いかけません。
 
 必要な環境変数は `.env.example` にあります。値は信頼できる実行ホストだけに置き、GitやCLIの引数へ書きません。`.env` を使う場合は `node --env-file=.env bin/kotodama.mjs ...` で読み込みます。
 
@@ -88,11 +90,15 @@ BotはDiscord側でも対象サーバーへ導入してください。Message Co
 
 成果通知は依頼者へのDM、コマンド結果は依頼者だけに見える返信です。配送できなかった場合は重ねて自動送信せず、`result`から確認できます。成果は確認待ちとして返し、利用者の採用を代行しません。
 
+音声会話はOpenAIの **GPT-Live 1（`gpt-live-1`）／Live API** をDiscordの音声接続につなぎます。「Discord Live API」という別のモデルAPIではありません。
+
+以下の確定テキスト待ち・commentary返却は `naturalConversation: false` の方式です。`true` ではLive内のResponses委譲で会話し、ローカルASRの完了を待ちません。
+
 `assist`は `gpt-live-1`、`minutes`のクラウド文字起こしはVADと `gpt-live-transcribe` を使います。ローカルASRも選べます。呼びかけ後は同じLiveセッションを複数ターンで再利用するため、回答ごとの接続待ちがありません。Luna analyzerが確定テキストから意図を整理し、確認済みの返答だけを `session.commentary.append` でLiveへ戻します。Liveの断片文字起こしや自発音声は仕事のSSOTになりません。
 
 発話中に利用者が話し始めると、Botはローカル再生と未再生queueを直ちに止め、同じセッションへ停止指示を送ります。仕事の実行はそのまま継続します。「もういいよ」などをLunaが `end_conversation` と構造化した場合はLiveだけを正常終了し、BotはVCでローカル待機へ戻ります。出力は既定120msを蓄えてから再生し、500msを超えるqueueは破棄します。値は `voice.outputPrefillMs` と `voice.maxOutputQueueMs` で調整できます。
 
-待機中のAPI呼出しは0にし、Live利用秒とLunaのinput・cached input・output tokenを別々に記録します。Lunaへ渡す会話contextと最大出力も設定で上限を持ち、usage snapshotは累積値として置き換えるため二重加算しません。Live会話は人の入力が既定120秒なければ閉じ、Botはローカル聞き役のまま残ります。`voice.conversationIdleSeconds` で30〜600秒に調整できます。
+ローカルASR構成でLiveを開始していない待機中は、音声クラウドAPIを呼び出しません。Live利用秒とLunaのinput・cached input・output tokenを別々に記録します。Lunaへ渡す会話contextと最大出力も設定で上限を持ち、usage snapshotは累積値として置き換えるため二重加算しません。`naturalConversation: false` のLive会話は人の入力が既定120秒なければ閉じ、Botはローカル聞き役のまま残ります。`voice.conversationIdleSeconds` で30〜600秒に調整できます。
 
 実装はOpenAI公式の[GPT-Liveセッション管理](https://developers.openai.com/api/docs/guides/live-conversations)、[client delegation](https://developers.openai.com/api/docs/guides/live-delegation?delegation-mode=client)、[サーバー側の再生制御](https://developers.openai.com/api/docs/guides/voice-server-controls?api=live)、[音声コスト最適化](https://developers.openai.com/api/docs/guides/voice-latency-cost?api=live)に合わせています。
 
@@ -136,7 +142,7 @@ VM別の配備はインストール、Bot、VC、データ領域、作業領域�
 
 対象VCで呼び名を付けずに話し始めたい場合は `voice.conversationStart: "speech"` を明示設定します。許可された操作者の入力が一定時間続いたときにLiveを開始し、接続待ちの音声も渡します。無音と短い物音は除きますが、人の声を厳密に分類する機能ではないため、継続的な雑音でも起動する可能性があります。既存の利用上限は引き続き適用されます。
 
-`voice.naturalConversation: true` はCT200の既存Live会話方式を移した選択肢です。音声の応答はLiveとLunaで進め、ローカル文字起こし完了を待ちません。音声入力は20ms間隔で送信し、開始待ちのバッファを上限付きで保持します。会話終了はツール判断で行い、短い無言では終了せず、接続時間と累計利用上限は維持します。話者別のローカル原文は別経路で記録します。
+`voice.naturalConversation: true` は既存の自然会話方式を移した選択肢です。音声の応答はLiveとLunaで進め、ローカル文字起こし完了を待ちません。音声入力は20ms間隔で送信し、開始待ちのバッファを上限付きで保持します。会話終了はツール判断で行い、短い無言では終了せず、接続時間と累計利用上限は維持します。話者別のローカル原文は別経路で記録します。
 
 ### 夜間の通知
 
@@ -147,3 +153,15 @@ VM別の配備はインストール、Bot、VC、データ領域、作業領域�
 既存の保存先を使う場合は `archive` の接続設定と `voice.storeAudio: true` を明示します。話者別の48kHz原音・全体音声・原文・訂正文を分け、既存の30日原音保持に接続します。保存の後処理は退出後に並列1で進め、音声会話は待ちません。再起動時には最後の永続フレームから再開し、正常退出時は最後のバッファも保存します。詳細は [保存接続](docs/ARCHIVE-RUNTIME.md) を参照してください。
 
 個人でのLive会話では、プロジェクトの `README.md`、`CONTEXT.md`、`briefs/`、`docs/` から関連する短い抜粋を出典付きで読む機能があります。最大3資料・6000文字に絞り、資料の記載と実環境の確認を区別します。他の参加者がいるときは個人資料を読み上げません。
+
+## サブエージェント・OpenClaw連携案（未実装）
+
+**接続できる可能性がある設計案です。このテンプレートにOpenClaw adapterやサブエージェント起動機能は同梱していません。**
+
+OpenAIの[client delegation](https://developers.openai.com/api/docs/guides/live-delegation?delegation-mode=client)では、アプリが委譲を受け、同じIDで結果を音声会話へ戻せます。委譲イベントは依頼本文ではないため、確定した出典・意図・現在の許可を既存Task ownerで解決してから外部実行器へ渡す案です。音声会話と長い仕事の寿命を分けます。
+
+[OpenClawのsub-agent仕様](https://docs.openclaw.ai/tools/subagents/tool-reference)には `sessions_spawn` と分離contextがあるため、必要な短い資料だけを持つ子へ、認可済みの仕事を割り当てるadapterを作れる可能性があります。逆にOpenClawからこのテンプレートのCLIへ依頼する場合も、actor文字列だけを本人認証とせず、信頼済みadapterで対応関係を検証する必要があります。
+
+追加実装では、VM・Bot・VC・Task・source revisionの対応、実行対象と期限、重複抑止、取消、結果の閲覧範囲を検査し、結果を同じTask ownerへ返します。[remote owner契約](docs/TASK-OWNER.md)はその接続点候補ですが、OpenClawとそのまま互換ではありません。OpenClawのtool policyと実モデル/権限も確認し、音声APIキーや全会話を子へ渡さない設計にします。設定だけで接続済みにはなりません。
+
+もう一つの選択肢は、[OpenClaw自身のDiscord音声機能](https://docs.openclaw.ai/channels/discord/voice-channels)を会話の実行系にする案です。公式資料には公開API用 `gpt-live-1`・`marin` と `/vc join` が記載されています。Kotodama側はSource/Intent/Task契約をtoolまたはremote owner adapterで接続する設計になりますが、この接続は未実装・未検証です。このテンプレートとOpenClawの両方に同じBot/VCを同時所有させず、採用する音声実行系を一つ選びます。
