@@ -70,6 +70,6 @@ export class CliWorker {
 }
 export async function verifyArtifacts(task){
   check(task.result&&task.state==='needs_review','RESULT_NOT_AVAILABLE');
-  for(const a of task.result.artifacts??[])if(!a.deleted)check(digest(await readFile(a.path))===a.sha256,'ARTIFACT_CHANGED');
+  for(const a of task.result.artifacts??[])if(!a.deleted){const cap=a.bytes??5000000;check(Number.isSafeInteger(cap)&&cap>=0&&cap<=50000000,'ARTIFACT_SIZE_LIMIT');check(digest(await readArtifact(a.path,cap))===a.sha256,'ARTIFACT_CHANGED');}
   return task.result;
 }

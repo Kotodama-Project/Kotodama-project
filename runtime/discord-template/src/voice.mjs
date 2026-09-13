@@ -112,6 +112,7 @@ export class VoiceRoom {
   }
   async capture(actor){
     if(!this.connectionReady()||this.paused||this.recovering||!this.audienceAllowed()||!this.allowed(actor)||!this.audience().includes(actor))return;
+    if(this.policy().voice.naturalConversation)this.sessions.get(actor)?.provider.resumeOutput?.();
     if(this.reply&&!this.policy().voice.naturalConversation)void this.stopSpeech();
     if(this.localAsr)return this.captureLocal(actor);
     const connection=this.connection,s=await this.session(actor);
@@ -158,7 +159,7 @@ export class VoiceRoom {
       this.store.event('voice.local_turn',{voiceSession:state.id,wakeDetected:called,eligible:eligible(),liveActive:Boolean(session?.provider.active),textChars:turn.text.length});
       if(session&&eligible())session.lastHumanInput=Date.now();
       if(called&&session)session.conversationActive=true;const active=Boolean(session&&this.current(session)&&session.conversationActive&&identified);
-      const source={provider:'discord',guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceId:turn.id,actorId:identified?state.actor:null,revision:++state.revision,text:turn.text,final:true,readers,metadata:{kind:'voice',sessionId:session?.id??state.id,startMs:turn.startMs,endMs:turn.endMs,createdAt:new Date().toISOString(),mode:this.mode,voiceEpoch:state.epoch,privacyBasis:state.privacyBasis==='owner_managed'?'owner_managed_scope':'participant_opt_in_record',privacyNoticeId:state.privacyNoticeId,attribution:identified?'discord_input_track':'unknown_speaker',inputAccountId:state.actor,finality:'local_asr_completed',transcriptOrigin:'local_asr',archiveSessionRefs:turn.archiveSessionRefs??[],conversationActive:active,transcriptCorrection}};
+      const source={provider:'discord',guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceId:turn.id,actorId:identified?state.actor:null,revision:++state.revision,text:turn.text,final:true,readers,metadata:{kind:'voice',sessionId:session?.id??state.id,startMs:turn.startMs,endMs:turn.endMs,createdAt:new Date().toISOString(),mode:this.mode,voiceEpoch:state.epoch,privacyBasis:state.privacyBasis==='owner_managed'?'owner_managed_scope':'participant_opt_in_record',privacyNoticeId:state.privacyNoticeId,attribution:identified?'discord_input_track':'unknown_speaker',inputAccountId:state.actor,finality:'local_asr_completed',transcriptOrigin:'local_asr',nativeConversation:Boolean(cfg.voice.naturalConversation),archiveSessionRefs:turn.archiveSessionRefs??[],conversationActive:active,transcriptCorrection}};
       const result=await this.pipeline.ingest(source,{execute:active&&eligible()&&cfg.discord.operators.includes(state.actor),reply:active&&eligible()&&this.mode==='assist'&&!cfg.voice.naturalConversation,analyze:this.mode==='minutes'||active&&eligible()});
       if(startError&&!startError.voiceProviderReported)this.onError(errorCode(startError));
       return result;
@@ -229,6 +230,7 @@ export class VoiceRoom {
   async stopSpeech({invalidate=true,interruptProvider=true}={}){const old=this.reply;this.reply=null;if(invalidate)this.generation++;this.player.stop(true);if(old){clearInterval(old.accessTimer);clearTimeout(old.prefillTimer);clearTimeout(old.silenceTimer);clearTimeout(old.timer);old.stream.destroy();if(interruptProvider)old.provider.interrupt?.();}}
   async applyModelAction(action,source){
     check(['stop_speech','end_conversation'].includes(action)&&source?.metadata?.kind==='voice','VOICE_ACTION_INVALID');if(source.metadata.voiceEpoch!==this.epoch||!source.actorId)return;
+    const currentSession=this.sessions.get(source.actorId);if(!currentSession||currentSession.id!==source.metadata.sessionId)return;
     await this.stopSpeech({interruptProvider:action==='stop_speech'});if(action==='end_conversation'){const session=this.sessions.get(source.actorId);if(session&&session.epoch===this.epoch){session.conversationActive=false;await this.endSession(session);}}
   }
   async pause({sealLocal=false}={}){

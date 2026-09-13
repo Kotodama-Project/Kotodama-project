@@ -106,6 +106,7 @@ export class VoiceProvider {
     if(this.mode!=='assist'||!this.active||this.closed)return null;this.interrupted=true;this.interruptedAt=Date.now();this.outputPermitted=false;this.outputGeneration++;
     return this.sendAppend('session.instructions.append','今の発話を直ちに止め、未完の文を続けず、ユーザーの次の発話を聞いてください。',null);
   }
+  resumeOutput(){if(this.naturalConversation&&this.active&&this.interrupted){this.interrupted=false;this.outputPermitted=true;this.outputGeneration++;}}
   completeItem(e){if(this.seen.has(e.item_id))return;if(!this.items.has(e.item_id)){this.completions.set(e.item_id,e);return;}check(typeof e.transcript==='string','TRANSCRIPT_INVALID');const binding=this.items.get(e.item_id);this.items.delete(e.item_id);this.completions.delete(e.item_id);this.seen.add(e.item_id);this.onCompleted({...binding,providerItemId:e.item_id,text:e.transcript,final:true});if(!this.items.size&&!this.commits.length)this.resolveDrained?.();}
   commit(binding={}){check(this.active,'VOICE_NOT_ACTIVE');if(this.mode==='minutes'){this.commits.push(binding);this.transport.send({type:'input_audio_buffer.commit'});}}
   async close(){if(this.closed){try{this.transport?.close();}catch{}return;}this.closing=true;

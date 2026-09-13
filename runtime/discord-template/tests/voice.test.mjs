@@ -84,3 +84,8 @@ test('native status uses the scoped backend and continues only after its result'
   const events=Live.last.sent.slice(-2);assert.equal(events[0].type,'response.item.create');assert.equal(JSON.parse(events[0].item.output).scope,'current_installation');assert.equal(events[1].type,'response.create');
   await assert.rejects(p.handleNativeCalls([{name:'get_agent_status',call_id:'other',arguments:'{"vm":"other"}'}]),{code:'LIVE_TOOL_ARGUMENTS_INVALID'});assert.equal(reads,1);await p.close();
 });
+
+test('natural conversation can speak again on the next input after a manual interruption',async()=>{
+  const output=[];const p=new VoiceProvider({mode:'assist',apiKey:'synthetic-test',sdk,naturalConversation:true,onAudio:b=>output.push(b)});await p.start();p.interrupt();Live.last.emit('event',{type:'session.output_audio.delta',delta:Buffer.alloc(960).toString('base64')});assert.equal(output.length,0);
+  p.resumeOutput();Live.last.emit('event',{type:'session.output_audio.delta',delta:Buffer.alloc(960).toString('base64')});assert.equal(output.length,1);await p.close();
+});

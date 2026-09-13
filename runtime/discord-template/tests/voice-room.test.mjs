@@ -63,7 +63,7 @@ test('local Japanese transcripts stay authoritative and open one Live session on
   await utter();assert.equal(providers.length,1);assert.deepEqual(sources[2].flags,{execute:true,reply:true,analyze:true});assert(providers[0].appended>0);
 });
 
-test('ending a conversation closes its Live session but leaves the Discord room connected',async t=>{const {room,channel}=await fixture(t,provider);channel.members.delete(b);const session=await room.session(a);session.conversationActive=true;await room.applyModelAction('end_conversation',{actorId:a,metadata:{kind:'voice',voiceEpoch:room.epoch}});assert.equal(room.sessions.has(a),false);assert.equal(session.provider.active,false);assert(room.connectionReady());});
+test('ending a conversation closes its Live session but leaves the Discord room connected',async t=>{const {room,channel}=await fixture(t,provider);channel.members.delete(b);const session=await room.session(a);session.conversationActive=true;await room.applyModelAction('end_conversation',{actorId:a,metadata:{kind:'voice',voiceEpoch:room.epoch,sessionId:session.id}});assert.equal(room.sessions.has(a),false);assert.equal(session.provider.active,false);assert(room.connectionReady());});
 
 test('a delayed local wake after departure is recorded without starting Live',async t=>{
   let starts=0;const {room,channel,sources}=await fixture(t,o=>{starts++;return provider(o);});
@@ -124,4 +124,9 @@ test('private project lookup narrows a formerly shared Live session audience',as
   assert.equal((await session.provider.options.onContext('資料')).status,'individual_conversation_required');
   channel.members.delete(b);await session.provider.options.onContext('資料');assert.deepEqual(session.readers,[a]);
   session.provider.options.onAudio(Buffer.alloc(960),session.provider.sessionId,0);channel.members.set(b,{id:b,user:{bot:false}});assert.equal(room.canPlay(room.reply),false);await room.close();
+});
+
+test('a delayed end decision cannot close a replacement Live session in the same VC epoch',async t=>{
+  const {room}=await fixture(t,provider);const old=await room.session(a);await room.endSession(old);const current=await room.session(a);
+  await room.applyModelAction('end_conversation',{actorId:a,metadata:{kind:'voice',voiceEpoch:room.epoch,sessionId:old.id}});assert.equal(room.sessions.get(a),current);assert(current.provider.active);
 });
