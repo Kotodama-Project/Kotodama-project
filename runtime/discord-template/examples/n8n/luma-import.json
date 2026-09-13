@@ -1,0 +1,12 @@
+{
+  "name": "Kotodama - Luma CSV import",
+  "active": false,
+  "nodes": [
+    {"id":"manual","name":"Manual start","type":"n8n-nodes-base.manualTrigger","typeVersion":1,"position":[0,0],"parameters":{}},
+    {"id":"input","name":"Set event and CSV","type":"n8n-nodes-base.set","typeVersion":3.4,"position":[220,0],"parameters":{"assignments":{"assignments":[{"id":"event","name":"eventRef","value":"event-demo","type":"string"},{"id":"csv","name":"csv","value":"Name,Email,Approval Status\nExample,example@example.invalid,approved\n","type":"string"},{"id":"revision","name":"revision","value":"={{ Date.now() }}","type":"number"}]},"options":{}}},
+    {"id":"import","name":"Import to private Kotodama","type":"n8n-nodes-base.httpRequest","typeVersion":4.2,"position":[440,0],"parameters":{"method":"POST","url":"http://127.0.0.1:18796/v1/luma/import","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendBody":true,"specifyBody":"json","jsonBody":"={{ JSON.stringify($json) }}","options":{"timeout":15000}}}
+  ],
+  "connections":{"Manual start":{"main":[[{"node":"Set event and CSV","type":"main","index":0}]]},"Set event and CSV":{"main":[[{"node":"Import to private Kotodama","type":"main","index":0}]]}},
+  "settings":{"executionOrder":"v1","saveDataSuccessExecution":"none","saveDataErrorExecution":"none"},
+  "tags":[]
+}
