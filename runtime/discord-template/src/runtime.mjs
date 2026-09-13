@@ -6,7 +6,7 @@ import path from 'node:path';
 import {loadConfig} from './config.mjs';
 import {Store} from './store.mjs';
 import {CliAnalyzer,ResponsesAnalyzer} from './llm.mjs';
-import {CliWorker} from './worker.mjs';
+import {CliWorker,readArtifact} from './worker.mjs';
 import {Pipeline} from './pipeline.mjs';
 import {DiscordAdapter} from './discord.mjs';
 import {VoiceRoom} from './voice.mjs';
@@ -60,16 +60,22 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,log=v
   async function close(){if(closing)return;closing=true;pipeline.draining=true;clearInterval(policyTimer);clearInterval(archiveTimer);await discord?.close();await archive?.close();await pipeline.close();await new Promise(resolve=>bridge?bridge.close(resolve):resolve());await new Promise(resolve=>control?control.close(resolve):resolve());store.releaseHost(ownerId);store.close();log({event:'runtime_stopped',ownerId});}
   return {config,store,owner,pipeline,discord,voice,close};
 }
+async function localControlRequest(port,route,token,payload){
+  return new Promise((resolve,reject)=>{
+    const body=payload===undefined?null:JSON.stringify(payload);
+    const request=http.request({hostname:'127.0.0.1',port,path:route,method:body===null?'GET':'POST',headers:{authorization:'Bearer '+token,...(body===null?{}:{'content-type':'application/json','content-length':Buffer.byteLength(body)})}},response=>{
+      const chunks=[];let size=0;response.on('data',chunk=>{size+=chunk.length;if(size>1000000){request.destroy(new Error('CONTROL_RESPONSE_LIMIT'));return;}chunks.push(chunk);});
+      response.on('error',reject);response.on('end',()=>{try{const value=JSON.parse(Buffer.concat(chunks).toString('utf8'));check(response.statusCode===200,typeof value.error==='string'&&/^[A-Z_]+$/.test(value.error)?value.error:'RUNTIME_NOT_AVAILABLE');resolve(value);}catch(error){reject(error);}});
+    });
+    request.setTimeout(body===null?3000:30000,()=>request.destroy(new Error('CONTROL_TIMEOUT')));request.on('error',reject);request.end(body);
+  });
+}
 export async function controlCommand(config,input){
-  const runtime=JSON.parse(await readFile(path.join(config.dataDir,'runtime.json'),'utf8'));
+  const runtime=JSON.parse((await readArtifact(path.join(config.dataDir,'runtime.json'),65536)).toString('utf8'));
   const port=Number(runtime.port);check(Number.isInteger(port)&&port>=1&&port<=65535,'RUNTIME_PORT_INVALID');
-  const endpoint=new URL('http://127.0.0.1/v1/status');endpoint.port=String(port);
-  const token=await readFile(path.join(config.dataDir,'control.secret'),'utf8');
-  const status=await fetch(endpoint,{redirect:'error',headers:{authorization:'Bearer '+token},signal:AbortSignal.timeout(3000)});
-  check(status.ok,'RUNTIME_NOT_AVAILABLE');const current=await status.json();
+  const token=(await readArtifact(path.join(config.dataDir,'control.secret'),64)).toString('utf8');check(/^[a-f0-9]{64}$/.test(token),'CONTROL_TOKEN_INVALID');
+  const current=await localControlRequest(port,'/v1/status',token);
   check(current.ownerId===runtime.ownerId&&current.pid===runtime.pid&&current.startedAt===runtime.startedAt,'RUNTIME_OWNER_CHANGED');
   if(input.action==='status')return current;
-  endpoint.pathname='/v1/command';
-  const response=await fetch(endpoint,{method:'POST',redirect:'error',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify(input),signal:AbortSignal.timeout(30000)});
-  const value=await response.json();check(response.ok&&value.ok,value.error??'CONTROL_FAILED');return value.result;
+  const value=await localControlRequest(port,'/v1/command',token,input);check(value.ok,value.error??'CONTROL_FAILED');return value.result;
 }

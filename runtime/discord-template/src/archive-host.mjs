@@ -1,3 +1,4 @@
+import {readArtifact} from './worker.mjs';
 import path from 'node:path';
 import {mkdir,readFile,writeFile,rename,lstat,open,realpath,statfs} from 'node:fs/promises';
 import {runCommand} from './command.mjs';
@@ -7,10 +8,7 @@ import {check,digest,safePath,sourceIdentity} from './common.mjs';
 import {applyArchiveCorrections} from './archive-adapter.mjs';
 
 const maxJson=8*1024*1024;
-async function boundedFile(root,relative,max){
-  const p=await safePath(root,relative),s=await lstat(p);check(s.isFile()&&s.nlink===1&&s.size<=max,'ARCHIVE_FILE_INVALID');
-  const fd=await open(p,'r');try{const seen=await fd.stat();check(seen.ino===s.ino&&seen.dev===s.dev&&seen.size===s.size,'ARCHIVE_FILE_CHANGED');const bytes=Buffer.alloc(s.size+1);let n=0;while(n<bytes.length){const r=await fd.read(bytes,n,bytes.length-n,n);if(!r.bytesRead)break;n+=r.bytesRead;}check(n===s.size,'ARCHIVE_FILE_CHANGED');return bytes.subarray(0,n);}finally{await fd.close();}
-}
+async function boundedFile(root,relative,max){return readArtifact(await safePath(root,relative),max);}
 async function durableFile(p,bytes){const fd=await open(p,'wx',0o600);try{await fd.writeFile(bytes);await fd.sync();}finally{await fd.close();}}
 async function jsonFile(p,value){await durableFile(p,Buffer.from(JSON.stringify(value,null,2)+'\n'));}
 const permitted=(fn,b,phase)=>check(fn(structuredClone(b),phase)===true,'ARCHIVE_SCOPE_REVOKED');
@@ -18,7 +16,7 @@ const permitted=(fn,b,phase)=>check(fn(structuredClone(b),phase)===true,'ARCHIVE
 /** Existing recorder-compatible file sink. No hardcoded installation paths. */
 export function createArchiveSink({archiveRoot,ffmpeg='ffmpeg',authorize,timeoutMs=120000,maxEncodedBytes=64*1024*1024,maxPcmBytes=128*1024*1024,clock=Date.now}){
   check(typeof authorize==='function'&&Number.isSafeInteger(timeoutMs)&&timeoutMs>0&&Number.isSafeInteger(maxEncodedBytes)&&maxEncodedBytes>0,'ARCHIVE_HOST_CONFIG');
-  async function root(){const p=await realpath(archiveRoot);check(p===path.resolve(archiveRoot),'ARCHIVE_ROOT_LINK');return p;}
+  async function root(){const absolute=path.resolve(archiveRoot),drive=path.parse(absolute).root;const checked=await safePath(drive,path.relative(drive,absolute));return realpath(checked);}
   async function verify(receipt,b){
     permitted(authorize,b,'read_archive');check(receipt.sessionId===b.sessionId,'ARCHIVE_RECEIPT_BINDING');
     const r=await root(),dir=await safePath(r,b.sessionId);check(receipt.archiveRef===dir,'ARCHIVE_RECEIPT_BINDING');
