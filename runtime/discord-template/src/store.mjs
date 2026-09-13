@@ -18,14 +18,15 @@ export class Store {
       CREATE TABLE IF NOT EXISTS usage(day TEXT PRIMARY KEY, reserved_ms INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS voice_controls(guild TEXT NOT NULL,channel TEXT NOT NULL,suspension TEXT,PRIMARY KEY(guild,channel));
       CREATE TABLE IF NOT EXISTS voice_consents(guild TEXT NOT NULL,channel TEXT NOT NULL,actor TEXT NOT NULL,notice TEXT NOT NULL,granted INTEGER NOT NULL,updated TEXT NOT NULL,PRIMARY KEY(guild,channel,actor));
-      CREATE TABLE IF NOT EXISTS host_lock(name TEXT PRIMARY KEY, owner TEXT NOT NULL, pid INTEGER NOT NULL, created TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS host_lock(name TEXT PRIMARY KEY, owner TEXT NOT NULL, pid INTEGER NOT NULL, created TEXT NOT NULL, domain TEXT);
     `);
     if(!this.db.prepare('PRAGMA table_info(voice_consents)').all().some(c=>c.name==='interaction_id'))this.db.exec("ALTER TABLE voice_consents ADD COLUMN interaction_id TEXT NOT NULL DEFAULT '0'");
+    if(!this.db.prepare('PRAGMA table_info(host_lock)').all().some(c=>c.name==='domain'))this.db.exec('ALTER TABLE host_lock ADD COLUMN domain TEXT');
   }
   transaction(fn) {this.db.exec('BEGIN IMMEDIATE');try{const v=fn();this.db.exec('COMMIT');return v;}catch(e){this.db.exec('ROLLBACK');throw e;}}
   event(type,body,taskId=null){this.db.prepare('INSERT INTO events(task_id,type,at,body) VALUES(?,?,?,?)').run(taskId,type,new Date().toISOString(),JSON.stringify(body));}
-  claimHost(owner,pid,created){this.db.prepare('INSERT INTO host_lock VALUES(?,?,?,?)').run('runtime',owner,pid,created);}
-  replaceStaleHost(stale,owner,pid,created){return this.transaction(()=>{const removed=this.db.prepare('DELETE FROM host_lock WHERE name=? AND owner=? AND pid=? AND created=?').run('runtime',stale.owner,stale.pid,stale.created);check(removed.changes===1,'RUNTIME_LOCK_CHANGED');this.claimHost(owner,pid,created);});}
+  claimHost(owner,pid,created,domain=null){this.db.prepare('INSERT INTO host_lock(name,owner,pid,created,domain) VALUES(?,?,?,?,?)').run('runtime',owner,pid,created,domain);}
+  replaceStaleHost(stale,owner,pid,created,domain){return this.transaction(()=>{const removed=this.db.prepare('DELETE FROM host_lock WHERE name=? AND owner=? AND pid=? AND created=? AND domain IS ?').run('runtime',stale.owner,stale.pid,stale.created,stale.domain??null);check(removed.changes===1,'RUNTIME_LOCK_CHANGED');this.claimHost(owner,pid,created,domain);});}
   releaseHost(owner){this.db.prepare('DELETE FROM host_lock WHERE name=? AND owner=?').run('runtime',owner);}
   lock(){return this.db.prepare('SELECT * FROM host_lock WHERE name=?').get('runtime');}
   consent(guild,channel,actor,notice){const row=this.db.prepare('SELECT * FROM voice_consents WHERE guild=? AND channel=? AND actor=?').get(guild,channel,actor);return Boolean(row?.granted===1&&row.notice===notice);}

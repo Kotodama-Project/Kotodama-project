@@ -33,12 +33,16 @@ test('completed prose is a worker document but cannot become structured intent',
 test('failed remote owner initialization does not leave a runtime lock',async t=>{const {config,file,cleanup}=await configFixture(t);t.after(cleanup);config.owner={kind:'remote',url:'http://127.0.0.1:1',tokenEnv:'KOTODAMA_MISSING_TEST_TOKEN'};await atomicJson(file,config);await assert.rejects(startRuntime(file,{offline:true,log:()=>{}}),/OWNER_CREDENTIAL_REQUIRED/);const store=new Store(config.dataDir);try{assert.equal(store.lock(),undefined);}finally{store.close();}});
 test('runtime reclaims a stale host lock only after its recorded PID is gone',async t=>{
   const {config,file,cleanup}=await configFixture(t);let runtime;t.after(async()=>{await runtime?.close();await cleanup();});
-  const stale=new Store(config.dataDir);stale.claimHost('stale-owner',2147483647,'2000-01-01T00:00:00.000Z');stale.close();
-  runtime=await startRuntime(file,{offline:true,log:()=>{}});const lock=runtime.store.lock();assert.match(lock.owner,/^host-/);assert.notEqual(lock.owner,'stale-owner');assert.equal(lock.pid,process.pid);
+  const stale=new Store(config.dataDir);stale.claimHost('stale-owner',2147483647,'2000-01-01T00:00:00.000Z','fixture-runtime');stale.close();
+  runtime=await startRuntime(file,{offline:true,runtimeDomain:'fixture-runtime',log:()=>{}});const lock=runtime.store.lock();assert.match(lock.owner,/^host-/);assert.notEqual(lock.owner,'stale-owner');assert.equal(lock.pid,process.pid);assert.equal(lock.domain,'fixture-runtime');
+});
+test('runtime never reclaims a stale PID recorded by another runtime domain',async t=>{
+  const {config,file,cleanup}=await configFixture(t);t.after(cleanup);const foreign=new Store(config.dataDir);foreign.claimHost('foreign-owner',2147483647,'2000-01-01T00:00:00.000Z','container-a');foreign.close();
+  await assert.rejects(startRuntime(file,{offline:true,runtimeDomain:'container-b',log:()=>{}}),{code:'RUNTIME_RECOVERY_DOMAIN_MISMATCH'});const checkStore=new Store(config.dataDir);try{assert.equal(checkStore.lock().owner,'foreign-owner');}finally{checkStore.close();}
 });
 test('runtime never reclaims a host lock whose PID is still alive',async t=>{
-  const {config,file,cleanup}=await configFixture(t);t.after(cleanup);const live=new Store(config.dataDir);live.claimHost('other-live-owner',process.pid,'2000-01-01T00:00:00.000Z');live.close();
-  await assert.rejects(startRuntime(file,{offline:true,log:()=>{}}),{code:'RUNTIME_ALREADY_OWNED'});const checkStore=new Store(config.dataDir);try{assert.equal(checkStore.lock().owner,'other-live-owner');}finally{checkStore.close();}
+  const {config,file,cleanup}=await configFixture(t);t.after(cleanup);const live=new Store(config.dataDir);live.claimHost('other-live-owner',process.pid,'2000-01-01T00:00:00.000Z','fixture-runtime');live.close();
+  await assert.rejects(startRuntime(file,{offline:true,runtimeDomain:'fixture-runtime',log:()=>{}}),{code:'RUNTIME_ALREADY_OWNED'});const checkStore=new Store(config.dataDir);try{assert.equal(checkStore.lock().owner,'other-live-owner');}finally{checkStore.close();}
 });
 test('runtime replaces an existing linked control token without writing through it',async t=>{
   const {config,file,root,cleanup}=await configFixture(t);await mkdir(config.dataDir,{recursive:true});
