@@ -1,6 +1,6 @@
 # プロジェクトの地図
 
-Kotodamaの目的は、会話から意図・仕事・成果・学習をつなぎ、人とAIが同じ目的・文脈・権限を共有して働けることです。これはREADMEから実装と検証へ進む入口であり、Taskや会社のCurrent Truthを所有する台帳ではありません。
+Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なときだけ仕事を進める一つの製品です。公開本体を統合・説明・導入の最優先の中心とし、[製品方向](PRODUCT-DIRECTION.md)からgoal、main、candidate、unconnected、hypothesisを確認できます。これはREADMEから実装と検証へ進む入口であり、Taskや会社のCurrent Truthを所有する台帳ではありません。
 
 ## 要件と確認する場所
 

@@ -1,10 +1,12 @@
 # Kotodama
 
-**会話を、監査可能な意図・仕事・成果・学習へ。**
+**楽しく過ごし、一緒に考え、必要なときだけ仕事を進める。**
 
-Kotodama は、人間が普段どおり話し、相談し、アイデアを共有するところから、その中にある意図を AI と人間が一緒に理解し、要件、判断、仕事、成果物、検証証拠へ接続する **Local-first Company OS** を目指すプロジェクトです。
+Kotodama は、人とagentが同じ場で話し、理解を共有できる一つの製品を目指しています。雑談を楽しむ、一緒にアイデアを考える、必要が生まれたら仕事を頼む。どれも正当な使い方で、雑談だけで終わっても失敗ではありません。雑談を新しい実行依頼や追加の許可とみなしたり、生産性へ誘導したりしません。一方、既存の目的・許可がある読取調査、知識整理、改善提案、ToDo確認、継続作業は、新しい命令を毎回待たずに進められます。発話や推測を候補として整理することと、新しい仕事の実行権限を得ることは別です。
 
-私たちが作ろうとしているのは、単独の Discord Bot、文字起こしサービス、Markdown テンプレート集、エージェントを並べただけの自動化基盤ではありません。Discord の Voice・テキスト、Issue、文書、業務データを会社への入口として、人間と AI が目的、文脈、権限境界、証拠を共有しながら、会社を立ち上げ、仕事を進め、価値を提供し、学習できる環境です。
+公開のこのリポジトリを、製品統合・説明・導入の最優先の中心にします。カジュアル利用は個人や小さなグループのための最小構成で、組織の役割や管理は必要に応じて足す構成です。別製品を並行して育てる方針ではありません。Discord、Slack、OS、webは任意の入口です。人もagentも、許可された同じSource・Context・Knowledge・訂正・結果を参照し、人向け説明も同じ根拠から作ることを目指します。
+
+新しく参加した人やagentが資料から話に追いつくこと、相談を成果へつなぐこと、**Local-first Company OS**として組織を動かすことは、選べる利用例です。すべての利用者にその順番を強制しません。[製品方向と実装状況](docs/PRODUCT-DIRECTION.md)に、目標、mainにある実装、未統合候補、未接続、設計仮説を分けて記載しています。
 
 > [!IMPORTANT]
 > このリポジトリは **Incomplete Public Preview** です。公開している Company starter、schema、validator、runtime/evidence candidate は試せますが、Public Beta の利用受付、Discord 招待、公開 Voice Bot はまだ提供していません。公開アクセスを開くための Final Human GO も完了していません。最新の境界は [Project Status](STATUS.md) を確認してください。
@@ -13,8 +15,8 @@ Kotodama は、人間が普段どおり話し、相談し、アイデアを共�
 
 作業を再開する方は **[プロジェクトの地図](docs/PROJECT-MAP.md)** から、目標に対応する文書・実装・PR の関係を確認できます。エージェントの開始手順は [AGENTS.md](AGENTS.md) にまとめています。
 
-Kotodama は Voice や Company starter の単機能プロジェクトではなく、会話から
-会社の学習までを一つの証拠鎖でつなぐ Company OS を目指しています。この長い
+Kotodama はカジュアルな会話から組織での協働までを支える一つの製品です。
+以下のCompany OSや仕事の説明は、必要に応じて選ぶ構成です。この長い
 README は、最初から最後まで一枚の壁として読む必要はありません。
 
 | 読み方 | ここで分かること | 入口 |
@@ -27,9 +29,9 @@ README は、最初から最後まで一枚の壁として読む必要はあり�
 
 ## Company AGI / Owner-confirmed direction
 
-> **会話を、根拠と権限を失わずに、専門Agentの仕事と学習へ変える。**
+> **仕事を望んだとき、根拠と権限を失わずに専門Agentへつなぐ。**
 
-これがKotodamaのCompany AGIの約束です。正本は
+Company AGIはKotodamaの組織利用の方向です。雑談の仕事化を必須にする約束ではありません。従来の詳細な方向記録は
 [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md)。
 README は Projection であり、実行権限、Current Truth、Final Human GOを
 作りません。この節は canonical doc の最小 projection であり、model routing、
@@ -64,7 +66,7 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
   plus a `STOP` file, complete-envelope digest/replay/restore/projection checks,
   and deny-by-default MCP access. This is **design candidate only**: no runtime,
   database, archive, provider, public effect, Promotion, or Current Truth is adopted.
-- IngressはDiscord text / Voice、Codex、Claude、Notion、GitHub、Google Drive、n8n、
+- IngressはDiscord text / Voice、Codex、接続済みagent client、Notion、GitHub、Google Drive、n8n、
   Microsoft Teams、Google Meet、Zoom。
   raw evidenceはsource/session/channel、speaker または individual track、timestamp/span、raw ASR、
   consent/retention revision、digestを保持し、derived transcript / minutes / Intentは
@@ -94,7 +96,10 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
   synthesis・human-facing judgmentは必要時にGPT-5.6 Sol、Terraも明示選択可とし、routing rationale、
   exact runtime model/provenance、evidenceを記録します。Identity-bound Codex subscriptionはcandidate、
   General-purpose local LLMはdeferred、local ASR/VAD・speaker support・encoder・tiny deterministic
-  specialistsは許容し、metered APIは除外です。
+  specialistsは許容します。従来記録のmetered API除外は歴史的な方針であり、
+  現在は用途・許可・費用上限を確認したAPI利用も選択肢です。
+  公開Live実装候補は[#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69) /
+  [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71)で、mainでの利用可能性とは分けます。
 - Archive Target interfaceはprovider-neutralのまま、private v1 backendはordinary encrypted-file
   package + ZFS snapshotです。dedicated synthetic ZFS test datasetでは、暗号化packageの
   transfer、remount、authenticated restore、plaintext byte比較、8/8 file-hash restore readbackまで
@@ -158,7 +163,7 @@ Public Beta access は未提供、Final Human GO は未完了です。
 
 ## North Star
 
-> 人間の意図を最上位の基準として、会話から意図を抽出し、監査可能な仕事・成果物・学習へ変換する。
+> 人間の意図を最上位に、楽しく過ごすこと、理解を共有すること、必要な仕事を進めることを支える。
 
 会話は重要な Source Evidence です。しかし、会話や AI の推測だけで会社の Current Truth を書き換えることはありません。提案、決定、実装、検証、採用を分離することで、速く作りながら、後から次を確認できる状態を作ります。
 
@@ -173,7 +178,7 @@ Public Beta access は未提供、Final Human GO は未完了です。
 
 会社の仕事は、会話の中から始まることが多い一方、その意図はチャット、議事録、Issue、個人の記憶へ散らばります。自動化を追加しても、目的と実装がずれたり、誰が許可したのか分からなくなったり、local test を本番稼働と誤認したりすれば、会社の能力にはなりません。
 
-Kotodama は、この分断を一つの証拠鎖でつなぐことを目指します。
+Kotodama は、仕事を望む場面では、この分断を一つの証拠鎖でつなぐことを目指します。以下は新しい依頼や既存の目的・許可に基づく仕事の経路で、雑談の必須手順ではありません。
 
 ```text
 会話・音声・Issue・文書
@@ -222,17 +227,17 @@ Kotodama における Discord は、Bot の設置場所ではなく、人間と 
 
 ただし、Discord 自体を Company SSOT にはしません。メッセージや transcript は Source Evidence であり、Human Decision、Capability Grant、Verification Receipt、Promotion、Current Truth は Discord から独立した統治層で扱います。
 
-Conversation ingress は Discord の text / Voice だけではありません。Codex、Claude、Notion、GitHub、
+Conversation ingress は Discord の text / Voice だけではありません。Codex、接続済みagent client、Notion、GitHub、
 Google Drive、n8n も同じ evidence boundary へ接続します。source/session/channel、speaker または
 individual track、timestamp/span、raw ASR text、consent/retention revision、digest を保持し、raw
 evidence と derived record を分離します。
 
 ## 理想のユーザー体験
 
-Kotodama が目指す体験は、長い仕様書を最初に書くことではありません。
+Kotodamaでは、雑談だけを続けても、一緒に考えるだけでも構いません。目的と使いたい資料を伝え、仕事が必要になった場合には次の経路を選べます。長い仕様書や固定wizardを最初に埋めることは求めません。
 
-1. 人間が Discord text / Voice、Codex、Claude、Notion、GitHub、Google Drive、n8n で普段どおり相談する
-2. Kotodama が目的、受益者、制約、成功条件、停止条件の候補を抽出する
+1. 人間が Discord text / Voice、Codex、接続済みagent client、Notion、GitHub、Google Drive、n8n で普段どおり相談する
+2. 許可された整理の範囲で、Kotodama が目的、受益者、制約、成功条件、停止条件の候補を抽出する。候補の存在を新しい実行依頼や追加権限とはみなさない
 3. GrillU が不確実性・影響・authorityに応じて、必要な確認だけを適応的に行う
 4. 確認済みの候補を、権限と停止条件を持つ Work Order へ変換する
 5. AI または人間が bounded execution lane で仕事を進める
@@ -251,7 +256,9 @@ self-approve、self-promote、self-executeしません。
 
 ## Voice — 最初に価値を体感する入口
 
-Voice は付属機能ではなく、Kotodama の思想を最短で体感できる最初のプロダクト面です。目指しているのは、音声を一つの文章へ変換するだけの仕組みではありません。
+Voiceは選べる入口の一つです。目指すagentは最初に静かに場と許可contextを理解し、役立つ場合にagentと分かる自己紹介で参加します。入室直後の発話を強制しません。現行公開候補は呼びかけ中心で、自発参加は未実装・未受入です。聞く、話す、記録する、仕事を実行する権限と、その停止・取消を分けます。
+
+以下は記録と仕事を選んだ場合の処理像です。雑談だけの利用に記録・成果化を強制するものではありません。
 
 ```text
 raw PCM + ingress event JSON
