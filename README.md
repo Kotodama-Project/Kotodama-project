@@ -839,6 +839,10 @@ python3 -S -B tools/smoke_company_pack_review_chain.py
 
 ## Quick Start — Company starter を試す
 
+Discordから使う最小構成の実装候補は[Discord runtime](docs/DISCORD-RUNTIME.md)へ。
+以下のCompany starterとは別の任意経路です。実マイクの連続応答品質と既存組織ownerへの
+自動接続はまだ受入済みではありません。
+
 ### 先にCLIの境界を確認する
 
 公開している14個のCompany Pack CLIは、`-h`または`--help`で使い方と共通境界を
