@@ -224,10 +224,25 @@ test('an occupancy exit drains old source text but disables execution and speech
   assert.equal(f.sources.length,1);assert.equal(f.sources[0].source.text,'最後の発言');assert.equal(f.sources[0].source.metadata.voiceEpoch,epoch);assert.deepEqual(f.sources[0].flags,{execute:false,reply:false,analyze:false});assert(f.room.epoch>epoch);assert.equal(session.provider.active,false);
 });
 
-test('leaving waits for an already draining transcript before destroying its connection',async t=>{
+test('leaving disconnects promptly while already sealed transcription finishes',async t=>{
   const f=await fixture(t);f.member(a);f.config.voice.apiKeyEnv='KOTODAMA_OCCUPANCY_TEST_KEY';process.env.KOTODAMA_OCCUPANCY_TEST_KEY='fixture';t.after(()=>delete process.env.KOTODAMA_OCCUPANCY_TEST_KEY);
   await f.room.control.check();const session=await f.room.session(a);session.turns.end(session.turns.begin(0),100);
   let finishDrain;const originalClose=session.provider.close.bind(session.provider);session.provider.close=async()=>{await new Promise(resolve=>{finishDrain=resolve;});await originalClose();};
-  const draining=f.room.endSession(session);assert.equal(f.room.sessions.size,0);const closing=voiceCommand(f.room,'leave');await flush();assert.equal(f.connections[0].destroyCount,0);
-  finishDrain();await draining;await closing;assert.equal(f.sources.length,1);assert.equal(f.connections[0].destroyCount,1);assert.equal(f.sources[0].flags.execute,false);
+  const draining=f.room.endSession(session);assert.equal(f.room.sessions.size,0);const closing=voiceCommand(f.room,'leave');await flush();const disconnectedBeforeDrain=f.connections[0].destroyCount;
+  finishDrain();await draining;await closing;assert.equal(disconnectedBeforeDrain,1);assert.equal(f.sources.length,1);assert.equal(f.connections[0].destroyCount,1);assert.equal(f.sources[0].flags.execute,false);
+});
+
+test('explicit conversation start bypasses wake transcription, retains scope and supports end',async t=>{
+  const f=await fixture(t);f.member(a);f.config.voice.apiKeyEnv='KOTODAMA_OCCUPANCY_TEST_KEY';process.env.KOTODAMA_OCCUPANCY_TEST_KEY='fixture';t.after(()=>delete process.env.KOTODAMA_OCCUPANCY_TEST_KEY);
+  await f.room.control.check();await assert.rejects(f.room.control.command('start_conversation',{actor:'outsider'}),{code:'VOICE_CONVERSATION_ACTOR_REQUIRED'});
+  await f.room.control.command('start_conversation',{actor:a});const first=f.room.sessions.get(a);assert(first.conversationActive);assert(first.provider.active);
+  await f.room.control.command('start_conversation',{actor:a});assert.equal(f.room.sessions.get(a),first);
+  await f.room.control.command('end_conversation',{actor:a});assert.equal(f.room.sessions.size,0);
+});
+
+test('an active room refuses reassignment to another VM, agent, or workspace',async t=>{
+  const f=await fixture(t);f.member(a);await f.room.control.check();assert(f.room.connectionReady());
+  f.config.agentBinding={agentId:'different-agent',vmId:'vm-other'};await f.room.control.check();assert.equal(f.room.connection,null);assert.equal(f.room.control.state,'scope');
+  delete f.config.agentBinding;await f.room.control.check();assert(f.room.connectionReady());
+  f.config.worker.workspace+='-other';await f.room.control.check();assert.equal(f.room.connection,null);
 });

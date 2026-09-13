@@ -85,3 +85,13 @@ test('empty local ASR packets cannot renew the billable conversation timeout',as
   await room.queueLocalTurn(room.localState(a),{id:'silence',text:'',startMs:0,endMs:1000});
   await new Promise(resolve=>setTimeout(resolve,1100));assert.equal(room.sessions.size,0);assert(room.connectionReady());
 });
+
+test('leaving seals the last local utterance and disconnects before ASR completes',async t=>{
+  let resolveAsr;const {room,sources}=await fixture(t,provider,{configure:c=>{c.voice.localAsr={maxUtteranceSeconds:30};}});
+  room.localAsr={transcribe:()=>new Promise(resolve=>{resolveAsr=resolve;})};
+  const stream=new PassThrough();let destroyed=false;
+  room.connection={state:{status:State.Ready},receiver:{subscribe:()=>stream},destroy(){destroyed=true;this.state={status:State.Destroyed};}};
+  await room.captureLocal(a);const encoder=new OpusScript(48000,2,OpusScript.Application.AUDIO);const packet=Buffer.from(encoder.encode(Buffer.alloc(3840),960));for(let i=0;i<6;i++)stream.write(packet);encoder.delete();
+  const closing=room.close();await new Promise(resolve=>setImmediate(resolve));assert(destroyed);assert.equal(typeof resolveAsr,'function');resolveAsr('最後の発言');await closing;
+  assert.equal(sources.length,1);assert.equal(sources[0].s.text,'最後の発言');assert.equal(sources[0].flags.reply,false);assert.equal(sources[0].flags.execute,false);
+});

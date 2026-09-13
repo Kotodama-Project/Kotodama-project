@@ -11,7 +11,7 @@ export const commandDefinition={name:'kotodama',description:'ことだまに相�
   {type:1,name:'tasks',description:'自分の仕事を見る'},
   {type:1,name:'consent',description:'音声処理の運用と、自分の停止設定を確認する'},
   ...['result','stop','resume'].map(name=>({type:1,name,description:{result:'成果を読む',stop:'仕事を止める',resume:'停止した仕事を再開する'}[name],options:[{type:3,name:'task',description:'仕事のID',required:true}]})),
-  {type:1,name:'voice',description:'音声モード・録音・発話を操作する',options:[{type:3,name:'mode',description:'操作',required:true,choices:['assist','minutes','join','pause','resume','stop_speech','leave','status'].map(v=>({name:v,value:v}))}]}
+  {type:1,name:'voice',description:'音声モード・録音・発話を操作する',options:[{type:3,name:'mode',description:'操作',required:true,choices:['assist','minutes','join','pause','resume','stop_speech','start_conversation','end_conversation','leave','status'].map(v=>({name:v,value:v}))}]}
 ]};
 
 export class DiscordAdapter {
@@ -78,7 +78,7 @@ export class DiscordAdapter {
       else if(sub==='stop'){await this.pipeline.stop(i.options.getString('task',true),i.user.id);text='停止を受け付けました。実行中の処理の終了を確認しています。';}
       else if(sub==='resume'){const t=await this.pipeline.resume(i.options.getString('task',true),i.user.id);text=`再開しました。${t.id}`;}
       else if(sub==='voice'){check(this.voice,'VOICE_NOT_CONFIGURED');const mode=i.options.getString('mode',true);
-        text=voiceStatusText(await voiceCommand(this.voice,mode));
+        text=voiceStatusText(await voiceCommand(this.voice,mode,{actor:i.user.id}));
       }
       await i.editReply({content:shortText(text),allowedMentions:{parse:[]}});
     }catch(e){await i.editReply({content:`実行できませんでした：${errorCode(e)}`,allowedMentions:{parse:[]}});}

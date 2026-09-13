@@ -8,10 +8,10 @@ import {voiceNotice} from './consent.mjs';
 import {check,uid,errorCode} from './common.mjs';
 import {VoiceControl} from './voice-control.mjs';
 
-const voiceBinding=config=>JSON.stringify({transcriptSource:config.voice.transcriptSource,assistModel:config.voice.assistModel,minutesModel:config.voice.minutesModel,localAsr:config.voice.transcriptSource==='local'?config.voice.localAsr:null});
+const voiceBinding=config=>JSON.stringify({installation:config.installation,agentBinding:config.agentBinding,applicationId:config.discord.applicationId,workspace:config.worker.workspace,owner:config.owner,transcriptSource:config.voice.transcriptSource,assistModel:config.voice.assistModel,minutesModel:config.voice.minutesModel,localAsr:config.voice.transcriptSource==='local'?config.voice.localAsr:null});
 function audible(pcm){for(let i=0;i<pcm.length;i+=2)if(Math.abs(pcm.readInt16LE(i))>96)return true;return false;}
 const escaped=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-function addressed(text,config){return config.voice.wakeWords.some(word=>new RegExp(`(?:^|[、,。.!！?？\\s])${escaped(word)}(?:[、,。.!！?？\\s]|$)`,'i').test(text));}
+export function addressed(text,config){return config.voice.wakeWords.some(word=>new RegExp(`(?:^|[、,。.!！?？\\s])${escaped(word)}(?:[、,。.!！?？\\s]|$|(?:あ|ねえ|えっと)?(?:こんにちは|こんばんは|おはよう|聞こえ|きこえ|教えて|おしえて|お願い|調べて|確認して|どう思う))`,'i').test(text));}
 
 export class VoiceRoom {
   constructor({client,config,store,pipeline,policy=()=>config,onError=()=>{},sourceReaders=async()=>[],providerFactory=o=>new VoiceProvider(o),localAsrFactory=o=>new LocalAsr(o),connectionFactory=joinVoiceChannel,waitForState=entersState}){
@@ -140,7 +140,13 @@ export class VoiceRoom {
   queueLocalTurn(state,turn){
     state.chain=state.chain.then(async()=>{
       if(!turn.text||!this.allowed(state.actor))return;const readers=await this.sourceReaders();if(!this.allowed(state.actor))return;
-      const cfg=this.policy(),identified=!cfg.discord.unattributedUsers.includes(state.actor),called=addressed(turn.text,cfg);
+      const cfg=this.policy(),identified=!cfg.discord.unattributedUsers.includes(state.actor);let transcriptCorrection=null;
+      if(cfg.voice.contextCorrection&&identified&&typeof this.pipeline.analyzer?.correctTranscript==='function'){
+        try{const context=this.store.sources(state.actor).filter(s=>s.guildId===cfg.discord.guildId&&s.channelId===cfg.discord.voiceChannelId&&s.actorId===state.actor).slice(-3);transcriptCorrection=await this.pipeline.analyzer.correctTranscript(turn.text,context,cfg.voice.wakeWords);}
+        catch{this.onError('TRANSCRIPT_CORRECTION_FAILED');}
+      }
+      if(!this.allowed(state.actor))return;
+      const called=addressed(turn.text,cfg)||Boolean(transcriptCorrection&&!transcriptCorrection.uncertain&&addressed(transcriptCorrection.text,cfg));
       const eligible=()=>identified&&state.epoch===this.epoch&&this.connectionReady()&&!this.paused&&!this.recovering&&this.audienceAllowed()&&this.audience().includes(state.actor);
       let session=this.sessions.get(state.actor),startError;
       if(called&&this.mode==='assist'&&eligible()&&(!session||!this.current(session))){
@@ -149,7 +155,7 @@ export class VoiceRoom {
       this.store.event('voice.local_turn',{voiceSession:state.id,wakeDetected:called,eligible:eligible(),liveActive:Boolean(session?.provider.active),textChars:turn.text.length});
       if(session&&eligible())session.lastHumanInput=Date.now();
       if(called&&session)session.conversationActive=true;const active=Boolean(session&&this.current(session)&&session.conversationActive&&identified);
-      const source={provider:'discord',guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceId:turn.id,actorId:identified?state.actor:null,revision:++state.revision,text:turn.text,final:true,readers,metadata:{kind:'voice',sessionId:session?.id??state.id,startMs:turn.startMs,endMs:turn.endMs,createdAt:new Date().toISOString(),mode:this.mode,voiceEpoch:state.epoch,privacyBasis:state.privacyBasis==='owner_managed'?'owner_managed_scope':'participant_opt_in_record',privacyNoticeId:state.privacyNoticeId,attribution:identified?'discord_input_track':'unknown_speaker',inputAccountId:state.actor,finality:'local_asr_completed',transcriptOrigin:'local_asr'}};
+      const source={provider:'discord',guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceId:turn.id,actorId:identified?state.actor:null,revision:++state.revision,text:turn.text,final:true,readers,metadata:{kind:'voice',sessionId:session?.id??state.id,startMs:turn.startMs,endMs:turn.endMs,createdAt:new Date().toISOString(),mode:this.mode,voiceEpoch:state.epoch,privacyBasis:state.privacyBasis==='owner_managed'?'owner_managed_scope':'participant_opt_in_record',privacyNoticeId:state.privacyNoticeId,attribution:identified?'discord_input_track':'unknown_speaker',inputAccountId:state.actor,finality:'local_asr_completed',transcriptOrigin:'local_asr',conversationActive:active,transcriptCorrection}};
       const result=await this.pipeline.ingest(source,{execute:active&&eligible()&&cfg.discord.operators.includes(state.actor),reply:active&&eligible()&&this.mode==='assist',analyze:this.mode==='minutes'||active&&eligible()});
       if(startError&&!startError.voiceProviderReported)this.onError(errorCode(startError));
       return result;
@@ -157,7 +163,7 @@ export class VoiceRoom {
   }
   async captureLocal(actor){
     if(this.localCaptures.has(actor))return;const connection=this.connection,state=this.localState(actor),live=this.sessions.get(actor);if(live&&(!this.current(live)||live.mode!=='assist'))return;
-    const decoder=new OpusScript(48000,2,OpusScript.Application.AUDIO),stream=connection.receiver.subscribe(actor,{end:{behavior:EndBehaviorType.AfterSilence,duration:this.config.voice.vadSilenceMs}});const chunks=[];let bytes=0,finished=false,rejected=false,startMs=state.ms;const capture={stream,stop:()=>{rejected=true;stream.destroy();}},limit=this.policy().voice.localAsr.maxUtteranceSeconds*48000;this.localCaptures.set(actor,capture);
+    const decoder=new OpusScript(48000,2,OpusScript.Application.AUDIO),stream=connection.receiver.subscribe(actor,{end:{behavior:EndBehaviorType.AfterSilence,duration:this.config.voice.vadSilenceMs}});const chunks=[];let bytes=0,finished=false,rejected=false,startMs=state.ms;const capture={stream,stop:({seal=false}={})=>{rejected=!seal;stream.destroy();if(seal)finish();}},limit=this.policy().voice.localAsr.maxUtteranceSeconds*48000;this.localCaptures.set(actor,capture);
     const finish=()=>{
       if(finished)return;finished=true;if(this.localCaptures.get(actor)===capture)this.localCaptures.delete(actor);decoder.delete();
       if(rejected||bytes<4800)return;const pcm=Buffer.concat(chunks,bytes),turn={id:uid('utterance'),startMs,endMs:state.ms};
@@ -209,9 +215,9 @@ export class VoiceRoom {
     check(['stop_speech','end_conversation'].includes(action)&&source?.metadata?.kind==='voice','VOICE_ACTION_INVALID');if(source.metadata.voiceEpoch!==this.epoch||!source.actorId)return;
     await this.stopSpeech({interruptProvider:action==='stop_speech'});if(action==='end_conversation'){const session=this.sessions.get(source.actorId);if(session&&session.epoch===this.epoch){session.conversationActive=false;await this.endSession(session);}}
   }
-  async pause(){
+  async pause({sealLocal=false}={}){
     this.controlGeneration++;this.paused=true;this.epoch++;const attempt=this.joining;this.joining=null;attempt?.abort.abort();
-    for(const capture of this.localCaptures.values())capture.stop();const speech=this.stopSpeech({interruptProvider:false});for(const s of this.sessions.values())void this.endSession(s).catch(e=>this.onError(errorCode(e)));await Promise.allSettled([speech,...this.draining]);
+    for(const [actor,capture] of this.localCaptures)capture.stop({seal:sealLocal&&this.allowed(actor)});const speech=this.stopSpeech({interruptProvider:false});for(const s of this.sessions.values())void this.endSession(s).catch(e=>this.onError(errorCode(e)));await Promise.allSettled([speech,...this.draining]);
   }
   async setMode(mode){
     check(['assist','minutes'].includes(mode),'VOICE_MODE_INVALID');
@@ -223,7 +229,10 @@ export class VoiceRoom {
   async close(){
     if(this.closing)return this.closing;
     clearInterval(this.policyTimer);const connection=this.connection;this.connection=null;this.recovering?.abort.abort();this.recovering=null;
-    this.closing=this.pause().finally(()=>{if(connection&&connection.state?.status!==VoiceConnectionStatus.Destroyed)connection.destroy();this.closing=null;});return this.closing;
+    this.closing=this.pause({sealLocal:true}).finally(()=>{this.closing=null;});
+    // A sealed transcript may finish after departure; it must not keep the Bot in the VC.
+    if(connection&&connection.state?.status!==VoiceConnectionStatus.Destroyed)connection.destroy();
+    return this.closing;
   }
   async dispose(){await this.control.stop();for(const event of ['voiceStateUpdate','channelUpdate','guildMemberUpdate','guildMemberRemove','roleUpdate','roleDelete','threadMembersUpdate'])this.client.off?.(event,this.accessChanged);}
 }

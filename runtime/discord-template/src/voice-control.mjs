@@ -48,10 +48,16 @@ export class VoiceControl {
     await room.join({shouldJoin:()=>!this.stopped&&!this.suspension&&room.policy().voice.autoJoin&&room.audienceAllowed()});
     this.state='connected';
   }
-  async command(mode){
-    check(['join','pause','resume','leave','stop_speech','assist','minutes','status'].includes(mode),'VOICE_MODE_INVALID');
+  async command(mode,{actor}={}){
+    check(['join','pause','resume','leave','stop_speech','assist','minutes','status','start_conversation','end_conversation'].includes(mode),'VOICE_MODE_INVALID');
     check(!this.stopped||mode==='status','RUNTIME_STOPPING');const room=this.room;
-    if(mode==='pause'||mode==='leave'){
+    if(mode==='start_conversation'||mode==='end_conversation'){
+      check(typeof actor==='string'&&room.policy().discord.operators.includes(actor)&&room.allowed(actor)&&room.audience().includes(actor),'VOICE_CONVERSATION_ACTOR_REQUIRED');
+      if(mode==='start_conversation'){
+        check(room.mode==='assist'&&!this.suspension,'VOICE_CONVERSATION_UNAVAILABLE');
+        const session=await room.session(actor);session.conversationActive=true;session.lastHumanInput=Date.now();
+      }else{const session=room.sessions.get(actor);if(session)await room.endSession(session);}
+    }else if(mode==='pause'||mode==='leave'){
       this.suspend(mode); // Invalidate before awaiting any pending connection or drain.
       if(mode==='leave'||room.joining)await room.close();else await room.pause();
     }else if(mode==='join'||mode==='resume'){
@@ -64,5 +70,5 @@ export class VoiceControl {
   async stop(){this.stopped=true;clearInterval(this.timer);this.room.client.off('voiceStateUpdate',this.onOccupancy);await this.room.close();await this.running;}
 }
 
-export async function voiceCommand(room,mode){return room.control.command(mode);}
+export async function voiceCommand(room,mode,options){return room.control.command(mode,options);}
 export function voiceStatusText(status){const live=status.liveSessions?`Live会話 ${status.liveSessions}件`:status.transcriptSource==='local'?'ローカル聞き役':'Live聞き役';return `音声: ${status.mode} / ${status.connected?'接続中':'未接続'} / ${status.paused?'録音停止中':'受付中'} / ${live} / 自動接続${status.autoJoin?'オン':'オフ'} / ${status.waitingText}`;}
