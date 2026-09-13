@@ -110,3 +110,18 @@ test('natural Live playback precedes ASR and remains bound to the original audie
   assert(room.reply?.started);assert.equal(room.reply.naturalSession,session);assert(room.canPlay(room.reply));
   channel.members.set('100000000000000099',{id:'100000000000000099',user:{bot:false}});assert.equal(room.canPlay(room.reply),false);await room.close();
 });
+
+test('the receiver archives original 48k mono and links the fast transcript before leaving',async t=>{
+  const {room,sources}=await fixture(t,provider,{configure:c=>{c.voice.localAsr={maxUtteranceSeconds:30};}});room.localAsr={transcribe:async()=> '最後の記録'};
+  let packets=0,seals=0;room.archive={append:(actor,pcm,time)=>{assert.equal(actor,a);assert.equal(pcm.length,1920);assert(Number.isSafeInteger(time));packets++;return {sessionId:'session-fixture'};},seal:()=>{seals++;}};
+  const stream=new PassThrough();room.connection={state:{status:State.Ready},receiver:{subscribe:()=>stream},destroy(){this.state={status:State.Destroyed};}};
+  await room.captureLocal(a);const encoder=new OpusScript(48000,2,OpusScript.Application.AUDIO);const packet=Buffer.from(encoder.encode(Buffer.alloc(3840),960));for(let i=0;i<6;i++)stream.write(packet);encoder.delete();await room.close();
+  assert.equal(packets,6);assert.equal(seals,1);assert.deepEqual(sources[0].s.metadata.archiveSessionRefs,['session-fixture']);
+});
+
+test('private project lookup narrows a formerly shared Live session audience',async t=>{
+  const {room,channel}=await fixture(t,provider,{configure:c=>{c.voice.naturalConversation=true;}});const session=await room.session(a);
+  assert.equal((await session.provider.options.onContext('資料')).status,'individual_conversation_required');
+  channel.members.delete(b);await session.provider.options.onContext('資料');assert.deepEqual(session.readers,[a]);
+  session.provider.options.onAudio(Buffer.alloc(960),session.provider.sessionId,0);channel.members.set(b,{id:b,user:{bot:false}});assert.equal(room.canPlay(room.reply),false);await room.close();
+});

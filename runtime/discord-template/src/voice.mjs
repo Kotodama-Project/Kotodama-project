@@ -1,15 +1,16 @@
+import {readProjectContext} from './project-context.mjs';
 import {SpeechAdmission} from './speech-admission.mjs';
 import {Readable} from 'node:stream';
 import OpusScript from 'opusscript';
 import {joinVoiceChannel,entersState,VoiceConnectionStatus,EndBehaviorType,createAudioPlayer,createAudioResource,StreamType,NoSubscriberBehavior} from '@discordjs/voice';
-import {VoiceProvider,pcm48StereoTo24Mono,pcm24MonoTo48Stereo} from './voice-providers.mjs';
+import {VoiceProvider,pcm48StereoTo24Mono,pcm24MonoTo48Stereo,pcm48StereoToMono} from './voice-providers.mjs';
 import {LocalAsr} from './local-asr.mjs';
 import {TranscriptTurns} from './transcripts.mjs';
 import {voiceNotice} from './consent.mjs';
 import {check,uid,errorCode} from './common.mjs';
 import {VoiceControl} from './voice-control.mjs';
 
-const voiceBinding=config=>JSON.stringify({installation:config.installation,agentBinding:config.agentBinding,applicationId:config.discord.applicationId,workspace:config.worker.workspace,owner:config.owner,naturalConversation:config.voice.naturalConversation,conversationStart:config.voice.conversationStart,transcriptSource:config.voice.transcriptSource,assistModel:config.voice.assistModel,minutesModel:config.voice.minutesModel,localAsr:config.voice.transcriptSource==='local'?config.voice.localAsr:null});
+const voiceBinding=config=>JSON.stringify({installation:config.installation,agentBinding:config.agentBinding,applicationId:config.discord.applicationId,workspace:config.worker.workspace,owner:config.owner,storeAudio:config.voice.storeAudio,archive:config.archive,naturalConversation:config.voice.naturalConversation,conversationStart:config.voice.conversationStart,transcriptSource:config.voice.transcriptSource,assistModel:config.voice.assistModel,minutesModel:config.voice.minutesModel,localAsr:config.voice.transcriptSource==='local'?config.voice.localAsr:null});
 function audible(pcm){for(let i=0;i<pcm.length;i+=2)if(Math.abs(pcm.readInt16LE(i))>96)return true;return false;}
 const escaped=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 export function addressed(text,config){return config.voice.wakeWords.some(word=>new RegExp(`(?:^|[、,。.!！?？\\s])${escaped(word)}(?:[、,。.!！?？\\s]|$|(?:あ|ねえ|えっと)?(?:こんにちは|こんばんは|おはよう|聞こえ|きこえ|教えて|おしえて|お願い|調べて|確認して|どう思う))`,'i').test(text));}
@@ -60,7 +61,7 @@ export class VoiceRoom {
         if(this.reply&&!this.canPlay(this.reply))void this.stopSpeech();
         if(!this.targetMatches()||this.audience().some(actor=>!this.allowed(actor))){void this.close();return;}
         if([...this.sessions.values()].some(s=>!this.privacyMatches(s))){void this.pause();return;}
-        for(const s of this.sessions.values())if(!this.allowed(s.actor))void this.endSession(s,{drain:false});else if(!this.audience().includes(s.actor))void this.endSession(s);
+        for(const s of this.sessions.values())if(s.readers&&this.audience().some(id=>!s.readers.includes(id)))void this.endSession(s,{drain:false});else if(!this.allowed(s.actor))void this.endSession(s,{drain:false});else if(!this.audience().includes(s.actor))void this.endSession(s);
       },250);this.policyTimer.unref();
     }catch(e){if(connection){if(this.connection===connection)this.connection=null;if(connection.state?.status!==VoiceConnectionStatus.Destroyed)connection.destroy();}throw e;}
     finally{if(this.joining===attempt)this.joining=null;}
@@ -89,7 +90,7 @@ export class VoiceRoom {
       }).catch(e=>{if(!e.voiceProviderReported)this.onError(errorCode(e));});return s.chain;
     };
     s.turns=new TranscriptTurns({onTurn:emit});s.readers=this.audience().filter(actor=>this.allowed(actor));if(cfg.voice.naturalConversation)s.conversationActive=true;
-    s.provider=this.providerFactory({mode:s.mode,naturalConversation:cfg.voice.naturalConversation,onStatus:async()=>{check(this.current(s),'VOICE_SESSION_SUPERSEDED');return {scope:'current_installation',configuredAgent:cfg.agentBinding??null,...this.control.status()};},onPark:()=>{void this.endSession(s).catch(e=>this.onError(errorCode(e)));},onEvent:(type,data)=>{if(type==='native.response.usage')this.store.event('voice.native_usage',data);},model:cfg.voice.assistModel,initialHistory,apiKey:process.env[cfg.voice.apiKeyEnv],onFragment:f=>{if(cfg.voice.transcriptSource!=='local')s.turns.fragment(f);},onCompleted:t=>{if(cfg.voice.transcriptSource!=='local')emit({...t,revision:++s.revision});},
+    s.provider=this.providerFactory({mode:s.mode,naturalConversation:cfg.voice.naturalConversation,onContext:async query=>{check(this.current(s),'VOICE_SESSION_SUPERSEDED');if(this.audience().some(id=>id!==actor))return {status:'individual_conversation_required'};const result=await readProjectContext(cfg.worker.workspace,query);check(this.current(s)&&this.audience().every(id=>id===actor),'SOURCE_ACCESS_DENIED');s.readers=[actor];if(this.reply?.naturalSession===s)this.reply.readers=s.readers;return result;},onStatus:async()=>{check(this.current(s),'VOICE_SESSION_SUPERSEDED');return {scope:'current_installation',recordingEnabled:Boolean(this.archive),recordingHealthy:!this.archiveFailure,configuredAgent:cfg.agentBinding??null,...this.control.status()};},onPark:()=>{void this.endSession(s).catch(e=>this.onError(errorCode(e)));},onEvent:(type,data)=>{if(type==='native.response.usage')this.store.event('voice.native_usage',data);},model:cfg.voice.assistModel,initialHistory,apiKey:process.env[cfg.voice.apiKeyEnv],onFragment:f=>{if(cfg.voice.transcriptSource!=='local')s.turns.fragment(f);},onCompleted:t=>{if(cfg.voice.transcriptSource!=='local')emit({...t,revision:++s.revision});},
       onAudio:(pcm,sessionId,outputGeneration)=>this.receiveReplyAudio(s,pcm,sessionId,outputGeneration),onDelegation:d=>s.delegations.push(d),onUsage:usage=>{s.providerUsageSeconds=usage.seconds;if(usage.final||usage.seconds-s.lastUsageRecorded>=5){s.lastUsageRecorded=usage.seconds;this.store.event('voice.usage_snapshot',{voiceSession:s.id,seconds:usage.seconds,contextUsageRatio:usage.contextUsageRatio,final:usage.final});}},onError:code=>{
       if(s.stopped||s.epoch!==this.epoch||this.sessions.get(actor)!==s)return;
       if(!this.providerError(code))void this.endSession(s,{drain:false});
@@ -157,7 +158,7 @@ export class VoiceRoom {
       this.store.event('voice.local_turn',{voiceSession:state.id,wakeDetected:called,eligible:eligible(),liveActive:Boolean(session?.provider.active),textChars:turn.text.length});
       if(session&&eligible())session.lastHumanInput=Date.now();
       if(called&&session)session.conversationActive=true;const active=Boolean(session&&this.current(session)&&session.conversationActive&&identified);
-      const source={provider:'discord',guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceId:turn.id,actorId:identified?state.actor:null,revision:++state.revision,text:turn.text,final:true,readers,metadata:{kind:'voice',sessionId:session?.id??state.id,startMs:turn.startMs,endMs:turn.endMs,createdAt:new Date().toISOString(),mode:this.mode,voiceEpoch:state.epoch,privacyBasis:state.privacyBasis==='owner_managed'?'owner_managed_scope':'participant_opt_in_record',privacyNoticeId:state.privacyNoticeId,attribution:identified?'discord_input_track':'unknown_speaker',inputAccountId:state.actor,finality:'local_asr_completed',transcriptOrigin:'local_asr',conversationActive:active,transcriptCorrection}};
+      const source={provider:'discord',guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceId:turn.id,actorId:identified?state.actor:null,revision:++state.revision,text:turn.text,final:true,readers,metadata:{kind:'voice',sessionId:session?.id??state.id,startMs:turn.startMs,endMs:turn.endMs,createdAt:new Date().toISOString(),mode:this.mode,voiceEpoch:state.epoch,privacyBasis:state.privacyBasis==='owner_managed'?'owner_managed_scope':'participant_opt_in_record',privacyNoticeId:state.privacyNoticeId,attribution:identified?'discord_input_track':'unknown_speaker',inputAccountId:state.actor,finality:'local_asr_completed',transcriptOrigin:'local_asr',archiveSessionRefs:turn.archiveSessionRefs??[],conversationActive:active,transcriptCorrection}};
       const result=await this.pipeline.ingest(source,{execute:active&&eligible()&&cfg.discord.operators.includes(state.actor),reply:active&&eligible()&&this.mode==='assist'&&!cfg.voice.naturalConversation,analyze:this.mode==='minutes'||active&&eligible()});
       if(startError&&!startError.voiceProviderReported)this.onError(errorCode(startError));
       return result;
@@ -165,14 +166,14 @@ export class VoiceRoom {
   }
   async captureLocal(actor){
     if(this.localCaptures.has(actor))return;const connection=this.connection,state=this.localState(actor);let live=this.sessions.get(actor);const admission=new SpeechAdmission();let starting=false;if(live&&(!this.current(live)||live.mode!=='assist'))return;
-    const decoder=new OpusScript(48000,2,OpusScript.Application.AUDIO),stream=connection.receiver.subscribe(actor,{end:{behavior:EndBehaviorType.AfterSilence,duration:this.config.voice.vadSilenceMs}});const chunks=[];let bytes=0,finished=false,rejected=false,startMs=state.ms;const capture={stream,stop:({seal=false}={})=>{rejected=!seal;stream.destroy();if(seal)finish();}},limit=this.policy().voice.localAsr.maxUtteranceSeconds*48000;this.localCaptures.set(actor,capture);
+    const decoder=new OpusScript(48000,2,OpusScript.Application.AUDIO),stream=connection.receiver.subscribe(actor,{end:{behavior:EndBehaviorType.AfterSilence,duration:this.config.voice.vadSilenceMs}});const chunks=[],archiveRefs=new Set();let bytes=0,finished=false,rejected=false,startMs=state.ms;const capture={stream,stop:({seal=false}={})=>{rejected=!seal;stream.destroy();if(seal)finish();}},limit=this.policy().voice.localAsr.maxUtteranceSeconds*48000;this.localCaptures.set(actor,capture);
     const finish=()=>{
       if(finished)return;finished=true;if(this.localCaptures.get(actor)===capture)this.localCaptures.delete(actor);decoder.delete();
-      if(rejected||bytes<4800)return;const pcm=Buffer.concat(chunks,bytes),turn={id:uid('utterance'),startMs,endMs:state.ms};
+      if(rejected||bytes<4800)return;const pcm=Buffer.concat(chunks,bytes),turn={id:uid('utterance'),startMs,endMs:state.ms,archiveSessionRefs:[...archiveRefs]};
       const work=this.transcribeLocal(pcm).then(text=>this.queueLocalTurn(state,{...turn,text})).catch(e=>this.onError(errorCode(e)));this.draining.add(work);work.finally(()=>this.draining.delete(work));
     };
     stream.on('data',packet=>{
-      try{if(this.connection!==connection||this.paused||!this.allowed(actor)){rejected=true;stream.destroy();return;}const pcm=pcm48StereoTo24Mono(Buffer.from(decoder.decode(packet)));if(bytes+pcm.length>limit){rejected=true;this.onError('VOICE_UTTERANCE_LIMIT');stream.destroy();return;}chunks.push(pcm);bytes+=pcm.length;state.ms+=pcm.length/48;
+      try{if(this.connection!==connection||this.paused||!this.allowed(actor)){rejected=true;stream.destroy();return;}const decoded=Buffer.from(decoder.decode(packet));if(this.archive&&!this.archiveFailure){try{const receipt=this.archive.append(actor,pcm48StereoToMono(decoded),Date.now());if(receipt?.sessionId)archiveRefs.add(receipt.sessionId);}catch{this.archiveFailure=true;this.onError('ARCHIVE_CAPTURE_FAILED');}}const pcm=pcm48StereoTo24Mono(decoded);if(bytes+pcm.length>limit){rejected=true;this.onError('VOICE_UTTERANCE_LIMIT');stream.destroy();return;}chunks.push(pcm);bytes+=pcm.length;state.ms+=pcm.length/48;
         if(!live&&!starting&&this.mode==='assist'&&this.policy().voice.conversationStart==='speech'&&this.policy().discord.operators.includes(actor)&&admission.push(pcm)){
           starting=true;
           void this.session(actor).then(session=>{
@@ -247,6 +248,7 @@ export class VoiceRoom {
     this.closing=this.pause({sealLocal:true}).finally(()=>{this.closing=null;});
     // A sealed transcript may finish after departure; it must not keep the Bot in the VC.
     if(connection&&connection.state?.status!==VoiceConnectionStatus.Destroyed)connection.destroy();
+    try{this.archive?.seal();}catch{this.onError('ARCHIVE_SEAL_FAILED');}
     return this.closing;
   }
   async dispose(){await this.control.stop();for(const event of ['voiceStateUpdate','channelUpdate','guildMemberUpdate','guildMemberRemove','roleUpdate','roleDelete','threadMembersUpdate'])this.client.off?.(event,this.accessChanged);}

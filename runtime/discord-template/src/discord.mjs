@@ -4,6 +4,8 @@ import path from 'node:path';
 import {check,digest,shortText,sourceIdentity,errorCode,atomicJson} from './common.mjs';
 import {voiceNotice} from './consent.mjs';
 import {voiceCommand,voiceStatusText} from './voice-control.mjs';
+import {NotificationQueue} from './notifications.mjs';
+import {resultFiles} from './result-files.mjs';
 
 export const commandDefinition={name:'kotodama',description:'ことだまに相談・依頼し、仕事と音声を操作します',options:[
   {type:1,name:'ask',description:'相談する',options:[{type:3,name:'text',description:'知りたいこと',required:true}]},
@@ -17,6 +19,7 @@ export const commandDefinition={name:'kotodama',description:'ことだまに相�
 export class DiscordAdapter {
   constructor({config,store,pipeline,policy=()=>config,onError=()=>{}}){
     Object.assign(this,{config,store,pipeline,policy,onError});this.voice=null;this.verifiedInstallation=false;
+    this.notifications=store.db?new NotificationQueue(store.db,()=>this.policy().notifications?.quietHours,{onError}):null;
     this.client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent,GatewayIntentBits.GuildVoiceStates]});
     this.client.on('messageCreate',m=>this.message(m).catch(e=>onError(errorCode(e))));
     this.client.on('messageUpdate',(_old,m)=>this.message(m).catch(e=>onError(errorCode(e))));
@@ -35,7 +38,12 @@ export class DiscordAdapter {
   async readers(channel){const readers=[];for(const actor of this.policy().discord.operators)if(await this.canRead(channel,actor))readers.push(actor);return readers;}
   async login(){const token=process.env[this.config.discord.botTokenEnv];check(token,'DISCORD_CREDENTIAL_REQUIRED');
     let timer;const ready=new Promise((resolve,reject)=>{timer=setTimeout(()=>reject(new Error('DISCORD_READY_TIMEOUT')),30000);this.client.once('clientReady',resolve);});
-    try{await Promise.all([this.client.login(token),ready]);check(this.config.discord.applicationId&&this.client.application.id===this.config.discord.applicationId,'BOT_APPLICATION_MISMATCH');await this.client.guilds.fetch(this.config.discord.guildId);this.verifiedInstallation=true;}catch(e){await this.client.destroy();throw e;}finally{clearTimeout(timer);}
+    try{await Promise.all([this.client.login(token),ready]);check(this.config.discord.applicationId&&this.client.application.id===this.config.discord.applicationId,'BOT_APPLICATION_MISMATCH');await this.client.guilds.fetch(this.config.discord.guildId);this.verifiedInstallation=true;this.notifications?.start(async(kind,body)=>{
+      if(!this.verifiedInstallation)return {state:'blocked'};
+      if(kind==='luma')return this.notifyLumaImport(body);
+      const task=await this.pipeline.owner.task(body.id,body.actor);if(task.revision!==body.revision)return {state:'stale'};
+      return this.deliver(task);
+    });}catch(e){await this.client.destroy();throw e;}finally{clearTimeout(timer);}
   }
   async register(){
     check(this.verifiedInstallation,'BOT_INSTALLATION_NOT_VERIFIED');
@@ -75,7 +83,7 @@ export class DiscordAdapter {
       if(sub==='do'){const request=i.options.getString('text',true),action=i.options.getString('action',true);const t=await this.pipeline.request(this.interactionSource(i,request),{title:request.slice(0,120),request,action});text=`受け付けました。\n${t.id}\n結果はこの仕事の「result」で確認できます。`;}
       else if(sub==='ask'){const source=this.interactionSource(i,i.options.getString('text',true));source.metadata.operation='ask';const receipt=await this.pipeline.ingest(source,{execute:false,reply:false});for(const b of receipt.contextSources??[]){const s=this.store.source(b.key,i.user.id);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord'){const channel=await this.client.channels.fetch(s.channelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}}text=receipt.answer??receipt.summary??'整理しました。';}
       else if(sub==='tasks'){const tasks=await this.pipeline.owner.tasks(i.user.id);const visible=[];for(const task of tasks)try{await this.pipeline.authorize(task,'read_result');visible.push(task);}catch{}text=visible.slice(0,15).map(t=>`${t.id} · ${{queued:'受付済み',running:'実行中',needs_review:'成果確認待ち',stale:'訂正により無効',failed:'失敗',cancelled:'停止済み',stopping:'停止処理中',uncertain:'状態確認中'}[t.state]??t.state}\n${t.title}`).join('\n')||'読取可能な仕事はまだありません。';}
-      else if(sub==='result'){const result=await this.pipeline.result(i.options.getString('task',true),i.user.id);text=result.summary;}
+      else if(sub==='result'){const result=await this.pipeline.result(i.options.getString('task',true),i.user.id);const files=await resultFiles(result);await i.editReply({content:shortText(result.summary),files,allowedMentions:{parse:[]}});return;}
       else if(sub==='stop'){await this.pipeline.stop(i.options.getString('task',true),i.user.id);text='停止を受け付けました。実行中の処理の終了を確認しています。';}
       else if(sub==='resume'){const t=await this.pipeline.resume(i.options.getString('task',true),i.user.id);text=`再開しました。${t.id}`;}
       else if(sub==='voice'){check(this.voice,'VOICE_NOT_CONFIGURED');const mode=i.options.getString('mode',true);
@@ -96,6 +104,7 @@ export class DiscordAdapter {
     }catch(e){await i.editReply({content:`設定できませんでした：${errorCode(e)}`,components:[],allowedMentions:{parse:[]}});}
   }
   async notifyLumaImport(receipt,{readConfig=async()=>this.policy()}={}){
+    if(this.notifications?.quiet()){this.notifications.defer(digest(['luma',receipt.key,receipt.sourceDigest,receipt.actorId]),'luma',receipt);return {state:'deferred'};}
     let claimed=false;
     try{
       const actor=receipt.actorId;
@@ -122,10 +131,12 @@ export class DiscordAdapter {
     }catch{if(claimed){this.onError('LUMA_IMPORT_NOTIFICATION_UNKNOWN');return {state:'unknown'};}return {state:'blocked'};}
   }
   async deliver(task){
+    if(this.notifications?.quiet()){this.notifications.defer(digest(['task',task.id,task.revision]),'task',{id:task.id,revision:task.revision,actor:task.actor});return {state:'deferred'};}
     await this.pipeline.authorize(task,'read_result');await this.member(task.actor);const source=this.store.source(task.source_key,task.actor);const channel=await this.client.channels.fetch(source.channelId);check(await this.canRead(channel,task.actor),'SOURCE_ACCESS_DENIED');
     const key=digest([task.id,task.revision,'result']);const text=`仕事の成果ができました（確認待ち）。\n${task.id}\n${task.result.summary}`;
+    const files=await resultFiles(task.result);await this.pipeline.authorize(task,'read_result');
     if(!this.store.claimDelivery(key,text))return;
-    try{const user=await this.client.users.fetch(task.actor);const message=await user.send({content:shortText(text),allowedMentions:{parse:[]}});this.store.delivered(key,message.id);}catch{this.onError('RESULT_DELIVERY_UNKNOWN');}
+    try{const user=await this.client.users.fetch(task.actor);const message=await user.send({content:shortText(text),files,allowedMentions:{parse:[]}});this.store.delivered(key,message.id);}catch{this.onError('RESULT_DELIVERY_UNKNOWN');}
   }
   async reply({source,text,contextSources=[]}){
     for(const b of contextSources){const s=this.store.source(b.key,source.actorId);check(s.revision===b.revision,'CONTEXT_CHANGED');}if(source.metadata?.kind==='voice'){
@@ -159,5 +170,5 @@ export class DiscordAdapter {
     coverage.complete=coverage.channels.every(c=>['complete','not_authorized'].includes(c.state))&&coverage.imported<limit;coverage.finishedAt=new Date().toISOString();
     await atomicJson(path.join(this.config.dataDir,'latest-import-coverage.json'),coverage);return coverage;
   }
-  async close(){this.verifiedInstallation=false;await this.voice?.dispose();await this.client.destroy();}
+  async close(){this.verifiedInstallation=false;await this.notifications?.stop();await this.voice?.dispose();await this.client.destroy();}
 }

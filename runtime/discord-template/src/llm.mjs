@@ -6,7 +6,7 @@ import {z} from 'zod';
 import {runCommand,workerEnv} from './command.mjs';
 import {check,digest,uid,Refused} from './common.mjs';
 
-export function codexFailure(result){return /could not parse your authentication token|your access token could not be refreshed|please run .?codex login|not logged in/i.test(result.stderr??'')?'CODEX_LOGIN_REQUIRED':'MODEL_COMMAND_FAILED';}
+export function codexFailure(result){if(/could not parse your authentication token|your access token could not be refreshed|please run .?codex login|not logged in/i.test(result.stderr??''))return 'CODEX_LOGIN_REQUIRED';const text=(result.stderr??'')+'\n'+(result.stdout??'');return /you(?:'|’)ve hit your usage limit|usage limit reached|insufficient_quota/i.test(text)?'MODEL_USAGE_LIMIT':'MODEL_COMMAND_FAILED';}
 const executionKey=Symbol('modelExecution');
 export const modelExecution=value=>value?.[executionKey]??null;
 function bindExecution(value,execution){Object.defineProperty(value,executionKey,{value:execution});return value;}
@@ -34,7 +34,7 @@ export function lastAgentText(stdout) {
 }
 export async function invokeCodex(config,options){
   try{return bindExecution(await invokeOnce(config,options),{model:config.model??null,adapter:'codex_cli',fallback:false});}
-  catch(e){if(!config.fallback||!['CODEX_LOGIN_REQUIRED','COMMAND_UNAVAILABLE'].includes(e.code)||options.signal?.aborted)throw e;
+  catch(e){if(!config.fallback||!['CODEX_LOGIN_REQUIRED','COMMAND_UNAVAILABLE','MODEL_USAGE_LIMIT'].includes(e.code)||options.signal?.aborted)throw e;
     check(options.sandbox!=='workspace-write'||typeof options.beforeFallback==='function','FALLBACK_WRITE_CHECK_REQUIRED');await options.beforeFallback?.();check(!options.signal?.aborted,'CANCELLED');
     const answer=await invokeOnce(config.fallback,options);return bindExecution(answer,{model:config.fallback.model??null,adapter:'codex_cli',fallback:true,primaryModel:config.model??null,primaryFailure:e.code});
   }

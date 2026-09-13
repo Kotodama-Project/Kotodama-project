@@ -1,3 +1,4 @@
+import {ArchiveRuntime} from './archive-runtime.mjs';
 import http from 'node:http';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {readFile,writeFile} from 'node:fs/promises';
@@ -18,12 +19,18 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,log=v
   const config=await loadConfig(filename);let current=config;const store=new Store(config.dataDir),ownerId=uid('host'),startedAt=new Date().toISOString();
   let owner,claimed=false;
   try{owner=config.owner.kind==='remote'?new RemoteOwner(config.owner):store;check(!store.lock(),'RUNTIME_ALREADY_OWNED');store.claimHost(ownerId,process.pid,startedAt);claimed=true;store.reconcileInterrupted();}catch(e){if(claimed)store.releaseHost(ownerId);store.close();throw e;}
-  let discord,voice,bridge,control,policyTimer,closing=false;
+  let discord,voice,archive,archiveTimer,bridge,control,policyTimer,closing=false;
   const authorize=async(task,purpose='execute')=>{const c=await loadConfig(filename);check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(discord&&!offline){await discord.member(task.actor);const keys=new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)]);for(const key of keys){const source=store.source(key,task.actor);if(source.provider==='discord'){const channel=await discord.client.channels.fetch(source.channelId);check(await discord.canRead(channel,task.actor),'SOURCE_ACCESS_DENIED');}}}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
   const selectedAnalyzer=analyzer??(config.analyzer.kind==='responses'?new ResponsesAnalyzer(config):new CliAnalyzer(config));
   const pipeline=new Pipeline({store,owner,config,analyzer:selectedAnalyzer,worker:worker??new CliWorker(config),authorize,onTask:async task=>{if(discord)await discord.deliver(task);},onReply:async reply=>{if(discord)await discord.reply(reply);},onVoiceAction:async action=>{if(discord)await discord.voiceAction(action);},onError:code=>log({event:'operation_failed',code})});
   try{
     if(!offline){discord=new DiscordAdapter({config,store,pipeline,policy:()=>current,onError:code=>log({event:'discord',code})});await discord.login();if(config.discord.voiceChannelId){voice=new VoiceRoom({client:discord.client,config,store,pipeline,policy:()=>current,sourceReaders:async()=>{const channel=await discord.client.channels.fetch(config.discord.voiceChannelId,{force:true});const candidates=new Set([...current.discord.operators,...voice.audience().filter(id=>voice.allowed(id))]);const readers=[];for(const actor of candidates)if(await discord.canRead(channel,actor))readers.push(actor);return readers;},onError:code=>log({event:'voice',code})});discord.voice=voice;}}
+    if(config.archive?.enabled){
+      check(voice&&config.voice.storeAudio,'ARCHIVE_RECORDING_CONFIG_REQUIRED');let failures=0,retryAt=0;
+      const archivePolicy=()=>({...current,archive:{...current.archive,speakerIds:voice.audience().filter(id=>voice.allowed(id)),canProcess:!closing&&!voice.connectionReady()&&failures<3&&Date.now()>=retryAt}});
+      archive=new ArchiveRuntime({config:archivePolicy(),policy:archivePolicy,store,analyzer:selectedAnalyzer,authorize:b=>b.readers.every(id=>current.discord.operators.includes(id))&&b.speakerIds.every(id=>voice.allowed(id)),onUsage:usage=>store.event('archive.model_usage',usage),onError:code=>{if(code==='ARCHIVE_SCOPE_REVOKED'&&voice.connectionReady())return;failures++;retryAt=Date.now()+60000;log({event:'archive',code,failures});}});
+      voice.archive=archive;archiveTimer=setInterval(()=>{void archive.processPending().catch(()=>{if(voice.connectionReady())return;failures++;retryAt=Date.now()+60000;log({event:'archive',code:'ARCHIVE_PROCESSING_FAILED',failures});});},10000);archiveTimer.unref();
+    }
     voice?.control.start();
     const secret=randomBytes(32).toString('hex');const secretFile=path.join(config.dataDir,'control.secret');await writeFile(secretFile,secret,{encoding:'utf8',mode:0o600});
     control=http.createServer(async(req,res)=>{
@@ -49,8 +56,8 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,log=v
     const runtime={ownerId,pid:process.pid,startedAt,port:control.address().port,secretFile,configFile:path.resolve(filename),offline};await atomicJson(path.join(config.dataDir,'runtime.json'),runtime);
     let checking=false;policyTimer=setInterval(async()=>{if(checking||closing)return;checking=true;try{const previous=current;try{current=await loadConfig(filename);}catch{current={...config,discord:{...config.discord,operators:[],consentingUsers:[]},voice:{...config.voice,consentMode:'owner_managed',participantIds:[]}};log({event:'policy_unavailable'});}if(JSON.stringify(previous)!==JSON.stringify(current))void voice?.control.check();for(const [id,run]of pipeline.active){try{const task=await owner.taskInternal(id);check(task.revision===run.revision&&task.state==='running','TASK_CHANGED');await owner.assertContext(id,task.actor);await authorize(task);}catch{run.controller.abort();}}}finally{checking=false;}},1000);policyTimer.unref();
     log({event:'runtime_ready',pid:process.pid,port:runtime.port,discord:offline?'offline_fixture':'connected',voice:'not_joined',taskOwner:config.owner.kind});
-  }catch(e){await pipeline.close();await discord?.close();control?.close();bridge?.close();store.releaseHost(ownerId);store.close();throw e;}
-  async function close(){if(closing)return;closing=true;pipeline.draining=true;clearInterval(policyTimer);await discord?.close();await pipeline.close();await new Promise(resolve=>bridge?bridge.close(resolve):resolve());await new Promise(resolve=>control?control.close(resolve):resolve());store.releaseHost(ownerId);store.close();log({event:'runtime_stopped',ownerId});}
+  }catch(e){clearInterval(archiveTimer);await pipeline.close();await discord?.close();await archive?.close();control?.close();bridge?.close();store.releaseHost(ownerId);store.close();throw e;}
+  async function close(){if(closing)return;closing=true;pipeline.draining=true;clearInterval(policyTimer);clearInterval(archiveTimer);await discord?.close();await archive?.close();await pipeline.close();await new Promise(resolve=>bridge?bridge.close(resolve):resolve());await new Promise(resolve=>control?control.close(resolve):resolve());store.releaseHost(ownerId);store.close();log({event:'runtime_stopped',ownerId});}
   return {config,store,owner,pipeline,discord,voice,close};
 }
 export async function controlCommand(config,input){
