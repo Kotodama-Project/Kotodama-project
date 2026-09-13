@@ -87,5 +87,5 @@ test('native status uses the scoped backend and continues only after its result'
 
 test('natural conversation can speak again on the next input after a manual interruption',async()=>{
   const output=[];const p=new VoiceProvider({mode:'assist',apiKey:'synthetic-test',sdk,naturalConversation:true,onAudio:b=>output.push(b)});await p.start();p.interrupt();Live.last.emit('event',{type:'session.output_audio.delta',delta:Buffer.alloc(960).toString('base64')});assert.equal(output.length,0);
-  p.resumeOutput();Live.last.emit('event',{type:'session.output_audio.delta',delta:Buffer.alloc(960).toString('base64')});assert.equal(output.length,1);await p.close();
+  Live.last.emit('event',{type:'session.input_transcript.delta',event_id:'next-turn',delta:'続けて',start_ms:100,end_ms:200});Live.last.emit('event',{type:'session.output_audio.delta',delta:Buffer.alloc(960).toString('base64')});assert.equal(output.length,1);await p.close();
 });

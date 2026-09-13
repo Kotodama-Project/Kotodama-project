@@ -4,7 +4,7 @@
 
 設定変更は現在の操作者・出典の検査に反映します。音声モデルや接続先、実行先を変える場合は、このインストールを停止してから再起動します。
 
-クラッシュ後のrunning/stoppingはuncertainとして保持し、未確認の仕事を自動再実行しません。host lockが残る場合は、記録されたPID・起動時刻と実際のプロセスを照合してから復旧してください。単にlockを削除して二つのwriterを起動しないでください。
+クラッシュ後のrunning/stoppingはuncertainとして保持し、未確認の仕事を自動再実行しません。自動復旧を使う場合は、serviceのprivate環境へ `KOTODAMA_RUNTIME_DOMAIN` を設定します。この値は同じhost・PID namespace内では再起動後も同じにし、同じデータ領域を見られる別container・別hostでは必ず変えます。lockのdomainが一致し、記録PIDが存在しない場合だけCAS付きで回収します。domainがない旧lock、domain不一致、生存PID、確認不能では起動を拒否します。記録されたPID・起動時刻と実際のプロセスを照合せず、単にlockを削除して二つのwriterを起動しないでください。
 
 作業候補はTaskのrevisionごとのworktreeとartifact directoryに残します。旧候補・会話・出典を削除して復旧しません。モデルが申告したファイル名だけでなく、Gitの実変更から成果物を列挙します。
 
