@@ -66,7 +66,7 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
   plus a `STOP` file, complete-envelope digest/replay/restore/projection checks,
   and deny-by-default MCP access. This is **design candidate only**: no runtime,
   database, archive, provider, public effect, Promotion, or Current Truth is adopted.
-- IngressはDiscord text / Voice、Codex、Claude、Notion、GitHub、Google Drive、n8n、
+- IngressはDiscord text / Voice、Codex、接続済みagent client、Notion、GitHub、Google Drive、n8n、
   Microsoft Teams、Google Meet、Zoom。
   raw evidenceはsource/session/channel、speaker または individual track、timestamp/span、raw ASR、
   consent/retention revision、digestを保持し、derived transcript / minutes / Intentは
@@ -227,7 +227,7 @@ Kotodama における Discord は、Bot の設置場所ではなく、人間と 
 
 ただし、Discord 自体を Company SSOT にはしません。メッセージや transcript は Source Evidence であり、Human Decision、Capability Grant、Verification Receipt、Promotion、Current Truth は Discord から独立した統治層で扱います。
 
-Conversation ingress は Discord の text / Voice だけではありません。Codex、Claude、Notion、GitHub、
+Conversation ingress は Discord の text / Voice だけではありません。Codex、接続済みagent client、Notion、GitHub、
 Google Drive、n8n も同じ evidence boundary へ接続します。source/session/channel、speaker または
 individual track、timestamp/span、raw ASR text、consent/retention revision、digest を保持し、raw
 evidence と derived record を分離します。
@@ -236,7 +236,7 @@ evidence と derived record を分離します。
 
 Kotodamaでは、雑談だけを続けても、一緒に考えるだけでも構いません。目的と使いたい資料を伝え、仕事が必要になった場合には次の経路を選べます。長い仕様書や固定wizardを最初に埋めることは求めません。
 
-1. 人間が Discord text / Voice、Codex、Claude、Notion、GitHub、Google Drive、n8n で普段どおり相談する
+1. 人間が Discord text / Voice、Codex、接続済みagent client、Notion、GitHub、Google Drive、n8n で普段どおり相談する
 2. 明示依頼が生まれたら、Kotodama が目的、受益者、制約、成功条件、停止条件の候補を抽出する
 3. GrillU が不確実性・影響・authorityに応じて、必要な確認だけを適応的に行う
 4. 確認済みの候補を、権限と停止条件を持つ Work Order へ変換する

@@ -198,7 +198,7 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
         for marker in (
             "Discord text / Voice",
             "Codex",
-            "Claude",
+            "接続済みagent client",
             "Notion",
             "GitHub",
             "Google Drive",
