@@ -1,3 +1,4 @@
+import {SpeechAdmission} from './speech-admission.mjs';
 import {Readable} from 'node:stream';
 import OpusScript from 'opusscript';
 import {joinVoiceChannel,entersState,VoiceConnectionStatus,EndBehaviorType,createAudioPlayer,createAudioResource,StreamType,NoSubscriberBehavior} from '@discordjs/voice';
@@ -8,7 +9,7 @@ import {voiceNotice} from './consent.mjs';
 import {check,uid,errorCode} from './common.mjs';
 import {VoiceControl} from './voice-control.mjs';
 
-const voiceBinding=config=>JSON.stringify({installation:config.installation,agentBinding:config.agentBinding,applicationId:config.discord.applicationId,workspace:config.worker.workspace,owner:config.owner,transcriptSource:config.voice.transcriptSource,assistModel:config.voice.assistModel,minutesModel:config.voice.minutesModel,localAsr:config.voice.transcriptSource==='local'?config.voice.localAsr:null});
+const voiceBinding=config=>JSON.stringify({installation:config.installation,agentBinding:config.agentBinding,applicationId:config.discord.applicationId,workspace:config.worker.workspace,owner:config.owner,naturalConversation:config.voice.naturalConversation,conversationStart:config.voice.conversationStart,transcriptSource:config.voice.transcriptSource,assistModel:config.voice.assistModel,minutesModel:config.voice.minutesModel,localAsr:config.voice.transcriptSource==='local'?config.voice.localAsr:null});
 function audible(pcm){for(let i=0;i<pcm.length;i+=2)if(Math.abs(pcm.readInt16LE(i))>96)return true;return false;}
 const escaped=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 export function addressed(text,config){return config.voice.wakeWords.some(word=>new RegExp(`(?:^|[、,。.!！?？\\s])${escaped(word)}(?:[、,。.!！?？\\s]|$|(?:あ|ねえ|えっと)?(?:こんにちは|こんばんは|おはよう|聞こえ|きこえ|教えて|おしえて|お願い|調べて|確認して|どう思う))`,'i').test(text));}
@@ -87,8 +88,8 @@ export class VoiceRoom {
         return this.pipeline.ingest(source,{execute:active&&cfgNow.discord.operators.includes(actor),reply:active&&s.mode==='assist',analyze:s.mode==='minutes'||active});
       }).catch(e=>{if(!e.voiceProviderReported)this.onError(errorCode(e));});return s.chain;
     };
-    s.turns=new TranscriptTurns({onTurn:emit});
-    s.provider=this.providerFactory({mode:s.mode,model:cfg.voice.assistModel,initialHistory,apiKey:process.env[cfg.voice.apiKeyEnv],onFragment:f=>{if(cfg.voice.transcriptSource!=='local')s.turns.fragment(f);},onCompleted:t=>{if(cfg.voice.transcriptSource!=='local')emit({...t,revision:++s.revision});},
+    s.turns=new TranscriptTurns({onTurn:emit});s.readers=this.audience().filter(actor=>this.allowed(actor));if(cfg.voice.naturalConversation)s.conversationActive=true;
+    s.provider=this.providerFactory({mode:s.mode,naturalConversation:cfg.voice.naturalConversation,onPark:()=>{void this.endSession(s).catch(e=>this.onError(errorCode(e)));},onEvent:(type,data)=>{if(type==='native.response.usage')this.store.event('voice.native_usage',data);},model:cfg.voice.assistModel,initialHistory,apiKey:process.env[cfg.voice.apiKeyEnv],onFragment:f=>{if(cfg.voice.transcriptSource!=='local')s.turns.fragment(f);},onCompleted:t=>{if(cfg.voice.transcriptSource!=='local')emit({...t,revision:++s.revision});},
       onAudio:(pcm,sessionId,outputGeneration)=>this.receiveReplyAudio(s,pcm,sessionId,outputGeneration),onDelegation:d=>s.delegations.push(d),onUsage:usage=>{s.providerUsageSeconds=usage.seconds;if(usage.final||usage.seconds-s.lastUsageRecorded>=5){s.lastUsageRecorded=usage.seconds;this.store.event('voice.usage_snapshot',{voiceSession:s.id,seconds:usage.seconds,contextUsageRatio:usage.contextUsageRatio,final:usage.final});}},onError:code=>{
       if(s.stopped||s.epoch!==this.epoch||this.sessions.get(actor)!==s)return;
       if(!this.providerError(code))void this.endSession(s,{drain:false});
@@ -97,11 +98,11 @@ export class VoiceRoom {
     s.ready=s.provider.start().then(()=>{
       check(this.current(s),'VOICE_SESSION_SUPERSEDED');
       s.budgetTimer=setInterval(()=>{
-        if(s.mode==='assist'&&Date.now()-(this.localAsr?s.lastHumanInput??s.started:s.lastInput)>=this.policy().voice.conversationIdleSeconds*1000){void this.endSession(s);return;}
+        if(s.mode==='assist'&&!cfg.voice.naturalConversation&&Date.now()-(this.localAsr?s.lastHumanInput??s.started:s.lastInput)>=this.policy().voice.conversationIdleSeconds*1000){void this.endSession(s);return;}
         try{check(this.current(s),'VOICE_PAUSED');check(Date.now()-s.started<cfg.voice.maxSessionSeconds*1000,'VOICE_SESSION_LIMIT');this.reserveAudio(1000,this.policy().voice);}
         catch(e){this.onError(errorCode(e));if(!['AUDIO_BUDGET_EXHAUSTED','AUDIO_TOTAL_BUDGET_EXHAUSTED'].includes(e.code))void this.endSession(s,{drain:this.allowed(s.actor)&&this.privacyMatches(s)});}
       },1000);s.budgetTimer.unref();
-      if(s.mode==='assist'){
+      if(s.mode==='assist'&&!cfg.voice.naturalConversation){
         s.silenceTimer=setInterval(()=>{if(s.provider.active&&this.current(s)&&Date.now()-s.lastInput>=100){try{s.provider.append(Buffer.alloc(4800));s.ms+=100;}catch{}}},100);s.silenceTimer.unref();
       }
       return s;
@@ -110,7 +111,7 @@ export class VoiceRoom {
   }
   async capture(actor){
     if(!this.connectionReady()||this.paused||this.recovering||!this.audienceAllowed()||!this.allowed(actor)||!this.audience().includes(actor))return;
-    if(this.reply)void this.stopSpeech();
+    if(this.reply&&!this.policy().voice.naturalConversation)void this.stopSpeech();
     if(this.localAsr)return this.captureLocal(actor);
     const connection=this.connection,s=await this.session(actor);
     if(s.stream||!s.provider.active||!this.current(s)||this.connection!==connection)return;
@@ -149,6 +150,7 @@ export class VoiceRoom {
       const called=addressed(turn.text,cfg)||Boolean(transcriptCorrection&&!transcriptCorrection.uncertain&&addressed(transcriptCorrection.text,cfg));
       const eligible=()=>identified&&state.epoch===this.epoch&&this.connectionReady()&&!this.paused&&!this.recovering&&this.audienceAllowed()&&this.audience().includes(state.actor);
       let session=this.sessions.get(state.actor),startError;
+      if(session?.ready&&eligible())try{await session.ready;}catch(error){startError=error;session=null;}
       if(called&&this.mode==='assist'&&eligible()&&(!session||!this.current(session))){
         try{session=await this.session(state.actor,{initialHistory:[{role:'user',text:turn.text}]});}catch(error){startError=error;}
       }
@@ -156,13 +158,13 @@ export class VoiceRoom {
       if(session&&eligible())session.lastHumanInput=Date.now();
       if(called&&session)session.conversationActive=true;const active=Boolean(session&&this.current(session)&&session.conversationActive&&identified);
       const source={provider:'discord',guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceId:turn.id,actorId:identified?state.actor:null,revision:++state.revision,text:turn.text,final:true,readers,metadata:{kind:'voice',sessionId:session?.id??state.id,startMs:turn.startMs,endMs:turn.endMs,createdAt:new Date().toISOString(),mode:this.mode,voiceEpoch:state.epoch,privacyBasis:state.privacyBasis==='owner_managed'?'owner_managed_scope':'participant_opt_in_record',privacyNoticeId:state.privacyNoticeId,attribution:identified?'discord_input_track':'unknown_speaker',inputAccountId:state.actor,finality:'local_asr_completed',transcriptOrigin:'local_asr',conversationActive:active,transcriptCorrection}};
-      const result=await this.pipeline.ingest(source,{execute:active&&eligible()&&cfg.discord.operators.includes(state.actor),reply:active&&eligible()&&this.mode==='assist',analyze:this.mode==='minutes'||active&&eligible()});
+      const result=await this.pipeline.ingest(source,{execute:active&&eligible()&&cfg.discord.operators.includes(state.actor),reply:active&&eligible()&&this.mode==='assist'&&!cfg.voice.naturalConversation,analyze:this.mode==='minutes'||active&&eligible()});
       if(startError&&!startError.voiceProviderReported)this.onError(errorCode(startError));
       return result;
     }).catch(e=>{if(!e.voiceProviderReported)this.onError(errorCode(e));});return state.chain;
   }
   async captureLocal(actor){
-    if(this.localCaptures.has(actor))return;const connection=this.connection,state=this.localState(actor),live=this.sessions.get(actor);if(live&&(!this.current(live)||live.mode!=='assist'))return;
+    if(this.localCaptures.has(actor))return;const connection=this.connection,state=this.localState(actor);let live=this.sessions.get(actor);const admission=new SpeechAdmission();let starting=false;if(live&&(!this.current(live)||live.mode!=='assist'))return;
     const decoder=new OpusScript(48000,2,OpusScript.Application.AUDIO),stream=connection.receiver.subscribe(actor,{end:{behavior:EndBehaviorType.AfterSilence,duration:this.config.voice.vadSilenceMs}});const chunks=[];let bytes=0,finished=false,rejected=false,startMs=state.ms;const capture={stream,stop:({seal=false}={})=>{rejected=!seal;stream.destroy();if(seal)finish();}},limit=this.policy().voice.localAsr.maxUtteranceSeconds*48000;this.localCaptures.set(actor,capture);
     const finish=()=>{
       if(finished)return;finished=true;if(this.localCaptures.get(actor)===capture)this.localCaptures.delete(actor);decoder.delete();
@@ -170,7 +172,16 @@ export class VoiceRoom {
       const work=this.transcribeLocal(pcm).then(text=>this.queueLocalTurn(state,{...turn,text})).catch(e=>this.onError(errorCode(e)));this.draining.add(work);work.finally(()=>this.draining.delete(work));
     };
     stream.on('data',packet=>{
-      try{if(this.connection!==connection||this.paused||!this.allowed(actor)){rejected=true;stream.destroy();return;}const pcm=pcm48StereoTo24Mono(Buffer.from(decoder.decode(packet)));if(bytes+pcm.length>limit){rejected=true;this.onError('VOICE_UTTERANCE_LIMIT');stream.destroy();return;}chunks.push(pcm);bytes+=pcm.length;state.ms+=pcm.length/48;if(live?.provider.active&&this.current(live)){live.provider.append(pcm);live.ms+=pcm.length/48;live.lastInput=Date.now();}}
+      try{if(this.connection!==connection||this.paused||!this.allowed(actor)){rejected=true;stream.destroy();return;}const pcm=pcm48StereoTo24Mono(Buffer.from(decoder.decode(packet)));if(bytes+pcm.length>limit){rejected=true;this.onError('VOICE_UTTERANCE_LIMIT');stream.destroy();return;}chunks.push(pcm);bytes+=pcm.length;state.ms+=pcm.length/48;
+        if(!live&&!starting&&this.mode==='assist'&&this.policy().voice.conversationStart==='speech'&&this.policy().discord.operators.includes(actor)&&admission.push(pcm)){
+          starting=true;
+          void this.session(actor).then(session=>{
+            if(this.connection!==connection||!this.current(session))return;
+            session.conversationActive=true;
+            for(const buffered of chunks){session.provider.append(buffered);session.ms+=buffered.length/48;}
+            session.lastInput=Date.now();live=session;
+          }).catch(e=>{if(!e.voiceProviderReported)this.onError(errorCode(e));});
+        }if(live?.provider.active&&this.current(live)){live.provider.append(pcm);live.ms+=pcm.length/48;live.lastInput=Date.now();}}
       catch(e){rejected=true;stream.destroy();this.onError(errorCode(e));}
     });
     stream.once('end',finish);stream.once('close',finish);stream.once('error',()=>{rejected=true;this.onError('VOICE_INPUT_FAILED');});
@@ -185,6 +196,7 @@ export class VoiceRoom {
     })();this.draining.add(s.ending);s.ending.then(()=>this.draining.delete(s.ending),()=>this.draining.delete(s.ending));return s.ending;
   }
   canPlay(reply){
+    if(reply.naturalSession&&!this.current(reply.naturalSession))return false;
     if(!this.connectionReady()||this.mode!=='assist'||this.paused||this.recovering||reply.epoch!==this.epoch||Date.now()>reply.accessExpires||!this.audienceAllowed())return false;
     try{for(const actor of this.audience()){if(!reply.readers.includes(actor))return false;for(const b of reply.bindings){const source=this.store.source(b.key,actor);if(source.revision!==b.revision)return false;}}return true;}catch{return false;}
   }
@@ -192,9 +204,12 @@ export class VoiceRoom {
     if(reply.started||this.reply!==reply)return;if(!this.canPlay(reply)){void this.stopSpeech();return;}reply.started=true;clearTimeout(reply.prefillTimer);this.player.play(createAudioResource(reply.stream,{inputType:StreamType.Raw}));
   }
   receiveReplyAudio(s,pcm,sessionId,outputGeneration){
+    if(!this.reply&&this.policy().voice.naturalConversation&&this.current(s)){
+      const stream=new Readable({read(){}});this.reply={naturalSession:s,generation:++this.generation,epoch:s.epoch,bindings:[],readers:s.readers,stream,accessExpires:Infinity,provider:s.provider,sessionId,outputGeneration};
+    }
     const reply=this.reply;if(!reply||reply.provider!==s.provider||reply.sessionId!==sessionId||reply.outputGeneration!==outputGeneration||!this.canPlay(reply))return;
     const output=pcm24MonoTo48Stereo(pcm),cfg=this.policy().voice,maxBytes=cfg.maxOutputQueueMs*192,prefillBytes=cfg.outputPrefillMs*192;if(reply.stream.readableLength+output.length>maxBytes){this.onError('VOICE_OUTPUT_QUEUE_OVERFLOW');void this.stopSpeech();return;}
-    reply.stream.push(output);if(audible(pcm)){reply.audible=true;clearTimeout(reply.silenceTimer);reply.silenceTimer=setTimeout(()=>{if(this.reply===reply)void this.stopSpeech();},1000);reply.silenceTimer.unref();}if(!reply.started&&reply.stream.readableLength>=prefillBytes)this.startReplyPlayback(reply);
+    reply.stream.push(output);if(audible(pcm)&&!reply.naturalSession){reply.audible=true;clearTimeout(reply.silenceTimer);reply.silenceTimer=setTimeout(()=>{if(this.reply===reply)void this.stopSpeech();},1000);reply.silenceTimer.unref();}if(!reply.started&&reply.stream.readableLength>=prefillBytes)this.startReplyPlayback(reply);
   }
   async speak(text,{epoch,actorId,bindings=[],authorizeAudience}={}){
     if(!this.connectionReady()||this.mode!=='assist'||this.paused||epoch!==this.epoch||!this.audienceAllowed()||!text.trim())return;

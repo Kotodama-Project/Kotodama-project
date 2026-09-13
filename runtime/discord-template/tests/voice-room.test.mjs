@@ -95,3 +95,18 @@ test('leaving seals the last local utterance and disconnects before ASR complete
   const closing=room.close();await new Promise(resolve=>setImmediate(resolve));assert(destroyed);assert.equal(typeof resolveAsr,'function');resolveAsr('最後の発言');await closing;
   assert.equal(sources.length,1);assert.equal(sources[0].s.text,'最後の発言');assert.equal(sources[0].flags.reply,false);assert.equal(sources[0].flags.execute,false);
 });
+
+test('speech admission starts one scoped Live session and preserves buffered startup audio',async t=>{
+  let starts=0,bytes=0;const {room}=await fixture(t,o=>({...provider(o),start:async function(){starts++;this.active=true;},append:pcm=>{bytes+=pcm.length;}}),{configure:c=>{c.voice.conversationStart='speech';c.voice.localAsr={maxUtteranceSeconds:30};}});
+  room.localAsr={transcribe:async()=>''};const stream=new PassThrough();room.connection={state:{status:State.Ready},receiver:{subscribe:()=>stream},destroy(){this.state={status:State.Destroyed};}};
+  await room.captureLocal(a);const encoder=new OpusScript(48000,2,OpusScript.Application.AUDIO);const frame=Buffer.alloc(3840);for(let i=0;i<frame.length;i+=2)frame.writeInt16LE(Math.round(4000*Math.sin(i/2*0.05)),i);
+  for(let i=0;i<35;i++)stream.write(Buffer.from(encoder.encode(frame,960)));encoder.delete();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(starts,1);assert.equal(bytes,35*960);assert(room.sessions.get(a).conversationActive);await room.close();
+});
+
+test('natural Live playback precedes ASR and remains bound to the original audience',async t=>{
+  const {room,channel}=await fixture(t,provider,{configure:c=>{c.voice.naturalConversation=true;}});const session=await room.session(a);
+  for(let i=0;i<7;i++)session.provider.options.onAudio(Buffer.alloc(960),session.provider.sessionId,0);
+  assert(room.reply?.started);assert.equal(room.reply.naturalSession,session);assert(room.canPlay(room.reply));
+  channel.members.set('100000000000000099',{id:'100000000000000099',user:{bot:false}});assert.equal(room.canPlay(room.reply),false);await room.close();
+});

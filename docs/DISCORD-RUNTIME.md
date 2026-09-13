@@ -43,7 +43,7 @@ PythonによるLive制御候補です。今回のNodeランタイムとは同時
 ## 出典と検証
 
 取り込み元はKotodama contributorsのMITライセンスのテンプレート、
-source revision `6ed9797`です。
+source revision `90c5dc2`です。
 そのLICENSEとdocs/PROVENANCEをディレクトリ内に保持します。
 privateなGit履歴、実設定、音声、会話、credentialを移していません。
 以後の汎用実装の統合先はこの公開本体とし、先行テンプレートとの変更の分岐を整理します。
