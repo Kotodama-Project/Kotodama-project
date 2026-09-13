@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,writeFile,readFile,mkdir,link,lstat} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile,readFile,mkdir,link,symlink,lstat} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -44,7 +44,11 @@ test('runtime replaces an existing linked control token without writing through 
   const {config,file,root,cleanup}=await configFixture(t);await mkdir(config.dataDir,{recursive:true});
   const outside=path.join(root,'outside-secret'),secret=path.join(config.dataDir,'control.secret');await writeFile(outside,'preserve-me');await link(outside,secret);
   const runtime=await startRuntime(file,{offline:true,log:()=>{}});t.after(async()=>{await runtime.close();await cleanup();});
-  assert.equal(await readFile(outside,'utf8'),'preserve-me');assert.match(await readFile(secret,'utf8'),/^[a-f0-9]{64}$/);assert.equal((await lstat(secret)).nlink,1);
+  assert.equal(await readFile(outside,'utf8'),'preserve-me');assert.match(await readFile(secret,'utf8'),/^[a-f0-9]{64}$/);const stat=await lstat(secret);assert.equal(stat.nlink,1);if(process.platform!=='win32')assert.equal(stat.mode&0o777,0o600);
+});
+test('runtime refuses a symbolic control token without changing its target',{skip:process.platform==='win32'?'Symlink creation requires a separate Windows privilege; Linux CI covers this refusal.':false},async t=>{
+  const {config,file,root,cleanup}=await configFixture(t);t.after(cleanup);await mkdir(config.dataDir,{recursive:true});const outside=path.join(root,'outside-symlink-target'),secret=path.join(config.dataDir,'control.secret');await writeFile(outside,'preserve-me');await symlink(outside,secret,'file');
+  await assert.rejects(startRuntime(file,{offline:true,log:()=>{}}),{code:'LINK_PATH_REFUSED'});assert.equal(await readFile(outside,'utf8'),'preserve-me');const store=new Store(config.dataDir);try{assert.equal(store.lock(),undefined);}finally{store.close();}
 });
 test('write worker includes unreported new files and supports later Task revisions',{skip:process.platform==='win32'?'Reference write worker runs on Linux; Windows CLI/client tests still run.':false},async t=>{
   const {config,root,cleanup}=await configFixture(t);t.after(cleanup);for(const args of [['init'],['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--allow-empty','-m','fixture']]){const r=await runCommand('git',args,{cwd:root});assert.equal(r.code,0);}
