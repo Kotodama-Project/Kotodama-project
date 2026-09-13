@@ -1,5 +1,6 @@
 import hashlib
 import importlib.util
+import re
 import subprocess
 import tempfile
 import unittest
@@ -180,13 +181,14 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             workflow.index("python -m unittest discover -s tests -v"),
         )
         self.assertIn("python -m unittest discover -s tests -v", workflow)
-        self.assertIn(
-            "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", workflow
-        )
-        self.assertIn(
-            "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
-            workflow,
-        )
+        # Assert the reviewed action, immutable pin, and version comment rather
+        # than one literal SHA, so a reviewed Dependabot bump does not fail CI.
+        for action in ("actions/checkout", "actions/setup-python"):
+            with self.subTest(action=action):
+                self.assertRegex(
+                    workflow,
+                    re.escape(action) + r"@[0-9a-f]{40}\s+#\s*v\d",
+                )
 
     def test_actionlint_is_checksum_verified_outside_the_worktree(self) -> None:
         workflow = (ROOT / ".github/workflows/repository-validation.yml").read_text(
@@ -593,9 +595,11 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
             ROOT / ".github/workflows/dependency-review.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("permissions:\n  contents: read", dependency_review)
-        self.assertIn(
-            "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+        # Assert the reviewed action, immutable pin, and version comment rather
+        # than one literal SHA, so a reviewed Dependabot bump does not fail CI.
+        self.assertRegex(
             dependency_review,
+            r"actions/dependency-review-action@[0-9a-f]{40}\s+#\s*v\d",
         )
         self.assertIn("fail-on-severity: moderate", dependency_review)
 

@@ -12,6 +12,7 @@ or promote the separately scoped runtime/deployment evidence below.
 | Company governance starter | Published and locally validated |
 | [Task-bound Company Pack execution](docs/COMPANY-PACK-TASK-EXECUTION.md) | Included local CREATE_COMPANY_PACK adapter; existing-record binding and checked output receipt; no Task-state write or agent dispatch |
 | [Persistent local review gateway](runtime/local-review-gateway/README.md) | Included local review/restart candidate; actor-scoped projections; live Access/Tunnel and automatic Voice-to-Task connection remain unverified |
+| [Discord Bot template](runtime/discord-template/README.md) | Merged source via #79–#81; self-hosted bot candidate with local ASR, consent, budget, and archive options; public invite, hosted deployment, and real-voice acceptance remain unverified |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
 | [Cloudflare edge preview candidate](runtime/cloudflare-edge/README.md) | Merged source candidate via #18; content-free validation only, no version upload or deployment established |
 | [Official Cloudflare OS bounded runtime candidate](docs/CLOUDFLARE-OS-ADOPTION.md) | Merged source candidate via #18; exact source pin, six synthetic metadata projections, and content-free runtime receipt; no provider execution established |
@@ -20,11 +21,11 @@ or promote the separately scoped runtime/deployment evidence below.
 | Local image availability preflight | Published read-only tool; saved verification is historical binding only |
 | Clean-install / migration evidence candidate | Published unattested saved-binding contract; no live receipt |
 | Protected one-use attestation evaluation | Published local candidate; atomic only within one bound SQLite store |
-| Signed nonce-store checkpoint | Published protected-local tool; point-in-time and immediate-parent only |
-| Recursive nonce-store checkpoint chain | Published protected-local candidate; supplied path/store equivalence only |
-| Checkpoint-head anchor / restore-drill evidence | Published protected-local contract; signed reported binding only |
-| Checkpoint segment transition / key rotation | Published protected-local contract; one presented boundary only |
-| Segment transition candidate builder | Published protected-local CLI; deterministic new-file creation only, unsigned and unverified |
+| [Signed nonce-store checkpoint](docs/ATTESTATION-NONCE-STORE-CHECKPOINT.md) | Published protected-local tool; point-in-time and immediate-parent only |
+| [Recursive nonce-store checkpoint chain](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-CHAIN.md) | Published protected-local candidate; supplied path/store equivalence only |
+| [Checkpoint-head anchor / restore-drill evidence](docs/ATTESTATION-NONCE-STORE-HEAD-ANCHOR-AND-RESTORE-DRILL.md) | Published protected-local contract; signed reported binding only |
+| [Checkpoint segment transition / key rotation](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-SEGMENT-TRANSITION.md) | Published protected-local contract; one presented boundary only |
+| [Segment transition candidate builder](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-SEGMENT-TRANSITION-CREATION.md) | Published protected-local CLI; deterministic new-file creation only, unsigned and unverified |
 | [Source binding verification candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md) | Included in this revision as a read-only local candidate; stable postcheck and R30 projection digest only |
 | [Protected Source binding receipt candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md) | Included as an unpopulated schema-only private receipt contract; no protected runner or verified receipt |
 | [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) | Included as an opaque schema-only request shape; no execution accepted, executed, or private handoff |
