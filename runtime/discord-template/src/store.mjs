@@ -25,6 +25,7 @@ export class Store {
   transaction(fn) {this.db.exec('BEGIN IMMEDIATE');try{const v=fn();this.db.exec('COMMIT');return v;}catch(e){this.db.exec('ROLLBACK');throw e;}}
   event(type,body,taskId=null){this.db.prepare('INSERT INTO events(task_id,type,at,body) VALUES(?,?,?,?)').run(taskId,type,new Date().toISOString(),JSON.stringify(body));}
   claimHost(owner,pid,created){this.db.prepare('INSERT INTO host_lock VALUES(?,?,?,?)').run('runtime',owner,pid,created);}
+  replaceStaleHost(stale,owner,pid,created){return this.transaction(()=>{const removed=this.db.prepare('DELETE FROM host_lock WHERE name=? AND owner=? AND pid=? AND created=?').run('runtime',stale.owner,stale.pid,stale.created);check(removed.changes===1,'RUNTIME_LOCK_CHANGED');this.claimHost(owner,pid,created);});}
   releaseHost(owner){this.db.prepare('DELETE FROM host_lock WHERE name=? AND owner=?').run('runtime',owner);}
   lock(){return this.db.prepare('SELECT * FROM host_lock WHERE name=?').get('runtime');}
   consent(guild,channel,actor,notice){const row=this.db.prepare('SELECT * FROM voice_consents WHERE guild=? AND channel=? AND actor=?').get(guild,channel,actor);return Boolean(row?.granted===1&&row.notice===notice);}

@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {Collection} from 'discord.js';
 import {DiscordAdapter} from '../src/discord.mjs';
 import {exampleConfig} from '../src/config.mjs';
 test('ask returns the answer and rechecks source access before the ephemeral reply',async t=>{
@@ -15,4 +19,18 @@ test('an actual Bot mention marks direct conversation without inventing a work r
   const message={guildId:config.discord.guildId,channelId:config.discord.textChannelIds[0],author:{id:config.discord.operators[0]},mentions:{users:new Map([['bot',{}]])}};
   await adapter.message(message);assert.equal(received[0].source.metadata.directlyAddressed,true);assert.equal(received[0].source.text,'こんにちは');assert.equal(received[0].source.metadata.operation,undefined);
   message.mentions.users.clear();await adapter.message(message);assert.equal(received[1].source.metadata.directlyAddressed,false);assert.equal(received[1].flags.reply,false);
+});
+
+test('backfill continues past a short bot-only page to find older human messages',async t=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-discord-backfill-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  const config=exampleConfig();config.dataDir=root;const actor=config.discord.operators[0],channelId=config.discord.textChannelIds[0];
+  let fetches=0,ingested=0;
+  const page=message=>{const result=new Collection();if(message)result.set(message.id,message);return result;};
+  const bot={id:'200000000000000001',author:{bot:true}},human={id:'200000000000000002',author:{bot:false},webhookId:null};
+  const channel={id:channelId,isTextBased:()=>true,isThread:()=>false,messages:{fetch:async()=>page(fetches++===0?bot:human)}};
+  const guild={id:config.discord.guildId,channels:{fetch:async()=>new Collection([[channelId,channel]]),fetchActiveThreads:async()=>({threads:new Collection()})}};
+  const adapter=new DiscordAdapter({config,store:{ingest:()=>{ingested++;}},pipeline:{}});t.after(()=>adapter.client.destroy());
+  adapter.member=async()=>({});adapter.canRead=async()=>true;adapter.client.guilds.fetch=async()=>guild;adapter.source=async message=>({sourceId:message.id});
+  const coverage=await adapter.backfill(actor,{limit:1});
+  assert.equal(fetches,2);assert.equal(ingested,1);assert.equal(coverage.imported,1);assert.equal(coverage.channels[0].state,'limit_reached');
 });

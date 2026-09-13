@@ -1,7 +1,6 @@
 import {ArchiveRuntime} from './archive-runtime.mjs';
 import http from 'node:http';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
-import {readFile,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {loadConfig} from './config.mjs';
 import {Store} from './store.mjs';
@@ -13,12 +12,17 @@ import {VoiceRoom} from './voice.mjs';
 import {voiceCommand} from './voice-control.mjs';
 import {RemoteOwner} from './remote-owner.mjs';
 import {startBridge} from './bridge.mjs';
-import {atomicJson,check,uid,errorCode,redact} from './common.mjs';
+import {atomicJson,atomicText,check,uid,errorCode,redact} from './common.mjs';
+
+function pidRunning(pid){
+  if(!Number.isSafeInteger(pid)||pid<=0)return true;
+  try{process.kill(pid,0);return true;}catch(error){return error.code!=='ESRCH';}
+}
 
 export async function startRuntime(filename,{offline=false,analyzer,worker,log=value=>console.log(JSON.stringify(redact(value)))}={}){
   const config=await loadConfig(filename);let current=config;const store=new Store(config.dataDir),ownerId=uid('host'),startedAt=new Date().toISOString();
   let owner,claimed=false;
-  try{owner=config.owner.kind==='remote'?new RemoteOwner(config.owner):store;check(!store.lock(),'RUNTIME_ALREADY_OWNED');store.claimHost(ownerId,process.pid,startedAt);claimed=true;store.reconcileInterrupted();}catch(e){if(claimed)store.releaseHost(ownerId);store.close();throw e;}
+  try{owner=config.owner.kind==='remote'?new RemoteOwner(config.owner):store;const stale=store.lock();if(stale){check(!pidRunning(stale.pid),'RUNTIME_ALREADY_OWNED');store.replaceStaleHost(stale,ownerId,process.pid,startedAt);}else store.claimHost(ownerId,process.pid,startedAt);claimed=true;store.reconcileInterrupted();}catch(e){if(claimed)store.releaseHost(ownerId);store.close();throw e;}
   let discord,voice,archive,archiveTimer,bridge,control,policyTimer,closing=false;
   const authorize=async(task,purpose='execute')=>{const c=await loadConfig(filename);check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(discord&&!offline){await discord.member(task.actor);const keys=new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)]);for(const key of keys){const source=store.source(key,task.actor);if(source.provider==='discord'){const channel=await discord.client.channels.fetch(source.channelId);check(await discord.canRead(channel,task.actor),'SOURCE_ACCESS_DENIED');}}}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
   const selectedAnalyzer=analyzer??(config.analyzer.kind==='responses'?new ResponsesAnalyzer(config):new CliAnalyzer(config));
@@ -32,7 +36,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,log=v
       voice.archive=archive;archiveTimer=setInterval(()=>{void archive.processPending().catch(()=>{if(voice.connectionReady())return;failures++;retryAt=Date.now()+60000;log({event:'archive',code:'ARCHIVE_PROCESSING_FAILED',failures});});},10000);archiveTimer.unref();
     }
     voice?.control.start();
-    const secret=randomBytes(32).toString('hex');const secretFile=path.join(config.dataDir,'control.secret');await writeFile(secretFile,secret,{encoding:'utf8',mode:0o600});
+    const secret=randomBytes(32).toString('hex');const secretFile=path.join(config.dataDir,'control.secret');await atomicText(secretFile,secret);
     control=http.createServer(async(req,res)=>{
       const send=(status,body)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(body));};
       try{

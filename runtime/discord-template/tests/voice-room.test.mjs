@@ -111,6 +111,13 @@ test('natural Live playback precedes ASR and remains bound to the original audie
   channel.members.set('100000000000000099',{id:'100000000000000099',user:{bot:false}});assert.equal(room.canPlay(room.reply),false);await room.close();
 });
 
+test('a natural-conversation speaker stops local playback and queued PCM immediately',async t=>{
+  const {room,channel}=await fixture(t,provider,{configure:c=>{c.voice.naturalConversation=true;}});channel.members.delete(b);const session=await room.session(a);
+  for(let i=0;i<7;i++)session.provider.options.onAudio(Buffer.alloc(960),session.provider.sessionId,0);assert(room.reply?.started);
+  const input=new PassThrough();room.connection.receiver={subscribe:()=>input};await room.capture(a);
+  assert.equal(room.reply,null);assert.equal(session.provider.interrupted,true);input.destroy();await room.close();
+});
+
 test('the receiver archives original 48k mono and links the fast transcript before leaving',async t=>{
   const {room,sources}=await fixture(t,provider,{configure:c=>{c.voice.localAsr={maxUtteranceSeconds:30};}});room.localAsr={transcribe:async()=> '最後の記録'};
   let packets=0,seals=0;room.archive={append:(actor,pcm,time)=>{assert.equal(actor,a);assert.equal(pcm.length,1920);assert(Number.isSafeInteger(time));packets++;return {sessionId:'session-fixture'};},seal:()=>{seals++;}};
@@ -124,6 +131,11 @@ test('private project lookup narrows a formerly shared Live session audience',as
   assert.equal((await session.provider.options.onContext('資料')).status,'individual_conversation_required');
   channel.members.delete(b);await session.provider.options.onContext('資料');assert.deepEqual(session.readers,[a]);
   session.provider.options.onAudio(Buffer.alloc(960),session.provider.sessionId,0);channel.members.set(b,{id:b,user:{bot:false}});assert.equal(room.canPlay(room.reply),false);await room.close();
+});
+
+test('voice processing scope alone cannot grant a participant access to project files',async t=>{
+  const {room,channel,config}=await fixture(t,provider,{configure:c=>{c.voice.naturalConversation=true;}});assert(!config.discord.operators.includes(b));channel.members.delete(a);
+  const session=await room.session(b);await assert.rejects(session.provider.options.onContext('プロジェクト資料'),{code:'SOURCE_ACCESS_DENIED'});await room.close();
 });
 
 test('a delayed end decision cannot close a replacement Live session in the same VC epoch',async t=>{

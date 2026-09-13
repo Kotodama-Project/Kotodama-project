@@ -1,5 +1,5 @@
 import {createHash, randomUUID} from 'node:crypto';
-import {mkdir, readFile, writeFile, rename, lstat, realpath} from 'node:fs/promises';
+import {mkdir, readFile, writeFile, rename, unlink, lstat, realpath} from 'node:fs/promises';
 import path from 'node:path';
 
 export class Refused extends Error {
@@ -38,13 +38,20 @@ export async function safePath(root, relative, {mustExist = true} = {}) {
   }
   return target;
 }
-export async function atomicJson(target, value) {
+export async function atomicText(target, value) {
+  check(typeof value === 'string', 'ATOMIC_TEXT_REQUIRED');
   await mkdir(path.dirname(target), {recursive:true,mode:0o700});
   try { check(!(await lstat(target)).isSymbolicLink(), 'LINK_PATH_REFUSED'); } catch (e) { if(e.code !== 'ENOENT') throw e; }
   const temp = `${target}.${randomUUID()}.tmp`;
-  await writeFile(temp, JSON.stringify(value,null,2)+'\n', {encoding:'utf8',mode:0o600,flag:'wx'});
-  await rename(temp,target);
+  try {
+    await writeFile(temp, value, {encoding:'utf8',mode:0o600,flag:'wx'});
+    await rename(temp,target);
+  } catch (error) {
+    try { await unlink(temp); } catch (cleanupError) { if (cleanupError.code !== 'ENOENT') error.cleanupError = cleanupError; }
+    throw error;
+  }
 }
+export async function atomicJson(target, value) { await atomicText(target, JSON.stringify(value,null,2)+'\n'); }
 export const readJson = async p => JSON.parse(await readFile(p,'utf8'));
 export function sourceIdentity(s) { return digest([s.provider,s.guildId,s.channelId,s.sourceId]); }
 export function sourceFingerprint(s) { return digest({text:s.text,actorId:s.actorId,readers:[...s.readers].sort(),final:s.final,withdrawn:s.withdrawn ?? false,metadata:s.metadata ?? {}}); }

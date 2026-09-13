@@ -42,6 +42,7 @@ export class VoiceProvider {
               else if(!commandFailure(e))failure(e);
             }else if(e.type==='session.input_transcript.delta'&&this.active){
               check(typeof e.event_id==='string'&&typeof e.delta==='string'&&Number.isFinite(e.start_ms)&&Number.isFinite(e.end_ms),'TRANSCRIPT_INVALID');
+              if(this.naturalConversation&&this.interrupted)this.resumeOutput();
               if(!this.seen.has(e.event_id)){check(this.seen.size<50000,'VOICE_EVENT_LIMIT');this.seen.add(e.event_id);this.onFragment({id:e.event_id,text:e.delta,startMs:e.start_ms,endMs:e.end_ms});}
             }else if(e.type==='session.output_audio.delta'&&this.active){
               check(typeof e.delta==='string'&&e.delta.length<=131072,'VOICE_OUTPUT_LIMIT');if(this.outputPermitted)this.onAudio(Buffer.from(e.delta,'base64'),this.sessionId,this.outputGeneration);
