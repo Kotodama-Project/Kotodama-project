@@ -53,4 +53,16 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,log=v
   async function close(){if(closing)return;closing=true;pipeline.draining=true;clearInterval(policyTimer);await discord?.close();await pipeline.close();await new Promise(resolve=>bridge?bridge.close(resolve):resolve());await new Promise(resolve=>control?control.close(resolve):resolve());store.releaseHost(ownerId);store.close();log({event:'runtime_stopped',ownerId});}
   return {config,store,owner,pipeline,discord,voice,close};
 }
-export async function controlCommand(config,input){const runtime=JSON.parse(await readFile(path.join(config.dataDir,'runtime.json'),'utf8'));const token=await readFile(runtime.secretFile,'utf8');const status=await fetch(`http://127.0.0.1:${runtime.port}/v1/status`,{headers:{authorization:'Bearer '+token},signal:AbortSignal.timeout(3000)});check(status.ok,'RUNTIME_NOT_AVAILABLE');const current=await status.json();check(current.ownerId===runtime.ownerId&&current.pid===runtime.pid&&current.startedAt===runtime.startedAt,'RUNTIME_OWNER_CHANGED');if(input.action==='status')return current;const response=await fetch(`http://127.0.0.1:${runtime.port}/v1/command`,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify(input),signal:AbortSignal.timeout(30000)});const value=await response.json();check(response.ok&&value.ok,value.error??'CONTROL_FAILED');return value.result;}
+export async function controlCommand(config,input){
+  const runtime=JSON.parse(await readFile(path.join(config.dataDir,'runtime.json'),'utf8'));
+  const port=Number(runtime.port);check(Number.isInteger(port)&&port>=1&&port<=65535,'RUNTIME_PORT_INVALID');
+  const endpoint=new URL('http://127.0.0.1/v1/status');endpoint.port=String(port);
+  const token=await readFile(path.join(config.dataDir,'control.secret'),'utf8');
+  const status=await fetch(endpoint,{redirect:'error',headers:{authorization:'Bearer '+token},signal:AbortSignal.timeout(3000)});
+  check(status.ok,'RUNTIME_NOT_AVAILABLE');const current=await status.json();
+  check(current.ownerId===runtime.ownerId&&current.pid===runtime.pid&&current.startedAt===runtime.startedAt,'RUNTIME_OWNER_CHANGED');
+  if(input.action==='status')return current;
+  endpoint.pathname='/v1/command';
+  const response=await fetch(endpoint,{method:'POST',redirect:'error',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify(input),signal:AbortSignal.timeout(30000)});
+  const value=await response.json();check(response.ok&&value.ok,value.error??'CONTROL_FAILED');return value.result;
+}

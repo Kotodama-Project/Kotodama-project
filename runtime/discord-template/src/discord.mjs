@@ -62,6 +62,7 @@ export class DiscordAdapter {
   async message(message){
     const cfg=this.policy();if(!this.verifiedInstallation||message.guildId!==cfg.discord.guildId||!cfg.discord.textChannelIds.includes(message.channelId)||message.author?.bot||message.webhookId||message.partial)return;
     const source=await this.source(message);const addressed=message.mentions.users.has(this.client.user.id)&&cfg.discord.operators.includes(message.author.id);
+    source.metadata.directlyAddressed=addressed;
     await this.pipeline.ingest(source,{execute:addressed,reply:addressed});
   }
   async withdraw(message){if(!this.verifiedInstallation)return;if(message.guildId!==this.config.discord.guildId)return;const key=sourceIdentity({provider:'discord',guildId:message.guildId,channelId:message.channelId,sourceId:message.id});const old=this.store.sourceInternal(key);if(old)await this.pipeline.ingest({...old,revision:Math.max(Date.now(),old.revision+1),text:'',withdrawn:true,metadata:{...old.metadata,withdrawalActorUnknown:true}},{execute:false});}

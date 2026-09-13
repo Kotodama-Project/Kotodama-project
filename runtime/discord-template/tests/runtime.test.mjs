@@ -13,6 +13,13 @@ import {runCommand} from '../src/command.mjs';
 import {Store} from '../src/store.mjs';
 
 const rootRepo=fileURLToPath(new URL('..',import.meta.url));const actor='100000000000000002';const fixtureCli=path.join(rootRepo,'tests/fixtures/model-cli.mjs');
+test('runtime metadata cannot redirect control credentials to an injected host',async t=>{
+  const {config,cleanup}=await configFixture(t);t.after(cleanup);
+  for(const port of ['80@external.example','80/path',0,65536]){
+    await atomicJson(path.join(config.dataDir,'runtime.json'),{port,secretFile:'must-not-be-read'});
+    await assert.rejects(controlCommand(config,{action:'status'}),{code:'RUNTIME_PORT_INVALID'});
+  }
+});
 async function configFixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-runtime-test-'));const config=exampleConfig({workspace:root});config.dataDir=path.join(root,'data');config.analyzer={executable:process.execPath,args:[fixtureCli],timeoutSeconds:10};config.worker={...config.worker,executable:process.execPath,args:[fixtureCli],timeoutSeconds:10};const file=path.join(root,'config.json');await atomicJson(file,config);const cleanup=async()=>{assert(inside(os.tmpdir(),root));await rm(root,{recursive:true,force:true});};return {root,config,file,cleanup};}
 test('real HTTP control and child CLI produce an artifact and verify its bytes',async t=>{
   const {config,file,cleanup}=await configFixture(t);const logs=[];const r=await startRuntime(file,{offline:true,log:v=>logs.push(v)});t.after(async()=>{await r.close();await cleanup();});

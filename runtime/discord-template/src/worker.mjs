@@ -1,10 +1,21 @@
 import path from 'node:path';
-import {mkdir,readFile,writeFile,lstat} from 'node:fs/promises';
+import {mkdir,readFile,writeFile,lstat,open} from 'node:fs/promises';
+import {constants} from 'node:fs';
 import {invokeCodex,modelExecution,parseModelJson} from './llm.mjs';
 import {runCommand} from './command.mjs';
 import {check,digest,safePath,atomicJson,errorCode} from './common.mjs';
 
 const resultSchema={type:'object',additionalProperties:false,required:['summary','files'],properties:{summary:{type:'string'},files:{type:'array',items:{type:'string'}}}};
+export async function readArtifact(file,maxBytes){
+  const handle=await open(file,constants.O_RDONLY|(constants.O_NOFOLLOW??0));
+  try{
+    const before=await handle.stat();check(before.isFile()&&before.nlink===1&&before.size<=maxBytes,'ARTIFACT_SIZE_LIMIT');
+    const bytes=Buffer.alloc(before.size+1);let total=0;
+    while(total<bytes.length){const read=await handle.read(bytes,total,bytes.length-total,total);if(!read.bytesRead)break;total+=read.bytesRead;}
+    const after=await handle.stat();check(total===before.size&&after.size===before.size&&after.mtimeMs===before.mtimeMs&&after.ctimeMs===before.ctimeMs,'ARTIFACT_CHANGED');
+    return bytes.subarray(0,total);
+  }finally{await handle.close();}
+}
 export class CliWorker {
   constructor(config){this.config=config;}
   async run(task,context,{signal,authorize=async()=>{},onStart=()=>{}}={}) {
@@ -48,7 +59,7 @@ export class CliWorker {
       const file=await safePath(cwd,relative,{mustExist:false});let stat;try{stat=await lstat(file);}catch(e){if(e.code!=='ENOENT')throw e;}
       if(!stat){const before=await runCommand('git',['rev-parse',`${baseRevision}:${relative}`],{cwd,signal,timeoutMs:10000});check(before.code===0,'DELETED_FILE_BINDING_FAILED');artifacts.push({relative,deleted:true,priorBlobOid:before.stdout.trim()});continue;}
       check(stat.isFile()&&stat.size<=cfg.worker.maxArtifactBytes,'ARTIFACT_SIZE_LIMIT');
-      const bytes=await readFile(file);artifacts.push({path:file,relative,sha256:digest(bytes),bytes:bytes.length});
+      const bytes=await readArtifact(file,cfg.worker.maxArtifactBytes);artifacts.push({path:file,relative,sha256:digest(bytes),bytes:bytes.length});
     }
     const summaryFile=path.join(resultRoot,'result.md');await writeFile(summaryFile,answer.summary,{encoding:'utf8',flag:'wx',mode:0o600});
     artifacts.push({path:summaryFile,relative:'result.md',sha256:digest(answer.summary),bytes:Buffer.byteLength(answer.summary)});

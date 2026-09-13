@@ -77,3 +77,10 @@ test('CT200 natural frontend speaks without waiting for a local transcript resul
   Live.last.emit('event',{type:'response.event',event:{type:'response.completed',response:{id:'r',output:[]}}});
   assert.equal(parked,1);await p.close();
 });
+
+test('native status uses the scoped backend and continues only after its result',async()=>{
+  let reads=0;const p=new VoiceProvider({mode:'assist',apiKey:'synthetic-test',sdk,naturalConversation:true,onStatus:async()=>{reads++;return {scope:'current_installation',connected:true};}});await p.start();
+  await p.handleNativeCalls([{name:'get_agent_status',call_id:'s',arguments:'{ }'}]);assert.equal(reads,1);
+  const events=Live.last.sent.slice(-2);assert.equal(events[0].type,'response.item.create');assert.equal(JSON.parse(events[0].item.output).scope,'current_installation');assert.equal(events[1].type,'response.create');
+  await assert.rejects(p.handleNativeCalls([{name:'get_agent_status',call_id:'other',arguments:'{"vm":"other"}'}]),{code:'LIVE_TOOL_ARGUMENTS_INVALID'});assert.equal(reads,1);await p.close();
+});
