@@ -154,14 +154,13 @@ VM別の配備はインストール、Bot、VC、データ領域、作業領域�
 
 個人でのLive会話では、プロジェクトの `README.md`、`CONTEXT.md`、`briefs/`、`docs/` から関連する短い抜粋を出典付きで読む機能があります。最大3資料・6000文字に絞り、資料の記載と実環境の確認を区別します。他の参加者がいるときは個人資料を読み上げません。
 
-## サブエージェント・OpenClaw連携案（未実装）
+## 任意のエージェント実行器との接続案（未実装）
 
-**接続できる可能性がある設計案です。このテンプレートにOpenClaw adapterやサブエージェント起動機能は同梱していません。**
+**以下はKotodama側に追加する接続契約の案です。OpenClaw adapterやサブエージェント起動は未実装・未検証です。**
 
-OpenAIの[client delegation](https://developers.openai.com/api/docs/guides/live-delegation?delegation-mode=client)では、アプリが委譲を受け、同じIDで結果を音声会話へ戻せます。委譲イベントは依頼本文ではないため、確定した出典・意図・現在の許可を既存Task ownerで解決してから外部実行器へ渡す案です。音声会話と長い仕事の寿命を分けます。
+- KotodamaがVCを所有する場合：client delegationを受け、確定Source・Intent・現在の許可を既存Task ownerで解決し、認可済みTaskだけをremote owner adapterからOpenClawの `sessions_spawn` 等へ渡す。結果は検証・必要な秘匿処理を経て、同じTaskとLiveの委譲IDへ返す設計です。
+- OpenClawがVCを所有する場合：KotodamaのSource/Intent/Task契約をtoolまたはremote ownerとして接続する設計です。このテンプレートの音声接続は同時起動せず、同じBot/VCの所有者を一つにします。
 
-[OpenClawのsub-agent仕様](https://docs.openclaw.ai/tools/subagents/tool-reference)には `sessions_spawn` と分離contextがあるため、必要な短い資料だけを持つ子へ、認可済みの仕事を割り当てるadapterを作れる可能性があります。逆にOpenClawからこのテンプレートのCLIへ依頼する場合も、actor文字列だけを本人認証とせず、信頼済みadapterで対応関係を検証する必要があります。
+どちらもVM・Bot・VC・Task・source revision、対象操作と期限、重複抑止、取消、結果の閲覧範囲をadapterで検査します。actor文字列や委譲イベントだけを認証・依頼本文・許可と扱わず、音声APIキーや全会話を子へ渡しません。音声終了と仕事取消は別に扱い、結果を一つのTask ownerへ戻します。[remote owner契約](docs/TASK-OWNER.md)への接続実装と実経路の検証が必要です。
 
-追加実装では、VM・Bot・VC・Task・source revisionの対応、実行対象と期限、重複抑止、取消、結果の閲覧範囲を検査し、結果を同じTask ownerへ返します。[remote owner契約](docs/TASK-OWNER.md)はその接続点候補ですが、OpenClawとそのまま互換ではありません。OpenClawのtool policyと実モデル/権限も確認し、音声APIキーや全会話を子へ渡さない設計にします。設定だけで接続済みにはなりません。
-
-もう一つの選択肢は、[OpenClaw自身のDiscord音声機能](https://docs.openclaw.ai/channels/discord/voice-channels)を会話の実行系にする案です。公式資料には公開API用 `gpt-live-1`・`marin` と `/vc join` が記載されています。Kotodama側はSource/Intent/Task契約をtoolまたはremote owner adapterで接続する設計になりますが、この接続は未実装・未検証です。このテンプレートとOpenClawの両方に同じBot/VCを同時所有させず、採用する音声実行系を一つ選びます。
+実装時の一次資料：[OpenAI client delegation](https://developers.openai.com/api/docs/guides/live-delegation?delegation-mode=client)、[OpenClaw sub-agent tool](https://docs.openclaw.ai/tools/subagents/tool-reference)、[OpenClaw Discord voice](https://docs.openclaw.ai/channels/discord/voice-channels)。
