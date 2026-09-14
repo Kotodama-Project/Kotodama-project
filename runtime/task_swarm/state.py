@@ -839,6 +839,17 @@ class SwarmState:
             if job is None:
                 raise protocol.SwarmError("UNKNOWN_JOB", "job does not exist")
             if job["state"] == "accepted":
+                # Replays must not grandfather an invalid pre-fix acceptance.
+                accepted = conn.execute(
+                    """SELECT * FROM attempts WHERE run_id = ? AND job_id = ?
+                       AND state = 'accepted' AND result_digest = ?
+                       ORDER BY attempt DESC LIMIT 1""",
+                    (run_id, job_id, result_digest),
+                ).fetchone()
+                if accepted is None or accepted["outcome"] != "candidate":
+                    raise protocol.SwarmError("NON_CANDIDATE_RESULT", "accepted evidence is not a candidate")
+                if accepted["worker_ref"] == owner_ref:
+                    raise protocol.SwarmError("IDENTITY_CONFLICT", "worker cannot accept its own report")
                 if job["accepted_digest"] != result_digest or job["verification_ref"] != verification_ref:
                     raise protocol.SwarmError("RESULT_MISMATCH", "job is already accepted with another result")
                 ok = True
@@ -860,6 +871,8 @@ class SwarmState:
             ).fetchone()
             if candidate is None:
                 raise protocol.SwarmError("RESULT_MISMATCH", "reported candidate digest does not match")
+            if candidate["outcome"] != "candidate":
+                raise protocol.SwarmError("NON_CANDIDATE_RESULT", "only candidate reports may be accepted")
             if candidate["worker_ref"] == owner_ref:
                 raise protocol.SwarmError("IDENTITY_CONFLICT", "worker cannot accept its own report")
             conn.execute(

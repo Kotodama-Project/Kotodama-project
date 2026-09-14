@@ -11,6 +11,7 @@ import uuid
 from typing import Any, Iterable
 
 from .protocol import SwarmError, digest_ref
+from .payload_budget import payload_budget
 from .privacy import TOKEN_PATTERN, KEY_PATTERN
 
 
@@ -98,7 +99,9 @@ def _canonical_bytes(text: Any, evidence_refs: Any) -> tuple[bytes, str]:
 class PayloadStore:
     """Store immutable UTF-8 JSON beneath one exact operator-selected root."""
 
-    def __init__(self, root: str | os.PathLike[str]) -> None:
+    def __init__(self, root: str | os.PathLike[str], *, max_payloads: int | None = None, max_storage_bytes: int | None = None) -> None:
+        self.max_payloads = max_payloads
+        self.max_storage_bytes = max_storage_bytes
         raw = Path(root)
         try:
             self.root = raw.expanduser().resolve(strict=False)
@@ -155,17 +158,18 @@ class PayloadStore:
     def put(self, text: Any, evidence_refs: Any = None) -> tuple[str, str]:
         raw, digest = _canonical_bytes(text, evidence_refs)
         path = self._path_for_digest(digest)
-        try:
-            with path.open("xb") as handle:
-                handle.write(raw)
-        except FileExistsError:
+        with payload_budget(self.root, self.payload_root, path, len(raw), self.max_payloads, self.max_storage_bytes):
             try:
-                if path.is_symlink() or path.read_bytes() != raw:
-                    _reject("PAYLOAD_IMMUTABLE_CONFLICT", "payload digest path is not immutable")
+                with path.open("xb") as handle:
+                    handle.write(raw)
+            except FileExistsError:
+                try:
+                    if path.is_symlink() or path.read_bytes() != raw:
+                        _reject("PAYLOAD_IMMUTABLE_CONFLICT", "payload digest path is not immutable")
+                except OSError as exc:
+                    raise PayloadError("PAYLOAD_STORAGE_ERROR", "existing payload cannot be read") from exc
             except OSError as exc:
-                raise PayloadError("PAYLOAD_STORAGE_ERROR", "existing payload cannot be read") from exc
-        except OSError as exc:
-            raise PayloadError("PAYLOAD_STORAGE_ERROR", "payload cannot be stored") from exc
+                raise PayloadError("PAYLOAD_STORAGE_ERROR", "payload cannot be stored") from exc
         return self._ref(digest), digest
 
     def get(self, payload_ref: Any, payload_digest: Any) -> dict[str, Any]:

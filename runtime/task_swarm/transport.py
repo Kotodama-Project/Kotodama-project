@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS messages (
     payload_digest TEXT NOT NULL,
     expires_at REAL NOT NULL,
     stored_at REAL NOT NULL,
+    payload_state TEXT NOT NULL DEFAULT 'ready' CHECK(payload_state IN ('pending','ready')),
     FOREIGN KEY(parent_message_id) REFERENCES messages(message_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_message_idempotency
@@ -251,6 +252,9 @@ class PeerTransport:
                     statement = statement.strip()
                     if statement:
                         connection.execute(statement)
+                columns = {row["name"] for row in connection.execute("PRAGMA table_info(messages)")}
+                if "payload_state" not in columns:
+                    connection.execute("ALTER TABLE messages ADD COLUMN payload_state TEXT NOT NULL DEFAULT 'ready' CHECK(payload_state IN ('pending','ready'))")
 
             self._retry_transaction(initialize)
 
@@ -372,6 +376,9 @@ class PeerTransport:
             }
             if result["parent_message_id"] is not None:
                 ref(result["parent_message_id"], "parent_message_id")
+            if row["payload_state"] not in {"pending", "ready"}:
+                raise SwarmError("CORRUPT_STORE", "invalid payload publication state")
+            result["payload_state"] = row["payload_state"]
             return result
         except SwarmError as exc:
             raise SwarmError("CORRUPT_STORE", "transport store contains an invalid message") from exc
@@ -414,6 +421,8 @@ class PeerTransport:
         row = connection.execute("SELECT * FROM acknowledgements WHERE message_id=?", (message["message_id"],)).fetchone()
         if row is None:
             return None
+        if message["payload_state"] != "ready":
+            raise SwarmError("CORRUPT_STORE", "unpublished message cannot have an acknowledgement")
         try:
             value = dict(row)
             ref(value["actor_ref"], "ACK actor")
@@ -453,7 +462,37 @@ class PeerTransport:
     # ------------------------------------------------------------------
     # Public send/retrieve/ack/reply API
     # ------------------------------------------------------------------
-    def send(self, request: Mapping[str, Any]) -> dict[str, Any]:
+    def _publish_pending(
+        self, parsed: Mapping[str, Any], publish: Callable[[], tuple[str, str]], *, action: str
+    ) -> dict[str, Any]:
+        # Admission was committed separately. A crash or write failure cannot
+        # release quota while leaving an unaccounted payload on disk. The exact
+        # same logical request may retry, but pending rows are never delivered.
+        def write(connection: sqlite3.Connection) -> dict[str, Any]:
+            now = self._now()
+            if parsed["expires_at"] <= now:
+                raise SwarmError("EXPIRED_MESSAGE", "publication expired")
+            self._validate_sender_and_recipient(parsed, action=action, now=now)
+            row = self._find_by_id(connection, parsed["message_id"])
+            if row is None or not self._request_matches(row, parsed):
+                raise SwarmError("IDEMPOTENCY_CONFLICT", "publication does not match its reservation")
+            self._envelope(row)
+            if row["payload_state"] == "pending":
+                actual = publish()
+                if actual != (parsed["payload_ref"], parsed["payload_digest"]):
+                    raise SwarmError("DIGEST_MISMATCH", "published payload does not match reservation")
+                now = self._now()
+                if parsed["expires_at"] <= now:
+                    raise SwarmError("EXPIRED_MESSAGE", "publication expired")
+                self._validate_sender_and_recipient(parsed, action=action, now=now)
+                connection.execute("UPDATE messages SET payload_state='ready' WHERE message_id=? AND payload_state='pending'", (parsed["message_id"],))
+                row = self._find_by_id(connection, parsed["message_id"])
+            return self._envelope(row)
+        return self._retry_transaction(write)
+
+    def send(self, request: Mapping[str, Any], *, publish: Callable[[], tuple[str, str]] | None = None) -> dict[str, Any]:
+        if publish is not None and not callable(publish):
+            raise SwarmError("INVALID_MESSAGE", "payload publisher must be callable")
         now = self._now()
         parsed = self._request(request, now)
         if parsed["parent_message_id"] is not None:
@@ -493,15 +532,15 @@ class PeerTransport:
                     message_id,idempotency_key,task_id,revision,context_digest,owner_ref,
                     active_home,authority_ref,capability_ref,sender_ref,recipient_ref,
                     sender_epoch,invocation_ref,parent_message_id,payload_ref,payload_digest,
-                    expires_at,stored_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    expires_at,stored_at,payload_state
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     parsed["message_id"], parsed["idempotency_key"], parsed["task_id"], parsed["revision"],
                     parsed["context_digest"], parsed["owner_ref"], parsed["active_home"],
                     parsed["authority_ref"], parsed["capability_ref"], parsed["sender_ref"],
                     parsed["recipient_ref"], parsed["sender_epoch"], parsed["invocation_ref"],
                     parsed["parent_message_id"], parsed["payload_ref"], parsed["payload_digest"],
-                    parsed["expires_at"], now,
+                    parsed["expires_at"], now, "pending" if publish is not None else "ready",
                 ),
             )
             row = self._find_by_id(connection, parsed["message_id"])
@@ -509,7 +548,12 @@ class PeerTransport:
                 raise SwarmError("CORRUPT_STORE", "inserted message cannot be read back")
             return self._envelope(row)
 
-        return self._retry_transaction(write)
+        receipt = self._retry_transaction(write)
+        if publish is not None:
+            return self._publish_pending(parsed, publish, action="send")
+        if receipt["payload_state"] != "ready":
+            raise SwarmError("PAYLOAD_UNAVAILABLE", "message payload is not published")
+        return receipt
 
     def receive(self, task_id: str, actor_ref: str, limit: int = 20) -> list[dict[str, Any]]:
         ref(task_id, "task_id")
@@ -529,7 +573,7 @@ class PeerTransport:
                 """SELECT m.* FROM messages AS m
                    WHERE m.task_id=? AND m.revision=? AND m.context_digest=?
                      AND m.owner_ref=? AND m.active_home=? AND m.authority_ref=?
-                     AND m.recipient_ref=? AND m.expires_at>?
+                     AND m.recipient_ref=? AND m.expires_at>? AND m.payload_state='ready'
                      AND NOT EXISTS (SELECT 1 FROM acknowledgements a WHERE a.message_id=m.message_id)
                    ORDER BY m.row_id LIMIT ?""",
                 (*scope_key(binding), actor_ref, now, scan_limit),
@@ -566,6 +610,8 @@ class PeerTransport:
                 raise SwarmError("MESSAGE_NOT_FOUND", "message is not addressed to this actor")
             self._envelope(row)
             self._check_row_scope(row, binding)
+            if row["payload_state"] != "ready":
+                raise SwarmError("PAYLOAD_UNAVAILABLE", "message payload is not published")
             if row["expires_at"] <= self._now():
                 raise SwarmError("EXPIRED_MESSAGE", "message expired")
             self._allowed(binding, actor_ref, row["sender_ref"], "receive")
@@ -606,6 +652,8 @@ class PeerTransport:
                 raise SwarmError("MESSAGE_NOT_FOUND", "message is not addressed to this actor")
             self._envelope(row)
             self._check_row_scope(row, binding)
+            if row["payload_state"] != "ready":
+                raise SwarmError("PAYLOAD_UNAVAILABLE", "message payload is not published")
             if row["expires_at"] <= now:
                 raise SwarmError("EXPIRED_MESSAGE", "expired messages cannot be acknowledged")
             if row["payload_digest"] != payload_digest:
@@ -637,7 +685,9 @@ class PeerTransport:
 
         return self._retry_transaction(write)
 
-    def reply(self, request: Mapping[str, Any]) -> dict[str, Any]:
+    def reply(self, request: Mapping[str, Any], *, publish: Callable[[], tuple[str, str]] | None = None) -> dict[str, Any]:
+        if publish is not None and not callable(publish):
+            raise SwarmError("INVALID_MESSAGE", "payload publisher must be callable")
         now = self._now()
         parsed = self._request(request, now)
         if parsed["parent_message_id"] is None:
@@ -651,6 +701,8 @@ class PeerTransport:
             if parent is None:
                 raise SwarmError("MESSAGE_NOT_FOUND", "reply parent does not exist")
             self._envelope(parent)
+            if parent["payload_state"] != "ready":
+                raise SwarmError("PAYLOAD_UNAVAILABLE", "reply parent is not published")
             self._check_row_scope(parent, sender)
             if parent["recipient_ref"] != parsed["sender_ref"]:
                 raise SwarmError("WRONG_RECIPIENT", "reply parent is addressed to another actor")
@@ -691,15 +743,15 @@ class PeerTransport:
                     message_id,idempotency_key,task_id,revision,context_digest,owner_ref,
                     active_home,authority_ref,capability_ref,sender_ref,recipient_ref,
                     sender_epoch,invocation_ref,parent_message_id,payload_ref,payload_digest,
-                    expires_at,stored_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    expires_at,stored_at,payload_state
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     parsed["message_id"], parsed["idempotency_key"], parsed["task_id"], parsed["revision"],
                     parsed["context_digest"], parsed["owner_ref"], parsed["active_home"],
                     parsed["authority_ref"], parsed["capability_ref"], parsed["sender_ref"],
                     parsed["recipient_ref"], parsed["sender_epoch"], parsed["invocation_ref"],
                     parsed["parent_message_id"], parsed["payload_ref"], parsed["payload_digest"],
-                    parsed["expires_at"], now,
+                    parsed["expires_at"], now, "pending" if publish is not None else "ready",
                 ),
             )
             row = self._find_by_id(connection, parsed["message_id"])
@@ -707,7 +759,12 @@ class PeerTransport:
                 raise SwarmError("CORRUPT_STORE", "inserted reply cannot be read back")
             return self._envelope(row)
 
-        return self._retry_transaction(write)
+        receipt = self._retry_transaction(write)
+        if publish is not None:
+            return self._publish_pending(parsed, publish, action="reply")
+        if receipt["payload_state"] != "ready":
+            raise SwarmError("PAYLOAD_UNAVAILABLE", "reply payload is not published")
+        return receipt
 
     def status(self, task_id: str, actor_ref: str, message_id: str) -> dict[str, Any]:
         ref(task_id, "task_id")
@@ -740,6 +797,8 @@ class PeerTransport:
                 if (tuple(reply[key] for key in _SCOPE_COLUMNS) != tuple(row[key] for key in _SCOPE_COLUMNS)
                         or reply["sender_ref"] != row["recipient_ref"] or reply["recipient_ref"] != row["sender_ref"]):
                     raise SwarmError("CORRUPT_STORE", "reply crosses its parent Task or actor scope")
+                if reply["payload_state"] != "ready":
+                    continue
                 reply_ids.append(reply_envelope["message_id"])
                 reply_ack = self._ack_record(connection, reply)
                 if reply_ack is None:
@@ -754,6 +813,8 @@ class PeerTransport:
                 unacked_reply_ids = []
             elif float(row["expires_at"]) <= now:
                 state = "expired"
+            elif row["payload_state"] != "ready":
+                state = "payload_pending"
             elif ack_row is None:
                 state = "stored"
             elif not reply_ids:
