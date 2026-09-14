@@ -1,0 +1,31 @@
+name: Control Plane Audit
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Run full regression suite
+        run: python -m unittest discover -s tests -v
+      - name: Run Knowledge Work CI
+        run: python tools/audit_knowledge_workspaces.py --format markdown --fail-on error --require-package
+      - name: Emit control-plane audit
+        run: python tools/audit_control_plane.py --format markdown --fail-on error
+      - name: Emit proposal-only maintenance plan
+        run: python tools/plan_control_plane_maintenance.py --format markdown

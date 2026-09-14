@@ -1,0 +1,194 @@
+{
+  "version": 1,
+  "status": "candidate_only",
+  "reviewed_at": "2026-09-07",
+  "review_interval_days": 7,
+  "north_star": {
+    "goal": "人間が自然に話し、相談し、仕事を依頼するだけで、Kotodama が意図を監査可能な仕事・成果・学習へ変換し、必要な正しい知識と適切なエージェントを継続的に整備できる Company OS になる。",
+    "principle": "Human Intent first. Agent automation may prepare, verify, compare, and propose, but must not silently manufacture authority, Promotion, Current Truth, runtime activation, or Public Beta GO.",
+    "beneficiary": "Kotodama を使って会社・プロジェクトを運営する人間と、その人間に代わって bounded work を行う AI workforce"
+  },
+  "current_state": {
+    "snapshot_date": "2026-09-07",
+    "public_maturity": "incomplete_public_preview",
+    "strengths": [
+      "Human Intent, Evidence Chain, Company Pack, Context, Workforce, Business/Learning の全体像が README に整理されている",
+      "Company governance starter、schema、validator、review chain、candidate-only boundary が公開されている",
+      "Current Truth、Human approval、Capability Grant、Verification Receipt、Promotion を短絡させない設計がある"
+    ],
+    "gaps": [
+      "Goal/KGI/Key Factors と日々の work を結ぶ単一の machine-readable control plane がない",
+      "リポジトリ全体の情報を canonical fact family、freshness、provenance、projection として横断管理する knowledge registry がない",
+      "Agent の目的、権限、eval、重複、退役、rollback を一元管理する agent registry がない",
+      "Knowledge と Agent を継続監査し、改善候補を自動生成する閉ループが未実装",
+      "Context Platform は候補段階であり、live Company-wide query plane として採用・実証されていない",
+      "Public Voice/Discord E2E、live runtime、Final Human GO、Public Beta は未成立",
+      "KGI の live baseline telemetry がまだない"
+    ]
+  },
+  "kgis": [
+    {
+      "id": "KGI-01",
+      "name": "Verified intent-to-outcome completion",
+      "definition": "eligible な人間の依頼が、Intent Candidate から検証済み outcome / Promotion Candidate まで到達した割合",
+      "target": {"operator": ">=", "value": 0.8, "unit": "ratio"},
+      "baseline_status": "not_measured",
+      "baseline": null,
+      "measurement_phase": "P4",
+      "guardrails": ["KGI-02", "KGI-04"]
+    },
+    {
+      "id": "KGI-02",
+      "name": "Promotion traceability integrity",
+      "definition": "Promotion / Current Truth 変更が Source、Decision authority、Work/Artifact、Verification、Promotion authority に完全に束縛されている割合",
+      "target": {"operator": "==", "value": 1.0, "unit": "ratio"},
+      "baseline_status": "not_measured",
+      "baseline": null,
+      "measurement_phase": "P4",
+      "guardrails": []
+    },
+    {
+      "id": "KGI-03",
+      "name": "Knowledge reliability",
+      "definition": "active canonical fact family が freshness SLA を満たし、promotion 時に severity-1 contradiction が残っていない状態",
+      "target": {"operator": ">=", "value": 0.95, "unit": "fresh_fact_family_ratio"},
+      "baseline_status": "not_measured",
+      "baseline": null,
+      "measurement_phase": "P1",
+      "guardrails": ["KGI-02"]
+    },
+    {
+      "id": "KGI-04",
+      "name": "Agent reliability and governance",
+      "definition": "active agent が registry、eval gate、least-privilege authority、rollback/retirement path を持ち、critical eval suite を満たす状態",
+      "target": {"operator": ">=", "value": 0.95, "unit": "critical_eval_pass_ratio"},
+      "baseline_status": "not_measured",
+      "baseline": null,
+      "measurement_phase": "P2",
+      "guardrails": ["KGI-02"]
+    },
+    {
+      "id": "KGI-05",
+      "name": "Human structuring load",
+      "definition": "eligible request を実行可能にするまで人間に要求する material clarification の中央値",
+      "target": {"operator": "<=", "value": 1, "unit": "clarifications_p50"},
+      "baseline_status": "not_measured",
+      "baseline": null,
+      "measurement_phase": "P4",
+      "guardrails": ["KGI-01", "KGI-02"]
+    },
+    {
+      "id": "KGI-06",
+      "name": "Control-plane responsiveness",
+      "definition": "critical audit finding が owner と bounded next work を持つまでの時間",
+      "target": {"operator": "<=", "value": 1, "unit": "days_p95"},
+      "baseline_status": "not_measured",
+      "baseline": null,
+      "measurement_phase": "P3",
+      "guardrails": ["KGI-02"]
+    }
+  ],
+  "key_factors": [
+    {"id": "KF-01", "name": "Canonical Knowledge Base", "outcome": "人間とAgentが必要な正しい情報へ、canonical owner・provenance・freshness・authorityを失わず到達できる", "kgi_links": ["KGI-03", "KGI-05"]},
+    {"id": "KF-02", "name": "Explicit Strategy and Metrics", "outcome": "Goal、KGI、Key Factor、Phase、Work が機械可読に接続され、進捗が claim ではなく evidence で更新される", "kgi_links": ["KGI-01", "KGI-06"]},
+    {"id": "KF-03", "name": "Agent Foundry and Registry", "outcome": "すべての active agent が目的、責務、input/output、権限、eval、cost、rollback、retirement を持ち、重複や性能劣化を監査できる", "kgi_links": ["KGI-04", "KGI-06"]},
+    {"id": "KF-04", "name": "Evidence and Governance", "outcome": "Source→Intent→Decision→Work→Verification→Promotion→Current Truth の chain が短絡せず、各段階の authority が明示される", "kgi_links": ["KGI-02", "KGI-04"]},
+    {"id": "KF-05", "name": "Context Compiler", "outcome": "Agentごと・仕事ごとに必要な canonical context だけを権限付きで組み立て、古い・競合・不要な情報を混ぜない", "kgi_links": ["KGI-01", "KGI-03", "KGI-05"]},
+    {"id": "KF-06", "name": "Evaluation and Observability", "outcome": "品質、境界遵守、latency、cost、freshness、human corrections を測り、baseline と regression を比較できる", "kgi_links": ["KGI-01", "KGI-03", "KGI-04", "KGI-06"]},
+    {"id": "KF-07", "name": "Closed-loop Orchestration", "outcome": "Audit finding が自動で candidate work に変換され、Agentが修正案と証拠を作り、policy/human gateを越えたものだけ採用される", "kgi_links": ["KGI-01", "KGI-06"]},
+    {"id": "KF-08", "name": "Human Authority and Simple UX", "outcome": "人間は自然な会話を保ちつつ、重要な曖昧さ、権限、不可逆操作、Promotionだけを明示的に判断できる", "kgi_links": ["KGI-02", "KGI-05"]}
+  ],
+  "phases": [
+    {
+      "id": "P0",
+      "name": "Control Plane Baseline",
+      "state": "in_progress",
+      "objective": "Goal/KGI、knowledge、agent、audit を registry 化し、全リポジトリを deterministic に棚卸しできるようにする",
+      "key_factors": ["KF-01", "KF-02", "KF-03", "KF-06"],
+      "exit_gates": [
+        "OKF / Knowledge / Agent / Audit registry が schema-valid",
+        "repository classification coverage >= 98%",
+        "canonical owner の欠落が error として検出される",
+        "active agent を無登録で起動できない policy が定義される"
+      ]
+    },
+    {
+      "id": "P1",
+      "name": "Canonical Knowledge",
+      "state": "planned",
+      "objective": "正しい情報を canonical fact family として整備し、provenance、freshness、contradiction、retrieval を管理する",
+      "key_factors": ["KF-01", "KF-05", "KF-06"],
+      "exit_gates": [
+        "KGI-03 baseline が取得される",
+        "critical fact family の freshness SLA が定義・計測される",
+        "contradiction candidate が自動検出され、人間/authorityへ handoff される",
+        "task context が canonical source と provenance を保持して生成される"
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Agent Foundry",
+      "state": "planned",
+      "objective": "Agentを capability と eval で管理し、作成・比較・統合・退役を再現可能にする",
+      "key_factors": ["KF-03", "KF-04", "KF-06"],
+      "exit_gates": [
+        "KGI-04 baseline が取得される",
+        "全 active agent に registry entry、eval suite、authority、rollback がある",
+        "duplicate capability と underperforming agent を定期検出できる",
+        "agent activation は eval gate と capability grant を要求する"
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Agentic Maintenance Loop",
+      "state": "planned",
+      "objective": "OKF・Knowledge・Agent の監査から改善候補までを Agent が継続生成する",
+      "key_factors": ["KF-02", "KF-03", "KF-06", "KF-07"],
+      "exit_gates": [
+        "Knowledge Curator / Agent Auditor / OKF Steward が proposal-only で稼働する",
+        "audit finding から candidate Issue/Work Order/PR を生成できる",
+        "critical finding の owner と bounded next work が 1日以内に作られる",
+        "Agent自身の変更も独立evalとPromotion gateを通る"
+      ]
+    },
+    {
+      "id": "P4",
+      "name": "Dogfood End-to-End",
+      "state": "planned",
+      "objective": "Office/Voice/Intent/Work/Verification/Promotion Candidate を実データの bounded dogfood で一周させる",
+      "key_factors": ["KF-04", "KF-05", "KF-07", "KF-08"],
+      "exit_gates": [
+        "KGI-01 / KGI-02 / KGI-05 baseline が取得される",
+        "eligible request の traceable completion が計測される",
+        "rollback / stop / correction が実運用で検証される",
+        "claim と live evidence が一致する"
+      ]
+    },
+    {
+      "id": "P5",
+      "name": "Public Beta Gate",
+      "state": "planned",
+      "objective": "live runtime、privacy/security、SLO、rollback、support、Final Human GO を満たして Public Beta を判断する",
+      "key_factors": ["KF-04", "KF-06", "KF-08"],
+      "exit_gates": [
+        "live installation / restart / rollback / restore evidence がある",
+        "Voice/Discord E2E と privacy/consent/retention enforcement が検証される",
+        "critical agent eval と operational SLO が満たされる",
+        "Final Human GO が明示的に記録される"
+      ]
+    },
+    {
+      "id": "P6",
+      "name": "Self-Optimizing Company OS",
+      "state": "planned",
+      "objective": "品質・速度・cost・human load を継続評価し、AgentとKnowledgeを安全に自動改善する",
+      "key_factors": ["KF-01", "KF-03", "KF-05", "KF-06", "KF-07"],
+      "exit_gates": [
+        "canary/evalで improvement candidate を比較できる",
+        "regression で自動rollbackまたはPromotion停止ができる",
+        "agent merge/retire と knowledge compaction が evidence-driven",
+        "最適化が Human Intent と governance guardrail を上書きしない"
+      ]
+    }
+  ]
+}
