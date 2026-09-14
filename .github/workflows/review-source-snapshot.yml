@@ -1,0 +1,40 @@
+name: Swarm review source evidence
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    if: github.head_ref == 'fix/swarm-acceptance-storage-20260914'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          path: candidate
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 86bc5bf45124e1b8e4520d376028c4e2eba99c84
+          persist-credentials: false
+          path: review-tools
+          sparse-checkout: tools/check_tracked_secret_hygiene.py
+          sparse-checkout-cone-mode: false
+      - name: Refuse tracked credentials using the current main checker
+        run: python -S -B review-tools/tools/check_tracked_secret_hygiene.py --root candidate
+      - name: Package tracked candidate source only
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/swarm-source"
+          git rev-parse HEAD > "${RUNNER_TEMP}/swarm-source/COMMIT.txt"
+          git archive --format=tar HEAD > "${RUNNER_TEMP}/swarm-source/source.tar"
+          cd "${RUNNER_TEMP}/swarm-source"
+          sha256sum source.tar > SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: swarm-review-source-${{ github.sha }}
+          path: ${{ runner.temp }}/swarm-source/
+          retention-days: 3
+          if-no-files-found: error
