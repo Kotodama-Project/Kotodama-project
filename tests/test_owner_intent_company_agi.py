@@ -5,10 +5,11 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL = ROOT / "docs" / "OWNER-INTENT-COMPANY-AGI.md"
-README = ROOT / "README.md"
+README = ROOT / "docs" / "OVERVIEW.md"
 STATUS = ROOT / "STATUS.md"
 ROADMAP = ROOT / "ROADMAP.md"
 CANONICAL_LINK = "docs/OWNER-INTENT-COMPANY-AGI.md"
+OVERVIEW_CANONICAL_LINK = "OWNER-INTENT-COMPANY-AGI.md"
 GRILLU_ANCHOR = "grillu-adaptive-requirements"
 
 
@@ -77,7 +78,7 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
                 self.assertIn(marker, self.canonical)
 
         for marker in (
-            f"]({CANONICAL_LINK})",
+            f"]({OVERVIEW_CANONICAL_LINK})",
             "README は Projection",
             "### Target",
             "### Current reality",

@@ -330,7 +330,7 @@ class CompanyPackIntentCandidateInstanceContractTests(unittest.TestCase):
         ):
             self.assertIn(required, text)
         discoverability_files = (
-            ROOT / "README.md",
+            ROOT / "docs" / "OVERVIEW.md",
             ROOT / "docs" / "CUSTOMIZATION-CHECKLIST.md",
             ROOT / "docs" / "REVIEW-DECISION-HANDOFF.md",
             ROOT / "docs" / "REVIEW-WORKFLOW.md",

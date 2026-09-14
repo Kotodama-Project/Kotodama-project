@@ -390,7 +390,7 @@ class ProtectedExecutionRequestHandoffCandidateContractTests(unittest.TestCase):
         self.assertIn("WINDOW_EXCEEDS_PARENT_EXPIRY", refused.stdout)
 
     def test_runbook_and_public_navigation_links_are_discoverable(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
         roadmap = (ROOT / "ROADMAP.md").read_text(encoding="utf-8")
         receipt_runbook = (ROOT / "docs" / "PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md").read_text(
