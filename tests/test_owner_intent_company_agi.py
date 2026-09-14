@@ -288,14 +288,14 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
                 self.assertIn(marker, projection_words)
 
         for public_surface in (self.canonical, self.projection):
-            for private_marker in (
-                "source_thread_id",
-                "C:\\Users\\",
-                "CT200",
-                "VM214",
-                "local-zfs-raid01",
+            for private_pattern in (
+                re.compile(r"source_thread_id"),
+                re.compile(r"[A-Za-z]:\\Users\\"),
+                re.compile(r"\b(?:CT|VM)\d{3}\b"),
+                re.compile(r"\blocal-zfs-"),
             ):
-                self.assertNotIn(private_marker, public_surface)
+                with self.subTest(pattern=private_pattern.pattern):
+                    self.assertIsNone(private_pattern.search(public_surface))
 
     def test_grillu_is_adaptive_and_never_authorizes_execution(self) -> None:
         for marker in (
