@@ -1,0 +1,47 @@
+name: 不具合の報告 / Bug report
+description: 公開リポジトリの tools、schema、runtime 候補、文書で再現できる問題
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        credential、private な host 名や絶対パス、参加者の情報、音声、文字起こしは書かないでください。脆弱性は Issue ではなく Security の private report を使ってください（SECURITY.md）。
+        Please do not include credentials, private hostnames or absolute paths, participant data, audio, or transcripts. Report vulnerabilities through the private channel described in SECURITY.md.
+  - type: input
+    id: revision
+    attributes:
+      label: 対象の revision / Revision
+      description: main の commit SHA、または PR 番号
+      placeholder: "86bc5bf"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 環境 / Environment
+      description: OS、Python の版、Node の版（runtime/discord-template の場合）
+      placeholder: "Windows 11, Python 3.12.10, Node 24"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 最小の再現手順 / Smallest safe reproduction
+      description: 実行したコマンドと、観測した出力（秘密値は伏せる）
+      placeholder: |
+        python -S -B tools/smoke_company_pack_review_chain.py
+        → {"status": "REFUSED", ...}
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した結果 / Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: not_run
+    attributes:
+      label: 実行していない確認 / Checks not run
+      description: 実行しなかった検証があれば書いてください（「未実行」で構いません）

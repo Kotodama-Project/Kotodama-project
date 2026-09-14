@@ -1,0 +1,24 @@
+name: 文書の修正 / Documentation fix
+description: README、docs/、STATUS、ROADMAP の誤り、古さ、分かりにくさ
+title: "docs: "
+labels: ["documentation"]
+body:
+  - type: input
+    id: document
+    attributes:
+      label: 対象の文書と箇所 / Document and location
+      placeholder: "docs/FIVE-MINUTE-TOUR.md の「3. PASS を読む」"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 何が困るか / What is wrong or unclear
+      description: 古い記述、矛盾、リンク切れ、初見で分からない語など
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 直し方の案 / Proposed wording
+      description: 分かる範囲で。公開面の境界（Incomplete Public Preview、NO_GO_UNPUBLISHED）を弱める表現は採用しません。
