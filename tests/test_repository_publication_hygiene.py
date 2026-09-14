@@ -586,7 +586,7 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
 
     def test_dependabot_has_a_review_cooldown(self) -> None:
         dependabot = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
-        self.assertEqual(dependabot.count("default-days: 7"), 2)
+        self.assertEqual(dependabot.count("default-days: 7"), dependabot.count("package-ecosystem:"))
 
     def test_dependency_review_is_pinned_and_bounded(self) -> None:
         dependency_review = (

@@ -276,13 +276,13 @@ class CompanyPackCatalogCliTests(unittest.TestCase):
         )
 
     def test_catalog_runbook_and_starter_links_are_discoverable(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         starter_readme = (STARTER / "README.md").read_text(encoding="utf-8")
         runbook_path = ROOT / "docs" / "COMPANY-PACK-CATALOG.md"
         runbook = runbook_path.read_text(encoding="utf-8")
 
         self.assertIn("tools/catalog_company_pack.py", readme)
-        self.assertIn("docs/COMPANY-PACK-CATALOG.md", readme)
+        self.assertIn("](COMPANY-PACK-CATALOG.md)", readme)
         self.assertIn("tools/catalog_company_pack.py", starter_readme)
         self.assertIn("../../docs/COMPANY-PACK-CATALOG.md", starter_readme)
         self.assertIn("read-only", runbook)

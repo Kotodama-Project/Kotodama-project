@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ReadmeVoiceRotationContractTests(unittest.TestCase):
     def test_voice_rotation_explains_user_value_and_current_boundary(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         start = readme.index("### 15分 Voice rotation")
         end = readme.index("## GrillU", start)
         section = readme[start:end]
@@ -26,7 +26,7 @@ class ReadmeVoiceRotationContractTests(unittest.TestCase):
                 self.assertIn(marker, section)
 
     def test_voice_rotation_keeps_product_contract_before_unproven_claim(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         start = readme.index("### 15分 Voice rotation")
         end = readme.index("## GrillU", start)
         section = readme[start:end]

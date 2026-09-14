@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ReadmeCompanyTemplateUsageMapTests(unittest.TestCase):
     def _section(self) -> str:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         start = readme.index("## Company Template・Blocks・MOCsの使い方")
         end = readme.index("## Context Platform — 会社の共有記憶", start)
         return readme[start:end]
@@ -43,19 +43,19 @@ class ReadmeCompanyTemplateUsageMapTests(unittest.TestCase):
     def test_usage_map_links_each_shipped_entrypoint(self) -> None:
         section = self._section()
         links = (
-            "[Company Template](templates/company/README.md)",
-            "[Blocks](templates/blocks/README.md)",
-            "[Governed Records](templates/records/README.md)",
-            "[MOCs](templates/mocs/README.md)",
-            "[Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md)",
-            "[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)",
-            "[Validation Guide](docs/VALIDATION.md)",
+            "[Company Template](../templates/company/README.md)",
+            "[Blocks](../templates/blocks/README.md)",
+            "[Governed Records](../templates/records/README.md)",
+            "[MOCs](../templates/mocs/README.md)",
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+            "[Validation Guide](VALIDATION.md)",
         )
         for link in links:
             with self.subTest(link=link):
                 self.assertIn(link, section)
                 relative_path = link.split("](", 1)[1][:-1]
-                self.assertTrue((ROOT / relative_path).is_file())
+                self.assertTrue((ROOT / "docs" / relative_path).is_file())
 
     def test_usage_map_keeps_example_immutable_and_commands_on_candidate(self) -> None:
         section = self._section()

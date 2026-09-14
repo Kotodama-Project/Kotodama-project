@@ -135,7 +135,7 @@ class CompanyPackReviewChainSmokeCliTests(unittest.TestCase):
 
     def test_public_docs_expose_the_one_command_smoke_and_boundaries(self) -> None:
         surfaces = {
-            "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
+            "README.md": (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8"),
             "docs/STARTER-WALKTHROUGH.md": (
                 ROOT / "docs" / "STARTER-WALKTHROUGH.md"
             ).read_text(encoding="utf-8"),
