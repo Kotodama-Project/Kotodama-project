@@ -17,3 +17,36 @@ Discordのテキスト・音声 → 出典と版 → 意図・ToDo → 明示依
 接続待ちと復旧待ちは接続個体に結び付けます。停止・設定取消・終了後に遅い接続が復活したり、新しい接続を古い失敗処理が破棄したりしません。終了時の文字起こしは旧epochの出典として確定し、その出典から実行・音声回答を再開しません。
 
 Discord再生はLive出力と別の世代・閲覧許可・source revisionに束縛します。利用者の発話開始、権限変更、mode変更、queue overflowではplayerと未再生PCMを先に破棄します。Liveには停止指示を送りますが、そのACKを再生停止の証明には使いません。音声会話終了はLiveセッションだけを閉じ、既に許可されたTaskは取り消しません。
+
+
+## Runtime admission and recovery boundary
+
+The conversation Pipeline records the current Source before it seeks a bounded
+analysis slot. Global, room and reader limits share one scheduler; a finite
+priority queue may supersede a passive entry, but does not erase its Source.
+Reservations count analysis requests, not provider billing. SQLite daily and
+cumulative counters survive process replacement. A queued operation revalidates
+Source revision, reader access and current policy before reservation/dispatch and
+after the model returns. Cancelled operations retain their slots until they settle.
+Archive post-processing and other model adapters have separate controls; this is
+not an installation-wide financial budget.
+
+A write worker has two execution boundaries: Codex's configured sandbox for
+implementation, and a required operator-managed immutable Docker image for
+verification. Verification sees a read-only candidate, no network, no host HOME,
+no credential mounts, and bounded scratch/resources. A missing verifier is an
+explicit refusal, not a host-command fallback. The host collector does not execute
+candidate files and disables Git external diff/text conversion; file reads bind
+both descriptor and directory entry, reject links/special files and bound the read.
+Docker process termination must be observed at the daemon, not inferred from the
+client exit. Failed cleanup leaves the Task uncertain.
+
+Startup preserves Task IDs: queued becomes paused, running/stopping becomes
+uncertain. Only paused/cancelled/failed may explicitly resume after current grant
+and Source checks. An uncertain execution is never automatically replayed. Remote
+Task owners remain authoritative; this does not add another remote recovery ledger.
+
+The existing required `Trusted repository validation` workflow calls the complete
+Discord reusable matrix and fails unless its result is success. Failure, skipped,
+cancelled and missing matrix results cannot produce a green required context.
+This candidate does not mutate GitHub administration settings.

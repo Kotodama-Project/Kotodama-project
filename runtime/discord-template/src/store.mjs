@@ -16,6 +16,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, type TEXT NOT NULL, at TEXT NOT NULL, body TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS deliveries(key TEXT PRIMARY KEY, digest TEXT NOT NULL, state TEXT NOT NULL, message_id TEXT);
       CREATE TABLE IF NOT EXISTS usage(day TEXT PRIMARY KEY, reserved_ms INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS analysis_usage(day TEXT PRIMARY KEY, reserved INTEGER NOT NULL CHECK(reserved>=0));
       CREATE TABLE IF NOT EXISTS voice_controls(guild TEXT NOT NULL,channel TEXT NOT NULL,suspension TEXT,PRIMARY KEY(guild,channel));
       CREATE TABLE IF NOT EXISTS voice_consents(guild TEXT NOT NULL,channel TEXT NOT NULL,actor TEXT NOT NULL,notice TEXT NOT NULL,granted INTEGER NOT NULL,updated TEXT NOT NULL,PRIMARY KEY(guild,channel,actor));
       CREATE TABLE IF NOT EXISTS host_lock(name TEXT PRIMARY KEY, owner TEXT NOT NULL, pid INTEGER NOT NULL, created TEXT NOT NULL, domain TEXT);
@@ -89,11 +90,29 @@ export class Store {
   finish(id,revision,result){check(['needs_review','failed','uncertain'].includes(result.state),'INVALID_RESULT_STATE');const t=this.taskInternal(id);const s=this.sourceInternal(t.source_key);check(s&&!s.withdrawn&&s.revision===t.source_revision,'SOURCE_CHANGED');this.assertContext(id,t.actor);const r=this.db.prepare("UPDATE tasks SET state=?,result=? WHERE id=? AND revision=? AND state='running'").run(result.state,JSON.stringify(result),id,revision);check(r.changes===1,'TASK_CHANGED');this.event('task.result',{state:result.state,artifact_count:result.artifacts?.length??0},id);}
   cancel(id,actor){const t=this.task(id,actor);if(['stopping','cancelled','uncertain'].includes(t.state))return t;this.db.prepare('UPDATE tasks SET state=?,revision=revision+1,result=NULL WHERE id=?').run(t.state==='running'?'stopping':'cancelled',id);this.event('task.stop_requested',{},id);return t;}
   confirmStop(id,actor,confirmed){const t=this.task(id,actor);check(t.state==='stopping','TASK_NOT_STOPPING');this.db.prepare('UPDATE tasks SET state=? WHERE id=?').run(confirmed?'cancelled':'uncertain',id);this.event('task.stop_observed',{confirmed},id);}
-  resume(id,actor){const t=this.task(id,actor);check(['cancelled','failed'].includes(t.state),'TASK_CANNOT_RESUME');const s=this.source(t.source_key,actor);check(s.revision===t.source_revision,'SOURCE_CHANGED');this.db.prepare("UPDATE tasks SET state='queued',revision=revision+1,result=NULL WHERE id=?").run(id);this.event('task.resumed',{},id);return this.task(id,actor);}
-  reconcileInterrupted(){this.db.prepare("UPDATE tasks SET state='uncertain' WHERE state IN ('running','stopping')").run();}
+  resume(id,actor){return this.transaction(()=>{const t=this.task(id,actor);check(['cancelled','failed','paused'].includes(t.state),'TASK_CANNOT_RESUME');const s=this.source(t.source_key,actor);check(s.revision===t.source_revision,'SOURCE_CHANGED');const changed=this.db.prepare("UPDATE tasks SET state='queued',revision=revision+1,result=NULL WHERE id=? AND revision=? AND state=?").run(id,t.revision,t.state);check(changed.changes===1,'TASK_CHANGED');this.event('task.resumed',{previousState:t.state,revision:t.revision+1},id);return this.task(id,actor);});}
+  reconcileInterrupted(){return this.transaction(()=>{
+    const affected=this.db.prepare("SELECT id,state,revision FROM tasks WHERE state IN ('queued','running','stopping') ORDER BY rowid").all();
+    for(const task of affected){const state=task.state==='queued'?'paused':'uncertain',reason=state==='paused'?'RUNTIME_RESTART_BEFORE_EXECUTION':'RUNTIME_RESTART_DURING_EXECUTION';
+      this.db.prepare('UPDATE tasks SET state=?,result=? WHERE id=? AND revision=? AND state=?').run(state,JSON.stringify({state,summary:reason,artifacts:[],recoveryRequired:true}),task.id,task.revision,task.state);
+      this.event('task.recovery_required',{previousState:task.state,state,reason,revision:task.revision},task.id);
+    }
+    return affected.length;
+  });}
   claimDelivery(key,body){return this.transaction(()=>{const hash=digest(body),old=this.db.prepare('SELECT * FROM deliveries WHERE key=?').get(key);if(old){check(old.digest===hash,'DELIVERY_CONFLICT');return false;}this.db.prepare('INSERT INTO deliveries VALUES(?,?,?,NULL)').run(key,hash,'unknown');return true;});}
   delivered(key,messageId){this.db.prepare("UPDATE deliveries SET state='sent',message_id=? WHERE key=?").run(messageId,key);}
   deliveryState(key){return this.db.prepare('SELECT state FROM deliveries WHERE key=?').get(key)?.state??null;}
   reserveAudio(milliseconds,capSeconds,day=new Date().toISOString().slice(0,10),totalCapSeconds){return this.transaction(()=>{check(Number.isSafeInteger(milliseconds)&&milliseconds>0&&capSeconds>0,'AUDIO_BUDGET_REQUIRED');const old=this.db.prepare('SELECT reserved_ms FROM usage WHERE day=?').get(day)?.reserved_ms??0;check(old+milliseconds<=capSeconds*1000,'AUDIO_BUDGET_EXHAUSTED');if(totalCapSeconds!==undefined){const total=this.db.prepare('SELECT COALESCE(SUM(reserved_ms),0) AS total FROM usage').get().total;check(total+milliseconds<=totalCapSeconds*1000,'AUDIO_TOTAL_BUDGET_EXHAUSTED');}this.db.prepare('INSERT INTO usage VALUES(?,?) ON CONFLICT(day) DO UPDATE SET reserved_ms=excluded.reserved_ms').run(day,old+milliseconds);return old+milliseconds;});}
+  reserveAnalysis(limits,day=new Date().toISOString().slice(0,10)){
+    check(/^\d{4}-\d{2}-\d{2}$/.test(day),'ANALYSIS_DAY_INVALID');
+    for(const key of ['maxDailyAnalyses','maxTotalAnalyses'])check(Number.isSafeInteger(limits[key])&&limits[key]>=0,'ANALYSIS_LIMIT_INVALID');
+    return this.transaction(()=>{
+      const used=this.db.prepare('SELECT reserved FROM analysis_usage WHERE day=?').get(day)?.reserved??0;
+      const total=this.db.prepare('SELECT COALESCE(SUM(reserved),0) AS total FROM analysis_usage').get().total;
+      check(used<limits.maxDailyAnalyses,'ANALYSIS_BUDGET_EXHAUSTED');check(total<limits.maxTotalAnalyses,'ANALYSIS_TOTAL_BUDGET_EXHAUSTED');
+      this.db.prepare('INSERT INTO analysis_usage VALUES(?,?) ON CONFLICT(day) DO UPDATE SET reserved=excluded.reserved').run(day,used+1);
+      return {day,reserved:used+1,total:total+1};
+    });
+  }
   close(){this.db.close();}
 }
