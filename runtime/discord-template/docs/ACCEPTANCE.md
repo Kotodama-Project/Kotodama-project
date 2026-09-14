@@ -23,3 +23,34 @@
 `offline_fixture`は合成試験の表示です。設定にIDやモデル名があるだけで接続済みとは表示しません。CIは実音声・APIキー・Discord tokenを使いません。
 
 2026-09-13の限定実行確認では、合成の開発課題をtrusted CLIから投入し、Lunaが実ファイルを変更しました。Discordの画面操作による確認はエージェントがCLI経由で行ったもので、人による満足・音声同意の証拠とは区別します。ローカルモデルのfallbackはprimaryの起動失敗を模した条件で、実モデルのCLIツール操作・ファイル変更・テスト・成果hash読戻しまで確認しました。Discordの後続訂正でも同じTask IDの新版でREADME作成とコード修正が成功しています。
+
+
+## Review remediation acceptance (candidate)
+
+The following regression surfaces are executable in `tests/analysis-admission.test.mjs`,
+`tests/restart-recovery.test.mjs`, `tests/artifact-read.test.mjs`, and
+`tests/verification.test.mjs`. Passing them is local/CI evidence, not user acceptance.
+
+| Scenario | Required observation |
+|---|---|
+| 400 concurrent analysis submissions | At most the configured active and queued counts; no unbounded pending set |
+| Permission/revision changes during queueing | No stale/unauthorized model dispatch or result adoption |
+| Zero/exhausted analysis allowance | Source preserved, analysis explicitly deferred, no new execution |
+| Restart and UTC rollover | Consumed cumulative reservations persist |
+| Runtime restart | Unstarted Tasks visibly paused; running/stopping uncertain; no duplicate execution |
+| Explicit paused resume | Same Task ID, new revision, current permission checked before state mutation |
+| Ordinary files, FIFO, links, directories | Bounded reads; special/link paths rejected without hanging |
+| Generated verification | No host-command fallback; read-only workspace; no network or host credentials |
+| Cancelled verifier / cleanup failure | Owned daemon container removed, or explicit uncertain result |
+| Discord matrix failure/skip/cancel | Existing required repository context fails |
+
+The real Docker probe needs Linux and `KOTODAMA_TEST_VERIFIER_IMAGE` containing the
+immutable ID of a deliberately prepared fixture image. Linux CI prepares that
+fixture; the runtime never pulls an image. Without this fixture the real isolation
+probe is explicitly skipped, and argument/mocked lifecycle tests are not substituted
+for it. The image ID and cleanup result are emitted as bounded CI evidence.
+
+Still separate and not claimed here: a second person's clean installation,
+2-person/30-minute real Discord voice, measured interruption/latency, provider
+billing, configured production Docker daemon/image, and Human GO. Existing live
+receipts apply only to their own revisions and unchanged behaviors.

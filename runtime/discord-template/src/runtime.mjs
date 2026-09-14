@@ -7,6 +7,7 @@ import {Store} from './store.mjs';
 import {CliAnalyzer,ResponsesAnalyzer} from './llm.mjs';
 import {CliWorker,readArtifact} from './worker.mjs';
 import {Pipeline} from './pipeline.mjs';
+import {createAnalysisAuthorizer} from './analysis-policy.mjs';
 import {DiscordAdapter} from './discord.mjs';
 import {VoiceRoom} from './voice.mjs';
 import {voiceCommand} from './voice-control.mjs';
@@ -27,17 +28,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   try{owner=config.owner.kind==='remote'?new RemoteOwner(config.owner):store;const stale=store.lock();if(stale){check(Boolean(runtimeDomain)&&stale.domain===runtimeDomain,'RUNTIME_RECOVERY_DOMAIN_MISMATCH');check(!pidRunning(stale.pid),'RUNTIME_ALREADY_OWNED');store.replaceStaleHost(stale,ownerId,process.pid,startedAt,runtimeDomain);}else store.claimHost(ownerId,process.pid,startedAt,runtimeDomain??null);claimed=true;store.reconcileInterrupted();}catch(e){if(claimed)store.releaseHost(ownerId);store.close();throw e;}
   let discord,voice,archive,archiveTimer,bridge,control,policyTimer,closing=false;
   const authorize=async(task,purpose='execute')=>{const c=await loadConfig(filename);check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(discord&&!offline){await discord.member(task.actor);const keys=new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)]);for(const key of keys){const source=store.source(key,task.actor);if(source.provider==='discord'){const channel=await discord.client.channels.fetch(source.channelId);check(await discord.canRead(channel,task.actor),'SOURCE_ACCESS_DENIED');}}}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
-  const authorizeAnalysis=async(source,principal)=>{
-    const c=await loadConfig(filename);current=c;
-    check(c.discord.operators.includes(principal),'GRANT_REVOKED');
-    check(c.owner.kind===config.owner.kind&&c.worker.workspace===config.worker.workspace,'WORKSPACE_BINDING_CHANGED');
-    if(source.provider==='discord'){
-      if(source.metadata?.kind==='text')check(c.discord.textChannelIds.includes(source.channelId),'SOURCE_ACCESS_DENIED');
-      if(source.metadata?.kind==='voice'&&voice)check(voice.allowed(source.actorId),'SOURCE_ACCESS_DENIED');
-      if(discord&&!offline){const channel=await discord.client.channels.fetch(source.channelId,{force:true});check(await discord.canRead(channel,principal),'SOURCE_ACCESS_DENIED');}
-    }
-    if(owner.kind==='remote'){const remote=await owner.source(source.key,principal);check(remote.revision===source.revision,'REMOTE_SOURCE_CHANGED');}
-  };
+  const authorizeAnalysis=createAnalysisAuthorizer({readConfig:()=>loadConfig(filename),config,onPolicy:value=>{current=value;},voice:()=>voice,discord:()=>discord,owner,offline});
   const selectedAnalyzer=analyzer??(config.analyzer.kind==='responses'?new ResponsesAnalyzer(config):new CliAnalyzer(config));
   const pipeline=new Pipeline({store,owner,config,policy:()=>current,analyzer:selectedAnalyzer,worker:worker??new CliWorker(config),authorize,authorizeAnalysis,onTask:async task=>{if(discord)await discord.deliver(task);},onReply:async reply=>{if(discord)await discord.reply(reply);},onVoiceAction:async action=>{if(discord)await discord.voiceAction(action);},onError:code=>log({event:'operation_failed',code})});
   try{
