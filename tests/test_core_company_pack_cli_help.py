@@ -72,7 +72,7 @@ class CoreCompanyPackCliHelpTests(unittest.TestCase):
                 self.assertNotIn(secret_like, combined)
 
     def test_readme_quick_start_exposes_cross_shell_help_first(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         start = readme.index("## Quick Start — Company starter を試す")
         end = readme.index("## Runtime candidate を検査する", start)
         section = readme[start:end]
