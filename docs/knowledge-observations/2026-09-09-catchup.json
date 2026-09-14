@@ -1,0 +1,116 @@
+{
+  "kind": "kotodama.public-catchup-observation",
+  "observed_at": "2026-09-08T16:28:40.188373+00:00",
+  "repository": "Kotodama-Project/Kotodama-project",
+  "authority": "projection_only",
+  "classification": "public_candidate",
+  "main_sha": "be71f424689648b3ab1b1db15adbaddea374586b",
+  "pull_requests": [
+    {
+      "baseRefName": "codex/project-okf-control-plane-20260907",
+      "headRefOid": "9df1cb934aea4db28a67d723b327d32e69a3f05f",
+      "number": 48,
+      "state": "OPEN",
+      "title": "Add governed OKF knowledge base and agent context tooling",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/48"
+    },
+    {
+      "baseRefName": "main",
+      "headRefOid": "0bfb80838e82845638b62d70fe32af7c785f1340",
+      "number": 49,
+      "state": "OPEN",
+      "title": "feat: add OKF control plane and Knowledge Work CI",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/49"
+    },
+    {
+      "baseRefName": "main",
+      "headRefOid": "52997fa46dc1ebe6ddc6d934bdfc4f45f5ee0dba",
+      "number": 55,
+      "state": "OPEN",
+      "title": "feat: add OpenManus as bounded Proxmox executor candidate",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/55"
+    },
+    {
+      "baseRefName": "feat/okf-control-plane",
+      "headRefOid": "6c6155fdfde11a7febdbf4dfc3b5e3d135810b69",
+      "number": 56,
+      "state": "OPEN",
+      "title": "feat(control-plane): Cloudflare OS内でOpenMaus・全Agent・Proxmoxを一括管理する構成契約",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/56"
+    },
+    {
+      "baseRefName": "feat/openmaus-unified-agent-control-plane",
+      "headRefOid": "1b5d79cea54a1d17c34b359a177cd5a5671a7862",
+      "number": 57,
+      "state": "OPEN",
+      "title": "feat(agents): Cloudflare OSのGit担当と複数人・複数AIの作業セル調整コア",
+      "url": "https://github.com/Kotodama-Project/Kotodama-project/pull/57"
+    }
+  ],
+  "pr49_checked_head": "0bfb80838e82845638b62d70fe32af7c785f1340",
+  "pr49_tree_truncated": false,
+  "pr49_checked_paths": {
+    "tools/audit_control_plane.py": true,
+    "governance/knowledge-registry.json": true,
+    "docs/KNOWLEDGE-WORK-ENGINEERING.md": false,
+    "tools/audit_knowledge_workspaces.py": false,
+    "tools/knowledge_work_validator.py": false,
+    "tools/compile_knowledge_context.py": false
+  },
+  "pr56_job": {
+    "id": 101914112926,
+    "head_sha": "6c6155fdfde11a7febdbf4dfc3b5e3d135810b69",
+    "conclusion": "failure",
+    "steps": [
+      {
+        "name": "Set up job",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+        "conclusion": "success"
+      },
+      {
+        "name": "Install test dependencies",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run full regression suite",
+        "conclusion": "failure"
+      },
+      {
+        "name": "Run Knowledge Work CI",
+        "conclusion": "skipped"
+      },
+      {
+        "name": "Emit control-plane audit",
+        "conclusion": "skipped"
+      },
+      {
+        "name": "Emit proposal-only maintenance plan",
+        "conclusion": "skipped"
+      },
+      {
+        "name": "Post Run actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
+        "conclusion": "skipped"
+      },
+      {
+        "name": "Post Run actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+        "conclusion": "success"
+      },
+      {
+        "name": "Complete job",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "limitations": [
+    "Dated GitHub metadata, not runtime or outcome acceptance.",
+    "Descriptions remain author claims until checked against exact files.",
+    "No independent concept verification or public integration is established."
+  ]
+}

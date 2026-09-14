@@ -156,12 +156,15 @@ def action_references(text: str) -> list[tuple[int, str | None, str]]:
 
 def is_git_repository(root: Path) -> bool:
     result = subprocess.run(
-        ["git", "rev-parse", "--git-dir"],
+        ["git", "rev-parse", "--show-prefix"],
         cwd=root,
         capture_output=True,
         check=False,
     )
-    return result.returncode == 0
+    # Being somewhere inside an ancestor repository is not enough. Git pathspecs
+    # and HEAD reads below assume this exact root; otherwise an untracked nested
+    # workspace could be reported clean without inspecting its local workflows.
+    return result.returncode == 0 and not result.stdout.strip()
 
 
 def git_paths(root: Path, source: str) -> set[PurePosixPath]:
