@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "status": "candidate_only",
+  "reviewed_at": "2026-09-08",
+  "upstream": {
+    "repository": "cloudflare/cloudflare-os",
+    "compatibility_commit": "c0b6f3e52ff0ab8d44d290647e256936e88e6b57",
+    "kotodama_extension_commit": "9a5b616c7974a37b123e024334a69dd4964ad017",
+    "extension_path": "runtime/cloudflare-os-kotodama",
+    "dependency_prs": [45, 46, 47]
+  },
+  "composition": {
+    "shell": "cloudflare_os",
+    "surface_ref": "openmausbot_kotodama_control_surface",
+    "integration_contract": "governance/openmaus-integration.json",
+    "gadget": "native_workforce_console",
+    "transport": "capnweb_via_native_gatekeeper",
+    "cli_runtime": "isolated_proxmox_worker"
+  },
+  "guards": {
+    "separate_management_portal": false,
+    "external_harness_iframe": false,
+    "gadget_receives_backend_credentials": false,
+    "gadget_can_choose_backend_origin": false,
+    "read_uses_authorize_observation": true,
+    "write_uses_submit_then_apply_action": true,
+    "native_approval_replaces_capability_grant": false,
+    "simulated_action_is_execution_evidence": false,
+    "apply_submission_is_task_completion": false,
+    "observer_access_rechecked": true,
+    "transport_identity_is_business_authority": false,
+    "origin_validates_access_assertion": true,
+    "direct_harness_tunnel": false,
+    "direct_proxmox_tunnel": false,
+    "reuse_brief_bridge_for_general_dispatch": false,
+    "existing_pilot_transport_changed": false
+  },
+  "cloudflare_services": [
+    {
+      "id": "workers",
+      "stage": "core",
+      "purpose": "OS and Gatekeeper hosting; bounded control API, not desktop or CLI execution",
+      "enabled": false
+    },
+    {
+      "id": "durable_objects",
+      "stage": "core",
+      "purpose": "Reuse OS workspace state; a separate dispatch journal is not a Task SSOT",
+      "enabled": false
+    },
+    {
+      "id": "dynamic_workers_and_facets",
+      "stage": "core",
+      "purpose": "Reuse native Gadget isolation and capability bindings",
+      "enabled": false
+    },
+    {
+      "id": "access",
+      "stage": "hybrid_phase",
+      "purpose": "Human/service transport authentication in addition to OS identity and business grants",
+      "enabled": false
+    },
+    {
+      "id": "tunnel",
+      "stage": "hybrid_phase",
+      "purpose": "Outbound connector to one restricted adapter, never the raw harness or Proxmox API",
+      "enabled": false
+    },
+    {
+      "id": "r2",
+      "stage": "artifact_phase",
+      "purpose": "Opt-in classified artifact bytes with digests and separately protected receipts",
+      "enabled": false
+    },
+    {
+      "id": "workflows",
+      "stage": "deferred",
+      "purpose": "Long-running orchestration only after exclusive scheduler ownership and retry tests",
+      "enabled": false
+    },
+    {
+      "id": "queues",
+      "stage": "deferred",
+      "purpose": "At-least-once transport, not a scheduler or execution receipt",
+      "enabled": false
+    },
+    {
+      "id": "d1",
+      "stage": "deferred",
+      "purpose": "Rebuildable search/report projection, not another authoritative Task database",
+      "enabled": false
+    },
+    {
+      "id": "ai_gateway",
+      "stage": "deferred",
+      "purpose": "Eligible API observability only after privacy review; CLI subscription traffic is not assumed compatible",
+      "enabled": false
+    }
+  ],
+  "data_and_scheduling": {
+    "task_authority": "existing_kotodama_owner",
+    "workspace_data": "authorized_views_not_copied_ledgers",
+    "dispatch_storage": "journal_not_task_ssot",
+    "scheduler_ownership": "one_owner_per_work_with_fencing",
+    "queue_delivery": "at_least_once",
+    "ambiguous_delivery": "reconcile_before_retry",
+    "sensitive_data_egress": "deny_unless_explicitly_admitted",
+    "artifact_verification": "digest_and_independent_receipt",
+    "budgets": "bounded_concurrency_time_bytes_cost_and_retries",
+    "stop_semantics": "requested_is_not_confirmed"
+  },
+  "deployment": {
+    "preferred_target": "cloudflare_managed_os_with_proxmox_workers",
+    "local_pilot": "preserve_without_cutover",
+    "production_selfhost_certified": false,
+    "account_resources_created": false,
+    "cutover_requires": "identity_mapping_observer_acl_idempotency_restore_and_rollback_evidence"
+  },
+  "claims": {
+    "cloudflare_os_integrated": false,
+    "all_agents_integrated": false,
+    "cloudflare_resources_deployed": false,
+    "proxmox_connected": false,
+    "team_acl_verified": false,
+    "runtime_tests_passed": false,
+    "human_go": false
+  }
+}

@@ -198,3 +198,14 @@ P0 が complete と言えるのは、少なくとも以下が evidence で確認
 - full regression suite が利用可能な runner 上で通る
 
 それまでは `P0 in_progress` のままです。
+
+## 8. Unified workforce in Cloudflare OS — adoption candidate
+
+[Cloudflare OS + OpenMaus integration design](OPENMAUS-UNIFIED-AGENT-CONTROL-PLANE.md) defines one native management surface, shared Work identity, and isolated Proxmox execution. It reuses the existing OS addon rather than creating a separate portal or Task authority.
+
+- [Workforce integration contract](../governance/openmaus-integration.json)
+- [Cloudflare OS / platform composition](../governance/cloudflare-os-integration.json)
+- [Read-only composition validator](../tools/validate_cloudflare_os_integration.py)
+- [Offline contract tests](../tests/test_cloudflare_os_integration.py)
+
+These are design candidates, not deployment configuration, live inventory, Cloudflare account changes, or runtime acceptance. Existing native OS dependencies and the C0–C3 implementation gates are documented in the design.

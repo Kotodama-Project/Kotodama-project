@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/cloudflare-os-integration.schema.json",
+  "title": "Cloudflare OS composition of the unified Kotodama workforce",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "status",
+    "reviewed_at",
+    "upstream",
+    "composition",
+    "guards",
+    "cloudflare_services",
+    "data_and_scheduling",
+    "deployment",
+    "claims"
+  ],
+  "properties": {
+    "version": {"const": 1},
+    "status": {"const": "candidate_only"},
+    "reviewed_at": {"type": "string", "format": "date"},
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "compatibility_commit", "kotodama_extension_commit", "extension_path", "dependency_prs"],
+      "properties": {
+        "repository": {"const": "cloudflare/cloudflare-os"},
+        "compatibility_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "kotodama_extension_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "extension_path": {"const": "runtime/cloudflare-os-kotodama"},
+        "dependency_prs": {"const": [45, 46, 47]}
+      }
+    },
+    "composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shell", "surface_ref", "integration_contract", "gadget", "transport", "cli_runtime"],
+      "properties": {
+        "shell": {"const": "cloudflare_os"},
+        "surface_ref": {"const": "openmausbot_kotodama_control_surface"},
+        "integration_contract": {"const": "governance/openmaus-integration.json"},
+        "gadget": {"const": "native_workforce_console"},
+        "transport": {"const": "capnweb_via_native_gatekeeper"},
+        "cli_runtime": {"const": "isolated_proxmox_worker"}
+      }
+    },
+    "guards": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "separate_management_portal",
+        "external_harness_iframe",
+        "gadget_receives_backend_credentials",
+        "gadget_can_choose_backend_origin",
+        "read_uses_authorize_observation",
+        "write_uses_submit_then_apply_action",
+        "native_approval_replaces_capability_grant",
+        "simulated_action_is_execution_evidence",
+        "apply_submission_is_task_completion",
+        "observer_access_rechecked",
+        "transport_identity_is_business_authority",
+        "origin_validates_access_assertion",
+        "direct_harness_tunnel",
+        "direct_proxmox_tunnel",
+        "reuse_brief_bridge_for_general_dispatch",
+        "existing_pilot_transport_changed"
+      ],
+      "properties": {
+        "separate_management_portal": {"const": false},
+        "external_harness_iframe": {"const": false},
+        "gadget_receives_backend_credentials": {"const": false},
+        "gadget_can_choose_backend_origin": {"const": false},
+        "read_uses_authorize_observation": {"const": true},
+        "write_uses_submit_then_apply_action": {"const": true},
+        "native_approval_replaces_capability_grant": {"const": false},
+        "simulated_action_is_execution_evidence": {"const": false},
+        "apply_submission_is_task_completion": {"const": false},
+        "observer_access_rechecked": {"const": true},
+        "transport_identity_is_business_authority": {"const": false},
+        "origin_validates_access_assertion": {"const": true},
+        "direct_harness_tunnel": {"const": false},
+        "direct_proxmox_tunnel": {"const": false},
+        "reuse_brief_bridge_for_general_dispatch": {"const": false},
+        "existing_pilot_transport_changed": {"const": false}
+      }
+    },
+    "cloudflare_services": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "stage", "purpose", "enabled"],
+        "properties": {
+          "id": {
+            "enum": [
+              "workers",
+              "durable_objects",
+              "dynamic_workers_and_facets",
+              "access",
+              "tunnel",
+              "r2",
+              "workflows",
+              "queues",
+              "d1",
+              "ai_gateway"
+            ]
+          },
+          "stage": {"enum": ["core", "hybrid_phase", "artifact_phase", "deferred"]},
+          "purpose": {"type": "string", "minLength": 1, "maxLength": 300},
+          "enabled": {"const": false}
+        }
+      }
+    },
+    "data_and_scheduling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_authority",
+        "workspace_data",
+        "dispatch_storage",
+        "scheduler_ownership",
+        "queue_delivery",
+        "ambiguous_delivery",
+        "sensitive_data_egress",
+        "artifact_verification",
+        "budgets",
+        "stop_semantics"
+      ],
+      "properties": {
+        "task_authority": {"const": "existing_kotodama_owner"},
+        "workspace_data": {"const": "authorized_views_not_copied_ledgers"},
+        "dispatch_storage": {"const": "journal_not_task_ssot"},
+        "scheduler_ownership": {"const": "one_owner_per_work_with_fencing"},
+        "queue_delivery": {"const": "at_least_once"},
+        "ambiguous_delivery": {"const": "reconcile_before_retry"},
+        "sensitive_data_egress": {"const": "deny_unless_explicitly_admitted"},
+        "artifact_verification": {"const": "digest_and_independent_receipt"},
+        "budgets": {"const": "bounded_concurrency_time_bytes_cost_and_retries"},
+        "stop_semantics": {"const": "requested_is_not_confirmed"}
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preferred_target", "local_pilot", "production_selfhost_certified", "account_resources_created", "cutover_requires"],
+      "properties": {
+        "preferred_target": {"const": "cloudflare_managed_os_with_proxmox_workers"},
+        "local_pilot": {"const": "preserve_without_cutover"},
+        "production_selfhost_certified": {"const": false},
+        "account_resources_created": {"const": false},
+        "cutover_requires": {"const": "identity_mapping_observer_acl_idempotency_restore_and_rollback_evidence"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cloudflare_os_integrated",
+        "all_agents_integrated",
+        "cloudflare_resources_deployed",
+        "proxmox_connected",
+        "team_acl_verified",
+        "runtime_tests_passed",
+        "human_go"
+      ],
+      "properties": {
+        "cloudflare_os_integrated": {"const": false},
+        "all_agents_integrated": {"const": false},
+        "cloudflare_resources_deployed": {"const": false},
+        "proxmox_connected": {"const": false},
+        "team_acl_verified": {"const": false},
+        "runtime_tests_passed": {"const": false},
+        "human_go": {"const": false}
+      }
+    }
+  }
+}
