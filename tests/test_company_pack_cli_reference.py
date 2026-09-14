@@ -80,8 +80,8 @@ class CompanyPackCliReferenceTests(unittest.TestCase):
         self.assertIn("`STATIC_CUSTOMIZATION` / `CANDIDATE_BINDING`", reference)
 
     def test_readme_links_reference_from_quick_start_and_document_map(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        link = "[Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md)"
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
+        link = "[Company Pack CLI Reference](COMPANY-PACK-CLI-REFERENCE.md)"
         quick_start = readme.index("## Quick Start")
         document_map = readme.index("## Document Map")
         self.assertIn(link, readme[quick_start:document_map])
