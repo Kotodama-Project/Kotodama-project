@@ -1,10 +1,14 @@
 import {Analysis,modelExecution} from './llm.mjs';
 import {check,digest,errorCode} from './common.mjs';
 import {verifyArtifacts} from './worker.mjs';
+import {AnalysisAdmission,AnalysisBudget} from './analysis-admission.mjs';
 
 export class Pipeline {
-  constructor({store,owner=store,config,analyzer,worker,authorize=async()=>{},onTask=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
-    Object.assign(this,{store,owner,config,analyzer,worker,authorize,onTask,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.tail=Promise.resolve();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;
+  constructor({store,owner=store,config,analyzer,worker,analysisBudget,authorizeAnalysis=async()=>{},authorize=async()=>{},onTask=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
+    Object.assign(this,{store,owner,config,analyzer,worker,authorize,authorizeAnalysis,onTask,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.tail=Promise.resolve();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;
+    this.admission=new AnalysisAdmission(config.analyzer.admission);
+    this.analysisBudget=analysisBudget??new AnalysisBudget(store,config.analyzer.admission);
+    this.recovery={state:'not_checked',enqueued:0,blocked:0};
   }
   context(source,principal){
     const config=this.config.analyzer,maxSources=config.maxContextSources??12;let remaining=config.maxContextChars??24000;
@@ -24,16 +28,32 @@ export class Pipeline {
     const principal=source.readers.includes(source.actorId)?source.actorId:source.readers.find(p=>this.config.discord.operators.includes(p));
     if(!principal)return {...received,analysis:'no_authorized_reader'};
     const key=digest([received.key,source.revision]);if(this.analysis.has(key))return this.analysis.get(key);
-    const job=this.#analyze({...source,key:received.key},principal,{execute,reply},key).finally(()=>{this.analysis.delete(key);this.analysisControllers.delete(key);this.analysisBindings.delete(key);});
+    const controller=new AbortController();this.analysisControllers.set(key,controller);
+    this.analysisBindings.set(key,[{key:received.key,revision:source.revision}]);
+    const job=this.admission.run({room:`${source.provider}:${source.guildId}:${source.channelId}`,actor:principal,
+      signal:controller.signal,priority:received.state==='corrected'?2:(execute||reply?1:0)},
+      ()=>this.#analyze({...source,key:received.key},principal,{execute,reply},key,controller)).catch(error=>{
+        const code=errorCode(error);
+        if(!['ANALYSIS_QUEUE_FULL','ANALYSIS_QUEUE_PREEMPTED','ANALYSIS_DAILY_LIMIT','ANALYSIS_TOTAL_LIMIT'].includes(code))throw error;
+        this.store.event?.('analysis.deferred',{source_key:received.key,revision:source.revision,reason:code});
+        return {...received,analysis:'recorded_only',reason:code};
+      }).finally(()=>{this.analysis.delete(key);this.analysisControllers.delete(key);this.analysisBindings.delete(key);});
     this.analysis.set(key,job);return job;
   }
-  async #analyze(source,principal,{execute,reply},analysisKey){
-    const controller=new AbortController();this.analysisControllers.set(analysisKey,controller);
+  async #analyze(source,principal,{execute,reply},analysisKey,controller){
+    const checkSource=()=>{check(!controller.signal.aborted&&!this.closing,'CANCELLED');const current=this.store.source(source.key,principal);check(current.revision===source.revision,'SOURCE_CHANGED');};
+    checkSource();
     const analyzerConfig=this.config.analyzer;let taskChars=analyzerConfig.maxTaskContextChars??12000;const tasksContext=[];for(const task of (await this.owner.tasks(principal)).filter(t=>t.room===`${source.provider}:${source.guildId}:${source.channelId}`).slice(0,analyzerConfig.maxTaskContextItems??5)){if(taskChars<=0)break;const request=task.request.slice(0,taskChars);taskChars-=request.length;tasksContext.push({...task,request});}
     const context=this.context(source,principal);const bindings=[source,...context].map(s=>({key:s.key,revision:s.revision}));this.analysisBindings.set(analysisKey,bindings);
+    const analysisScope={actor:principal,source_key:source.key,source_revision:source.revision,contextSources:bindings};
+    await this.authorizeAnalysis(analysisScope);
+    checkSource();for(const b of bindings)check(this.store.source(b.key,principal).revision===b.revision,'CONTEXT_CHANGED');
+    // Reserve the declared primary and possible fallback before either is invoked.
+    this.analysisBudget.reserve(analyzerConfig.kind!=='responses'&&analyzerConfig.fallback?2:1);
     const analyzed=await this.analyzer.analyze(source,context,{signal:controller.signal,tasks:tasksContext});const result=Analysis.parse(analyzed);check(!controller.signal.aborted&&!this.closing,'CANCELLED');
     if(modelExecution(analyzed))this.store.event('analysis.model_used',{source_key:source.key,revision:source.revision,...modelExecution(analyzed)});
     const checkInputs=()=>{for(const b of bindings){const s=this.store.source(b.key,principal);check(s.revision===b.revision,'CONTEXT_CHANGED');}};checkInputs();
+    await this.authorizeAnalysis(analysisScope);checkInputs();check(!controller.signal.aborted&&!this.closing,'CANCELLED');
     const current=this.store.source(source.key,principal);check(current.revision===source.revision,'SOURCE_CHANGED');
     const ids=this.store.saveIntents(source,result.intents.map(i=>({...i,contextSources:bindings})),principal);const tasks=[];
     let requests=result.intents.map((intent,index)=>({intent,index})).filter(({intent})=>execute&&!this.draining&&source.provider==='discord'&&this.config.discord.operators.includes(source.actorId)&&intent.kind==='request'&&intent.explicit&&intent.complete&&intent.action!=='none');
@@ -76,7 +96,29 @@ export class Pipeline {
     }finally{this.active.delete(id);}
   }
   async stop(id,actor){await this.owner.cancel(id,actor);this.active.get(id)?.controller.abort();}
-  async resume(id,actor){check(!this.active.has(id),'STOP_NOT_FINISHED');const t=await this.owner.resume(id,actor);await this.authorize(t);this.enqueue(id,actor,t.revision);return t;}
+  async recoverQueued(){
+    check(!this.closing&&!this.draining,'RUNTIME_STOPPING');
+    if(this.owner!==this.store){this.recovery={state:'remote_owner',enqueued:0,blocked:0};return this.recovery;}
+    const result={state:'checked',enqueued:0,blocked:0};
+    for(const row of this.store.db.prepare("SELECT id,actor,revision FROM tasks WHERE state='queued' ORDER BY rowid").all()){
+      try{
+        const task=await this.owner.task(row.id,row.actor);
+        check(task.state==='queued'&&task.revision===row.revision,'TASK_CHANGED');
+        const source=this.store.source(task.source_key,task.actor);check(source.revision===task.source_revision,'SOURCE_CHANGED');
+        await this.owner.assertContext(task.id,task.actor);await this.authorize(task);
+        this.enqueue(task.id,task.actor,task.revision);result.enqueued++;
+      }catch(error){result.blocked++;this.store.event('task.recovery_blocked',{reason:errorCode(error)},row.id);}
+    }
+    this.recovery=result;return result;
+  }
+  async resume(id,actor){
+    check(!this.closing&&!this.draining,'RUNTIME_STOPPING');check(!this.active.has(id),'STOP_NOT_FINISHED');
+    const prior=await this.owner.task(id,actor);await this.authorize(prior);
+    check(prior.state!=='uncertain','TASK_RECONCILIATION_REQUIRED');
+    const source=this.store.source(prior.source_key,actor);check(source.revision===prior.source_revision,'SOURCE_CHANGED');
+    const t=prior.state==='queued'?prior:await this.owner.resume(id,actor);
+    await this.authorize(t);this.enqueue(id,actor,t.revision);return t;
+  }
   async result(id,actor){const task=await this.owner.task(id,actor);await this.authorize(task,'read_result');return verifyArtifacts(task);}
-  async close(){this.closing=true;for(const c of this.analysisControllers.values())c.abort();for(const run of this.active.values())run.controller.abort();await Promise.allSettled([...this.analysis.values()]);await this.tail;}
+  async close(){this.closing=true;this.admission.close();for(const c of this.analysisControllers.values())c.abort();for(const run of this.active.values())run.controller.abort();await Promise.allSettled([...this.analysis.values()]);await this.tail;}
 }
