@@ -435,7 +435,7 @@ class ProtectedSourceBindingReceiptCandidateContractTests(unittest.TestCase):
 
     def test_contract_is_discoverable_from_company_pack_entry_surfaces(self) -> None:
         paths = (
-            ROOT / "README.md",
+            ROOT / "docs" / "OVERVIEW.md",
             ROOT / "ROADMAP.md",
             ROOT / "STATUS.md",
             ROOT / "docs" / "CUSTOMIZATION-CHECKLIST.md",

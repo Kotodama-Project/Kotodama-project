@@ -570,7 +570,7 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
             self.assertIn(required, runbook)
 
         discoverability_files = (
-            ROOT / "README.md",
+            ROOT / "docs" / "OVERVIEW.md",
             ROOT / "docs" / "REVIEW-WORKFLOW.md",
             ROOT / "docs" / "REVIEW-RESPONSE.md",
             ROOT / "docs" / "STARTER-WALKTHROUGH.md",
