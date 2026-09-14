@@ -1,12 +1,14 @@
 import path from 'node:path';
 import {z} from 'zod';
 import {readJson, check, inside} from './common.mjs';
+import {admissionDefaults} from './analysis-admission.mjs';
 
 const id = z.string().regex(/^\d{5,24}$/);
 const envName=z.string().regex(/^[A-Z_][A-Z0-9_]*$/);
 const commandBase = z.object({executable:z.string().min(1),args:z.array(z.string()).default([]),model:z.string().optional(),codexHome:z.string().min(1).optional(),ignoreUserConfig:z.boolean().default(true),timeoutSeconds:z.number().int().min(5).max(3600).default(300)}).strict();
 const command=commandBase.extend({model:z.string().default('gpt-5.6-luna'),fallback:commandBase.extend({model:z.string().min(1)}).optional()});
-const analyzerContext={maxContextSources:z.number().int().min(1).max(30).default(12),maxContextChars:z.number().int().min(1000).max(120000).default(24000),maxTaskContextItems:z.number().int().min(0).max(10).default(5),maxTaskContextChars:z.number().int().min(0).max(40000).default(12000)};
+const admission=z.object(Object.fromEntries(Object.entries(admissionDefaults).map(([key,value])=>[key,z.number().int().min(key.startsWith('max')?0:1).max(key.endsWith('Calls')?1000000:1024).default(value)]))).strict().prefault({});
+const analyzerContext={admission,maxContextSources:z.number().int().min(1).max(30).default(12),maxContextChars:z.number().int().min(1000).max(120000).default(24000),maxTaskContextItems:z.number().int().min(0).max(10).default(5),maxTaskContextChars:z.number().int().min(0).max(40000).default(12000)};
 const analyzerConfig=z.union([
   command.extend({kind:z.literal('codex_cli').default('codex_cli'),...analyzerContext}),
   z.object({kind:z.literal('responses'),model:z.string().default('gpt-5.6-luna'),apiKeyEnv:envName.default('OPENAI_API_KEY'),baseUrl:z.string().url().default('https://api.openai.com/v1'),timeoutSeconds:z.number().int().min(5).max(300).default(60),maxOutputTokens:z.number().int().min(256).max(8000).default(3000),reasoningEffort:z.enum(['low','medium','high']).default('low'),...analyzerContext}).strict()
@@ -28,7 +30,7 @@ export const Config = z.object({
   notifications:z.object({quietHours:z.object({enabled:z.boolean().default(false),startHour:z.number().int().min(0).max(23).default(22),endHour:z.number().int().min(0).max(23).default(9),timeZone:z.literal('Asia/Tokyo').default('Asia/Tokyo')}).prefault({})}).prefault({}),
   analyzer:analyzerConfig.prefault({kind:'codex_cli',executable:'codex',args:[],model:'gpt-5.6-luna',timeoutSeconds:120}),
   worker:command.extend({workspace:z.string(),actions:z.array(z.enum(['research','summarize','write_file','develop'])).default(['research','summarize']),
-    verify:z.array(z.object({executable:z.string().min(1),args:z.array(z.string())}).strict()).default([]),maxArtifactBytes:z.number().int().min(1000).max(50000000).default(5000000)}).strict(),
+    verify:z.array(z.object({executable:z.string().min(1),args:z.array(z.string())}).strict()).default([]),verificationRuntimeRoots:z.array(z.string().min(1)).max(8).default([]),maxArtifactBytes:z.number().int().min(1000).max(50000000).default(5000000)}).strict(),
   owner:z.discriminatedUnion('kind',[
     z.object({kind:z.literal('local')}).strict(),
     z.object({kind:z.literal('remote'),url:z.string().url(),tokenEnv:z.string().min(1)}).strict()
