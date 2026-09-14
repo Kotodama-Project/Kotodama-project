@@ -36,11 +36,12 @@ localとcloudの双方を認めます。Tailscaleはprivate接続の強い候補
 
 ## 実装と候補の現在地
 
-2026-09-13に公開main `4abe890`と以下のopen PRを照合しました。mainはコードを含む状態、candidateは未統合、unconnectedは接続未確認、hypothesisは未実証の設計仮説です。CI成功を実利用成功へ読み替えません。
+2026-09-14に公開main `86bc5bf`と以下のopen PRを照合しました。mainはコードを含む状態、candidateは未統合、unconnectedは接続未確認、hypothesisは未実証の設計仮説です。CI成功を実利用成功へ読み替えません。
 
 | 対象 | 状態 | 根拠と残件 |
 |---|---|---|
 | Company Pack作成と確認・訂正Gateway | main | [Task-bound実行](COMPANY-PACK-TASK-EXECUTION.md)、[Gateway](../runtime/local-review-gateway/README.md)。実ファイル／local HTTPの限定経路。自動Voice-to-Taskは未接続 |
+| Discord Botテンプレート | main | [任意ランタイム](../runtime/discord-template/README.md)、[導入と残件](DISCORD-RUNTIME.md)。#79–#81で統合。公開招待・hosted配備・実音声受入は未検証 |
 | 知識訂正とexecutor入力binding | candidate | [#59](https://github.com/Kotodama-Project/Kotodama-project/pull/59)、head `b962196`。現在pin・入力digestの候補。Task owner接続は残件 |
 | OKF適合と判断readyの分離 | candidate | [#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)、head `05c947a`。構造PASSは内容・権限・意思決定の証明ではない |
 | 診断／Knowledge Work合流 | candidate | [#64](https://github.com/Kotodama-Project/Kotodama-project/pull/64)、head `e0460b3`。読取診断の候補。GUI、live observer、実Work接続は未受入 |

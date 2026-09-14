@@ -22,10 +22,17 @@ class CloudflareCandidateCIContractTests(unittest.TestCase):
         self.assertIn("contents: read", workflow)
         self.assertIn("ubuntu-24.04", workflow)
         self.assertIn("name: Trusted Cloudflare candidate validation", workflow)
-        self.assertIn("actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803", workflow)
-        self.assertIn("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97", workflow)
+        # Assert the reviewed action, immutable pin, and version comment rather
+        # than one literal SHA, so a reviewed Dependabot bump does not fail CI.
+        # Immutable pinning itself is enforced globally by
+        # check_workflow_references.py and the publication hygiene tests.
+        for action in ("actions/checkout", "actions/setup-python", "actions/setup-node"):
+            with self.subTest(action=action):
+                self.assertRegex(
+                    workflow,
+                    re.escape(action) + r"@[0-9a-f]{40}\s+#\s*v\d",
+                )
         self.assertIn('python-version: "3.12.10"', workflow)
-        self.assertIn("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020", workflow)
         self.assertIn('node-version: "24.14.0"', workflow)
         self.assertIn("python -S -B tools/check_tracked_secret_hygiene.py", workflow)
         self.assertIn("--require-hashes -r requirements-ci.txt", workflow)

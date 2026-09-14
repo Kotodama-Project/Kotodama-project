@@ -30,11 +30,11 @@ or promote the separately scoped runtime/deployment evidence below.
 | Local image availability preflight | Published read-only tool; saved verification is historical binding only |
 | Clean-install / migration evidence candidate | Published unattested saved-binding contract; no live receipt |
 | Protected one-use attestation evaluation | Published local candidate; atomic only within one bound SQLite store |
-| Signed nonce-store checkpoint | Published protected-local tool; point-in-time and immediate-parent only |
-| Recursive nonce-store checkpoint chain | Published protected-local candidate; supplied path/store equivalence only |
-| Checkpoint-head anchor / restore-drill evidence | Published protected-local contract; signed reported binding only |
-| Checkpoint segment transition / key rotation | Published protected-local contract; one presented boundary only |
-| Segment transition candidate builder | Published protected-local CLI; deterministic new-file creation only, unsigned and unverified |
+| [Signed nonce-store checkpoint](docs/ATTESTATION-NONCE-STORE-CHECKPOINT.md) | Published protected-local tool; point-in-time and immediate-parent only |
+| [Recursive nonce-store checkpoint chain](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-CHAIN.md) | Published protected-local candidate; supplied path/store equivalence only |
+| [Checkpoint-head anchor / restore-drill evidence](docs/ATTESTATION-NONCE-STORE-HEAD-ANCHOR-AND-RESTORE-DRILL.md) | Published protected-local contract; signed reported binding only |
+| [Checkpoint segment transition / key rotation](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-SEGMENT-TRANSITION.md) | Published protected-local contract; one presented boundary only |
+| [Segment transition candidate builder](docs/ATTESTATION-NONCE-STORE-CHECKPOINT-SEGMENT-TRANSITION-CREATION.md) | Published protected-local CLI; deterministic new-file creation only, unsigned and unverified |
 | [Source binding verification candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md) | Included in this revision as a read-only local candidate; stable postcheck and R30 projection digest only |
 | [Protected Source binding receipt candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md) | Included as an unpopulated schema-only private receipt contract; no protected runner or verified receipt |
 | [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) | Included as an opaque schema-only request shape; no execution accepted, executed, or private handoff |

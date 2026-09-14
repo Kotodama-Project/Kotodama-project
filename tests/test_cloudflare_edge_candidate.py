@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import shutil
 import tempfile
 import textwrap
@@ -130,13 +131,17 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             "path: trusted",
             "trusted/runtime/cloudflare-edge/wrangler-integrity.json",
             "python trusted/tools/verify_wrangler_artifact.py",
-            "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
             'node-version: "24.14.0"',
             "curl --fail --location --proto '=https' --tlsv1.2",
             'npm ci --ignore-scripts --no-audit --no-fund --prefix "$RUNNER_TEMP/wrangler-verified"',
             'node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js"',
         ):
             self.assertIn(marker, workflow)
+        # Assert the reviewed action, immutable pin, and version comment rather
+        # than one literal SHA, so a reviewed Dependabot bump does not fail CI.
+        self.assertRegex(
+            workflow, r"actions/setup-node@[0-9a-f]{40}\s+#\s*v\d"
+        )
         self.assertLess(
             workflow.index("python trusted/tools/verify_wrangler_artifact.py"),
             workflow.index('node "$RUNNER_TEMP/wrangler-verified/node_modules/wrangler/bin/wrangler.js"'),
