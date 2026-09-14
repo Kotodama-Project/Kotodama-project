@@ -726,7 +726,7 @@ class CompanyPackSourceRecordInstanceContractTests(unittest.TestCase):
         ):
             self.assertIn(phrase, runbook)
         surfaces = [
-            ROOT / "README.md",
+            ROOT / "docs" / "OVERVIEW.md",
             ROOT / "docs" / "CUSTOMIZATION-CHECKLIST.md",
             ROOT / "docs" / "INTENT-CANDIDATE-INSTANCE.md",
             ROOT / "docs" / "REVIEW-WORKFLOW.md",
