@@ -168,7 +168,7 @@ class CompanyPackDecisionRecordCandidateContractTests(unittest.TestCase):
                 "PyYAML==6.0.3",
             },
         )
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         self.assertIn("python -m pip install -r requirements-test.txt", readme)
 
     def test_schema_closes_every_authority_and_execution_claim(self) -> None:
@@ -249,7 +249,7 @@ class CompanyPackDecisionRecordCandidateContractTests(unittest.TestCase):
         ):
             self.assertIn(required, text)
         discoverability_files = (
-            ROOT / "README.md",
+            ROOT / "docs" / "OVERVIEW.md",
             ROOT / "docs" / "REVIEW-DECISION-HANDOFF.md",
             ROOT / "docs" / "REVIEW-WORKFLOW.md",
             ROOT / "docs" / "STARTER-WALKTHROUGH.md",
