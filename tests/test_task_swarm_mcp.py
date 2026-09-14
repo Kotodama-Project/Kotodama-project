@@ -69,12 +69,14 @@ class FakeTransport:
         self.acks: set[str] = set()
         self.statuses: dict[str, dict] = {}
 
-    def send(self, request: dict) -> dict:
+    def send(self, request: dict, *, publish=None) -> dict:
         existing = next((item for item in self.messages if item["message_id"] == request["message_id"]), None)
         if existing is not None:
             if existing != request:
                 raise PeerAdapterError("IDEMPOTENCY_ARGUMENT_MISMATCH", "request differs")
             return dict(existing)
+        if publish is not None:
+            publish()
         self.messages.append(dict(request))
         self.statuses[request["message_id"]] = {
             "message_id": request["message_id"],
@@ -102,10 +104,12 @@ class FakeTransport:
         self.statuses[message_id].update({"state": "acked", "ack": True})
         return {"message_id": message_id, "payload_digest": payload_digest, "ack": True}
 
-    def reply(self, request: dict) -> dict:
+    def reply(self, request: dict, *, publish=None) -> dict:
         parent = next(item for item in self.messages if item["message_id"] == request["parent_message_id"])
         if request["parent_message_id"] not in self.acks:
             raise PeerAdapterError("MISSING_ACK", "parent is not acknowledged")
+        if publish is not None:
+            publish()
         self.messages.append(dict(request))
         self.statuses[parent["message_id"]]["reply_ids"].append(request["message_id"])
         return dict(request)

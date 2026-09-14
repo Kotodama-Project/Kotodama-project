@@ -270,7 +270,9 @@ class PeerTools:
         binding = self._current_binding()
         target = self._peer(binding, recipient, "send")
         idem = _text(idempotency_key, "idempotency_key", maximum=_MAX_IDEMPOTENCY)
-        payload_ref, payload_digest = self.payloads.put(text, [] if evidence_refs is None else evidence_refs)
+        # Canonicalize in memory. Only an admitted envelope may publish bytes.
+        _, payload_digest = self.payloads.canonical_bytes(text, evidence_refs)
+        payload_ref = self.payloads._ref(payload_digest)
         message_id = self._message_id(binding["task_id"], self.actor, idem)
         request = self._request(
             binding,
@@ -282,7 +284,8 @@ class PeerTools:
             parent_message_id=None,
         )
         try:
-            result = self.transport.send(request)
+            result = self.transport.send(request, publish=lambda: self.payloads.put(text, evidence_refs))
+            self.payloads.get(payload_ref, payload_digest)
         except Exception as exc:
             raise _component_error(exc) from exc
         return _one_receipt(result, message_id=message_id, payload_ref=payload_ref, payload_digest=payload_digest)
@@ -399,7 +402,9 @@ class PeerTools:
         parent = self._parent(binding, parent_id)
         target = self._peer(binding, parent["sender_ref"], "reply")
         idem = _text(idempotency_key, "idempotency_key", maximum=_MAX_IDEMPOTENCY)
-        payload_ref, payload_digest = self.payloads.put(text, [] if evidence_refs is None else evidence_refs)
+        # Canonicalize in memory. Only an admitted envelope may publish bytes.
+        _, payload_digest = self.payloads.canonical_bytes(text, evidence_refs)
+        payload_ref = self.payloads._ref(payload_digest)
         message_id = self._message_id(binding["task_id"], self.actor, parent_id, idem)
         request = self._request(
             binding,
@@ -411,7 +416,8 @@ class PeerTools:
             parent_message_id=parent_id,
         )
         try:
-            result = self.transport.reply(request)
+            result = self.transport.reply(request, publish=lambda: self.payloads.put(text, evidence_refs))
+            self.payloads.get(payload_ref, payload_digest)
         except Exception as exc:
             raise _component_error(exc) from exc
         return _one_receipt(
