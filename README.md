@@ -68,7 +68,7 @@ Source Evidence → Intent Candidate → Human Decision → Work Order → Capab
 
 - 現在地と gate: [STATUS.md](STATUS.md)、[ROADMAP.md](ROADMAP.md)、[docs/HISTORY.md](docs/HISTORY.md)（過去の revision 履歴）
 - 方向: [docs/PRODUCT-DIRECTION.md](docs/PRODUCT-DIRECTION.md)、[docs/OWNER-INTENT-COMPANY-AGI.md](docs/OWNER-INTENT-COMPANY-AGI.md)、[docs/PROJECT-MAP.md](docs/PROJECT-MAP.md)
-- 使う: [5-minute tour](docs/FIVE-MINUTE-TOUR.md)、[Discord runtime](docs/DISCORD-RUNTIME.md)、[Template Guide](docs/TEMPLATE-GUIDE.md)、[Validation Guide](docs/VALIDATION.md)、[Runtime candidates](runtime/README.md)
+- 使う: [5-minute tour](docs/FIVE-MINUTE-TOUR.md)、[Discord runtime](docs/DISCORD-RUNTIME.md)、[Template Guide](docs/TEMPLATE-GUIDE.md)、[Validation Guide](docs/VALIDATION.md)、[Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md)、[Runtime candidates](runtime/README.md)
 - 設計の全文: [docs/OVERVIEW.md](docs/OVERVIEW.md)
 
 ## 参加する
