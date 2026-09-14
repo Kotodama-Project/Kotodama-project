@@ -51,3 +51,18 @@ class DependabotPolicyTests(unittest.TestCase):
         policy = self._github_actions_policy()
         group = policy["groups"]["actions-minor-and-patch"]
         self.assertEqual(set(group["update-types"]), {"minor", "patch"})
+
+    def test_dependabot_maintains_the_discord_template_npm_dependencies(self) -> None:
+        config = self._load_config()
+        npm_updates = [
+            update
+            for update in config["updates"]
+            if update.get("package-ecosystem") == "npm"
+        ]
+        self.assertEqual(len(npm_updates), 1)
+        policy = npm_updates[0]
+        self.assertEqual(policy["directory"], "/runtime/discord-template")
+        self.assertEqual(policy["schedule"]["interval"], "weekly")
+        self.assertLessEqual(policy["open-pull-requests-limit"], 10)
+        group = policy["groups"]["discord-template-minor-and-patch"]
+        self.assertEqual(set(group["update-types"]), {"minor", "patch"})
