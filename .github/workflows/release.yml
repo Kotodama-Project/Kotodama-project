@@ -1,0 +1,74 @@
+name: Release candidate
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build, attest, and draft the release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUTF8: "1"
+    steps:
+      - name: Check out the tagged revision without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up exact Python runtime
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.10"
+          check-latest: false
+
+      - name: Run the one-command smoke and keep the report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -S -B tools/smoke_company_pack_review_chain.py > "smoke-${GITHUB_REF_NAME}.json"
+          python -c "import json,sys; r=json.load(open(sys.argv[1], encoding='utf-8')); assert r['status']=='PASS', r" "smoke-${GITHUB_REF_NAME}.json"
+
+      - name: Build the source archive from the tagged tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=tar.gz --prefix="kotodama-${GITHUB_REF_NAME}/" -o "kotodama-${GITHUB_REF_NAME}.tar.gz" HEAD
+          sha256sum "kotodama-${GITHUB_REF_NAME}.tar.gz" "smoke-${GITHUB_REF_NAME}.json" > "SHA256SUMS-${GITHUB_REF_NAME}.txt"
+          cat "SHA256SUMS-${GITHUB_REF_NAME}.txt"
+
+      - name: Attest build provenance for the archive and the smoke report
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            kotodama-${{ github.ref_name }}.tar.gz
+            smoke-${{ github.ref_name }}.json
+
+      - name: Draft the release with the matching CHANGELOG section
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          notes="$(awk -v v="$version" 'index($0, "## [" v "]") == 1 {p=1; next} /^## \[/ {p=0} p' CHANGELOG.md)"
+          if [ -z "$notes" ]; then
+            notes="See CHANGELOG.md for ${GITHUB_REF_NAME}. This is an Incomplete Public Preview (NO_GO_UNPUBLISHED)."
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --draft --prerelease \
+            --title "$GITHUB_REF_NAME" \
+            --notes "$notes" \
+            "kotodama-${GITHUB_REF_NAME}.tar.gz" \
+            "smoke-${GITHUB_REF_NAME}.json" \
+            "SHA256SUMS-${GITHUB_REF_NAME}.txt"
