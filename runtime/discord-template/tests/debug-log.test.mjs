@@ -40,6 +40,13 @@ test('opt-in debug log keeps the redacted stack and classification site with pri
   disableDebugLog();errorCode(new Error('after disable'));assert.equal((await lines(file)).length,1);
 });
 
+test('network-derived error text cannot hide or reorder what the log shows',()=>{
+  const entry=describeError(new Error('ok\u202eevil\u200b\u0085tail\ufeff'),'where\u2066');
+  for(const value of [entry.message,entry.stack,entry.where])assert(!/[\u0080-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/.test(value));
+  assert.match(entry.message,/^ok\ufffdevil\ufffd\ufffdtail\ufffd$/);
+  const line=JSON.stringify(entry);assert(!line.includes('\n'));
+});
+
 test('configuration errors list setting paths without the configured values',async t=>{
   const dir=await tempDir(t),config=exampleConfig(),secretLike='fixture-'+'value-must-not-appear';
   config.discord.guildId=secretLike;config.voice.maxDailyAudioSeconds='sixty';const filename=path.join(dir,'config.json');await writeFile(filename,JSON.stringify(config));

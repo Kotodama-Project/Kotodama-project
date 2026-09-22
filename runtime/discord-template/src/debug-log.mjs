@@ -7,7 +7,11 @@ import {redact,setErrorHook} from './common.mjs';
 // place where an unexpected error was classified as OPERATION_FAILED.
 export const debugRequested=({verbose=false,env=process.env}={})=>verbose===true||/^(1|true|yes|on)$/i.test(env.KOTODAMA_DEBUG??'');
 
-const text=(value,max)=>redact(String(value)).slice(0,max);
+// Error text can come from network peers. Besides redaction and JSON escaping,
+// drop characters that change how a log line is displayed (C1 controls,
+// zero-width and bidirectional formatting marks).
+const invisible=/[\u0080-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g;
+const text=(value,max)=>redact(String(value)).replace(invisible,'\ufffd').slice(0,max);
 export function describeError(error,where=null){
   const entry={at:new Date().toISOString(),where:where?text(where,500):null,name:typeof error?.name==='string'?error.name.slice(0,100):typeof error};
   if(typeof error?.code==='string'||Number.isInteger(error?.code))entry.code=typeof error.code==='string'?error.code.slice(0,100):error.code;
