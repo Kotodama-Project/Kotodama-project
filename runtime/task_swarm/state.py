@@ -222,8 +222,37 @@ class SwarmState:
             raise protocol.SwarmError("WRONG_TASK", "owner binding belongs to another Task")
         return binding
 
-    def _run_owner(self, run: sqlite3.Row, now: float) -> dict[str, Any]:
-        binding = self._owner_binding(str(run["task_id"]), now)
+    def _prefetch_owner(self, now: float, *, run_id: str | None = None, token: str | None = None) -> tuple[str, dict[str, Any]] | None:
+        """Read the owner binding before taking the write lock.
+
+        The owner adapter may be slow (it re-reads and hashes pinned sources),
+        so it must not run under BEGIN IMMEDIATE, where it would block every
+        other process's scheduler writes.  Inside the lock only the cheap
+        expiry re-check and digest comparison remain.
+        """
+        conn = self._connect()
+        try:
+            if token is not None:
+                row = conn.execute(
+                    "SELECT runs.task_id AS task_id FROM attempts JOIN runs ON runs.run_id = attempts.run_id WHERE attempts.token = ?",
+                    (token,),
+                ).fetchone()
+            else:
+                row = conn.execute("SELECT task_id FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise protocol.SwarmError("STATE_READ_FAILED", "unable to read scheduler state") from exc
+        finally:
+            conn.close()
+        if row is None:
+            return None  # the locked path reports the usual unknown run/token error
+        task_id = str(row["task_id"])
+        return task_id, self._owner_binding(task_id, now)
+
+    def _run_owner(self, run: sqlite3.Row, now: float, prefetched: tuple[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+        if prefetched is not None and prefetched[0] == str(run["task_id"]):
+            binding = protocol.validate_binding(prefetched[1], now=now)
+        else:
+            binding = self._owner_binding(str(run["task_id"]), now)
         if protocol.digest(binding) != run["binding_digest"]:
             raise protocol.SwarmError("STALE_BINDING", "owner binding no longer matches the run")
         return binding
@@ -586,16 +615,12 @@ class SwarmState:
     ) -> bool:
         if not keys:
             return False
+        # Keys name owner-resolved resources (a worktree, a file), so a lease in
+        # any run of this state store conflicts, not only one in the same run.
         leases = conn.execute(
-            "SELECT job_id FROM jobs WHERE run_id = ? AND state = 'leased'", (run_id,)
+            "SELECT exclusive_keys_json FROM jobs WHERE state = 'leased'"
         ).fetchall()
-        for lease in leases:
-            other = conn.execute(
-                "SELECT exclusive_keys_json FROM jobs WHERE run_id = ? AND job_id = ?",
-                (run_id, lease["job_id"]),
-            ).fetchone()
-            if other is None:
-                continue
+        for other in leases:
             other_keys = set(SwarmState._decode_list(other["exclusive_keys_json"], "exclusive keys"))
             if other_keys.intersection(keys):
                 return True
@@ -610,15 +635,16 @@ class SwarmState:
         run_id = protocol.ref(run_id, "run id")
         worker_ref = self._validate_worker(worker_ref)
         lease_seconds = self._validate_lease(lease_seconds)
-        now = self._now()
-
         # Owner binding validation is performed before entering the write
-        # transaction so an unavailable owner cannot consume an attempt.
+        # transaction so an unavailable or slow owner can neither consume an
+        # attempt nor hold the lock. Time is read again once the lock is held.
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
         conn = self._transaction()
         ok = False
         try:
+            now = self._now()
             run = self._get_run(conn, run_id)
-            self._run_owner(run, now)
+            self._run_owner(run, now, prefetched)
             deadline, attempt_budget, concurrency = self._run_values(run)
             if now >= deadline:
                 ok = True
@@ -710,16 +736,20 @@ class SwarmState:
             raise protocol.SwarmError("UNKNOWN_TOKEN", "attempt token does not exist")
         return row
 
-    def _current_attempt(self, conn: sqlite3.Connection, token: str, now: float) -> tuple[sqlite3.Row, sqlite3.Row]:
+    def _current_attempt(self, conn: sqlite3.Connection, token: str, now: float, prefetched: tuple[str, dict[str, Any]] | None = None, *, allow_expired: bool = False) -> tuple[sqlite3.Row, sqlite3.Row]:
         attempt = self._attempt_for_token(conn, token)
         if attempt["state"] != "leased":
             raise protocol.SwarmError("STALE_ATTEMPT", "attempt token is no longer current")
         run = self._get_run(conn, str(attempt["run_id"]))
-        self._run_owner(run, now)
-        if now >= float(run["deadline"]):
-            raise protocol.SwarmError("DEADLINE_EXPIRED", "run deadline has elapsed")
-        if now >= float(attempt["lease_until"]):
-            raise protocol.SwarmError("LEASE_EXPIRED", "attempt lease has elapsed")
+        expired = now >= float(run["deadline"]) or now >= float(attempt["lease_until"])
+        # Giving up an expired lease only downgrades state, so the current
+        # token holder may still do it; everything else needs a live lease.
+        if not (allow_expired and expired):
+            self._run_owner(run, now, prefetched)
+            if now >= float(run["deadline"]):
+                raise protocol.SwarmError("DEADLINE_EXPIRED", "run deadline has elapsed")
+            if now >= float(attempt["lease_until"]):
+                raise protocol.SwarmError("LEASE_EXPIRED", "attempt lease has elapsed")
         job = conn.execute(
             "SELECT * FROM jobs WHERE run_id = ? AND job_id = ?",
             (attempt["run_id"], attempt["job_id"]),
@@ -738,10 +768,11 @@ class SwarmState:
     def attach_identity(self, token: str, identity: Mapping[str, Any]) -> dict[str, Any]:
         token = self._validate_token(token)
         normalized = self._validate_identity(identity)
-        now = self._now()
+        prefetched = self._prefetch_owner(self._now(), token=token)
         conn = self._transaction()
         ok = False
         try:
+            now = self._now()
             attempt = self._attempt_for_token(conn, token)
             if attempt["state"] != "leased":
                 if attempt["identity_json"] is not None:
@@ -754,7 +785,7 @@ class SwarmState:
                         return copy.deepcopy(normalized)
                 raise protocol.SwarmError("STALE_ATTEMPT", "attempt token is no longer current")
             run = self._get_run(conn, str(attempt["run_id"]))
-            self._run_owner(run, now)
+            self._run_owner(run, now, prefetched)
             if now >= float(run["deadline"]):
                 raise protocol.SwarmError("DEADLINE_EXPIRED", "run deadline has elapsed")
             if now >= float(attempt["lease_until"]):
@@ -791,11 +822,12 @@ class SwarmState:
         if outcome not in _OUTCOMES:
             raise protocol.SwarmError("INVALID_OUTCOME", "unknown worker outcome")
         runtime_receipt_ref = protocol.ref(runtime_receipt_ref, "runtime receipt reference")
-        now = self._now()
+        prefetched = self._prefetch_owner(self._now(), token=token)
         conn = self._transaction()
         ok = False
         try:
-            attempt, run = self._current_attempt(conn, token, now)
+            now = self._now()
+            attempt, run = self._current_attempt(conn, token, now, prefetched)
             conn.execute(
                 """UPDATE attempts SET state = 'reported', result_ref = ?, result_digest = ?,
                    outcome = ?, runtime_receipt_ref = ?, updated_at = ?
@@ -825,12 +857,13 @@ class SwarmState:
         result_digest = protocol.digest_ref(result_digest, "result digest")
         verification_ref = protocol.ref(verification_ref, "verification reference")
         owner_ref = protocol.ref(owner_ref, "owner reference")
-        now = self._now()
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
         conn = self._transaction()
         ok = False
         try:
+            now = self._now()
             run = self._get_run(conn, run_id)
-            owner = self._run_owner(run, now)
+            owner = self._run_owner(run, now, prefetched)
             if owner_ref != owner["owner_ref"]:
                 raise protocol.SwarmError("WRONG_OWNER", "acceptance caller is not the current owner")
             job = conn.execute(
@@ -909,11 +942,15 @@ class SwarmState:
         if not isinstance(retryable, bool):
             raise protocol.SwarmError("INVALID_FAILURE", "retryable must be boolean")
         per_job_limit = protocol.integer(per_job_limit, "per-job limit", maximum=_PER_JOB_LIMIT_MAX)
-        now = self._now()
+        try:
+            prefetched = self._prefetch_owner(self._now(), token=token)
+        except protocol.SwarmError:
+            prefetched = None  # an expired owner must not keep an expired lease alive
         conn = self._transaction()
         ok = False
         try:
-            attempt, run = self._current_attempt(conn, token, now)
+            now = self._now()
+            attempt, run = self._current_attempt(conn, token, now, prefetched, allow_expired=True)
             conn.execute(
                 """UPDATE attempts SET state = 'failed', reason = ?, retryable = ?,
                    per_job_limit = ?, updated_at = ? WHERE token = ? AND state = 'leased'""",
@@ -966,7 +1003,7 @@ class SwarmState:
                 "SELECT * FROM attempts WHERE run_id = ? AND state = 'leased' AND lease_until <= ?",
                 (run_id, now),
             ).fetchall()
-            self._get_run(conn, run_id)
+            run_deadline = float(self._get_run(conn, run_id)["deadline"])
         finally:
             conn.close()
         decisions: list[tuple[str, str]] = []
@@ -1008,6 +1045,22 @@ class SwarmState:
                         if row is not None:
                             conn.execute(
                                 "UPDATE jobs SET state = 'pending', reason = 'dead worker lease revoked' WHERE run_id = ? AND job_id = ? AND state = 'leased'",
+                                (row["run_id"], row["job_id"]),
+                            )
+                        revoked.append(token)
+                elif decision == "alive" and now >= run_deadline:
+                    # A live worker past the run deadline can never report; free
+                    # its slot instead of leaving the run active forever.
+                    changed = conn.execute(
+                        """UPDATE attempts SET state = 'revoked', reason = 'run deadline elapsed',
+                           retryable = 0, updated_at = ? WHERE token = ? AND state = 'leased'""",
+                        (now, token),
+                    ).rowcount
+                    if changed:
+                        row = conn.execute("SELECT run_id, job_id FROM attempts WHERE token = ?", (token,)).fetchone()
+                        if row is not None:
+                            conn.execute(
+                                "UPDATE jobs SET state = 'failed', reason = 'run deadline elapsed' WHERE run_id = ? AND job_id = ? AND state = 'leased'",
                                 (row["run_id"], row["job_id"]),
                             )
                         revoked.append(token)
