@@ -39,6 +39,8 @@ EFFORT = "max"
 SANDBOX = "read-only"
 APPROVAL_POLICY = "never"
 MAX_TIMEOUT = 3600.0
+MAX_STDOUT_BYTES = 16 * 1024 * 1024
+MAX_STDERR_BYTES = 1024 * 1024
 _READ_TOOLS = frozenset({"peer_list", "peer_receive", "peer_status"})
 
 
@@ -79,7 +81,7 @@ _QUERY_SECRET_RE = re.compile(
     r"(?i)([?&](?:access_token|api[_-]?key|apikey|auth|authorization|key|secret|refresh_token|token)=)[^&#\s]+"
 )
 _KEY_VALUE_SECRET_RE = re.compile(
-    r'''(?i)(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|token|password|passwd|secret|authorization)["']?\s*[:=\s]+)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^,\s;}\]]+)'''
+    r'''(?i)(["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|token|password|passwd|secret|authorization)["']?\s*[:=\s]+)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^,\s;}\]"']+)'''
 )
 _SENSITIVE_KEYS = {
     "authorization",
@@ -110,6 +112,8 @@ def _safe_text(value: Any) -> str:
 
     def hide(match: re.Match[str]) -> str:
         value = match.group(2)
+        if value.strip("\"'").startswith("[REDACTED"):
+            return match.group(0)  # already redacted: keep redaction idempotent
         quote = value[0] if value and value[0] in ('"', "'") else ""
         return match.group(1) + quote + "[REDACTED]" + quote
 
@@ -653,6 +657,20 @@ def _artifact_digests(paths: Mapping[str, Path]) -> dict[str, str]:
     return result
 
 
+def _read_spool(spool: Any, limit: int) -> str:
+    spool.flush()
+    spool.seek(0)
+    return spool.read(limit).decode("utf-8", errors="replace")
+
+
+def _read_last_message(path: Path) -> str:
+    """Return the unredacted final message for parsing and comparison only."""
+    try:
+        return path.read_bytes().decode("utf-8", errors="replace")
+    except (FileNotFoundError, OSError):
+        return ""
+
+
 def _scrub_last_message(path: Path) -> str:
     try:
         raw = path.read_bytes()
@@ -842,6 +860,8 @@ class CodexBackend:
         stderr = ""
         records: list[dict[str, Any]] = []
         process: subprocess.Popen[bytes] | None = None
+        stdout_spool: Any = None
+        stderr_spool: Any = None
         pid: int | None = None
         created_at: float | None = None
         exit_code: int | None = None
@@ -864,12 +884,16 @@ class CodexBackend:
             )
             _write_json(paths["command"], {"argv": command, "shell": False, "cwd": str(run_dir)})
             diagnostics["executable"] = str(executable_path)
+            # Child output goes to private spool files with a byte cap instead of
+            # memory; the raw (unredacted) spools are removed in ``finally``.
+            stdout_spool = open(run_dir / ".stdout.raw", "w+b")
+            stderr_spool = open(run_dir / ".stderr.raw", "w+b")
             process = subprocess.Popen(
                 command,
                 cwd=str(run_dir),
                 stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=stdout_spool,
+                stderr=stderr_spool,
                 shell=False,
             )
             pid = int(process.pid)
@@ -903,19 +927,39 @@ class CodexBackend:
                         pass
                     raise BackendError("process_callback", "process ownership callback failed", retryable=True) from exc
             try:
-                stdout_bytes, stderr_bytes = process.communicate(input=prompt.encode("utf-8"), timeout=timeout_value)
-            except subprocess.TimeoutExpired as exc:
-                cleanup = _terminate_owned(process, pid, created_at)
+                process.stdin.write(prompt.encode("utf-8"))
+            except (BrokenPipeError, OSError):
+                pass  # the exit status and output decide the outcome
+            finally:
                 try:
-                    tail_out, tail_err = process.communicate(timeout=2.0)
-                except (OSError, subprocess.TimeoutExpired):
-                    tail_out, tail_err = b"", b""
-                stdout = _decode(exc.output) + _decode(tail_out)
-                stderr = _decode(exc.stderr) + _decode(tail_err)
-                diagnostics.update({"status": "timeout", "cleanup": cleanup})
-                raise BackendError("timeout", "the Codex child exceeded timeout", retryable=True) from exc
-            stdout = _decode(stdout_bytes)
-            stderr = _decode(stderr_bytes)
+                    process.stdin.close()
+                except OSError:
+                    pass
+            deadline = time.monotonic() + timeout_value
+            limit_code: str | None = None
+            while process.poll() is None:
+                if time.monotonic() >= deadline:
+                    limit_code = "timeout"
+                elif os.fstat(stdout_spool.fileno()).st_size > MAX_STDOUT_BYTES or os.fstat(stderr_spool.fileno()).st_size > MAX_STDERR_BYTES:
+                    limit_code = "output_limit"
+                if limit_code:
+                    cleanup = _terminate_owned(process, pid, created_at)
+                    try:
+                        process.wait(timeout=2.0)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    stdout = _read_spool(stdout_spool, MAX_STDOUT_BYTES)
+                    stderr = _read_spool(stderr_spool, MAX_STDERR_BYTES)
+                    diagnostics.update({"status": limit_code, "cleanup": cleanup})
+                    if limit_code == "timeout":
+                        raise BackendError("timeout", "the Codex child exceeded timeout", retryable=True)
+                    raise BackendError("output_limit", "the Codex child exceeded the output limit", retryable=False)
+                time.sleep(0.05)
+            stdout = _read_spool(stdout_spool, MAX_STDOUT_BYTES)
+            stderr = _read_spool(stderr_spool, MAX_STDERR_BYTES)
+            if os.fstat(stdout_spool.fileno()).st_size > MAX_STDOUT_BYTES or os.fstat(stderr_spool.fileno()).st_size > MAX_STDERR_BYTES:
+                diagnostics.update({"status": "output_limit"})
+                raise BackendError("output_limit", "the Codex child exceeded the output limit", retryable=False)
             exit_code = process.returncode
             records, malformed, parse_error = _parse_events(stdout)
             diagnostics.update({"exit_code": exit_code, "stdout_event_count": len(records), "stdout_malformed_lines": malformed})
@@ -948,7 +992,9 @@ class CodexBackend:
                 or runtime.get("approval_policy") not in (None, APPROVAL_POLICY)
             ):
                 raise BackendError("runtime_mismatch", "completed runtime settings do not match the fixed worker policy", retryable=False)
-            final_text = _scrub_last_message(paths["last_message"])
+            # Parse and compare the raw output; only persisted copies are
+            # redacted, so redaction can never corrupt an honest result.
+            final_text = _read_last_message(paths["last_message"])
             if not final_text:
                 final_text = _final_message(records)
             result = _result_from_message(final_text)
@@ -959,7 +1005,7 @@ class CodexBackend:
             completed_output = runtime.get("completed_output")
             if not isinstance(completed_output, str) or not completed_output:
                 raise BackendError("runtime_output_missing", "completed runtime output is unavailable", retryable=False)
-            if _redact(_result_from_message(completed_output)) != _redact(result):
+            if _result_from_message(completed_output) != result:
                 raise BackendError("runtime_output_mismatch", "result file differs from the completed model output", retryable=False)
             finished = time.time()
             receipt = {
@@ -1027,6 +1073,13 @@ class CodexBackend:
             error.diagnostics = dict(diagnostics)
             raise error from exc
         finally:
+            for spool in (stdout_spool, stderr_spool):
+                if spool is not None:
+                    try:
+                        spool.close()
+                        os.unlink(spool.name)
+                    except OSError:
+                        pass
             try:
                 if not records and stdout:
                     records, _, _ = _parse_events(stdout)

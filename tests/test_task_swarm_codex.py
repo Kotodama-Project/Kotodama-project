@@ -41,7 +41,14 @@ def _fake_codex(tmp_path: Path) -> Path:
             mode = os.environ.get("FAKE_MODE", "success")
             if mode == "timeout":
                 time.sleep(10)
-            output.write_text(json.dumps({"job": "fixture", "answer": "ok"}), encoding="utf-8")
+            if mode == "flood":
+                chunk = "x" * 65536 + "\n"
+                for _ in range(int(os.environ.get("FAKE_FLOOD_CHUNKS", "0"))):
+                    sys.stdout.write(chunk)
+                sys.stdout.flush()
+                time.sleep(10)
+            answer = os.environ.get("FAKE_ANSWER", "ok")
+            output.write_text(json.dumps({"job": "fixture", "answer": answer}), encoding="utf-8")
             thread = "11111111-1111-4111-8111-111111111111"
             turn = "22222222-2222-4222-8222-222222222222"
             print(json.dumps({"type": "thread.started", "thread_id": thread}))
@@ -52,7 +59,7 @@ def _fake_codex(tmp_path: Path) -> Path:
             lines = [
               {"type":"session_meta","payload":{"id":thread,"session_id":thread,"cwd":str(pathlib.Path.cwd()),"timestamp":datetime.now(timezone.utc).isoformat()}},
               {"type":"turn_context","payload":{"turn_id":turn,"model":"gpt-5.6-luna","effort":"max","approval_policy":"never","sandbox_policy":{"type":"read-only"}}},
-              {"type":"event_msg","payload":{"type":"task_complete","turn_id":turn,"completed_at":1,"last_agent_message":json.dumps({"job":"fixture","answer":"ok"})}},
+              {"type":"event_msg","payload":{"type":"task_complete","turn_id":turn,"completed_at":1,"last_agent_message":json.dumps({"job":"fixture","answer":answer})}},
             ]
             if mode == "missing_cwd":
                 lines[0]["payload"].pop("cwd")
@@ -169,3 +176,44 @@ def test_peer_command_contains_exact_tools_and_write_opt_in(tmp_path: Path) -> N
     assert not any("tools.peer_send.approval_mode" in item for item in readonly)
     assert any("tools.peer_send.approval_mode" in item for item in enabled)
     assert "--dangerously-bypass-approvals-and-sandbox" not in enabled
+
+
+FREE_SCHEMA = {
+    "type": "object",
+    "required": ["job", "answer"],
+    "properties": {"job": {"type": "string"}, "answer": {"type": "string"}},
+    "additionalProperties": False,
+}
+
+
+@pytest.mark.parametrize("answer", ["rotated the token handling", "no secret leaked in logs", "password policy reviewed"])
+def test_honest_results_that_mention_secret_words_are_not_corrupted(tmp_path, monkeypatch, answer):
+    fake = _fake_codex(tmp_path)
+    sessions = tmp_path / "sessions"
+    monkeypatch.setenv("FIXTURE_SESSIONS", str(sessions))
+    monkeypatch.setenv("FAKE_ANSWER", answer)
+    result = CodexBackend(fake, session_root=sessions).invoke("fixture", FREE_SCHEMA, tmp_path / "attempt", timeout=5)
+    assert result["result"]["job"] == "fixture"
+    assert result["receipt"]["completed_output_matches"] is True
+
+
+def test_redaction_is_idempotent_and_keeps_json_valid():
+    import json
+    from task_swarm.codex import _safe_text
+    once = _safe_text('{"token":"abc123","note":"token handling"}')
+    assert _safe_text(once) == once
+    assert json.loads(once)["token"] == "[REDACTED]"
+
+
+def test_unbounded_child_output_is_stopped_at_the_limit(tmp_path, monkeypatch):
+    import task_swarm.codex as codex
+    fake = _fake_codex(tmp_path)
+    sessions = tmp_path / "sessions"
+    monkeypatch.setenv("FIXTURE_SESSIONS", str(sessions))
+    monkeypatch.setenv("FAKE_MODE", "flood")
+    monkeypatch.setenv("FAKE_FLOOD_CHUNKS", "64")  # 4 MiB against a 1 MiB cap
+    monkeypatch.setattr(codex, "MAX_STDOUT_BYTES", 1024 * 1024)
+    with pytest.raises(BackendError) as raised:
+        CodexBackend(fake, session_root=sessions).invoke("fixture", FREE_SCHEMA, tmp_path / "attempt", timeout=30)
+    assert raised.value.code == "output_limit"
+    assert not list((tmp_path / "attempt").rglob(".stdout.raw")), "raw unredacted spool must be removed"
