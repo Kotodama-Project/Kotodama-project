@@ -14,7 +14,7 @@ class DiscordRequiredGateTests(unittest.TestCase):
         self.assertEqual(jobs['discord']['uses'], './.github/workflows/discord-runtime.yml')
         required = jobs['validate']
         self.assertEqual(required['name'], 'Trusted repository validation')
-        self.assertEqual(required['needs'], 'discord')
+        self.assertIn('discord', required['needs'])
         self.assertEqual(required['if'], '${{ always() }}')
         gate = required['steps'][0]
         self.assertEqual(gate['env']['DISCORD_RESULT'], '${{ needs.discord.result }}')

@@ -35,6 +35,12 @@ credential gate は HEAD、index、tracked な working tree の 3 つの snapsho
 pip-compile --generate-hashes --output-file=requirements-ci.txt requirements-test.txt
 ```
 
+Task swarm（`runtime/task_swarm`）は MCP SDK などの依存が多いため、共通 lock とは別の `requirements-task-swarm-ci.txt` を使います。入力は `requirements-task-swarm.txt` と `requirements-task-swarm-test.txt` で、Linux と Windows の両方で使えるよう uv 0.12.17 の universal 解決で生成します。
+
+```text
+uv pip compile --universal --generate-hashes --python-version 3.12 --output-file requirements-task-swarm-ci.txt requirements-task-swarm-test.txt
+```
+
 `runtime/discord-template` を変えるときは Node 24 と pnpm 11.19.0 で次を通します。
 
 ```text

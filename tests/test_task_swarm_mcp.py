@@ -7,7 +7,11 @@ from pathlib import Path
 import sys
 import textwrap
 
-import pytest
+try:
+    import pytest
+except ModuleNotFoundError:  # the core unittest gate installs only requirements-ci.txt
+    import unittest
+    raise unittest.SkipTest("runs under pytest in the required Task swarm validation job (requirements-task-swarm-ci.txt)")
 
 
 RUNTIME = Path(__file__).resolve().parents[1] / "runtime"

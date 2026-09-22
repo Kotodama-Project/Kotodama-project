@@ -41,7 +41,9 @@ def payload_budget(root: Path, payload_root: Path, destination: Path, size: int,
         count = used = 0
         with os.scandir(payload_root) as entries:
             for entry in entries:
-                info = entry.stat(follow_symlinks=False)
+                # DirEntry.stat() reports st_nlink as 0 on Windows; a full
+                # lstat reads the real link count on every platform.
+                info = os.lstat(entry.path)
                 if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                     raise SwarmError("PAYLOAD_STORAGE_ERROR", "payload root contains a non-private regular file")
                 count += 1

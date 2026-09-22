@@ -1,11 +1,16 @@
 """Negative review regressions; no real providers or production owner state."""
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
 import sys
 import threading
-import pytest
+try:
+    import pytest
+except ModuleNotFoundError:  # the core unittest gate installs only requirements-ci.txt
+    import unittest
+    raise unittest.SkipTest("runs under pytest in the required Task swarm validation job (requirements-task-swarm-ci.txt)")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'runtime'))
 from task_swarm.protocol import SwarmError
@@ -39,7 +44,7 @@ def test_non_candidate_and_legacy_acceptance_replay_are_refused(outcome):
         state.report(attempt['token'], 'result-a', 'c'*64, outcome, 'runtime-a')
         with pytest.raises(SwarmError, match='NON_CANDIDATE_RESULT'):
             state.accept('run-demo', 'work', 'c'*64, 'verified-a', 'owner')
-        with sqlite3.connect(fixture.db) as db:
+        with closing(sqlite3.connect(fixture.db)) as db, db:
             assert db.execute("SELECT state FROM jobs WHERE job_id='work'").fetchone()[0] == 'reported'
             # Model an old DB containing a pre-fix invalid accepted row.
             db.execute("UPDATE attempts SET state='accepted' WHERE token=?", (attempt['token'],))
@@ -87,7 +92,7 @@ def test_failed_publication_retains_quota_is_not_delivered_and_retries_same_id(t
     assert payload_files(a)==[]
     with pytest.raises(SwarmError,match='BACKPRESSURE'):
         a.peer_send('actor-b','other','other')
-    with sqlite3.connect(a.transport.db_path) as db:
+    with closing(sqlite3.connect(a.transport.db_path)) as db, db:
         digest=db.execute('SELECT payload_digest FROM messages WHERE message_id=?',(message,)).fetchone()[0]
     with pytest.raises(SwarmError,match='PAYLOAD_UNAVAILABLE'):
         b.peer_ack(message,digest)
@@ -182,6 +187,28 @@ def test_payload_root_limits_are_persistent_and_do_not_erase_shared_content(tmp_
         PayloadStore(tmp_path/'payloads',max_payloads=2).put('body',[])
 
 
+def test_payload_budget_does_not_trust_directory_entry_link_counts(tmp_path, monkeypatch):
+    # Windows reports st_nlink=0 from DirEntry.stat(); accounting must read the
+    # real link count instead of refusing every existing payload file.
+    import os as real_os
+    from task_swarm import payload_budget as budget
+    original_scandir=real_os.scandir
+    class Entry:
+        def __init__(self, entry): self._entry=entry; self.path=entry.path; self.name=entry.name
+        def stat(self, *, follow_symlinks=True):
+            info=self._entry.stat(follow_symlinks=follow_symlinks)
+            return real_os.stat_result((info.st_mode, 0, 0, 0, info.st_uid, info.st_gid, info.st_size, 0, 0, 0))
+    class Entries:
+        def __init__(self, path): self._iterator=original_scandir(path)
+        def __enter__(self): return (Entry(entry) for entry in self._iterator)
+        def __exit__(self, *exc): self._iterator.close()
+    monkeypatch.setattr(budget.os, 'scandir', Entries)
+    store=PayloadStore(tmp_path/'payloads',max_payloads=2,max_storage_bytes=1000)
+    first=store.put('first',[]); second=store.put('second',[])
+    assert store.get(*first)['text']=='first' and store.get(*second)['text']=='second'
+    with pytest.raises(SwarmError,match='PAYLOAD_STORAGE_QUOTA'): store.put('third',[])
+
+
 def test_parallel_payload_stores_share_one_capacity_limit(tmp_path):
     root=tmp_path/'payloads'; base=PayloadStore(root,max_payloads=3,max_storage_bytes=1000)
     base.put('seed',[])
@@ -233,9 +260,9 @@ def test_legacy_transport_schema_is_migrated_without_reclassifying_old_messages(
     owner=_owner(tmp_path)
     db=tmp_path/'storage'/'mailbox.sqlite'; db.parent.mkdir(parents=True)
     legacy=_SCHEMA.replace("    payload_state TEXT NOT NULL DEFAULT 'ready' CHECK(payload_state IN ('pending','ready')),\n",'')
-    with sqlite3.connect(db) as conn: conn.executescript(legacy)
+    with closing(sqlite3.connect(db)) as conn, conn: conn.executescript(legacy)
     a=PeerTools(owner,'actor-a',1,'invocation-a',clock=lambda:1_700_000_000.0)
     receipt=a.peer_send('actor-b','migration fixture','migration')
     assert receipt['payload_state']=='ready'
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn, conn:
         assert 'payload_state' in {row[1] for row in conn.execute('PRAGMA table_info(messages)')}

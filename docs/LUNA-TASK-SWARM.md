@@ -154,8 +154,8 @@ gate_ceiling: LOCAL_PASS
 Python3.12で、依存を導入してから明示的なlocal fixtureを実行します。通常のテストとoffline demoはモデルを呼びません。
 
 ```powershell
-python -m pip install -r requirements-task-swarm-test.txt
-python -m pytest -q tests -k task_swarm
+python -m pip install --require-hashes -r requirements-task-swarm-ci.txt
+python -m pytest -q -p no:cacheprovider tests -k task_swarm
 python tools/task_swarm.py demo --root work/offline-demo --allow-local-fixture
 python -c "import tomllib, pathlib; [tomllib.loads(p.read_text(encoding='utf-8')) for p in pathlib.Path('.codex/agents').glob('kotodama_luna_*.toml')]; print('TOML_OK')"
 ```

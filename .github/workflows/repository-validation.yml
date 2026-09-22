@@ -16,9 +16,11 @@ concurrency:
 jobs:
   discord:
     uses: ./.github/workflows/discord-runtime.yml
+  swarm:
+    uses: ./.github/workflows/task-swarm.yml
   validate:
     name: Trusted repository validation
-    needs: discord
+    needs: [discord, swarm]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -34,6 +36,10 @@ jobs:
         env:
           DISCORD_RESULT: ${{ needs.discord.result }}
         run: test "$DISCORD_RESULT" = success
+      - name: Require the complete task swarm test matrix
+        env:
+          SWARM_RESULT: ${{ needs.swarm.result }}
+        run: test "$SWARM_RESULT" = success
       - name: Check out without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
