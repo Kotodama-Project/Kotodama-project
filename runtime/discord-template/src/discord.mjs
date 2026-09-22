@@ -18,6 +18,14 @@ export const commandDefinition={name:'kotodama',description:'ことだまに相�
 
 const accessCacheMs=3000;
 const accessEvents=['channelUpdate','channelDelete','guildUpdate','guildMemberUpdate','guildMemberRemove','roleCreate','roleUpdate','roleDelete','threadUpdate','threadDelete','threadMembersUpdate'];
+const taskStates={queued:'受付済み',running:'実行中',needs_review:'成果確認待ち',stale:'訂正により無効',failed:'失敗',cancelled:'停止済み',stopping:'停止処理中',uncertain:'状態確認中（自動では再実行しません）',paused:'一時停止中（resumeで再開できます）'};
+export const taskStateText=state=>taskStates[state]??state;
+// Deferred analysis keeps the Source; say so instead of claiming it was analysed.
+export function deferredAnalysisText(reason){
+  if(reason==='ANALYSIS_BUDGET_EXHAUSTED')return '本日の解析回数の上限に達したため、今回は解析していません。相談内容は記録済みです。';
+  if(reason==='ANALYSIS_TOTAL_BUDGET_EXHAUSTED')return '解析回数の累計上限に達したため、解析していません。相談内容は記録済みです。上限は管理者が設定で見直せます。';
+  return '混み合っているため、解析を後回しにしました。相談内容は記録済みです。少し時間をおいて、もう一度お試しください。';
+}
 export function accessFailure(error){const status=error?.status;return Number.isInteger(status)&&status>=400&&status<500&&status!==429?'denied':'unavailable';}
 
 export class DiscordAdapter {
@@ -114,8 +122,8 @@ export class DiscordAdapter {
     await i.deferReply({flags:MessageFlags.Ephemeral});
     try{this.operator(i.user.id);await this.member(i.user.id);const sub=i.options.getSubcommand();let text;
       if(sub==='do'){const request=i.options.getString('text',true),action=i.options.getString('action',true);const t=await this.pipeline.request(this.interactionSource(i,request),{title:request.slice(0,120),request,action});text=`受け付けました。\n${t.id}\n結果はこの仕事の「result」で確認できます。`;}
-      else if(sub==='ask'){const source=this.interactionSource(i,i.options.getString('text',true));source.metadata.operation='ask';const receipt=await this.pipeline.ingest(source,{execute:false,reply:false});for(const b of receipt.contextSources??[]){const s=this.store.source(b.key,i.user.id);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord'){const channel=await this.client.channels.fetch(s.channelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}}text=receipt.answer??receipt.summary??'整理しました。';}
-      else if(sub==='tasks'){const tasks=await this.pipeline.owner.tasks(i.user.id);const visible=[];for(const task of tasks)try{await this.pipeline.authorize(task,'read_result');visible.push(task);}catch{}text=visible.slice(0,15).map(t=>`${t.id} · ${{queued:'受付済み',running:'実行中',needs_review:'成果確認待ち',stale:'訂正により無効',failed:'失敗',cancelled:'停止済み',stopping:'停止処理中',uncertain:'状態確認中'}[t.state]??t.state}\n${t.title}`).join('\n')||'読取可能な仕事はまだありません。';}
+      else if(sub==='ask'){const source=this.interactionSource(i,i.options.getString('text',true));source.metadata.operation='ask';const receipt=await this.pipeline.ingest(source,{execute:false,reply:false});for(const b of receipt.contextSources??[]){const s=this.store.source(b.key,i.user.id);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord'){const channel=await this.client.channels.fetch(s.channelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}}text=receipt.analysis==='deferred'?deferredAnalysisText(receipt.reason):receipt.answer??receipt.summary??'整理しました。';}
+      else if(sub==='tasks'){const tasks=await this.pipeline.owner.tasks(i.user.id);const visible=[];for(const task of tasks)try{await this.pipeline.authorize(task,'read_result');visible.push(task);}catch{}text=visible.slice(0,15).map(t=>`${t.id} · ${taskStateText(t.state)}\n${t.title}`).join('\n')||'読取可能な仕事はまだありません。';}
       else if(sub==='result'){const result=await this.pipeline.result(i.options.getString('task',true),i.user.id);const files=await resultFiles(result,{artifactRoot:this.artifactRoot()});await i.editReply({content:shortText(result.summary),files,allowedMentions:{parse:[]}});return;}
       else if(sub==='stop'){await this.pipeline.stop(i.options.getString('task',true),i.user.id);text='停止を受け付けました。実行中の処理の終了を確認しています。';}
       else if(sub==='resume'){const t=await this.pipeline.resume(i.options.getString('task',true),i.user.id);text=`再開しました。${t.id}`;}

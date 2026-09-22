@@ -39,6 +39,13 @@ node bin/kotodama.mjs doctor --json
 4. CLI実行器の実ファイル、モデル（既定はLuna）、作業対象、許す操作、検証コマンド。[モデルと任意のフォールバック](docs/MODELS.md)。
 5. 音声の一回・一日あたりの上限。既定の一日上限は0なので、設定前に音声APIへ接続しません。
 
+ファイルを書き換える `write_file` と `develop` を `worker.actions` に加える場合は、Linuxの実行ホストに検証用のDocker imageを事前に用意します。`worker.verify` に1つ以上の検証コマンドを、`worker.verification` にimageのID（`sha256:` と64桁、`docker image inspect` で確認）またはdigest付きの名前を指定します。検証は読取専用の作業領域・ネットワークなし・認証情報なしのコンテナで行い、通常のホストで代わりに実行することはありません。設定がない場合やLinux以外では、モデルを動かす前に `VERIFICATION_COMMAND_REQUIRED`・`VERIFICATION_ISOLATION_REQUIRED`・`WRITE_WORKER_REQUIRES_LINUX_HOST` で拒否します。実行中にimageを取得（pull）しません。検証コマンドはコンテナ内の `node` などを使い、ホストの絶対パスは使えません。書き込みは `/tmp` だけに行えます。
+
+```json
+"verify": [{"executable": "node", "args": ["--test"]}],
+"verification": {"kind": "docker", "image": "sha256:<64桁のimage ID>"}
+```
+
 ローカルASRを使う最小設定例です。endpointはHTTPS、loopback、private LAN、またはtailnet内だけを受け付けます。
 
 ```json
