@@ -4,8 +4,8 @@ import {verifyArtifacts} from './worker.mjs';
 import {AnalysisAdmission} from './analysis-admission.mjs';
 
 export class Pipeline {
-  constructor({store,owner=store,config,policy=()=>config,analyzer,worker,authorize=async()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
-    Object.assign(this,{store,owner,config,policy,analyzer,worker,authorize,authorizeAnalysis,onTask,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.tail=Promise.resolve();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);
+  constructor({store,owner=store,config,policy=()=>config,analyzer,worker,authorize=async()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onTaskQueued=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
+    Object.assign(this,{store,owner,config,policy,analyzer,worker,authorize,authorizeAnalysis,onTask,onTaskQueued,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.tail=Promise.resolve();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);
   }
   context(source,principal){
     const config=this.config.analyzer,maxSources=config.maxContextSources??12;let remaining=config.maxContextChars??24000;
@@ -61,6 +61,8 @@ export class Pipeline {
       if(intent.targetTaskId){const prior=await this.owner.task(intent.targetTaskId,source.actorId);check(prior.room===`${source.provider}:${source.guildId}:${source.channelId}`,'TASK_ROOM_MISMATCH');await this.authorize(prior,'revise');}
       checkInputs();const boundIntent={...intent,intentIds:intent.intentIds??[ids[index]],requiredActions:intent.requiredActions??[intent.action],contextSources:bindings};const task=intent.targetTaskId?await this.owner.reviseTask(intent.targetTaskId,source,boundIntent):await this.owner.createTask(source,{...boundIntent,key:ids[index]});await this.authorize(task);
       if(intent.targetTaskId)this.active.get(intent.targetTaskId)?.controller.abort();tasks.push(task.id);this.enqueue(task.id,task.actor,task.revision);
+      // Tell the requester at once; a failed notice never undoes the queued work.
+      const revised=Boolean(intent.targetTaskId);void (async()=>{try{await this.onTaskQueued(task,{revised});}catch(e){this.onError(errorCode(e));}})();
     }
     if(source.metadata?.kind==='voice'&&!source.metadata.nativeConversation&&result.voiceAction!=='none'){checkInputs();await this.onVoiceAction({source,action:result.voiceAction,contextSources:bindings});}
     else if(reply&&result.replyRequested){checkInputs();await this.onReply({source,text:result.reply,contextSources:bindings});}

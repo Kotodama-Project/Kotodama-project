@@ -110,9 +110,20 @@ export class DiscordAdapter {
   }
   async message(message){
     const cfg=this.policy();if(!this.verifiedInstallation||message.guildId!==cfg.discord.guildId||!cfg.discord.textChannelIds.includes(message.channelId)||message.author?.bot||message.webhookId||message.partial)return;
-    const source=await this.source(message);const addressed=message.mentions.users.has(this.client.user.id)&&cfg.discord.operators.includes(message.author.id);
-    source.metadata.directlyAddressed=addressed;
+    const source=await this.source(message);
+    // In an agent channel every operator message is addressed to the Bot, as if it @mentioned it.
+    // Execution still needs an explicit, complete request in the text itself.
+    const agentChannel=cfg.discord.agentChannelIds.includes(message.channelId);
+    const addressed=cfg.discord.operators.includes(message.author.id)&&(agentChannel||message.mentions.users.has(this.client.user.id));
+    source.metadata.directlyAddressed=addressed;if(agentChannel)source.metadata.agentChannel=true;
     await this.pipeline.ingest(source,{execute:addressed,reply:addressed});
+  }
+  // Immediate DM to the requester when conversation became running work; the result follows on completion.
+  async acknowledgeTask(task,{revised=false}={}){
+    if(!this.verifiedInstallation)return {state:'blocked'};this.operator(task.actor);
+    const text=`${revised?'作業内容を更新して、走り直しています':'走り始めました'}：${task.title}\nID: ${task.id}\n終わったら、このDMで結果を届けます。止めるときは /kotodama stop でこのIDを指定してください。`;
+    const user=await this.client.users.fetch(task.actor);const message=await user.send({content:shortText(text),allowedMentions:{parse:[]}});
+    check(message?.id,'NOTIFICATION_SEND_UNCONFIRMED');return {state:'sent'};
   }
   async withdraw(message){if(!this.verifiedInstallation)return;if(message.guildId!==this.config.discord.guildId)return;const key=sourceIdentity({provider:'discord',guildId:message.guildId,channelId:message.channelId,sourceId:message.id});const old=this.store.sourceInternal(key);if(old)await this.pipeline.ingest({...old,revision:Math.max(Date.now(),old.revision+1),text:'',withdrawn:true,metadata:{...old.metadata,withdrawalActorUnknown:true}},{execute:false});}
   interactionSource(i,text){return {provider:'discord',guildId:i.guildId,channelId:i.channelId,sourceId:i.id,actorId:i.user.id,readers:[i.user.id],revision:i.createdTimestamp,final:true,text,metadata:{kind:'command'}};}

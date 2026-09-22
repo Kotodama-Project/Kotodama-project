@@ -80,6 +80,7 @@ BotはDiscord側でも対象サーバーへ導入してください。Message Co
 | 操作 | Discord |
 |---|---|
 | 相談 | Botへのメンション、または `/kotodama ask` |
+| 話すだけで仕事を頼む | エージェント用チャンネル（`discord.agentChannelIds`）に書く。VCでは呼びかけ（`conversationStart: "speech"` なら話し始め）から |
 | 明示的に仕事を頼む | `/kotodama do` |
 | 自分の仕事を見る | `/kotodama tasks` |
 | 成果を読む | `/kotodama result` |
@@ -110,6 +111,19 @@ BotはDiscord側でも対象サーバーへ導入してください。Message Co
 ローカルASR構成でLiveを開始していない待機中は、音声クラウドAPIを呼び出しません。Live利用秒とLunaのinput・cached input・output tokenを別々に記録します。Lunaへ渡す会話contextと最大出力も設定で上限を持ち、usage snapshotは累積値として置き換えるため二重加算しません。`naturalConversation: false` のLive会話は人の入力が既定120秒なければ閉じ、Botはローカル聞き役のまま残ります。`voice.conversationIdleSeconds` で30〜600秒に調整できます。
 
 実装はOpenAI公式の[GPT-Liveセッション管理](https://developers.openai.com/api/docs/guides/live-conversations)、[client delegation](https://developers.openai.com/api/docs/guides/live-delegation?delegation-mode=client)、[サーバー側の再生制御](https://developers.openai.com/api/docs/guides/voice-server-controls?api=live)、[音声コスト最適化](https://developers.openai.com/api/docs/guides/voice-latency-cost?api=live)に合わせています。
+
+### 意図を抜き出して、すぐに走る
+
+`discord.agentChannelIds` に指定したテキストチャンネル（`textChannelIds` に含まれるもの）では、操作者の発言をBotへのメンションと同じに扱います。@を付けずに「〇〇を調べて」「この資料を要約して」と書くと、Lunaが意図を抜き出し、明確で実行に足りる依頼なら許可された操作（`worker.actions`）の範囲ですぐに仕事を始めます。雑談、相談、引用、推測だけの発言からは仕事を作りません。対象が足りない依頼は実行せず、意図の候補として残します。
+
+```json
+"discord": {
+  "textChannelIds": ["一般チャンネルのID", "エージェント用チャンネルのID"],
+  "agentChannelIds": ["エージェント用チャンネルのID"]
+}
+```
+
+会話（テキストでも音声でも）から仕事が走り始めると、依頼した人へすぐにDMで「走り始めました：件名」と仕事のIDを届けます。止めるときは `/kotodama stop` にそのIDを指定します。完了すると同じDMへ成果を届けます。VCで呼び名なしに話し始めたい場合は、[会話の開始と退出](#会話の開始と退出)の `voice.conversationStart: "speech"` を使います。
 
 ## CLI・資料・連携
 
