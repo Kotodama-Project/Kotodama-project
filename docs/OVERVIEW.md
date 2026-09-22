@@ -686,7 +686,7 @@ Local-first は、すべてを一台へ詰め込むことではありません�
 | TiDB | Context Platform の第一評価候補 | 未採用、未配備 |
 | Proxmox | segmented local runtime の基準候補 | lifecycle contract 公開、live receipt なし |
 | Compose minimum | 小さな導入 profile | secret-free skeleton / candidate 公開 |
-| Cloudflare edge | bounded public ingress / application delivery | 採用方向。content-free Worker と guarded preview workflow は draft candidate、未 upload |
+| Cloudflare edge | bounded public ingress / application delivery | 採用方向。content-free Worker と guarded preview workflow（現在の `main` の先頭だけを対象）は #18 で統合済みの candidate、未 upload |
 | Official Cloudflare OS | AI workspace、Gadgets、Blueprints、Gatekeepers の実装基盤 | 採用方向。official starter/core source pin と local synthetic adapter は candidate、未 install／未 deploy |
 
 provider を利用する場合も、exact artifact、participant scope、purpose、provider/model、expiry、cancellation、retention を持つ transfer grant の後ろに置く方針です。

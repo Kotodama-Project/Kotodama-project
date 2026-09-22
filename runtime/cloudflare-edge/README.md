@@ -74,8 +74,8 @@ node --test tests/node/test_cloudflare_voice_review.mjs
 ```
 
 The GitHub workflow first checks a lowercase 40-hex commit and requires it to
-equal the current remote tip of the allowed `codex/cloudflare-os-foundation-rebased-20260824`
-branch; a historical ancestor is refused. Validator code is checked out from
+equal the current remote tip of `main`, which only receives reviewed
+changes through the required checks; a historical ancestor is refused. Validator code is checked out from
 the exact `github.sha` dispatch revision on `main`, rather than re-resolving a
 mutable default-branch name during the run. Candidate Python or tests are not
 executed in that unprivileged validation job. After Environment approval, the

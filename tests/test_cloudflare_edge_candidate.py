@@ -515,7 +515,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         for guard in (
             "refs/heads/main",
             "^[0-9a-f]{40}$",
-            "refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824",
+            "refs/remotes/origin/main",
             "path: trusted",
             "path: candidate",
             "trusted/tools/validate_cloudflare_edge_candidate.py --root candidate",
@@ -534,13 +534,13 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         self.assertEqual(
             2,
             workflow.count(
-                'test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824)" '
+                'test "$(git rev-parse refs/remotes/origin/main)" '
                 '= "$CANDIDATE_SHA"',
             ),
         )
         validation_job, upload_job = workflow.split("  upload-preview-version:", 1)
-        self.assertEqual(1, validation_job.count("git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824"))
-        self.assertEqual(1, upload_job.count("git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824"))
+        self.assertEqual(1, validation_job.count("git rev-parse refs/remotes/origin/main"))
+        self.assertEqual(1, upload_job.count("git rev-parse refs/remotes/origin/main"))
         self.assertNotIn("git merge-base --is-ancestor", workflow)
 
     def test_validator_refuses_ancestor_only_branch_guard(self) -> None:
@@ -551,7 +551,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             workflow_path = candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
             workflow = workflow_path.read_text(encoding="utf-8")
             exact_tip_guard = (
-                'test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824)" '
+                'test "$(git rev-parse refs/remotes/origin/main)" '
                 '= "$CANDIDATE_SHA"'
             )
             workflow_path.write_text(
@@ -572,11 +572,12 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
                 errors,
             )
 
-    def test_validator_accepts_only_the_current_rebased_candidate_branch(self) -> None:
+    def test_validator_accepts_only_the_current_main_tip(self) -> None:
         workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
-        current_branch = "codex/cloudflare-os-foundation-rebased-20260824"
-        stale_branch = "codex/cloudflare-os-foundation"
+        current_branch = "refs/remotes/origin/main"
+        stale_branch = "codex/cloudflare-os-foundation-rebased-20260824"
         self.assertIn(current_branch, workflow)
+        self.assertNotIn(stale_branch, workflow)
         self.assertNotIn(f"refs/heads/{stale_branch}:", workflow)
         self.assertNotIn(f"refs/remotes/origin/{stale_branch})", workflow)
 
@@ -589,14 +590,17 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             workflow = workflow_path.read_text(encoding="utf-8")
             workflow_path.write_text(
                 workflow.replace(
-                    "codex/cloudflare-os-foundation-rebased-20260824",
-                    "codex/cloudflare-os-foundation",
+                    "refs/heads/main:refs/remotes/origin/main",
+                    "refs/heads/codex/cloudflare-os-foundation-rebased-20260824:refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824",
+                ).replace(
+                    "git rev-parse refs/remotes/origin/main)",
+                    "git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824)",
                 ),
                 encoding="utf-8",
             )
             errors = MODULE.validate(candidate)
             self.assertIn(
-                "workflow missing required guard: refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824",
+                "workflow missing required guard: refs/remotes/origin/main",
                 errors,
             )
             self.assertIn(

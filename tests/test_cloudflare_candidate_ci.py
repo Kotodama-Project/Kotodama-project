@@ -17,7 +17,8 @@ class CloudflareCandidateCIContractTests(unittest.TestCase):
 
         self.assertIn("pull_request:", workflow)
         self.assertIn("push:", workflow)
-        self.assertIn("codex/cloudflare-os-foundation", workflow)
+        self.assertIn("branches:\n      - main", workflow)
+        self.assertNotIn("codex/cloudflare-os-foundation", workflow)
         self.assertNotIn("pull_request_target", workflow)
         self.assertIn("contents: read", workflow)
         self.assertIn("ubuntu-24.04", workflow)
