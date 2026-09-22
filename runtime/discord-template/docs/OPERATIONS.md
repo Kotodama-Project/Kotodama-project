@@ -26,6 +26,14 @@
 
 GPT-Liveの利用量は `session.usage.updated` の累積秒を前回値と置き換え、5秒ごとと `session.closed` の最終値を `voice.usage_snapshot` に保存します。snapshot同士を足しません。Luna Responsesはinput、cached input、output、total tokenを応答ごとに一度だけ保存します。人の入力が `voice.conversationIdleSeconds` を超えて途切れた場合はLiveだけを閉じます。長い仕事へ移ったら音声会話を閉じてもworkerは継続でき、結果は次の呼びかけ時に必要な要点だけを再投入できます。
 
+通常ログとDiscordへの返信は、想定外のエラーも `OPERATION_FAILED` という分類コードだけにします。原因を調べるときは、`start --verbose`（または環境変数 `KOTODAMA_DEBUG=1`）で起動し直してから同じ操作を再現します。データ領域の `debug.log` に、1行1件のJSONで次の項目を記録します。
+
+- `at`：記録時刻。`where`：エラーを `OPERATION_FAILED` に分類したコード上の場所。
+- `name` / `message` / `stack`：エラーの種類・内容・発生箇所。APIキー、Bearer値、Discord tokenの形をした文字列は `[REDACTED]` に置き換えます。
+- `issues`：設定ファイルの誤りでは、誤った項目の `path` と種類 `code` だけを出し、設定した値は出しません。
+
+ファイルは所有者だけが読める権限（0600）で作り、1MiBを超えると `debug.log.1` へ1世代だけ回します。リンクされたファイルには書きません。設定ファイル自体が読めない場合はデータ領域が分からないため、`--verbose` を付けたコマンドの出力の `debug` に同じ内容を表示します。調査が終わったら `--verbose` を外して再起動し、`debug.log` は共有前に内容を確認してください。会話の断片がエラー文に含まれる可能性があります。
+
 アップデートは、停止→状態保存→新しいソースと固定依存で試験→起動→実際の依頼と成果確認の順です。問題があればコードを前の版へ戻し、データは保持します。
 
 音声はDiscordの入力アカウントごとに扱います。共有マイクなど本人を特定できない入力は `discord.unattributedUsers` へ登録し、話者不明として記録します。その発言からは自動実行・音声回答を始めません。重なった別アカウントの入力は別トラックです。
