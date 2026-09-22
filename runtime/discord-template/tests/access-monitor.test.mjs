@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {AccessGrace} from '../src/access-grace.mjs';
+import {AccessGrace,AccessMonitor} from '../src/access-grace.mjs';
 import {DiscordAdapter,accessFailure} from '../src/discord.mjs';
 import {exampleConfig} from '../src/config.mjs';
 
@@ -57,4 +57,34 @@ test('monitoring deduplicates channels, reuses a short cache and drops it on per
   state.failure=null;adapter.member=async()=>{throw apiError(404,10007);};adapter.accessCache.clear();
   assert.equal(await adapter.actorAccess(actor,[a],{cached:true}),'denied','a removed member is denied');
   await assert.rejects(adapter.actorAccess('100000000000000099',[a]),{code:'OPERATOR_REQUIRED'});
+});
+
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function ticks(monitor,probe,{tickMs=20,max=40}={}){
+  const started=Date.now();for(let n=1;n<=max;n++){if(!await monitor.check('task-a',probe))return {n,elapsed:Date.now()-started};await sleep(tickMs);}return null;
+}
+
+test('a check that never finishes cannot keep a revoked Task running past the bounded window',async()=>{
+  // A hung connection or endless 429 retries inside discord.js never settles.
+  const monitor=new AccessMonitor({grace:new AccessGrace({graceMs:200,maxUnavailable:3}),limitMs:50});
+  const stopped=await ticks(monitor,()=>new Promise(()=>{}));
+  assert(stopped,'the Task must be stopped');assert(stopped.elapsed<400,`stopped after ${stopped.elapsed} ms`);
+});
+
+test('a slow failure counts from the start of the check, and success resets the window',async()=>{
+  const grace=new AccessGrace({graceMs:120,maxUnavailable:10}),monitor=new AccessMonitor({grace,limitMs:1000});
+  const slowUnavailable=()=>sleep(80).then(()=>{throw Object.assign(new Error('503'),{code:'ACCESS_UNAVAILABLE'});});
+  assert.equal(await monitor.check('task-a',slowUnavailable),true);
+  assert.equal(await monitor.check('task-a',slowUnavailable),false,'the second slow failure exceeds 120 ms since the first check began');
+  assert.equal(await monitor.check('task-b',slowUnavailable),true);assert.equal(await monitor.check('task-b',async()=>{}),true);assert.equal(grace.pending.has('task-b'),false);
+  assert.equal(await monitor.check('task-c',async()=>{throw Object.assign(new Error('denied'),{code:'SOURCE_ACCESS_DENIED'});}),false,'a denial stops at once');
+});
+
+test('a hung check is not duplicated and a late success cannot confirm access',async()=>{
+  let calls=0,release;const monitor=new AccessMonitor({grace:new AccessGrace({graceMs:10000,maxUnavailable:10}),limitMs:30});
+  const probe=()=>{calls++;return new Promise(resolve=>{release=resolve;});};
+  assert.equal(await monitor.check('task-a',probe),true);assert.equal(await monitor.check('task-a',probe),true);
+  assert.equal(calls,1,'the in-flight check is reused, not stacked');assert.equal(monitor.grace.pending.get('task-a').count,2);
+  release();await sleep(0);assert.equal(monitor.grace.pending.get('task-a').count,2,'the late result does not clear the failure');
+  assert.equal(await monitor.check('task-a',async()=>{}),true);assert.equal(calls,1);assert.equal(monitor.grace.pending.has('task-a'),false);
 });

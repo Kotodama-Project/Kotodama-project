@@ -46,7 +46,9 @@ Running Tasks are rechecked every second. Discord read access is tri-state
 reused for at most three seconds and dropped on channel, role, thread and member
 events. A definitive denial stops the Task at that check. Rate limits, Discord
 server errors and transport failures are unavailable, tolerated for at most five
-seconds and three consecutive checks, then the Task stops as before.
+seconds (from the start of the first failing check) and three consecutive checks,
+then the Task stops as before. Each check has a two-second wall-clock limit, a
+check still in flight counts as unavailable, and Tasks are checked concurrently.
 
 Startup preserves Task IDs: queued becomes paused, running/stopping becomes
 uncertain. Only paused/cancelled/failed may explicitly resume after current grant
