@@ -98,6 +98,8 @@ BotはDiscord側でも対象サーバーへ導入してください。Message Co
 
 発話中に利用者が話し始めると、Botはローカル再生と未再生queueを直ちに止め、同じセッションへ停止指示を送ります。仕事の実行はそのまま継続します。「もういいよ」などをLunaが `end_conversation` と構造化した場合はLiveだけを正常終了し、BotはVCでローカル待機へ戻ります。出力は既定120msを蓄えてから再生し、500msを超えるqueueは破棄します。値は `voice.outputPrefillMs` と `voice.maxOutputQueueMs` で調整できます。
 
+再生中の返答を権限の変化で止めるのは、対象VCへの入退室と、対象サーバーでの権限・ロール・チャンネル・メンバー変更のときです。別のサーバーや別のVCでの入退室、対象VC内でのミュート・スピーカーミュート・配信の切替では返答は止まりません。判別できないイベントは安全側として停止します。
+
 ローカルASR構成でLiveを開始していない待機中は、音声クラウドAPIを呼び出しません。Live利用秒とLunaのinput・cached input・output tokenを別々に記録します。Lunaへ渡す会話contextと最大出力も設定で上限を持ち、usage snapshotは累積値として置き換えるため二重加算しません。`naturalConversation: false` のLive会話は人の入力が既定120秒なければ閉じ、Botはローカル聞き役のまま残ります。`voice.conversationIdleSeconds` で30〜600秒に調整できます。
 
 実装はOpenAI公式の[GPT-Liveセッション管理](https://developers.openai.com/api/docs/guides/live-conversations)、[client delegation](https://developers.openai.com/api/docs/guides/live-delegation?delegation-mode=client)、[サーバー側の再生制御](https://developers.openai.com/api/docs/guides/voice-server-controls?api=live)、[音声コスト最適化](https://developers.openai.com/api/docs/guides/voice-latency-cost?api=live)に合わせています。

@@ -9,7 +9,7 @@ import OpusScript from 'opusscript';
 import {VoiceConnectionStatus as State} from '@discordjs/voice';
 import {Store} from '../src/store.mjs';
 import {exampleConfig} from '../src/config.mjs';
-import {VoiceRoom} from '../src/voice.mjs';
+import {VoiceRoom,accessEventRelevant} from '../src/voice.mjs';
 import {DiscordAdapter} from '../src/discord.mjs';
 import {voiceNotice} from '../src/consent.mjs';
 const a='100000000000000002',b='100000000000000004';
@@ -141,4 +141,42 @@ test('voice processing scope alone cannot grant a participant access to project 
 test('a delayed end decision cannot close a replacement Live session in the same VC epoch',async t=>{
   const {room}=await fixture(t,provider);const old=await room.session(a);await room.endSession(old);const current=await room.session(a);
   await room.applyModelAction('end_conversation',{actorId:a,metadata:{kind:'voice',voiceEpoch:room.epoch,sessionId:old.id}});assert.equal(room.sessions.get(a),current);assert(current.provider.active);
+});
+test('access events are scoped to the target guild and to audience membership changes',()=>{
+  const target={guildId:'100000000000000010',voiceChannelId:'100000000000000011'},other='100000000000000012',state=(guild,channelId)=>({guild:{id:guild},channelId});
+  assert.equal(accessEventRelevant('voiceStateUpdate',[state(other,target.voiceChannelId),state(other,null)],target),false);
+  assert.equal(accessEventRelevant('voiceStateUpdate',[state(target.guildId,'100000000000000013'),state(target.guildId,null)],target),false);
+  assert.equal(accessEventRelevant('voiceStateUpdate',[state(target.guildId,target.voiceChannelId),state(target.guildId,target.voiceChannelId)],target),false);
+  assert.equal(accessEventRelevant('voiceStateUpdate',[state(target.guildId,null),state(target.guildId,target.voiceChannelId)],target),true);
+  assert.equal(accessEventRelevant('voiceStateUpdate',[null,state(target.guildId,target.voiceChannelId)],target),true);
+  assert.equal(accessEventRelevant('voiceStateUpdate',[state(target.guildId,target.voiceChannelId),state(target.guildId,'100000000000000013')],target),true);
+  assert.equal(accessEventRelevant('voiceStateUpdate',[{},{}],target),true);
+  for(const event of ['channelUpdate','guildMemberUpdate','roleUpdate']){
+    assert.equal(accessEventRelevant(event,[{guildId:other},{guildId:other}],target),false);
+    assert.equal(accessEventRelevant(event,[{guild:{id:target.guildId}},{guild:{id:target.guildId}}],target),true);
+  }
+  for(const event of ['guildMemberRemove','roleDelete']){assert.equal(accessEventRelevant(event,[{guild:{id:other}}],target),false);assert.equal(accessEventRelevant(event,[{guild:{id:target.guildId}}],target),true);}
+  assert.equal(accessEventRelevant('threadMembersUpdate',[new Map(),new Map(),{guildId:other}],target),false);
+  assert.equal(accessEventRelevant('threadMembersUpdate',[new Map(),new Map(),{guildId:target.guildId}],target),true);
+  assert.equal(accessEventRelevant('channelUpdate',[{},{}],target),true);
+});
+test('unrelated voice and permission events do not stop the current reply; target changes still do',async t=>{
+  const {store,room,channel,config,client}=await fixture(t,provider);channel.members.delete(b);await room.session(a);
+  const key=store.ingest({provider:'discord',guildId:config.discord.guildId,channelId:channel.id,sourceId:'scoped-events',actorId:a,revision:1,final:true,readers:[a],text:'資料',metadata:{}}).key;
+  const speak=async()=>{await room.speak('回答',{epoch:room.epoch,actorId:a,bindings:[{key,revision:1}],authorizeAudience:async()=>[a]});assert(room.reply);return room.reply;};
+  const otherGuild='100000000000000020',otherVoice='100000000000000021',state=(guild,channelId)=>({guild:{id:guild},channelId});
+  const reply=await speak();
+  client.emit('voiceStateUpdate',state(otherGuild,null),state(otherGuild,otherVoice));
+  client.emit('voiceStateUpdate',state(config.discord.guildId,otherVoice),state(config.discord.guildId,null));
+  client.emit('voiceStateUpdate',state(config.discord.guildId,channel.id),state(config.discord.guildId,channel.id));
+  client.emit('roleUpdate',{guild:{id:otherGuild}},{guild:{id:otherGuild}});client.emit('guildMemberRemove',{guild:{id:otherGuild}});
+  assert.equal(room.reply,reply);assert.equal(reply.provider.interrupted,undefined);
+  client.emit('voiceStateUpdate',state(config.discord.guildId,null),state(config.discord.guildId,channel.id));assert.equal(room.reply,null);
+  await speak();client.emit('roleUpdate',{guild:{id:config.discord.guildId}},{guild:{id:config.discord.guildId}});assert.equal(room.reply,null);
+  await speak();client.emit('channelUpdate',{},{});assert.equal(room.reply,null);
+});
+test('disposing the room removes every access listener it registered',async t=>{
+  const {room,client}=await fixture(t,provider);const events=['voiceStateUpdate','channelUpdate','guildMemberUpdate','guildMemberRemove','roleUpdate','roleDelete','threadMembersUpdate'];
+  const before=Object.fromEntries(events.map(e=>[e,client.listenerCount(e)]));assert(events.every(e=>before[e]>=1));await room.dispose();
+  for(const e of events)assert.equal(client.listenerCount(e),before[e]-1);
 });
