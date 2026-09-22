@@ -6,6 +6,18 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ## [Unreleased]
 
+### Changed
+
+- Discord runtime のレビュー指摘への対応を統合（[#84](https://github.com/Kotodama-Project/Kotodama-project/pull/84)）: 会話解析の同時実行・待ち行列・日次/累計の上限、書込み Task の検証を Linux の固定 Docker image で隔離、成果ファイルの読込みを開いたファイルと名前の両方に束縛、再起動時は queued を paused・running を uncertain として保持（自動再実行しない）、必須 CI が Discord の Linux / Windows 試験を要求。`write_file` / `develop` には Linux・`worker.verify`・`worker.verification` の設定が必要になった（`runtime/discord-template/README.md`）。
+- `/kotodama tasks` が一時停止中（paused）と状態確認中（uncertain）を日本語で表示し、`/kotodama ask` は解析を後回しにした場合にそう伝える。
+
+### Fixed
+
+- 別のサーバーや別の Voice channel での入退室・ミュート切替で、Bot の返答が止まっていた（[#91](https://github.com/Kotodama-Project/Kotodama-project/issues/91)）。
+- 実行中 Task の毎秒の権限確認が Discord REST を大量に消費し、一時的な API エラーで Task を失敗させていた。確認をチャンネル単位にまとめて 3 秒だけ再利用し、確認不能は 5 秒・3 回まで猶予する（[#92](https://github.com/Kotodama-Project/Kotodama-project/issues/92)）。
+- 想定外のエラーが `OPERATION_FAILED` だけになり原因を追えなかった。`--verbose` または `KOTODAMA_DEBUG=1` で、秘密値を伏せた詳細を `debug.log` に記録する（[#93](https://github.com/Kotodama-Project/Kotodama-project/issues/93)）。
+- CodeQL の指摘 2 件（成果ファイル読込みの確認と使用の間の競合、検証テストのコード組立て）。
+
 ## [0.1.0-preview] - 2026-09-14
 
 最初の tag です。Public Beta の受付、Discord 招待、公開 Voice Bot、live deployment、Final Human GO は含みません。
