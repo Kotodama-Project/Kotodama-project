@@ -41,8 +41,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          docker pull node:24-bookworm-slim
-          image="$(docker image inspect --format '{{.Id}}' node:24-bookworm-slim)"
+          # Pinned by digest: the fixture image is reviewed input, not a moving tag.
+          fixture='node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6'
+          docker pull "$fixture"
+          image="$(docker image inspect --format '{{.Id}}' "$fixture")"
           printf 'KOTODAMA_TEST_VERIFIER_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
       - run: pnpm test
       - run: pnpm check
