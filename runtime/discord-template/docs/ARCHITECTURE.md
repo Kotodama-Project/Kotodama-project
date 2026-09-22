@@ -41,6 +41,13 @@ both descriptor and directory entry, reject links/special files and bound the re
 Docker process termination must be observed at the daemon, not inferred from the
 client exit. Failed cleanup leaves the Task uncertain.
 
+Running Tasks are rechecked every second. Discord read access is tri-state
+(allowed, denied, unavailable) and checked once per distinct channel; results are
+reused for at most three seconds and dropped on channel, role, thread and member
+events. A definitive denial stops the Task at that check. Rate limits, Discord
+server errors and transport failures are unavailable, tolerated for at most five
+seconds and three consecutive checks, then the Task stops as before.
+
 Startup preserves Task IDs: queued becomes paused, running/stopping becomes
 uncertain. Only paused/cancelled/failed may explicitly resume after current grant
 and Source checks. An uncertain execution is never automatically replayed. Remote

@@ -16,6 +16,10 @@ export const commandDefinition={name:'kotodama',description:'ことだまに相�
   {type:1,name:'voice',description:'音声モード・録音・発話を操作する',options:[{type:3,name:'mode',description:'操作',required:true,choices:['assist','minutes','join','pause','resume','stop_speech','start_conversation','end_conversation','leave','status'].map(v=>({name:v,value:v}))}]}
 ]};
 
+const accessCacheMs=3000;
+const accessEvents=['channelUpdate','channelDelete','guildUpdate','guildMemberUpdate','guildMemberRemove','roleCreate','roleUpdate','roleDelete','threadUpdate','threadDelete','threadMembersUpdate'];
+export function accessFailure(error){const status=error?.status;return Number.isInteger(status)&&status>=400&&status<500&&status!==429?'denied':'unavailable';}
+
 export class DiscordAdapter {
   constructor({config,store,pipeline,policy=()=>config,onError=()=>{}}){
     Object.assign(this,{config,store,pipeline,policy,onError});this.voice=null;this.verifiedInstallation=false;
@@ -26,15 +30,43 @@ export class DiscordAdapter {
     this.client.on('messageDelete',m=>this.withdraw(m).catch(e=>onError(errorCode(e))));
     this.client.on('interactionCreate',i=>this.interaction(i).catch(e=>onError(errorCode(e))));
     this.client.on('error',()=>onError('DISCORD_CLIENT_FAILED'));
+    this.accessCache=new Map();const forget=()=>this.accessCache.clear();for(const event of accessEvents)this.client.on(event,forget);
   }
   operator(actor){check(this.policy().discord.operators.includes(actor),'OPERATOR_REQUIRED');}
   artifactRoot(){return this.config.owner.kind==='local'?path.join(this.config.dataDir,'worktrees'):null;}
   async member(actor){this.operator(actor);const guild=await this.client.guilds.fetch(this.config.discord.guildId);return guild.members.fetch({user:actor,force:true});}
-  async canRead(channel,actor){
-    try{channel=await this.client.channels.fetch(channel.id,{force:true});const member=await channel.guild.members.fetch({user:actor,force:true});await channel.guild.roles.fetch();const p=channel.permissionsFor(member);if(!p?.has(PermissionFlagsBits.ViewChannel)||!p.has(PermissionFlagsBits.ReadMessageHistory))return false;
-      if(channel.type===ChannelType.PrivateThread&&!p.has(PermissionFlagsBits.ManageThreads))await channel.members.fetch({member:actor,force:true});
-      return true;
-    }catch{return false;}
+  // allowed / denied / unavailable. A Discord 4xx other than 429 is a denial;
+  // rate limits, 5xx, timeouts and transport errors only mean "unavailable".
+  async readAccess(channel,actor,{cached=false}={}){
+    const key=`${channel?.id}:${actor}`;if(cached){const hit=this.accessCache.get(key);if(hit&&hit.expires>Date.now())return hit.state;}
+    let state;
+    try{channel=await this.client.channels.fetch(channel.id,{force:true});
+      if(!channel?.guild)state='denied';
+      else{const member=await channel.guild.members.fetch({user:actor,force:true});await channel.guild.roles.fetch();const p=channel.permissionsFor(member);
+        if(!p?.has(PermissionFlagsBits.ViewChannel)||!p.has(PermissionFlagsBits.ReadMessageHistory))state='denied';
+        else{if(channel.type===ChannelType.PrivateThread&&!p.has(PermissionFlagsBits.ManageThreads))await channel.members.fetch({member:actor,force:true});state='allowed';}}
+    }catch(error){state=accessFailure(error);}
+    this.remember(key,state);return state;
+  }
+  async canRead(channel,actor){return await this.readAccess(channel,actor)==='allowed';}
+  async memberAccess(actor,{cached=false}={}){
+    this.operator(actor);const key=`member:${actor}`;if(cached){const hit=this.accessCache.get(key);if(hit&&hit.expires>Date.now())return hit.state;}
+    let state;try{await this.member(actor);state='allowed';}catch(error){state=accessFailure(error);}
+    this.remember(key,state);return state;
+  }
+  // One check per distinct channel. Cached results live for accessCacheMs and
+  // are dropped on any permission-relevant gateway event.
+  async actorAccess(actor,channelIds,{cached=false}={}){
+    let unavailable=false;
+    for(const probe of [()=>this.memberAccess(actor,{cached}),...[...new Set(channelIds)].map(id=>()=>this.readAccess({id},actor,{cached}))]){
+      const state=await probe();if(state==='denied')return 'denied';if(state==='unavailable')unavailable=true;
+    }
+    return unavailable?'unavailable':'allowed';
+  }
+  remember(key,state){
+    if(state==='unavailable'){this.accessCache.delete(key);return;}
+    if(this.accessCache.size>=1000)for(const [k,v] of this.accessCache)if(v.expires<=Date.now())this.accessCache.delete(k);
+    if(this.accessCache.size<1000)this.accessCache.set(key,{state,expires:Date.now()+accessCacheMs});
   }
   async readers(channel){const readers=[];for(const actor of this.policy().discord.operators)if(await this.canRead(channel,actor))readers.push(actor);return readers;}
   async login(){const token=process.env[this.config.discord.botTokenEnv];check(token,'DISCORD_CREDENTIAL_REQUIRED');
