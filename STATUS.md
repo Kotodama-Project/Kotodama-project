@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-09-14
+Updated: 2026-09-22
 
 現在の公開面の状態表です。過去の documentation revision（R91〜R179）の履歴は
 [docs/HISTORY.md](docs/HISTORY.md) に移し、この文書は現在地だけを示します。
@@ -19,7 +19,7 @@ or promote the separately scoped runtime/deployment evidence below.
 | [Persistent local review gateway](runtime/local-review-gateway/README.md) | Included local review/restart candidate; actor-scoped projections; live Access/Tunnel and automatic Voice-to-Task connection remain unverified |
 | [Discord runtime candidate](docs/DISCORD-RUNTIME.md) | Included in `main` via #79, #80, and #81 as `runtime/discord-template` (Node 24 template with local ASR, continuous Live conversation, and a bounded Task worker); the voice-channel modes (楽しく過ごす / 一緒に考える / 必要なときだけ仕事) are selectable there; real-microphone continuity, a two-person 30-minute session, and reproduction in a separate setup remain unaccepted; no public Bot |
 | [Session / conversation event ledger](docs/SESSION-CONVERSATION-LEDGER.md) | Published schema and validator; no runtime ingestion or Task connection |
-| Agent swarm and autonomous delegation after a human GO | Design direction in the [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md); candidate PRs #67, #34, #35, and #36 are not on `main`; `main` contains bounded Task execution only |
+| Agent swarm and autonomous delegation after a human GO | [Luna Task swarm](docs/LUNA-TASK-SWARM.md) (#67 with the #85 repairs) is on `main` as a bounded local runtime: owner-bound plans, budgets, acknowledged peer messages, and an independent verifier, exercised by the offline fixture on Linux and Windows in the required check; live Codex/Luna acceptance is not established. Contract candidates #34, #35, and #36 are not on `main`. The repository's own [improvement loop](docs/IMPROVEMENT-LOOP.md) defines how agents select, verify, merge, and revert one change at a time |
 | Knowledge base (OKF) control plane | Candidate PRs #48, #49, and #61 are not on `main`; the single canonical bundle is undecided |
 | Slack / Teams / Salesforce adapters | Requirement records only (#68, #70, #77); unconnected |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
