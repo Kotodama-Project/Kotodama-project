@@ -1,4 +1,4 @@
-import {openSync,fstatSync,fchmodSync,writeSync,closeSync,renameSync,lstatSync,mkdirSync,constants} from 'node:fs';
+import {openSync,fstatSync,fchmodSync,writeSync,closeSync,renameSync,mkdirSync,constants} from 'node:fs';
 import path from 'node:path';
 import {redact,setErrorHook} from './common.mjs';
 
@@ -29,13 +29,16 @@ export class DebugLog{
     try{
       const line=JSON.stringify(describeError(error,where))+'\n';
       mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});
-      try{const current=lstatSync(this.file);if(current.isFile()&&current.size+Buffer.byteLength(line)>this.maxBytes)renameSync(this.file,this.file+'.1');}catch(e){if(e.code!=='ENOENT')throw e;}
-      const fd=openSync(this.file,constants.O_WRONLY|constants.O_APPEND|constants.O_CREAT|(constants.O_NOFOLLOW??0),0o600);
+      // Open first and inspect the descriptor; never follow a link or write
+      // into a file that has another name.
+      const append=()=>openSync(this.file,constants.O_WRONLY|constants.O_APPEND|constants.O_CREAT|(constants.O_NOFOLLOW??0),0o600);
+      let fd=append();
       try{
-        const opened=fstatSync(fd);if(!opened.isFile()||opened.nlink!==1)return false;
+        let opened=fstatSync(fd);if(!opened.isFile()||opened.nlink!==1)return false;
+        if(opened.size>0&&opened.size+Buffer.byteLength(line)>this.maxBytes){closeSync(fd);fd=null;renameSync(this.file,this.file+'.1');fd=append();opened=fstatSync(fd);if(!opened.isFile()||opened.nlink!==1)return false;}
         if(process.platform!=='win32'&&(opened.mode&0o077))fchmodSync(fd,0o600);
         writeSync(fd,line);return true;
-      }finally{closeSync(fd);}
+      }finally{if(fd!==null)closeSync(fd);}
     }catch{return false;}
   }
 }
