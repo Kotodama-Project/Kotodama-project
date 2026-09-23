@@ -54,6 +54,7 @@ test('a hung shutdown step is bounded and the host lock is still released',async
   await r.close();
   assert.deepEqual(logs.filter(v=>v.event==='close_step_timeout').map(v=>v.step),['pipeline']);assert(logs.some(v=>v.event==='runtime_stopped'));
   const reopened=new Store(config.dataDir);try{assert.equal(reopened.lock(),undefined);}finally{reopened.close();}
+  for(const shutdownLimits of [{pipeline:0},{pipeline:1.5},{pipeline:600001},{unknown:10}])await assert.rejects(startRuntime(file,{offline:true,shutdownLimits,log:()=>{}}),{code:'SHUTDOWN_LIMIT_INVALID'});
 });
 test('runtime never reclaims a host lock whose PID is still alive',async t=>{
   const {config,file,cleanup}=await configFixture(t);t.after(cleanup);const live=new Store(config.dataDir);live.claimHost('other-live-owner',process.pid,'2000-01-01T00:00:00.000Z','fixture-runtime');live.close();

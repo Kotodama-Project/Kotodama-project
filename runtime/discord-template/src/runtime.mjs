@@ -25,6 +25,8 @@ function pidRunning(pid){
 export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),shutdownLimits={},log=value=>console.log(JSON.stringify(redact(value)))}={}){
   if(runtimeDomain==='')runtimeDomain=undefined;
   if(runtimeDomain!==undefined)check(typeof runtimeDomain==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(runtimeDomain),'RUNTIME_DOMAIN_INVALID');
+  const limits={discord:15000,archive:20000,pipeline:15000,server:5000};
+  for(const [step,limit] of Object.entries(shutdownLimits??{})){check(Object.hasOwn(limits,step)&&Number.isSafeInteger(limit)&&limit>0&&limit<=600000,'SHUTDOWN_LIMIT_INVALID');limits[step]=limit;}
   const config=await loadConfig(filename);let current=config;const store=new Store(config.dataDir),ownerId=uid('host'),startedAt=new Date().toISOString();
   if(debug){enableDebugLog(config.dataDir);log({event:'debug_log',state:'enabled',file:'debug.log'});}
   const stopDebug=()=>{if(debug)disableDebugLog();};
@@ -35,7 +37,6 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   // (90 s by default). One hung step (Discord logout, a transcription in the archive,
   // a worker that ignores cancellation, an idle keep-alive socket) must not keep the
   // host lock until then, so every step has its own upper bound.
-  const limits={discord:15000,archive:20000,pipeline:15000,server:5000,...shutdownLimits};
   const bounded=(step,limit,run)=>new Promise(resolve=>{
     const timer=setTimeout(()=>{log({event:'close_step_timeout',step});resolve();},limit);
     Promise.resolve().then(run).catch(e=>log({event:'close_step_failed',step,code:errorCode(e)})).finally(()=>{clearTimeout(timer);resolve();});
