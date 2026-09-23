@@ -13,10 +13,12 @@ const source=(extra={})=>({provider:'discord',guildId:'100000000000000001',chann
 const intent=(extra={})=>({kind:'request',title:'資料作成',request:'資料を作って',action:'write_file',explicit:true,complete:true,acceptance:['本文がある'],...extra});
 const analysis=(items=[intent()])=>({summary:'資料作成の依頼',intents:items,replyRequested:false,reply:''});
 async function temp(t){const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-agent-channel-'));t.after(()=>rm(root,{recursive:true,force:true}));return root;}
+// Close the store before removing its directory: Windows cannot unlink an open SQLite file.
+async function fixture(t){const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-agent-channel-')),store=new Store(root);t.after(async()=>{store.close();await rm(root,{recursive:true,force:true});});return {root,store};}
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 
 test('a request extracted from conversation is acknowledged at once and still runs once',async t=>{
-  const root=await temp(t),store=new Store(root);t.after(()=>store.close());
+  const {root,store}=await fixture(t);
   const config=exampleConfig({workspace:root});config.worker.actions=['write_file'];const queued=[];let runs=0;
   const p=new Pipeline({store,config,analyzer:{analyze:async()=>analysis()},worker:{run:async()=>{runs++;return {state:'needs_review',summary:'候補',artifacts:[]};}},onTaskQueued:async(task,options)=>{queued.push({task,options});}});
   const receipt=await p.ingest(source(),{execute:true});await p.tail;await settle();
@@ -24,7 +26,7 @@ test('a request extracted from conversation is acknowledged at once and still ru
 });
 
 test('chat, questions and non-executable turns are never acknowledged as work',async t=>{
-  const root=await temp(t),store=new Store(root);t.after(()=>store.close());
+  const {root,store}=await fixture(t);
   const config=exampleConfig({workspace:root});config.worker.actions=['write_file'];const queued=[];
   const p=new Pipeline({store,config,analyzer:{analyze:async()=>analysis([intent({kind:'question',explicit:false}),intent({kind:'request',explicit:true,complete:false})])},worker:{run:async()=>assert.fail('must not run')},onTaskQueued:async task=>{queued.push(task);}});
   await p.ingest(source({text:'どう思う？'}),{execute:true});await p.ingest(source({sourceId:'unaddressed',text:'資料を作って'}),{execute:false});await p.tail;await settle();
@@ -32,7 +34,7 @@ test('chat, questions and non-executable turns are never acknowledged as work',a
 });
 
 test('a re-run of the same request is acknowledged as revised',async t=>{
-  const root=await temp(t),store=new Store(root);t.after(()=>store.close());
+  const {root,store}=await fixture(t);
   const config=exampleConfig({workspace:root});config.worker.actions=['write_file'];const queued=[];
   const p=new Pipeline({store,config,analyzer:{analyze:async()=>analysis()},worker:{run:async()=>({state:'needs_review',summary:'候補',artifacts:[]})},onTaskQueued:async(task,options)=>{queued.push(options);}});
   await p.ingest(source(),{execute:true});await p.tail;await settle();
@@ -41,7 +43,7 @@ test('a re-run of the same request is acknowledged as revised',async t=>{
 });
 
 test('a failed acknowledgement is reported but never cancels the queued work',async t=>{
-  const root=await temp(t),store=new Store(root);t.after(()=>store.close());
+  const {root,store}=await fixture(t);
   const config=exampleConfig({workspace:root});config.worker.actions=['write_file'];const errors=[];let runs=0;
   const p=new Pipeline({store,config,analyzer:{analyze:async()=>analysis()},worker:{run:async()=>{runs++;return {state:'needs_review',summary:'候補',artifacts:[]};}},onTaskQueued:async()=>{throw new Error('dm unavailable');},onError:code=>errors.push(code)});
   await p.ingest(source(),{execute:true});await p.tail;await settle();
