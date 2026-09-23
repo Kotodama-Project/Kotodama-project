@@ -560,11 +560,11 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             )
             errors = MODULE.validate(candidate)
             self.assertIn(
-                "workflow must bind both validation and upload jobs to the exact allowed branch tip",
+                "workflow must bind both validation and upload jobs to the exact main tip",
                 errors,
             )
             self.assertIn(
-                "workflow must place one exact allowed-branch-tip guard in each validation and upload job",
+                "workflow must place one exact main-tip guard in each validation and upload job",
                 errors,
             )
             self.assertIn(
@@ -604,7 +604,28 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
                 errors,
             )
             self.assertIn(
-                "workflow must bind both validation and upload jobs to the exact allowed branch tip",
+                "workflow must bind both validation and upload jobs to the exact main tip",
+                errors,
+            )
+
+    def test_validator_refuses_a_main_ref_fetched_from_another_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            candidate = pathlib.Path(temporary)
+            shutil.copytree(ROOT / "runtime", candidate / "runtime")
+            shutil.copytree(ROOT / ".github", candidate / ".github")
+            workflow_path = candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
+            workflow = workflow_path.read_text(encoding="utf-8")
+            workflow_path.write_text(
+                workflow.replace(
+                    "+refs/heads/main:refs/remotes/origin/main",
+                    "+refs/heads/other:refs/remotes/origin/main",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            errors = MODULE.validate(candidate)
+            self.assertIn(
+                "workflow must fetch refs/remotes/origin/main from refs/heads/main in each validation and upload job",
                 errors,
             )
 
