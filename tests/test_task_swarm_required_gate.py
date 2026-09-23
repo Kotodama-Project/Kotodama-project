@@ -58,6 +58,9 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         self.assertNotIn("--hash=md5:", lock)
         self.assertNotIn("--hash=sha1:", lock)
 
+    # The gate step runs on the Linux runner; on Windows `bash` may resolve to
+    # WSL, which does not inherit this process's environment.
+    @unittest.skipUnless(os.name == "posix", "the gate step runs under bash on Linux")
     def test_failure_skip_cancellation_and_missing_results_do_not_pass(self):
         for result in ["success", "failure", "skipped", "cancelled", ""]:
             with self.subTest(result=result):
