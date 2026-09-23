@@ -27,8 +27,8 @@
 - [x] Standard-library-only one-command review-chain smoke with temporary cleanup and closed report
 - [x] Clone-to-result five-minute tour with cross-shell commands, report interpretation, and bounded next choices
 - [x] README Company OS reader/story map from Vision through current reality to safe first use
-- [x] Draft Cloudflare edge candidate with exact Wrangler supply-chain binding and manual-only preview upload guard
-- [x] Draft official Cloudflare OS source pin and content-free Gatekeeper-to-Kotodama adapter contract
+- [x] Cloudflare edge candidate merged via #18, with exact Wrangler supply-chain binding and a manual-only preview upload guard bound to the current `main` tip
+- [x] Official Cloudflare OS source pin (merged via #18) and content-free Gatekeeper-to-Kotodama adapter contract
 - [x] Content-free official Cloudflare OS local runtime receipt with exact integrity, 1060 passing tests, loopback readback, and cleanup evidence
 - [x] Repository governance baseline (MIT root license, reproducible hash-locked CI, tracked-secret hygiene, session / conversation ledger contract) merged via #73 and #18 on 2026-09-12
 - [x] Task-bound Company Pack execution and the persistent local review gateway merged via #75 and #76 on 2026-09-12
@@ -36,7 +36,7 @@
 
 ## Current Cloudflare candidate
 
-The draft Cloudflare candidate now separates Cloudflare edge from the official
+The merged Cloudflare candidate separates Cloudflare edge from the official
 Cloudflare OS project. The edge side remains a content-free Worker candidate;
 no preview version has been uploaded. The Cloudflare OS side pins the exact
 official starter, the core gitlink used by that starter, and the separately

@@ -444,7 +444,7 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "workflow_dispatch:",
         "refs/heads/main",
         "^[0-9a-f]{40}$",
-        "refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824",
+        "refs/remotes/origin/main",
         "path: trusted",
         "path: candidate",
         "ref: ${{ github.sha }}",
@@ -486,7 +486,7 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         if required not in workflow:
             errors.append(f"workflow missing required guard: {required}")
     exact_tip_guard = (
-        'test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824)" '
+        'test "$(git rev-parse refs/remotes/origin/main)" '
         '= "$CANDIDATE_SHA"'
     )
     upload_job_marker = "  upload-preview-version:"
@@ -496,10 +496,14 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         validation_job, upload_job = workflow.split(upload_job_marker, 1)
         if validation_job.count(exact_tip_guard) != 1 or upload_job.count(exact_tip_guard) != 1:
             errors.append(
-                "workflow must place one exact allowed-branch-tip guard in each validation and upload job"
+                "workflow must place one exact main-tip guard in each validation and upload job"
             )
+    # The compared ref must be fetched from main itself, once per job.
+    main_refspec = "+refs/heads/main:refs/remotes/origin/main"
+    if workflow.count(main_refspec) != 2:
+        errors.append("workflow must fetch refs/remotes/origin/main from refs/heads/main in each validation and upload job")
     if workflow.count(exact_tip_guard) != 2:
-        errors.append("workflow must bind both validation and upload jobs to the exact allowed branch tip")
+        errors.append("workflow must bind both validation and upload jobs to the exact main tip")
     integrity_verification = workflow.find("python trusted/tools/verify_wrangler_artifact.py")
     runner_manifest_copy = workflow.find(
         'cp trusted/runtime/cloudflare-edge/wrangler-runner-package.json '
