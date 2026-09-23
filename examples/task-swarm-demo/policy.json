@@ -1,0 +1,11 @@
+{
+  "kind": "synthetic_local_owner_fixture",
+  "purpose": "Exercise bounded Task-scoped communication and verification, not Company authority.",
+  "rules": {
+    "ack_is_task_completion": false,
+    "stale_worker_may_publish": false,
+    "worker_report_is_independent_verification": false
+  },
+  "canonical_task_mutation": false,
+  "external_effects_authorized": false
+}

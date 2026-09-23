@@ -45,7 +45,7 @@ localとcloudの双方を認めます。Tailscaleはprivate接続の強い候補
 | 知識訂正とexecutor入力binding | candidate | [#59](https://github.com/Kotodama-Project/Kotodama-project/pull/59)、head `b962196`。現在pin・入力digestの候補。Task owner接続は残件 |
 | OKF適合と判断readyの分離 | candidate | [#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)、head `05c947a`。構造PASSは内容・権限・意思決定の証明ではない |
 | 診断／Knowledge Work合流 | candidate | [#64](https://github.com/Kotodama-Project/Kotodama-project/pull/64)、head `e0460b3`。読取診断の候補。GUI、live observer、実Work接続は未受入 |
-| 専門agent協調 | candidate | [#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67)、head `6ac299f`。非candidate受入と拒否payload保存など修復待ち。全利用の必須構成にしない |
+| 専門agent協調 | main | [Luna Task swarm](LUNA-TASK-SWARM.md)。#67と#85の修復を統合し、Linux・Windowsの必須CIでoffline fixtureを確認。実Codex/Lunaのlive受入は未実施。全利用の必須構成にしない |
 | room別Live／workspace | candidate | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)、head `b2fd317`。Source/Task/mediaの実接続は未受入 |
 | 静音Liveと会話制御 | candidate | [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71)、head `b3fda59`。継続発話、退出と仕事の分離を#69と合流して検証する |
 | Slack／Salesforce | unconnected | #70／#77。公開mainで接続済みとはしない |
