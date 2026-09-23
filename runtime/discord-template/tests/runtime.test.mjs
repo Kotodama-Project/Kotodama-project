@@ -45,15 +45,15 @@ test('runtime never reclaims a stale PID recorded by another runtime domain',asy
   const {config,file,cleanup}=await configFixture(t);t.after(cleanup);const foreign=new Store(config.dataDir);foreign.claimHost('foreign-owner',2147483647,'2000-01-01T00:00:00.000Z','container-a');foreign.close();
   await assert.rejects(startRuntime(file,{offline:true,runtimeDomain:'container-b',log:()=>{}}),{code:'RUNTIME_RECOVERY_DOMAIN_MISMATCH'});const checkStore=new Store(config.dataDir);try{assert.equal(checkStore.lock().owner,'foreign-owner');}finally{checkStore.close();}
 });
+test('runtime never reclaims a host lock whose PID is still alive',async t=>{
+  const {config,file,cleanup}=await configFixture(t);t.after(cleanup);const live=new Store(config.dataDir);live.claimHost('other-live-owner',process.pid,'2000-01-01T00:00:00.000Z','fixture-runtime');live.close();
+  await assert.rejects(startRuntime(file,{offline:true,runtimeDomain:'fixture-runtime',log:()=>{}}),{code:'RUNTIME_ALREADY_OWNED'});const checkStore=new Store(config.dataDir);try{assert.equal(checkStore.lock().owner,'other-live-owner');}finally{checkStore.close();}
+});
 test('an unreadable policy is logged once when it starts and once when it ends',async t=>{
   const {config,file,cleanup}=await configFixture(t);const logs=[];const r=await startRuntime(file,{offline:true,log:v=>logs.push(v)});t.after(async()=>{await r.close();await cleanup();});
   const policy=()=>logs.filter(v=>['policy_unavailable','policy_restored'].includes(v.event)).map(v=>v.event);
   await writeFile(file,'{');await new Promise(resolve=>setTimeout(resolve,2600));assert.deepEqual(policy(),['policy_unavailable']);
   await atomicJson(file,config);await new Promise(resolve=>setTimeout(resolve,1300));assert.deepEqual(policy(),['policy_unavailable','policy_restored']);
-});
-test('runtime never reclaims a host lock whose PID is still alive',async t=>{
-  const {config,file,cleanup}=await configFixture(t);t.after(cleanup);const live=new Store(config.dataDir);live.claimHost('other-live-owner',process.pid,'2000-01-01T00:00:00.000Z','fixture-runtime');live.close();
-  await assert.rejects(startRuntime(file,{offline:true,runtimeDomain:'fixture-runtime',log:()=>{}}),{code:'RUNTIME_ALREADY_OWNED'});const checkStore=new Store(config.dataDir);try{assert.equal(checkStore.lock().owner,'other-live-owner');}finally{checkStore.close();}
 });
 test('runtime replaces an existing linked control token without writing through it',async t=>{
   const {config,file,root,cleanup}=await configFixture(t);await mkdir(config.dataDir,{recursive:true});

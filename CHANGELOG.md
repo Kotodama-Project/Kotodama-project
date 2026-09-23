@@ -20,13 +20,13 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
-- 設定ファイルを読めない間、Discord runtime が毎秒 `policy_unavailable` をログへ書き続けていた。読めなくなった時に一度だけ記録し、読めるようになった時に `policy_restored` を記録する（読めない間は誰も操作者として扱わない点は変えない）。
 - Cloudflare edge の preview upload は、退役した作業 branch ではなく現在の `main` の先頭 commit だけを受け付ける（手動起動・Environment 承認は従来どおり）。候補検証 workflow は `main` への push でも走る。Cloudflare の説明文から古い「draft」表記を直した。
 - 別のサーバーや別の Voice channel での入退室・ミュート切替で、Bot の返答が止まっていた（[#91](https://github.com/Kotodama-Project/Kotodama-project/issues/91)）。
 - 実行中 Task の毎秒の権限確認が Discord REST を大量に消費し、一時的な API エラーで Task を失敗させていた。確認をチャンネル単位にまとめて 3 秒だけ再利用し、確認不能は 5 秒・3 回まで猶予する（[#92](https://github.com/Kotodama-Project/Kotodama-project/issues/92)）。
 - 想定外のエラーが `OPERATION_FAILED` だけになり原因を追えなかった。`--verbose` または `KOTODAMA_DEBUG=1` で、秘密値を伏せた詳細を `debug.log` に記録する（[#93](https://github.com/Kotodama-Project/Kotodama-project/issues/93)）。
 - CodeQL の指摘 2 件（成果ファイル読込みの確認と使用の間の競合、検証テストのコード組立て）。
 - Task swarm が Windows で失敗していた（ディレクトリ一覧の link 数を信用して既存 payload を拒否、SQLite 接続の閉じ忘れ）。
+- 設定ファイルを読めない間、Discord runtime が毎秒 `policy_unavailable` をログへ書き続けていた。読めなくなった時に一度だけ記録し、読めるようになった時に `policy_restored` を記録する（読めない間は誰も操作者として扱わない点は変えない）。
 
 ## [0.1.0-preview] - 2026-09-14
 
