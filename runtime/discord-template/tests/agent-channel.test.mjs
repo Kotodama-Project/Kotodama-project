@@ -31,6 +31,15 @@ test('chat, questions and non-executable turns are never acknowledged as work',a
   assert.equal(queued.length,0);assert.equal(store.tasks(actor).length,0);
 });
 
+test('a re-run of the same request is acknowledged as revised',async t=>{
+  const root=await temp(t),store=new Store(root);t.after(()=>store.close());
+  const config=exampleConfig({workspace:root});config.worker.actions=['write_file'];const queued=[];
+  const p=new Pipeline({store,config,analyzer:{analyze:async()=>analysis()},worker:{run:async()=>({state:'needs_review',summary:'候補',artifacts:[]})},onTaskQueued:async(task,options)=>{queued.push(options);}});
+  await p.ingest(source(),{execute:true});await p.tail;await settle();
+  await p.ingest(source({revision:2,text:'資料を作って。'}),{execute:true});await p.tail;await settle();
+  assert.deepEqual(queued,[{revised:false},{revised:true}]);
+});
+
 test('a failed acknowledgement is reported but never cancels the queued work',async t=>{
   const root=await temp(t),store=new Store(root);t.after(()=>store.close());
   const config=exampleConfig({workspace:root});config.worker.actions=['write_file'];const errors=[];let runs=0;
@@ -55,7 +64,7 @@ function adapter(t){
   const a=new DiscordAdapter({config,store:{},pipeline:{ingest:async(s,flags)=>{received.push({s,flags});return {tasks:[]};}}});t.after(()=>a.client.destroy());
   a.verifiedInstallation=true;a.client.user={id:'bot'};a.source=async message=>({text:message.content,metadata:{kind:'text'}});
   a.client.users.fetch=async id=>({id,send:async value=>{sent.push({id,...value});return {id:'dm-'+sent.length};}});
-  const message=(channelId,author,{mention=false}={})=>({guildId:config.discord.guildId,channelId,author:{id:author},content:'資料を作って',mentions:{users:new Map(mention?[['bot',{}]]:[])}});
+  const message=(channelId,author,{mention=false,others=[],roles=0,replyTo=null}={})=>({guildId:config.discord.guildId,channelId,author:{id:author},content:'資料を作って',reference:replyTo?{messageId:'earlier'}:undefined,mentions:{users:new Map([...(mention?[['bot',{}]]:[]),...others.map(id=>[id,{}])]),roles:{size:roles},repliedUser:replyTo?{id:replyTo}:null}});
   return {a,config,received,sent,message};
 }
 
@@ -66,8 +75,24 @@ test('operators do not need an @mention inside an agent channel',async t=>{
   await a.message(message(plainChannel,actor));
   await a.message(message(plainChannel,actor,{mention:true}));
   assert.deepEqual(received.map(r=>r.flags),[{execute:true,reply:true},{execute:false,reply:false},{execute:false,reply:false},{execute:true,reply:true}]);
-  assert.equal(received[0].s.metadata.directlyAddressed,true);assert.equal(received[0].s.metadata.agentChannel,true);
-  assert.equal(received[1].s.metadata.directlyAddressed,false);assert.equal(received[3].s.metadata.agentChannel,undefined);
+  assert.equal(received[0].s.metadata.agentChannel,true);assert.equal(received[0].s.metadata.directlyAddressed,false,'only a real @mention asks for a reply to everything');
+  assert.equal(received[3].s.metadata.directlyAddressed,true);assert.equal(received[3].s.metadata.agentChannel,undefined);
+});
+
+test('in an agent channel, messages for other people and edits do not start work',async t=>{
+  const {a,received,message}=adapter(t);
+  await a.message(message(agentChannel,actor,{others:[other]}));
+  await a.message(message(agentChannel,actor,{roles:1}));
+  await a.message(message(agentChannel,actor,{replyTo:other}));
+  await a.message(message(agentChannel,actor,{replyTo:'bot'}));
+  await a.message(message(agentChannel,actor),{edited:true});
+  await a.message(message(agentChannel,actor,{mention:true}),{edited:true});
+  assert.deepEqual(received.map(r=>r.flags.execute),[false,false,false,true,false,true]);
+});
+
+test('quiet hours hold the acknowledgement like every other DM',async t=>{
+  const {a,sent}=adapter(t);a.notifications={quiet:()=>true};
+  assert.deepEqual(await a.acknowledgeTask({id:'task-q',actor,title:'資料作成'}),{state:'quiet'});assert.equal(sent.length,0);
 });
 
 test('the acknowledgement goes only to the requesting operator and names the Task',async t=>{

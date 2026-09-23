@@ -62,7 +62,7 @@ export class Pipeline {
       checkInputs();const boundIntent={...intent,intentIds:intent.intentIds??[ids[index]],requiredActions:intent.requiredActions??[intent.action],contextSources:bindings};const task=intent.targetTaskId?await this.owner.reviseTask(intent.targetTaskId,source,boundIntent):await this.owner.createTask(source,{...boundIntent,key:ids[index]});await this.authorize(task);
       if(intent.targetTaskId)this.active.get(intent.targetTaskId)?.controller.abort();tasks.push(task.id);this.enqueue(task.id,task.actor,task.revision);
       // Tell the requester at once; a failed notice never undoes the queued work.
-      const revised=Boolean(intent.targetTaskId);void (async()=>{try{await this.onTaskQueued(task,{revised});}catch(e){this.onError(errorCode(e));}})();
+      const revised=Boolean(intent.targetTaskId)||Number(task.revision)>1;void (async()=>{try{await this.onTaskQueued(task,{revised});}catch(e){this.onError(errorCode(e));}})();
     }
     if(source.metadata?.kind==='voice'&&!source.metadata.nativeConversation&&result.voiceAction!=='none'){checkInputs();await this.onVoiceAction({source,action:result.voiceAction,contextSources:bindings});}
     else if(reply&&result.replyRequested){checkInputs();await this.onReply({source,text:result.reply,contextSources:bindings});}
