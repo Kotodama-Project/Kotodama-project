@@ -34,7 +34,7 @@ export class DiscordAdapter {
     this.notifications=store.db?new NotificationQueue(store.db,()=>this.policy().notifications?.quietHours,{onError}):null;
     this.client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent,GatewayIntentBits.GuildVoiceStates]});
     this.client.on('messageCreate',m=>this.message(m).catch(e=>onError(errorCode(e))));
-    this.client.on('messageUpdate',(_old,m)=>this.message(m).catch(e=>onError(errorCode(e))));
+    this.client.on('messageUpdate',(_old,m)=>this.message(m,{edited:true}).catch(e=>onError(errorCode(e))));
     this.client.on('messageDelete',m=>this.withdraw(m).catch(e=>onError(errorCode(e))));
     this.client.on('interactionCreate',i=>this.interaction(i).catch(e=>onError(errorCode(e))));
     this.client.on('error',()=>onError('DISCORD_CLIENT_FAILED'));
@@ -108,11 +108,28 @@ export class DiscordAdapter {
     const current=await this.readers(message.channel);check(readers.every(a=>current.includes(a)),'SOURCE_AUDIENCE_CHANGED');
     return {provider:'discord',guildId:message.guildId,channelId:message.channelId,sourceId:message.id,actorId:message.author.id,readers,revision:message.editedTimestamp??message.createdTimestamp,final:true,text,metadata:{kind:'text',url:message.url,attachments:coverage,createdAt:message.createdAt.toISOString()}};
   }
-  async message(message){
+  async message(message,{edited=false}={}){
     const cfg=this.policy();if(!this.verifiedInstallation||message.guildId!==cfg.discord.guildId||!cfg.discord.textChannelIds.includes(message.channelId)||message.author?.bot||message.webhookId||message.partial)return;
-    const source=await this.source(message);const addressed=message.mentions.users.has(this.client.user.id)&&cfg.discord.operators.includes(message.author.id);
-    source.metadata.directlyAddressed=addressed;
+    const source=await this.source(message);
+    const operator=cfg.discord.operators.includes(message.author.id),mentioned=message.mentions.users.has(this.client.user.id);
+    // In an agent channel a new operator message is for the Bot unless it names
+    // someone else or replies to another message. Editing an old message never
+    // starts work without an @mention, so a typo fix cannot re-run a Task.
+    const agentChannel=cfg.discord.agentChannelIds.includes(message.channelId);
+    const others=[...message.mentions.users.keys()].some(id=>id!==this.client.user.id)||(message.mentions.roles?.size??0)>0||Boolean(message.reference?.messageId&&message.mentions.repliedUser?.id!==this.client.user.id);
+    const forBot=mentioned||(agentChannel&&!edited&&!others);
+    const addressed=operator&&forBot;
+    source.metadata.directlyAddressed=operator&&mentioned;if(agentChannel)source.metadata.agentChannel=true;
     await this.pipeline.ingest(source,{execute:addressed,reply:addressed});
+  }
+  // Immediate DM to the requester when conversation became running work; the result follows on completion.
+  async acknowledgeTask(task,{revised=false}={}){
+    if(!this.verifiedInstallation)return {state:'blocked'};this.operator(task.actor);
+    // Quiet hours hold every DM; the completion notice follows once they end.
+    if(this.notifications?.quiet())return {state:'quiet'};
+    const text=`${revised?'作業内容を更新して、走り直しています':'走り始めました'}：${task.title}\nID: ${task.id}\n終わったら、このDMで結果を届けます。止めるときは /kotodama stop でこのIDを指定してください。`;
+    const user=await this.client.users.fetch(task.actor);const message=await user.send({content:shortText(text),allowedMentions:{parse:[]}});
+    check(message?.id,'NOTIFICATION_SEND_UNCONFIRMED');return {state:'sent'};
   }
   async withdraw(message){if(!this.verifiedInstallation)return;if(message.guildId!==this.config.discord.guildId)return;const key=sourceIdentity({provider:'discord',guildId:message.guildId,channelId:message.channelId,sourceId:message.id});const old=this.store.sourceInternal(key);if(old)await this.pipeline.ingest({...old,revision:Math.max(Date.now(),old.revision+1),text:'',withdrawn:true,metadata:{...old.metadata,withdrawalActorUnknown:true}},{execute:false});}
   interactionSource(i,text){return {provider:'discord',guildId:i.guildId,channelId:i.channelId,sourceId:i.id,actorId:i.user.id,readers:[i.user.id],revision:i.createdTimestamp,final:true,text,metadata:{kind:'command'}};}
