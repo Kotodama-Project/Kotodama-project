@@ -11,9 +11,10 @@ import {exportDocument,readExport} from '../src/documents.mjs';
 import {parseLumaCsv,lumaSource,parseIcs} from '../src/integrations.mjs';
 import {BrowserCli} from '../src/browser.mjs';
 import {CliAnalyzer} from '../src/llm.mjs';
+import {debugRequested,describeError,enableDebugLog} from '../src/debug-log.mjs';
 
-const HELP=`ことだま — Discordの会話から仕事へ\n\n  init --config PATH [--guild ID --app ID --operator ID --channel ID --workspace PATH]\n  doctor --config PATH\n  start --config PATH [--offline]\n  register --config PATH\n  status | shutdown --config PATH --actor ID\n  tasks | result | stop | resume --config PATH --actor ID [--task ID]\n  request --config PATH --actor ID --action research|summarize|write_file|develop --text TEXT\n  voice --config PATH --actor ID --mode assist|minutes|join|pause|resume|stop_speech|leave\n  import-discord --config PATH --actor ID [--limit 10000]\n  import-luma --config PATH --actor ID --file CSV\n  import-file --config PATH --actor ID --file TEXT\n  export --config PATH --actor ID --output FILE\n  read-export --config PATH --actor ID --file FILE\n  browser list|open|read|click|fill|scroll|screenshot --config PATH [--tab 0 --url URL --selector CSS --role ROLE --name NAME --label LABEL --text TEXT --x N --y N --output FILE]\n\n--json で機械可読の結果を返します。秘密値は引数へ渡さず環境変数に設定してください。`;
-const spec={config:{type:'string',default:'.kotodama/config.json'},json:{type:'boolean',default:false},offline:{type:'boolean',default:false},guild:{type:'string'},app:{type:'string'},operator:{type:'string'},channel:{type:'string'},workspace:{type:'string'},actor:{type:'string'},task:{type:'string'},action:{type:'string'},text:{type:'string'},mode:{type:'string'},file:{type:'string'},output:{type:'string'},limit:{type:'string'},tab:{type:'string',default:'0'},url:{type:'string'},'expected-url':{type:'string'},checked:{type:'boolean'},selector:{type:'string'},role:{type:'string'},name:{type:'string'},label:{type:'string'},x:{type:'string'},y:{type:'string'},delta:{type:'string'},help:{type:'boolean'}};
+const HELP=`ことだま — Discordの会話から仕事へ\n\n  init --config PATH [--guild ID --app ID --operator ID --channel ID --workspace PATH]\n  doctor --config PATH\n  start --config PATH [--offline]\n  register --config PATH\n  status | shutdown --config PATH --actor ID\n  tasks | result | stop | resume --config PATH --actor ID [--task ID]\n  request --config PATH --actor ID --action research|summarize|write_file|develop --text TEXT\n  voice --config PATH --actor ID --mode assist|minutes|join|pause|resume|stop_speech|leave\n  import-discord --config PATH --actor ID [--limit 10000]\n  import-luma --config PATH --actor ID --file CSV\n  import-file --config PATH --actor ID --file TEXT\n  export --config PATH --actor ID --output FILE\n  read-export --config PATH --actor ID --file FILE\n  browser list|open|read|click|fill|scroll|screenshot --config PATH [--tab 0 --url URL --selector CSS --role ROLE --name NAME --label LABEL --text TEXT --x N --y N --output FILE]\n\n--json で機械可読の結果を返します。--verbose（または環境変数 KOTODAMA_DEBUG=1）で、想定外のエラーの詳細をデータ領域の debug.log に記録します。秘密値は引数へ渡さず環境変数に設定してください。`;
+const spec={config:{type:'string',default:'.kotodama/config.json'},json:{type:'boolean',default:false},offline:{type:'boolean',default:false},guild:{type:'string'},app:{type:'string'},operator:{type:'string'},channel:{type:'string'},workspace:{type:'string'},actor:{type:'string'},task:{type:'string'},action:{type:'string'},text:{type:'string'},mode:{type:'string'},file:{type:'string'},output:{type:'string'},limit:{type:'string'},tab:{type:'string',default:'0'},url:{type:'string'},'expected-url':{type:'string'},checked:{type:'boolean'},selector:{type:'string'},role:{type:'string'},name:{type:'string'},label:{type:'string'},x:{type:'string'},y:{type:'string'},delta:{type:'string'},help:{type:'boolean'},verbose:{type:'boolean',default:false}};
 const {values:options,positionals}=parseArgs({options:spec,allowPositionals:true});const [command='help',sub]=positionals;
 function output(value){if(options.json)console.log(JSON.stringify(redact(value)));else if(typeof value==='string')console.log(value);else console.log(JSON.stringify(redact(value),null,2));}
 try{
@@ -24,7 +25,7 @@ try{
     const cfg=exampleConfig({guildId:options.guild,applicationId:options.app,operatorId:options.operator,channelId:options.channel,workspace:options.workspace??path.resolve('.')});
     await atomicJson(filename,cfg);output({state:'initialized',config:filename,next:'doctorで設定・認証・実行器を確認してください。初期音声予算は0です。'});process.exit(0);
   }
-  const config=await loadConfig(filename);
+  const config=await loadConfig(filename);if(debugRequested({verbose:options.verbose}))enableDebugLog(config.dataDir);
   if(command==='doctor'){
     const {spawnSync}=await import('node:child_process');const binary=cmd=>{const r=spawnSync(cmd,['--version'],{encoding:'utf8',windowsHide:true});return !r.error&&r.status===0;};
     output({node:process.versions.node,nodeSupported:Number(process.versions.node.split('.')[0])>=24,taskOwner:config.owner.kind,
@@ -33,7 +34,7 @@ try{
       voiceConfigured:Boolean(config.discord.voiceChannelId),privacyMode:config.voice.consentMode,voiceParticipantsConfigured:config.voice.participantIds.length,audioBudgetSeconds:config.voice.maxDailyAudioSeconds,
       browserConfigured:Boolean(config.browser.cdpUrl),localWriteWorkerSupported:process.platform!=='win32',providerVerified:false});
   }else if(command==='start'){
-    const runtime=await startRuntime(filename,{offline:options.offline});const stop=()=>runtime.close().then(()=>process.exit(0)).catch(()=>process.exit(1));process.once('SIGINT',stop);process.once('SIGTERM',stop);
+    const runtime=await startRuntime(filename,{offline:options.offline,debug:debugRequested({verbose:options.verbose})});const stop=()=>runtime.close().then(()=>process.exit(0)).catch(()=>process.exit(1));process.once('SIGINT',stop);process.once('SIGTERM',stop);
   }else if(['status','shutdown','tasks','result','stop','resume','voice','request'].includes(command)){
     if(command!=='status')check(options.actor&&config.discord.operators.includes(options.actor),'OPERATOR_REQUIRED');
     output(await controlCommand(config,{action:command,actor:options.actor,taskId:options.task,mode:options.mode,operation:options.action,text:options.text,requestId:uid('cli')}));
@@ -62,4 +63,4 @@ try{
       else if(sub==='screenshot'){check(options.output,'OUTPUT_REQUIRED');result=await browser.screenshot(tab,path.resolve(options.output),options.selector);}else throw new Error('BROWSER_COMMAND_INVALID');output(result);
     }finally{await browser.disconnect();}
   }else throw new Error('UNKNOWN_COMMAND');
-}catch(e){output({ok:false,error:errorCode(e),message:e?.issues?'設定の項目を確認してください。':undefined});process.exitCode=1;}
+}catch(e){const code=errorCode(e);output({ok:false,error:code,message:e?.issues?'設定の項目を確認してください。':undefined,debug:code==='OPERATION_FAILED'&&debugRequested({verbose:options.verbose})?describeError(e):undefined});process.exitCode=1;}

@@ -39,6 +39,13 @@ node bin/kotodama.mjs doctor --json
 4. CLI実行器の実ファイル、モデル（既定はLuna）、作業対象、許す操作、検証コマンド。[モデルと任意のフォールバック](docs/MODELS.md)。
 5. 音声の一回・一日あたりの上限。既定の一日上限は0なので、設定前に音声APIへ接続しません。
 
+ファイルを書き換える `write_file` と `develop` を `worker.actions` に加える場合は、Linuxの実行ホストに検証用のDocker imageを事前に用意します。`worker.verify` に1つ以上の検証コマンドを、`worker.verification` にimageのID（`sha256:` と64桁、`docker image inspect` で確認）またはdigest付きの名前を指定します。検証は読取専用の作業領域・ネットワークなし・認証情報なしのコンテナで行い、通常のホストで代わりに実行することはありません。設定がない場合やLinux以外では、モデルを動かす前に `VERIFICATION_COMMAND_REQUIRED`・`VERIFICATION_ISOLATION_REQUIRED`・`WRITE_WORKER_REQUIRES_LINUX_HOST` で拒否します。実行中にimageを取得（pull）しません。検証コマンドはコンテナ内の `node` などを使い、ホストの絶対パスは使えません。書き込みは `/tmp` だけに行えます。
+
+```json
+"verify": [{"executable": "node", "args": ["--test"]}],
+"verification": {"kind": "docker", "image": "sha256:<64桁のimage ID>"}
+```
+
 ローカルASRを使う最小設定例です。endpointはHTTPS、loopback、private LAN、またはtailnet内だけを受け付けます。
 
 ```json
@@ -97,6 +104,8 @@ BotはDiscord側でも対象サーバーへ導入してください。Message Co
 `assist`は `gpt-live-1`、`minutes`のクラウド文字起こしはVADと `gpt-live-transcribe` を使います。ローカルASRも選べます。呼びかけ後は同じLiveセッションを複数ターンで再利用するため、回答ごとの接続待ちがありません。Luna analyzerが確定テキストから意図を整理し、確認済みの返答だけを `session.commentary.append` でLiveへ戻します。Liveの断片文字起こしや自発音声は仕事のSSOTになりません。
 
 発話中に利用者が話し始めると、Botはローカル再生と未再生queueを直ちに止め、同じセッションへ停止指示を送ります。仕事の実行はそのまま継続します。「もういいよ」などをLunaが `end_conversation` と構造化した場合はLiveだけを正常終了し、BotはVCでローカル待機へ戻ります。出力は既定120msを蓄えてから再生し、500msを超えるqueueは破棄します。値は `voice.outputPrefillMs` と `voice.maxOutputQueueMs` で調整できます。
+
+再生中の返答を権限の変化で止めるのは、対象VCへの入退室と、対象サーバーでの権限・ロール・チャンネル・メンバー変更のときです。別のサーバーや別のVCでの入退室、対象VC内でのミュート・スピーカーミュート・配信の切替では返答は止まりません。判別できないイベントは安全側として停止します。
 
 ローカルASR構成でLiveを開始していない待機中は、音声クラウドAPIを呼び出しません。Live利用秒とLunaのinput・cached input・output tokenを別々に記録します。Lunaへ渡す会話contextと最大出力も設定で上限を持ち、usage snapshotは累積値として置き換えるため二重加算しません。`naturalConversation: false` のLive会話は人の入力が既定120秒なければ閉じ、Botはローカル聞き役のまま残ります。`voice.conversationIdleSeconds` で30〜600秒に調整できます。
 

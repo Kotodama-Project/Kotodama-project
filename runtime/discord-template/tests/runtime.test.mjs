@@ -12,6 +12,8 @@ import {CliWorker} from '../src/worker.mjs';
 import {runCommand} from '../src/command.mjs';
 import {Store} from '../src/store.mjs';
 
+// Synthetic subprocess fixture only. Real isolation is checked separately.
+const fixtureVerifier={preflight:async()=>{},verify:async(command,options)=>({...await runCommand(command.executable,command.args,options),isolation:{kind:'synthetic_fixture'}})};
 const rootRepo=fileURLToPath(new URL('..',import.meta.url));const actor='100000000000000002';const fixtureCli=path.join(rootRepo,'tests/fixtures/model-cli.mjs');
 test('runtime metadata cannot redirect control credentials to an injected host',async t=>{
   const {config,cleanup}=await configFixture(t);t.after(cleanup);
@@ -59,7 +61,7 @@ test('runtime refuses a symbolic control token without changing its target',{ski
 });
 test('write worker includes unreported new files and supports later Task revisions',{skip:process.platform==='win32'?'Reference write worker runs on Linux; Windows CLI/client tests still run.':false},async t=>{
   const {config,root,cleanup}=await configFixture(t);t.after(cleanup);for(const args of [['init'],['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--allow-empty','-m','fixture']]){const r=await runCommand('git',args,{cwd:root});assert.equal(r.code,0);}
-  config.worker.actions=['develop'];config.worker.args=[fixtureCli,'--fixture-write'];config.worker.verify=[{executable:process.execPath,args:['--check','created.mjs']}];const worker=new CliWorker(config);
+  config.worker.actions=['develop'];config.worker.args=[fixtureCli,'--fixture-write'];config.worker.verify=[{executable:process.execPath,args:['--check','created.mjs']}];const worker=new CliWorker(config,{verifier:fixtureVerifier});
   const base={id:'task-fixture',actor,source_revision:1,action:'develop',request:'create',acceptance:[]};const a=await worker.run({...base,revision:1},[]);const b=await worker.run({...base,revision:2},[]);assert.notEqual(a.workspace,b.workspace);assert(a.artifacts.some(f=>f.relative==='created.mjs'));const patch=a.artifacts.find(f=>f.relative==='changes.patch');assert((await readFile(patch.path,'utf8')).includes('created.mjs'));assert.equal(a.validations[0].exitCode,0);
 });
 
@@ -67,6 +69,6 @@ test('a primary commit before authentication failure refuses fallback',{skip:pro
   const {config,root,cleanup}=await configFixture(t);t.after(cleanup);
   for(const args of [['init'],['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','--allow-empty','-m','fixture']])assert.equal((await runCommand('git',args,{cwd:root})).code,0);
   const primary=path.join(root,'primary.mjs');await writeFile(primary,`import {writeFileSync} from 'node:fs';import {execFileSync} from 'node:child_process';writeFileSync('committed.mjs','export const answer=1;');execFileSync('git',['add','committed.mjs']);execFileSync('git',['-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-m','changed']);process.stderr.write('Not logged in.');process.exit(1);`,'utf8');
-  config.worker.actions=['develop'];config.worker.args=[primary];config.worker.fallback={executable:process.execPath,args:[fixtureCli],model:'fallback-fixture',timeoutSeconds:10};const worker=new CliWorker(config);
+  config.worker.actions=['develop'];config.worker.verify=[{executable:process.execPath,args:['--version']}];config.worker.args=[primary];config.worker.fallback={executable:process.execPath,args:[fixtureCli],model:'fallback-fixture',timeoutSeconds:10};const worker=new CliWorker(config,{verifier:fixtureVerifier});
   await assert.rejects(worker.run({id:'task-commit',actor,revision:1,source_revision:1,action:'develop',request:'fixture',acceptance:[]},[]),/FALLBACK_WORKSPACE_CHANGED/);
 });

@@ -1,5 +1,6 @@
 name: Discord runtime candidate
 on:
+  workflow_call:
   pull_request:
   push:
     branches: [main]
@@ -22,6 +23,9 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Check tracked credential hygiene before dependencies
+        working-directory: .
+        run: python -S -B tools/check_tracked_secret_hygiene.py
       - run: npm install --global pnpm@11.19.0
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Install audio encoder (Linux)
@@ -32,5 +36,15 @@ jobs:
       - name: Install audio encoder (Windows)
         if: runner.os == 'Windows'
         run: choco install ffmpeg --yes --no-progress
+      - name: Prepare isolated Linux verification fixture
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Pinned by digest: the fixture image is reviewed input, not a moving tag.
+          fixture='node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6'
+          docker pull "$fixture"
+          image="$(docker image inspect --format '{{.Id}}' "$fixture")"
+          printf 'KOTODAMA_TEST_VERIFIER_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
       - run: pnpm test
       - run: pnpm check

@@ -4,7 +4,7 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {Collection} from 'discord.js';
-import {DiscordAdapter} from '../src/discord.mjs';
+import {DiscordAdapter,taskStateText,deferredAnalysisText} from '../src/discord.mjs';
 import {exampleConfig} from '../src/config.mjs';
 test('ask returns the answer and rechecks source access before the ephemeral reply',async t=>{
   const config=exampleConfig(),actor=config.discord.operators[0],replies=[];let allowed=true;
@@ -33,4 +33,15 @@ test('backfill continues past a short bot-only page to find older human messages
   adapter.member=async()=>({});adapter.canRead=async()=>true;adapter.client.guilds.fetch=async()=>guild;adapter.source=async message=>({sourceId:message.id});
   const coverage=await adapter.backfill(actor,{limit:1});
   assert.equal(fetches,2);assert.equal(ingested,1);assert.equal(coverage.imported,1);assert.equal(coverage.channels[0].state,'limit_reached');
+});
+
+test('deferred analysis and paused Tasks are described in Japanese instead of claiming completion',async t=>{
+  assert.match(taskStateText('paused'),/一時停止中/);assert.match(taskStateText('uncertain'),/自動では再実行しません/);assert.equal(taskStateText('future_state'),'future_state');
+  for(const reason of ['ANALYSIS_QUEUE_FULL','ANALYSIS_SUPERSEDED','ANALYSIS_BUDGET_EXHAUSTED','ANALYSIS_TOTAL_BUDGET_EXHAUSTED'])assert.match(deferredAnalysisText(reason),/記録済み/);
+  const config=exampleConfig(),actor=config.discord.operators[0],replies=[];
+  const adapter=new DiscordAdapter({config,store:{},pipeline:{ingest:async()=>({state:'new',analysis:'deferred',reason:'ANALYSIS_QUEUE_FULL'}),owner:{tasks:async()=>[{id:'task-paused',state:'paused',title:'再起動前の依頼'}]},authorize:async()=>{}}});
+  t.after(()=>adapter.client.destroy());adapter.verifiedInstallation=true;adapter.member=async()=>({});
+  const interaction=sub=>({guildId:config.discord.guildId,channelId:config.discord.resultChannelId,id:'interaction-'+sub,createdTimestamp:1,commandName:'kotodama',user:{id:actor},isButton:()=>false,isChatInputCommand:()=>true,options:{getSubcommand:()=>sub,getString:()=>'どう思う？'},deferReply:async()=>{},editReply:async v=>replies.push(v.content)});
+  await adapter.interaction(interaction('ask'));assert.match(replies[0],/後回し/);assert(!replies[0].includes('整理しました'));
+  await adapter.interaction(interaction('tasks'));assert.match(replies[1],/task-paused · 一時停止中/);
 });
