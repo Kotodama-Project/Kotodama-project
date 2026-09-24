@@ -59,7 +59,7 @@ class A019MigrationBatchTests(unittest.TestCase):
         self.assertEqual(meta_errors, [])
         return schemas, validators
 
-    def test_exact_candidate_passes_but_admission_remains_blocked(self) -> None:
+    def test_exact_candidate_passes_and_reports_the_recorded_admission(self) -> None:
         result = VALIDATOR.validate(ROOT)
         manifest = self._manifest(ROOT)
 
@@ -76,15 +76,51 @@ class A019MigrationBatchTests(unittest.TestCase):
         self.assertEqual(result["source_registry_blob_reuse"], 0)
         self.assertEqual(result["source_path_leakage"], 0)
         self.assertEqual(result["candidate_scan_findings"], 0)
-        self.assertEqual(result["admission_status"], "BLOCKED")
         self.assertEqual(
             manifest["component_license"]["source_derived_scope"],
             sorted(VALIDATOR.DESTINATIONS),
         )
-        self.assertIn(
-            "MISSING_APPLICABLE_A019_PRIVATE_SOURCE_HISTORY_RECEIPT",
-            result["no_go_reasons"],
-        )
+        if manifest["admission_gates"]["independent_review"] == "PASSED_INDEPENDENT_REVIEW":
+            self.assertEqual(result["admission_status"], "ADMITTED")
+            self.assertEqual(result["no_go_reasons"], [])
+        else:
+            self.assertEqual(result["admission_status"], "BLOCKED")
+            self.assertEqual(result["no_go_reasons"], ["INDEPENDENT_REVIEW_PENDING"])
+
+    def test_admission_gates_and_provenance_fail_closed(self) -> None:
+        def gate(value):
+            return lambda manifest, provenance: manifest["admission_gates"].update(value)
+
+        def prov(update):
+            return lambda manifest, provenance: update(provenance)
+
+        mutations = {
+            "issue 25 gate reopened": gate({"license_and_provenance": "BLOCKED_ISSUE_25"}),
+            "sibling integration reopened": gate({"sibling_integration": "BLOCKED_ISSUE_30"}),
+            "unknown review state": gate({"independent_review": "APPROVED"}),
+            "receipt digest removed": prov(lambda p: p.pop("private_source_history_receipt_sha256")),
+            "receipt did not pass": prov(lambda p: p.update(private_source_history_result="FINDINGS")),
+            "author is not a handle": prov(lambda p: p["entries"][0].update(author_github_handles=["Some Person"])),
+            "re-authored source missing": prov(lambda p: p["entries"].pop()),
+            "source blob drift": prov(lambda p: p["entries"][0].update(source_blob_sha="0" * 40)),
+            # The path is read from the manifest so this file never names it.
+            "source path repeated": lambda manifest, provenance: provenance["entries"][0].update(
+                source_path=manifest["entries"][0]["source_path"]
+            ),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label):
+                temporary, root = self._fixture()
+                with temporary:
+                    manifest = self._manifest(root)
+                    provenance_path = root / VALIDATOR.PROVENANCE_PATH
+                    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+                    mutate(manifest, provenance)
+                    self._write_manifest(root, manifest)
+                    provenance_path.write_text(json.dumps(provenance, ensure_ascii=False, indent=2), encoding="utf-8")
+                    result = VALIDATOR.validate(root)
+                    self.assertEqual(result["status"], "FAIL", label)
+                    self.assertEqual(result["admission_status"], "BLOCKED", label)
 
     def test_exact_six_source_mapping_fails_closed_on_drift(self) -> None:
         mutations = (

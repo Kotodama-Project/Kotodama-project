@@ -24,7 +24,7 @@
       "schemas/worker-capability-catalog.schema.json",
       "schemas/worker-result.schema.json"
     ],
-    "license_and_provenance_gate": "BLOCKED_ISSUE_25",
+    "license_and_provenance_gate": "RECORDED_ISSUE_25_OWNER_DECISION",
     "apache_pr18_relicenses_component": false
   },
   "decision_contract": {
@@ -60,13 +60,13 @@
     }
   ],
   "admission_gates": {
-    "license_and_provenance": "BLOCKED_ISSUE_25",
-    "applicable_source_history_secret_pii": "BLOCKED_MISSING_A019_PRIVATE_RECEIPT_ISSUE_251_OR_257",
+    "license_and_provenance": "RECORDED_ISSUE_25_OWNER_DECISION",
+    "applicable_source_history_secret_pii": "PASSED_PRIVATE_RECEIPT",
     "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
-    "independent_review": "PENDING_LATEST_PUSH",
-    "public_governance": "BLOCKED_PR_18_AND_ISSUE_19",
-    "sibling_integration": "BLOCKED_ISSUE_30",
-    "dependency_review": "BLOCKED_UNTIL_RETARGET_TO_MAIN"
+    "independent_review": "PENDING",
+    "public_governance": "PASSED_PR_18_MERGED_ISSUE_19_CLOSED",
+    "sibling_integration": "PASSED_ISSUE_30_LINEAR_RELAND",
+    "dependency_review": "REQUIRED_CHECK_ON_MAIN_PULL_REQUEST"
   },
   "entries": [
     {
