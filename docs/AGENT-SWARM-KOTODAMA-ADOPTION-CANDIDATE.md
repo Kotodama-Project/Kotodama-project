@@ -6,34 +6,15 @@ public-preview-only の設計候補です。ここでいう swarm は「エー�
 各 worker の対象・親子 edge・workspace / revision・handoff・lease / TTL・stop
 condition・結果を比較可能にしたうえで、root が統合・検証する構造を指します。
 
-## Primary-source findings
+## 設計の根拠
 
-OpenAI Agents SDK の公式ガイドは、複数 agent の orchestration を、LLM に流れを
-決めさせる方式とコードで流れを決める方式に分けています。典型的な二つの形は、
-manager が specialist を `agent.asTool()` として呼び出す **agents as tools** と、
-triage agent が specialist へ制御を渡す **handoff** です。[Agent Orchestration
-guide](https://openai.github.io/openai-agents-js/guides/multi-agent/) は、依存しない
-仕事はコードで並列実行でき、最終回答・共有 guardrail を root が所有する場合は
-manager pattern が適すると説明しています。
+Kotodama の swarm は、次の要求から形を決めています。
 
-同 SDK の公式説明では、guardrail は agent の最初／最後だけでなく、各 function-tool
-呼び出しの前後に置けます。agent-level の guardrail だけでは delegated specialist
-の各作用を覆えないため、作用境界は tool / handoff の近くで再確認する必要があります。
-[Guardrails guide](https://openai.github.io/openai-agents-python/guardrails/) を参照して
-います。また SDK は tracing、sessions、sandbox agents、human-in-the-loop を提供
-しますが、それらの機能を有効にしたこと自体は Kotodama の Work Order や Human GO
-ではありません。[OpenAI Agents SDK overview](https://openai.github.io/openai-agents-python/)
-にある runtime capability と、Kotodama の evidence gate は分離します。
+- **流れはコードで固定する。** 依存しない仕事はコードで並列に配り、最終的な統合と共通の guardrail は root が持つ。handoff で制御を渡す場合も、どの worker が何を返すかを assignment に固定する。
+- **作用の境界ごとに確かめる。** agent 全体の入口と出口だけでなく、tool や handoff を一つ呼ぶたびに対象と権限を確かめる。tracing、session、sandbox、human-in-the-loop といった実行基盤の機能を有効にしても、それだけでは Work Order や Human GO にならない。
+- **並列化は独立した仕事だけにする。** 独立した文脈で並列に調べる仕事には効くが、token の消費が大きく、依存の密な仕事や全員が同じ文脈を要る仕事には向かない。曖昧な指示は重複・欠落・終わらない探索を生むので、worker ごとに objective、出力形式、tool、境界を明示し、複雑さに応じて worker 数を抑える。
 
-Anthropic の公式 engineering report は、orchestrator-worker で専門 subagent を
-独立 context で並列に走らせると、breadth-first の調査で有効だと説明しています。
-同時に、multi-agent は通常の chat より大幅に token を消費し、依存関係が密な仕事や
-全員が同じ context を必要とする仕事には向かない、と報告しています。曖昧な task
-説明は重複・欠落・無限探索を生むため、objective、output format、tools、境界を各
-worker に明示し、complexity に応じて agent 数を制限する必要があります。[How we
-built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system)
-の orchestrator-worker、cost、decomposition、prompt engineering の知見を採用
-しています。
+参照: [OpenAI Agents SDK の orchestration](https://openai.github.io/openai-agents-js/guides/multi-agent/)、[guardrails](https://openai.github.io/openai-agents-python/guardrails/)、[Anthropic の multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system)。
 
 ## Kotodama mapping
 
@@ -97,10 +78,23 @@ session、credential、raw prompt、private content を解決しません。
    Work Order、Capability Grant、Human gate、re-observe、persistent idempotency を別々に
    満たす。
 
+## Luna Task swarm との対応
+
+main の [Luna Task swarm](LUNA-TASK-SWARM.md)（`runtime/task_swarm`）は、この契約の考え方を local runtime として実装したものです。この契約は計画の形を検証するだけで、Luna の実行や受入を代わりに証明しません。
+
+| 契約の項目 | Luna Task swarm | まだ対応していないこと |
+|---|---|---|
+| budget: `attempt_budget_N`、`concurrency_cap_C`、`wave_width_W`、`verifier_reserve_V`、`max_workflow_depth` | packet の `budget`（`N`、`C`、`W`、`V`、`depth`、`max_depth`）と scheduler の予算（試行・同時実行・検証枠） | 契約は `max_workflow_depth=2`、Luna の既定例は `max_depth=1` |
+| assignment: `attempt_ref`、`parent_edge_ref`、`objective_ref`、`ownership_ref`、`dependencies` | job の `job_id`、`kind`（work / review）、`dependencies`、`exclusive_keys`、packet の `objective` と `ownership` | 契約の opaque ref と Luna の job ID を対応づける変換はない |
+| target: `workspace_ref`、`workspace_binding`、`public_revision` | Task の `task_id`、`revision`、`context_digest`、`active_home` | revision の hash binding を Luna 側で読む検証はない |
+| handoff: 入力と期待する出力の binding | peer 通信（`peer_send` / `peer_ack` / `peer_reply` と `peer_status`） | handoff を契約の record として保存する経路はない |
+| lifecycle: `ttl_seconds`、`epoch`、`dedup_key_ref`、`retry_owner_ref`、cancel / stop | lease と epoch、idempotency key、owner binding の期限、即時 stop の条件 | — |
+| evidence: `verification_status=NOT_VERIFIED`、claims は false | 独立した verifier と owner の `accept`。offline fixture はモデルを呼ばない | 実 Codex / Luna での live 受入は未実施 |
+
 ## Current implementation boundary
 
-この repository で採用するのは、schema、read-only validator、negative tests、docs、
-machine-readable planning ledger までです。Codex session の spawn、OpenAI / Anthropic
+この契約で採用するのは、schema、read-only validator、negative tests、docs、
+machine-readable planning ledger までです。実行は上の Luna Task swarm が担い、この契約はそれを起動しません。Codex session の spawn、OpenAI / Anthropic
 provider 呼び出し、subagent の実 runtime verification、worktree の作成、external send、
 device / provider mutation、Promotion、Current Truth、Public Beta GO は含みません。
 
