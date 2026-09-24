@@ -20,7 +20,7 @@
    判断が人に残っている Issue（`status/needs-decision`、ライセンス、公開、課金、配備）は選ばず、周回の報告に並べるだけにします。
 3. **変更と検証**: 最新 main から branch を作り、一件に必要な最小の変更をします。[CI と必須チェック](CI.md) のローカル確認を通し、失敗を再現してから直します。
 4. **独立 review**: 変更を書いた agent とは別の reviewer（別の agent / 別の session）に diff を読ませ、根拠のある指摘を直します。指摘が残るうちは merge しません。
-5. **merge**: 必須チェック `Trusted repository validation` が緑、独立 review に未解決の指摘がなく、衝突がないときだけ squash merge します。
+5. **merge**: 必須チェック（[4 本](CI.md)）がすべて緑、独立 review に未解決の指摘がなく、衝突がないときだけ squash merge します。
 6. **監視と自動 revert**: merge 後に main の必須チェックを読み戻します。その merge が原因で赤くなったら、先に revert PR を出して main を緑へ戻し、原因は別の PR で直します。
 7. **学び**: `CHANGELOG.md` の Unreleased、閉じた Issue、必要なら [プロジェクトの地図](PROJECT-MAP.md) と `STATUS.md` を同じ PR で更新します。
 

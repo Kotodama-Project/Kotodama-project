@@ -14,7 +14,7 @@ Kotodama detects intent in conversation, voice, issues, and documents, confirms 
 You choose how to use it:
 
 - **Run work**: Company Packs and the review chain trace a request through Work Order, Verification Receipt, and Promotion.
-- **Say "OK" and let agents proceed**: within a permission granted once, an agent swarm researches, implements, and verifies on its own and returns to a human only when judgment or authority is missing. This is the design direction; `main` contains bounded Task execution only.
+- **Say "OK" and let agents proceed**: within a permission granted once, an agent swarm researches, implements, and verifies on its own and returns to a human only when judgment or authority is missing. This is the design direction; `main` contains bounded Task execution and the [Luna Task swarm](docs/LUNA-TASK-SWARM.md), exercised with an offline fixture (no live model acceptance yet).
 - **Spend time in a voice channel**: choose a mode such as relaxing, thinking together, or working only when needed. Small talk is never turned into work or extra permission by itself.
 
 ## Try it in five minutes
@@ -27,7 +27,7 @@ cd Kotodama-project
 python3 -S -B tools/smoke_company_pack_review_chain.py
 ```
 
-A success prints one line of JSON with `"status": "PASS"` and `"public_beta": "NO_GO_UNPUBLISHED"`; every value under `claims` is `false`. The [5-minute tour](docs/FIVE-MINUTE-TOUR.md) explains the report and the bounded next choices.
+On Windows PowerShell, use `python` instead of `python3`. A success prints one line of JSON with `"status": "PASS"` and `"public_beta": "NO_GO_UNPUBLISHED"`; every value under `claims` is `false`. The [5-minute tour](docs/FIVE-MINUTE-TOUR.md) explains the report and the bounded next choices.
 
 ## What works today
 
@@ -35,23 +35,23 @@ A success prints one line of JSON with `"status": "PASS"` and `"public_beta": "N
 |---|---|---|---|
 | Company Pack / Evidence Chain | starter with 9 Blocks, 9 Records, 3 MOCs; schemas, validators, review chain, smoke | | Promotion policy per lane |
 | Session / conversation ledger | schema and validator | | runtime ingestion |
-| Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker; real-microphone continuity not yet accepted) | Live control and per-room workspaces (#69, #71) | 15-minute rotation, Voice-to-Verified-Handoff, GrillU |
-| Agent swarm / autonomy | bounded Task execution | Task swarm, agent lifecycle, migration ledger (#67, #34 to #36) | Goal Completion Loop after a human GO |
-| Knowledge / Context | | OKF control plane (#48, #49, #61) | Context Gateway, TiDB evaluation |
+| Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | #69 and #71 (not taken in as separate runtimes; their ideas move into this Node runtime) | 15-minute rotation, Voice-to-Verified-Handoff, GrillU |
+| Agent swarm / autonomy | bounded Task execution, Luna Task swarm | swarm, route-binding, migration-ledger, and agent-lifecycle contracts (#34 to #36) | Goal Completion Loop after a human GO |
+| Knowledge / Context | | OKF v0.2 knowledge bundle (#48, #61, #59, chosen as the canonical line), control plane (#49 line) | Context Gateway, TiDB evaluation |
 | Runtime | Compose / Proxmox lifecycle contracts, Cloudflare candidates | | deployment on Cloudflare edge and the official Cloudflare OS |
 
 [STATUS.md](STATUS.md) is the source for the current state. This page is a projection, not a Human Decision or Current Truth.
 
 ## Documents
 
-- Current state and gates: [STATUS.md](STATUS.md), [ROADMAP.md](ROADMAP.md), [docs/HISTORY.md](docs/HISTORY.md)
+- Current state and gates: [STATUS.md](STATUS.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), [docs/HISTORY.md](docs/HISTORY.md)
 - Direction: [docs/PRODUCT-DIRECTION.md](docs/PRODUCT-DIRECTION.md), [docs/OWNER-INTENT-COMPANY-AGI.md](docs/OWNER-INTENT-COMPANY-AGI.md), [docs/PROJECT-MAP.md](docs/PROJECT-MAP.md)
-- Use: [5-minute tour](docs/FIVE-MINUTE-TOUR.md), [Discord runtime](docs/DISCORD-RUNTIME.md), [Template Guide](docs/TEMPLATE-GUIDE.md), [Validation Guide](docs/VALIDATION.md)
+- Use: [5-minute tour](docs/FIVE-MINUTE-TOUR.md), [Discord runtime](docs/DISCORD-RUNTIME.md), [Template Guide](docs/TEMPLATE-GUIDE.md), [Validation Guide](docs/VALIDATION.md), [Luna Task swarm](docs/LUNA-TASK-SWARM.md)
 - Full design text: [docs/OVERVIEW.md](docs/OVERVIEW.md)
 
 ## Participate
 
-[CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) describe how to contribute, report vulnerabilities, ask for help, and behave. Agents start from [AGENTS.md](AGENTS.md).
+[CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [SUPPORT.md](SUPPORT.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) describe how to contribute, report vulnerabilities, ask for help, and behave. Questions and discussion go to [GitHub Discussions](https://github.com/Kotodama-Project/Kotodama-project/discussions). Agents start from [AGENTS.md](AGENTS.md).
 
 ## License
 

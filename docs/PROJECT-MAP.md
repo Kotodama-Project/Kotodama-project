@@ -11,7 +11,7 @@ Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なと�
 | 意図を同じ仕事と成果へ結ぶ | [Task / Session契約](SESSION-CONVERSATION-LEDGER.md)、[Review Workflow](REVIEW-WORKFLOW.md)、[Company Pack](STARTER-WALKTHROUGH.md) | Source、Intent、Decision、Work、Verification、Promotionを区別し、選択した一つのTask ownerへ戻す |
 | 初回の許可範囲で自律的に進める | [Agent entrypoint](../AGENTS.md)、[Security](../SECURITY.md)、[自動改善ループ](IMPROVEMENT-LOOP.md) | 同じ許可を聞き直さず、期限・取消・対象は再確認する。ログインの本人操作は人が行う |
 | 必要な文脈を小さく渡す | [Context](OVERVIEW.md#context-platform--会社の共有記憶)、[Session ledger](SESSION-CONVERSATION-LEDGER.md) | 出典・訂正・現在の担当を落とさず、アクセス不可や古い資料を再注入しない |
-| 話す・録音する・仕事を止める操作を分ける | [Voice](OVERVIEW.md#voice--最初に価値を体感する入口)、Voice候補 [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69) / [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) | 呼びかけ、長時間・複数人、切断復帰、音質、負荷、背景の仕事の継続を同じ実経路で確かめる |
+| 話す・録音する・仕事を止める操作を分ける | [Voice](OVERVIEW.md#voice--最初に価値を体感する入口)、[Discord runtime](DISCORD-RUNTIME.md)（main） | 呼びかけ、長時間・複数人、切断復帰、音質、負荷、背景の仕事の継続を同じ実経路で確かめる |
 | 小さな成果を検証して学習へ戻す | [5-minute tour](FIVE-MINUTE-TOUR.md)、[Runtime](../runtime/README.md)、[Business Loop](OVERVIEW.md#ai-business-loop) | テスト件数だけでなく成果の有用性、失敗、rollbackと次の改善を確認する |
 | 手元の環境で再現・停止・復旧できる | [Installation lifecycle](INSTALLATION-LIFECYCLE.md)、[Runtime](../runtime/README.md) | 対象profileでinstall、実行、停止、backup/restoreを検証する。構成検査を実稼働としない |
 | 参加者と事業に価値を返す | [Community / Office](OVERVIEW.md#discord-の中に会社を作る)、[Business Loop](OVERVIEW.md#ai-business-loop) | 参加・相談・通報・復旧の体験と、顧客需要や費用を含む成果を実測する |
@@ -25,18 +25,18 @@ Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なと�
 
 後続作業は、PRの本文だけでなく現在のhead/base、差分、レビュー、必須CIを確認して選びます。古いSHAや承認待ちの記述を、現在の停止条件として使い回しません。
 
-このrevisionには、[#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43)由来の[ローカル確認・訂正Gateway](../runtime/local-review-gateway/README.md)と[既存Taskに束縛したCompany Pack作成](COMPANY-PACK-TASK-EXECUTION.md)も含まれます。二つは限定された別の実行経路であり、会話からTaskを自動作成・実行するconnectorはまだ接続されていません。
+mainには、[#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43)由来の[ローカル確認・訂正Gateway](../runtime/local-review-gateway/README.md)と[既存Taskに束縛したCompany Pack作成](COMPANY-PACK-TASK-EXECUTION.md)、Discordから使う[最小構成](DISCORD-RUNTIME.md)（`runtime/discord-template`）も含まれます。三つは限定された別の実行経路であり、会話からTaskを自動作成・実行するconnectorはまだ接続されていません。
 
 | 系統 | 次に確認する候補 | 判断の要点 |
 |---|---|---|
-| 仕事・文脈の継続 | [#44](https://github.com/Kotodama-Project/Kotodama-project/pull/44) → [#45](https://github.com/Kotodama-Project/Kotodama-project/pull/45) → [#46](https://github.com/Kotodama-Project/Kotodama-project/pull/46) → [#47](https://github.com/Kotodama-Project/Kotodama-project/pull/47) | 引継ぎ、reader権限、実行入力、訂正の接続を前提順に確認する |
-| 知識と検索 | [#48](https://github.com/Kotodama-Project/Kotodama-project/pull/48)、[#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)、[#59](https://github.com/Kotodama-Project/Kotodama-project/pull/59) | schema適合と、判断に使える根拠・鮮度を分ける |
-| 音声 | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)、[#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) | 二つのruntime ownerを並立させず、Task・原文の既存ownerへ接続する |
-| 並列実行 | [Luna Task swarm](LUNA-TASK-SWARM.md)（[#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67)・[#85](https://github.com/Kotodama-Project/Kotodama-project/pull/85)を統合） | Linux・Windowsの必須CIと独立reviewを通したlocal fixtureの段階。実Codex/Lunaのlive受入と、契約候補#34〜#36との重複整理は残件 |
-| 別系統のcontrol-plane | [#49](https://github.com/Kotodama-Project/Kotodama-project/pull/49)と後続stack | 記載された実装の欠落やownerの重複を解消し、既存の知識系と合流する |
+| 仕事・文脈の継続 | [#44](https://github.com/Kotodama-Project/Kotodama-project/pull/44) → [#45](https://github.com/Kotodama-Project/Kotodama-project/pull/45) → [#46](https://github.com/Kotodama-Project/Kotodama-project/pull/46) → [#47](https://github.com/Kotodama-Project/Kotodama-project/pull/47) | 前提順にコードと契約だけをmainへ取り込む。日付付きのsnapshotと運用方針の写しは入れない |
+| 知識と検索 | [#48](https://github.com/Kotodama-Project/Kotodama-project/pull/48)、[#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)、[#59](https://github.com/Kotodama-Project/Kotodama-project/pull/59) | 知識基盤の正本はこの系統（2026-09-24 owner判断）。schema適合と、判断に使える根拠・鮮度を分ける |
+| 音声 | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)、[#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) | Node runtime（`runtime/discord-template`）に一本化する（2026-09-24 owner判断）。別runtimeは取り込まず、方針文書とNodeに無い考え方を移す |
+| 並列実行 | [Luna Task swarm](LUNA-TASK-SWARM.md)（[#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67)・[#85](https://github.com/Kotodama-Project/Kotodama-project/pull/85)を統合） | Linux・Windowsの必須CIと独立reviewを通したlocal fixtureの段階。実Codex/Lunaのlive受入は残件。契約候補#34〜#36はこのruntimeとの対応表を付けて取り込む |
+| 別系統のcontrol-plane | [#49](https://github.com/Kotodama-Project/Kotodama-project/pull/49)と後続stack | 競合するOKFの表現を外し、#48の知識bundleにつないで取り込む |
 | 既存能力の移植 | [Migration Epic #24](https://github.com/Kotodama-Project/Kotodama-project/issues/24)、[出典と権利 #25](https://github.com/Kotodama-Project/Kotodama-project/issues/25) | capabilityごとに出典・第三者条件・consumerを確認する |
 
-PR一覧は作業選択のための入口です。件数やリンクの存在で全履歴読了、採用、配備を主張しません。元のPRが別branch向けでも、最終的にどのbytesがmainへ入ったかを確認します。
+PRごとの処分と進み具合は[#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)にあります。名前の系統は[NAMES](NAMES.md)、公開リポジトリの関係は[REPOSITORIES](REPOSITORIES.md)にあります。PR一覧は作業選択のための入口です。件数やリンクの存在で全履歴読了、採用、配備を主張しません。元のPRが別branch向けでも、最終的にどのbytesがmainへ入ったかを確認します。
 
 ## 作業を一つ進める
 

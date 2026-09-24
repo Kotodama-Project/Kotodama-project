@@ -14,7 +14,7 @@ Kotodama is a local-first Company OS that turns conversation into auditable inte
 同じ製品の中で、利用の場面を選べます。
 
 - **仕事を進める**: Company Pack と review chain で、依頼を Work Order、Verification Receipt、Promotion まで辿る。
-- **「OK」の後は agent に任せる**: 人が一度許可した範囲で agent swarm が調査・実装・検証を自律的に進め、判断材料や権限が足りないときだけ人へ戻す。設計方向であり、`main` にあるのは限定 Task 実行までです。
+- **「OK」の後は agent に任せる**: 人が一度許可した範囲で agent swarm が調査・実装・検証を自律的に進め、判断材料や権限が足りないときだけ人へ戻す。設計方向です。`main` には限定 Task 実行と、offline の fixture で確かめた [Luna Task swarm](docs/LUNA-TASK-SWARM.md) があります（実モデルでの受入は未実施）。
 - **Voice channel で過ごす**: 楽しく過ごす、一緒に考える、必要なときだけ仕事を進める、のモードを選ぶ。雑談を勝手に仕事や追加の権限へ変えません。
 
 設計の全文は [docs/OVERVIEW.md](docs/OVERVIEW.md)、方向と現在地の対応は [docs/PRODUCT-DIRECTION.md](docs/PRODUCT-DIRECTION.md) と [docs/PROJECT-MAP.md](docs/PROJECT-MAP.md) にあります。
@@ -26,20 +26,21 @@ Git と Python 3.12 だけで、Company Pack の review chain（13 steps）を�
 ```bash
 git clone https://github.com/Kotodama-Project/Kotodama-project.git
 cd Kotodama-project
-python -S -B tools/smoke_company_pack_review_chain.py
+python3 -S -B tools/smoke_company_pack_review_chain.py
 ```
 
-PowerShell では `python3` の代わりに `python` を使います。成功すると `"status": "PASS"` と `"public_beta": "NO_GO_UNPUBLISHED"` を含む一行 JSON が返り、`claims` はすべて `false` です。読み方と次の一歩は [5-minute tour](docs/FIVE-MINUTE-TOUR.md) にあります。
+Windows の PowerShell では `python3` の代わりに `python` を使います。成功すると `"status": "PASS"` と `"public_beta": "NO_GO_UNPUBLISHED"` を含む一行 JSON が返り、`claims` はすべて `false` です。読み方と次の一歩は [5-minute tour](docs/FIVE-MINUTE-TOUR.md) にあります。
 
 ## 使い方を選ぶ
 
 | やりたいこと | 今日 `main` でできること | 入口 |
 |---|---|---|
 | Company Pack を自分の会社の候補として編集し検査する | initializer、customization checker、validator、Catalog、Review Bundle（read-only / candidate-only） | [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)、[CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) |
-| Discord / Voice で使う | `runtime/discord-template`。Node 24、Discord Bot、モデル接続が前提。local ASR と Live 会話、限定 Task worker。実マイクの連続応答、2 人 30 分の会話、別設定での再現は未受入 | [Discord runtime](docs/DISCORD-RUNTIME.md) |
+| Discord / Voice で使う | `runtime/discord-template`。Node 24、Discord Bot、モデル接続が前提。local ASR と Live 会話、限定 Task worker、エージェント用チャンネルからの即時着手。書込みの仕事は Linux と Docker での検証が必要。実マイクの連続応答、2 人 30 分の会話、別設定での再現は未受入 | [Discord runtime](docs/DISCORD-RUNTIME.md) |
 | 既存 Task に結び付けて Company Pack を実生成し、確認・訂正する | `tools/run_company_pack_task.py` と local review gateway | [Task-bound execution](docs/COMPANY-PACK-TASK-EXECUTION.md)、[Gateway](runtime/local-review-gateway/README.md) |
 | 会社の runtime を配備する | Compose minimum / Proxmox segmented の lifecycle contract と validator（live receipt なし）。Cloudflare edge と公式 Cloudflare OS の候補（未 upload、未 deploy） | [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)、[Cloudflare OS](docs/CLOUDFLARE-OS-ADOPTION.md) |
-| agent swarm に任せる、知識基盤を使う | open PR の候補（#67、#34〜#36 と #48、#49、#61）。`main` には未統合 | [PROJECT-MAP](docs/PROJECT-MAP.md) |
+| agent swarm に任せる | Luna Task swarm（owner に束縛した計画・予算・ACK 付きの通信・独立した検証者。offline の fixture で動く）。契約の候補 #34〜#36 は未統合 | [Luna Task swarm](docs/LUNA-TASK-SWARM.md) |
+| 知識基盤を使う | まだ main にはありません。正本は #48・#61・#59 の系統に決まり、取り込み中です（[#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)） | [PROJECT-MAP](docs/PROJECT-MAP.md) |
 
 ## 今 `main` にあるもの、候補、方向
 
@@ -47,9 +48,9 @@ PowerShell では `python3` の代わりに `python` を使います。成功す
 |---|---|---|---|
 | Company Pack / Evidence Chain | 9 Blocks、9 Records、3 MOCs の starter、schema と validator、review chain、smoke | | lane ごとの Promotion policy |
 | Session / conversation ledger | schema と validator | | runtime への取込 |
-| Discord / Voice | `runtime/discord-template` | Live 制御と room 別 workspace（#69、#71） | 15 分 rotation、Voice-to-Verified-Handoff、GrillU |
-| Agent swarm / 自律実行 | 限定 Task 実行 | Task swarm、agent lifecycle、migration ledger（#67、#34〜#36） | 「OK」後の Goal Completion Loop、reversible delegation |
-| 知識・Context | | OKF control plane（#48、#49、#61） | Context Gateway、TiDB 評価 |
+| Discord / Voice | `runtime/discord-template` | #69・#71（別 runtime としては取り込まず、考え方をこの Node runtime へ移す） | 15 分 rotation、Voice-to-Verified-Handoff、GrillU |
+| Agent swarm / 自律実行 | 限定 Task 実行、Luna Task swarm | agent swarm・route binding・migration ledger・agent lifecycle の契約（#34〜#36） | 「OK」後の Goal Completion Loop、reversible delegation |
+| 知識・Context | | OKF v0.2 の知識 bundle（#48・#61・#59）、control plane（#49 の系統） | Context Gateway、TiDB 評価 |
 | Runtime | Compose / Proxmox contract、Cloudflare candidate | | Cloudflare edge と公式 Cloudflare OS を基盤にした配備 |
 | 組織・事業 | | | Resident Clone、Agent Foundry、AI Business Loop |
 
@@ -66,14 +67,14 @@ Source Evidence → Intent Candidate → Human Decision → Work Order → Capab
 
 ## 文書の地図
 
-- 現在地と gate: [STATUS.md](STATUS.md)、[ROADMAP.md](ROADMAP.md)、[docs/HISTORY.md](docs/HISTORY.md)（過去の revision 履歴）
+- 現在地と gate: [STATUS.md](STATUS.md)、[ROADMAP.md](ROADMAP.md)、[CHANGELOG.md](CHANGELOG.md)（版ごとの変更）、[docs/HISTORY.md](docs/HISTORY.md)（過去の revision 履歴）
 - 方向: [docs/PRODUCT-DIRECTION.md](docs/PRODUCT-DIRECTION.md)、[docs/OWNER-INTENT-COMPANY-AGI.md](docs/OWNER-INTENT-COMPANY-AGI.md)、[docs/PROJECT-MAP.md](docs/PROJECT-MAP.md)
-- 使う: [5-minute tour](docs/FIVE-MINUTE-TOUR.md)、[Discord runtime](docs/DISCORD-RUNTIME.md)、[Template Guide](docs/TEMPLATE-GUIDE.md)、[Validation Guide](docs/VALIDATION.md)、[Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md)、[Runtime candidates](runtime/README.md)
+- 使う: [5-minute tour](docs/FIVE-MINUTE-TOUR.md)、[Discord runtime](docs/DISCORD-RUNTIME.md)、[Template Guide](docs/TEMPLATE-GUIDE.md)、[Validation Guide](docs/VALIDATION.md)、[Schema / Validator / Test Matrix](docs/SCHEMA-VALIDATOR-MATRIX.md)、[Luna Task swarm](docs/LUNA-TASK-SWARM.md)、[Runtime candidates](runtime/README.md)
 - 設計の全文: [docs/OVERVIEW.md](docs/OVERVIEW.md)
 
 ## 参加する
 
-Issue と Pull Request の手順は [CONTRIBUTING.md](CONTRIBUTING.md)、相談は GitHub Discussions、脆弱性は [SECURITY.md](SECURITY.md)、それ以外の問い合わせは [SUPPORT.md](SUPPORT.md)、行動規範は [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) にあります。エージェントの開始手順は [AGENTS.md](AGENTS.md) です。
+Issue と Pull Request の手順は [CONTRIBUTING.md](CONTRIBUTING.md)、相談は [GitHub Discussions](https://github.com/Kotodama-Project/Kotodama-project/discussions)、脆弱性は [SECURITY.md](SECURITY.md)、それ以外の問い合わせは [SUPPORT.md](SUPPORT.md)、行動規範は [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) にあります。エージェントの開始手順は [AGENTS.md](AGENTS.md) です。
 
 ## ライセンス
 
