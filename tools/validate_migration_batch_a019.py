@@ -8,7 +8,6 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import subprocess
 from typing import Any, Iterable
 from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
@@ -70,7 +69,6 @@ MAPPING_DIGEST_KEYS = (
     "rationale",
 )
 MANIFEST_ENTRY_KEYS = frozenset(MAPPING_DIGEST_KEYS)
-IGNORED_SCAN_DIRECTORIES = {".git", "__pycache__"}
 
 # Admission evidence: Issue #25 owner decision (24 September 2026), a private
 # source-history scan receipt bound by digest in the provenance file, the merged
@@ -127,10 +125,6 @@ ALLOWED_PUBLIC_URLS = {
 }
 
 
-class CandidateScopeError(RuntimeError):
-    pass
-
-
 def git_blob_sha(data: bytes) -> str:
     header = f"blob {len(data)}\0".encode("ascii")
     return hashlib.sha1(header + data).hexdigest()  # noqa: S324 - Git identity
@@ -164,103 +158,12 @@ def _load_json(root: Path, relative: Path, errors: list[str]) -> Any:
         return None
 
 
-def _filesystem_paths(root: Path, errors: list[str]) -> set[Path]:
-    paths: set[Path] = set()
-    try:
-        candidates = root.rglob("*")
-        for candidate in candidates:
-            relative = candidate.relative_to(root)
-            if any(part in IGNORED_SCAN_DIRECTORIES for part in relative.parts):
-                continue
-            if candidate.is_file() or candidate.is_symlink():
-                paths.add(relative)
-    except (OSError, ValueError) as exc:
-        errors.append(f"candidate path scan failed: {type(exc).__name__}")
-    return paths
-
-
-def _git_candidate_paths(root: Path) -> set[Path] | None:
-    if not (root / ".git").exists():
-        return None
-
-    def git_bytes(*arguments: str) -> bytes:
-        return subprocess.run(
-            ["git", "-C", str(root), *arguments],
-            capture_output=True,
-            check=True,
-        ).stdout
-
-    try:
-        if git_bytes("rev-parse", "--is-shallow-repository").strip() == b"true":
-            raise CandidateScopeError("shallow repository")
-        head_parts = git_bytes(
-            "rev-list", "--parents", "-n", "1", "HEAD"
-        ).decode("ascii").split()
-        parents = head_parts[1:]
-        if len(parents) == 2:
-            base_commit = git_bytes("merge-base", parents[0], parents[1])
-            base_commit = base_commit.decode("ascii").strip()
-            candidate_commit = parents[1]
-        elif len(parents) == 1:
-            manifest_commit = git_bytes(
-                "log",
-                "-n",
-                "1",
-                "--format=%H",
-                "--diff-filter=A",
-                "--",
-                MANIFEST_PATH.as_posix(),
-            ).decode("utf-8").strip()
-            if not manifest_commit:
-                return None
-            base_commit = git_bytes("rev-parse", f"{manifest_commit}^")
-            base_commit = base_commit.decode("ascii").strip()
-            candidate_commit = "HEAD"
-        else:
-            return None
-        changed = git_bytes(
-            "diff",
-            "--name-only",
-            "--diff-filter=ACMRTUXB",
-            "-z",
-            f"{base_commit}..{candidate_commit}",
-        )
-        untracked = git_bytes("ls-files", "--others", "--exclude-standard", "-z")
-    except CandidateScopeError:
-        raise
-    except (OSError, subprocess.SubprocessError, UnicodeError) as exc:
-        raise CandidateScopeError(type(exc).__name__) from exc
-
-    paths: set[Path] = set()
-    for raw in (*changed.split(b"\0"), *untracked.split(b"\0")):
-        if not raw:
-            continue
-        try:
-            relative = Path(raw.decode("utf-8"))
-        except UnicodeError:
-            continue
-        if not relative.is_absolute() and not any(
-            part in IGNORED_SCAN_DIRECTORIES for part in relative.parts
-        ):
-            paths.add(relative)
-    return paths
-
-
-def _candidate_scan_paths(root: Path, errors: list[str]) -> set[Path]:
-    paths = set(REQUIRED_PATHS)
-    try:
-        discovered = _git_candidate_paths(root)
-    except CandidateScopeError:
-        errors.append("candidate Git scope unavailable or shallow")
-        discovered = set()
-    if discovered is None:
-        discovered = _filesystem_paths(root, errors)
-    paths.update(discovered)
-    return {
-        relative
-        for relative in paths
-        if not any(part in IGNORED_SCAN_DIRECTORIES for part in relative.parts)
-    }
+def _candidate_scan_paths() -> set[Path]:
+    # The scan covers exactly the files this batch owns. A Git-diff scope would
+    # pull later changes on main and unrelated pull requests into this batch's
+    # checks; the repository-wide secret and private-identifier checks cover the
+    # rest of the tree.
+    return set(REQUIRED_PATHS)
 
 
 def _mapping_digest(entries: list[dict[str, Any]]) -> str:
@@ -892,7 +795,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     if manifest.get("destination_contract") != expected_destination_contract:
         errors.append("destination contract fixed-point mismatch")
 
-    candidate_scan_paths = _candidate_scan_paths(root, errors)
+    candidate_scan_paths = _candidate_scan_paths()
     source_blob_reuse_paths: list[str] = []
     for relative in sorted(candidate_scan_paths):
         data = _read_bounded(root, relative, errors)
@@ -1008,6 +911,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
                 errors.append("provenance authors must be GitHub handles")
             if not (isinstance(row.get("withheld_author_identities"), int) and row["withheld_author_identities"] >= 0):
                 errors.append("provenance must count withheld author identities")
+            elif isinstance(handles, list) and not handles and row["withheld_author_identities"] == 0:
+                errors.append("provenance entry must name or count at least one author")
 
     license_data = _read_bounded(root, LICENSE_PATH, errors)
     if license_data is not None and git_blob_sha(license_data) != SOURCE_LICENSE_BLOB:
@@ -1068,7 +973,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "component_license": "MIT",
         "license_blob_sha": SOURCE_LICENSE_BLOB,
         "admission_status": "ADMITTED" if not errors and review_state == "PASSED_INDEPENDENT_REVIEW" else "BLOCKED",
-        "no_go_reasons": [] if review_state == "PASSED_INDEPENDENT_REVIEW" else ["INDEPENDENT_REVIEW_PENDING"],
+        "no_go_reasons": (["VALIDATION_FAILED"] if errors else [])
+        + ([] if review_state == "PASSED_INDEPENDENT_REVIEW" else ["INDEPENDENT_REVIEW_PENDING"]),
         "errors": errors,
     }
 

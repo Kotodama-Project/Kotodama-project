@@ -5,7 +5,6 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
-import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -101,6 +100,9 @@ class A019MigrationBatchTests(unittest.TestCase):
             "receipt digest removed": prov(lambda p: p.pop("private_source_history_receipt_sha256")),
             "receipt did not pass": prov(lambda p: p.update(private_source_history_result="FINDINGS")),
             "author is not a handle": prov(lambda p: p["entries"][0].update(author_github_handles=["Some Person"])),
+            "row names no author": prov(
+                lambda p: p["entries"][0].update(author_github_handles=[], withheld_author_identities=0)
+            ),
             "re-authored source missing": prov(lambda p: p["entries"].pop()),
             "source blob drift": prov(lambda p: p["entries"][0].update(source_blob_sha="0" * 40)),
             # The path is read from the manifest so this file never names it.
@@ -121,6 +123,7 @@ class A019MigrationBatchTests(unittest.TestCase):
                     result = VALIDATOR.validate(root)
                     self.assertEqual(result["status"], "FAIL", label)
                     self.assertEqual(result["admission_status"], "BLOCKED", label)
+                    self.assertIn("VALIDATION_FAILED", result["no_go_reasons"], label)
 
     def test_exact_six_source_mapping_fails_closed_on_drift(self) -> None:
         mutations = (
@@ -505,132 +508,55 @@ class A019MigrationBatchTests(unittest.TestCase):
             self.assertEqual(result["status"], "FAIL")
             self.assertGreater(result["candidate_scan_findings"], 0)
 
-    def test_candidate_scan_covers_unlisted_candidate_paths(self) -> None:
+    def test_candidate_scan_scope_is_the_fixed_batch_file_set(self) -> None:
+        # No Git history and no full-tree walk: the scope cannot grow with later changes.
+        self.assertEqual(VALIDATOR._candidate_scan_paths(), set(VALIDATOR.REQUIRED_PATHS))
+
+    def test_candidate_scan_covers_every_batch_file(self) -> None:
         temporary, root = self._fixture()
         with temporary:
-            extra = root / "docs" / "added-candidate.txt"
-            extra.parent.mkdir(parents=True)
-            extra.write_text(
-                "registry/" + "INDEX.md\n"
-                + "C:" + chr(47) + "Users/rambo/private-source.txt\n",
-                encoding="utf-8",
+            provenance_path = root / VALIDATOR.PROVENANCE_PATH
+            provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+            provenance["author_identity_policy"] += (
+                " C:" + chr(47) + "Users/someone/private.txt"
+            )
+            provenance_path.write_text(
+                json.dumps(provenance, ensure_ascii=False, indent=2), encoding="utf-8"
             )
 
             result = VALIDATOR.validate(root)
 
             self.assertEqual(result["status"], "FAIL")
-            self.assertGreater(result["source_path_leakage"], 0)
-            self.assertGreater(result["candidate_scan_findings"], 0)
             self.assertTrue(
-                any("docs/added-candidate.txt" in error for error in result["errors"]),
+                any(
+                    error.startswith("candidate scan finding absolute_user_path: ")
+                    and VALIDATOR.PROVENANCE_PATH.as_posix() in error
+                    for error in result["errors"]
+                ),
                 result["errors"],
             )
 
-    def test_candidate_scan_rejects_source_blob_reuse_in_unlisted_path(self) -> None:
+    def test_candidate_scan_ignores_files_outside_the_batch(self) -> None:
+        # A dated CHANGELOG entry or unrelated documentation added after this
+        # batch must not change its result.
         temporary, root = self._fixture()
         with temporary:
-            extra = root / "docs" / "copied-source.md"
+            (root / "CHANGELOG.md").write_text(
+                "## [0.2.0-preview] - " + "2026" + "-09-" + "25\n", encoding="utf-8"
+            )
+            extra = root / "docs" / "unrelated.md"
             extra.parent.mkdir(parents=True)
-            copied_source = b"private source bytes copied unchanged\n"
-            extra.write_bytes(copied_source)
-            copied_blob = VALIDATOR.git_blob_sha(copied_source)
-
-            with mock.patch.object(
-                VALIDATOR,
-                "SOURCE_BLOBS",
-                VALIDATOR.SOURCE_BLOBS | {copied_blob},
-            ):
-                result = VALIDATOR.validate(root)
-
-            self.assertEqual(result["status"], "FAIL")
-            self.assertIn(
-                "source registry blob copied unchanged: docs/copied-source.md",
-                result["errors"],
+            extra.write_text(
+                "Contact " + "person" + "@" + "example.invalid\n", encoding="utf-8"
             )
-            self.assertEqual(result["source_registry_blob_reuse"], 1)
 
-    def test_unavailable_git_scope_fails_closed_without_full_tree_fallback(self) -> None:
-        errors: list[str] = []
-        with mock.patch.object(
-            VALIDATOR,
-            "_git_candidate_paths",
-            side_effect=VALIDATOR.CandidateScopeError("shallow repository"),
-        ), mock.patch.object(
-            VALIDATOR,
-            "_filesystem_paths",
-            side_effect=AssertionError("full-tree fallback forbidden"),
-        ):
-            paths = VALIDATOR._candidate_scan_paths(ROOT, errors)
-
-        self.assertEqual(set(VALIDATOR.REQUIRED_PATHS), paths)
-        self.assertEqual(["candidate Git scope unavailable or shallow"], errors)
-
-    def test_repository_validation_fetches_history_for_candidate_scope(self) -> None:
-        workflow = (
-            ROOT / ".github" / "workflows" / "repository-validation.yml"
-        ).read_text(encoding="utf-8")
-        checkout = workflow.split("uses: actions/checkout@", 1)[1].split(
-            "- name:", 1
-        )[0]
-
-        self.assertIn("persist-credentials: false", checkout)
-        self.assertIn("fetch-depth: 0", checkout)
-
-    def test_merge_ref_scopes_candidate_scan_to_second_parent(self) -> None:
-        temporary = tempfile.TemporaryDirectory()
-        with temporary:
-            repository = Path(temporary.name) / "merge-ref"
-            repository.mkdir()
-
-            def git(*arguments: str) -> str:
-                completed = subprocess.run(
-                    ["git", *arguments],
-                    cwd=repository,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-                return completed.stdout.strip()
-
-            git("init", "--initial-branch=main")
-            git("config", "core.autocrlf", "false")
-            git("config", "user.name", "A019 test")
-            git("config", "user.email", "a019-test@" + "example.invalid")
-            git("commit", "--allow-empty", "-m", "common ancestor")
-            common = git("rev-parse", "HEAD")
-
-            base_only = repository / "base-only.txt"
-            base_only.write_text(
-                "C:" + chr(47) + "Users/base-only/private.txt\n",
-                encoding="utf-8",
-            )
-            git("add", "base-only.txt")
-            git("commit", "-m", "updated PR18 base")
-            parent_one = git("rev-parse", "HEAD")
-
-            git("switch", "-c", "candidate", common)
-            for relative in VALIDATOR.REQUIRED_PATHS:
-                destination = repository / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(ROOT / relative, destination)
-            git("add", ".")
-            git("commit", "-m", "A019 candidate")
-            parent_two = git("rev-parse", "HEAD")
-
-            git("switch", "main")
-            git("merge", "--no-ff", "--no-edit", "candidate")
-            parents = git("rev-list", "--parents", "-n", "1", "HEAD").split()
-
-            self.assertEqual(parents[1:], [parent_one, parent_two])
-            self.assertEqual(git("merge-base", parent_one, parent_two), common)
-            candidate_paths = VALIDATOR._git_candidate_paths(repository)
-            self.assertIsNotNone(candidate_paths)
-            self.assertNotIn(Path("base-only.txt"), candidate_paths)
-
-            result = VALIDATOR.validate(repository)
+            result = VALIDATOR.validate(root)
 
             self.assertEqual(result["status"], "PASS", result["errors"])
             self.assertEqual(result["candidate_scan_findings"], 0)
+            self.assertEqual(
+                result["admission_status"], VALIDATOR.validate(ROOT)["admission_status"]
+            )
 
     def test_non_object_manifest_source_returns_structured_failure(self) -> None:
         temporary, root = self._fixture()
