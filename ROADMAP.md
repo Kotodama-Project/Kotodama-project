@@ -98,6 +98,8 @@ describe the current state of `main`. Open work is tracked on GitHub
 - [x] [Read-only Source binding candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md) with strict bounded parsing, stable terminal reread, non-reflective refusal, and non-emitted R30 projection digest. This line describes repository contents, not publication, protected verification, or Public Beta GO.
 - [x] [Protected Source binding receipt candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md) schema with private snapshot, clock, locator, evidence, replay, retention/deletion, and detached-attestation roles. This is an unpopulated schema contract, not protected execution or a verified receipt.
 - [x] [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) with opaque runner/input refs, bounded evaluation window, fixed stop/rollback shape, expected receipt, and independent-verification handoff. This is schema-only; no execution is requested or accepted.
+- [x] [Agent orchestration route-binding candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md) with opaque source / target identity, workspace / revision, route, preview, confirmation, and rollback comparison. This is a schema, read-only preflight, and tests; no runner or dispatch.
+- [x] [Agent Swarm × Kotodama adoption candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) with bounded root / worker / verifier assignments, explicit parent edges, handoffs, leases, stop conditions, and N/C/W/V budgets, mapped to the [Luna Task swarm](docs/LUNA-TASK-SWARM.md) runtime. This is a schema, read-only preflight, and tests; it dispatches nothing.
 
 ## Runtime profiles still requiring live evidence
 
