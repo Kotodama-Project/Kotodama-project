@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-09-22
+Updated: 2026-09-25
 
 現在の公開面の状態表です。過去の documentation revision（R91〜R179）の履歴は
 [docs/HISTORY.md](docs/HISTORY.md) に移し、この文書は現在地だけを示します。
@@ -17,11 +17,11 @@ or promote the separately scoped runtime/deployment evidence below.
 | Company governance starter | Published and locally validated |
 | [Task-bound Company Pack execution](docs/COMPANY-PACK-TASK-EXECUTION.md) | Included local CREATE_COMPANY_PACK adapter; existing-record binding and checked output receipt; no Task-state write or agent dispatch |
 | [Persistent local review gateway](runtime/local-review-gateway/README.md) | Included local review/restart candidate; actor-scoped projections; live Access/Tunnel and automatic Voice-to-Task connection remain unverified |
-| [Discord runtime candidate](docs/DISCORD-RUNTIME.md) | Included in `main` via #79, #80, and #81 as `runtime/discord-template` (Node 24 template with local ASR, continuous Live conversation, and a bounded Task worker); the voice-channel modes (楽しく過ごす / 一緒に考える / 必要なときだけ仕事) are selectable there; real-microphone continuity, a two-person 30-minute session, and reproduction in a separate setup remain unaccepted; no public Bot |
+| [Discord runtime candidate](docs/DISCORD-RUNTIME.md) | Included in `main` via #79, #80, and #81 as `runtime/discord-template` (Node 24 template with local ASR, continuous Live conversation, and a bounded Task worker); the voice-channel modes (楽しく過ごす / 一緒に考える / 必要なときだけ仕事) are selectable there; #99 added bounded analysis concurrency and limits, Linux Docker-isolated verification for write Tasks (`write_file` / `develop` need Linux and `worker.verify` / `worker.verification`), and restart states that keep queued Tasks paused and running Tasks uncertain; #101 added agent channels (`discord.agentChannelIds`) that start a clear, complete request immediately and send the requester a DM with its title and ID; real-microphone continuity, a two-person 30-minute session, and reproduction in a separate setup remain unaccepted; no public Bot |
 | [Session / conversation event ledger](docs/SESSION-CONVERSATION-LEDGER.md) | Published schema and validator; no runtime ingestion or Task connection |
-| Agent swarm and autonomous delegation after a human GO | [Luna Task swarm](docs/LUNA-TASK-SWARM.md) (#67 with the #85 repairs) is on `main` as a bounded local runtime: owner-bound plans, budgets, acknowledged peer messages, and an independent verifier, exercised by the offline fixture on Linux and Windows in the required check; live Codex/Luna acceptance is not established. Contract candidates #34, #35, and #36 are not on `main`. The repository's own [improvement loop](docs/IMPROVEMENT-LOOP.md) defines how agents select, verify, merge, and revert one change at a time |
-| Knowledge base (OKF) control plane | Candidate PRs #48, #49, and #61 are not on `main`; the single canonical bundle is undecided |
-| Slack / Teams / Salesforce adapters | Requirement records only (#68, #70, #77); unconnected |
+| Agent swarm and autonomous delegation after a human GO | [Luna Task swarm](docs/LUNA-TASK-SWARM.md) (#67 with the #85 repairs) is on `main` as a bounded local runtime: owner-bound plans, budgets, acknowledged peer messages, and an independent verifier, exercised by the offline fixture on Linux and Windows in the required check; live Codex/Luna acceptance is not established. Contract candidates #34, #35, and #36 are not on `main`; they are to be re-landed with a mapping to this runtime ([#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)). The repository's own [improvement loop](docs/IMPROVEMENT-LOOP.md) defines how agents select, verify, merge, and revert one change at a time |
+| Knowledge base (OKF) control plane | Candidate PRs #48, #61, and #59 are not on `main`. On 2026-09-24 the owner chose the #48 line as the canonical OKF bundle; the #49 line is to be connected to it ([#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)) |
+| Slack / Teams / Salesforce adapters | Requirement records only (#70, #77); unconnected |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
 | [Cloudflare edge preview candidate](runtime/cloudflare-edge/README.md) | Merged source candidate via #18; content-free validation only, no version upload or deployment established |
 | [Official Cloudflare OS bounded runtime candidate](docs/CLOUDFLARE-OS-ADOPTION.md) | Merged source candidate via #18; exact source pin, six synthetic metadata projections, and content-free runtime receipt; no provider execution established |
@@ -52,7 +52,7 @@ or promote the separately scoped runtime/deployment evidence below.
 | [Company Pack CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) | Fourteen public entrypoints with fixed help boundaries and one candidate-only Smoke command |
 | One-command review-chain smoke | Published standard-library-only local smoke; exact thirteen steps in a temporary workspace, no retained artifacts or GO |
 | [5-minute tour](docs/FIVE-MINUTE-TOUR.md) | Clone-to-result first-visit path; external-free local smoke and bounded next choices only |
-| README Company OS story map | Vision-to-Try-it reader map and eight-surface ideal/current boundary; documentation only |
+| [Company OS story map](docs/OVERVIEW.md) | Vision-to-Try-it reader map and eight-surface ideal/current boundary, moved from README to docs/OVERVIEW.md on 2026-09-14; documentation only |
 | [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) | Redacted owner-directed direction candidate; not signed/independently verified governance approval or rightsholder proof; runtime remains unimplemented, `NO_GO_UNPUBLISHED` |
 | Live Compose / Proxmox installation | Not verified |
 | Public Beta access | Not open |
@@ -83,6 +83,7 @@ signature. Dynamic Workers, Workers Paid entitlement, KV, R2, Browser Rendering,
 Access, provider logs, private Context, backup, restore, Discord integration,
 and production remain unproven. The edge Worker was not uploaded or deployed.
 `NO_GO_UNPUBLISHED` remains unchanged.
+
 ## Owner-confirmed Company AGI direction
 
 The [Owner-confirmed direction](docs/OWNER-INTENT-COMPANY-AGI.md) records the
