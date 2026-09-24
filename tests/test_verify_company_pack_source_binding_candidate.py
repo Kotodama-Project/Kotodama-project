@@ -1168,7 +1168,7 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
 
     def test_runbook_is_discoverable_honest_and_no_populated_source_is_shipped(self) -> None:
         surfaces = [
-            ROOT / "README.md",
+            ROOT / "docs" / "OVERVIEW.md",
             ROOT / "STATUS.md",
             ROOT / "ROADMAP.md",
             ROOT / "docs" / "VALIDATION.md",

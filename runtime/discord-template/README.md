@@ -39,6 +39,13 @@ node bin/kotodama.mjs doctor --json
 4. CLI実行器の実ファイル、モデル（既定はLuna）、作業対象、許す操作、検証コマンド。[モデルと任意のフォールバック](docs/MODELS.md)。
 5. 音声の一回・一日あたりの上限。既定の一日上限は0なので、設定前に音声APIへ接続しません。
 
+ファイルを書き換える `write_file` と `develop` を `worker.actions` に加える場合は、Linuxの実行ホストに検証用のDocker imageを事前に用意します。`worker.verify` に1つ以上の検証コマンドを、`worker.verification` にimageのID（`sha256:` と64桁、`docker image inspect` で確認）またはdigest付きの名前を指定します。検証は読取専用の作業領域・ネットワークなし・認証情報なしのコンテナで行い、通常のホストで代わりに実行することはありません。設定がない場合やLinux以外では、モデルを動かす前に `VERIFICATION_COMMAND_REQUIRED`・`VERIFICATION_ISOLATION_REQUIRED`・`WRITE_WORKER_REQUIRES_LINUX_HOST` で拒否します。実行中にimageを取得（pull）しません。検証コマンドはコンテナ内の `node` などを使い、ホストの絶対パスは使えません。書き込みは `/tmp` だけに行えます。
+
+```json
+"verify": [{"executable": "node", "args": ["--test"]}],
+"verification": {"kind": "docker", "image": "sha256:<64桁のimage ID>"}
+```
+
 ローカルASRを使う最小設定例です。endpointはHTTPS、loopback、private LAN、またはtailnet内だけを受け付けます。
 
 ```json
@@ -73,6 +80,7 @@ BotはDiscord側でも対象サーバーへ導入してください。Message Co
 | 操作 | Discord |
 |---|---|
 | 相談 | Botへのメンション、または `/kotodama ask` |
+| 話すだけで仕事を頼む | エージェント用チャンネル（`discord.agentChannelIds`）に書く。VCでは呼びかけ（`conversationStart: "speech"` なら話し始め）から |
 | 明示的に仕事を頼む | `/kotodama do` |
 | 自分の仕事を見る | `/kotodama tasks` |
 | 成果を読む | `/kotodama result` |
@@ -98,9 +106,24 @@ BotはDiscord側でも対象サーバーへ導入してください。Message Co
 
 発話中に利用者が話し始めると、Botはローカル再生と未再生queueを直ちに止め、同じセッションへ停止指示を送ります。仕事の実行はそのまま継続します。「もういいよ」などをLunaが `end_conversation` と構造化した場合はLiveだけを正常終了し、BotはVCでローカル待機へ戻ります。出力は既定120msを蓄えてから再生し、500msを超えるqueueは破棄します。値は `voice.outputPrefillMs` と `voice.maxOutputQueueMs` で調整できます。
 
+再生中の返答を権限の変化で止めるのは、対象VCへの入退室と、対象サーバーでの権限・ロール・チャンネル・メンバー変更のときです。別のサーバーや別のVCでの入退室、対象VC内でのミュート・スピーカーミュート・配信の切替では返答は止まりません。判別できないイベントは安全側として停止します。
+
 ローカルASR構成でLiveを開始していない待機中は、音声クラウドAPIを呼び出しません。Live利用秒とLunaのinput・cached input・output tokenを別々に記録します。Lunaへ渡す会話contextと最大出力も設定で上限を持ち、usage snapshotは累積値として置き換えるため二重加算しません。`naturalConversation: false` のLive会話は人の入力が既定120秒なければ閉じ、Botはローカル聞き役のまま残ります。`voice.conversationIdleSeconds` で30〜600秒に調整できます。
 
 実装はOpenAI公式の[GPT-Liveセッション管理](https://developers.openai.com/api/docs/guides/live-conversations)、[client delegation](https://developers.openai.com/api/docs/guides/live-delegation?delegation-mode=client)、[サーバー側の再生制御](https://developers.openai.com/api/docs/guides/voice-server-controls?api=live)、[音声コスト最適化](https://developers.openai.com/api/docs/guides/voice-latency-cost?api=live)に合わせています。
+
+### 意図を抜き出して、すぐに走る
+
+`discord.agentChannelIds` に指定したテキストチャンネル（`textChannelIds` に含まれるもの）では、操作者の発言をBotへのメンションと同じに扱います。@を付けずに「〇〇を調べて」「この資料を要約して」と書くと、Lunaが意図を抜き出し、明確で実行に足りる依頼なら許可された操作（`worker.actions`）の範囲ですぐに仕事を始めます。雑談、相談、引用、推測だけの発言からは仕事を作りません。対象が足りない依頼は実行せず、意図の候補として残します。
+
+```json
+"discord": {
+  "textChannelIds": ["一般チャンネルのID", "エージェント用チャンネルのID"],
+  "agentChannelIds": ["エージェント用チャンネルのID"]
+}
+```
+
+会話（テキストでも音声でも）から仕事が走り始めると、依頼した人へすぐにDMで「走り始めました：件名」と仕事のIDを届けます。止めるときは `/kotodama stop` にそのIDを指定します。完了すると同じDMへ成果を届けます。VCで呼び名なしに話し始めたい場合は、[会話の開始と退出](#会話の開始と退出)の `voice.conversationStart: "speech"` を使います。
 
 ## CLI・資料・連携
 

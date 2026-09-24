@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 相談・質問・雑談 / Questions and discussion
+    url: https://github.com/Kotodama-Project/Kotodama-project/discussions
+    about: 使い方の相談、設計の議論、雑談は Discussions へ。Issue にすると仕事の依頼として扱われます。
+  - name: 脆弱性の報告 / Security vulnerability
+    url: https://github.com/Kotodama-Project/Kotodama-project/security/advisories/new
+    about: 脆弱性は public Issue に書かず、private な Security Advisory で報告してください（SECURITY.md）。

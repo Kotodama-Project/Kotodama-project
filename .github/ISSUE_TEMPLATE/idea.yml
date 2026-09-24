@@ -1,0 +1,42 @@
+name: 提案・アイデア / Proposal
+description: 新しい機能、adapter、設計の候補。雑談や質問は Discussions へ。
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提案は候補です。Issue が作られたことは採用、実行権限、Promotion を意味しません。競合サービスとの比較は公開リポジトリには書かず、Kotodama 自身の要求として書いてください。
+  - type: textarea
+    id: user_problem
+    attributes:
+      label: 誰のどの困りごとを解くか / Who has which problem
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案 / Proposal
+      description: 何を作るか、既存のどの部品（Company Pack、Evidence Chain、Discord runtime、Cloudflare 候補など）に接続するか
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完了の確認方法 / How to verify it is done
+      description: 実行できる検証、負のケース、rollback。local PASS を live や deployed と呼ばない前提で。
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 領域 / Area
+      options:
+        - onboarding / docs
+        - company-pack / evidence chain
+        - discord / voice
+        - agent swarm / 自律実行
+        - knowledge / OKF / context
+        - cloudflare / runtime
+        - adapter (Slack / Teams / CRM)
+        - ci / governance / security

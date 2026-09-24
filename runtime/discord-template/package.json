@@ -18,10 +18,10 @@
     "@snazzah/davey": "0.1.12",
     "csv-parse": "7.0.2",
     "discord.js": "14.27.0",
-    "openai": "7.15.0",
+    "openai": "7.17.0",
     "opusscript": "0.1.1",
     "playwright-core": "1.63.0",
     "ws": "8.21.3",
-    "zod": "4.6.2"
+    "zod": "4.6.5"
   }
 }

@@ -34,7 +34,7 @@ journal内のPCMは後処理再開用staging。実sinkの`verify`で全保存音
 
 既存30日raw-retentionは`metadata.json.endedAt`、`transcript.json.status=succeeded`、hash付き`knowledge-source-transcript-*.json`、`.ct202-local-grant-<session>.json.artifact_manifest`を読む。このsinkは同名manifestにPCM/MP3のref/size/sha256を記録するが、schemaはretention manifest、`authorityGranted:false`であり転送grantを偽造しない。CT202送信権限はauthorizeで別に判断する。hostは既存保持policy `kotodama.voice-retention/v2`（rawAudioDays=30、transcriptDays/derivedTextDays=null）へ同rootを設定する。既存retentionは文字起こし成功を確認できない場合削除を止めるため、ASRが永続失敗した録音と失敗stagingは保持ownerが別途処理する必要がある。このadapterだけで保持処理が稼働したとはしない。
 
-`createWhisperArchiveAsr({sink,endpoint,authorize,language,timeoutMs})`はhost指定のCT202 `/transcribe` URLへ、検証済みMP3をmultipart `audio`/`language`でPOSTする。redirect拒否・response8MiB上限・timeout。区間start/end/textを保持し、idxは応答順、confidenceはexp(avg_logprob)、欠落時は既存clientと同じ0.8。個別speakerの名乗り不一致は拒否。URLは秘密の固定値を同梱しないのでhostがCT202 allowlistと一致を確認する。
+`createWhisperArchiveAsr({sink,endpoint,authorize,language,timeoutMs})`はhost指定の private transcribe endpoint（`/transcribe` URL）へ、検証済みMP3をmultipart `audio`/`language`でPOSTする。redirect拒否・response8MiB上限・timeout。区間start/end/textを保持し、idxは応答順、confidenceはexp(avg_logprob)、欠落時は既存clientと同じ0.8。個別speakerの名乗り不一致は拒否。URLは秘密の固定値を同梱しないのでhostがCT202 allowlistと一致を確認する。
 
 `createLunaArchiveCorrector({command,cwd,dataDir,authorize,vocabulary})`は既存Codex CLI実行器と`gpt-5.6-luna`を使い、raw個別+mixed+語彙から型付きeditsを取得する。話者/idx/時刻/beforeは厳密照合。元の再decode品質判定とは別のLLM訂正候補であり、音響再decodeの認証済み証拠を作らない。モデル呼出しの権限と予算はhost側で束縛する。
 
@@ -44,6 +44,6 @@ encoder失敗は同一idempotencyKeyのstagingを残して停止し、次回も�
 
 ## 確認範囲
 
-合成試験で最後のsample、共通時刻、mixed overlap、再送、誤話者、訂正時刻、再起動再開、取消、上限を検査。実ffmpeg、実HTTP fixture、CLIモデルfixture、既存Storeを通して原音保存→journal PCM解放→後処理再起動→Intent記録を検査する。既存CT200 sourceをread-only確認して契約を参照した新規MIT候補。既存private sourceを丸ごと移植していない。実CT202/Luna応答、音声の実聴、retentionの本番削除、分散排他、public Task ownerへの実配線は未受入。rootの統合・配備作業が必要。
+合成試験で最後のsample、共通時刻、mixed overlap、再送、誤話者、訂正時刻、再起動再開、取消、上限を検査。実ffmpeg、実HTTP fixture、CLIモデルfixture、既存Storeを通して原音保存→journal PCM解放→後処理再起動→Intent記録を検査する。既存の private source をread-only確認して契約を参照した新規MIT候補。既存private sourceを丸ごと移植していない。実 transcribe endpoint/Luna応答、音声の実聴、retentionの本番削除、分散排他、public Task ownerへの実配線は未受入。rootの統合・配備作業が必要。
 
 既存のraw-retention実装を合成sessionに対して実行し、29日目は削除対象0、31日目はPCM/MP3の6ファイルだけ削除、text削除0、再実行削除0を確認した。認証grantを発行した試験ではない。

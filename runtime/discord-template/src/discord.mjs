@@ -16,25 +16,65 @@ export const commandDefinition={name:'kotodama',description:'ことだまに相�
   {type:1,name:'voice',description:'音声モード・録音・発話を操作する',options:[{type:3,name:'mode',description:'操作',required:true,choices:['assist','minutes','join','pause','resume','stop_speech','start_conversation','end_conversation','leave','status'].map(v=>({name:v,value:v}))}]}
 ]};
 
+const accessCacheMs=3000;
+const accessEvents=['channelUpdate','channelDelete','guildUpdate','guildMemberUpdate','guildMemberRemove','roleCreate','roleUpdate','roleDelete','threadUpdate','threadDelete','threadMembersUpdate'];
+const taskStates={queued:'受付済み',running:'実行中',needs_review:'成果確認待ち',stale:'訂正により無効',failed:'失敗',cancelled:'停止済み',stopping:'停止処理中',uncertain:'状態確認中（自動では再実行しません）',paused:'一時停止中（resumeで再開できます）'};
+export const taskStateText=state=>taskStates[state]??state;
+// Deferred analysis keeps the Source; say so instead of claiming it was analysed.
+export function deferredAnalysisText(reason){
+  if(reason==='ANALYSIS_BUDGET_EXHAUSTED')return '本日の解析回数の上限に達したため、今回は解析していません。相談内容は記録済みです。';
+  if(reason==='ANALYSIS_TOTAL_BUDGET_EXHAUSTED')return '解析回数の累計上限に達したため、解析していません。相談内容は記録済みです。上限は管理者が設定で見直せます。';
+  return '混み合っているため、解析を後回しにしました。相談内容は記録済みです。少し時間をおいて、もう一度お試しください。';
+}
+export function accessFailure(error){const status=error?.status;return Number.isInteger(status)&&status>=400&&status<500&&status!==429?'denied':'unavailable';}
+
 export class DiscordAdapter {
   constructor({config,store,pipeline,policy=()=>config,onError=()=>{}}){
     Object.assign(this,{config,store,pipeline,policy,onError});this.voice=null;this.verifiedInstallation=false;
     this.notifications=store.db?new NotificationQueue(store.db,()=>this.policy().notifications?.quietHours,{onError}):null;
     this.client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent,GatewayIntentBits.GuildVoiceStates]});
     this.client.on('messageCreate',m=>this.message(m).catch(e=>onError(errorCode(e))));
-    this.client.on('messageUpdate',(_old,m)=>this.message(m).catch(e=>onError(errorCode(e))));
+    this.client.on('messageUpdate',(_old,m)=>this.message(m,{edited:true}).catch(e=>onError(errorCode(e))));
     this.client.on('messageDelete',m=>this.withdraw(m).catch(e=>onError(errorCode(e))));
     this.client.on('interactionCreate',i=>this.interaction(i).catch(e=>onError(errorCode(e))));
     this.client.on('error',()=>onError('DISCORD_CLIENT_FAILED'));
+    this.accessCache=new Map();const forget=()=>this.accessCache.clear();for(const event of accessEvents)this.client.on(event,forget);
   }
   operator(actor){check(this.policy().discord.operators.includes(actor),'OPERATOR_REQUIRED');}
   artifactRoot(){return this.config.owner.kind==='local'?path.join(this.config.dataDir,'worktrees'):null;}
   async member(actor){this.operator(actor);const guild=await this.client.guilds.fetch(this.config.discord.guildId);return guild.members.fetch({user:actor,force:true});}
-  async canRead(channel,actor){
-    try{channel=await this.client.channels.fetch(channel.id,{force:true});const member=await channel.guild.members.fetch({user:actor,force:true});await channel.guild.roles.fetch();const p=channel.permissionsFor(member);if(!p?.has(PermissionFlagsBits.ViewChannel)||!p.has(PermissionFlagsBits.ReadMessageHistory))return false;
-      if(channel.type===ChannelType.PrivateThread&&!p.has(PermissionFlagsBits.ManageThreads))await channel.members.fetch({member:actor,force:true});
-      return true;
-    }catch{return false;}
+  // allowed / denied / unavailable. A Discord 4xx other than 429 is a denial;
+  // rate limits, 5xx, timeouts and transport errors only mean "unavailable".
+  async readAccess(channel,actor,{cached=false}={}){
+    const key=`${channel?.id}:${actor}`;if(cached){const hit=this.accessCache.get(key);if(hit&&hit.expires>Date.now())return hit.state;}
+    let state;
+    try{channel=await this.client.channels.fetch(channel.id,{force:true});
+      if(!channel?.guild)state='denied';
+      else{const member=await channel.guild.members.fetch({user:actor,force:true});await channel.guild.roles.fetch();const p=channel.permissionsFor(member);
+        if(!p?.has(PermissionFlagsBits.ViewChannel)||!p.has(PermissionFlagsBits.ReadMessageHistory))state='denied';
+        else{if(channel.type===ChannelType.PrivateThread&&!p.has(PermissionFlagsBits.ManageThreads))await channel.members.fetch({member:actor,force:true});state='allowed';}}
+    }catch(error){state=accessFailure(error);}
+    this.remember(key,state);return state;
+  }
+  async canRead(channel,actor){return await this.readAccess(channel,actor)==='allowed';}
+  async memberAccess(actor,{cached=false}={}){
+    this.operator(actor);const key=`member:${actor}`;if(cached){const hit=this.accessCache.get(key);if(hit&&hit.expires>Date.now())return hit.state;}
+    let state;try{await this.member(actor);state='allowed';}catch(error){state=accessFailure(error);}
+    this.remember(key,state);return state;
+  }
+  // One check per distinct channel. Cached results live for accessCacheMs and
+  // are dropped on any permission-relevant gateway event.
+  async actorAccess(actor,channelIds,{cached=false}={}){
+    let unavailable=false;
+    for(const probe of [()=>this.memberAccess(actor,{cached}),...[...new Set(channelIds)].map(id=>()=>this.readAccess({id},actor,{cached}))]){
+      const state=await probe();if(state==='denied')return 'denied';if(state==='unavailable')unavailable=true;
+    }
+    return unavailable?'unavailable':'allowed';
+  }
+  remember(key,state){
+    if(state==='unavailable'){this.accessCache.delete(key);return;}
+    if(this.accessCache.size>=1000)for(const [k,v] of this.accessCache)if(v.expires<=Date.now())this.accessCache.delete(k);
+    if(this.accessCache.size<1000)this.accessCache.set(key,{state,expires:Date.now()+accessCacheMs});
   }
   async readers(channel){const readers=[];for(const actor of this.policy().discord.operators)if(await this.canRead(channel,actor))readers.push(actor);return readers;}
   async login(){const token=process.env[this.config.discord.botTokenEnv];check(token,'DISCORD_CREDENTIAL_REQUIRED');
@@ -68,11 +108,28 @@ export class DiscordAdapter {
     const current=await this.readers(message.channel);check(readers.every(a=>current.includes(a)),'SOURCE_AUDIENCE_CHANGED');
     return {provider:'discord',guildId:message.guildId,channelId:message.channelId,sourceId:message.id,actorId:message.author.id,readers,revision:message.editedTimestamp??message.createdTimestamp,final:true,text,metadata:{kind:'text',url:message.url,attachments:coverage,createdAt:message.createdAt.toISOString()}};
   }
-  async message(message){
+  async message(message,{edited=false}={}){
     const cfg=this.policy();if(!this.verifiedInstallation||message.guildId!==cfg.discord.guildId||!cfg.discord.textChannelIds.includes(message.channelId)||message.author?.bot||message.webhookId||message.partial)return;
-    const source=await this.source(message);const addressed=message.mentions.users.has(this.client.user.id)&&cfg.discord.operators.includes(message.author.id);
-    source.metadata.directlyAddressed=addressed;
+    const source=await this.source(message);
+    const operator=cfg.discord.operators.includes(message.author.id),mentioned=message.mentions.users.has(this.client.user.id);
+    // In an agent channel a new operator message is for the Bot unless it names
+    // someone else or replies to another message. Editing an old message never
+    // starts work without an @mention, so a typo fix cannot re-run a Task.
+    const agentChannel=cfg.discord.agentChannelIds.includes(message.channelId);
+    const others=[...message.mentions.users.keys()].some(id=>id!==this.client.user.id)||(message.mentions.roles?.size??0)>0||Boolean(message.reference?.messageId&&message.mentions.repliedUser?.id!==this.client.user.id);
+    const forBot=mentioned||(agentChannel&&!edited&&!others);
+    const addressed=operator&&forBot;
+    source.metadata.directlyAddressed=operator&&mentioned;if(agentChannel)source.metadata.agentChannel=true;
     await this.pipeline.ingest(source,{execute:addressed,reply:addressed});
+  }
+  // Immediate DM to the requester when conversation became running work; the result follows on completion.
+  async acknowledgeTask(task,{revised=false}={}){
+    if(!this.verifiedInstallation)return {state:'blocked'};this.operator(task.actor);
+    // Quiet hours hold every DM; the completion notice follows once they end.
+    if(this.notifications?.quiet())return {state:'quiet'};
+    const text=`${revised?'作業内容を更新して、走り直しています':'走り始めました'}：${task.title}\nID: ${task.id}\n終わったら、このDMで結果を届けます。止めるときは /kotodama stop でこのIDを指定してください。`;
+    const user=await this.client.users.fetch(task.actor);const message=await user.send({content:shortText(text),allowedMentions:{parse:[]}});
+    check(message?.id,'NOTIFICATION_SEND_UNCONFIRMED');return {state:'sent'};
   }
   async withdraw(message){if(!this.verifiedInstallation)return;if(message.guildId!==this.config.discord.guildId)return;const key=sourceIdentity({provider:'discord',guildId:message.guildId,channelId:message.channelId,sourceId:message.id});const old=this.store.sourceInternal(key);if(old)await this.pipeline.ingest({...old,revision:Math.max(Date.now(),old.revision+1),text:'',withdrawn:true,metadata:{...old.metadata,withdrawalActorUnknown:true}},{execute:false});}
   interactionSource(i,text){return {provider:'discord',guildId:i.guildId,channelId:i.channelId,sourceId:i.id,actorId:i.user.id,readers:[i.user.id],revision:i.createdTimestamp,final:true,text,metadata:{kind:'command'}};}
@@ -82,8 +139,8 @@ export class DiscordAdapter {
     await i.deferReply({flags:MessageFlags.Ephemeral});
     try{this.operator(i.user.id);await this.member(i.user.id);const sub=i.options.getSubcommand();let text;
       if(sub==='do'){const request=i.options.getString('text',true),action=i.options.getString('action',true);const t=await this.pipeline.request(this.interactionSource(i,request),{title:request.slice(0,120),request,action});text=`受け付けました。\n${t.id}\n結果はこの仕事の「result」で確認できます。`;}
-      else if(sub==='ask'){const source=this.interactionSource(i,i.options.getString('text',true));source.metadata.operation='ask';const receipt=await this.pipeline.ingest(source,{execute:false,reply:false});for(const b of receipt.contextSources??[]){const s=this.store.source(b.key,i.user.id);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord'){const channel=await this.client.channels.fetch(s.channelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}}text=receipt.answer??receipt.summary??'整理しました。';}
-      else if(sub==='tasks'){const tasks=await this.pipeline.owner.tasks(i.user.id);const visible=[];for(const task of tasks)try{await this.pipeline.authorize(task,'read_result');visible.push(task);}catch{}text=visible.slice(0,15).map(t=>`${t.id} · ${{queued:'受付済み',running:'実行中',needs_review:'成果確認待ち',stale:'訂正により無効',failed:'失敗',cancelled:'停止済み',stopping:'停止処理中',uncertain:'状態確認中'}[t.state]??t.state}\n${t.title}`).join('\n')||'読取可能な仕事はまだありません。';}
+      else if(sub==='ask'){const source=this.interactionSource(i,i.options.getString('text',true));source.metadata.operation='ask';const receipt=await this.pipeline.ingest(source,{execute:false,reply:false});for(const b of receipt.contextSources??[]){const s=this.store.source(b.key,i.user.id);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord'){const channel=await this.client.channels.fetch(s.channelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}}text=receipt.analysis==='deferred'?deferredAnalysisText(receipt.reason):receipt.answer??receipt.summary??'整理しました。';}
+      else if(sub==='tasks'){const tasks=await this.pipeline.owner.tasks(i.user.id);const visible=[];for(const task of tasks)try{await this.pipeline.authorize(task,'read_result');visible.push(task);}catch{}text=visible.slice(0,15).map(t=>`${t.id} · ${taskStateText(t.state)}\n${t.title}`).join('\n')||'読取可能な仕事はまだありません。';}
       else if(sub==='result'){const result=await this.pipeline.result(i.options.getString('task',true),i.user.id);const files=await resultFiles(result,{artifactRoot:this.artifactRoot()});await i.editReply({content:shortText(result.summary),files,allowedMentions:{parse:[]}});return;}
       else if(sub==='stop'){await this.pipeline.stop(i.options.getString('task',true),i.user.id);text='停止を受け付けました。実行中の処理の終了を確認しています。';}
       else if(sub==='resume'){const t=await this.pipeline.resume(i.options.getString('task',true),i.user.id);text=`再開しました。${t.id}`;}

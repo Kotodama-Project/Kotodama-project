@@ -30,21 +30,21 @@ jobs:
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
       - name: Check out trusted validator from the dispatch revision
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           path: trusted
           persist-credentials: false
 
       - name: Check out the exact candidate without executing its code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.candidate_sha }}
           path: candidate
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Refuse candidate that is not the allowed branch tip
+      - name: Refuse candidate that is not the current main tip
         shell: bash
         env:
           CANDIDATE_SHA: ${{ inputs.candidate_sha }}
@@ -53,8 +53,8 @@ jobs:
           cd candidate
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           git fetch --no-tags origin \
-            +refs/heads/codex/cloudflare-os-foundation-rebased-20260824:refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824
-          test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824)" = "$CANDIDATE_SHA"
+            +refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse refs/remotes/origin/main)" = "$CANDIDATE_SHA"
 
       - name: Validate candidate bytes with trusted code
         run: |
@@ -68,14 +68,14 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check out trusted upload tooling from the dispatch revision
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
           path: trusted
           persist-credentials: false
 
       - name: Check out the exact candidate
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.candidate_sha }}
           path: candidate
@@ -91,8 +91,8 @@ jobs:
           test "$CANDIDATE_SHA" != ""
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           git fetch --no-tags origin \
-            +refs/heads/codex/cloudflare-os-foundation-rebased-20260824:refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824
-          test "$(git rev-parse refs/remotes/origin/codex/cloudflare-os-foundation-rebased-20260824)" = "$CANDIDATE_SHA"
+            +refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse refs/remotes/origin/main)" = "$CANDIDATE_SHA"
 
       - name: Set up exact Node runtime for verified Wrangler
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

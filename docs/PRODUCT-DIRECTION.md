@@ -2,6 +2,10 @@
 
 Kotodamaは一つの製品です。公開のKotodama-projectを、製品統合・説明・導入の最優先の中心にします。カジュアル利用は最小構成、組織機能は追加構成です。カジュアルな環境だけを改善して公開本体への統合を後回しにはしません。
 
+## 2026-09-14 の補足
+
+「楽しく過ごし、一緒に考え、必要なときだけ仕事を進める」は、Voice channel でそのモードを選んだときの体験を指します。製品の本体は、Cloudflare edge と公式 Cloudflare OS を基盤とする設計、Company OS、Evidence Chain を含めて徹底して作ることで、矛盾を残さずに選択肢を増やしていきます。最も大切な体験は、人が「OK」と言った後に、agent swarm が許可された範囲でやりたいことを自律的に進めることです。カジュアルな場面でも同じ仕組みを使いたいことがある、という位置づけであり、カジュアル利用を製品の中心にする意味ではありません。
+
 ## 選べる体験
 
 雑談を楽しむだけでもよく、新しい実行依頼や追加の許可とみなして仕事や生産性へ誘導しません。一緒に考え、許可資料を使って新しい人やagentが目的・経緯・決定・未完へ追いつくこともできます。既存の目的・許可がある読取調査、知識整理、改善提案、ToDo確認、継続作業は、新しい命令を毎回待たずに進められます。元発話や推測を候補として整理することと、新しい仕事の実行権限は別です。新しい依頼も継続作業も現在の許可範囲に照合し、検証した成果を会話へ返します。catch-upや成果化は利用例であり強制ファネルではありません。
@@ -32,15 +36,16 @@ localとcloudの双方を認めます。Tailscaleはprivate接続の強い候補
 
 ## 実装と候補の現在地
 
-2026-09-13に公開main `4abe890`と以下のopen PRを照合しました。mainはコードを含む状態、candidateは未統合、unconnectedは接続未確認、hypothesisは未実証の設計仮説です。CI成功を実利用成功へ読み替えません。
+2026-09-14に公開main `86bc5bf`と以下のopen PRを照合しました。mainはコードを含む状態、candidateは未統合、unconnectedは接続未確認、hypothesisは未実証の設計仮説です。CI成功を実利用成功へ読み替えません。
 
 | 対象 | 状態 | 根拠と残件 |
 |---|---|---|
 | Company Pack作成と確認・訂正Gateway | main | [Task-bound実行](COMPANY-PACK-TASK-EXECUTION.md)、[Gateway](../runtime/local-review-gateway/README.md)。実ファイル／local HTTPの限定経路。自動Voice-to-Taskは未接続 |
+| Discord Botテンプレート | main | [任意ランタイム](../runtime/discord-template/README.md)、[導入と残件](DISCORD-RUNTIME.md)。#79–#81で統合。公開招待・hosted配備・実音声受入は未検証 |
 | 知識訂正とexecutor入力binding | candidate | [#59](https://github.com/Kotodama-Project/Kotodama-project/pull/59)、head `b962196`。現在pin・入力digestの候補。Task owner接続は残件 |
 | OKF適合と判断readyの分離 | candidate | [#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)、head `05c947a`。構造PASSは内容・権限・意思決定の証明ではない |
 | 診断／Knowledge Work合流 | candidate | [#64](https://github.com/Kotodama-Project/Kotodama-project/pull/64)、head `e0460b3`。読取診断の候補。GUI、live observer、実Work接続は未受入 |
-| 専門agent協調 | candidate | [#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67)、head `6ac299f`。非candidate受入と拒否payload保存など修復待ち。全利用の必須構成にしない |
+| 専門agent協調 | main | [Luna Task swarm](LUNA-TASK-SWARM.md)。#67と#85の修復を統合し、Linux・Windowsの必須CIでoffline fixtureを確認。実Codex/Lunaのlive受入は未実施。全利用の必須構成にしない |
 | room別Live／workspace | candidate | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)、head `b2fd317`。Source/Task/mediaの実接続は未受入 |
 | 静音Liveと会話制御 | candidate | [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71)、head `b3fda59`。継続発話、退出と仕事の分離を#69と合流して検証する |
 | Slack／Salesforce | unconnected | #70／#77。公開mainで接続済みとはしない |
