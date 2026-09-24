@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Python's `\b` counts Japanese characters as word characters, so an identifier
 # written directly next to Japanese text has no word boundary. Explicit ASCII
 # lookarounds catch it there as well as in English prose.
-CONTAINER_OR_VM = re.compile(r"(?<![A-Za-z0-9])(?:CT|VM)\d{3}(?![0-9])")
+CONTAINER_OR_VM = re.compile(r"(?<![A-Za-z0-9])(?:CT|VM)\d{3}(?![A-Za-z0-9])")
 PRIVATE_PATTERNS = (
     ("container or VM identifier", CONTAINER_OR_VM),
     ("private pool name", re.compile(r"\blocal-zfs-")),
@@ -78,7 +78,8 @@ class PrivateIdentifierHygieneTests(unittest.TestCase):
         for sample in ("送信先はCT123に限る", "hostがVM456の設定を読む", "(CT123)"):
             with self.subTest(sample=sample):
                 self.assertIsNotNone(CONTAINER_OR_VM.search(sample))
-        for sample in ("ACT123", "CT1234", "vm456", ".ct123-local-grant-"):
+        # Mixed-case base64 in lockfiles must not trip the scan.
+        for sample in ("ACT123", "CT1234", "CT123abc", "vm456", ".ct123-local-grant-"):
             with self.subTest(sample=sample):
                 self.assertIsNone(CONTAINER_OR_VM.search(sample))
 
