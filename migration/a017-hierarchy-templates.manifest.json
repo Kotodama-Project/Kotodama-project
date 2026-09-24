@@ -22,8 +22,8 @@
     ]
   },
   "admission_gates": {
-    "license_and_provenance": "BLOCKED_ISSUE_25",
-    "source_history_secret_pii": "BLOCKED_MISSING_PRIVATE_RECEIPT",
+    "license_and_provenance": "RECORDED_ISSUE_25_OWNER_DECISION",
+    "source_history_secret_pii": "PASSED_PRIVATE_RECEIPT",
     "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
     "independent_review": "PENDING"
   },
@@ -94,7 +94,7 @@
       "source_mode": "100644",
       "decision": "RE_AUTHORED",
       "destination_path": "templates/hierarchy/README.md",
-      "destination_blob_sha": "55c80c0aa494dfff638d8e843b34ad5b981ce57b",
+      "destination_blob_sha": "a9200399ff18544ae391728c01989d481a76dbd2",
       "semantic_coverage": ["hierarchy", "usage", "canonical_boundary", "validation", "migration_boundary", "license_boundary"],
       "rationale": "Replace private CLI, generated bridge, local-state, and tool-specific instructions with a portable catalog and safety contract."
     },

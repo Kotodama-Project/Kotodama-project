@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed validation for the public A017 hierarchy-template candidate."""
+"""Fail-closed validation for the public A017 hierarchy-template batch and its admission record."""
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ EXPECTED_ENTRIES = {
         "c2d5cd8036cc4f75d4c53ce3a37a05645ceec11e",
         "RE_AUTHORED",
         "templates/hierarchy/README.md",
-        "55c80c0aa494dfff638d8e843b34ad5b981ce57b",
+        "a9200399ff18544ae391728c01989d481a76dbd2",
     ),
     "forest/_templates/session/CONTEXT.json": (
         "74963410019e8dd3ace9c38e5464fff72770e710",
@@ -130,8 +130,21 @@ SCHEMA_PATH = Path("schemas/hierarchy-session-context.schema.json")
 README_PATH = Path("templates/hierarchy/README.md")
 CATALOG_PATH = Path("templates/README.md")
 GUIDE_PATH = Path("docs/TEMPLATE-GUIDE.md")
+PROVENANCE_PATH = Path("migration/a017-hierarchy-templates.provenance.json")
+RIGHTSHOLDER_RECORD = "https://github.com/Kotodama-Project/Kotodama-project/issues/25"
+# Admission evidence (Issue #25, 2026-09-24): the owner recorded the
+# rightsholder decision, a private source-history scan produced a receipt whose
+# digest is in the provenance file, and an independent review is recorded last.
+RECORDED_GATES = {
+    "license_and_provenance": "RECORDED_ISSUE_25_OWNER_DECISION",
+    "source_history_secret_pii": "PASSED_PRIVATE_RECEIPT",
+    "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
+}
+REVIEW_STATES = {"PENDING", "PASSED_INDEPENDENT_REVIEW"}
+PRIVATE_RESULTS = {"PASS", "PASS_AFTER_TRIAGE"}
 REQUIRED_PATHS = {
     MANIFEST_PATH,
+    PROVENANCE_PATH,
     LICENSE_PATH,
     README_PATH,
     CATALOG_PATH,
@@ -272,13 +285,14 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     }:
         errors.append("component MIT scope or notice mismatch")
 
-    if manifest.get("admission_gates") != {
-        "license_and_provenance": "BLOCKED_ISSUE_25",
-        "source_history_secret_pii": "BLOCKED_MISSING_PRIVATE_RECEIPT",
-        "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
-        "independent_review": "PENDING",
-    }:
-        errors.append("admission gates must remain fail-closed")
+    gates = manifest.get("admission_gates")
+    if not isinstance(gates, dict):
+        gates = {}
+    review_state = gates.get("independent_review")
+    if {key: value for key, value in gates.items() if key != "independent_review"} != RECORDED_GATES:
+        errors.append("admission gates must match the recorded admission evidence")
+    if review_state not in REVIEW_STATES:
+        errors.append("independent review gate must be PENDING or PASSED_INDEPENDENT_REVIEW")
     if manifest.get("rollback") != EXPECTED_ROLLBACK:
         errors.append("manifest rollback contract mismatch")
 
@@ -442,6 +456,48 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         if schema.get("additionalProperties") is not False:
             errors.append("session context schema must reject additional properties")
 
+    provenance_data = _read_bounded(root, PROVENANCE_PATH, errors)
+    if provenance_data is not None:
+        try:
+            provenance = json.loads(provenance_data.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            provenance = {}
+            errors.append("provenance file is not valid UTF-8 JSON")
+        if not isinstance(provenance, dict):
+            provenance = {}
+        if provenance.get("schema_version") != "kotodama.public-migration-provenance.v1":
+            errors.append("unexpected provenance schema_version")
+        if provenance.get("batch_id") != "A017" or provenance.get("source_fixed_commit") != SOURCE_COMMIT:
+            errors.append("provenance is not bound to the A017 fixed source commit")
+        if provenance.get("license_expression") != "MIT":
+            errors.append("provenance license expression must be MIT")
+        if provenance.get("rightsholder_record") != RIGHTSHOLDER_RECORD:
+            errors.append("provenance must cite the Issue #25 rightsholder record")
+        digest = provenance.get("private_source_history_receipt_sha256")
+        if not (isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest)):
+            errors.append("provenance must bind the private source-history receipt digest")
+        if provenance.get("private_source_history_result") not in PRIVATE_RESULTS:
+            errors.append("private source-history receipt did not pass")
+        rows = provenance.get("entries")
+        if not isinstance(rows, list):
+            rows = []
+        if sorted(row.get("source_path") for row in rows if isinstance(row, dict)) != sorted(EXPECTED_ENTRIES):
+            errors.append("provenance must cover exactly the ten allowlisted sources")
+        for row in rows:
+            if not isinstance(row, dict):
+                errors.append("provenance entries must be objects")
+                continue
+            handles = row.get("author_github_handles")
+            if not (isinstance(row.get("commits_touching_source"), int) and row["commits_touching_source"] >= 1):
+                errors.append("provenance entry must count at least one source commit")
+            if not (isinstance(handles, list) and all(isinstance(h, str) and re.fullmatch(r"[A-Za-z0-9-]{1,39}", h) for h in handles)):
+                errors.append("provenance authors must be GitHub handles")
+            if not (isinstance(row.get("withheld_author_identities"), int) and row["withheld_author_identities"] >= 0):
+                errors.append("provenance must count withheld author identities")
+            if isinstance(row.get("source_path"), str) and row.get("source_blob_sha") != EXPECTED_ENTRIES.get(row["source_path"], ("",))[0]:
+                errors.append("provenance source blob does not match the manifest")
+        errors.extend(_scan_text(PROVENANCE_PATH, provenance_data.decode("utf-8", errors="replace"), include_private_refs=True))
+
     readme_data = _read_bounded(root, README_PATH, errors)
     if readme_data is not None:
         readme = readme_data.decode("utf-8", errors="replace")
@@ -458,8 +514,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         catalog = catalog_data.decode("utf-8", errors="replace")
         if "[Hierarchy](hierarchy/README.md)" not in catalog:
             errors.append("template catalog does not link hierarchy candidate")
-        if "Issue #25の解決まではadmission不可" not in catalog:
-            errors.append("template catalog omits hierarchy admission blocker")
+        if "admissionはIssue #25のowner判断と出典表で記録" not in catalog:
+            errors.append("template catalog omits the hierarchy admission record")
         errors.extend(_scan_text(CATALOG_PATH, catalog, include_private_refs=False))
 
     guide_data = _read_bounded(root, GUIDE_PATH, errors)
@@ -467,8 +523,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         guide = guide_data.decode("utf-8", errors="replace")
         if "[A017階層テンプレート候補](../templates/hierarchy/README.md)" not in guide:
             errors.append("template guide does not link the A017 hierarchy candidate")
-        if "private source-history receipt、独立reviewが閉じるまではadmission不可" not in guide:
-            errors.append("template guide omits the A017 admission blockers")
+        if "admissionはIssue #25のowner判断（2026-09-24）、出典表、private source-history receipt、独立reviewの記録で判定" not in guide:
+            errors.append("template guide omits the A017 admission record")
         if "session、requirement、plan、taskといった階層テンプレート" in guide:
             errors.append("template guide still classifies the hierarchy as local-only")
         errors.extend(_scan_text(GUIDE_PATH, guide, include_private_refs=False))
@@ -501,12 +557,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "component_license": "MIT",
         "license_blob_sha": SOURCE_LICENSE_BLOB,
         "candidate_scan_findings": sum(1 for error in errors if error.startswith("scan finding ")),
-        "admission_status": "BLOCKED",
-        "no_go_reasons": [
-            "ISSUE_25_LICENSE_PROVENANCE",
-            "MISSING_PRIVATE_SOURCE_HISTORY_SECRET_PII_RECEIPT",
-            "INDEPENDENT_REVIEW_PENDING",
-        ],
+        "admission_status": "ADMITTED" if not errors and review_state == "PASSED_INDEPENDENT_REVIEW" else "BLOCKED",
+        "no_go_reasons": [] if review_state == "PASSED_INDEPENDENT_REVIEW" else ["INDEPENDENT_REVIEW_PENDING"],
         "errors": errors,
     }
 

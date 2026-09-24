@@ -37,8 +37,10 @@ python tools/validate_migration_batch_a017.py
 The validator binds this pack to the ten allowlisted source blob identifiers
 in `migration/a017-hierarchy-templates.manifest.json`, checks the eight public
 destinations, verifies component attribution, and scans the candidate payload.
-A pass is candidate evidence only. License/provenance Issue #25, the private
-source-history scan, and independent review remain blocking gates.
+A pass is candidate evidence only. Admission is recorded separately: Issue #25
+holds the owner's rightsholder decision (2026-09-24), the provenance file lists
+the source commits and authors, and the manifest records the private
+source-history scan receipt and the independent review.
 
 ## Migration and license boundary
 
@@ -48,6 +50,7 @@ requirement source is classified `SUPERSEDED`; the two task sources are
 explicitly consolidated into `task.md`.
 
 This source-derived batch is distributed under the MIT License. See
-[`LICENSES/MIT.txt`](../../LICENSES/MIT.txt) and the deterministic migration
-manifest. The repository-level Apache-2.0 proposal does not relicense this
-component or resolve Issue #25.
+[`LICENSES/MIT.txt`](../../LICENSES/MIT.txt), the deterministic migration
+manifest, and `migration/a017-hierarchy-templates.provenance.json`. The
+repository root license is also MIT (#18); this component keeps its own notice
+and provenance record.

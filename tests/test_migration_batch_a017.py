@@ -1,4 +1,4 @@
-"""Regression tests for the clean-history A017 hierarchy candidate."""
+"""Regression tests for the clean-history A017 hierarchy batch and its admission record."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class A017MigrationBatchTests(unittest.TestCase):
             shutil.copy2(source, target)
         return candidate
 
-    def test_exact_candidate_passes_with_admission_still_blocked(self) -> None:
+    def test_exact_candidate_passes_and_reports_the_recorded_admission(self) -> None:
         result = VALIDATOR.validate(ROOT)
         self.assertEqual(result["status"], "PASS", msg=result["errors"])
         self.assertEqual(result["source_entries"], 10)
@@ -38,12 +38,43 @@ class A017MigrationBatchTests(unittest.TestCase):
         self.assertEqual(result["unique_destinations"], 8)
         self.assertEqual(result["source_template_blob_reuse"], 0)
         self.assertEqual(result["candidate_scan_findings"], 0)
-        self.assertEqual(result["admission_status"], "BLOCKED")
-        self.assertIn("ISSUE_25_LICENSE_PROVENANCE", result["no_go_reasons"])
-        self.assertIn(
-            "MISSING_PRIVATE_SOURCE_HISTORY_SECRET_PII_RECEIPT",
-            result["no_go_reasons"],
-        )
+        manifest = json.loads((ROOT / VALIDATOR.MANIFEST_PATH).read_text(encoding="utf-8"))
+        if manifest["admission_gates"]["independent_review"] == "PASSED_INDEPENDENT_REVIEW":
+            self.assertEqual(result["admission_status"], "ADMITTED")
+            self.assertEqual(result["no_go_reasons"], [])
+        else:
+            self.assertEqual(result["admission_status"], "BLOCKED")
+            self.assertEqual(result["no_go_reasons"], ["INDEPENDENT_REVIEW_PENDING"])
+
+    def test_admission_gates_and_provenance_fail_closed(self) -> None:
+        def gate(value):
+            return lambda manifest, provenance: manifest["admission_gates"].update(value)
+
+        def prov(update):
+            return lambda manifest, provenance: update(provenance)
+
+        mutations = {
+            "issue 25 gate reopened": gate({"license_and_provenance": "BLOCKED_ISSUE_25"}),
+            "unknown review state": gate({"independent_review": "APPROVED"}),
+            "receipt digest removed": prov(lambda p: p.pop("private_source_history_receipt_sha256")),
+            "receipt did not pass": prov(lambda p: p.update(private_source_history_result="FINDINGS")),
+            "author is not a handle": prov(lambda p: p["entries"][0].update(author_github_handles=["Some Person <someone@example.com>"])),
+            "source missing": prov(lambda p: p["entries"].pop()),
+            "wrong rightsholder record": prov(lambda p: p.update(rightsholder_record="https://example.com/")),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                candidate = self._candidate_copy(Path(temporary))
+                manifest_path = candidate / VALIDATOR.MANIFEST_PATH
+                provenance_path = candidate / VALIDATOR.PROVENANCE_PATH
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+                mutate(manifest, provenance)
+                manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+                provenance_path.write_text(json.dumps(provenance, ensure_ascii=False, indent=2), encoding="utf-8")
+                result = VALIDATOR.validate(candidate)
+                self.assertEqual(result["status"], "FAIL", msg=label)
+                self.assertEqual(result["admission_status"], "BLOCKED", msg=label)
 
     def test_manifest_binds_two_task_sources_and_supersedes_duplicate_requirement(self) -> None:
         manifest = json.loads((ROOT / VALIDATOR.MANIFEST_PATH).read_text(encoding="utf-8"))

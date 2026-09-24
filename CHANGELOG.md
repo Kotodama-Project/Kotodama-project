@@ -11,6 +11,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Luna Task swarm を main に統合（[#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67) と修復 [#85](https://github.com/Kotodama-Project/Kotodama-project/pull/85)）: owner に束縛した計画、予算（試行・同時実行・検証枠）、ACK 付きの agent 間通信、独立した検証者。offline fixture はモデルを呼ばずに動き、実 Codex / Luna の live 受入は未実施（`docs/LUNA-TASK-SWARM.md`）。
 - このリポジトリの自動改善ループの運用契約（`docs/IMPROVEMENT-LOOP.md`）: 一周に一件、独立 review と必須 CI を通して merge し、main が赤くなれば revert する。agent がしないことと人が決めることを明記。
 - 意図を抜き出して、すぐに走る: `discord.agentChannelIds` のテキストチャンネルでは、操作者の発言をBotへのメンションと同じに扱い、明確で実行に足りる依頼をすぐに仕事にする。会話（テキスト・音声）から仕事が走り始めると、依頼者へ即座にDMで件名と仕事のIDを届ける。
+- BecomeOne から移植した階層テンプレート（A017: project / phase / requirement / plan / task と session context）。移植元の固定 commit・作者の GitHub handle・ライセンスを載せた出典表（`migration/a017-hierarchy-templates.provenance.json`）と、Issue #25 の owner 判断・非公開の元履歴走査 receipt・独立 review による受入の記録を付けた（[#27](https://github.com/Kotodama-Project/Kotodama-project/pull/27) を main に合わせて取り込み）。
 
 ### Changed
 

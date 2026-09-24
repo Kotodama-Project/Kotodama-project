@@ -212,7 +212,7 @@ flowchart LR
 - Company manifest、Block、MOC、Governed Recordのschema、validator、negative tests
 - Compose minimum / Proxmox segmentedの6フェーズinstallation lifecycle契約、validator、公開runbook
 - Compose minimumのCompany DB / Evidence metadata Store data-plane skeletonとexact-byte validator
-- [A017階層テンプレート候補](../templates/hierarchy/README.md): project、phase、requirement、plan、task、session contextを8つの公開safeなdestinationへ再構成し、exact 10-source manifestと標準ライブラリvalidatorで検査。Issue #25、private source-history receipt、独立reviewが閉じるまではadmission不可
+- [A017階層テンプレート候補](../templates/hierarchy/README.md): project、phase、requirement、plan、task、session contextを8つの公開safeなdestinationへ再構成し、exact 10-source manifestと標準ライブラリvalidatorで検査。admissionはIssue #25のowner判断（2026-09-24）、出典表、private source-history receipt、独立reviewの記録で判定
 
 これらは構造検証できるstarterです。Compose data-planeはofflineで解決できる実行候補まで進みましたが、image取得・起動・migration・restart・restoreのlive receiptやCompany OS一式ではありません。実際の使い始め方は[Starter Walkthrough](STARTER-WALKTHROUGH.md)、runtime境界は[Installation Lifecycle Profiles](INSTALLATION-LIFECYCLE.md)を参照してください。
 
