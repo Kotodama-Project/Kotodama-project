@@ -40,7 +40,7 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 | 既存 Task に結び付けて Company Pack を実生成し、確認・訂正する | `tools/run_company_pack_task.py` と local review gateway | [Task-bound execution](docs/COMPANY-PACK-TASK-EXECUTION.md)、[Gateway](runtime/local-review-gateway/README.md) |
 | 会社の runtime を配備する | Compose minimum / Proxmox segmented の lifecycle contract と validator（live receipt なし）。Cloudflare edge と公式 Cloudflare OS の候補（未 upload、未 deploy） | [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)、[Cloudflare OS](docs/CLOUDFLARE-OS-ADOPTION.md) |
 | agent swarm に任せる | Luna Task swarm（owner に束縛した計画・予算・ACK 付きの通信・独立した検証者。offline の fixture で動く）。契約の候補 #34〜#36 は未統合 | [Luna Task swarm](docs/LUNA-TASK-SWARM.md) |
-| 知識基盤を使う | 未統合。#48・#61・#59 を知識基盤の正本として取り込む予定（[#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)） | [PROJECT-MAP](docs/PROJECT-MAP.md) |
+| 知識基盤を使う | まだ main にはありません。正本は #48・#61・#59 の系統に決まり、取り込み中です（[#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)） | [PROJECT-MAP](docs/PROJECT-MAP.md) |
 
 ## 今 `main` にあるもの、候補、方向
 
@@ -48,7 +48,7 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 |---|---|---|---|
 | Company Pack / Evidence Chain | 9 Blocks、9 Records、3 MOCs の starter、schema と validator、review chain、smoke | | lane ごとの Promotion policy |
 | Session / conversation ledger | schema と validator | | runtime への取込 |
-| Discord / Voice | `runtime/discord-template` | #69・#71 の考え方をこの Node runtime へ移す | 15 分 rotation、Voice-to-Verified-Handoff、GrillU |
+| Discord / Voice | `runtime/discord-template` | #69・#71（別 runtime としては取り込まず、考え方をこの Node runtime へ移す） | 15 分 rotation、Voice-to-Verified-Handoff、GrillU |
 | Agent swarm / 自律実行 | 限定 Task 実行、Luna Task swarm | agent swarm・route binding・migration ledger・agent lifecycle の契約（#34〜#36） | 「OK」後の Goal Completion Loop、reversible delegation |
 | 知識・Context | | OKF v0.2 の知識 bundle（#48・#61・#59）、control plane（#49 の系統） | Context Gateway、TiDB 評価 |
 | Runtime | Compose / Proxmox contract、Cloudflare candidate | | Cloudflare edge と公式 Cloudflare OS を基盤にした配備 |
