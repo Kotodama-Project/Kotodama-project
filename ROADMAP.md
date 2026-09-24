@@ -102,20 +102,24 @@ describe the current state of `main`. Open work is tracked on GitHub
 ## Runtime profiles still requiring live evidence
 
 - [x] Executable Compose data-plane candidate manifest (not a live receipt)
-- [ ] Protected, authenticated, fresh digest-pinned image staging and clean-install/migration receipt
-- [ ] Exact Proxmox guest/service candidate and segmented deployment receipt
-- [ ] Candidate-bound restart, rollback, and isolated restore receipts
-- [ ] External checkpoint-head canonical authority, old-key revocation, adopted segmentation policy, and scope-matched tested restore execution/continuity
-- [ ] PostgreSQL Company DB and Evidence Store setup/restore E2E
+- [ ] Protected, authenticated, fresh digest-pinned image staging and clean-install/migration receipt (`PB-G6`)
+- [ ] Exact Proxmox guest/service candidate and segmented deployment receipt (`PB-G6`)
+- [ ] Candidate-bound restart, rollback, and isolated restore receipts (`PB-G6`)
+- [ ] External checkpoint-head canonical authority, old-key revocation, adopted segmentation policy, and scope-matched tested restore execution/continuity (`PB-G7`)
+- [ ] PostgreSQL Company DB and Evidence Store setup/restore E2E (`PB-G6`)
 
 ## Required before opening access
 
-- [ ] Fresh candidate-bound Voice cutover and rollback evidence
-- [ ] Real 15-minute rotation, transcription post, and deletion evidence
-- [ ] Speaker attribution and Voice-to-Verified-Handoff E2E
-- [ ] Separate-person verification and three-persona E2E
-- [ ] Protected reconciliation and independent verification receipts
-- [ ] Candidate-bound Final Human GO
-- [ ] Voice / Discord mode acceptance in one real conversation: a social-only session ends without a new Task, source-cited catch-up works, bounded work runs on existing permission, corrections flow back to Knowledge / Task / agent context, and native UI, free text, and voice corrections share one history ([Product direction](docs/PRODUCT-DIRECTION.md))
+Gate IDs are defined in [docs/OVERVIEW.md](docs/OVERVIEW.md#public-beta-完成としてまだ証明されていないもの).
+
+- [ ] Fresh candidate-bound Voice cutover, rollback, and exact post-deployment byte/revision readback proving deployed/candidate parity (`PB-G4`)
+- [ ] Real 15-minute rotation, transcription post, and deletion evidence (`PB-G2`, `PB-G3`)
+- [ ] Always-on listener continuity and forced-disconnect/rejoin E2E (`PB-G1`)
+- [ ] Speaker attribution and Voice-to-Verified-Handoff E2E (`PB-G5`)
+- [ ] Separate-person verification and three-persona E2E (`PB-G5`, `PB-G7`)
+- [ ] Protected reconciliation and independent verification receipts (`PB-G7`)
+- [ ] Public Discord invite and publicly reachable Voice Bot readback (`PB-G8`)
+- [ ] Candidate-bound Final Human GO (`PB-G9`)
+- [ ] Voice / Discord mode acceptance in one real conversation (`PB-G10`): a social-only session ends without a new Task, source-cited catch-up works, bounded work runs on existing permission, corrections flow back to Knowledge / Task / agent context, and native UI, free text, and voice corrections share one history ([Product direction](docs/PRODUCT-DIRECTION.md))
 
 この一覧は進捗を透明にするためのものです。チェック項目は、対応する検証 receipt が揃うまで完了扱いにしません。

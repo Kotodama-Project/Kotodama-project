@@ -9,5 +9,6 @@
 | [Cloudflare edge](cloudflare-edge/README.md) | content-free Worker、manual preview upload guard（current `main` tip only）、Wrangler integrity binding | local static/runtime smoke candidate only; no provider upload |
 | [Official Cloudflare OS](cloudflare-os/README.md) | exact starter/core pin、content-free Gatekeeper projection adapter、saved local runtime receipt | 1060-test `PASS_LOCAL_RUNTIME_WITH_GAPS`; no provider execution or production claim |
 | [Luna Task swarm](../docs/LUNA-TASK-SWARM.md) | owner binding、bounded scheduler、ACK/reply/status、Codex CLI adapter、project Skill | opt-in local fixture、concurrency/restart/negative tests。Company authorityやdeploymentを発行しない |
+| [OpenManus Proxmox executor](openmanus-proxmox/README.md) | OpenManus bounded executor、Proxmox KVM isolation、request/result authority boundary | pinned upstream candidate、JSON Schema、static invariants; no live VM/deployment evidence |
 
 `runtime/`に存在することはdeploymentの証明ではありません。各候補は`example`または`candidate_only`から始まり、対象revisionへ束縛したWork Order、runtime health、negative test、restart、rollback、backup/restore receiptが揃うまでlive/verifiedとは呼びません。Public Beta は `NO_GO_UNPUBLISHED` のままです。
