@@ -6,7 +6,9 @@ import http from 'node:http';
 import {chromium} from 'playwright-core';
 import {BrowserCli} from '../src/browser.mjs';
 const executable=process.env.CHROME_BIN??(process.platform==='win32'?path.join(process.env.ProgramFiles??'', 'Google/Chrome/Application/chrome.exe'):'/usr/bin/chromium');
-test('real browser refuses coordinate Token reset, login and secret-area capture',{skip:!existsSync(executable)},async t=>{
+// This real-browser test usually finishes in 2-19 s on shared CI runners but
+// sometimes exceeds the suite-wide 30 s default; its assertions are unchanged.
+test('real browser refuses coordinate Token reset, login and secret-area capture',{skip:!existsSync(executable),timeout:120000},async t=>{
   const server=http.createServer((_req,res)=>res.end('<button id="token"><span>Reset Token</span></button><label id="safe">Message Content<input type="checkbox"></label>'));
   await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
   const browser=await chromium.launch({executablePath:executable,headless:true});t.after(async()=>{await browser.close();await new Promise(r=>server.close(r));});const page=await browser.newPage();const cli=new BrowserCli({allowedOrigins:[base]});cli.browser=browser;
