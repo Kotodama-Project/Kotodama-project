@@ -1,4 +1,5 @@
 """The existing required status must include the complete Discord matrix."""
+import os
 from pathlib import Path
 import subprocess
 import unittest
@@ -33,8 +34,10 @@ class DiscordRequiredGateTests(unittest.TestCase):
         self.assertEqual(fixture['if'], "runner.os == 'Linux'")
         self.assertIn('KOTODAMA_TEST_VERIFIER_IMAGE=', fixture['run'])
 
+    # The gate step runs on the Linux runner; on Windows `bash` may resolve to
+    # WSL, which does not inherit this process's environment.
+    @unittest.skipUnless(os.name == 'posix', 'the gate step runs under bash on Linux')
     def test_failure_skip_cancellation_and_missing_results_do_not_pass(self):
-        import os
         for result in ['success', 'failure', 'skipped', 'cancelled', '']:
             with self.subTest(result=result):
                 status = subprocess.run(['bash', '-c', 'test "$DISCORD_RESULT" = success'],
