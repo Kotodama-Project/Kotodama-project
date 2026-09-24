@@ -101,7 +101,7 @@ class PublicSkillsTest(unittest.TestCase):
             {"files_changed": 0, "network_writes": 0, "external_sends": 0},
         )
         self.assertEqual(payload["no_go_reasons"], [])
-        self.assertEqual(payload["audit"]["skill_count"], 9)
+        self.assertEqual(payload["audit"]["skill_count"], 10)
         self.assertEqual(payload["audit"]["external_catalog_count"], 0)
         self.assertEqual(payload["audit"]["failures"], [])
 

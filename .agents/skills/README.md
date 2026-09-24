@@ -27,6 +27,7 @@ own evidence and human-governance gates are satisfied.
 | `kotodama-public-review` | Separating local, device, provider, public, and human-go evidence. |
 | `kotodama-surface-audit` | Auditing skill manifests, links, triggers, and stale assumptions. |
 | `kotodama-handoff` | Resuming work from a compact, redacted, evidence-bound handoff. |
+| `kotodama-luna-swarm` | Running a bounded Task swarm with owner-bound packets, peer receipts, and independent review ([Luna Task swarm](../../docs/LUNA-TASK-SWARM.md)). |
 
 The normative shared contract is [SKILL-OPERATING-CONTRACT.md](../../docs/SKILL-OPERATING-CONTRACT.md).
 Use the public repository's existing Company Pack validators and review-chain
