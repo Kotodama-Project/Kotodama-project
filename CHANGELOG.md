@@ -11,6 +11,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Luna Task swarm を main に統合（[#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67) と修復 [#85](https://github.com/Kotodama-Project/Kotodama-project/pull/85)）: owner に束縛した計画、予算（試行・同時実行・検証枠）、ACK 付きの agent 間通信、独立した検証者。offline fixture はモデルを呼ばずに動き、実 Codex / Luna の live 受入は未実施（`docs/LUNA-TASK-SWARM.md`）。
 - このリポジトリの自動改善ループの運用契約（`docs/IMPROVEMENT-LOOP.md`）: 一周に一件、独立 review と必須 CI を通して merge し、main が赤くなれば revert する。agent がしないことと人が決めることを明記。
 - 意図を抜き出して、すぐに走る: `discord.agentChannelIds` のテキストチャンネルでは、操作者の発言をBotへのメンションと同じに扱い、明確で実行に足りる依頼をすぐに仕事にする。会話（テキスト・音声）から仕事が走り始めると、依頼者へ即座にDMで件名と仕事のIDを届ける。
+- 公開の Agent Skills（intent、plan、research、delegate、validate、implement、public review、surface audit、handoff の 9 件）と共通の運用契約 `docs/SKILL-OPERATING-CONTRACT.md`、読み取り専用の監査 `tools/audit_public_skills.py`。既存の `kotodama-luna-swarm` も同じ契約の形式にそろえた（[#17](https://github.com/Kotodama-Project/Kotodama-project/pull/17)）。
 - agent swarm と route binding の契約候補: schema、読み取り専用の preflight、否定の試験。main の Luna Task swarm との対応表を付けた（[#34](https://github.com/Kotodama-Project/Kotodama-project/pull/34)）。
 
 ### Changed
@@ -18,6 +19,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Discord runtime のレビュー指摘への対応を統合（[#84](https://github.com/Kotodama-Project/Kotodama-project/pull/84)）: 会話解析の同時実行・待ち行列・日次/累計の上限、書込み Task の検証を Linux の固定 Docker image で隔離、成果ファイルの読込みを開いたファイルと名前の両方に束縛、再起動時は queued を paused・running を uncertain として保持（自動再実行しない）、必須 CI が Discord の Linux / Windows 試験を要求。`write_file` / `develop` には Linux・`worker.verify`・`worker.verification` の設定が必要になった（`runtime/discord-template/README.md`）。
 - `/kotodama tasks` が一時停止中（paused）と状態確認中（uncertain）を日本語で表示し、`/kotodama ask` は解析を後回しにした場合にそう伝える。
 - 必須チェック `Trusted repository validation` が Task swarm の Linux / Windows 試験も要求する。swarm の依存は共通 lock と分けた hash 付きの `requirements-task-swarm-ci.txt` から入れる。
+- 公開面の識別子検査が、日本語に隣接して書かれた private host の番号も拾うようにした。残っていた 2 箇所を中立化し、`docs/REPOSITORIES.md` は公開リポジトリだけにした（[#108](https://github.com/Kotodama-Project/Kotodama-project/pull/108)）。
 
 ### Fixed
 
