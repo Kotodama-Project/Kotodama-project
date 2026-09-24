@@ -17,6 +17,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Discord runtime のレビュー指摘への対応を統合（[#84](https://github.com/Kotodama-Project/Kotodama-project/pull/84)）: 会話解析の同時実行・待ち行列・日次/累計の上限、書込み Task の検証を Linux の固定 Docker image で隔離、成果ファイルの読込みを開いたファイルと名前の両方に束縛、再起動時は queued を paused・running を uncertain として保持（自動再実行しない）、必須 CI が Discord の Linux / Windows 試験を要求。`write_file` / `develop` には Linux・`worker.verify`・`worker.verification` の設定が必要になった（`runtime/discord-template/README.md`）。
 - `/kotodama tasks` が一時停止中（paused）と状態確認中（uncertain）を日本語で表示し、`/kotodama ask` は解析を後回しにした場合にそう伝える。
 - 必須チェック `Trusted repository validation` が Task swarm の Linux / Windows 試験も要求する。swarm の依存は共通 lock と分けた hash 付きの `requirements-task-swarm-ci.txt` から入れる。
+- 公開面の識別子検査が、日本語に隣接して書かれた private host の番号も拾うようにした。残っていた 2 箇所を中立化し、`docs/REPOSITORIES.md` は公開リポジトリだけにした（[#108](https://github.com/Kotodama-Project/Kotodama-project/pull/108)）。
 
 ### Fixed
 
