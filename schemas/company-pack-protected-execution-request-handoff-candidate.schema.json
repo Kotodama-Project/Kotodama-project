@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-protected-execution-request-handoff-candidate.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-protected-execution-request-handoff-candidate.schema.json",
   "title": "Kotodama Company Pack Protected Execution Request / Handoff Candidate",
   "$comment": "Schema-only public candidate contract. It records an opaque request shape for a future protected runner; it does not request, accept, execute, authenticate, resolve, retain, delete, verify, promote, deploy, or publish private evidence.",
   "type": "object",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-protected-source-binding-receipt-candidate.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-protected-source-binding-receipt-candidate.schema.json",
   "title": "Kotodama Company Pack Protected Source Binding Receipt Candidate",
   "$comment": "Schema-only private handoff contract. A structurally valid receipt candidate does not verify protected execution, atomicity, trusted time, locator resolution, authenticity, consent, retention, deletion, replay prevention, Human Intent, authority, runtime, Promotion, Current Truth, or Public Beta GO.",
   "type": "object",

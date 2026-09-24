@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-bundle.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-review-bundle.schema.json",
   "title": "Kotodama Company Pack Review Bundle",
   "$comment": "A candidate bundle binds static pack bytes only. It does not prove Human approval, authority, Promotion, Current Truth, runtime readiness, Final Human GO, or Public Beta GO.",
   "type": "object",

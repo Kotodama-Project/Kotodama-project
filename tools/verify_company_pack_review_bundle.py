@@ -243,7 +243,7 @@ def verify_saved_bundle(bundle_path: Path, pack_dir: Path) -> dict[str, Any]:
             object_pairs_hook=reject_duplicate_keys,
             parse_constant=reject_non_finite_constant,
         )
-    except (UnicodeDecodeError, ValueError, json.JSONDecodeError):
+    except (UnicodeDecodeError, ValueError, RecursionError, json.JSONDecodeError):
         return verification_report(
             status="MISMATCH",
             reason="INVALID_BUNDLE_FORMAT",

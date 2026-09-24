@@ -251,6 +251,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         self.assertIn("entry 0 sequence mismatch", report["errors"])
         self.assertTrue(all(not value for value in report["claims"].values()))
 
+    # 550,001 bytes: below 1 MiB; 5,000 levels parse on Linux CPython 3.12.14.
     def test_deep_checkpoint_in_chain_directory_is_a_structured_creation_refusal(
         self,
     ) -> None:
@@ -260,7 +261,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             checkpoints = case["checkpoints"]
             assert isinstance(checkpoints, list)
             checkpoints[0].write_bytes(
-                (b'{"nested":' * 5000) + b"0" + (b"}" * 5000)
+                (b'{"nested":' * 50_000) + b"0" + (b"}" * 50_000)
             )
             output = temporary / "deep-checkpoint-bundle.json"
             created = self.create_bundle(case, output)
@@ -279,7 +280,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             case = self.make_chain(temporary, length=1)
             bundle = temporary / "deep-outer-bundle.json"
             bundle.write_bytes(
-                (b'{"nested":' * 5000) + b"0" + (b"}" * 5000)
+                (b'{"nested":' * 50_000) + b"0" + (b"}" * 50_000)
             )
             verified = self.verify_bundle(case, bundle)
 

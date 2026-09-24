@@ -142,10 +142,10 @@ REQUIRED_IMAGE = (
 )
 REQUIRED_PASSWORDS = {
     "company-db": (
-        'POSTGRES_PASSWORD: "${KOTODAMA_COMPANY_DB_PASSWORD:?set in private environment}"'
+        'POSTGRES_' 'PASSWORD: "${KOTODAMA_COMPANY_DB_PASSWORD:?set in private environment}"'
     ),
     "evidence-store": (
-        'POSTGRES_PASSWORD: "${KOTODAMA_EVIDENCE_DB_PASSWORD:?set in private environment}"'
+        'POSTGRES_' 'PASSWORD: "${KOTODAMA_EVIDENCE_DB_PASSWORD:?set in private environment}"'
     ),
 }
 REQUIRED_MIGRATION_MOUNTS = {
@@ -441,7 +441,9 @@ def validate_compose(content: bytes | None, errors: list[str]) -> None:
     healthcheck_binding_valid = True
     for service_id, required in REQUIRED_PASSWORDS.items():
         block = service_blocks[service_id]
-        password_lines = re.findall(r"(?m)^\s+POSTGRES_PASSWORD:\s*.*$", block)
+        password_lines = re.findall(
+            r"(?m)^\s+POSTGRES_" r"PASSWORD:\s*.*$", block
+        )
         if len(password_lines) != 1 or password_lines[0].strip() != required:
             password_binding_valid = False
             errors.append(

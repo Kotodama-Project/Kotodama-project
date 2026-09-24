@@ -462,12 +462,13 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
             self.assertEqual(json.loads(result.stdout)["status"], "INVALID")
             self.assertNotIn(private_marker, result.stdout + result.stderr)
 
+    # 550,001 bytes: below 1 MiB; 5,000 levels parse on Linux CPython 3.12.14.
     def test_deep_checkpoint_and_parent_json_are_structured_refusals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
             inputs = self.make_r18_inputs(temporary)
             deep = temporary / "deep-checkpoint.json"
-            deep.write_bytes((b'{"nested":' * 5000) + b"0" + (b"}" * 5000))
+            deep.write_bytes((b'{"nested":' * 50_000) + b"0" + (b"}" * 50_000))
             placeholder_signature = temporary / "placeholder.sig"
             placeholder_signature.write_bytes(b"not-a-private-signature-body")
 

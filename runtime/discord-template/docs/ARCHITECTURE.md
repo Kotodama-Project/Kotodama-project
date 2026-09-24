@@ -1,0 +1,61 @@
+# 構成
+
+Discordのテキスト・音声 → 出典と版 → 意図・ToDo → 明示依頼 → CLI実行器 → 検証済み成果。
+
+`assist` は一回の呼びかけでGPT-Live会話を開き、その話者との複数ターンで同じWebSocketを使います。Lunaのbackend結果は同じセッションのcommentaryへ返し、回答ごとの音声セッションは作りません。`minutes` はVADと専用文字起こしを使い、音声を返しません。どちらも同じ意図抽出器とTask ownerを使います。
+
+`voice.transcriptSource: "local"` ではDiscordの話者別PCMをローカルASRへ渡し、その確定した日本語テキストをSource Evidenceにします。呼びかけ前の発話は保存だけを行い、Live・Luna・Task実行を開始しません。呼びかけ時は確定テキストをLiveの開始履歴へ入れ、その後の音声は同じ話者のLiveセッションへ流します。Live側のtranscript deltaはUI補助に限り、Intentを確定しません。
+
+単体構成はNode.jsとSQLiteで動きます。組織構成ではremote Task ownerを選びます。n8nは取込と呼出しを担当し、仕事の正本は持ちません。
+
+参照した既存候補：Kotodama-project PR #69の部屋別契約、#71の発話制御、#59の文脈と入力の束縛、#67のCLI実行証拠。大きなPR stackやprivate runtimeのソースを丸ごとコピーせず、このテンプレートのコードを新規作成します。参照PRの未受入部分を配備済みと表示しません。
+
+原音の永続保存は既定で行いません。文字起こしとその訂正、資料と仕事の履歴はインストール先のprivate data directoryに保持します。録音・外部処理への同意、閲覧範囲、モデルと費用上限を初回に設定し、停止・取消を実行時に照合します。
+
+固定VCの自動入退室は、一つの直列化した音声制御が扱います。起動時、対象VCの入退室イベント、10秒間隔で人間の在室と現在の対象範囲を照合します。Botは人数に含めません。対象外の参加者がいる間は、新しい音声処理・再生を止めて退出します。手動停止の設定はSQLite内のVC別設定で保持し、仕事の台帳を増やしません。
+
+接続待ちと復旧待ちは接続個体に結び付けます。停止・設定取消・終了後に遅い接続が復活したり、新しい接続を古い失敗処理が破棄したりしません。終了時の文字起こしは旧epochの出典として確定し、その出典から実行・音声回答を再開しません。
+
+Discord再生はLive出力と別の世代・閲覧許可・source revisionに束縛します。利用者の発話開始、権限変更、mode変更、queue overflowではplayerと未再生PCMを先に破棄します。Liveには停止指示を送りますが、そのACKを再生停止の証明には使いません。音声会話終了はLiveセッションだけを閉じ、既に許可されたTaskは取り消しません。
+
+
+## Runtime admission and recovery boundary
+
+The conversation Pipeline records the current Source before it seeks a bounded
+analysis slot. Global, room and reader limits share one scheduler; a finite
+priority queue may supersede a passive entry, but does not erase its Source.
+Reservations count analysis requests, not provider billing. SQLite daily and
+cumulative counters survive process replacement. A queued operation revalidates
+Source revision, reader access and current policy before reservation/dispatch and
+after the model returns. Cancelled operations retain their slots until they settle.
+Archive post-processing and other model adapters have separate controls; this is
+not an installation-wide financial budget.
+
+A write worker has two execution boundaries: Codex's configured sandbox for
+implementation, and a required operator-managed immutable Docker image for
+verification. Verification sees a read-only candidate, no network, no host HOME,
+no credential mounts, and bounded scratch/resources. A missing verifier is an
+explicit refusal, not a host-command fallback. The host collector does not execute
+candidate files and disables Git external diff/text conversion; file reads bind
+both descriptor and directory entry, reject links/special files and bound the read.
+Docker process termination must be observed at the daemon, not inferred from the
+client exit. Failed cleanup leaves the Task uncertain.
+
+Running Tasks are rechecked every second. Discord read access is tri-state
+(allowed, denied, unavailable) and checked once per distinct channel; results are
+reused for at most three seconds and dropped on channel, role, thread and member
+events. A definitive denial stops the Task at that check. Rate limits, Discord
+server errors and transport failures are unavailable, tolerated for at most five
+seconds (from the start of the first failing check) and three consecutive checks,
+then the Task stops as before. Each check has a two-second wall-clock limit, a
+check still in flight counts as unavailable, and Tasks are checked concurrently.
+
+Startup preserves Task IDs: queued becomes paused, running/stopping becomes
+uncertain. Only paused/cancelled/failed may explicitly resume after current grant
+and Source checks. An uncertain execution is never automatically replayed. Remote
+Task owners remain authoritative; this does not add another remote recovery ledger.
+
+The existing required `Trusted repository validation` workflow calls the complete
+Discord reusable matrix and fails unless its result is success. Failure, skipped,
+cancelled and missing matrix results cannot produce a green required context.
+This candidate does not mutate GitHub administration settings.

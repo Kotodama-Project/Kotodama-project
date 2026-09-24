@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-review-chain-smoke.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-review-chain-smoke.schema.json",
   "title": "Kotodama Company Pack Review Chain Smoke",
   "$comment": "A closed report for the temporary, synthetic, external-free execution of the thirteen public Company Pack entrypoints. PASS does not verify reviewer identity, Human approval, execution authority, runtime, Promotion, Current Truth, Final Human GO, or Public Beta GO.",
   "type": "object",

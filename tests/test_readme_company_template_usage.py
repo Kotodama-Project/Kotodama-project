@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
     def test_readme_quick_start_keeps_generated_candidate_as_target(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         start = readme.index("## Quick Start — Company starter を試す")
         end = readme.index("## Runtime candidate を検査する", start)
         section = readme[start:end]
@@ -64,21 +64,21 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
         )
 
     def test_document_map_exposes_ideal_layers_before_current_entrypoints(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         start = readme.index("### 最初に読む")
         end = readme.index("### Company pack を review する", start)
         section = readme[start:end]
         required = (
-            "[Template Guide](docs/TEMPLATE-GUIDE.md)",
-            "[Company Template](templates/company/README.md)",
-            "[Blocks](templates/blocks/README.md)",
-            "[Governed Records](templates/records/README.md)",
-            "[MOCs](templates/mocs/README.md)",
-            "[Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md)",
-            "[Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)",
-            "[Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md)",
-            "[Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)",
-            "[Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)",
+            "[Template Guide](TEMPLATE-GUIDE.md)",
+            "[Company Template](../templates/company/README.md)",
+            "[Blocks](../templates/blocks/README.md)",
+            "[Governed Records](../templates/records/README.md)",
+            "[MOCs](../templates/mocs/README.md)",
+            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
+            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
+            "[Public Preview Self-check](PUBLIC-PREVIEW-SELF-CHECK.md)",
+            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
+            "[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)",
             "理想のCompany Template層",
             "Status と Roadmap は公開状況とPublic Beta gateを確認するためのorientationです",
             "その後の5項目",
@@ -95,7 +95,7 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
         orientation = section.index(
             "Status と Roadmap は公開状況とPublic Beta gateを確認するためのorientationです"
         )
-        template_guide = section.index("[Template Guide](docs/TEMPLATE-GUIDE.md)")
+        template_guide = section.index("[Template Guide](TEMPLATE-GUIDE.md)")
         ideal_layers = section.index("その後の5項目")
         self.assertLess(orientation, template_guide)
         self.assertLess(ideal_layers, template_guide)
@@ -115,14 +115,14 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
                 self.assertTrue((ROOT / relative_path).is_file())
 
     def test_document_map_links_review_chain_artifact_map_after_guided_next_steps(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         start = readme.index("### 最初に読む")
         end = readme.index("### Company pack を review する", start)
         section = readme[start:end]
 
         required = (
-            "[Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)",
-            "[Review-chain artifact map](docs/STARTER-WALKTHROUGH.md#review-chain-artifact-map)",
+            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
+            "[Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)",
             "artifact states and next handoffs",
             "read-only/candidate-only",
             "NO_GO_UNPUBLISHED",
@@ -132,14 +132,14 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
                 self.assertIn(marker, section)
 
         guided = section.index(
-            "[Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md)"
+            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)"
         )
         artifact_map = section.find(
-            "[Review-chain artifact map](docs/STARTER-WALKTHROUGH.md#review-chain-artifact-map)"
+            "[Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)"
         )
         if artifact_map < 0:
             return
-        lifecycle = section.index("[Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)")
+        lifecycle = section.index("[Installation Lifecycle](INSTALLATION-LIFECYCLE.md)")
         self.assertLess(guided, artifact_map)
         self.assertLess(artifact_map, lifecycle)
         self.assertTrue(
@@ -147,7 +147,7 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
         )
 
     def test_readme_distinguishes_ideal_and_current_template_usage(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         required = (
             "理想の使い方",
             "現在の Public Preview でできること",
@@ -161,7 +161,7 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
                 self.assertIn(marker, readme)
 
     def test_template_usage_flow_preserves_governance_order(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         ideal = readme.index("Company Template を複製")
         validator = readme.index("validator", ideal)
         review = readme.index("Review Bundle", validator)
@@ -171,7 +171,7 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
         self.assertLess(review, activation)
 
     def test_readme_first_stop_points_to_catalog_before_runtime_profiles(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
 
         for marker in (
             "## 最初に選ぶ",
@@ -194,7 +194,7 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
         self.assertLess(starter, lifecycle)
 
     def test_readme_exposes_posix_examples_for_the_same_public_candidate_path(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         required = (
             "```bash\nmkdir -p work",
             "python3 tools/create_company_pack.py my-company work/my-company",
@@ -216,7 +216,7 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
                 self.assertIn(marker, readme)
 
     def test_readme_validation_exposes_cross_shell_full_suite_commands(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         start = readme.index("## Validation")
         end = readme.index("## Example Company の作り方", start)
         section = readme[start:end]
@@ -241,7 +241,7 @@ class ReadmeCompanyTemplateUsageTests(unittest.TestCase):
         )
 
     def test_readme_keeps_posix_candidate_commands_in_governance_order(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         quick_start = readme.index("## Quick Start — Company starter を試す")
         runtime = readme.index("## Runtime candidate を検査する", quick_start)
         section = readme[quick_start:runtime]

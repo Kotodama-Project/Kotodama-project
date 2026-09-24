@@ -189,6 +189,45 @@ class CompanyPackReviewBundleVerifierCliTests(unittest.TestCase):
         self.assertEqual(report["reason"], "INVALID_BUNDLE_FORMAT")
         self.assertIsNone(report["pack_id"])
 
+    def test_deep_saved_json_is_a_non_reflective_format_refusal(self) -> None:
+        marker = "SYNTHETIC_PRIVATE_BUNDLE_BODY"
+        leaf = json.dumps(marker).encode("utf-8")
+        payloads = {
+            "shallow invalid": b'{"nested":' + leaf + b'}',
+            "deep array": (
+                b'{"nested":' + b'[' * 5000 + leaf + b']' * 5000 + b'}'
+            ),
+            "deep object": b'{"nested":' * 5000 + leaf + b'}' * 5000,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            bundle_path = parent / "synthetic-private-bundle.json"
+            pack = parent / "unused-private-pack"
+            for label, data in payloads.items():
+                with self.subTest(payload=label):
+                    self.assertLess(len(data), 1024 * 1024)
+                    bundle_path.write_bytes(data)
+                    result = self.run_verifier(bundle_path, pack)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stderr, "")
+                    self.assertEqual(len(result.stdout.splitlines()), 1)
+                    self.assertNotIn(marker, result.stdout)
+                    self.assertNotIn(str(bundle_path), result.stdout)
+                    self.assertNotIn(str(pack), result.stdout)
+                    report = json.loads(result.stdout)
+                    self.assertEqual(report["status"], "MISMATCH")
+                    self.assertEqual(report["reason"], "INVALID_BUNDLE_FORMAT")
+                    self.assertIsNone(report["pack_id"])
+                    self.assertEqual(report["binding_count"], 0)
+                    self.assertEqual(report["matched_bindings"], 0)
+                    self.assertEqual(report["mismatched_paths"], [])
+                    self.assertTrue(
+                        all(value is False for value in report["claims"].values())
+                    )
+                    self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+                    self.assertEqual(bundle_path.read_bytes(), data)
+                    self.assertFalse(pack.exists())
+
     def test_pack_not_ready_is_refused_without_binding_comparison(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             parent = Path(temporary)

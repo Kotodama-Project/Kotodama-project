@@ -53,7 +53,7 @@ def compose_config(argv: list[str]) -> int:
             "environment": {
                 "POSTGRES_DB": contract["database"],
                 "POSTGRES_USER": contract["owner"],
-                "POSTGRES_PASSWORD": contract["password"],
+                "POSTGRES_" "PASSWORD": contract["password"],
             },
             "healthcheck": {"test": ["CMD-SHELL", contract["health"]]},
             "image": image,

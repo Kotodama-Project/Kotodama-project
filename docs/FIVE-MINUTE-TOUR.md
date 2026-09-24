@@ -13,14 +13,14 @@ runtime、Promotion、Current Truth、Final Human GO、Public Beta GOは作ら�
 PowerShell:
 
 ```powershell
-git clone https://github.com/dj-thank/Kotodama-project.git
+git clone https://github.com/Kotodama-Project/Kotodama-project.git
 Set-Location Kotodama-project
 ```
 
 POSIX shell:
 
 ```bash
-git clone https://github.com/dj-thank/Kotodama-project.git
+git clone https://github.com/Kotodama-Project/Kotodama-project.git
 cd Kotodama-project
 ```
 

@@ -16,7 +16,7 @@ class FiveMinuteTourTests(unittest.TestCase):
         text = TOUR.read_text(encoding="utf-8")
 
         for marker in (
-            "git clone https://github.com/dj-thank/Kotodama-project.git",
+            "git clone https://github.com/Kotodama-Project/Kotodama-project.git",
             "Set-Location Kotodama-project",
             "python -S -B tools/smoke_company_pack_review_chain.py",
             "cd Kotodama-project",
@@ -54,12 +54,19 @@ class FiveMinuteTourTests(unittest.TestCase):
 
     def test_readme_exposes_tour_before_the_longer_quick_start(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        overview = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         link = "[5-minute tour](docs/FIVE-MINUTE-TOUR.md)"
 
         self.assertGreaterEqual(readme.count(link), 2)
-        self.assertLess(readme.index(link), readme.index("## Quick Start"))
-        self.assertIn("clone → 1 command → 結果を読む", readme)
-        self.assertIn("最初に読む", readme)
+        self.assertLess(
+            readme.index("smoke_company_pack_review_chain.py"),
+            readme.index("## 使い方を選ぶ"),
+        )
+        overview_link = "[5-minute tour](FIVE-MINUTE-TOUR.md)"
+        self.assertGreaterEqual(overview.count(overview_link), 2)
+        self.assertLess(overview.index(overview_link), overview.index("## Quick Start"))
+        self.assertIn("clone → 1 command → 結果を読む", overview)
+        self.assertIn("最初に読む", overview)
 
     def test_documented_success_contract_matches_the_real_smoke_report(self) -> None:
         with tempfile.TemporaryDirectory() as caller:

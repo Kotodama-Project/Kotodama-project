@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ReadmeCompanyOsStoryMapTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
 
     def test_reader_map_is_near_top_and_preserves_narrative_order(self) -> None:
         start = self.readme.index("## この README の読み方")
@@ -68,7 +68,7 @@ class ReadmeCompanyOsStoryMapTests(unittest.TestCase):
         for target in (
             "#discord-の中に会社を作る",
             "#voice--最初に価値を体感する入口",
-            "#grillu--一度に一つだけ深掘りする",
+            "#grillu-adaptive-requirements",
             "#evidence-chain--会話から-current-truth-まで",
             "#company-template--会社を再現できる部品",
             "#context-platform--会社の共有記憶",

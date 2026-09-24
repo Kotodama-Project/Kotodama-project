@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/dj-thank/Kotodama-project/schemas/company-pack-intent-candidate-instance.schema.json",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/company-pack-intent-candidate-instance.schema.json",
   "title": "Kotodama Company Pack Intent Candidate Instance",
   "$comment": "Schema-only private candidate contract. Validation does not retrieve a source body, verify a Source Record, source authenticity or completeness, access or consent, retention, subject identity or attribution, extraction provenance, prompt-injection safety, disclosure safety, Human confirmation, Human Intent, authority, a Decision, execution, Promotion, Current Truth, runtime readiness, Final Human GO, or Public Beta GO.",
   "type": "object",
