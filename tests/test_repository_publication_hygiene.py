@@ -141,7 +141,7 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
 
     def test_public_status_omits_the_private_runtime_identifier(self) -> None:
         status = (ROOT / "STATUS.md").read_text(encoding="utf-8")
-        self.assertNotIn("CT200", status)
+        self.assertIsNone(re.search(r"(?<![A-Za-z0-9])(?:CT|VM)\d{3}(?![0-9])", status))
         self.assertIn("private Voice runtime cutover attempt", status)
 
     def test_repository_validation_workflow_is_bounded_and_pinned(self) -> None:
