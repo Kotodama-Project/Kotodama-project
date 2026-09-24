@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/hierarchy-session-context.schema.json",
+  "title": "Kotodama Public Hierarchy Session Context",
+  "type": "object",
+  "required": [
+    "$schema",
+    "schema_version",
+    "kind",
+    "session_id",
+    "intent_ref",
+    "owner_role",
+    "created_at",
+    "status",
+    "worktree_enabled",
+    "parent_refs",
+    "evidence_refs"
+  ],
+  "properties": {
+    "$schema": {"const": "https://github.com/Kotodama-Project/Kotodama-project/schemas/hierarchy-session-context.schema.json"},
+    "schema_version": {"const": "1.0"},
+    "kind": {"const": "session_context"},
+    "session_id": {"type": "string", "minLength": 1, "maxLength": 160},
+    "intent_ref": {"type": "string", "minLength": 1, "maxLength": 256},
+    "owner_role": {"type": "string", "minLength": 1, "maxLength": 160},
+    "created_at": {"type": "string", "format": "date-time", "minLength": 1, "maxLength": 64},
+    "status": {
+      "enum": ["draft", "active", "blocked", "completed", "archived"]
+    },
+    "worktree_enabled": {"type": "boolean"},
+    "parent_refs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 256},
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 256},
+      "maxItems": 64,
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false
+}
