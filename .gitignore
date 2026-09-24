@@ -3,6 +3,12 @@ __pycache__/
 .pytest_cache/
 /work/
 
+# Local development environments; CI requires a clean tree after tests
+.venv/
+venv/
+venv-*/
+node_modules/
+
 # Local secret and environment material
 .env
 .env.*

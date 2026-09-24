@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/task-swarm-message.schema.json",
+  "title": "Task swarm transport message",
+  "description": "Task-scoped peer message request or immutable transport envelope. Payload text is stored by a separate digest-addressed owner adapter.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message_id",
+    "idempotency_key",
+    "task_id",
+    "revision",
+    "context_digest",
+    "owner_ref",
+    "active_home",
+    "authority_ref",
+    "capability_ref",
+    "sender_ref",
+    "recipient_ref",
+    "sender_epoch",
+    "invocation_ref",
+    "parent_message_id",
+    "payload_ref",
+    "payload_digest",
+    "expires_at"
+  ],
+  "properties": {
+    "message_id": { "$ref": "#/$defs/ref" },
+    "idempotency_key": { "$ref": "#/$defs/ref" },
+    "task_id": { "$ref": "#/$defs/ref" },
+    "revision": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "context_digest": { "$ref": "#/$defs/digest" },
+    "owner_ref": { "$ref": "#/$defs/ref" },
+    "active_home": { "$ref": "#/$defs/ref" },
+    "authority_ref": { "$ref": "#/$defs/ref" },
+    "capability_ref": { "$ref": "#/$defs/ref" },
+    "sender_ref": { "$ref": "#/$defs/ref" },
+    "recipient_ref": { "$ref": "#/$defs/ref" },
+    "sender_epoch": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "invocation_ref": { "$ref": "#/$defs/ref" },
+    "parent_message_id": {
+      "anyOf": [ { "type": "null" }, { "$ref": "#/$defs/ref" } ]
+    },
+    "payload_ref": { "$ref": "#/$defs/ref" },
+    "payload_digest": { "$ref": "#/$defs/digest" },
+    "expires_at": { "$ref": "#/$defs/timestamp" },
+    "stored_at": { "type": "number", "minimum": 0 },
+    "state": {
+      "enum": ["stored", "acked", "replied", "reply_acked", "expired", "stale"]
+    },
+    "ack": { "type": "boolean" },
+    "reply_ids": { "type": "array", "items": { "$ref": "#/$defs/ref" }, "maxItems": 100000 },
+    "unacked_reply_ids": { "type": "array", "items": { "$ref": "#/$defs/ref" }, "maxItems": 100000 },
+    "acked_at": { "type": "number", "minimum": 0 }
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[^\\u0000-\\u001f]+$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timestamp": {
+      "anyOf": [
+        { "type": "number", "minimum": 0 },
+        { "type": "string", "format": "date-time" }
+      ]
+    }
+  }
+}

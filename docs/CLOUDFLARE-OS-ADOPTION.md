@@ -4,7 +4,7 @@ Kotodama adopts two related but distinct Cloudflare planes.
 
 | Plane | Adopted role | Current public evidence | Not proven |
 |---|---|---|---|
-| Cloudflare edge | Bounded public ingress and application delivery through Workers and Access | content-free `/healthz` and `/version` candidate, exact Wrangler binding, manual preview-upload workflow candidate | upload, route, origin, production traffic, provider log retention, independent review, Public Beta |
+| Cloudflare edge | Bounded public ingress and application delivery through Workers and Access | content-free `/healthz` and `/version` candidate, exact Wrangler binding, manual preview-upload workflow candidate that accepts only the current `main` tip | upload, route, origin, production traffic, provider log retention, independent review, Public Beta |
 | Official Cloudflare OS | AI workspace, sandboxed Gadget application, Blueprint, and capability-based Gatekeeper foundation | exact official starter/core source pin, metadata-only Gatekeeper projections, a content-free local runtime receipt with 1060 passing tests, and a workspace-only security-overlay preflight with an observed generated-lock byte binding | frozen install and zero-high remediation proof, independent drift review, provider entitlement, Dynamic Worker provider execution, private Context, backup/restore, production |
 | Proxmox | Protected local compute, storage, search and service runtime | lifecycle/profile documentation and historical local evidence outside this public candidate | current live topology and deployment parity in this repository |
 | BecomeOne / Human Intent | Decision, Work Order, Promotion and Current Truth authority | public Company governance contracts | canonical adoption or live authority execution |

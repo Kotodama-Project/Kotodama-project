@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ReadmeCompanyOsStoryMapTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
 
     def test_reader_map_is_near_top_and_preserves_narrative_order(self) -> None:
         start = self.readme.index("## この README の読み方")

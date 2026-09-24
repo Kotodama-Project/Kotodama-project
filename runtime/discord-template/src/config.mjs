@@ -1,12 +1,15 @@
 import path from 'node:path';
 import {z} from 'zod';
 import {readJson, check, inside} from './common.mjs';
+import {immutableImage} from './verification.mjs';
+import {DEFAULT_ANALYSIS_LIMITS} from './analysis-admission.mjs';
 
 const id = z.string().regex(/^\d{5,24}$/);
 const envName=z.string().regex(/^[A-Z_][A-Z0-9_]*$/);
 const commandBase = z.object({executable:z.string().min(1),args:z.array(z.string()).default([]),model:z.string().optional(),codexHome:z.string().min(1).optional(),ignoreUserConfig:z.boolean().default(true),timeoutSeconds:z.number().int().min(5).max(3600).default(300)}).strict();
 const command=commandBase.extend({model:z.string().default('gpt-5.6-luna'),fallback:commandBase.extend({model:z.string().min(1)}).optional()});
-const analyzerContext={maxContextSources:z.number().int().min(1).max(30).default(12),maxContextChars:z.number().int().min(1000).max(120000).default(24000),maxTaskContextItems:z.number().int().min(0).max(10).default(5),maxTaskContextChars:z.number().int().min(0).max(40000).default(12000)};
+const analysisLimitsConfig=z.object({maxConcurrent:z.number().int().min(1).max(16),maxQueued:z.number().int().min(0).max(256),maxPerRoom:z.number().int().min(1).max(16),maxPerActor:z.number().int().min(1).max(16),maxDailyAnalyses:z.number().int().min(0).max(1000000),maxTotalAnalyses:z.number().int().min(0).max(10000000)}).partial().strict().transform(value=>({...DEFAULT_ANALYSIS_LIMITS,...value})).prefault({});
+const analyzerContext={limits:analysisLimitsConfig,maxContextSources:z.number().int().min(1).max(30).default(12),maxContextChars:z.number().int().min(1000).max(120000).default(24000),maxTaskContextItems:z.number().int().min(0).max(10).default(5),maxTaskContextChars:z.number().int().min(0).max(40000).default(12000)};
 const analyzerConfig=z.union([
   command.extend({kind:z.literal('codex_cli').default('codex_cli'),...analyzerContext}),
   z.object({kind:z.literal('responses'),model:z.string().default('gpt-5.6-luna'),apiKeyEnv:envName.default('OPENAI_API_KEY'),baseUrl:z.string().url().default('https://api.openai.com/v1'),timeoutSeconds:z.number().int().min(5).max(300).default(60),maxOutputTokens:z.number().int().min(256).max(8000).default(3000),reasoningEffort:z.enum(['low','medium','high']).default('low'),...analyzerContext}).strict()
@@ -22,12 +25,13 @@ export const Config = z.object({
   version:z.literal(1), installation:z.string().regex(/^[a-z0-9-]{1,64}$/), dataDir:z.string().default('data'),
   agentBinding:z.object({agentId:z.string().regex(/^[a-z0-9-]{1,64}$/),vmId:z.string().regex(/^[a-zA-Z0-9-]{1,64}$/)}).strict().optional(),
   discord:z.object({guildId:id,applicationId:id.optional(), textChannelIds:z.array(id).min(1), voiceChannelId:id.optional(), resultChannelId:id,
-    operators:z.array(id).min(1), consentingUsers:z.array(id).default([]),unattributedUsers:z.array(id).default([]),botTokenEnv:z.string().regex(/^[A-Z_][A-Z0-9_]*$/).default('DISCORD_BOT_TOKEN')}).strict(),
+    operators:z.array(id).min(1), agentChannelIds:z.array(id).default([]), consentingUsers:z.array(id).default([]),unattributedUsers:z.array(id).default([]),botTokenEnv:z.string().regex(/^[A-Z_][A-Z0-9_]*$/).default('DISCORD_BOT_TOKEN')}).strict(),
   voice,
   archive:z.object({enabled:z.boolean(),archiveRoot:z.string(),journalPath:z.string(),retentionPolicyRef:z.string(),sourceRef:z.string(),actorId:id,readers:z.array(id).min(1),ffmpeg:z.string().default('ffmpeg'),whisperEndpoint:z.string().url(),batchMs:z.number().int().min(20).max(250).default(250),rotationMs:z.number().int().min(1000).max(60000).default(55000),maxPendingSessions:z.number().int().min(1).max(128).default(16),maxJournalPcmBytes:z.number().int().min(1000000).max(1073741824).default(536870912),maxPcmBytes:z.number().int().min(1000000).max(134217728).default(134217728),vocabulary:z.array(z.string().max(100)).max(100).default([])}).strict().optional(),
   notifications:z.object({quietHours:z.object({enabled:z.boolean().default(false),startHour:z.number().int().min(0).max(23).default(22),endHour:z.number().int().min(0).max(23).default(9),timeZone:z.literal('Asia/Tokyo').default('Asia/Tokyo')}).prefault({})}).prefault({}),
   analyzer:analyzerConfig.prefault({kind:'codex_cli',executable:'codex',args:[],model:'gpt-5.6-luna',timeoutSeconds:120}),
   worker:command.extend({workspace:z.string(),actions:z.array(z.enum(['research','summarize','write_file','develop'])).default(['research','summarize']),
+    verification:z.object({kind:z.literal('docker'),image:z.string().regex(immutableImage),executable:z.string().min(1).default('docker'),memoryMb:z.number().int().min(128).max(8192).default(512),cpus:z.number().min(0.1).max(8).default(1),pidsLimit:z.number().int().min(16).max(512).default(64)}).strict().optional(),
     verify:z.array(z.object({executable:z.string().min(1),args:z.array(z.string())}).strict()).default([]),maxArtifactBytes:z.number().int().min(1000).max(50000000).default(5000000)}).strict(),
   owner:z.discriminatedUnion('kind',[
     z.object({kind:z.literal('local')}).strict(),
@@ -44,6 +48,8 @@ export async function loadConfig(filename) {
   config.dataDir=path.resolve(root,config.dataDir);if(config.archive?.enabled)check(path.isAbsolute(config.archive.archiveRoot)&&path.isAbsolute(config.archive.journalPath)&&inside(config.dataDir,config.archive.journalPath),'ARCHIVE_PATH_SCOPE');config.worker.workspace=path.resolve(root,config.worker.workspace);
   const commandAdapters=[config.worker,config.worker.fallback,...(config.analyzer.kind==='codex_cli'?[config.analyzer,config.analyzer.fallback]:[])];for(const adapter of commandAdapters)if(adapter?.codexHome)adapter.codexHome=path.resolve(root,adapter.codexHome);
   check(new Set(config.discord.operators).size===config.discord.operators.length,'DUPLICATE_OPERATOR');
+  // Agent channels are text channels the Bot already reads; they only drop the @mention requirement for operators.
+  check(config.discord.agentChannelIds.every(channel=>config.discord.textChannelIds.includes(channel)),'AGENT_CHANNEL_NOT_TEXT_CHANNEL');
   if(config.bridge.enabled)check(config.bridge.actorId&&config.discord.operators.includes(config.bridge.actorId),'BRIDGE_ACTOR_REQUIRED');
   if(config.browser.cdpUrl) {const u=new URL(config.browser.cdpUrl);check(['localhost','127.0.0.1','[::1]'].includes(u.hostname),'CDP_MUST_BE_LOOPBACK');}
   if(config.voice.localAsr){const u=new URL(config.voice.localAsr.url),host=u.hostname.toLowerCase(),v4=host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)?.slice(1).map(Number);const privateHost=['localhost','127.0.0.1','::1','[::1]'].includes(host)||host.endsWith('.ts.net')||Boolean(v4&&(v4[0]===10||v4[0]===127||v4[0]===192&&v4[1]===168||v4[0]===172&&v4[1]>=16&&v4[1]<=31||v4[0]===100&&v4[1]>=64&&v4[1]<=127));check(u.protocol==='https:'||u.protocol==='http:'&&privateHost,'LOCAL_ASR_TRANSPORT_REFUSED');check(!u.username&&!u.password&&!u.search&&!u.hash,'LOCAL_ASR_URL_INVALID');}

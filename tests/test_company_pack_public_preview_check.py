@@ -309,7 +309,7 @@ class PublicPreviewCheckTests(unittest.TestCase):
 
     def test_public_docs_expose_the_self_check_from_each_onboarding_surface(self) -> None:
         expected = {
-            ROOT / "README.md": "docs/PUBLIC-PREVIEW-SELF-CHECK.md",
+            ROOT / "docs" / "OVERVIEW.md": "](PUBLIC-PREVIEW-SELF-CHECK.md)",
             ROOT / "STATUS.md": "docs/PUBLIC-PREVIEW-SELF-CHECK.md",
             ROOT / "docs" / "TEMPLATE-GUIDE.md": "PUBLIC-PREVIEW-SELF-CHECK.md",
             ROOT / "docs" / "STARTER-WALKTHROUGH.md": "check_company_pack_public_preview.py",
@@ -322,7 +322,7 @@ class PublicPreviewCheckTests(unittest.TestCase):
                 self.assertIn(marker, path.read_text(encoding="utf-8"))
         self.assertTrue((ROOT / "docs" / "PUBLIC-PREVIEW-SELF-CHECK.md").is_file())
         for path in (
-            ROOT / "README.md",
+            ROOT / "docs" / "OVERVIEW.md",
             ROOT / "STATUS.md",
             ROOT / "docs" / "PUBLIC-PREVIEW-SELF-CHECK.md",
             ROOT / "docs" / "STARTER-WALKTHROUGH.md",

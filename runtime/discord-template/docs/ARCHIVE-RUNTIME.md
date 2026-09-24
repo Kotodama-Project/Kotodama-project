@@ -18,7 +18,7 @@ const archiveConfig = {
     actorId: operatorId,
     readers: authorizedReaders,
     ffmpeg: installedFfmpegExecutable,
-    whisperEndpoint: allowedCt202TranscribeUrl,
+    whisperEndpoint: allowedPrivateTranscribeUrl,
     batchMs: 250,
     rotationMs: 55000,
     maxPendingSessions: 16,

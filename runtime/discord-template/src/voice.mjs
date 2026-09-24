@@ -15,6 +15,20 @@ function audible(pcm){for(let i=0;i<pcm.length;i+=2)if(Math.abs(pcm.readInt16LE(
 const escaped=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 export function addressed(text,config){return config.voice.wakeWords.some(word=>new RegExp(`(?:^|[、,。.!！?？\\s])${escaped(word)}(?:[、,。.!！?？\\s]|$|(?:あ|ねえ|えっと)?(?:こんにちは|こんばんは|おはよう|聞こえ|きこえ|教えて|おしえて|お願い|調べて|確認して|どう思う))`,'i').test(text));}
 
+const accessEvents=['voiceStateUpdate','channelUpdate','guildMemberUpdate','guildMemberRemove','roleUpdate','roleDelete','threadMembersUpdate'];
+const guildOf=value=>value?.guild?.id??value?.guildId??null;
+// Client events arrive for every guild. Only events that can change who hears
+// the target voice channel, or what they may read, stop current speech. An
+// event whose guild cannot be identified still stops speech (fail closed).
+export function accessEventRelevant(event,args,target){
+  const guilds=args.map(guildOf).filter(Boolean);
+  if(guilds.length&&!guilds.includes(target.guildId))return false;
+  if(event!=='voiceStateUpdate'||!guilds.length)return true;
+  const [before,after]=args,from=before?.channelId??null,to=after?.channelId??null;
+  // Mute, deafen, stream and video toggles do not change the audience.
+  return from!==to&&(from===target.voiceChannelId||to===target.voiceChannelId);
+}
+
 export class VoiceRoom {
   constructor({client,config,store,pipeline,policy=()=>config,onError=()=>{},sourceReaders=async()=>[],providerFactory=o=>new VoiceProvider(o),localAsrFactory=o=>new LocalAsr(o),connectionFactory=joinVoiceChannel,waitForState=entersState}){
     Object.assign(this,{client,config,store,pipeline,policy,onError,sourceReaders,providerFactory,localAsrFactory,connectionFactory,waitForState});
@@ -24,8 +38,8 @@ export class VoiceRoom {
     this.localAsr=config.voice.transcriptSource==='local'?this.localAsrFactory({...config.voice.localAsr,apiKey:config.voice.localAsr.apiKeyEnv?process.env[config.voice.localAsr.apiKeyEnv]:null}):null;
     this.player=createAudioPlayer({behaviors:{noSubscriber:NoSubscriberBehavior.Pause}});
     this.control=new VoiceControl({room:this});
-    this.accessChanged=()=>{void this.stopSpeech();};
-    for(const event of ['voiceStateUpdate','channelUpdate','guildMemberUpdate','guildMemberRemove','roleUpdate','roleDelete','threadMembersUpdate'])client.on?.(event,this.accessChanged);
+    this.accessListeners=accessEvents.map(event=>[event,(...args)=>{if(accessEventRelevant(event,args,this.target))void this.stopSpeech();}]);
+    for(const [event,listener] of this.accessListeners)client.on?.(event,listener);
   }
   targetMatches(){const cfg=this.policy();return cfg.discord.guildId===this.target.guildId&&cfg.discord.voiceChannelId===this.target.voiceChannelId&&voiceBinding(cfg)===this.voiceBinding;}
   allowed(actor){const cfg=this.policy();if(!this.targetMatches()||this.store.voiceOptedOut(cfg.discord.guildId,cfg.discord.voiceChannelId,actor))return false;return cfg.voice.consentMode==='owner_managed'?cfg.voice.participantIds.includes(actor):this.store.consent(cfg.discord.guildId,cfg.discord.voiceChannelId,actor,voiceNotice(cfg).id);}
@@ -253,5 +267,5 @@ export class VoiceRoom {
     try{this.archive?.seal();}catch{this.onError('ARCHIVE_SEAL_FAILED');}
     return this.closing;
   }
-  async dispose(){await this.control.stop();for(const event of ['voiceStateUpdate','channelUpdate','guildMemberUpdate','guildMemberRemove','roleUpdate','roleDelete','threadMembersUpdate'])this.client.off?.(event,this.accessChanged);}
+  async dispose(){await this.control.stop();for(const [event,listener] of this.accessListeners)this.client.off?.(event,listener);}
 }

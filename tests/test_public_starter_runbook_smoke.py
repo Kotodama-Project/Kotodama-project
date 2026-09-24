@@ -32,7 +32,7 @@ class PublicStarterRunbookSmokeTests(unittest.TestCase):
 
     def test_public_docs_expose_full_review_chain_smoke(self) -> None:
         surfaces = {
-            "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
+            "README.md": (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8"),
             "docs/STARTER-WALKTHROUGH.md": (
                 ROOT / "docs" / "STARTER-WALKTHROUGH.md"
             ).read_text(encoding="utf-8"),
@@ -82,7 +82,7 @@ class PublicStarterRunbookSmokeTests(unittest.TestCase):
 
     def test_first_read_runbook_entries_name_the_complete_review_chain(self) -> None:
         surfaces = {
-            "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
+            "README.md": (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8"),
             "docs/STARTER-WALKTHROUGH.md": (
                 ROOT / "docs" / "STARTER-WALKTHROUGH.md"
             ).read_text(encoding="utf-8"),

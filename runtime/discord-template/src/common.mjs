@@ -21,7 +21,14 @@ export function redact(value) {
   if (typeof value !== 'string') return value;
   return value.replace(/\bsk-[A-Za-z0-9_-]{12,}\b/g,'[REDACTED]').replace(/\bBearer\s+[^\s"']+/gi,'Bearer [REDACTED]').replace(/\b[A-Za-z0-9_-]{22,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}\b/g,'[REDACTED]');
 }
-export function errorCode(error) { return error instanceof Refused ? error.code : 'OPERATION_FAILED'; }
+let errorHook = null;
+// Opt-in diagnostics (see debug-log.mjs). Callers still receive only a code.
+export function setErrorHook(hook) { errorHook = typeof hook === 'function' ? hook : null; }
+export function errorCode(error) {
+  if (error instanceof Refused) return error.code;
+  if (errorHook) { try { errorHook(error, String(new Error().stack ?? '').split('\n')[2]?.trim().replace(/^at\s+/, '') || null); } catch {} }
+  return 'OPERATION_FAILED';
+}
 export function inside(root, target) {
   const relative = path.relative(path.resolve(root), path.resolve(target));
   return relative === '' || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));

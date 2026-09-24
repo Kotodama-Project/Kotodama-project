@@ -1,0 +1,12 @@
+# Review ownership for the public Kotodama repository.
+# The maintainer reviews every change; governance-sensitive paths are listed
+# explicitly so the responsibility is visible even if a team is added later.
+
+*                                   @dj-thank
+
+/.github/                           @dj-thank
+/tools/check_tracked_secret_hygiene.py  @dj-thank
+/tools/check_workflow_references.py     @dj-thank
+/runtime/                           @dj-thank
+/schemas/                           @dj-thank
+/docs/                              @dj-thank
