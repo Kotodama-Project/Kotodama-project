@@ -12,7 +12,8 @@ and public access have different owners; do not create another status ledger her
    component's instructions before editing.
 4. Pin the repository, branch, HEAD, working-tree changes, intended outcome,
    owner, files, and verification boundary. Preserve existing work.
-5. If the checkout contains `docs/PROJECT-TASK-OPERATIONS.md` and
+5. The public repository does not ship the Task contract. If a maintainer's
+   checkout contains `docs/PROJECT-TASK-OPERATIONS.md` and
    `projects/kotodama-project/`, follow their Task resolver, records, events, and
    restart checkpoint. Reuse the stable Task ID; a session or Markdown summary
    does not own Task state. If those files are absent, do not invent a second
