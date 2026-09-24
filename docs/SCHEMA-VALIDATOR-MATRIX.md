@@ -326,7 +326,7 @@ python3 tools/validate_session_conversation_ledger.py validate path/to/ledger.js
 python3 tools/validate_session_conversation_ledger.py project path/to/ledger.jsonl ref/session/example
 ```
 
-## 13. Agent orchestration route-binding candidate
+## Agent orchestration route-binding candidate
 
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
 |---|---|---|---|
@@ -356,7 +356,7 @@ session、host、cwd、credentialは解決・出力せず、複数candidate間�
 `checks.schema=MATCH`を保ち、構造・parser・validatorの拒否だけを`REFUSED`とするため、
 修正対象を区別できますが、runtimeやauthorityの証明にはなりません。
 
-## 14. Agent swarm execution candidate
+## Agent swarm execution candidate
 
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
 |---|---|---|---|
