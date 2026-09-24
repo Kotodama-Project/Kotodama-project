@@ -1,0 +1,76 @@
+{
+  "kind": "executor_runtime_candidate",
+  "spec_version": "0.1",
+  "id": "openmanus-proxmox-executor",
+  "status": "candidate_only",
+  "purpose": "Evaluate OpenManus as a replaceable bounded execution worker for Kotodama, isolated in a Proxmox KVM guest without direct authority over Current Truth or the Proxmox management plane.",
+  "upstream": {
+    "repository": "FoundationAgents/OpenManus",
+    "revision": "3309bf4e416fb1c74b008f3e86494439a31bad53",
+    "license": "MIT",
+    "entrypoint": "python run_mcp.py --prompt <bounded-rendered-work-order>",
+    "browser_runtime": "Browser Use CLI 3.0 MCP; pin the resolved browser-use package before protected deployment"
+  },
+  "kotodama_role": {
+    "role": "bounded_executor",
+    "canonical_authority": "kotodama",
+    "may_promote_current_truth": false,
+    "may_modify_capability_grants": false
+  },
+  "runtime": {
+    "profile": "proxmox_segmented",
+    "guest_type": "kvm",
+    "vcpu": 4,
+    "memory_mib": 8192,
+    "disk_gib": 60,
+    "max_concurrency": 1,
+    "management_plane_access": "deny",
+    "outbound_network": "gateway_allowlist_only",
+    "shared_filesystem": "task_scoped_only"
+  },
+  "request_contract": {
+    "required_bindings": [
+      "work_order_id_or_digest",
+      "capability_grant_id_or_digest",
+      "candidate_revision_or_digest",
+      "budget_and_deadline",
+      "stop_conditions"
+    ],
+    "payload_mode": "task_scoped_locator_or_rendered_prompt",
+    "stop_on_scope_mismatch": true
+  },
+  "result_contract": {
+    "required_outputs": [
+      "execution_status",
+      "artifact_locators_or_digests",
+      "source_or_evidence_references",
+      "tool_trace_digest",
+      "unresolved_or_failed_checks",
+      "verification_candidate"
+    ],
+    "completion_is_promotion": false
+  },
+  "prohibited_operations": [
+    "direct Proxmox management API access from the worker",
+    "direct mutation of Kotodama Capability Grants",
+    "direct promotion to Current Truth",
+    "unscoped read of company-wide shared filesystems",
+    "production deletion or destructive infrastructure mutation without a separately bound Work Order",
+    "credential-store enumeration or export",
+    "payment, contract, or legal commitment outside an explicit bounded grant"
+  ],
+  "promotion_gates": [
+    "independent verification of artifacts and evidence",
+    "scope and capability-grant match",
+    "negative test for Proxmox management-plane reachability",
+    "negative test for non-task shared-data reachability",
+    "restart and rollback receipt for the worker guest",
+    "dependency and upstream revision pin review"
+  ],
+  "evaluation": {
+    "task_count": 20,
+    "trials_per_task": 3,
+    "human_time_reduction_hypothesis": 0.3,
+    "authority_breaches_allowed": 0
+  }
+}
