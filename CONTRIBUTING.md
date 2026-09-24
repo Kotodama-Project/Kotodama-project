@@ -63,15 +63,15 @@ pnpm check
 
 ## レビューと merge（現在の運用）
 
-- 必須チェックは `Trusted repository validation` です。
-- 現在は単独メンテナの運用で、人間の承認は GitHub 上で必須になっていません。Codex の自動レビューが PR に付くため、merge はそのレビューが投稿され、指摘を処理してから行います。人による独立レビューが成立した PR は本文にそう書き、成立していない PR を「独立レビュー済み」とは書きません。
+- 必須チェックは `Trusted repository validation`、`test (ubuntu-latest)`、`test (windows-latest)`、`Dependency review` の 4 件です（[docs/CI.md](docs/CI.md)）。
+- 現在は単独メンテナの運用で、人間の承認は GitHub 上で必須になっていません。Codex の自動レビューが付いたときは、その指摘を処理してから merge します。付かないとき（利用上限など）は、変更を書いた agent とは別の agent / session が diff を読み、根拠のある指摘を処理してから merge します（[自動改善ループ](docs/IMPROVEMENT-LOOP.md)）。人による独立レビューが成立した PR は本文にそう書き、成立していない PR を「独立レビュー済み」とは書きません。
 - draft PR は 14 日以上更新がなければ `status/parked` を付けて close し、要点を Issue に残します。
 - 担当は `.github/CODEOWNERS` にあります。
 
 ## 言語と用語
 
-日本語を正本にし、英語の要約を併記できます。用語は [README.md](README.md) の用語表と `CONTEXT` の定義に合わせます。境界を表す語（`NO_GO_UNPUBLISHED`、candidate-only、Promotion、Current Truth）は意味を変えずに使います。
+日本語を正本にし、英語の要約を併記できます。用語は [docs/OVERVIEW.md の用語](docs/OVERVIEW.md#用語) に合わせます。境界を表す語（`NO_GO_UNPUBLISHED`、candidate-only、Promotion、Current Truth）は意味を変えずに使います。
 
 ## English summary
 
-Narrow issues and pull requests are welcome. Keep the evidence and authority boundaries: never describe a local pass as live, deployed, or approved; never add secrets, private identifiers, participant data, audio, transcripts, or private source bodies. Documentation-only changes need `python -S -B tools/lint_docs.py`, the smoke, and `git diff --check`; code changes need the full local check list above (Python 3.12, hash-locked dependencies, `python -m unittest discover -s tests -v`). One topic per pull request, `type: summary` titles, the four-section template, and `Closes #N` when an issue exists. The repository is maintained by a single maintainer; automated review comments arrive on each pull request and are handled before merge.
+Narrow issues and pull requests are welcome. Keep the evidence and authority boundaries: never describe a local pass as live, deployed, or approved; never add secrets, private identifiers, participant data, audio, transcripts, or private source bodies. Documentation-only changes need `python -S -B tools/lint_docs.py`, the smoke, and `git diff --check`; code changes need the full local check list above (Python 3.12, hash-locked dependencies, `python -m unittest discover -s tests -v`). One topic per pull request, `type: summary` titles, the four-section template, and `Closes #N` when an issue exists. The repository is maintained by a single maintainer; an independent reviewer (the automated review, or a separate agent or session when it is unavailable) reads each diff, and its findings are handled before merge.

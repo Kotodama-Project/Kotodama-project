@@ -13,7 +13,7 @@ body:
     attributes:
       label: 対象の revision / Revision
       description: main の commit SHA、または PR 番号
-      placeholder: "86bc5bf"
+      placeholder: "0123abc または #123"
     validations:
       required: true
   - type: input

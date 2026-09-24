@@ -13,7 +13,7 @@
 | 公開 Python package（計画） | `kotodama-core` / import `kotodama_core` | Issue #26、#28 |
 | CLI（計画） | `kotodama`（alias `ktdm`） | Issue #26 |
 | Discord template（monorepo 内） | `runtime/discord-template`、package.json name `kotodama-discord-template` | このリポジトリ |
-| Discord template（公開 standalone） | repo `discord-voice-template`、package.json name `kotodama-discord-template` | GitHub |
+| Discord template（公開 standalone） | repo `discord-voice-template`、package.json name `kotodama-discord-voice-template` | GitHub |
 | private 側の evidence snapshot | repo `ktdm` | GitHub |
 | テストの一時ディレクトリ接頭辞 | `ktdm-` | `runtime/discord-template/tests` |
 | 旧 URL | `dj-thank/Kotodama-project` は organization transfer の redirect（fork ではない） | GitHub |
