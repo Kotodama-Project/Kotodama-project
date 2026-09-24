@@ -7,10 +7,12 @@ import sqlite3
 import subprocess
 import sys
 
+RUNTIME = Path(__file__).resolve().parents[1] / "runtime"
+if str(RUNTIME) not in sys.path:
+    sys.path.insert(0, str(RUNTIME))
+
 from task_swarm.protocol import digest, validate_binding
 from task_swarm.state import SwarmState
-
-RUNTIME = Path(__file__).resolve().parents[1] / "runtime"
 
 
 def children(program, args):
