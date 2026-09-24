@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "status": "candidate_only",
+  "reviewed_at": "2026-09-07",
+  "optimization_priority": [
+    "human_intent_and_authority",
+    "governance_integrity",
+    "knowledge_correctness",
+    "task_success_quality",
+    "recoverability",
+    "human_structuring_load",
+    "latency",
+    "cost"
+  ],
+  "cadence": [
+    {"id": "pr-deterministic", "frequency": "on_pull_request", "mode": "deterministic", "authority": "read_only", "outputs": ["audit_report"]},
+    {"id": "daily-inventory", "frequency": "daily", "mode": "deterministic", "authority": "read_only", "outputs": ["audit_report"]},
+    {"id": "weekly-knowledge-agent-review", "frequency": "weekly", "mode": "agentic", "authority": "proposal_only", "outputs": ["candidate_issue", "candidate_work_order", "candidate_patch"]},
+    {"id": "weekly-okf-review", "frequency": "weekly", "mode": "agentic", "authority": "proposal_only", "outputs": ["candidate_metric_update", "candidate_okf_change", "candidate_work_order"]},
+    {"id": "monthly-governance-review", "frequency": "monthly", "mode": "human_plus_agent", "authority": "proposal_only", "outputs": ["governance_review_bundle"]}
+  ],
+  "gates": [
+    {"id": "canonical-owner-exists", "severity": "error", "condition": "every fact family canonical_path exists"},
+    {"id": "inventory-coverage", "severity": "error", "condition": "repository classification coverage >= knowledge registry threshold"},
+    {"id": "status-freshness", "severity": "warning", "condition": "current public status is within freshness SLA"},
+    {"id": "registered-active-agent", "severity": "critical", "condition": "every active agent has a registry entry"},
+    {"id": "agent-activation-evidence", "severity": "critical", "condition": "active agent has eval, capability grant, runtime evidence and rollback"},
+    {"id": "promotion-boundary", "severity": "critical", "condition": "agent automation cannot silently create Human approval, Capability Grant, Promotion, Current Truth, runtime activation, Final Human GO or Public Beta GO"},
+    {"id": "critical-contradiction", "severity": "critical", "condition": "no unresolved severity-1 contradiction crosses a promotion gate"}
+  ],
+  "finding_lifecycle": {
+    "states": ["detected", "triaged", "candidate_work_created", "verified", "resolved", "accepted_risk"],
+    "critical_owner_sla_days": 1,
+    "high_resolution_target_days": 7,
+    "required_fields": ["finding_id", "severity", "source", "evidence", "owner", "next_action", "state"]
+  },
+  "autonomy_boundaries": {
+    "deterministic_checks_may_run_automatically": true,
+    "agentic_maintenance_default": "proposal_only",
+    "automatic_outputs_allowed": ["audit_report", "candidate_issue", "candidate_work_order", "candidate_patch", "candidate_eval_case"],
+    "automatic_outputs_forbidden": ["human_approval", "capability_grant", "promotion", "current_truth_change", "runtime_deployment", "destructive_canonical_deletion", "final_human_go", "public_beta_go"]
+  }
+}

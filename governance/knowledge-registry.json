@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "status": "candidate_only",
+  "reviewed_at": "2026-09-07",
+  "inventory_scope": {
+    "include": ["*"],
+    "exclude": [".git/**", "__pycache__/**", "*.pyc", ".pytest_cache/**", ".mypy_cache/**", ".ruff_cache/**", "work/**", ".venv/**", "venv/**"],
+    "minimum_classification_coverage": 0.98
+  },
+  "fact_families": [
+    {
+      "id": "project_goal_and_kgi",
+      "description": "North Star Goal, KGI, Key Factors, phase gates and strategic measurement semantics",
+      "canonical_path": "governance/okf.json",
+      "human_projection_paths": ["OKF.md"],
+      "classification_patterns": ["OKF.md", "governance/okf.json", "schemas/okf.schema.json"],
+      "freshness": {"mode": "json_field", "field": "reviewed_at", "max_age_days": 14, "severity": "warning"},
+      "owner_role": "OKF Steward",
+      "required_provenance": ["human intent", "measurement evidence", "promotion decision for target changes"]
+    },
+    {
+      "id": "current_public_state",
+      "description": "What is actually published, verified, live, blocked, or not yet proven",
+      "canonical_path": "STATUS.md",
+      "human_projection_paths": ["README.md"],
+      "classification_patterns": ["STATUS.md"],
+      "freshness": {"mode": "date_line", "prefix": "Updated:", "max_age_days": 14, "severity": "warning"},
+      "owner_role": "Evidence Auditor",
+      "required_provenance": ["commit/revision", "test or runtime evidence", "explicit claim boundary"]
+    },
+    {
+      "id": "public_beta_execution_sequence",
+      "description": "Public Beta-oriented implementation and gate sequence",
+      "canonical_path": "ROADMAP.md",
+      "human_projection_paths": [],
+      "classification_patterns": ["ROADMAP.md"],
+      "freshness": {"mode": "manual", "max_age_days": null, "severity": "info"},
+      "owner_role": "OKF Steward",
+      "required_provenance": ["status evidence", "dependency order"]
+    },
+    {
+      "id": "public_orientation",
+      "description": "Reader-facing system map and project orientation; not the canonical live-status owner",
+      "canonical_path": "README.md",
+      "human_projection_paths": [],
+      "classification_patterns": ["README.md"],
+      "freshness": {"mode": "manual", "max_age_days": null, "severity": "info"},
+      "owner_role": "Knowledge Curator",
+      "required_provenance": ["links to canonical status and contracts"]
+    },
+    {
+      "id": "knowledge_operations",
+      "description": "Knowledge inventory, canonical ownership, freshness and contradiction handling",
+      "canonical_path": "governance/knowledge-registry.json",
+      "human_projection_paths": ["docs/KNOWLEDGE-BASE.md"],
+      "classification_patterns": ["governance/knowledge-registry.json", "docs/KNOWLEDGE-BASE.md", "schemas/knowledge-registry.schema.json"],
+      "freshness": {"mode": "json_field", "field": "reviewed_at", "max_age_days": 14, "severity": "warning"},
+      "owner_role": "Knowledge Curator",
+      "required_provenance": ["repository inventory", "canonical owner decisions"]
+    },
+    {
+      "id": "agent_portfolio",
+      "description": "Agent purpose, lifecycle, authority, eval gates, rollback and retirement",
+      "canonical_path": "governance/agent-registry.json",
+      "human_projection_paths": ["docs/AGENT-FOUNDRY-OPERATIONS.md"],
+      "classification_patterns": ["governance/agent-registry.json", "docs/AGENT-FOUNDRY-OPERATIONS.md", "schemas/agent-registry.schema.json"],
+      "freshness": {"mode": "json_field", "field": "reviewed_at", "max_age_days": 14, "severity": "warning"},
+      "owner_role": "Agent Auditor",
+      "required_provenance": ["eval evidence", "capability grants", "runtime evidence before activation"]
+    },
+    {
+      "id": "audit_policy",
+      "description": "Automated audit cadence, findings, autonomy boundaries and optimization priority",
+      "canonical_path": "governance/audit-policy.json",
+      "human_projection_paths": [],
+      "classification_patterns": ["governance/audit-policy.json", "schemas/audit-policy.schema.json", "tools/audit_control_plane.py", "tests/test_control_plane.py", ".github/workflows/control-plane-audit.yml"],
+      "freshness": {"mode": "json_field", "field": "reviewed_at", "max_age_days": 30, "severity": "warning"},
+      "owner_role": "Evidence Auditor",
+      "required_provenance": ["audit findings", "policy decision"]
+    },
+    {
+      "id": "governance_contracts_and_templates",
+      "description": "Schemas, Company Pack templates, governed records and navigation maps",
+      "canonical_path": "schemas/company-manifest.schema.json",
+      "human_projection_paths": ["docs/TEMPLATE-GUIDE.md"],
+      "classification_patterns": ["schemas/*.json", "templates/*", "templates/**/*"],
+      "freshness": {"mode": "manual", "max_age_days": null, "severity": "info"},
+      "owner_role": "Governance Maintainer",
+      "required_provenance": ["schema validation", "regression tests"]
+    },
+    {
+      "id": "documentation_and_runbooks",
+      "description": "Runbooks, review workflow, candidate contracts and operator documentation",
+      "canonical_path": "docs/SCHEMA-VALIDATOR-MATRIX.md",
+      "human_projection_paths": [],
+      "classification_patterns": ["docs/*.md"],
+      "freshness": {"mode": "manual", "max_age_days": null, "severity": "info"},
+      "owner_role": "Knowledge Curator",
+      "required_provenance": ["linked schema/tool/evidence"]
+    },
+    {
+      "id": "runtime_candidates",
+      "description": "Runtime and deployment candidates; does not imply live deployment",
+      "canonical_path": "runtime/compose-minimum/README.md",
+      "human_projection_paths": [],
+      "classification_patterns": ["runtime/*", "runtime/**/*"],
+      "freshness": {"mode": "manual", "max_age_days": null, "severity": "info"},
+      "owner_role": "Runtime Maintainer",
+      "required_provenance": ["runtime receipt before live claims"]
+    },
+    {
+      "id": "implementation_tools",
+      "description": "Deterministic repository tooling and validators",
+      "canonical_path": "tools/validate_template_pack.py",
+      "human_projection_paths": [],
+      "classification_patterns": ["tools/*.py"],
+      "freshness": {"mode": "manual", "max_age_days": null, "severity": "info"},
+      "owner_role": "Tooling Maintainer",
+      "required_provenance": ["tests", "closed output contract"]
+    },
+    {
+      "id": "verification_suite",
+      "description": "Regression and contract tests",
+      "canonical_path": "tests/test_validate_template_pack.py",
+      "human_projection_paths": [],
+      "classification_patterns": ["tests/*.py"],
+      "freshness": {"mode": "manual", "max_age_days": null, "severity": "info"},
+      "owner_role": "Evidence Auditor",
+      "required_provenance": ["test result"]
+    },
+    {
+      "id": "examples_and_fixtures",
+      "description": "Candidate examples, fixtures and public starter data",
+      "canonical_path": "examples/company-starter/README.md",
+      "human_projection_paths": [],
+      "classification_patterns": ["examples/*", "examples/**/*"],
+      "freshness": {"mode": "manual", "max_age_days": null, "severity": "info"},
+      "owner_role": "Knowledge Curator",
+      "required_provenance": ["schema-valid fixture"]
+    },
+    {
+      "id": "repository_configuration",
+      "description": "Repository-level configuration and test dependency declaration",
+      "canonical_path": "requirements-test.txt",
+      "human_projection_paths": [],
+      "classification_patterns": [".gitattributes", ".gitignore", "requirements-test.txt", ".github/*", ".github/**/*"],
+      "freshness": {"mode": "manual", "max_age_days": null, "severity": "info"},
+      "owner_role": "Repository Maintainer",
+      "required_provenance": ["reviewed change"]
+    }
+  ],
+  "contradiction_policy": {
+    "severity_1_examples": [
+      "Public Beta / runtime / Voice / Discord / Current Truth が evidence なしに成立したと主張する",
+      "同じ fact family に複数の competing canonical owner を置く",
+      "revoked authority or consent を active と扱う"
+    ],
+    "required_action": "stop promotion, open a candidate finding, bind conflicting sources, require authorized resolution",
+    "agent_may_auto_resolve": false
+  }
+}

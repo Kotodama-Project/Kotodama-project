@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/agent-registry.schema.json",
+  "title": "Kotodama Agent Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "status", "reviewed_at", "activation_policy", "agents"],
+  "properties": {
+    "version": {"const": 1},
+    "status": {"enum": ["candidate_only", "promoted"]},
+    "reviewed_at": {"type": "string", "format": "date"},
+    "activation_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default", "required_before_active", "unregistered_agent", "candidate_only_note"],
+      "properties": {
+        "default": {"const": "not_active"},
+        "required_before_active": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "unregistered_agent": {"const": "forbidden"},
+        "candidate_only_note": {"type": "string", "minLength": 1}
+      }
+    },
+    "agents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "purpose", "activation_state", "authority", "reads_fact_families", "outputs", "capabilities", "prohibited_actions", "kgi_links", "key_factor_links", "eval_gate", "rollback", "implementation", "runtime_evidence"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+          "name": {"type": "string", "minLength": 1},
+          "purpose": {"type": "string", "minLength": 1},
+          "activation_state": {"enum": ["planned", "candidate", "active", "disabled", "retired"]},
+          "authority": {"enum": ["read_only", "proposal_only", "bounded_execute"]},
+          "reads_fact_families": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "outputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "capabilities": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "prohibited_actions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "kgi_links": {"type": "array", "items": {"type": "string", "pattern": "^KGI-[0-9]{2}$"}, "uniqueItems": true},
+          "key_factor_links": {"type": "array", "items": {"type": "string", "pattern": "^KF-[0-9]{2}$"}, "uniqueItems": true},
+          "eval_gate": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["required_before_activation", "suite", "minimum_pass_rate", "critical_failures_allowed"],
+            "properties": {
+              "required_before_activation": {"type": "boolean"},
+              "suite": {"type": "string", "minLength": 1},
+              "minimum_pass_rate": {"type": "number", "minimum": 0, "maximum": 1},
+              "critical_failures_allowed": {"type": "integer", "minimum": 0}
+            }
+          },
+          "rollback": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["method", "owner_role"],
+            "properties": {
+              "method": {"type": "string", "minLength": 1},
+              "owner_role": {"type": "string", "minLength": 1}
+            }
+          },
+          "implementation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "path"],
+            "properties": {
+              "kind": {"enum": ["unbound", "script", "service", "workflow", "external_adapter"]},
+              "path": {"type": ["string", "null"]}
+            }
+          },
+          "runtime_evidence": {"type": ["string", "object", "null"]}
+        }
+      }
+    }
+  }
+}
