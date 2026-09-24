@@ -292,7 +292,7 @@ class OwnerIntentCompanyAgiTests(unittest.TestCase):
             for private_pattern in (
                 re.compile(r"source_thread_id"),
                 re.compile(r"[A-Za-z]:\\Users\\"),
-                re.compile(r"\b(?:CT|VM)\d{3}\b"),
+                re.compile(r"(?<![A-Za-z0-9])(?:CT|VM)\d{3}(?![A-Za-z0-9])"),
                 re.compile(r"\blocal-zfs-"),
             ):
                 with self.subTest(pattern=private_pattern.pattern):
