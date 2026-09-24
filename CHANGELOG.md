@@ -18,7 +18,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - `/kotodama tasks` が一時停止中（paused）と状態確認中（uncertain）を日本語で表示し、`/kotodama ask` は解析を後回しにした場合にそう伝える（[#99](https://github.com/Kotodama-Project/Kotodama-project/pull/99)）。
 - 必須チェック `Trusted repository validation` が Task swarm の Linux / Windows 試験も要求する。swarm の依存は共通 lock と分けた hash 付きの `requirements-task-swarm-ci.txt` から入れる（[#100](https://github.com/Kotodama-Project/Kotodama-project/pull/100)）。
 - 公開面の識別子検査が、日本語に隣接して書かれた private host の番号も拾うようにした。残っていた 2 箇所を中立化し、`docs/REPOSITORIES.md` は公開リポジトリだけにした（[#108](https://github.com/Kotodama-Project/Kotodama-project/pull/108)）。
-- README・STATUS・ROADMAP・CI などの文書を #99〜#102 後の main に合わせた。Task swarm を main 側へ移し、必須チェック 4 本、エージェント用チャンネル、知識基盤は #48 系・音声は Node runtime という owner 判断（2026-09-24）を反映した。
+- README・STATUS・ROADMAP・CI などの文書を #99〜#102 後の main に合わせた。Task swarm を main 側へ移し、必須チェック 4 本、エージェント用チャンネル、知識基盤は #48 系・音声は Node runtime という owner 判断（2026-09-24）を反映した（[#112](https://github.com/Kotodama-Project/Kotodama-project/pull/112)）。
 
 ### Fixed
 
