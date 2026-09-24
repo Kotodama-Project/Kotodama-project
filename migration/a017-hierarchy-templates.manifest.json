@@ -25,7 +25,7 @@
     "license_and_provenance": "RECORDED_ISSUE_25_OWNER_DECISION",
     "source_history_secret_pii": "PASSED_PRIVATE_RECEIPT",
     "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
-    "independent_review": "PENDING"
+    "independent_review": "PASSED_INDEPENDENT_REVIEW"
   },
   "entries": [
     {

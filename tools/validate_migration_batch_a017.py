@@ -131,7 +131,7 @@ README_PATH = Path("templates/hierarchy/README.md")
 CATALOG_PATH = Path("templates/README.md")
 GUIDE_PATH = Path("docs/TEMPLATE-GUIDE.md")
 PROVENANCE_PATH = Path("migration/a017-hierarchy-templates.provenance.json")
-RIGHTSHOLDER_RECORD = "https://github.com/Kotodama-Project/Kotodama-project/issues/25"
+RIGHTSHOLDER_RECORD = "Kotodama-Project/Kotodama-project#25"
 # Admission evidence (Issue #25, 2026-09-24): the owner recorded the
 # rightsholder decision, a private source-history scan produced a receipt whose
 # digest is in the provenance file, and an independent review is recorded last.
