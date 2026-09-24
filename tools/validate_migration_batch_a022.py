@@ -18,10 +18,10 @@ LICENSE_PATH = Path("LICENSES/MIT.txt")
 SOURCE_COMMIT = "2fc1bf60b0dc8721c96875788447e34adc4c7216"
 SOURCE_LICENSE_BLOB = "8294a2a3706f3fd652b8c1bae22a1024ade9406c"
 SOURCE_PACKAGE_BLOB = "39804f52b523024c8b62eae678f897166ae0a47a"
-SOURCE_MAPPING_DIGEST = "48dd3a64e4d2e18288445e08c2921028d4a6909e9d7333eafee0d73c225dceb5"
+SOURCE_MAPPING_DIGEST = "13223c08cb25bf0fb7e5eb406880290768690c7bd4e0dfecf78541fbf0395232"
 
 DESTINATIONS = {
-    "docs/architecture/README.md": "f7e40d2803a97c151a338ff5c52b7d2a78ae854f",
+    "docs/architecture/README.md": "375589b3fecd47b262057d75584bf2b2b1863887",
     "docs/architecture/multi-agent-coordination.md": "a6adf2717798dc742e627e3e35226c2695ec206e",
     "docs/architecture/plan-runtime.md": "25f7484d6c17e50dfcfb690dedf51d9383748748",
     "docs/architecture/supervision-contract.md": "f7ca884b5cd34fb890842f668ca2af4d57f4edff",
@@ -42,8 +42,24 @@ SUPERSEDED_REFS = {
         "fbb6da377edd2b726a854912eb17c964a1ec01e9:STATUS.md",
     ),
 }
+PROVENANCE_PATH = Path("migration/a022-public-architecture.provenance.json")
+RIGHTSHOLDER_RECORD = "Kotodama-Project/Kotodama-project#25"
+# Admission evidence: Issue #25 owner decision (24 September 2026), a private
+# source-history scan receipt bound by digest in the provenance file, the
+# merged PR #18 / closed Issue #19 baseline, Dependency Review as a required
+# check on the pull request to main, and an independent review recorded last.
+RECORDED_GATES = {
+    "license_and_provenance": "RECORDED_ISSUE_25_OWNER_DECISION",
+    "applicable_source_history_secret_pii": "PASSED_PRIVATE_RECEIPT",
+    "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
+    "public_governance": "PASSED_PR_18_MERGED_ISSUE_19_CLOSED",
+    "dependency_review": "REQUIRED_CHECK_ON_MAIN_PULL_REQUEST",
+}
+REVIEW_STATES = {"PENDING", "PASSED_INDEPENDENT_REVIEW"}
+PRIVATE_RESULTS = {"PASS", "PASS_AFTER_TRIAGE"}
 REQUIRED_PATHS = {
     MANIFEST_PATH,
+    PROVENANCE_PATH,
     LICENSE_PATH,
     Path("tools/validate_migration_batch_a022.py"),
     Path("tests/test_migration_batch_a022.py"),
@@ -250,21 +266,19 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "license_file": "LICENSES/MIT.txt",
         "license_blob_sha": SOURCE_LICENSE_BLOB,
         "source_derived_scope": sorted(DESTINATIONS),
-        "license_and_provenance_gate": "BLOCKED_ISSUE_25",
+        "license_and_provenance_gate": "RECORDED_ISSUE_25_OWNER_DECISION",
         "apache_pr18_relicenses_component": False,
     }:
         errors.append("component MIT scope or provenance boundary mismatch")
 
-    expected_gates = {
-        "license_and_provenance": "BLOCKED_ISSUE_25",
-        "applicable_source_history_secret_pii": "BLOCKED_MISSING_A022_PRIVATE_RECEIPT",
-        "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
-        "independent_review": "PENDING",
-        "public_governance": "BLOCKED_PR_18_AND_ISSUE_19",
-        "dependency_review": "BLOCKED_UNTIL_RETARGET_TO_MAIN",
-    }
-    if manifest.get("admission_gates") != expected_gates:
-        errors.append("admission gates must remain fail closed")
+    gates = manifest.get("admission_gates")
+    if not isinstance(gates, dict):
+        gates = {}
+    review_state = gates.get("independent_review")
+    if {key: value for key, value in gates.items() if key != "independent_review"} != RECORDED_GATES:
+        errors.append("admission gates must match the recorded admission evidence")
+    if review_state not in REVIEW_STATES:
+        errors.append("independent review gate must be PENDING or PASSED_INDEPENDENT_REVIEW")
 
     raw_entries = manifest.get("entries")
     if not isinstance(raw_entries, list) or any(
@@ -420,6 +434,53 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
                 errors.append(f"architecture boundary missing from {path}: {phrase}")
         errors.extend(_scan_text(Path(path), text))
 
+    provenance_data = _read_bounded(root, PROVENANCE_PATH, errors)
+    if provenance_data is not None:
+        try:
+            provenance = json.loads(provenance_data.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            provenance = {}
+            errors.append("provenance file is not valid UTF-8 JSON")
+        if not isinstance(provenance, dict):
+            provenance = {}
+        if provenance.get("schema_version") != "kotodama.public-migration-provenance.v1":
+            errors.append("unexpected provenance schema_version")
+        if provenance.get("batch_id") != "A022" or provenance.get("source_fixed_commit") != SOURCE_COMMIT:
+            errors.append("provenance is not bound to the A022 fixed source commit")
+        if provenance.get("license_expression") != "MIT":
+            errors.append("provenance license expression must be MIT")
+        if provenance.get("rightsholder_record") != RIGHTSHOLDER_RECORD:
+            errors.append("provenance must cite the Issue #25 rightsholder record")
+        digest = provenance.get("private_source_history_receipt_sha256")
+        if not (isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest)):
+            errors.append("provenance must bind the private source-history receipt digest")
+        if provenance.get("private_source_history_result") not in PRIVATE_RESULTS:
+            errors.append("private source-history receipt did not pass")
+        exported = {
+            entry.get("source_path"): entry.get("source_blob_sha")
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("decision") == "PUBLIC_REAUTHOR"
+        }
+        rows = provenance.get("entries")
+        if not isinstance(rows, list):
+            rows = []
+        if sorted(str(row.get("source_path")) for row in rows if isinstance(row, dict)) != sorted(exported):
+            errors.append("provenance must cover exactly the re-authored sources")
+        for row in rows:
+            if not isinstance(row, dict):
+                errors.append("provenance entries must be objects")
+                continue
+            handles = row.get("author_github_handles")
+            if not (isinstance(row.get("commits_touching_source"), int) and row["commits_touching_source"] >= 1):
+                errors.append("provenance entry must count at least one source commit")
+            if not (isinstance(handles, list) and all(isinstance(h, str) and re.fullmatch(r"[A-Za-z0-9-]{1,39}", h) for h in handles)):
+                errors.append("provenance authors must be GitHub handles")
+            if not (isinstance(row.get("withheld_author_identities"), int) and row["withheld_author_identities"] >= 0):
+                errors.append("provenance must count withheld author identities")
+            if row.get("source_blob_sha") != exported.get(row.get("source_path")):
+                errors.append("provenance source blob does not match the manifest")
+        errors.extend(_scan_text(PROVENANCE_PATH, provenance_data.decode("utf-8", errors="replace")))
+
     license_data = _read_bounded(root, LICENSE_PATH, errors)
     if license_data is not None and _candidate_blob_sha(license_data) != SOURCE_LICENSE_BLOB:
         errors.append("MIT license bytes do not match pinned source license blob")
@@ -459,14 +520,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         ),
         "component_license": "MIT",
         "license_blob_sha": SOURCE_LICENSE_BLOB,
-        "admission_status": "BLOCKED",
-        "no_go_reasons": [
-            "ISSUE_25_LICENSE_PROVENANCE",
-            "MISSING_APPLICABLE_A022_PRIVATE_SOURCE_HISTORY_RECEIPT",
-            "INDEPENDENT_REVIEW_PENDING",
-            "PR18_AND_ISSUE19_GOVERNANCE_PENDING",
-            "DEPENDENCY_REVIEW_AFTER_RETARGET_PENDING",
-        ],
+        "admission_status": "ADMITTED" if not errors and review_state == "PASSED_INDEPENDENT_REVIEW" else "BLOCKED",
+        "no_go_reasons": [] if review_state == "PASSED_INDEPENDENT_REVIEW" else ["INDEPENDENT_REVIEW_PENDING"],
         "errors": errors,
     }
 

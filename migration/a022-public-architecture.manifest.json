@@ -23,7 +23,7 @@
       "docs/architecture/plan-runtime.md",
       "docs/architecture/supervision-contract.md"
     ],
-    "license_and_provenance_gate": "BLOCKED_ISSUE_25",
+    "license_and_provenance_gate": "RECORDED_ISSUE_25_OWNER_DECISION",
     "apache_pr18_relicenses_component": false
   },
   "decision_contract": {
@@ -50,7 +50,7 @@
     {
       "group": "principles-boundaries",
       "destination_path": "docs/architecture/README.md",
-      "destination_blob_sha": "f7e40d2803a97c151a338ff5c52b7d2a78ae854f",
+      "destination_blob_sha": "375589b3fecd47b262057d75584bf2b2b1863887",
       "source_count": 2,
       "coverage_rule": "DISTINCT_PER_SOURCE"
     },
@@ -63,12 +63,12 @@
     }
   ],
   "admission_gates": {
-    "license_and_provenance": "BLOCKED_ISSUE_25",
-    "applicable_source_history_secret_pii": "BLOCKED_MISSING_A022_PRIVATE_RECEIPT",
+    "license_and_provenance": "RECORDED_ISSUE_25_OWNER_DECISION",
+    "applicable_source_history_secret_pii": "PASSED_PRIVATE_RECEIPT",
     "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
     "independent_review": "PENDING",
-    "public_governance": "BLOCKED_PR_18_AND_ISSUE_19",
-    "dependency_review": "BLOCKED_UNTIL_RETARGET_TO_MAIN"
+    "public_governance": "PASSED_PR_18_MERGED_ISSUE_19_CLOSED",
+    "dependency_review": "REQUIRED_CHECK_ON_MAIN_PULL_REQUEST"
   },
   "entries": [
     {
@@ -92,7 +92,7 @@
       "source_mode": "100644",
       "decision": "PUBLIC_REAUTHOR",
       "destination_path": "docs/architecture/README.md",
-      "destination_blob_sha": "f7e40d2803a97c151a338ff5c52b7d2a78ae854f",
+      "destination_blob_sha": "375589b3fecd47b262057d75584bf2b2b1863887",
       "consolidation_group": "principles-boundaries",
       "body_exported": false,
       "semantic_coverage": [
@@ -109,7 +109,7 @@
       "source_mode": "100644",
       "decision": "PUBLIC_REAUTHOR",
       "destination_path": "docs/architecture/README.md",
-      "destination_blob_sha": "f7e40d2803a97c151a338ff5c52b7d2a78ae854f",
+      "destination_blob_sha": "375589b3fecd47b262057d75584bf2b2b1863887",
       "consolidation_group": "principles-boundaries",
       "body_exported": false,
       "semantic_coverage": [

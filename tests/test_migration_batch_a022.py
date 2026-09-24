@@ -42,7 +42,7 @@ class A022MigrationBatchTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def test_exact_candidate_passes_but_admission_remains_blocked(self) -> None:
+    def test_exact_candidate_passes_and_reports_the_recorded_admission(self) -> None:
         result = VALIDATOR.validate(ROOT)
         manifest = self._manifest(ROOT)
 
@@ -57,15 +57,57 @@ class A022MigrationBatchTests(unittest.TestCase):
         self.assertEqual(result["source_architecture_blob_reuse"], 0)
         self.assertEqual(result["private_source_path_leakage"], 0)
         self.assertEqual(result["candidate_scan_findings"], 0)
-        self.assertEqual(result["admission_status"], "BLOCKED")
         self.assertEqual(
             manifest["component_license"]["source_derived_scope"],
             sorted(VALIDATOR.DESTINATIONS),
         )
-        self.assertIn(
-            "MISSING_APPLICABLE_A022_PRIVATE_SOURCE_HISTORY_RECEIPT",
-            result["no_go_reasons"],
-        )
+        if manifest["admission_gates"]["independent_review"] == "PASSED_INDEPENDENT_REVIEW":
+            self.assertEqual(result["admission_status"], "ADMITTED")
+            self.assertEqual(result["no_go_reasons"], [])
+        else:
+            self.assertEqual(result["admission_status"], "BLOCKED")
+            self.assertEqual(result["no_go_reasons"], ["INDEPENDENT_REVIEW_PENDING"])
+
+    def test_admission_gates_and_provenance_fail_closed(self) -> None:
+        def gate(value):
+            return lambda manifest, provenance: manifest["admission_gates"].update(value)
+
+        def prov(update):
+            return lambda manifest, provenance: update(provenance)
+
+        mutations = {
+            "issue 25 gate reopened": gate({"license_and_provenance": "BLOCKED_ISSUE_25"}),
+            "governance gate reopened": gate({"public_governance": "BLOCKED_PR_18_AND_ISSUE_19"}),
+            "unknown review state": gate({"independent_review": "APPROVED"}),
+            "receipt digest removed": prov(lambda p: p.pop("private_source_history_receipt_sha256")),
+            "receipt did not pass": prov(lambda p: p.update(private_source_history_result="FINDINGS")),
+            "author is not a handle": prov(lambda p: p["entries"][0].update(author_github_handles=["Some Person"])),
+            "re-authored source missing": prov(lambda p: p["entries"].pop()),
+            # The private path is read from the manifest so this file never names it.
+            "private source listed": lambda manifest, provenance: provenance["entries"].append(
+                dict(
+                    provenance["entries"][0],
+                    source_path=next(
+                        entry["source_path"]
+                        for entry in manifest["entries"]
+                        if entry["decision"] == "PRIVATE_RETAIN"
+                    ),
+                )
+            ),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label):
+                temporary, root = self._fixture()
+                with temporary:
+                    manifest = self._manifest(root)
+                    provenance_path = root / VALIDATOR.PROVENANCE_PATH
+                    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+                    mutate(manifest, provenance)
+                    self._write_manifest(root, manifest)
+                    provenance_path.write_text(json.dumps(provenance, ensure_ascii=False, indent=2), encoding="utf-8")
+                    result = VALIDATOR.validate(root)
+                    self.assertEqual(result["status"], "FAIL", label)
+                    self.assertEqual(result["admission_status"], "BLOCKED", label)
 
     def test_candidate_hashes_are_stable_across_checkout_line_endings(self) -> None:
         temporary, root = self._fixture()

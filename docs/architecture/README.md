@@ -87,12 +87,13 @@ payloads.
 
 ## Candidate and admission boundary
 
-This component remains blocked pending the accountable license/provenance
-decision in Issue #25, an applicable private source-history secret/PII receipt
-for all A022 paths, independent latest-push review, PR #18 and Issue #19
-governance prerequisites, and Dependency Review after retargeting to `main`.
-The Apache-2.0 proposal in PR #18 is not relicensing authority for this
-source-derived component.
+Admission is recorded, not implied: Issue #25 holds the owner's rightsholder
+decision (24 September 2026), `migration/a022-public-architecture.provenance.json`
+lists the source commits and authors of the re-authored documents, and the
+manifest records the private source-history scan receipt, the independent
+review, the PR #18 / Issue #19 governance baseline, and Dependency Review on the
+pull request to `main`. The repository root license is also MIT (#18); it does
+not relicense this component, which keeps its own notice and provenance record.
 
 Source-derived architecture component: MIT; see
 [`../../LICENSES/MIT.txt`](../../LICENSES/MIT.txt).
