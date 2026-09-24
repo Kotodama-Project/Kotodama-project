@@ -26,13 +26,18 @@
 - [x] Fourteen-entrypoint Company Pack CLI Reference with fixed cross-shell help boundaries
 - [x] Standard-library-only one-command review-chain smoke with temporary cleanup and closed report
 - [x] Clone-to-result five-minute tour with cross-shell commands, report interpretation, and bounded next choices
-- [x] README Company OS reader/story map from Vision through current reality to safe first use
+- [x] Company OS reader/story map from Vision through current reality to safe first use (in docs/OVERVIEW.md since 2026-09-14)
 - [x] Cloudflare edge candidate merged via #18, with exact Wrangler supply-chain binding and a manual-only preview upload guard bound to the current `main` tip
 - [x] Official Cloudflare OS source pin (merged via #18) and content-free Gatekeeper-to-Kotodama adapter contract
 - [x] Content-free official Cloudflare OS local runtime receipt with exact integrity, 1060 passing tests, loopback readback, and cleanup evidence
 - [x] Repository governance baseline (MIT root license, reproducible hash-locked CI, tracked-secret hygiene, session / conversation ledger contract) merged via #73 and #18 on 2026-09-12
 - [x] Task-bound Company Pack execution and the persistent local review gateway merged via #75 and #76 on 2026-09-12
 - [x] Discord runtime candidate `runtime/discord-template` (local ASR, continuous Live conversation, bounded Task worker, selectable voice-channel modes) merged via #79, #80, and #81 on 2026-09-13; real-microphone acceptance remains open
+- [x] [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) with README/STATUS/ROADMAP projections
+- [x] Tag `v0.1.0-preview` and a tag-triggered release workflow that drafts a pre-release with the smoke report, source archive, and provenance attestation (#97)
+- [x] Discord runtime review hardening merged via #99 on 2026-09-23: bounded analysis concurrency and limits, Linux Docker-isolated verification for write Tasks, restart states that never re-run work automatically, and fixes for #91, #92, and #93
+- [x] [Luna Task swarm](docs/LUNA-TASK-SWARM.md) merged via #100 on 2026-09-23: owner-bound plans, budgets, acknowledged peer messages, and an independent verifier, exercised offline on Linux and Windows; live Codex/Luna acceptance remains open
+- [x] Discord agent channels and an immediate start notice merged via #101 on 2026-09-23
 
 ## Current Cloudflare candidate
 
@@ -61,7 +66,6 @@ paid-plan budget and entitlement, and provider readback/rollback/deletion.
 Private Context, backup/restore, production behavior, Discord publication,
 Promotion, Current Truth, and Final Human GO remain open.
 `NO_GO_UNPUBLISHED` remains unchanged.
-- [x] [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) with README/STATUS/ROADMAP projections
 
 ## Owner-confirmed Company AGI direction
 
@@ -89,9 +93,9 @@ preserved in [docs/HISTORY.md](docs/HISTORY.md). It is historical and does not
 describe the current state of `main`. Open work is tracked on GitHub
 [milestones](https://github.com/Kotodama-Project/Kotodama-project/milestones).
 
-## Candidate contract included in this revision
+## Candidate contracts on `main`
 
-- [x] [Read-only Source binding candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md) with strict bounded parsing, stable terminal reread, non-reflective refusal, and non-emitted R30 projection digest. This line describes revision contents, not publication, protected verification, or Public Beta GO.
+- [x] [Read-only Source binding candidate](docs/SOURCE-BINDING-VERIFIER-CANDIDATE.md) with strict bounded parsing, stable terminal reread, non-reflective refusal, and non-emitted R30 projection digest. This line describes repository contents, not publication, protected verification, or Public Beta GO.
 - [x] [Protected Source binding receipt candidate](docs/PROTECTED-SOURCE-BINDING-RECEIPT-CANDIDATE.md) schema with private snapshot, clock, locator, evidence, replay, retention/deletion, and detached-attestation roles. This is an unpopulated schema contract, not protected execution or a verified receipt.
 - [x] [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) with opaque runner/input refs, bounded evaluation window, fixed stop/rollback shape, expected receipt, and independent-verification handoff. This is schema-only; no execution is requested or accepted.
 
