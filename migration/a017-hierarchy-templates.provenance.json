@@ -1,0 +1,110 @@
+{
+  "schema_version": "kotodama.public-migration-provenance.v1",
+  "batch_id": "A017",
+  "source_fixed_commit": "2fc1bf60b0dc8721c96875788447e34adc4c7216",
+  "license_expression": "MIT",
+  "rightsholder_record": "Kotodama-Project/Kotodama-project#25",
+  "author_identity_policy": "GitHub handles are listed only when the commit address is a GitHub noreply address; other identities are counted and recorded privately.",
+  "private_source_history_receipt_sha256": "978bdc3cc7a547f158e5506ccfb0890f7ee137de5fe7969d013c6a3242d39b50",
+  "entries": [
+    {
+      "source_path": "forest/_templates/INDEX_TEMPLATE.md",
+      "source_blob_sha": "1aecf8880cbda4453d003bff45e386474680be74",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/index.md",
+      "commits_touching_source": 3,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "forest/_templates/layers/L3_project_template.md",
+      "source_blob_sha": "4d56c1702657e1c5fb352efbf7021ea233980f41",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/project.md",
+      "commits_touching_source": 3,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "forest/_templates/layers/L4_phase_template.md",
+      "source_blob_sha": "14d352bc870e4663dbb1111c42d1885ba8901ddf",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/phase.md",
+      "commits_touching_source": 3,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "forest/_templates/layers/L5_requirement_template.md",
+      "source_blob_sha": "4ef237072365495538028e832f75c2d6fd53163d",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/requirement.md",
+      "commits_touching_source": 3,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "forest/_templates/layers/L6_plan_template.md",
+      "source_blob_sha": "d5b35bd67dc59fab509c64aff1ee97956f060d92",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/plan.md",
+      "commits_touching_source": 3,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "forest/_templates/layers/L7_task_template.md",
+      "source_blob_sha": "57bab30bcd42bf3cc3eab517d6028ba9b45a7e86",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/task.md",
+      "commits_touching_source": 3,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "forest/_templates/project/README.md",
+      "source_blob_sha": "c2d5cd8036cc4f75d4c53ce3a37a05645ceec11e",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/README.md",
+      "commits_touching_source": 4,
+      "author_github_handles": [
+        "dj-thank"
+      ],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "forest/_templates/session/CONTEXT.json",
+      "source_blob_sha": "74963410019e8dd3ace9c38e5464fff72770e710",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/session-context.json",
+      "commits_touching_source": 4,
+      "author_github_handles": [
+        "dj-thank"
+      ],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "forest/_templates/session/REQUIREMENT.md",
+      "source_blob_sha": "e1b975d7e6b450d9cbed93438a89ecd276e5d898",
+      "decision": "SUPERSEDED",
+      "destination_path": "templates/hierarchy/requirement.md",
+      "commits_touching_source": 1,
+      "author_github_handles": [
+        "dj-thank"
+      ],
+      "withheld_author_identities": 0
+    },
+    {
+      "source_path": "forest/_templates/session/TASK.md",
+      "source_blob_sha": "07872b0190fdf6df6eea6455b02c1d4aff659569",
+      "decision": "RE_AUTHORED",
+      "destination_path": "templates/hierarchy/task.md",
+      "commits_touching_source": 4,
+      "author_github_handles": [
+        "dj-thank"
+      ],
+      "withheld_author_identities": 1
+    }
+  ],
+  "private_source_history_result": "PASS"
+}
