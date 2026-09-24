@@ -1,6 +1,6 @@
 ---
 name: kotodama-luna-swarm
-description: Use only for the Kotodama public repository to run bounded Kotodama Task swarms with owner-bound work packets, truthful native-versus-CLI routing, observable peer receipts, and independent review; use the ordinary implementation workflow for a single-agent change.
+description: Use only for the Kotodama public repository to run bounded Kotodama Task swarms with owner-bound work packets, truthful native-versus-CLI routing, observable peer receipts, and independent review, when a Kotodama task needs Luna worker coordination or a swarm communication handoff; use the ordinary implementation workflow for a single-agent change.
 ---
 
 # Kotodama Luna Task Swarm
