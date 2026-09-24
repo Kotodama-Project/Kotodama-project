@@ -88,7 +88,7 @@ main の [Luna Task swarm](LUNA-TASK-SWARM.md)（`runtime/task_swarm`）は、�
 | assignment: `attempt_ref`、`parent_edge_ref`、`objective_ref`、`ownership_ref`、`dependencies` | job の `job_id`、`kind`（work / review）、`dependencies`、`exclusive_keys`、packet の `objective` と `ownership` | 契約の opaque ref と Luna の job ID を対応づける変換はない |
 | target: `workspace_ref`、`workspace_binding`、`public_revision` | Task の `task_id`、`revision`、`context_digest`、`active_home` | revision の hash binding を Luna 側で読む検証はない |
 | handoff: 入力と期待する出力の binding | peer 通信（`peer_send` / `peer_ack` / `peer_reply` と `peer_status`） | handoff を契約の record として保存する経路はない |
-| lifecycle: `ttl_seconds`、`epoch`、`dedup_key_ref`、`retry_owner_ref`、cancel / stop | lease と epoch、idempotency key、owner binding の期限、即時 stop の条件 | — |
+| lifecycle: `ttl_seconds`、`epoch`、`dedup_key_ref`、`retry_owner_ref`、cancel / stop | lease と epoch、idempotency key、owner binding の期限、即時 stop の条件 | `retry_owner_ref` に直接対応する項目はなく、job ごとの試行上限と owner / lease の束縛で扱う |
 | evidence: `verification_status=NOT_VERIFIED`、claims は false | 独立した verifier と owner の `accept`。offline fixture はモデルを呼ばない | 実 Codex / Luna での live 受入は未実施 |
 
 ## Current implementation boundary
