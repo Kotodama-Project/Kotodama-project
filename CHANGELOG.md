@@ -31,6 +31,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - 想定外のエラーが `OPERATION_FAILED` だけになり原因を追えなかった。`--verbose` または `KOTODAMA_DEBUG=1` で、秘密値を伏せた詳細を `debug.log` に記録する（[#93](https://github.com/Kotodama-Project/Kotodama-project/issues/93)）。
 - CodeQL の指摘 2 件（成果ファイル読込みの確認と使用の間の競合、検証テストのコード組立て）（[#99](https://github.com/Kotodama-Project/Kotodama-project/pull/99)）。
 - Task swarm が Windows で失敗していた（ディレクトリ一覧の link 数を信用して既存 payload を拒否、SQLite 接続の閉じ忘れ）。
+- Windows の CI で Chocolatey の配布元が一時的に 406 を返すと、ffmpeg が入らないまま導入の step が成功扱いになり、後の音声の試験が失敗していた。導入を 3 回まで試し、それでも無ければ導入の step で止める。
 
 ## [0.1.0-preview] - 2026-09-14
 
