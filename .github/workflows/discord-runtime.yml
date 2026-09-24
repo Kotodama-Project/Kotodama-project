@@ -35,7 +35,18 @@ jobs:
           sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Install audio encoder (Windows)
         if: runner.os == 'Windows'
-        run: choco install ffmpeg --yes --no-progress
+        shell: pwsh
+        run: |
+          # The community feed can answer 406, and choco then reports "installed 0/0
+          # packages" with exit code 0. Retry, and stop here if ffmpeg is still missing
+          # instead of failing later in the audio tests.
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            choco install ffmpeg --yes --no-progress
+            if (Get-Command ffmpeg -ErrorAction SilentlyContinue) { break }
+            if ($attempt -lt 3) { Start-Sleep -Seconds (20 * $attempt) }
+          }
+          $version = @(ffmpeg -version)
+          $version[0]
       - name: Prepare isolated Linux verification fixture
         if: runner.os == 'Linux'
         shell: bash
