@@ -26,6 +26,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - 想定外のエラーが `OPERATION_FAILED` だけになり原因を追えなかった。`--verbose` または `KOTODAMA_DEBUG=1` で、秘密値を伏せた詳細を `debug.log` に記録する（[#93](https://github.com/Kotodama-Project/Kotodama-project/issues/93)）。
 - CodeQL の指摘 2 件（成果ファイル読込みの確認と使用の間の競合、検証テストのコード組立て）。
 - Task swarm が Windows で失敗していた（ディレクトリ一覧の link 数を信用して既存 payload を拒否、SQLite 接続の閉じ忘れ）。
+- 設定ファイルを読めない間、Discord runtime が毎秒 `policy_unavailable` をログへ書き続けていた。読めなくなった時に一度だけ記録し、読めるようになった時に `policy_restored` を記録する（読めない間は誰も操作者として扱わない点は変えない）。
 
 ## [0.1.0-preview] - 2026-09-14
 
