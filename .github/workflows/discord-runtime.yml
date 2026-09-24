@@ -43,9 +43,9 @@ jobs:
           for ($attempt = 1; $attempt -le 3; $attempt++) {
             choco install ffmpeg --yes --no-progress
             if (Get-Command ffmpeg -ErrorAction SilentlyContinue) { break }
-            Start-Sleep -Seconds (20 * $attempt)
+            if ($attempt -lt 3) { Start-Sleep -Seconds (20 * $attempt) }
           }
-          $version = ffmpeg -version
+          $version = @(ffmpeg -version)
           $version[0]
       - name: Prepare isolated Linux verification fixture
         if: runner.os == 'Linux'
