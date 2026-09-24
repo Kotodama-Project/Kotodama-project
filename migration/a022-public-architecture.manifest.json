@@ -66,7 +66,7 @@
     "license_and_provenance": "RECORDED_ISSUE_25_OWNER_DECISION",
     "applicable_source_history_secret_pii": "PASSED_PRIVATE_RECEIPT",
     "candidate_privacy_secret": "REQUIRED_EXACT_HEAD",
-    "independent_review": "PENDING",
+    "independent_review": "PASSED_INDEPENDENT_REVIEW",
     "public_governance": "PASSED_PR_18_MERGED_ISSUE_19_CLOSED",
     "dependency_review": "REQUIRED_CHECK_ON_MAIN_PULL_REQUEST"
   },

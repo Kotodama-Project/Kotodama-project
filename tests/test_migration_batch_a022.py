@@ -122,7 +122,10 @@ class A022MigrationBatchTests(unittest.TestCase):
             result = VALIDATOR.validate(root)
 
             self.assertEqual(result["status"], "PASS", result["errors"])
-            self.assertEqual(result["admission_status"], "BLOCKED")
+            # Line endings must not change the admission decision either.
+            self.assertEqual(
+                result["admission_status"], VALIDATOR.validate(ROOT)["admission_status"]
+            )
 
     def test_required_document_symlink_is_rejected_before_resolution(self) -> None:
         temporary, root = self._fixture()

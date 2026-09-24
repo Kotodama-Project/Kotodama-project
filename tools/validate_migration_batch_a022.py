@@ -477,6 +477,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
                 errors.append("provenance authors must be GitHub handles")
             if not (isinstance(row.get("withheld_author_identities"), int) and row["withheld_author_identities"] >= 0):
                 errors.append("provenance must count withheld author identities")
+            elif isinstance(handles, list) and not handles and row["withheld_author_identities"] == 0:
+                errors.append("provenance entry must name or count at least one author")
             if row.get("source_blob_sha") != exported.get(row.get("source_path")):
                 errors.append("provenance source blob does not match the manifest")
         errors.extend(_scan_text(PROVENANCE_PATH, provenance_data.decode("utf-8", errors="replace")))
@@ -521,7 +523,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "component_license": "MIT",
         "license_blob_sha": SOURCE_LICENSE_BLOB,
         "admission_status": "ADMITTED" if not errors and review_state == "PASSED_INDEPENDENT_REVIEW" else "BLOCKED",
-        "no_go_reasons": [] if review_state == "PASSED_INDEPENDENT_REVIEW" else ["INDEPENDENT_REVIEW_PENDING"],
+        "no_go_reasons": (["VALIDATION_FAILED"] if errors else [])
+        + ([] if review_state == "PASSED_INDEPENDENT_REVIEW" else ["INDEPENDENT_REVIEW_PENDING"]),
         "errors": errors,
     }
 
