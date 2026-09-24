@@ -36,23 +36,23 @@ localとcloudの双方を認めます。Tailscaleはprivate接続の強い候補
 
 ## 実装と候補の現在地
 
-2026-09-14に公開main `86bc5bf`と以下のopen PRを照合しました。mainはコードを含む状態、candidateは未統合、unconnectedは接続未確認、hypothesisは未実証の設計仮説です。CI成功を実利用成功へ読み替えません。
+2026-09-25に公開mainと以下のPRを照合しました。PRごとの処分は[#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)にあります。mainはコードを含む状態、candidateは未統合、unconnectedは接続未確認、hypothesisは未実証の設計仮説です。CI成功を実利用成功へ読み替えません。
 
 | 対象 | 状態 | 根拠と残件 |
 |---|---|---|
 | Company Pack作成と確認・訂正Gateway | main | [Task-bound実行](COMPANY-PACK-TASK-EXECUTION.md)、[Gateway](../runtime/local-review-gateway/README.md)。実ファイル／local HTTPの限定経路。自動Voice-to-Taskは未接続 |
-| Discord Botテンプレート | main | [任意ランタイム](../runtime/discord-template/README.md)、[導入と残件](DISCORD-RUNTIME.md)。#79–#81で統合。公開招待・hosted配備・実音声受入は未検証 |
-| 知識訂正とexecutor入力binding | candidate | [#59](https://github.com/Kotodama-Project/Kotodama-project/pull/59)、head `b962196`。現在pin・入力digestの候補。Task owner接続は残件 |
-| OKF適合と判断readyの分離 | candidate | [#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)、head `05c947a`。構造PASSは内容・権限・意思決定の証明ではない |
-| 診断／Knowledge Work合流 | candidate | [#64](https://github.com/Kotodama-Project/Kotodama-project/pull/64)、head `e0460b3`。読取診断の候補。GUI、live observer、実Work接続は未受入 |
+| Discord Botテンプレート | main | [任意ランタイム](../runtime/discord-template/README.md)、[導入と残件](DISCORD-RUNTIME.md)。#79–#81で統合し、#99（レビュー対応）と#101（エージェント用チャンネル）を追加。公開招待・hosted配備・実音声受入は未検証 |
+| 知識訂正とexecutor入力binding | candidate | [#59](https://github.com/Kotodama-Project/Kotodama-project/pull/59)。#48系（知識基盤の正本）の一部として取り込む予定。現在pin・入力digestの候補。Task owner接続は残件 |
+| OKF適合と判断readyの分離 | candidate | [#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)。#48系の一部として取り込む予定。構造PASSは内容・権限・意思決定の証明ではない |
+| 診断／Knowledge Work合流 | candidate | [#64](https://github.com/Kotodama-Project/Kotodama-project/pull/64)。#48の知識bundleにつないで取り込む予定。読取診断の候補。GUI、live observer、実Work接続は未受入 |
 | 専門agent協調 | main | [Luna Task swarm](LUNA-TASK-SWARM.md)。#67と#85の修復を統合し、Linux・Windowsの必須CIでoffline fixtureを確認。実Codex/Lunaのlive受入は未実施。全利用の必須構成にしない |
-| room別Live／workspace | candidate | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)、head `b2fd317`。Source/Task/mediaの実接続は未受入 |
-| 静音Liveと会話制御 | candidate | [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71)、head `b3fda59`。継続発話、退出と仕事の分離を#69と合流して検証する |
+| room別Live／workspace | goal | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)の考え方をNode runtimeへ移す（別runtimeは取り込まない、2026-09-24 owner判断）。Source/Task/mediaの実接続は未受入 |
+| 静音Liveと会話制御 | goal | [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71)の方針文書を取り込み、継続発話、退出と仕事の分離をNode runtimeで検証する |
 | Slack／Salesforce | unconnected | #70／#77。公開mainで接続済みとはしない |
 | 自発参加／native UI統合 | goal | 個別候補があっても、同じ実会話での統合受入は未達 |
 | object情報からCRM体験を構成 | hypothesis | 対象用途・権限・同期方向・人向け表示の実証が必要 |
 
-各PRのチェック・レビューはheadに束縛された観測です。#67の既存CI成功でも修復待ちの指摘は残っています。他候補のレビューなしを承認済みと扱いません。[プロジェクト地図](PROJECT-MAP.md)と[現在の公開境界](../STATUS.md)から既存実装へ進めます。
+各PRのチェック・レビューはheadに束縛された観測です。他候補のレビューなしを承認済みと扱いません。[プロジェクト地図](PROJECT-MAP.md)と[現在の公開境界](../STATUS.md)から既存実装へ進めます。
 
 ## 説明と入口を保つ運用
 
