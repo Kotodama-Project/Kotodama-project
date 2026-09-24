@@ -793,15 +793,28 @@ Kotodama は、初期の言葉を消すのではなく、後続の指示、実�
 
 ### Public Beta 完成としてまだ証明されていないもの
 
-- Voice Bot の常時 listener と確実な rejoin
-- 自然な 900 秒 rotation と 15分 transcript 投稿
-- retention 期限内の delete receipt
-- 現行 deployed bytes と候補 bytes の parity
-- distinct real people を含む 3-persona Voice E2E
-- live Compose / Proxmox install、migration、restart、rollback、isolated restore
-- protected reconciliation と独立した trust / person separation
-- public Discord invite と public Voice Bot
-- 対象候補へ束縛された Final Human GO
+未証明の gate はちょうど **10 件** です。各 gate には安定した ID を付けています。
+[ROADMAP.md](../ROADMAP.md) の未完了項目はすべてこの ID を引用し、
+[`tests/test_public_beta_gate_enumeration.py`](../tests/test_public_beta_gate_enumeration.py)
+が件数と相互参照を機械的に検査します。projection が増えても、数が静かにずれない
+ようにするためです。
+
+- `PB-G1` [unproven] Voice Bot の常時 listener と確実な rejoin
+- `PB-G2` [unproven] 自然な 900 秒 rotation と 15分 transcript 投稿
+- `PB-G3` [unproven] retention 期限内の delete receipt
+- `PB-G4` [unproven] 現行 deployed bytes と候補 bytes の parity
+- `PB-G5` [unproven] distinct real people を含む 3-persona Voice E2E
+- `PB-G6` [unproven] live Compose / Proxmox install、migration、restart、rollback、isolated restore
+- `PB-G7` [unproven] protected reconciliation と独立した trust / person separation
+- `PB-G8` [unproven] public Discord invite と public Voice Bot
+- `PB-G9` [unproven] 対象候補へ束縛された Final Human GO
+- `PB-G10` [unproven] 一つの実会話での Voice / Discord モードの受入（雑談だけの session は Task を作らない、出典付きの catch-up、既存の許可内での仕事、訂正の一本化）
+
+`PB-G1` から `PB-G10` は安定した full registry です。gate が閉じても ID や行を削除・再採番せず、
+`[unproven]` を `[completed]` に変えて revision-bound receipt を同じ行へ結びます。
+新しい gate は末尾に次の番号で追加します。現在はすべて、公開面が Public Beta として証明されていない範囲そのものです。
+このうち 1 件でも未達なら Public Beta は `NO_GO_UNPUBLISHED` のままです。局所的な
+validator や runbook の `PASS` は、どの gate も閉じません。
 
 詳しい最新状態は [STATUS.md](../STATUS.md)、公開アクセスまでの未完了 gate は [ROADMAP.md](../ROADMAP.md) にあります。
 

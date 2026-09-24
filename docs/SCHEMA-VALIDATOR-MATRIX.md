@@ -326,6 +326,12 @@ python3 tools/validate_session_conversation_ledger.py validate path/to/ledger.js
 python3 tools/validate_session_conversation_ledger.py project path/to/ledger.jsonl ref/session/example
 ```
 
+## Executor runtime candidate
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [executor-runtime-candidate.schema.json](../schemas/executor-runtime-candidate.schema.json) | [`validate_executor_runtime_candidate.py`](../tools/validate_executor_runtime_candidate.py)（`requirements-ci.txt` の jsonschema が必要。無いときは終了 2） | [`test_openmanus_executor_runtime_candidate.py`](../tests/test_openmanus_executor_runtime_candidate.py) | [OpenManus Proxmox executor](../runtime/openmanus-proxmox/README.md)。PASS は候補の形・権限境界・秘密の混入なしの確認だけで、VM の配備や executor の採用を意味しない |
+
 ## Agent orchestration route-binding candidate
 
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
