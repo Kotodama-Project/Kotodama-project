@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
 import importlib.util
 import json
 from pathlib import Path
 import shutil
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -124,6 +126,170 @@ class A019MigrationBatchTests(unittest.TestCase):
                     self.assertEqual(result["status"], "FAIL", label)
                     self.assertEqual(result["admission_status"], "BLOCKED", label)
                     self.assertIn("VALIDATION_FAILED", result["no_go_reasons"], label)
+
+    def test_provenance_shape_and_fixed_metadata_fail_closed(self) -> None:
+        mutations = {
+            "extra root field": lambda p: p.update(source_body="ordinary fixture prose"),
+            "extra row field": lambda p: p["entries"][0].update(source_body="ordinary fixture prose"),
+            "missing root field": lambda p: p.pop("entry_scope"),
+            "missing row field": lambda p: p["entries"][0].pop("decision"),
+            "changed identity policy": lambda p: p.update(author_identity_policy="ordinary fixture prose"),
+            "changed entry scope": lambda p: p.update(entry_scope="ordinary fixture prose"),
+            "changed decision": lambda p: p["entries"][0].update(decision="PRIVATE_RETAIN"),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label):
+                temporary, root = self._fixture()
+                with temporary:
+                    path = root / VALIDATOR.PROVENANCE_PATH
+                    provenance = json.loads(path.read_text(encoding="utf-8"))
+                    mutate(provenance)
+                    path.write_text(json.dumps(provenance), encoding="utf-8")
+                    result = VALIDATOR.validate(root)
+                    self.assertEqual(result["status"], "FAIL", result["errors"])
+                    self.assertEqual(result["admission_status"], "BLOCKED")
+                    self.assertTrue(any("provenance" in error for error in result["errors"]))
+
+    def test_private_receipt_digest_is_bound_to_the_public_record(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            path = root / VALIDATOR.PROVENANCE_PATH
+            provenance = json.loads(path.read_text(encoding="utf-8"))
+            provenance["private_source_history_receipt_sha256"] = "0" * 64
+            path.write_text(json.dumps(provenance), encoding="utf-8")
+            result = VALIDATOR.validate(root)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertEqual(result["admission_status"], "BLOCKED")
+            self.assertIn(
+                "provenance must bind the private source-history receipt digest",
+                result["errors"],
+            )
+
+    def test_oversized_file_is_refused_before_open(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            relative = Path("fixture.json")
+            (root / relative).write_bytes(b"x" * 9)
+            errors: list[str] = []
+            with mock.patch.object(VALIDATOR, "MAX_FILE_BYTES", 8), mock.patch.object(
+                VALIDATOR.os, "open", side_effect=AssertionError("oversized file opened")
+            ):
+                self.assertIsNone(VALIDATOR._read_bounded(root, relative, errors))
+            self.assertEqual(errors, ["file exceeds 8 bytes: fixture.json"])
+
+    def test_read_limit_accepts_boundary_and_refuses_growth(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            relative = Path("fixture.json")
+            (root / relative).write_bytes(b"x" * 8)
+            original_fdopen = VALIDATOR.os.fdopen
+            for grew in (False, True):
+                with self.subTest(grew=grew):
+                    reads = []
+
+                    @contextmanager
+                    def observed_open(fd, mode):
+                        with original_fdopen(fd, mode) as stream:
+                            proxy = mock.Mock(wraps=stream)
+
+                            def bounded_read(size):
+                                reads.append(size)
+                                self.assertEqual(size, 9)
+                                return b"x" * 9 if grew else stream.read(size)
+
+                            proxy.read.side_effect = bounded_read
+                            yield proxy
+
+                    errors: list[str] = []
+                    with mock.patch.object(VALIDATOR, "MAX_FILE_BYTES", 8), mock.patch.object(
+                        VALIDATOR.os, "fdopen", side_effect=observed_open
+                    ):
+                        data = VALIDATOR._read_bounded(root, relative, errors)
+                    self.assertEqual(reads, [9])
+                    self.assertEqual(data, None if grew else b"x" * 8)
+                    self.assertEqual(errors, ["file exceeds 8 bytes: fixture.json"] if grew else [])
+
+    def test_reparse_parent_and_leaf_are_refused_before_open(self) -> None:
+        # Portable metadata fixture; real Windows junction behavior belongs to CI.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            relative = Path("nested/fixture.json")
+            (root / relative).parent.mkdir()
+            (root / relative).write_bytes(b"{}")
+            original_lstat = Path.lstat
+            for target in ((root / relative).parent, root / relative):
+                for attributes, tag in ((0x400, 0), (0, 0xA0000003)):
+                    with self.subTest(target=target.name, attributes=attributes, tag=tag):
+                        def reparse_lstat(path, *args, **kwargs):
+                            info = original_lstat(path, *args, **kwargs)
+                            if path == target:
+                                return SimpleNamespace(
+                                    st_mode=info.st_mode, st_dev=info.st_dev,
+                                    st_ino=info.st_ino, st_size=info.st_size,
+                                    st_file_attributes=attributes, st_reparse_tag=tag,
+                                )
+                            return info
+
+                        errors: list[str] = []
+                        with mock.patch.object(Path, "lstat", reparse_lstat), mock.patch.object(
+                            VALIDATOR.os, "open", side_effect=AssertionError("reparse path opened")
+                        ):
+                            self.assertIsNone(VALIDATOR._read_bounded(root, relative, errors))
+                        self.assertEqual(errors, ["reparse point is not allowed: nested/fixture.json"])
+
+    def test_resolved_candidate_must_stay_inside_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            relative = Path("fixture.json")
+            candidate = root / relative
+            candidate.write_bytes(b"{}")
+            original_resolve = Path.resolve
+
+            def escaped_resolution(path, *args, **kwargs):
+                if path == candidate:
+                    return root.parent / "outside-fixture.json"
+                return original_resolve(path, *args, **kwargs)
+
+            errors: list[str] = []
+            with mock.patch.object(Path, "resolve", escaped_resolution), mock.patch.object(
+                VALIDATOR.os, "open", side_effect=AssertionError("escaping path opened")
+            ):
+                self.assertIsNone(VALIDATOR._read_bounded(root, relative, errors))
+            self.assertEqual(errors, ["missing, escaping, or unreadable path: fixture.json"])
+
+    def test_required_file_symlink_is_refused(self) -> None:
+        for relative in (VALIDATOR.MANIFEST_PATH, Path(next(iter(VALIDATOR.DESTINATIONS)))):
+            with self.subTest(path=relative):
+                temporary, root = self._fixture()
+                with temporary:
+                    candidate = root / relative
+                    target = root / "unlisted-fixture.json"
+                    shutil.copy2(candidate, target)
+                    candidate.unlink()
+                    try:
+                        candidate.symlink_to(target)
+                    except OSError as error:
+                        self.skipTest(f"symlink creation unavailable: {error}")
+                    result = VALIDATOR.validate(root)
+                    self.assertEqual(result["status"], "FAIL")
+                    self.assertEqual(result["admission_status"], "BLOCKED")
+                    self.assertIn(f"symlink is not allowed: {relative.as_posix()}", result["errors"])
+
+    def test_required_parent_symlink_is_refused(self) -> None:
+        temporary, root = self._fixture()
+        with temporary:
+            directory = root / "schemas"
+            target = root / "unlisted-fixture-directory"
+            directory.rename(target)
+            try:
+                directory.symlink_to(target, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"symlink creation unavailable: {error}")
+            result = VALIDATOR.validate(root)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertEqual(result["admission_status"], "BLOCKED")
+            for relative in VALIDATOR.DESTINATIONS:
+                self.assertIn(f"symlink is not allowed: {relative}", result["errors"])
 
     def test_exact_six_source_mapping_fails_closed_on_drift(self) -> None:
         mutations = (

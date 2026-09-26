@@ -6,8 +6,10 @@ from __future__ import annotations
 from collections import Counter
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import stat
 from typing import Any, Iterable
 from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 
@@ -49,6 +51,26 @@ SCHEMA_IDS = {
 }
 PROVENANCE_PATH = Path("migration/a019-registry-contracts.provenance.json")
 RIGHTSHOLDER_RECORD = "Kotodama-Project/Kotodama-project#25"
+# Historical public record from PR #115; this does not inspect its private receipt.
+PRIVATE_RECEIPT_SHA256 = "1441c3af0cbe59676534391eb68ee4fc5df7e65a8e3fdad96f3acff0a20b7711"
+PROVENANCE_KEYS = frozenset({
+    "schema_version", "batch_id", "source_fixed_commit", "license_expression",
+    "rightsholder_record", "author_identity_policy", "entry_scope", "entries",
+    "private_source_history_receipt_sha256", "private_source_history_result",
+})
+PROVENANCE_ROW_KEYS = frozenset({
+    "destination_path", "source_blob_sha", "decision", "commits_touching_source",
+    "author_github_handles", "withheld_author_identities",
+})
+AUTHOR_IDENTITY_POLICY = (
+    "GitHub handles are listed only when the commit address is a GitHub noreply "
+    "address; other identities are counted and recorded privately."
+)
+PROVENANCE_ENTRY_SCOPE = (
+    "PUBLIC_REAUTHOR entries keyed by destination path and source blob; "
+    "source paths appear only in the manifest"
+)
+MAX_FILE_BYTES = 512 * 1024
 REQUIRED_PATHS = {
     MANIFEST_PATH,
     PROVENANCE_PATH,
@@ -130,19 +152,80 @@ def git_blob_sha(data: bytes) -> str:
     return hashlib.sha1(header + data).hexdigest()  # noqa: S324 - Git identity
 
 
+def _is_reparse_point(info: os.stat_result) -> bool:
+    return bool(
+        getattr(info, "st_file_attributes", 0)
+        & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+        or getattr(info, "st_reparse_tag", 0)
+    )
+
+
 def _read_bounded(root: Path, relative: Path, errors: list[str]) -> bytes | None:
+    label = relative.as_posix()
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        errors.append(f"missing or escaping path: {label}")
+        return None
     try:
-        resolved = (root / relative).resolve(strict=True)
-        resolved.relative_to(root.resolve(strict=True))
+        root_path = root.resolve(strict=True)
+        candidate = root_path
+        checked = []
+        for part in relative.parts:
+            candidate /= part
+            info = candidate.lstat()
+            if stat.S_ISLNK(info.st_mode):
+                errors.append(f"symlink is not allowed: {label}")
+                return None
+            if _is_reparse_point(info):
+                errors.append(f"reparse point is not allowed: {label}")
+                return None
+            checked.append((candidate, (info.st_dev, info.st_ino, info.st_mode)))
+        candidate.resolve(strict=True).relative_to(root_path)
+        if not stat.S_ISREG(info.st_mode):
+            errors.append(f"not a regular file: {label}")
+            return None
+        if info.st_size > MAX_FILE_BYTES:
+            errors.append(f"file exceeds {MAX_FILE_BYTES} bytes: {label}")
+            return None
+
+        # Bind the opened regular file to the checked path, then recheck the
+        # path chain before and after the bounded read. Never follow a leaf link
+        # where the platform supplies O_NOFOLLOW; O_NONBLOCK avoids FIFO waits.
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        with os.fdopen(os.open(candidate, flags), "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if (opened.st_dev, opened.st_ino, opened.st_mode) != checked[-1][1]:
+                errors.append(f"file changed while reading: {label}")
+                return None
+            if opened.st_size > MAX_FILE_BYTES:
+                errors.append(f"file exceeds {MAX_FILE_BYTES} bytes: {label}")
+                return None
+            for path, expected in checked:
+                current = path.lstat()
+                if _is_reparse_point(current) or (
+                    current.st_dev, current.st_ino, current.st_mode
+                ) != expected:
+                    errors.append(f"path changed while reading: {label}")
+                    return None
+            data = stream.read(MAX_FILE_BYTES + 1)
+            after = os.fstat(stream.fileno())
+            if (after.st_size, after.st_mtime_ns, after.st_ctime_ns) != (
+                opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns
+            ):
+                errors.append(f"file changed while reading: {label}")
+                return None
+            for path, expected in checked:
+                current = path.lstat()
+                if _is_reparse_point(current) or (
+                    current.st_dev, current.st_ino, current.st_mode
+                ) != expected:
+                    errors.append(f"path changed while reading: {label}")
+                    return None
     except (OSError, ValueError):
-        errors.append(f"missing or escaping path: {relative.as_posix()}")
+        errors.append(f"missing, escaping, or unreadable path: {label}")
         return None
-    if not resolved.is_file():
-        errors.append(f"not a regular file: {relative.as_posix()}")
-        return None
-    data = resolved.read_bytes()
-    if len(data) > 512 * 1024:
-        errors.append(f"file exceeds 524288 bytes: {relative.as_posix()}")
+    if len(data) > MAX_FILE_BYTES:
+        errors.append(f"file exceeds {MAX_FILE_BYTES} bytes: {label}")
         return None
     return data
 
@@ -864,6 +947,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
             errors.append("provenance file is not valid UTF-8 JSON")
         if not isinstance(provenance, dict):
             provenance = {}
+        if set(provenance) != PROVENANCE_KEYS:
+            errors.append("provenance fields must match the public record exactly")
         if provenance.get("schema_version") != "kotodama.public-migration-provenance.v1":
             errors.append("unexpected provenance schema_version")
         if provenance.get("batch_id") != "A019" or provenance.get("source_fixed_commit") != SOURCE_COMMIT:
@@ -872,8 +957,12 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
             errors.append("provenance license expression must be MIT")
         if provenance.get("rightsholder_record") != RIGHTSHOLDER_RECORD:
             errors.append("provenance must cite the Issue #25 rightsholder record")
+        if provenance.get("author_identity_policy") != AUTHOR_IDENTITY_POLICY:
+            errors.append("provenance author identity policy must match the public record")
+        if provenance.get("entry_scope") != PROVENANCE_ENTRY_SCOPE:
+            errors.append("provenance entry scope must match the public record")
         digest = provenance.get("private_source_history_receipt_sha256")
-        if not (isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest)):
+        if digest != PRIVATE_RECEIPT_SHA256:
             errors.append("provenance must bind the private source-history receipt digest")
         if provenance.get("private_source_history_result") not in PRIVATE_RESULTS:
             errors.append("private source-history receipt did not pass")
@@ -902,6 +991,10 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
             if not isinstance(row, dict):
                 errors.append("provenance entries must be objects")
                 continue
+            if set(row) != PROVENANCE_ROW_KEYS:
+                errors.append("provenance entry fields must match the public record exactly")
+            if row.get("decision") != "PUBLIC_REAUTHOR":
+                errors.append("provenance entry decision must remain PUBLIC_REAUTHOR")
             if "source_path" in row:
                 errors.append("provenance must not repeat source paths outside the manifest")
             handles = row.get("author_github_handles")
