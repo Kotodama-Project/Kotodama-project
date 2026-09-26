@@ -12,8 +12,9 @@ Kotodama adopts two related but distinct Cloudflare planes.
 
 The shared frontend routes knowledge, conversation, Task and agent operations
 back to their existing governed owners. Its views are projections, not another
-Company or Task SSOT. BecomeOne is the migration donor and later a consumer
-pinned to the public Kotodama version and content digest.
+Company or Task SSOT. Human Intent, Decision, Work Order, Promotion and Current
+Truth remain with Kotodama's existing governed owners. BecomeOne is the migration
+donor and later a consumer pinned to the public Kotodama version and content digest.
 This is a product direction, not an implemented frontend-to-owner transaction
 path. Native versus embedded UI, connector details, provider deployment and
 live acceptance remain separate design and evidence gates.
