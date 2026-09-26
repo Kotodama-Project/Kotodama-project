@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- BecomeOne の A022 アーキテクチャ候補を再構成: 単一の記録 owner、複数 agent の協調、tool の監督、plan lifecycle の公開契約と、出典表・固定 bytes の validator。公開済み PR #114 の候補を現行 main に合わせ、今回の公開候補への独立 review を履歴証拠と分けて記録（`docs/architecture/README.md`）。
+
 - Luna Task swarm を main に統合（[#100](https://github.com/Kotodama-Project/Kotodama-project/pull/100)。元は [#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67) と修復 [#85](https://github.com/Kotodama-Project/Kotodama-project/pull/85)）: owner に束縛した計画、予算（試行・同時実行・検証枠）、ACK 付きの agent 間通信、独立した検証者。offline fixture はモデルを呼ばずに動き、実 Codex / Luna の live 受入は未実施（`docs/LUNA-TASK-SWARM.md`）。
 - このリポジトリの自動改善ループの運用契約（`docs/IMPROVEMENT-LOOP.md`）: 一周に一件、独立 review と必須 CI を通して merge し、main が赤くなれば revert する。agent がしないことと人が決めることを明記（[#100](https://github.com/Kotodama-Project/Kotodama-project/pull/100)）。
 - 意図を抜き出して、すぐに走る: `discord.agentChannelIds` のテキストチャンネルでは、操作者の発言をBotへのメンションと同じに扱い、明確で実行に足りる依頼をすぐに仕事にする。会話（テキスト・音声）から仕事が走り始めると、依頼者へ即座にDMで件名と仕事のIDを届ける（[#101](https://github.com/Kotodama-Project/Kotodama-project/pull/101)）。

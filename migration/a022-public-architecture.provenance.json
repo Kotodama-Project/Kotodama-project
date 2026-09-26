@@ -1,0 +1,73 @@
+{
+  "schema_version": "kotodama.public-migration-provenance.v1",
+  "batch_id": "A022",
+  "source_fixed_commit": "2fc1bf60b0dc8721c96875788447e34adc4c7216",
+  "license_expression": "MIT",
+  "rightsholder_record": "Kotodama-Project/Kotodama-project#25",
+  "author_identity_policy": "GitHub handles are listed only when the commit address is a GitHub noreply address; other identities are counted and recorded privately.",
+  "private_source_history_receipt_sha256": "253637c97183d9b3b9da2c8123bac7503e2721972d87cd64911521609e32884d",
+  "entries": [
+    {
+      "source_path": "architecture/cognitive-constitution.md",
+      "source_blob_sha": "0cfe1f6bf7588867b0f06601e05fae481ef49fcf",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/README.md",
+      "commits_touching_source": 1,
+      "author_github_handles": [
+        "dj-thank"
+      ],
+      "withheld_author_identities": 0
+    },
+    {
+      "source_path": "architecture/directory-restructuring-and-routing.md",
+      "source_blob_sha": "160d1b02fc79d58cf81ef1042a75c98109ac0887",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/README.md",
+      "commits_touching_source": 1,
+      "author_github_handles": [
+        "dj-thank"
+      ],
+      "withheld_author_identities": 0
+    },
+    {
+      "source_path": "architecture/multi-agent-coordination.md",
+      "source_blob_sha": "8171cceaace774d05f30f3d8dd52f686ba2f40c1",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/multi-agent-coordination.md",
+      "commits_touching_source": 1,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "architecture/swarms-migration-prep.md",
+      "source_blob_sha": "dd37dc6896b362778aa990efd94da7d40c70e0b8",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/multi-agent-coordination.md",
+      "commits_touching_source": 1,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "architecture/tool-based-supervisor-design.md",
+      "source_blob_sha": "d79b3095672edc69429daf137288d35491c8237e",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/supervision-contract.md",
+      "commits_touching_source": 1,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "source_path": "architecture/universal-plan-runtime-v2.md",
+      "source_blob_sha": "b00c71e7541be570625a6a169f68b9cec5c4012e",
+      "decision": "PUBLIC_REAUTHOR",
+      "destination_path": "docs/architecture/plan-runtime.md",
+      "commits_touching_source": 2,
+      "author_github_handles": [
+        "dj-thank"
+      ],
+      "withheld_author_identities": 0
+    }
+  ],
+  "private_source_history_result": "PASS_AFTER_TRIAGE",
+  "entry_scope": "PUBLIC_REAUTHOR sources only; PRIVATE_RETAIN and SUPERSEDED sources are listed only in the manifest"
+}
