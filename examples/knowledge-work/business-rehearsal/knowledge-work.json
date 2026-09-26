@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "package_id": "business-rehearsal",
+  "work_ref": "ref/work/synthetic-reconnect",
+  "state": "candidate",
+  "producer_ref": "ref/producer/synthetic-author",
+  "sensitivity": "public",
+  "objective": "Preserve the smartphone-only correction while keeping device acceptance unproven.",
+  "sources": [
+    {
+      "id": "source-scenario",
+      "path": "source.txt",
+      "sha256": "6c92d340d139e1487e11fb8b2af62495c3f7b6a2feaa16f0a07fbee493f2ae3b",
+      "kind": "synthetic_fixture",
+      "sensitivity": "public",
+      "expires_at": null
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim-scope",
+      "kind": "observation",
+      "statement": "The fixture excludes BLE changes.",
+      "source_refs": [
+        "source-scenario"
+      ],
+      "material": true,
+      "sensitivity": "public"
+    },
+    {
+      "id": "claim-acceptance",
+      "kind": "inference",
+      "statement": "A source-code merge alone cannot close the fixture's device-audio acceptance.",
+      "source_refs": [
+        "source-scenario"
+      ],
+      "material": true,
+      "sensitivity": "public"
+    }
+  ],
+  "assumptions": [],
+  "questions": [
+    {
+      "id": "question-device",
+      "statement": "Can an actual device resume audio? This is outside this structural fixture.",
+      "blocking": false,
+      "state": "open"
+    }
+  ],
+  "contradictions": [],
+  "criteria": [
+    {
+      "id": "criterion-boundary",
+      "description": "The candidate retains the smartphone-only scope and unproven device boundary.",
+      "state": "met",
+      "deliverable_refs": [
+        "deliverable-conclusion"
+      ]
+    }
+  ],
+  "deliverables": [
+    {
+      "id": "deliverable-conclusion",
+      "path": "deliverable.md",
+      "sha256": "72fdc127a8b4c9bcb31f533d8a267a141c556b6e73c9c1092746acf227e00ff3",
+      "criterion_refs": [
+        "criterion-boundary"
+      ]
+    }
+  ],
+  "review": {
+    "state": "not_run",
+    "reviewer_ref": null,
+    "subject_sha256": null
+  },
+  "promotion": "blocked"
+}

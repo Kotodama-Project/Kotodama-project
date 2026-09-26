@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "package_sha256",
+    "subject_sha256",
+    "as_of",
+    "errors",
+    "claims",
+    "kind",
+    "status",
+    "package_id",
+    "warnings",
+    "bindings"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "package_sha256": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "subject_sha256": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "as_of": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "errors": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z_]+$"
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "human_approval_verified",
+        "reviewer_identity_verified",
+        "semantic_entailment_verified",
+        "execution_authorized",
+        "promotion_created",
+        "current_truth_changed"
+      ],
+      "properties": {
+        "human_approval_verified": {
+          "const": false
+        },
+        "reviewer_identity_verified": {
+          "const": false
+        },
+        "semantic_entailment_verified": {
+          "const": false
+        },
+        "execution_authorized": {
+          "const": false
+        },
+        "promotion_created": {
+          "const": false
+        },
+        "current_truth_changed": {
+          "const": false
+        }
+      }
+    },
+    "kind": {
+      "const": "knowledge_work_validation"
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "FAIL"
+      ]
+    },
+    "package_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/id"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z_]+$"
+      }
+    },
+    "bindings": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sha256",
+          "bytes"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/id"
+          },
+          "sha256": {
+            "$ref": "#/$defs/sha256"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1048576
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    }
+  }
+}
