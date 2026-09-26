@@ -31,7 +31,8 @@ PR #79でこのNodeテンプレートのsourceはmainへ統合済みです。新
 
 音声のruntimeはこのNodeテンプレートに一本化します（2026-09-24のowner判断）。
 公開候補[#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)（room/workspace・複数transportの基盤）と[#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71)（PythonによるLive制御）は
-別runtimeとしては取り込まず、方針文書と、このruntimeに無い考え方だけを移します（[#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)）。
+別runtimeとしては取り込みません（[#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)）。#71の方針文書だけを、このruntimeに合わせて[GPT-Liveの採用方針](GPT-LIVE-ADOPTION.md)として取り込みました。
+このruntimeに無い考え方は[#142](https://github.com/Kotodama-Project/Kotodama-project/issues/142)〜[#146](https://github.com/Kotodama-Project/Kotodama-project/issues/146)、実音声の受入手順は[#154](https://github.com/Kotodama-Project/Kotodama-project/issues/154)で扱います。
 同じVCを二つのruntimeに所有させません。
 
 この導入候補はpublic mainの既存Company Pack実行や確認Gatewayへ

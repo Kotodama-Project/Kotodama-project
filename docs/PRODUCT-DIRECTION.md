@@ -46,8 +46,8 @@ localとcloudの双方を認めます。Tailscaleはprivate接続の強い候補
 | OKF適合と判断readyの分離 | candidate | [#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)。#48系の一部として取り込む予定。構造PASSは内容・権限・意思決定の証明ではない |
 | 診断／Knowledge Work合流 | candidate | [#64](https://github.com/Kotodama-Project/Kotodama-project/pull/64)。#48の知識bundleにつないで取り込む予定。読取診断の候補。GUI、live observer、実Work接続は未受入 |
 | 専門agent協調 | main | [Luna Task swarm](LUNA-TASK-SWARM.md)。#67と#85の修復を統合し、Linux・Windowsの必須CIでoffline fixtureを確認。実Codex/Lunaのlive受入は未実施。全利用の必須構成にしない |
-| room別Live／workspace | goal | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)の考え方をNode runtimeへ移す（別runtimeは取り込まない、2026-09-24 owner判断）。Source/Task/mediaの実接続は未受入 |
-| 静音Liveと会話制御 | goal | [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71)の方針文書を取り込み、継続発話、退出と仕事の分離をNode runtimeで検証する |
+| room別Live／workspace | goal | 複数VCの同時運用は[#142](https://github.com/Kotodama-Project/Kotodama-project/issues/142)、チャンネル別の作業場は[#143](https://github.com/Kotodama-Project/Kotodama-project/issues/143)でNode runtimeへ移す（#69の別runtimeは取り込まない、2026-09-24 owner判断）。Source/Task/mediaの実接続は未受入 |
+| 静音Liveと会話制御 | goal | [GPT-Liveの採用方針](GPT-LIVE-ADOPTION.md)（#71の方針文書をNode runtimeに合わせて取り込み）。静かな進捗は[#144](https://github.com/Kotodama-Project/Kotodama-project/issues/144)、確認の方針は[#145](https://github.com/Kotodama-Project/Kotodama-project/issues/145)。継続発話、退出と仕事の分離をNode runtimeで検証する |
 | Slack／Salesforce | unconnected | #70／#77。公開mainで接続済みとはしない |
 | 自発参加／native UI統合 | goal | 個別候補があっても、同じ実会話での統合受入は未達 |
 | object情報からCRM体験を構成 | hypothesis | 対象用途・権限・同期方向・人向け表示の実証が必要 |

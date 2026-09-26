@@ -37,7 +37,7 @@ On Windows PowerShell, use `python` instead of `python3`. A success prints one l
 |---|---|---|---|
 | Company Pack / Evidence Chain | starter with 9 Blocks, 9 Records, 3 MOCs; schemas, validators, review chain, smoke | | Promotion policy per lane |
 | Session / conversation ledger | schema and validator | | runtime ingestion |
-| Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | #69 and #71 (not taken in as separate runtimes; their ideas move into this Node runtime) | 15-minute rotation, Voice-to-Verified-Handoff, GrillU |
+| Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | | 15-minute rotation, Voice-to-Verified-Handoff, GrillU, the rest of the [GPT-Live adoption policy](docs/GPT-LIVE-ADOPTION.md) (#142 to #146) |
 | Agent swarm / autonomy | bounded Task execution, Luna Task swarm | swarm, route-binding, migration-ledger, and agent-lifecycle contracts (#34 to #36) | Goal Completion Loop after a human GO |
 | Knowledge / Context | | OKF v0.2 knowledge bundle (#48, #61, #59, chosen as the canonical line), control plane (#49 line) | Context Gateway, TiDB evaluation |
 | Runtime | Compose / Proxmox lifecycle contracts, Cloudflare candidates | | deployment on Cloudflare edge and the official Cloudflare OS |
