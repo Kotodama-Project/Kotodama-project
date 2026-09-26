@@ -1,0 +1,114 @@
+# Public architecture boundaries
+
+Status: **candidate only / `NO_GO_UNPUBLISHED`**.
+
+These documents describe provider-neutral design contracts. They do not prove
+that a runtime exists, grant execution authority, publish an operational
+topology, or make a release or admission decision.
+
+## Scope
+
+The public architecture set answers four questions:
+
+1. Which layer owns each decision and record?
+2. How do bounded workers coordinate without hidden shared state?
+3. How does a supervisor call tools without acquiring implicit authority?
+4. How does a plan move through deterministic, reviewable states?
+
+The detailed contracts are:
+
+- [multi-agent coordination](multi-agent-coordination.md);
+- [supervision contract](supervision-contract.md);
+- [plan lifecycle](plan-runtime.md).
+
+## Architectural invariants
+
+### Separate intent, authority, execution, evidence, and promotion
+
+An intent states the desired outcome. A decision establishes whether work may
+proceed. A capability grant bounds what a worker may change. Execution produces
+a candidate. Verification produces evidence. Promotion is a separate human or
+policy decision. No layer may infer a missing decision from success in another
+layer.
+
+### One owner per authoritative record
+
+Each authoritative record has one declared owner and one write boundary.
+Projections may summarize or index that record, but a projection cannot become
+an alternate source of truth. Cross-layer communication uses immutable
+references or versioned messages rather than untracked shared state.
+
+### Dependencies point toward stable contracts
+
+The public dependency direction is:
+
+```text
+contracts -> coordination -> adapters -> operational surfaces
+```
+
+Contracts must not depend on a provider adapter. Coordination may depend on
+contracts but not on a live deployment. Adapters translate an explicit contract
+for one environment. Operational surfaces consume evidence; they do not rewrite
+the contract that produced it.
+
+### Fail closed at missing boundaries
+
+Unknown authority, missing evidence, conflicting ownership, expired capability,
+or an unrecognized state stops the transition. A stop is a valid and reportable
+outcome. It must not be converted into success by a retry, default value, or
+best-effort continuation.
+
+### Make replay deterministic
+
+State transitions use stable identifiers, explicit inputs, monotonic sequence
+numbers, and idempotency keys. Replaying the same accepted event must not create
+a second side effect. Human-readable documents may explain a transition, but
+the recorded state and evidence references determine its identity.
+
+### Minimize public data
+
+Public contracts define fields and categories, not live values. Credentials,
+personal data, provider account details, endpoints, private repository paths,
+and operational ledgers stay outside the public architecture set. Evidence
+should identify a check and immutable artifact without embedding sensitive
+payloads.
+
+## Repository placement rules
+
+- `docs/architecture/` contains stable, provider-neutral contracts.
+- Provider adapters belong outside the contract layer and require their own
+  security and deployment review.
+- Time-bound backlogs and incident state belong in the current tracking system,
+  not in normative architecture.
+- Generated indexes and implementation trace maps remain implementation
+  evidence, not public architectural authority.
+- A document may link to an authoritative record but must not duplicate its
+  mutable state.
+
+## Candidate and admission boundary
+
+This refreshed candidate comes from the already-public PR #114 at commit
+`3d117e184c9c1a27e947243dd6491ded592d403c`. It reuses the re-authored contracts;
+no private source bodies or source history are imported.
+
+Issue #25 holds the owner's rightsholder decision (24 September 2026).
+`migration/a022-public-architecture.provenance.json` preserves the previously
+recorded source commits, author counts, and private source-history scan receipt
+digest. These are historical source records, not a fresh inspection of the
+private receipt or an independent review of this candidate.
+
+An independent agent reviewed the refreshed public candidate on 26 September
+2026 against tree `26f28c7c0fadf0bedccfd89416eed5e39415848e` and patch SHA-256
+`9eeafc3ebedd680093712f64b17d58f7ebb8ff7853b6ad8ac2e6e591d3a67bfb`.
+The manifest records that review for this candidate. It does not authenticate
+the private source-history receipt or establish live operation. A local
+validator PASS checks the public mapping and document bytes; admission here is
+limited to the public architecture candidate. Privacy checks and Dependency
+Review must run for the current pull request revision.
+The PR #18 / Issue #19 governance baseline and root MIT license do not replace
+those checks or relicense this component, which keeps its own notice and
+provenance record. Runtime implementation, deployment, Promotion, Current Truth,
+and Public Beta remain outside this documentation candidate.
+
+Source-derived architecture component: MIT; see
+[`../../LICENSES/MIT.txt`](../../LICENSES/MIT.txt).
