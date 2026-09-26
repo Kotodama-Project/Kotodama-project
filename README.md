@@ -50,7 +50,7 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 |---|---|---|---|
 | Company Pack / Evidence Chain | 9 Blocks、9 Records、3 MOCs の starter、schema と validator、review chain、smoke | | lane ごとの Promotion policy |
 | Session / conversation ledger | schema と validator | | runtime への取込 |
-| Discord / Voice | `runtime/discord-template` | #69・#71（別 runtime としては取り込まず、考え方をこの Node runtime へ移す） | 15 分 rotation、Voice-to-Verified-Handoff、GrillU |
+| Discord / Voice | `runtime/discord-template` | | 15 分 rotation、Voice-to-Verified-Handoff、GrillU、[GPT-Live の採用方針](docs/GPT-LIVE-ADOPTION.md)の残り（#142〜#146） |
 | Agent swarm / 自律実行 | 限定 Task 実行、Luna Task swarm | agent swarm・route binding・migration ledger・agent lifecycle の契約（#34〜#36） | 「OK」後の Goal Completion Loop、reversible delegation |
 | 知識・Context | | OKF v0.2 の知識 bundle（#48・#61・#59）、control plane（#49 の系統） | Context Gateway、TiDB 評価 |
 | Runtime | Compose / Proxmox contract、Cloudflare candidate | | Cloudflare edge と公式 Cloudflare OS を基盤にした配備 |
