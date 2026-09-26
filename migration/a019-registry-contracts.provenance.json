@@ -1,0 +1,45 @@
+{
+  "schema_version": "kotodama.public-migration-provenance.v1",
+  "batch_id": "A019",
+  "source_fixed_commit": "2fc1bf60b0dc8721c96875788447e34adc4c7216",
+  "license_expression": "MIT",
+  "rightsholder_record": "Kotodama-Project/Kotodama-project#25",
+  "author_identity_policy": "GitHub handles are listed only when the commit address is a GitHub noreply address; other identities are counted and recorded privately.",
+  "private_source_history_receipt_sha256": "1441c3af0cbe59676534391eb68ee4fc5df7e65a8e3fdad96f3acff0a20b7711",
+  "entries": [
+    {
+      "destination_path": "schemas/task-contract.schema.json",
+      "source_blob_sha": "3529f688fb222135a5c352d73b5c5117e4a7ef87",
+      "decision": "PUBLIC_REAUTHOR",
+      "commits_touching_source": 3,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "destination_path": "schemas/task-decomposition.schema.json",
+      "source_blob_sha": "2ae3797052c82cbf67d5c720603476557dee4ff9",
+      "decision": "PUBLIC_REAUTHOR",
+      "commits_touching_source": 3,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "destination_path": "schemas/worker-capability-catalog.schema.json",
+      "source_blob_sha": "5275c648c1a87dc8b1b5e0bac5216003c38f4ff7",
+      "decision": "PUBLIC_REAUTHOR",
+      "commits_touching_source": 3,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    },
+    {
+      "destination_path": "schemas/worker-result.schema.json",
+      "source_blob_sha": "f38733322c79be02f5a75a7709fa932eaa9a4afa",
+      "decision": "PUBLIC_REAUTHOR",
+      "commits_touching_source": 3,
+      "author_github_handles": [],
+      "withheld_author_identities": 1
+    }
+  ],
+  "private_source_history_result": "PASS_AFTER_TRIAGE",
+  "entry_scope": "PUBLIC_REAUTHOR entries keyed by destination path and source blob; source paths appear only in the manifest"
+}
