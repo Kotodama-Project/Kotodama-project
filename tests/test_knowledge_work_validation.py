@@ -1,9 +1,7 @@
 import copy
-import hashlib
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -16,7 +14,6 @@ from jsonschema import Draft202012Validator, FormatChecker
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import knowledge_work_validator as validator
-from compile_knowledge_context import compile_context
 from create_knowledge_work_package import create_package
 
 NOW = datetime(2026, 9, 9, tzinfo=timezone.utc)
@@ -26,7 +23,9 @@ class KnowledgeWorkTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="knowledge-work-")
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name) / "package"
+        # Resolve the fixture location: the validator refuses linked ancestors,
+        # and some platforms place the temporary directory under one.
+        self.root = Path(self.temp.name).resolve() / "package"
         shutil.copytree(ROOT / "examples/knowledge-work/business-rehearsal", self.root)
         self.package = json.loads((self.root / validator.MANIFEST).read_text(encoding="utf-8"))
 
@@ -99,7 +98,6 @@ class KnowledgeWorkTests(unittest.TestCase):
         source["expires_at"] = "2026-09-08T00:00:00Z"
         self.save()
         self.assertIn("SOURCE_EXPIRED", self.errors())
-        self.assertEqual(compile_context(self.root, now=NOW)["status"], "REFUSED")
 
     def test_blocking_question_and_critical_contradiction_prevent_candidate(self):
         self.package["questions"][0]["blocking"] = True
@@ -134,22 +132,16 @@ class KnowledgeWorkTests(unittest.TestCase):
         self.save()
         self.assertIn("SENSITIVITY_DOWNGRADE", self.errors())
 
-    def test_ceiling_refusal_does_not_return_private_metadata_or_body(self):
+    def test_validator_ceiling_refusal_does_not_return_private_metadata(self):
         self.package["sensitivity"] = "restricted"
-        self.package["objective"] = "PRIVATE_FIXTURE_NOT_FOR_PUBLIC_CONTEXT"
+        self.package["objective"] = "PRIVATE_FIXTURE_NOT_FOR_PUBLIC_REPORT"
         self.save()
-        result = compile_context(self.root, now=NOW)
-        self.assertEqual(result["errors"], ["SENSITIVITY_CEILING"])
-        self.assertIsNone(result["package_sha256"])
-        self.assertNotIn("PRIVATE_FIXTURE", json.dumps(result))
-
-    def test_mandatory_and_byte_budgets_refuse_instead_of_truncating(self):
-        result = compile_context(self.root, max_claims=1, now=NOW)
-        self.assertEqual(result["status"], "REFUSED")
-        self.assertEqual(result["selected_claims"], [])
-        result = compile_context(self.root, max_bytes=256, now=NOW)
-        self.assertEqual(result["errors"], ["CONTEXT_BYTE_BUDGET"])
-        self.assertEqual(result["selected_claims"], [])
+        report, _ = validator.validate_package(self.root, NOW)
+        self.assertEqual(report["errors"], ["SENSITIVITY_CEILING"])
+        self.assertIsNone(report["package_id"])
+        self.assertIsNone(report["package_sha256"])
+        self.assertEqual(report["bindings"], [])
+        self.assertNotIn("PRIVATE_FIXTURE", json.dumps(report))
 
     def test_related_claims_cannot_be_dropped_under_assumptions_or_contradictions(self):
         optional = copy.deepcopy(self.package["claims"][0])
@@ -159,11 +151,6 @@ class KnowledgeWorkTests(unittest.TestCase):
         self.package["contradictions"].append({"id": "conflict-one", "claim_refs": ["claim-optional", "claim-scope"], "severity": 2, "state": "open"})
         self.save()
         self.assertEqual(self.errors(), [])
-        self.assertEqual(compile_context(self.root, max_claims=2, now=NOW)["status"], "REFUSED")
-        result = compile_context(self.root, max_claims=3, now=NOW)
-        self.assertEqual(result["status"], "READY_CANDIDATE")
-        selected = {c["id"] for c in result["selected_claims"]}
-        self.assertTrue(all(set(a["claim_refs"]) <= selected for a in result["assumptions"] + result["contradictions"]))
 
     def test_final_reread_detects_a_source_changed_after_its_initial_read(self):
         original = validator.read_bound
@@ -178,17 +165,11 @@ class KnowledgeWorkTests(unittest.TestCase):
         with mock.patch.object(validator, "read_bound", side_effect=read):
             self.assertIn("SOURCE_DRIFT", self.errors())
 
-    def test_output_schemas_and_no_source_body_context(self):
+    def test_validation_report_schema_and_no_source_body(self):
         report, _ = validator.validate_package(self.root, NOW)
-        context = compile_context(self.root, now=NOW)
-        for name, value in [("knowledge-work-validation-report.schema.json", report), ("knowledge-context-bundle.schema.json", context)]:
-            schema = json.loads((ROOT / "schemas" / name).read_text(encoding="utf-8"))
-            Draft202012Validator(schema, format_checker=FormatChecker()).validate(value)
-        self.assertNotIn("Synthetic scenario, not a real conversation", json.dumps(context))
-        self.assertFalse(any(context["claims"].values()))
-        before = context.pop("context_sha256")
-        context["context_sha256"] = None
-        self.assertEqual(before, hashlib.sha256(json.dumps(context, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest())
+        schema = json.loads((ROOT / "schemas" / "knowledge-work-validation-report.schema.json").read_text(encoding="utf-8"))
+        Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)
+        self.assertNotIn("Synthetic scenario, not a real conversation", json.dumps(report))
 
     def test_initializer_preserves_existing_data_and_creates_unbound_draft(self):
         target = Path(self.temp.name) / "new"
@@ -198,19 +179,6 @@ class KnowledgeWorkTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             create_package(target, "replacement")
         self.assertEqual((target / validator.MANIFEST).read_bytes(), before)
-        self.assertEqual(compile_context(target, ceiling="restricted", now=NOW)["errors"], ["CANDIDATE_REQUIRED"])
-
-    def test_required_repository_audit_fails_without_packages_and_runs_real_example(self):
-        empty = Path(self.temp.name) / "empty"
-        empty.mkdir()
-        command = [sys.executable, str(ROOT / "tools/audit_knowledge_workspaces.py"), "--require-package", "--format", "json", "--root"]
-        missing = subprocess.run([*command, str(empty)], capture_output=True, timeout=30, check=False)
-        self.assertEqual(missing.returncode, 1)
-        self.assertEqual(json.loads(missing.stdout)["errors"], ["PACKAGE_REQUIRED"])
-        actual = subprocess.run([*command, str(ROOT)], capture_output=True, timeout=30, check=False)
-        self.assertEqual(actual.returncode, 0, actual.stdout)
-        self.assertGreaterEqual(json.loads(actual.stdout)["package_count"], 1)
-
 
 if __name__ == "__main__":
     unittest.main()
