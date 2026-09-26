@@ -39,6 +39,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - CodeQL の指摘 2 件（成果ファイル読込みの確認と使用の間の競合、検証テストのコード組立て）（[#99](https://github.com/Kotodama-Project/Kotodama-project/pull/99)）。
 - Task swarm が Windows で失敗していた（ディレクトリ一覧の link 数を信用して既存 payload を拒否、SQLite 接続の閉じ忘れ）。
 - Windows の CI で Chocolatey の配布元が一時的に 406 を返すと、ffmpeg が入らないまま導入の step が成功扱いになり、後の音声の試験が失敗していた。導入を 3 回まで試し、それでも無ければ導入の step で止める。
+- Discord の音声会話で、一度返答した後の続きの質問に答えなくなる経路を直した。Live の命令が 1 件拒否されただけでは会話を閉じず、最後まで再生した返答のたびに停止の指示を Live へ送らず、Live の文字起こしでも会話の続きであることを返答の判断に渡す。原因を絞るため、本文・音声・Discord の ID を含まない診断記録を足した（`runtime/discord-template/docs/OPERATIONS.md`）。実マイクでの連続応答は未確認（[#147](https://github.com/Kotodama-Project/Kotodama-project/issues/147)）。
 
 ## [0.1.0-preview] - 2026-09-14
 
