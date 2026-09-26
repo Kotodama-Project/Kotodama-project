@@ -2,6 +2,7 @@ import {ArchiveRuntime} from './archive-runtime.mjs';
 import http from 'node:http';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {loadConfig} from './config.mjs';
 import {Store} from './store.mjs';
 import {CliAnalyzer,ResponsesAnalyzer} from './llm.mjs';
@@ -16,13 +17,17 @@ import {voiceCommand} from './voice-control.mjs';
 import {RemoteOwner} from './remote-owner.mjs';
 import {startBridge} from './bridge.mjs';
 import {atomicJson,atomicText,check,uid,errorCode,redact} from './common.mjs';
+import {bindRuntimeSource} from './source-binding.mjs';
+const packageRoot=fileURLToPath(new URL('..',import.meta.url));
 
 function pidRunning(pid){
   if(!Number.isSafeInteger(pid)||pid<=0)return true;
   try{process.kill(pid,0);return true;}catch(error){return error.code!=='ESRCH';}
 }
 
-export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),log=value=>console.log(JSON.stringify(redact(value)))}={}){
+export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),sourceRoot=packageRoot,log=value=>console.log(JSON.stringify(redact(value)))}={}){
+  // Bound once, before anything else runs; later disk changes do not alter it.
+  const source=await bindRuntimeSource(sourceRoot);
   if(runtimeDomain==='')runtimeDomain=undefined;
   if(runtimeDomain!==undefined)check(typeof runtimeDomain==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(runtimeDomain),'RUNTIME_DOMAIN_INVALID');
   const config=await loadConfig(filename);let current=config;const store=new Store(config.dataDir),ownerId=uid('host'),startedAt=new Date().toISOString();
@@ -49,7 +54,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
       const send=(status,body)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(body));};
       try{
         const auth=String(req.headers.authorization??''),expected='Bearer '+secret;check(auth.length===expected.length&&timingSafeEqual(Buffer.from(auth),Buffer.from(expected)),'UNAUTHORIZED');
-        if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status()});return;}
+        if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status(),source});return;}
         check(req.method==='POST'&&req.url==='/v1/command','ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;check(size<=200000,'CONTROL_BODY_LIMIT');chunks.push(chunk);}
         const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));current=await loadConfig(filename);check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
         let result;
