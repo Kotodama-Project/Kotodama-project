@@ -60,7 +60,7 @@ jobs:
           sampler=$!
           pnpm test 2>&1 | grep -E 'DIAG167|real browser|ℹ (tests|pass|fail|duration)|Timeout|timed out' || true
           kill $sampler || true
-          cat "$RUNNER_TEMP/sampler.txt" | head -400
+          cat "$RUNNER_TEMP/sampler.txt"
       - name: Full suite with a CPU sampler (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -79,5 +79,5 @@ jobs:
           }
           pnpm test 2>&1 | Select-String -Pattern 'DIAG167|real browser|ℹ (tests|pass|fail|duration)|Timeout|timed out'
           Stop-Job $sampler
-          Receive-Job $sampler | Select-Object -First 600
+          Receive-Job $sampler | Select-Object -First 3000
           Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AMRunningMode | Format-List
