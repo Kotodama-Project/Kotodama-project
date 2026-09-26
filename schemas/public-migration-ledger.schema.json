@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/public-migration-ledger.schema.json",
+  "title": "Kotodama Public Migration Ledger Record",
+  "description": "One append-only, public-safe aggregate record describing the disposition of a single migration subject. Every identifier is opaque; no private path, provider handle, host, participant, or source body may appear. A record is metadata about a disposition decision, never the material itself.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "version",
+    "record_id",
+    "sequence",
+    "subject_ref",
+    "subject_digest",
+    "owner_ref",
+    "status",
+    "terminal_classification",
+    "transfer_mode",
+    "proposed_action",
+    "supersession_reason",
+    "gates",
+    "private_receipt_ref",
+    "private_receipt_digest",
+    "recorded_at",
+    "prev_hash",
+    "content_hash",
+    "claims",
+    "public_beta"
+  ],
+  "properties": {
+    "kind": {
+      "const": "kotodama.public-migration-ledger-record"
+    },
+    "version": {
+      "const": "v1"
+    },
+    "record_id": {
+      "$ref": "#/$defs/opaque_ref"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "subject_ref": {
+      "$ref": "#/$defs/opaque_ref",
+      "description": "Opaque reference to the migration subject. Never a filesystem path, repository path, URL, or provider handle."
+    },
+    "subject_digest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "owner_ref": {
+      "$ref": "#/$defs/opaque_ref"
+    },
+    "status": {
+      "enum": ["BLOCKED", "PROPOSED", "ACCEPTED", "REJECTED"],
+      "description": "Workflow state of this disposition. ACCEPTED requires every gate to be PASS; it is still not a Promotion, a publication, or a Human GO."
+    },
+    "terminal_classification": {
+      "description": "The only four terminal classifications defined by the migration epic, or null while the disposition is BLOCKED. Transfer mechanism values must never appear here.",
+      "oneOf": [
+        {
+          "enum": ["PUBLIC_EXTRACT", "PRIVATE_RETAIN", "REGENERATE", "DROP"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "transfer_mode": {
+      "description": "How material would move if the classification is acted on. This is a mechanism, not a terminal classification.",
+      "oneOf": [
+        {
+          "enum": ["REAUTHOR", "GENERATE", "NO_COPY"]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "proposed_action": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/opaque_ref"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "supersession_reason": {
+      "oneOf": [
+        {
+          "enum": [
+            "SUPERSEDED_BY_LATER_RECORD",
+            "SUPERSEDED_BY_REAUTHOR",
+            "SUPERSEDED_BY_REGENERATION",
+            "WITHDRAWN"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "license_provenance",
+        "secret_scan",
+        "history_scan",
+        "dependency_baseline",
+        "independent_review"
+      ],
+      "properties": {
+        "license_provenance": {
+          "$ref": "#/$defs/gate_result"
+        },
+        "secret_scan": {
+          "$ref": "#/$defs/gate_result"
+        },
+        "history_scan": {
+          "$ref": "#/$defs/gate_result"
+        },
+        "dependency_baseline": {
+          "$ref": "#/$defs/gate_result"
+        },
+        "independent_review": {
+          "$ref": "#/$defs/gate_result"
+        }
+      }
+    },
+    "private_receipt_ref": {
+      "$ref": "#/$defs/opaque_ref",
+      "description": "Opaque identifier of the private control-plane receipt. Resolving it requires private authority this ledger does not carry."
+    },
+    "private_receipt_digest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "recorded_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "prev_hash": {
+      "$ref": "#/$defs/sha256",
+      "description": "content_hash of the preceding record. The first record uses 64 zeros."
+    },
+    "content_hash": {
+      "$ref": "#/$defs/sha256",
+      "description": "SHA-256 over the canonical JSON encoding of this record with content_hash removed."
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "migration_executed",
+        "private_continuity_verified",
+        "public_extract_published",
+        "dependency_cutover_verified",
+        "rollback_rehearsed",
+        "promotion_verified",
+        "current_truth_changed",
+        "final_human_go",
+        "public_beta_go"
+      ],
+      "properties": {
+        "migration_executed": {
+          "const": false
+        },
+        "private_continuity_verified": {
+          "const": false
+        },
+        "public_extract_published": {
+          "const": false
+        },
+        "dependency_cutover_verified": {
+          "const": false
+        },
+        "rollback_rehearsed": {
+          "const": false
+        },
+        "promotion_verified": {
+          "const": false
+        },
+        "current_truth_changed": {
+          "const": false
+        },
+        "final_human_go": {
+          "const": false
+        },
+        "public_beta_go": {
+          "const": false
+        }
+      }
+    },
+    "public_beta": {
+      "const": "NO_GO_UNPUBLISHED"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "PROPOSED",
+              "ACCEPTED",
+              "REJECTED"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "terminal_classification": {
+            "enum": [
+              "PUBLIC_EXTRACT",
+              "PRIVATE_RETAIN",
+              "REGENERATE",
+              "DROP"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "opaque_ref": {
+      "type": "string",
+      "pattern": "^ref/[0-9a-f]{64}$",
+      "description": "Opaque reference encoded as a bare lowercase SHA-256-style digest; descriptive path segments are not permitted."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "gate_result": {
+      "enum": ["PASS", "FAIL", "BLOCKED"]
+    }
+  }
+}
