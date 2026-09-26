@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-09-26
+Updated: 2026-09-27
 
 現在の公開面の状態表です。過去の documentation revision（R91〜R179）の履歴は
 [docs/HISTORY.md](docs/HISTORY.md) に移し、この文書は現在地だけを示します。
