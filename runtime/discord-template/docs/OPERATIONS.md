@@ -39,3 +39,36 @@ GPT-Liveの利用量は `session.usage.updated` の累積秒を前回値と置�
 音声はDiscordの入力アカウントごとに扱います。共有マイクなど本人を特定できない入力は `discord.unattributedUsers` へ登録し、話者不明として記録します。その発言からは自動実行・音声回答を始めません。重なった別アカウントの入力は別トラックです。
 
 一回だけの音声確認枠は `voice.maxTotalAudioSeconds` に累計上限を設定します。日次上限とは別に、日付や再起動をまたいでも同じ累計で停止します。聞き取り接続と回答用接続が同じ枠を消費し、原音は保存しません。説明・同意確認は人間側の運用責任で扱い、Botは確認を繰り返しません。`participant_opt_in`を選んだ場合だけ、説明の版に紐づく参加者記録を利用します。
+
+## 稼働中のソースと候補の照合
+
+`integrity` は、稼働中のruntimeがどの版のファイルで動いているかを、中身を出さずにSHA-256のdigestで確かめます。比べるのは次の三つです。
+
+- 候補: `--candidate` に渡したディレクトリ。候補のcommitから `git archive` で空のディレクトリへ展開して作ります。
+- disk: `integrity` を実行したCLI自身のパッケージに、今置かれているファイル。
+- 稼働中のruntime: `start` が起動の最初に一度だけ計算し、プロセスの中に保持した値。`status` と同じ認証付きのlocal controlで、`runtime.json` の所有者・PID・起動時刻と照合したうえで、その場で読み戻します。起動後にdiskを読み直した値ではありません。`status` の出力にも同じ `source`（各ファイルの相対pathとdigest）が含まれます。
+
+対象は `bin/` と `src/` の下のすべてのファイル、`package.json`、`pnpm-lock.yaml` です。設定、データ領域、`docs/`、`tests/`、`node_modules/` は含みません。`node_modules/` は `pnpm-lock.yaml` のdigestと `pnpm install --frozen-lockfile` を前提に束縛するだけで、その中のファイルは比べません。対象の中のsymlink、hard link、通常でないファイルは読まずに拒否します。起動時に束縛できなかった場合もruntimeは起動し、照合は `unverified` になります。
+
+結果の `parity` は三通りです。
+
+- `match`: 三つのdigestが一致し、稼働中のruntimeから60秒以内に読み戻せたときだけです。終了コード0はこの場合だけです。
+- `mismatch`: どれかの組が異なります。`INSTANCE_DISK_DIFFERS`（旧プロセスのまま新しいファイルを置いた場合など）、`INSTANCE_CANDIDATE_DIFFERS`、`CANDIDATE_DISK_DIFFERS` と、異なるファイルの相対pathを返します。
+- `unverified`: 停止・到達不能（`RUNTIME_NOT_AVAILABLE`）、別のinstance（`RUNTIME_OWNER_CHANGED`）、束縛のない旧版や束縛できなかった起動（`INSTANCE_BINDING_MISSING`）、読み戻した値の矛盾（`INSTANCE_BINDING_INVALID`）、古い読み戻し（`STALE_READBACK`）、候補の指定なし（`CANDIDATE_REQUIRED`）です。一致として扱いません。保存したJSONは入力に使えません。
+
+出力にはPID、所有者ID、port、絶対path、設定値、control secretを含めません。`--revision` は表示用のラベルで、道具はcommitとの対応を確かめません。commitとの対応は、そのcommitから候補を作ることで取ります。
+
+前提として、起動中のファイルを置き換えません。新しい版は別のディレクトリへ置き、停止してから新しいディレクトリで起動します。同じ場所へ上書きすると、Nodeが起動時にファイルを読んだ時点と束縛を計算した時点の差を説明できません。
+
+許可された切り替えとrollbackでは、次の順に読み戻します。候補はGitのcloneがある場所で作り、ディレクトリごと実行hostへ運んでもかまいません。
+
+```sh
+# 1. 候補を作る（commitごとに空のディレクトリへ）
+git archive <commit> runtime/discord-template | tar -x -C <空のディレクトリ>
+# 2. 切り替え前: 今動いている版のcommitで作った候補と比べる
+node bin/kotodama.mjs integrity --config <設定> --candidate <空のディレクトリ>/runtime/discord-template --revision <commit> --json
+# 3. 停止 → 新しい版を別のディレクトリへ置く → そこで start → そのディレクトリのCLIで同じ integrity を実行する
+# 4. rollback 後も、戻した版のcommitで作った候補で同じ読み戻しを行う
+```
+
+共有してよいのは、候補のcommit、`setDigest`（必要なら `packageDigest` と `lockDigest`）、`readAt`、`parity` と理由コードだけです。PID、control secret、host名、絶対pathは共有しません。手元の試験の結果やdiskだけの一致は、稼働中のruntimeと候補が一致した証拠になりません。

@@ -18,6 +18,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - OpenManus を Proxmox 上の限定 executor として評価するための候補: schema、例、読み取り専用の validator（必須の権限 binding と出力、文字列への秘密の混入、不正 UTF-8、空白だけの値を拒否）と試験。配備や採用は含まない（[#55](https://github.com/Kotodama-Project/Kotodama-project/pull/55)）。
 - agent swarm と route binding の契約候補: schema、読み取り専用の preflight、否定の試験。main の Luna Task swarm との対応表を付けた（[#34](https://github.com/Kotodama-Project/Kotodama-project/pull/34)）。
 - BecomeOne から移植した階層テンプレート（A017: project / phase / requirement / plan / task と session context）。移植元の固定 commit・作者の GitHub handle・ライセンスを載せた出典表（`migration/a017-hierarchy-templates.provenance.json`）と、Issue #25 の owner 判断・非公開の元履歴走査 receipt・独立 review による受入の記録を付けた（[#27](https://github.com/Kotodama-Project/Kotodama-project/pull/27) を main に合わせて取り込み）。
+- Discord runtime の `integrity` コマンド: 稼働中の runtime が起動時に束縛したソース（`bin/`・`src/`・`package.json`・`pnpm-lock.yaml` の digest）を認証付きの local control で読み戻し、候補・disk と比べる。三つが一致し、新しい読み戻しのときだけ `match`。停止・別 instance・古い報告・束縛なしは `unverified` とする（[#157](https://github.com/Kotodama-Project/Kotodama-project/issues/157)）。手元と CI の試験だけで、実 host での切り替え・rollback 後の読み戻しは未実施のため `PB-G4` は未証明のまま。
 
 ### Changed
 
