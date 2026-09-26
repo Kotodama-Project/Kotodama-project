@@ -224,6 +224,14 @@ python3 tools/verify_company_pack_review_decision_handoff.py \
 | なし（固定記録: [security-overlay.json](../runtime/cloudflare-os/security-overlay.json)） | [`validate_cloudflare_os_security_candidate.py`](../tools/validate_cloudflare_os_security_candidate.py) | [`test_cloudflare_os_security_overlay.py`](../tests/test_cloudflare_os_security_overlay.py) | [High-advisory remediation preflight](CLOUDFLARE-OS-ADOPTION.md#high-advisory-remediation-preflight)。記録された overlay spec（`nanoid` 3.3.18 と `@puppeteer/browsers` 3.0.4 の parent-scoped override、生成 lock の byte 束縛、`LOCAL_MATERIALIZATION_VERIFIED_NOT_DEPLOYED`、`independent_review: false`）を検査する。任意で `--core-repo` により pin した core の Git object を、`--generated-workspace` と `--generated-lock` の組で生成物を再検証する（片方だけは FAIL）。出力の `remediation_proven` は常に false で、独立 review、provider/upstream での是正、配備、Public Beta GO は証明しない。 |
 | なし（固定記録: [wrangler-integrity.json](../runtime/cloudflare-edge/wrangler-integrity.json)） | [`verify_wrangler_artifact.py`](../tools/verify_wrangler_artifact.py) `--metadata` `--artifact` | [`test_verify_wrangler_artifact.py`](../tests/test_verify_wrangler_artifact.py) | [Cloudflare edge profile](../runtime/cloudflare-edge/README.md)。preview-upload workflow が取得した Wrangler 4.120.0 の npm tarball について、npm SHA-512 integrity、legacy shasum、SLSA subject digest の一致だけを検査する。tarball が要るため upload job の中でだけ実行し、候補検証の CI では試験だけを走らせる。SLSA attestation の署名検証（出力の `slsa_attestation_signature_verified` は false）、provider での実行、配備は証明しない。 |
 
+## 14. Knowledge Work package
+
+一つの作業成果と、その根拠のファイルを SHA-256 で固定した package です。例は合成の [business-rehearsal](../examples/knowledge-work/business-rehearsal/knowledge-work.json) だけです。
+
+| Schema | Validator / CLI | Regression test | PASSの意味 |
+|---|---|---|---|
+| [knowledge-work-package.schema.json](../schemas/knowledge-work-package.schema.json)、[knowledge-work-validation-report.schema.json](../schemas/knowledge-work-validation-report.schema.json) | [`validate_knowledge_work_package.py`](../tools/validate_knowledge_work_package.py)（本体は [`knowledge_work_validator.py`](../tools/knowledge_work_validator.py)）、下書きを作る [`create_knowledge_work_package.py`](../tools/create_knowledge_work_package.py) | [`test_knowledge_work_validation.py`](../tests/test_knowledge_work_validation.py) | 構造の検査だけ。根拠と成果物の bytes と digest の一致、path の逸脱・link・hardlink の拒否、claim と根拠・受入条件と成果物の対応、期限、未解決の blocking な問い、自己 review、感度の引き下げを見る。意味の正しさ、人の承認、reviewer の本人確認、実行の許可、Promotion、Current Truth は作らず、report の `claims` は常にすべて false。 |
+
 ## Public starterの同じ実行順
 
 既存exampleを変更せず、必ず新しい作業copyで実行します。
