@@ -1,0 +1,41 @@
+# TEMPORARY diagnostic for #167. Removed before merge.
+name: Diagnose browser test timing (#167)
+on:
+  pull_request:
+    paths:
+      - .github/workflows/diag-browser-167.yml
+      - runtime/discord-template/tests/diag-browser-167.mjs
+permissions:
+  contents: read
+jobs:
+  diag:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        shard: [1, 2, 3]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: runtime/discord-template
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - run: npm install --global pnpm@11.19.0
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Step timings of the real-browser test
+        env:
+          DIAG_ITERATIONS: '20'
+          DIAG_VARIANTS: default,disable-gpu
+        run: node tests/diag-browser-167.mjs
+      - name: The unchanged test file, repeated
+        shell: bash
+        run: |
+          for i in $(seq 1 10); do
+            node --test --test-concurrency=1 --test-timeout=120000 tests/browser.test.mjs 2>&1 | grep -E 'real browser|Timeout|timed out' || true
+          done
