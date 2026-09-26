@@ -1,9 +1,19 @@
 # Git Steward — executable coordination candidate
 
+日本語の要約: 複数の人・AI の作業（work cell）が同じリポジトリで重ならないように、
+書込み範囲の予約、lease と epoch による古い実行者の締め出し、独立した reviewer の確認、
+統合の記録を扱う調整コアの候補です。モデルの呼出し、Git への書込み、GitHub や
+provider への接続、配備は含みません。試験の PASS は local の結果であり、live・配備・
+承認を意味しません。公開面は `NO_GO_UNPUBLISHED` のままです。
+
 This is the internal coordination kernel for the Cloudflare OS Git role, not a
 running LLM, public API, deployed Gadget, GitHub App, or second Task authority.
-The registered role remains `candidate` / `proposal_only` with no runtime receipt.
-See [the system design](../../docs/GIT-STEWARD-AND-WORK-CELLS.md).
+The role is not entered in an agent registry in this revision
+([#134](https://github.com/Kotodama-Project/Kotodama-project/issues/134) tracks
+that) and has no runtime receipt. The system design document and the business
+rehearsal follow in later changes under
+[#132](https://github.com/Kotodama-Project/Kotodama-project/issues/132). The
+common-front direction is in [Cloudflare OS adoption](../../docs/CLOUDFLARE-OS-ADOPTION.md).
 
 ## Included
 
@@ -12,25 +22,22 @@ See [the system design](../../docs/GIT-STEWARD-AND-WORK-CELLS.md).
 | `coordinator.mjs` | Provider-neutral, synchronous work-cell state machine and candidate assessment |
 | `sqlite-store.mjs` | Atomic journal adapter for SQLite-backed Cloudflare Durable Object storage |
 | `git-observer.mjs` | Node-only, read-only comparison of immutable Git commits |
-| `coordinator.test.mjs` | Negative/positive tests, disk restart, simultaneous SQLite writers, real Git worktrees |
-| `business-simulation.test.mjs` | Correction, dependency invalidation, clock, legacy-journal regressions and rehearsal entry point |
-| `business-rehearsal.mjs` | Synthetic scenario runner with real temporary Git, SQLite and controlled child processes; not a production executor |
+| `coordinator.test.mjs` | Negative/positive tests, Work corrections, legacy-journal refusal, disk restart, simultaneous SQLite writers, real Git worktrees |
 | `../../tests/test_git_steward_runtime.py` | Entry point discovered by the existing Python regression workflow |
 
 No package installation is needed for this slice. Use Node >=22.13, Git and
 Python >=3.10. Node's built-in SQLite may emit an experimental warning.
 
 ```sh
-node --test --test-reporter=tap runtime/git-steward/coordinator.test.mjs runtime/git-steward/business-simulation.test.mjs
+node --test --test-reporter=tap runtime/git-steward/coordinator.test.mjs
 python -m unittest discover -s tests -p 'test_git_steward_runtime.py' -v
-node runtime/git-steward/business-rehearsal.mjs > business-rehearsal.json
 ```
 
-The original suite has 37 Node tests; the business suite adds focused regressions
-and a multi-condition rehearsal. The Python entry point is
-one launcher test, not another set of independent cases. It fails rather
-than silently skipping when Node/Git/SQLite are unavailable. Full-repository
-regression and hosted CI must be reported separately.
+The core suite has 41 Node tests. The Python entry point is one launcher, not
+another set of independent cases: it fails rather than silently skipping when
+Node >=22.13 or Git is unavailable, and it requires every reported Node test to
+pass with none skipped, cancelled or left as todo. Full-repository regression
+and hosted CI must be reported separately.
 
 ## Protected integration, not a public method
 
@@ -189,8 +196,8 @@ This candidate uses journal v2. A v1 journal is refused with
 `JOURNAL_VERSION_UNSUPPORTED` and preserved, not silently upgraded or erased.
 Migration requires stopped/fenced old executors, preserved records, authoritative
 current Work rebinding and a non-regressing epoch/anti-rollback plan. Neither an
-empty replacement database nor a code revert proves that migration. See the
-[business rehearsal and staged production proposal](../../docs/BUSINESS-REHEARSAL.md).
+empty replacement database nor a code revert proves that migration. The
+business rehearsal and a staged production proposal follow in a later change.
 
 Disable new admissions, retain the journal, request stop, verify/fence active
 workers, reconcile external writes and preserve receipts before reverting the
@@ -198,7 +205,9 @@ candidate code. Do not perform `reset --hard`, `clean`, or automatic worktree
 removal against user work. Closing/reverting this source PR does not revoke a
 separate provider grant.
 
-Required next acceptance: native Gadget/Gatekeeper identity and observation ACL;
+Required next acceptance: protected Gatekeeper identity and observation ACL
+behind the common front (embedded GUI or native Gadget is still undecided in
+[#131](https://github.com/Kotodama-Project/Kotodama-project/issues/131));
 protected live Work/Grant/context admission; real executor fence and stop/readback;
 GitHub receipt/check identity mapping; base-change/merge-queue race handling;
 workerd deployment tests; multi-user cross-workspace access; restore/retention;
