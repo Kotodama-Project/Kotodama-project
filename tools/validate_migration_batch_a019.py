@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections import Counter
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -53,6 +54,17 @@ PROVENANCE_PATH = Path("migration/a019-registry-contracts.provenance.json")
 RIGHTSHOLDER_RECORD = "Kotodama-Project/Kotodama-project#25"
 # Historical public record from PR #115; this does not inspect its private receipt.
 PRIVATE_RECEIPT_SHA256 = "1441c3af0cbe59676534391eb68ee4fc5df7e65a8e3fdad96f3acff0a20b7711"
+# Canonical JSON from the same fixed public record, with only an allowed
+# independent-review state normalized to PENDING. These pins cover every
+# metadata value, including nested fields and attribution counts. Updating
+# them requires review of the changed record, not regeneration during validation.
+MANIFEST_METADATA_SHA256 = "662c46481e96b9dfc49c68bdf9647478c56bda1b227431074135bca45dfc48f1"
+PROVENANCE_METADATA_SHA256 = "32a172112f4e18c68d2857b570b85aa8bd3d29657eef29b18ded94ba6bda70d1"
+MANIFEST_KEYS = frozenset({
+    "schema_version", "batch_id", "status", "publication_state", "source",
+    "component_license", "decision_contract", "destination_contract",
+    "admission_gates", "entries",
+})
 PROVENANCE_KEYS = frozenset({
     "schema_version", "batch_id", "source_fixed_commit", "license_expression",
     "rightsholder_record", "author_identity_policy", "entry_scope", "entries",
@@ -125,7 +137,7 @@ PII_DETECTORS = {
         r"(?<!\w)(?=\+?\d[\d ()-]{8,}\d(?!\w))"
         r"(?=\+?\d[\d ()-]*[ ()-])\+?\d[\d ()-]{8,}\d(?!\w)"
     ),
-    "absolute_user_path": re.compile(r"(?:/(?:home|Users|root)/|[A-Za-z]:\\Users\\)"),
+    "absolute_user_path": re.compile(r"(?:/(?:home|Users|root)/|[A-Za-z]:\\+Users\\+)", re.I),
 }
 PRIVATE_VALUE_DETECTORS = {
     "named_provider": re.compile(r"\b(?:OpenClaw|Cloudflare|Discord|Proxmox|n8n)\b", re.I),
@@ -230,13 +242,61 @@ def _read_bounded(root: Path, relative: Path, errors: list[str]) -> bytes | None
     return data
 
 
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON object key")
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(value: str) -> Any:
+    raise ValueError("non-finite JSON number")
+
+
+def _finite_json_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("non-finite JSON number")
+    return number
+
+
+def _decode_metadata(data: bytes) -> Any:
+    # Duplicate keys would hide raw text when converted to canonical JSON.
+    return json.loads(
+        data.decode("utf-8"), object_pairs_hook=_unique_json_object,
+        parse_constant=_reject_json_constant, parse_float=_finite_json_float,
+    )
+
+
+def _metadata_digest(value: Any, *, normalize_review: bool = False) -> str | None:
+    if normalize_review and isinstance(value, dict):
+        value = dict(value)
+        gates = value.get("admission_gates")
+        if isinstance(gates, dict):
+            gates = dict(gates)
+            state = gates.get("independent_review")
+            if isinstance(state, str) and state in REVIEW_STATES:
+                gates["independent_review"] = "PENDING"
+            value["admission_gates"] = gates
+    try:
+        encoded = json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError, UnicodeError, RecursionError):
+        return None
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _load_json(root: Path, relative: Path, errors: list[str]) -> Any:
     data = _read_bounded(root, relative, errors)
     if data is None:
         return None
     try:
-        return json.loads(data.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError):
+        return _decode_metadata(data)
+    except (UnicodeError, ValueError, RecursionError):
         errors.append(f"invalid UTF-8 JSON: {relative.as_posix()}")
         return None
 
@@ -728,6 +788,11 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     if not isinstance(manifest, dict):
         manifest = {}
 
+    if set(manifest) != MANIFEST_KEYS:
+        errors.append("manifest fields must match the public record exactly")
+    if _metadata_digest(manifest, normalize_review=True) != MANIFEST_METADATA_SHA256:
+        errors.append("manifest metadata differs from the fixed public record")
+
     if manifest.get("schema_version") != "kotodama.public-migration-batch.v1":
         errors.append("unexpected manifest schema_version")
     if manifest.get("batch_id") != "A019":
@@ -773,7 +838,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     review_state = gates.get("independent_review")
     if {key: value for key, value in gates.items() if key != "independent_review"} != RECORDED_GATES:
         errors.append("admission gates must match the recorded admission evidence")
-    if review_state not in REVIEW_STATES:
+    if not isinstance(review_state, str) or review_state not in REVIEW_STATES:
         errors.append("independent review gate must be PENDING or PASSED_INDEPENDENT_REVIEW")
 
     raw_entries = manifest.get("entries")
@@ -941,12 +1006,14 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     provenance_data = _read_bounded(root, PROVENANCE_PATH, errors)
     if provenance_data is not None:
         try:
-            provenance = json.loads(provenance_data.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+            provenance = _decode_metadata(provenance_data)
+        except (UnicodeError, ValueError, RecursionError):
             provenance = {}
             errors.append("provenance file is not valid UTF-8 JSON")
         if not isinstance(provenance, dict):
             provenance = {}
+        if _metadata_digest(provenance) != PROVENANCE_METADATA_SHA256:
+            errors.append("provenance metadata differs from the fixed public record")
         if set(provenance) != PROVENANCE_KEYS:
             errors.append("provenance fields must match the public record exactly")
         if provenance.get("schema_version") != "kotodama.public-migration-provenance.v1":
@@ -964,7 +1031,8 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         digest = provenance.get("private_source_history_receipt_sha256")
         if digest != PRIVATE_RECEIPT_SHA256:
             errors.append("provenance must bind the private source-history receipt digest")
-        if provenance.get("private_source_history_result") not in PRIVATE_RESULTS:
+        private_result = provenance.get("private_source_history_result")
+        if not isinstance(private_result, str) or private_result not in PRIVATE_RESULTS:
             errors.append("private source-history receipt did not pass")
         # Rows are keyed by destination and source blob: source paths stay in the manifest only.
         exported = {

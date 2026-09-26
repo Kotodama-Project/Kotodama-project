@@ -60,6 +60,155 @@ class A019MigrationBatchTests(unittest.TestCase):
         self.assertEqual(meta_errors, [])
         return schemas, validators
 
+    def test_fixed_metadata_rejects_unknown_fields_at_every_object(self) -> None:
+        def object_paths(value, path=()):
+            if isinstance(value, dict):
+                yield path
+                for key, child in value.items():
+                    yield from object_paths(child, (*path, key))
+            elif isinstance(value, list):
+                for index, child in enumerate(value):
+                    yield from object_paths(child, (*path, index))
+
+        for relative in (VALIDATOR.MANIFEST_PATH, VALIDATOR.PROVENANCE_PATH):
+            original = json.loads((ROOT / relative).read_text(encoding="utf-8"))
+            for pointer in object_paths(original):
+                with self.subTest(file=relative.name, object=pointer):
+                    temporary, root = self._fixture()
+                    with temporary:
+                        document = copy.deepcopy(original)
+                        target = document
+                        for part in pointer:
+                            target = target[part]
+                        target["source_body"] = "ordinary fixture prose"
+                        (root / relative).write_text(json.dumps(document), encoding="utf-8")
+                        result = VALIDATOR.validate(root)
+                        self.assertEqual(result["status"], "FAIL")
+                        self.assertEqual(result["admission_status"], "BLOCKED")
+                        self.assertTrue(any("metadata differs" in error for error in result["errors"]))
+
+        for key in VALIDATOR.MANIFEST_KEYS:
+            with self.subTest(missing_manifest_key=key):
+                temporary, root = self._fixture()
+                with temporary:
+                    manifest = self._manifest(root)
+                    manifest.pop(key)
+                    self._write_manifest(root, manifest)
+                    result = VALIDATOR.validate(root)
+                    self.assertEqual(result["status"], "FAIL")
+                    self.assertIn("manifest fields must match the public record exactly", result["errors"])
+
+    def test_fixed_provenance_history_values_and_types_reject_drift(self) -> None:
+        mutations = {
+            "commits_touching_source": (1, True, 3.0),
+            "withheld_author_identities": (2, True, 1.0),
+            "author_github_handles": (["fixture-reviewer"],),
+        }
+        for index in range(4):
+            for field, values in mutations.items():
+                for value in values:
+                    with self.subTest(row=index, field=field, value_type=type(value).__name__):
+                        temporary, root = self._fixture()
+                        with temporary:
+                            path = root / VALIDATOR.PROVENANCE_PATH
+                            provenance = json.loads(path.read_text(encoding="utf-8"))
+                            provenance["entries"][index][field] = value
+                            path.write_text(json.dumps(provenance), encoding="utf-8")
+                            result = VALIDATOR.validate(root)
+                            self.assertEqual(result["status"], "FAIL")
+                            self.assertEqual(result["admission_status"], "BLOCKED")
+                            self.assertIn("provenance metadata differs from the fixed public record", result["errors"])
+        temporary, root = self._fixture()
+        with temporary:
+            path = root / VALIDATOR.PROVENANCE_PATH
+            provenance = json.loads(path.read_text(encoding="utf-8"))
+            provenance["private_source_history_result"] = "PASS"
+            path.write_text(json.dumps(provenance), encoding="utf-8")
+            self.assertIn(
+                "provenance metadata differs from the fixed public record",
+                VALIDATOR.validate(root)["errors"],
+            )
+
+    def test_fixed_metadata_allows_formatting_and_only_known_review_states(self) -> None:
+        for state in ("PENDING", "PASSED_INDEPENDENT_REVIEW"):
+            with self.subTest(state=state):
+                temporary, root = self._fixture()
+                with temporary:
+                    for relative in (VALIDATOR.MANIFEST_PATH, VALIDATOR.PROVENANCE_PATH):
+                        path = root / relative
+                        document = json.loads(path.read_text(encoding="utf-8"))
+                        if relative == VALIDATOR.MANIFEST_PATH:
+                            document["admission_gates"]["independent_review"] = state
+                        path.write_text(json.dumps(dict(reversed(list(document.items()))), indent=4), encoding="utf-8")
+                    result = VALIDATOR.validate(root)
+                    self.assertEqual(result["status"], "PASS", result["errors"])
+                    self.assertEqual(result["admission_status"], "ADMITTED" if state == "PASSED_INDEPENDENT_REVIEW" else "BLOCKED")
+
+    def test_metadata_duplicate_root_and_nested_keys_are_rejected(self) -> None:
+        for relative in (VALIDATOR.MANIFEST_PATH, VALIDATOR.PROVENANCE_PATH):
+            original = json.loads((ROOT / relative).read_text(encoding="utf-8"))
+            encoded = json.dumps(original)
+            root_duplicate = '{"schema_version":"ordinary fixture prose",' + encoded[1:]
+            if relative == VALIDATOR.MANIFEST_PATH:
+                nested_duplicate = encoded.replace('"source": {', '"source": {"fixed_commit":"ordinary fixture prose",', 1)
+            else:
+                nested_duplicate = encoded.replace('"entries": [{', '"entries": [{"decision":"ordinary fixture prose",', 1)
+            for label, mutated in (("root", root_duplicate), ("nested", nested_duplicate)):
+                with self.subTest(file=relative.name, position=label):
+                    # A permissive last-wins decoder would hide this added text.
+                    self.assertEqual(json.loads(mutated), original)
+                    temporary, root = self._fixture()
+                    with temporary:
+                        (root / relative).write_text(mutated, encoding="utf-8")
+                        result = VALIDATOR.validate(root)
+                        self.assertEqual(result["status"], "FAIL")
+                        self.assertEqual(result["admission_status"], "BLOCKED")
+                        self.assertTrue(any("JSON" in error for error in result["errors"]))
+
+    def test_metadata_nonfinite_values_are_rejected(self) -> None:
+        for relative in (VALIDATOR.MANIFEST_PATH, VALIDATOR.PROVENANCE_PATH):
+            encoded = (ROOT / relative).read_text(encoding="utf-8")
+            for token in ("NaN", "Infinity", "-Infinity", "1e999"):
+                with self.subTest(file=relative.name, token=token):
+                    temporary, root = self._fixture()
+                    with temporary:
+                        changed = '{"fixture_number":' + token + ',' + encoded.lstrip()[1:]
+                        (root / relative).write_text(changed, encoding="utf-8")
+                        result = VALIDATOR.validate(root)
+                        self.assertEqual(result["status"], "FAIL")
+                        self.assertTrue(any("JSON" in error for error in result["errors"]))
+
+    def test_malformed_review_states_return_structured_failure(self) -> None:
+        for state in ("APPROVED", [], {}, None, True):
+            with self.subTest(state_type=type(state).__name__):
+                temporary, root = self._fixture()
+                with temporary:
+                    manifest = self._manifest(root)
+                    manifest["admission_gates"]["independent_review"] = state
+                    self._write_manifest(root, manifest)
+                    result = VALIDATOR.validate(root)
+                    self.assertEqual(result["status"], "FAIL")
+                    self.assertEqual(result["admission_status"], "BLOCKED")
+                    self.assertIn("independent review gate must be PENDING or PASSED_INDEPENDENT_REVIEW", result["errors"])
+
+    def test_candidate_scan_rejects_normal_and_escaped_windows_user_paths(self) -> None:
+        synthetic = "C:" + chr(92) + "Users" + chr(92) + "fixture-user" + chr(92) + "record.txt"
+        representations = (synthetic, json.dumps(synthetic), repr(synthetic), json.dumps(json.dumps(synthetic)))
+        for relative in (Path("tests/test_migration_batch_a019.py"), Path("tools/validate_migration_batch_a019.py")):
+            for index, text in enumerate(representations):
+                with self.subTest(file=relative.name, representation=index):
+                    temporary, root = self._fixture()
+                    with temporary:
+                        path = root / relative
+                        path.write_text(path.read_text(encoding="utf-8") + "\n# " + text + "\n", encoding="utf-8")
+                        result = VALIDATOR.validate(root)
+                        self.assertEqual(result["status"], "FAIL")
+                        self.assertEqual(result["admission_status"], "BLOCKED")
+                        self.assertTrue(any(
+                            error.startswith("candidate scan finding absolute_user_path: ")
+                            and relative.as_posix() in error for error in result["errors"]
+                        ))
+
     def test_exact_candidate_passes_and_reports_the_recorded_admission(self) -> None:
         result = VALIDATOR.validate(ROOT)
         manifest = self._manifest(ROOT)
