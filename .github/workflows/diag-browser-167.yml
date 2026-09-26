@@ -9,14 +9,20 @@ on:
 permissions:
   contents: read
 jobs:
-  suite:
+  factor:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        shard: [1, 2, 3]
+        # setup-only:  heavy job setup (ffmpeg, docker pull), then the browser test alone
+        # tests-only:  no heavy setup, the 10 preceding test files, then the browser test
+        # warm-suite:  heavy setup, one throwaway headless Chrome launch, then the full suite
+        mode: [setup-only, tests-only, warm-suite]
+        shard: [1, 2]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      DEBUG: pw:browser
     defaults:
       run:
         working-directory: runtime/discord-template
@@ -29,55 +35,75 @@ jobs:
           node-version: '24'
       - run: npm install --global pnpm@11.19.0
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Install audio encoder (Linux)
+      - name: Start I/O sampler (Linux)
         if: runner.os == 'Linux'
+        shell: bash
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ffmpeg
-      - name: Install audio encoder (Windows)
+          nohup bash -c 'while true; do echo "IO $(date -u +%H:%M:%S) $(vmstat 1 2 | tail -1) psi=$(head -1 /proc/pressure/io 2>/dev/null)"; done' > "$RUNNER_TEMP/io.txt" 2>&1 &
+      - name: Start I/O sampler (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            choco install ffmpeg --yes --no-progress
-            if (Get-Command ffmpeg -ErrorAction SilentlyContinue) { break }
-            if ($attempt -lt 3) { Start-Sleep -Seconds (20 * $attempt) }
+          $script = {
+            param($out)
+            $c = '\PhysicalDisk(_Total)\% Idle Time','\PhysicalDisk(_Total)\Disk Read Bytes/sec','\PhysicalDisk(_Total)\Avg. Disk sec/Read','\PhysicalDisk(_Total)\Current Disk Queue Length','\Processor(_Total)\% Processor Time'
+            while ($true) {
+              $s = Get-Counter -Counter $c -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue
+              $v = $s.CounterSamples | ForEach-Object { '{0}={1:N3}' -f ($_.Path -replace '.*\\',''), $_.CookedValue }
+              Add-Content -Path $out -Value ("IO " + (Get-Date).ToUniversalTime().ToString('HH:mm:ss') + ' ' + ($v -join ' '))
+            }
           }
+          $out = Join-Path $env:RUNNER_TEMP 'io.txt'
+          Start-Process pwsh -ArgumentList '-NoProfile','-Command',"& {$script} '$out'" -WindowStyle Hidden
+      - name: Install audio encoder (Linux)
+        if: runner.os == 'Linux' && matrix.mode != 'tests-only'
+        working-directory: .
+        run: |
+          echo "MARK $(date -u +%H:%M:%S) apt-start"
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg > /dev/null
+          echo "MARK $(date -u +%H:%M:%S) apt-end"
+      - name: Install audio encoder (Windows)
+        if: runner.os == 'Windows' && matrix.mode != 'tests-only'
+        shell: pwsh
+        working-directory: .
+        run: |
+          "MARK $((Get-Date).ToUniversalTime().ToString('HH:mm:ss')) choco-start"
+          choco install ffmpeg --yes --no-progress | Out-Null
+          "MARK $((Get-Date).ToUniversalTime().ToString('HH:mm:ss')) choco-end"
       - name: Prepare isolated Linux verification fixture
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.mode != 'tests-only'
         shell: bash
         run: |
           set -euo pipefail
+          echo "MARK $(date -u +%H:%M:%S) docker-start"
           fixture='node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6'
-          docker pull "$fixture"
+          docker pull -q "$fixture"
           image="$(docker image inspect --format '{{.Id}}' "$fixture")"
           printf 'KOTODAMA_TEST_VERIFIER_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
-      - name: Full suite with a CPU sampler (Linux)
-        if: runner.os == 'Linux'
+          echo "MARK $(date -u +%H:%M:%S) docker-end"
+      - name: Throwaway headless Chrome launch
+        if: matrix.mode == 'warm-suite'
         shell: bash
         run: |
-          ( while true; do echo "SAMPLE $(date -u +%H:%M:%S) load=$(cut -d' ' -f1 /proc/loadavg)"; ps -eo pcpu,etimes,comm --sort=-pcpu | sed -n '2,6p' | sed 's/^/  /'; sleep 1; done ) > "$RUNNER_TEMP/sampler.txt" 2>&1 &
-          sampler=$!
-          pnpm test 2>&1 | grep -E 'DIAG167|real browser|ℹ (tests|pass|fail|duration)|Timeout|timed out' || true
-          kill $sampler || true
-          cat "$RUNNER_TEMP/sampler.txt"
-      - name: Full suite with a CPU sampler (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+          echo "MARK $(date -u +%H:%M:%S) warm-start"
+          node -e "import('playwright-core').then(async({chromium})=>{const path=require('node:path');const exe=process.env.CHROME_BIN??(process.platform==='win32'?path.join(process.env.ProgramFiles??'','Google/Chrome/Application/chrome.exe'):'/usr/bin/chromium');const b=await chromium.launch({executablePath:exe,headless:true});const p=await b.newPage();await p.setContent('<label id=w>w<input type=checkbox></label>');await p.locator('#w').click();await b.close();})"
+          echo "MARK $(date -u +%H:%M:%S) warm-end"
+      - name: The measured run
+        shell: bash
         run: |
-          $sampler = Start-Job -ScriptBlock {
-            $prev = @{}
-            while ($true) {
-              $now = Get-Process | Select-Object Id, ProcessName, CPU
-              $rows = foreach ($p in $now) { $d = if ($prev.ContainsKey($p.Id)) { $p.CPU - $prev[$p.Id] } else { 0 }; [pscustomobject]@{ Name = $p.ProcessName; Delta = [math]::Round($d, 2) } }
-              $prev = @{}; foreach ($p in $now) { $prev[$p.Id] = $p.CPU }
-              $total = (Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average
-              "SAMPLE $((Get-Date).ToUniversalTime().ToString('HH:mm:ss')) cpu=$total%"
-              $rows | Sort-Object Delta -Descending | Select-Object -First 5 | ForEach-Object { "  $($_.Delta)s $($_.Name)" }
-              Start-Sleep -Seconds 1
-            }
-          }
-          pnpm test 2>&1 | Select-String -Pattern 'DIAG167|real browser|ℹ (tests|pass|fail|duration)|Timeout|timed out'
-          Stop-Job $sampler
-          Receive-Job $sampler | Select-Object -First 3000
-          Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AMRunningMode | Format-List
+          echo "MARK $(date -u +%H:%M:%S) measured-start mode=${{ matrix.mode }}"
+          case "${{ matrix.mode }}" in
+            setup-only) files="tests/browser.test.mjs" ;;
+            tests-only) files="tests/access-monitor.test.mjs tests/agent-channel.test.mjs tests/analysis-admission.test.mjs tests/analysis-policy.test.mjs tests/archive-adapter.test.mjs tests/archive-context.test.mjs tests/archive-host.test.mjs tests/archive-runtime.test.mjs tests/artifact-read.test.mjs tests/bridge.test.mjs tests/browser.test.mjs" ;;
+            warm-suite) files="tests/*.test.mjs" ;;
+          esac
+          node --test --test-concurrency=1 --test-timeout=120000 $files > "$RUNNER_TEMP/measured.txt" 2>&1 || true
+          echo "MARK $(date -u +%H:%M:%S) measured-end"
+          grep -E 'DIAG167|real browser|pw:browser|ℹ (tests|pass|fail)|Timeout|timed out' "$RUNNER_TEMP/measured.txt" | cut -c1-300 | head -120
+          echo "MARK $(date -u +%H:%M:%S) second-start"
+          node --test --test-concurrency=1 --test-timeout=120000 tests/browser.test.mjs 2>&1 | grep -E 'DIAG167|real browser' || true
+      - name: I/O samples
+        if: always()
+        shell: bash
+        run: cat "$RUNNER_TEMP/io.txt" || true
