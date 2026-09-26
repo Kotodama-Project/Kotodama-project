@@ -34,7 +34,7 @@ mainには、[#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43)
 | 音声 | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)、[#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) | Node runtime（`runtime/discord-template`）に一本化する（2026-09-24 owner判断）。別runtimeは取り込まず、方針文書とNodeに無い考え方を移す |
 | 並列実行 | [Luna Task swarm](LUNA-TASK-SWARM.md)（[#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67)・[#85](https://github.com/Kotodama-Project/Kotodama-project/pull/85)を統合） | Linux・Windowsの必須CIと独立reviewを通したlocal fixtureの段階。実Codex/Lunaのlive受入は残件。契約候補#34〜#36はこのruntimeとの対応表を付けて取り込む |
 | 別系統のcontrol-plane | [#49](https://github.com/Kotodama-Project/Kotodama-project/pull/49)と後続stack | 競合するOKFの表現を外し、#48の知識bundleにつないで取り込む |
-| 既存能力の移植 | [Migration Epic #24](https://github.com/Kotodama-Project/Kotodama-project/issues/24)、[出典と権利 #25](https://github.com/Kotodama-Project/Kotodama-project/issues/25) | capabilityごとに出典・第三者条件・consumerを確認する |
+| 既存能力の移植 | [Migration Epic #24](https://github.com/Kotodama-Project/Kotodama-project/issues/24)、[出典と権利 #25](https://github.com/Kotodama-Project/Kotodama-project/issues/25) | capabilityごとに出典・第三者条件・consumerを確認する。[A022の公開architecture候補](architecture/README.md)はowner・協調・監督・planの契約を再利用する入口（独立review記録、liveは未検証） |
 
 PRごとの処分と進み具合は[#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)にあります。名前の系統は[NAMES](NAMES.md)、公開リポジトリの関係は[REPOSITORIES](REPOSITORIES.md)にあります。PR一覧は作業選択のための入口です。件数やリンクの存在で全履歴読了、採用、配備を主張しません。元のPRが別branch向けでも、最終的にどのbytesがmainへ入ったかを確認します。
 
