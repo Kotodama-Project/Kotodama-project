@@ -291,3 +291,40 @@ test('simultaneous worker threads acquire exactly one overlapping cell', async (
     assert.deepEqual((await Promise.all([run('alpha'), run('beta')])).sort(), ['SCOPE_BUSY', 'running']);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// Journal v2 correction refusals. The broader business rehearsal adds more
+// scenarios; these keep each refusal code covered by the core suite itself.
+test('an older or superseded Work revision cannot become current again', () => {
+  const h = setup(); h.add('beta', { work_ref: 'ref/work/alpha', work_revision: 2 });
+  rejects(() => h.add('alpha', { work_revision: 1 }), 'WORK_REVISION_STALE');
+  assert.equal(h.store.state.cells.alpha, undefined);
+  const g = setup(); g.add(); g.claim(); g.add('beta', { work_ref: 'ref/work/alpha', work_revision: 2 });
+  assert.equal(g.store.state.cells.alpha.state, 'stopping'); assert.equal(g.store.state.cells.alpha.superseded_by, 'beta');
+  rejects(() => g.send('stopped', 'alpha', { epoch: 1, receipt_ref: 'ref/receipt/stop', disposition: 'queued' }, ATTEST), 'WORK_REVISION_STALE');
+  g.send('stopped', 'alpha', { epoch: 1, receipt_ref: 'ref/receipt/stop', disposition: 'cancelled' }, ATTEST);
+  rejects(() => g.claim(), 'WORK_REVISION_STALE');
+});
+test('consumers of a corrected dependency are invalidated and cannot run', () => {
+  const h = setup(); h.add(); h.add('beta', { depends_on: ['alpha'] });
+  h.add('gamma', { work_ref: 'ref/work/alpha', work_revision: 2 });
+  assert.equal(h.store.state.cells.beta.state, 'cancelled'); assert.equal(h.store.state.cells.beta.invalidated_by, 'gamma');
+  rejects(() => h.claim('beta'), 'DEPENDENCY_SUPERSEDED');
+  rejects(() => h.add('delta', { depends_on: ['alpha'] }), 'DEPENDENCY_SUPERSEDED');
+  rejects(() => h.add('delta', { depends_on: ['beta'] }), 'DEPENDENCY_SUPERSEDED');
+});
+test('a correction cannot depend on the Work it supersedes and leaves no partial change', () => {
+  const h = setup(); h.add(); const before = structuredClone(h.store.state);
+  rejects(() => h.add('beta', { work_ref: 'ref/work/alpha', work_revision: 2, depends_on: ['alpha'] }), 'DEPENDENCY_SUPERSEDED');
+  const after = structuredClone(h.store.state); before.last_now = after.last_now;
+  assert.deepEqual(after, before); assert.equal(after.cells.alpha.state, 'queued');
+});
+test('an unsupported journal version is refused and preserved in SQLite', () => {
+  for (const version of [1, 3]) {
+    const db = new DatabaseSync(':memory:'); const h = setup(new CloudflareSqliteStore(sqliteStorage(db))); h.add(); h.claim();
+    const legacy = JSON.parse(db.prepare('SELECT payload FROM git_steward_state').get().payload); legacy.version = version;
+    db.prepare('UPDATE git_steward_state SET payload = ? WHERE slot = 1').run(JSON.stringify(legacy));
+    const before = db.prepare('SELECT payload FROM git_steward_state').get().payload;
+    rejects(() => h.submit(), 'JOURNAL_VERSION_UNSUPPORTED'); rejects(() => h.add('beta'), 'JOURNAL_VERSION_UNSUPPORTED');
+    assert.equal(db.prepare('SELECT payload FROM git_steward_state').get().payload, before); db.close();
+  }
+});
