@@ -698,7 +698,9 @@ Cloudflare edge は Workers と Access を使う ingress／application delivery�
 [公式 Cloudflare OS](https://os.cloudflare.app/) は agent chat、sandboxed
 Gadgets、Blueprints、capability-based Gatekeepers を備えた early-access v2
 の AI productivity environment です。後者は traditional computer OS では
-ありません。
+ありません。製品方向として公式 Cloudflare OS を、知識・会話・Task・agent の
+共通フロントとします。表示は projection とし、操作は既存の各 governed owner へ
+返す設計です。native Gadget と GUI 埋込みの選択、接続方法、実配備は未確定です。
 
 この候補では official starter、その starter が実際に pin する core gitlink、
 別途観測した core 最新 head を exact Git object として分離しました。さらに、
@@ -716,9 +718,12 @@ Promotion、Current Truth は作りません。
 設計、費用境界、未証明事項、再現コマンドは
 [Cloudflare edge and official Cloudflare OS](CLOUDFLARE-OS-ADOPTION.md) を参照してください。
 Dynamic Workers は Workers Paid が必要なため、採用決定は billing activation や
-provider deployment の包括承認ではありません。private Context は Proxmox 側へ
-残し、query authority は Context Gateway、正規 authority は BecomeOne／Human
-Intent が保持します。
+provider deployment の包括承認ではありません。private Context は Proxmox 側に
+置く設計とし、query authority は Context Gateway、Decision・Work Order・Promotion・
+Current Truth は Kotodama の各 governed owner に従います。
+BecomeOne は移植元であり、移行後は公開 Kotodama の版・内容 digest に固定した
+consumer とします。共通フロントを第二の正本や権限の発行元に
+せず、この設計を接続・認可・稼働の実装済み証拠とは扱いません。
 
 ## Consent、privacy、retention
 

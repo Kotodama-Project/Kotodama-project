@@ -11,6 +11,8 @@ The Japanese [README.md](README.md) is the canonical entry point. This page is a
 
 Kotodama detects intent in conversation, voice, issues, and documents, confirms only the requirements that are missing, decomposes the work, keeps results and verification evidence, lets an authority decide adoption, and returns the learning to the company. The parts are the Evidence Chain, Company Packs, a Context Platform, an AI workforce, and a deployment foundation on Cloudflare edge plus the official Cloudflare OS.
 
+The official Cloudflare OS is the planned shared frontend for knowledge, conversation, Tasks, and agents. Operations return to their existing governed owners; connection details, UI composition, and deployment remain subject to design and validation.
+
 You choose how to use it:
 
 - **Run work**: Company Packs and the review chain trace a request through Work Order, Verification Receipt, and Promotion.

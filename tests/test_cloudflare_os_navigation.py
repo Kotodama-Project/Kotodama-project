@@ -29,7 +29,7 @@ class CloudflareOsNavigationTests(unittest.TestCase):
             "Cloudflare edge",
             "Official Cloudflare OS",
             "Proxmox",
-            "BecomeOne / Human Intent",
+            "Kotodama governance",
             "Context Gateway",
             "Workers Paid",
             "1060",
