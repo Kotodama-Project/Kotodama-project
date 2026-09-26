@@ -394,7 +394,7 @@ prompt、private content を解決せず、複数candidate間の replay reservat
 `checks.schema=MATCH`を保ち、構造・parser・validatorの拒否だけを`REFUSED`とするため、
 修正対象を区別できますが、runtimeやauthorityの証明にはなりません。
 
-## 15. Public migration ledger
+## Public migration ledger
 
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
 |---|---|---|---|

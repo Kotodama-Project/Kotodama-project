@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-09-25
+Updated: 2026-09-26
 
 現在の公開面の状態表です。過去の documentation revision（R91〜R179）の履歴は
 [docs/HISTORY.md](docs/HISTORY.md) に移し、この文書は現在地だけを示します。
@@ -40,6 +40,7 @@ or promote the separately scoped runtime/deployment evidence below.
 | [Protected execution request / handoff candidate](docs/PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md) | Included as an opaque schema-only request shape; no execution accepted, executed, or private handoff |
 | [Agent orchestration route-binding candidate](docs/AGENT-ORCHESTRATION-ROUTE-BINDING-CANDIDATE.md) | Included as an opaque schema and read-only preflight; no Codex transport, subagent spawn, provider / device / public send, approval, Promotion, or Current Truth |
 | [Agent Swarm × Kotodama adoption candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) | Included as an opaque bounded root / worker / verifier plan, schema, validator, and tests, mapped to the Luna Task swarm runtime; no dispatch, provider / device / public send, Promotion, or Current Truth |
+| [Public migration ledger](docs/PUBLIC-MIGRATION-LEDGER.md) | Included from #35 as a hash-chained record schema, read-only verifier, optional trusted-head anchor, tests, and a synthetic fixture, with a note on how it differs from the Luna Task swarm records; the ledger file itself is not yet populated, and migration execution, private continuity, publication, approval, Promotion, and Current Truth remain unverified |
 | [Public Preview Self-check](docs/PUBLIC-PREVIEW-SELF-CHECK.md) | Included as a read-only aggregate of starter validator, Catalog, customization, and false-claim checks; JSON by default, `--format markdown` for the human-first fixed summary |
 | [Company Pack Catalog](docs/COMPANY-PACK-CATALOG.md) | Published `read-only/candidate-only` catalog; no runtime or approval; `NO_GO_UNPUBLISHED` |
 | [Company Pack Guided Next Steps](docs/COMPANY-PACK-NEXT-STEPS.md) | Published deterministic planner/runbook; candidate-only guidance only; `NO_GO_UNPUBLISHED` |

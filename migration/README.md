@@ -1,6 +1,15 @@
-# Migration ledger directory
+# Migration directory
 
-このディレクトリは、公開移行台帳 `public-migration-ledger.v1.jsonl` の置き場です。
+このディレクトリには、次の 2 種類のファイルを置きます。
+
+- 公開移行台帳 `public-migration-ledger.v1.jsonl`。契約は
+  [Public Migration Ledger](../docs/PUBLIC-MIGRATION-LEDGER.md) にあり、この文書の以下の節は台帳だけの説明です。
+- 移植 batch ごとの manifest（`*.manifest.json`）と出典表（`*.provenance.json`）。
+  今は A017・A019・A022 の 3 組があり、固定した内容はそれぞれ
+  [`validate_migration_batch_a017.py`](../tools/validate_migration_batch_a017.py)、
+  [`validate_migration_batch_a019.py`](../tools/validate_migration_batch_a019.py)、
+  [`validate_migration_batch_a022.py`](../tools/validate_migration_batch_a022.py) が検査します。
+  これらは台帳の record ではなく、台帳の verifier の検査対象でもありません。
 
 **台帳ファイルは現時点で not yet populated です。** 契約（schema、verifier、
 tests、fixture）だけが先に入っています。

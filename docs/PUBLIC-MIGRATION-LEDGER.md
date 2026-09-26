@@ -102,6 +102,22 @@ python tools/validate_public_migration_ledger.py `
 }
 ```
 
+## Luna Task swarm との対応
+
+main の [Luna Task swarm](LUNA-TASK-SWARM.md)（`runtime/task_swarm`）とこの台帳は、別の記録です。
+Luna の SQLite（`runs`・`jobs`・`attempts`）は、Task を並列に進めるための実行の記録です。
+この台帳は、移行対象ごとの処遇の記録です。どちらも相手を読み書きしないので、Luna の run が
+終わっても台帳の record は増えません。考え方の近い項目は次のとおりです。
+
+| 台帳の項目 | Luna Task swarm で近いもの | まだ対応していないこと |
+|---|---|---|
+| 記録の単位: `subject_ref` ごとの処遇を 1 行の JSONL に書く | run の中の job と、`claim` ごとの attempt（`(run_id, job_id, attempt)` で一意） | 移行対象と Luna の job を対応づける変換は無い |
+| 改竄検知: `sequence`、`prev_hash`、`content_hash` の hash chain と `--anchor` | 現在でない attempt token の report を `STALE_ATTEMPT` で拒否する | Luna の記録に hash chain は無い。job と attempt の状態は同じ行を更新する |
+| 受入: `status=ACCEPTED` は 5 つの gate がすべて `PASS` のときだけ | owner の `accept(run_id, job_id, result_digest, verification_ref, owner_ref)`。worker は自分の report を受け入れられない | Luna の `accept` は job の受入であり、台帳の `ACCEPTED` や `gates.independent_review=PASS` の証拠にはならない |
+| 追記: `migration/README.md` の手順で、private receipt の digest が確定してから足す | 対応するものは無い | Luna の状態から台帳の record を書き出す経路は無い |
+
+agent の実行を契約として比べる表は [Agent Swarm × Kotodama Adoption Candidate](AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md#luna-task-swarm-との対応) にあります。
+
 ## この検証が意味しないこと
 
 `LEDGER_CONSISTENT_UNVERIFIED` は、記録された処遇が構造的・内部的に整合して
