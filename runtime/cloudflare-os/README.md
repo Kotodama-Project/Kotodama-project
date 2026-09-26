@@ -49,8 +49,13 @@ a lockfile, and matching bytes alone cannot establish who generated them.
 Independent review and provider deployment/remediation remain required.
 
 Cloudflare OS is an early-access AI productivity environment, not a traditional
-computer operating system. Kotodama adopts it as a bounded workspace/Gadget/
-Gatekeeper foundation. BecomeOne and Human Intent retain governed meaning;
+computer operating system. Kotodama selects it as the shared frontend for
+knowledge, conversation, Tasks and agents, using its workspace/Gadget/Gatekeeper
+foundation. Operations return to Kotodama's existing governed owners, which
+retain Human Intent, Decision, Work Order, Promotion and Current Truth.
+BecomeOne is the migration donor and later a consumer pinned to the public
+Kotodama version and content digest. The frontend-to-owner path remains a
+design direction; native versus embedded UI and live integration are unproven.
 Proxmox retains the protected local runtime/data plane; Context Gateway retains
 query authority. A Gatekeeper result enters Kotodama as a candidate and cannot
 promote Current Truth by itself. Its metadata-only projection preserves the
