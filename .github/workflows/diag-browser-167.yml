@@ -16,9 +16,9 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         # setup-only:  heavy job setup (ffmpeg, docker pull), then the browser test alone
         # tests-only:  no heavy setup, the 10 preceding test files, then the browser test
-        # warm-suite:  heavy setup, one throwaway headless Chrome launch, then the full suite
-        mode: [setup-only, tests-only, warm-suite]
-        shard: [1, 2]
+        # suite:       heavy setup, then the full suite (the real CI condition, cold Chrome)
+        mode: [setup-only, tests-only, suite]
+        shard: [1, 2, 3]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -40,21 +40,6 @@ jobs:
         shell: bash
         run: |
           nohup bash -c 'while true; do echo "IO $(date -u +%H:%M:%S) $(vmstat 1 2 | tail -1) psi=$(head -1 /proc/pressure/io 2>/dev/null)"; done' > "$RUNNER_TEMP/io.txt" 2>&1 &
-      - name: Start I/O sampler (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $script = {
-            param($out)
-            $c = '\PhysicalDisk(_Total)\% Idle Time','\PhysicalDisk(_Total)\Disk Read Bytes/sec','\PhysicalDisk(_Total)\Avg. Disk sec/Read','\PhysicalDisk(_Total)\Current Disk Queue Length','\Processor(_Total)\% Processor Time'
-            while ($true) {
-              $s = Get-Counter -Counter $c -SampleInterval 1 -MaxSamples 1 -ErrorAction SilentlyContinue
-              $v = $s.CounterSamples | ForEach-Object { '{0}={1:N3}' -f ($_.Path -replace '.*\\',''), $_.CookedValue }
-              Add-Content -Path $out -Value ("IO " + (Get-Date).ToUniversalTime().ToString('HH:mm:ss') + ' ' + ($v -join ' '))
-            }
-          }
-          $out = Join-Path $env:RUNNER_TEMP 'io.txt'
-          Start-Process pwsh -ArgumentList '-NoProfile','-Command',"& {$script} '$out'" -WindowStyle Hidden
       - name: Install audio encoder (Linux)
         if: runner.os == 'Linux' && matrix.mode != 'tests-only'
         working-directory: .
@@ -82,13 +67,6 @@ jobs:
           image="$(docker image inspect --format '{{.Id}}' "$fixture")"
           printf 'KOTODAMA_TEST_VERIFIER_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
           echo "MARK $(date -u +%H:%M:%S) docker-end"
-      - name: Throwaway headless Chrome launch
-        if: matrix.mode == 'warm-suite'
-        shell: bash
-        run: |
-          echo "MARK $(date -u +%H:%M:%S) warm-start"
-          node -e "import('playwright-core').then(async({chromium})=>{const path=require('node:path');const exe=process.env.CHROME_BIN??(process.platform==='win32'?path.join(process.env.ProgramFiles??'','Google/Chrome/Application/chrome.exe'):'/usr/bin/chromium');const b=await chromium.launch({executablePath:exe,headless:true});const p=await b.newPage();await p.setContent('<label id=w>w<input type=checkbox></label>');await p.locator('#w').click();await b.close();})"
-          echo "MARK $(date -u +%H:%M:%S) warm-end"
       - name: The measured run
         shell: bash
         run: |
@@ -96,7 +74,7 @@ jobs:
           case "${{ matrix.mode }}" in
             setup-only) files="tests/browser.test.mjs" ;;
             tests-only) files="tests/access-monitor.test.mjs tests/agent-channel.test.mjs tests/analysis-admission.test.mjs tests/analysis-policy.test.mjs tests/archive-adapter.test.mjs tests/archive-context.test.mjs tests/archive-host.test.mjs tests/archive-runtime.test.mjs tests/artifact-read.test.mjs tests/bridge.test.mjs tests/browser.test.mjs" ;;
-            warm-suite) files="tests/*.test.mjs" ;;
+            suite) files="tests/*.test.mjs" ;;
           esac
           node --test --test-concurrency=1 --test-timeout=120000 $files > "$RUNNER_TEMP/measured.txt" 2>&1 || true
           echo "MARK $(date -u +%H:%M:%S) measured-end"
