@@ -328,3 +328,20 @@ test('an unsupported journal version is refused and preserved in SQLite', () => 
     assert.equal(db.prepare('SELECT payload FROM git_steward_state').get().payload, before); db.close();
   }
 });
+test('a running consumer of a corrected integration is released only as cancelled', () => {
+  const h = setup(); h.add(); h.claim(); h.submit(); h.verify(); h.integrated();
+  h.add('beta', { depends_on: ['alpha'] }); const running = h.claim('beta');
+  h.add('gamma', { work_ref: 'ref/work/alpha', work_revision: 2 });
+  assert.equal(h.store.state.cells.alpha.state, 'integrated'); assert.equal(h.store.state.cells.alpha.superseded_by, 'gamma');
+  assert.equal(h.store.state.cells.beta.state, 'stopping'); assert.equal(h.store.state.cells.beta.invalidated_by, 'gamma');
+  rejects(() => h.send('stopped', 'beta', { epoch: running.epoch, receipt_ref: 'ref/receipt/stop', disposition: 'queued' }, ATTEST), 'DEPENDENCY_SUPERSEDED');
+  assert.equal(h.store.state.cells.beta.state, 'stopping');
+  h.send('stopped', 'beta', { epoch: running.epoch, receipt_ref: 'ref/receipt/stop', disposition: 'cancelled' }, ATTEST);
+  assert.equal(h.store.state.cells.beta.state, 'cancelled'); rejects(() => h.claim('beta'), 'DEPENDENCY_SUPERSEDED');
+});
+test('a correction cannot depend on a consumer of the Work it supersedes', () => {
+  const h = setup(); h.add(); h.add('beta', { depends_on: ['alpha'] }); const before = structuredClone(h.store.state);
+  rejects(() => h.add('gamma', { work_ref: 'ref/work/alpha', work_revision: 2, depends_on: ['beta'] }), 'DEPENDENCY_SUPERSEDED');
+  const after = structuredClone(h.store.state); before.last_now = after.last_now;
+  assert.deepEqual(after, before); assert.equal(after.cells.beta.invalidated_by, undefined);
+});

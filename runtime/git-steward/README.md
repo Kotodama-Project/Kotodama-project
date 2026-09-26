@@ -33,7 +33,7 @@ node --test --test-reporter=tap runtime/git-steward/coordinator.test.mjs
 python -m unittest discover -s tests -p 'test_git_steward_runtime.py' -v
 ```
 
-The core suite has 41 Node tests. The Python entry point is one launcher, not
+The core suite has 43 Node tests. The Python entry point is one launcher, not
 another set of independent cases: it fails rather than silently skipping when
 Node >=22.13 or Git is unavailable, and it requires every reported Node test to
 pass with none skipped, cancelled or left as todo. Full-repository regression
