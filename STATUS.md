@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-09-25
+Updated: 2026-09-26
 
 現在の公開面の状態表です。過去の documentation revision（R91〜R179）の履歴は
 [docs/HISTORY.md](docs/HISTORY.md) に移し、この文書は現在地だけを示します。
@@ -20,6 +20,7 @@ or promote the separately scoped runtime/deployment evidence below.
 | [Discord runtime candidate](docs/DISCORD-RUNTIME.md) | Included in `main` via #79, #80, and #81 as `runtime/discord-template` (Node 24 template with local ASR, continuous Live conversation, and a bounded Task worker); the voice-channel modes (楽しく過ごす / 一緒に考える / 必要なときだけ仕事) are selectable there; #99 added bounded analysis concurrency and limits, Linux Docker-isolated verification for write Tasks (`write_file` / `develop` need Linux and `worker.verify` / `worker.verification`), and restart states that keep queued Tasks paused and running Tasks uncertain; #101 added agent channels (`discord.agentChannelIds`) that start a clear, complete request immediately and send the requester a DM with its title and ID; real-microphone continuity, a two-person 30-minute session, and reproduction in a separate setup remain unaccepted; no public Bot |
 | [Session / conversation event ledger](docs/SESSION-CONVERSATION-LEDGER.md) | Published schema and validator; no runtime ingestion or Task connection |
 | Agent swarm and autonomous delegation after a human GO | [Luna Task swarm](docs/LUNA-TASK-SWARM.md) (#67 with the #85 repairs) is on `main` as a bounded local runtime: owner-bound plans, budgets, acknowledged peer messages, and an independent verifier, exercised by the offline fixture on Linux and Windows in the required check; live Codex/Luna acceptance is not established. Contract candidates #34, #35, and #36 are not on `main`; they are to be re-landed with a mapping to this runtime ([#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)). The repository's own [improvement loop](docs/IMPROVEMENT-LOOP.md) defines how agents select, verify, merge, and revert one change at a time |
+| [Git Steward coordination core](runtime/git-steward/README.md) | Re-landed from #57 and #58 as a local candidate: work-cell reservations, lease/epoch fences, independent review, and a SQLite journal, exercised by synthetic Node tests in the required Linux check (not yet on Windows); no model call, Git/GitHub/provider write, or deployment; the design document and business rehearsal follow under [#132](https://github.com/Kotodama-Project/Kotodama-project/issues/132) |
 | Knowledge base (OKF) control plane | Candidate PRs #48, #61, and #59 are not on `main`. On 2026-09-24 the owner chose the #48 line as the canonical OKF bundle; the #49 line is to be connected to it ([#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)) |
 | Slack / Teams / Salesforce adapters | Requirement records only (#70, #77); unconnected |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
