@@ -108,8 +108,8 @@ Conversation / Voice -> Source Evidence -> Requirement State -> Plan Candidate
   General-purpose local LLMはdeferred、local ASR/VAD・speaker support・encoder・tiny deterministic
   specialistsは許容します。従来記録のmetered API除外は歴史的な方針であり、
   現在は用途・許可・費用上限を確認したAPI利用も選択肢です。
-  公開Live実装候補は[#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69) /
-  [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71)で、mainでの利用可能性とは分けます。
+  Liveの採用方針は[GPT-Liveの採用方針](GPT-LIVE-ADOPTION.md)にあり、実装はmainのNode runtimeに一本化しました
+  （#69・#71の別runtimeは取り込まない）。Nodeに無い考え方は#142〜#146で扱い、mainでの利用可能性とは分けます。
 - Archive Target interfaceはprovider-neutralのまま、private v1 backendはordinary encrypted-file
   package + ZFS snapshotです。dedicated synthetic ZFS test datasetでは、暗号化packageの
   transfer、remount、authenticated restore、plaintext byte比較、8/8 file-hash restore readbackまで
