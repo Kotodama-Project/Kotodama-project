@@ -180,3 +180,119 @@ test('disposing the room removes every access listener it registered',async t=>{
   const before=Object.fromEntries(events.map(e=>[e,client.listenerCount(e)]));assert(events.every(e=>before[e]>=1));await room.dispose();
   for(const e of events)assert.equal(client.listenerCount(e),before[e]-1);
 });
+
+// Issue #147: continued answers after the first reply. Synthetic PCM and a
+// provider stub only; real-microphone acceptance is a separate human check.
+const loudPcm=()=>{const pcm=Buffer.alloc(960);for(let i=0;i<pcm.length;i+=2)pcm.writeInt16LE(2000,i);return pcm;};
+const voiceEvents=store=>store.db.prepare("SELECT type,body FROM events WHERE type LIKE 'voice.%' ORDER BY seq").all().map(row=>({type:row.type,body:JSON.parse(row.body)}));
+const diagnosticTypes=new Set(['voice.local_turn','voice.local_asr_timing','voice.local_capture_dropped','voice.session_ended','voice.provider_command_rejected','voice.reply_skipped']);
+function assertNoPrivateValues(store,config,texts){
+  const bodies=voiceEvents(store).filter(e=>diagnosticTypes.has(e.type)).map(e=>JSON.stringify(e.body));assert(bodies.length>0);
+  for(const value of [a,b,config.discord.guildId,config.discord.voiceChannelId,...texts])assert(bodies.every(body=>!body.includes(value)),`voice event exposes ${value}`);
+}
+async function localConversation(t,transcripts,{configure=()=>{}}={}){
+  const providers=[],asrCalls=[],errors=[],streams=[];
+  const ctx=await fixture(t,options=>{const p=provider(options);providers.push(p);return p;},{configure:config=>{config.voice.transcriptSource='local';config.voice.localAsr={url:'http://127.0.0.1:9000/v1/audio/transcriptions',model:'tiny',language:'ja',timeoutSeconds:20,maxUtteranceSeconds:30};configure(config);},localAsrFactory:()=>({transcribe:async pcm=>{asrCalls.push(pcm.length);return transcripts.shift();}})});
+  ctx.channel.members.delete(b);ctx.room.onError=code=>errors.push(code);
+  const receive={subscribes:0};ctx.room.connection.receiver={subscribe:()=>{receive.subscribes++;return streams.shift();}};
+  const encoder=new OpusScript(48000,2,OpusScript.Application.AUDIO),packet=Buffer.from(encoder.encode(Buffer.alloc(3840),960));encoder.delete();
+  const settle=async()=>{await new Promise(resolve=>setImmediate(resolve));await Promise.allSettled([...ctx.room.draining]);};
+  const utter=async({packets=6}={})=>{const stream=new PassThrough();streams.push(stream);await ctx.room.capture(a);for(let i=0;i<packets;i++)stream.write(packet);stream.end();await settle();};
+  return {...ctx,providers,asrCalls,errors,streams,receive,packet,settle,utter};
+}
+async function boundReply(store,config,channel,room){
+  const key=store.ingest({provider:'discord',guildId:config.discord.guildId,channelId:channel.id,sourceId:'reply-source',actorId:a,revision:1,final:true,readers:[a],text:'資料',metadata:{}}).key;
+  return async(text='回答')=>{await room.speak(text,{epoch:room.epoch,actorId:a,bindings:[{key,revision:1}],authorizeAudience:async()=>[a]});return room.reply;};
+}
+
+test('#147 a reply that finished normally is cleared without sending a stop instruction to Live',async t=>{
+  const {store,config,room,channel}=await fixture(t,provider);channel.members.delete(b);const session=await room.session(a);const speak=await boundReply(store,config,channel,room);
+  const reply=await speak();assert(reply);session.provider.options.onAudio(loudPcm(),session.provider.sessionId,reply.outputGeneration);assert(reply.audible);
+  await new Promise(resolve=>setTimeout(resolve,1100));
+  assert.equal(room.reply,null);assert.notEqual(session.provider.interrupted,true);assert(room.current(session));
+  await room.close();
+});
+
+test('#147 speech over a reply and the reply time cap still stop Live output',async t=>{
+  const {store,config,room,channel}=await fixture(t,provider);channel.members.delete(b);const session=await room.session(a);const speak=await boundReply(store,config,channel,room);
+  const reply=await speak();session.provider.options.onAudio(loudPcm(),session.provider.sessionId,reply.outputGeneration);
+  const input=new PassThrough();room.connection.receiver={subscribe:()=>input};await room.capture(a);
+  assert.equal(room.reply,null);assert.equal(session.provider.interrupted,true);input.destroy();
+  session.provider.interrupted=undefined;config.voice.replySeconds=0.2;assert(await speak());
+  await new Promise(resolve=>setTimeout(resolve,300));assert.equal(room.reply,null);assert.equal(session.provider.interrupted,true);
+  await room.close();
+});
+
+test('#147 a rejected Live command keeps the conversation, so a follow-up without the wake phrase is answered',async t=>{
+  const texts=['ことだま、サーバーの状態を教えて','それで負荷はどう？'];const c=await localConversation(t,[...texts]);
+  await c.utter();assert.equal(c.providers.length,1);const session=c.room.sessions.get(a);assert(session);assert.equal(c.sources[0].flags.reply,true);
+  const speak=await boundReply(c.store,c.config,c.channel,c.room);assert(await speak());
+  c.providers[0].options.onEvent('session.command.rejected',{commandType:'session.commentary.append',code:'fixture_rejected'});c.providers[0].options.onError('VOICE_PROVIDER_COMMAND_REJECTED');await c.settle();
+  assert.equal(c.room.sessions.get(a),session);assert.equal(session.provider.active,true);assert.equal(c.room.reply,null);assert.notEqual(session.provider.interrupted,true);assert.deepEqual(c.errors,['VOICE_PROVIDER_COMMAND_REJECTED']);
+  await c.utter();assert.equal(c.providers.length,1);assert.deepEqual(c.sources[1].flags,{execute:true,reply:true,analyze:true});
+  // Answer audio shows the session still works, so only consecutive rejections count.
+  const next=await speak();session.provider.options.onAudio(loudPcm(),session.provider.sessionId,next.outputGeneration);
+  for(let i=0;i<2;i++)session.provider.options.onError('VOICE_PROVIDER_COMMAND_REJECTED');await c.settle();assert.equal(c.room.sessions.get(a),session);
+  const events=voiceEvents(c.store);
+  assert.deepEqual(events.filter(e=>e.type==='voice.provider_command_rejected').map(e=>e.body),[{voiceSession:session.id,commandType:'session.commentary.append',code:'fixture_rejected'}]);
+  assert.deepEqual(events.filter(e=>e.type==='voice.local_turn').map(e=>[e.body.liveSession,e.body.conversationActive]),[[session.id,true],[session.id,true]]);
+  assert.equal(events.some(e=>e.type==='voice.session_ended'),false);assertNoPrivateValues(c.store,c.config,texts);
+  await c.room.close();
+});
+
+test('#147 a rejected Live command leaves natural-conversation playback to the provider',async t=>{
+  const {room,channel}=await fixture(t,provider,{configure:c=>{c.voice.naturalConversation=true;}});channel.members.delete(b);const session=await room.session(a);
+  for(let i=0;i<7;i++)session.provider.options.onAudio(Buffer.alloc(960),session.provider.sessionId,0);const reply=room.reply;assert(reply?.started);
+  session.provider.options.onError('VOICE_PROVIDER_COMMAND_REJECTED');await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(room.sessions.get(a),session);assert.equal(room.reply,reply);await room.close();
+});
+
+test('#147 repeated Live command rejections and provider failures still close the conversation',async t=>{
+  const texts=['ことだま、状態を教えて','ことだま、もう一度','それで負荷はどう？'];const c=await localConversation(t,[...texts]);
+  await c.utter();const first=c.room.sessions.get(a);assert(first);
+  for(let i=0;i<3;i++)first.provider.options.onError('VOICE_PROVIDER_COMMAND_REJECTED');await c.settle();
+  assert.equal(c.room.sessions.has(a),false);assert.equal(first.provider.active,false);
+  await c.utter();const second=c.room.sessions.get(a);assert(second&&second!==first);
+  second.provider.active=false;second.provider.options.onError('VOICE_PROVIDER_FAILED');await c.settle();assert.equal(c.room.sessions.has(a),false);
+  await c.utter();assert.equal(c.providers.length,2);assert.equal(c.sources.at(-1).flags.reply,false);
+  const ended=voiceEvents(c.store).filter(e=>e.type==='voice.session_ended').map(e=>e.body);
+  assert.deepEqual(ended.map(e=>[e.voiceSession,e.reason,e.code,e.conversationActive]),[[first.id,'provider_error','VOICE_PROVIDER_COMMAND_REJECTED',true],[second.id,'provider_error','VOICE_PROVIDER_FAILED',true]]);
+  assert(ended.every(e=>Number.isInteger(e.durationMs)&&e.durationMs>=0));assertNoPrivateValues(c.store,c.config,texts);
+  await c.room.close();
+});
+
+test('#147 Live transcripts carry the active conversation to the reply decision after the wake phrase',async t=>{
+  const {room,channel,sources}=await fixture(t,provider);channel.members.delete(b);const session=await room.session(a);
+  const say=(id,text)=>{session.provider.options.onCompleted({id,text,startMs:0,endMs:1000});return session.chain;};
+  await say('idle','今日は雑談です');await say('wake','ことだま、状態を教えて');await say('follow','それで負荷はどう？');
+  assert.deepEqual(sources.map(x=>x.s.metadata.conversationActive),[false,true,true]);assert.deepEqual(sources.map(x=>x.flags.reply),[false,true,true]);
+  await room.close();
+});
+
+test('#147 H1: a capture closed without an end event frees the speaker, and one speaker keeps one receive stream',async t=>{
+  const c=await localConversation(t,['ことだま、状態を教えて','それで負荷はどう？']);
+  const first=new PassThrough();c.streams.push(first);await c.room.capture(a);await c.room.capture(a);assert.equal(c.receive.subscribes,1);
+  for(let i=0;i<6;i++)first.write(c.packet);first.destroy();await c.settle();
+  assert.equal(c.room.localCaptures.size,0);assert.equal(c.asrCalls.length,1);
+  await c.utter();assert.equal(c.receive.subscribes,2);assert.equal(c.sources.length,2);assert.equal(c.sources[1].flags.reply,true);
+  await c.room.close();
+});
+
+test('#147 H2: over-long and too-short local captures are recorded as reason codes before any ASR request',async t=>{
+  const c=await localConversation(t,['ことだま、状態を教えて'],{configure:config=>{config.voice.localAsr.maxUtteranceSeconds=0.1;}});
+  await c.utter();assert.equal(c.asrCalls.length,0);assert.deepEqual(c.errors,['VOICE_UTTERANCE_LIMIT']);
+  // The same 0.1 s limit: two packets stay under it but below the 100 ms ASR minimum; no packet records nothing.
+  await c.utter({packets:2});await c.utter({packets:0});assert.equal(c.asrCalls.length,0);assert.equal(c.receive.subscribes,3);
+  const dropped=voiceEvents(c.store).filter(e=>e.type==='voice.local_capture_dropped').map(e=>e.body);
+  assert.deepEqual(dropped.map(e=>[e.reason,e.audioMs]),[['utterance_limit',100],['too_short',40]]);assert(dropped.every(e=>typeof e.voiceSession==='string'));
+  assertNoPrivateValues(c.store,c.config,['ことだま、状態を教えて']);
+  await c.room.close();
+});
+
+test('#147 a skipped voice reply records only a reason code',async t=>{
+  const {store,config,room,channel}=await fixture(t,provider);channel.members.delete(b);const speak=await boundReply(store,config,channel,room);
+  assert.equal(await speak('秘密の回答'),null);
+  await room.speak('秘密の回答',{epoch:room.epoch+1,actorId:a,bindings:[{key:'unused',revision:1}],authorizeAudience:async()=>[a]});
+  assert.deepEqual(voiceEvents(store).filter(e=>e.type==='voice.reply_skipped').map(e=>e.body.reason),['no_live_session','epoch_changed']);
+  assertNoPrivateValues(store,config,['秘密の回答']);
+});

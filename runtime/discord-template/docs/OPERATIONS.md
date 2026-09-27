@@ -22,6 +22,16 @@
 
 ローカルASR構成では `voice status` に「ローカル聞き役」または現在のLive会話数を表示します。`LOCAL_ASR_FAILED`、`LOCAL_ASR_BUSY`、`VOICE_UTTERANCE_LIMIT` が続く場合は、新しいLive会話を増やさず、ASR endpointのhealth、処理時間、queueを確認します。ASR失敗時にクラウド文字起こしへ自動で切り替えません。
 
+一度返答した後に音声の会話が続かないときの調査用に、データ領域の `kotodama.sqlite` の `events` 表へ、会話の本文・音声・Discord の ID を含まない記録を残します。
+
+- `voice.local_turn`：ローカルASRの一区切りごとに、呼びかけを検出したか、Live 会話の ID（`liveSession`）、その区切りを会話の続きとして扱ったか（`conversationActive`）、文字数。
+- `voice.local_capture_dropped`：ASR に送らなかった区切りの理由（`utterance_limit` は `maxUtteranceSeconds` の超過、`too_short` は 0.1 秒未満、ほかに `input_failed`、`not_current`、`stopped`、`asr_busy`、`asr_failed`）と長さ `audioMs`。
+- `voice.session_ended`：Live 会話を閉じた理由（`idle`、`provider_error`、`model_end_conversation`、`voice_command`、`speaker_left`、`pause` など）、分類コード、会話中だったか、続いた時間。
+- `voice.provider_command_rejected`：Live が受け付けなかった命令の種類と分類コード。1 回の拒否では会話を閉じず、返答の音声が届かないまま 3 回続いたときに閉じます。
+- `voice.reply_skipped`：音声で返答しなかった理由（`no_live_session`、`epoch_changed`、`paused`、`audience_check` など）。
+
+最後まで再生した返答では、Live へ停止の指示を送りません。返答に重ねて話したときと、返答が `voice.replySeconds` に達したときは従来どおり止めます。記録は `SELECT seq, type, at, body FROM events WHERE type IN ('voice.local_turn', 'voice.local_capture_dropped', 'voice.session_ended', 'voice.provider_command_rejected', 'voice.reply_skipped') ORDER BY seq;` で時刻順に読めます。`voice.consent` などほかの `voice.*` には Discord の ID が入るため、共有する記録に含めません。共有前に内容を確認してください。
+
 音声の途切れは `outputPrefillMs` を少し増やし、体感遅延は少し減らして調整します。`maxOutputQueueMs` は古い音声を溜めない上限です。`VOICE_OUTPUT_QUEUE_OVERFLOW` が出た場合はその発話を止め、provider速度、CPU、Discord送信の詰まりを確認します。上限だけを広げて古い音声を後から流しません。
 
 GPT-Liveの利用量は `session.usage.updated` の累積秒を前回値と置き換え、5秒ごとと `session.closed` の最終値を `voice.usage_snapshot` に保存します。snapshot同士を足しません。Luna Responsesはinput、cached input、output、total tokenを応答ごとに一度だけ保存します。人の入力が `voice.conversationIdleSeconds` を超えて途切れた場合はLiveだけを閉じます。長い仕事へ移ったら音声会話を閉じてもworkerは継続でき、結果は次の呼びかけ時に必要な要点だけを再投入できます。
