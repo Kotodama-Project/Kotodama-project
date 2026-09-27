@@ -10,7 +10,7 @@ const FLAGS = Object.freeze(['wakeDetected', 'eligible', 'liveActive', 'conversa
 const TIMINGS = Object.freeze(['audioMs', 'queueMs', 'elapsedMs']);
 const MAX_EVENTS = 10000;
 const MAX_BODY_BYTES = 8192;
-const MAX_DATABASE_BYTES = 256 * 1024 * 1024;
+const MAX_DATABASE_INPUT_BYTES = 256 * 1024 * 1024;
 const MAX_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_TIMING_MS = 60 * 60 * 1000;
 
@@ -19,6 +19,22 @@ export class VoiceDiagnosticsError extends Error {
 }
 function requireValue(condition, code) {
   if (!condition) throw new VoiceDiagnosticsError(code);
+}
+// SQLite consumes sidecars too. Check their aggregate size without reading bytes.
+function requireBoundedDatabaseInput(database) {
+  let total = 0;
+  for (const suffix of ['', '-wal', '-shm', '-journal']) {
+    let stat;
+    try { stat = lstatSync(database + suffix); }
+    catch (error) {
+      if (suffix && error?.code === 'ENOENT') continue;
+      throw error;
+    }
+    requireValue(stat.isFile() && !stat.isSymbolicLink() && Number.isSafeInteger(stat.size),
+      'DIAGNOSTIC_DATABASE_INVALID');
+    total += stat.size;
+    requireValue(total <= MAX_DATABASE_INPUT_BYTES, 'DIAGNOSTIC_DATABASE_INVALID');
+  }
 }
 function timestamp(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return null;
@@ -43,14 +59,14 @@ export function collectVoiceDiagnostics({database, since, until, revision} = {})
     'DIAGNOSTIC_DATABASE_INVALID');
   let db, transactionOpen = false;
   try {
-    const stat = lstatSync(database);
-    requireValue(stat.isFile() && !stat.isSymbolicLink() && stat.size <= MAX_DATABASE_BYTES,
-      'DIAGNOSTIC_DATABASE_INVALID');
+    requireBoundedDatabaseInput(database);
     db = new DatabaseSync(database, {readOnly: true, allowExtension: false, timeout: 1000});
     db.exec('PRAGMA query_only=ON; PRAGMA trusted_schema=OFF; BEGIN;');
     transactionOpen = true;
     requireValue(db.prepare("SELECT type FROM sqlite_schema WHERE name='events'").get()?.type === 'table',
       'DIAGNOSTIC_SCHEMA_INVALID');
+    // Recheck after SQLite acquires its read snapshot (a writer may append WAL).
+    requireBoundedDatabaseInput(database);
     const columns = db.prepare('PRAGMA table_info(events)').all();
     requireValue(['seq', 'type', 'at', 'body'].every(name => columns.some(c => c.name === name)) &&
       columns.some(c => c.name === 'seq' && c.pk === 1 && c.type === 'INTEGER'),
@@ -93,6 +109,8 @@ export function collectVoiceDiagnostics({database, since, until, revision} = {})
         }
       }
     }
+    // Do not publish an observation if the input grew beyond the bound while reading.
+    requireBoundedDatabaseInput(database);
     const incomplete = invalidBodies > 0 || Object.values(flags).some(x => x.unknown > 0) ||
       Object.values(invalidTimings).some(n => n > 0);
     return {

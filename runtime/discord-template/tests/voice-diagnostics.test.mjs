@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync, truncateSync, statSync, mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -200,4 +200,34 @@ test('CLI refuses extra, duplicate and private arguments without echoing them', 
   }
   const help = run(['--help']);
   assert.equal(help.status, 0); assert.match(help.stdout, /never real-voice acceptance/);
+});
+
+
+test('bounds WAL, shared-memory and journal files before opening SQLite', async t => {
+  for (const suffix of ['-wal', '-shm', '-journal']) {
+    await t.test(suffix, child => {
+      const f = fixture(child, [{type: 'voice.local_turn', body: turn}]);
+      const sidecar = f.database + suffix;
+      writeFileSync(sidecar, '');
+      // Sparse synthetic files exercise length checks without allocating 256 MiB.
+      truncateSync(sidecar, 256 * 1024 * 1024 + 1);
+      refused(() => collectVoiceDiagnostics(f), 'DIAGNOSTIC_DATABASE_INVALID');
+      assert.equal(statSync(sidecar).size, 256 * 1024 * 1024 + 1);
+    });
+  }
+});
+
+test('bounds the combined database and sidecar size, not each file independently', t => {
+  const f = fixture(t, [{type: 'voice.local_turn', body: turn}]);
+  for (const suffix of ['-wal', '-shm', '-journal']) {
+    writeFileSync(f.database + suffix, '');
+    truncateSync(f.database + suffix, 90 * 1024 * 1024);
+  }
+  refused(() => collectVoiceDiagnostics(f), 'DIAGNOSTIC_DATABASE_INVALID');
+});
+
+test('rejects non-regular sidecars before SQLite can read them', t => {
+  const f = fixture(t, [{type: 'voice.local_turn', body: turn}]);
+  mkdirSync(f.database + '-wal');
+  refused(() => collectVoiceDiagnostics(f), 'DIAGNOSTIC_DATABASE_INVALID');
 });
