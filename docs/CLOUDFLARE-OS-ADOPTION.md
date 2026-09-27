@@ -4,8 +4,8 @@ Kotodama adopts two related but distinct Cloudflare planes.
 
 | Plane | Adopted role | Current public evidence | Not proven |
 |---|---|---|---|
-| Cloudflare edge | Bounded public ingress and application delivery through Workers and Access | content-free `/healthz` and `/version` candidate, exact Wrangler binding, manual preview-upload workflow candidate that accepts only the current `main` tip | upload, route, origin, production traffic, provider log retention, independent review, Public Beta |
-| Official Cloudflare OS | Planned shared frontend for knowledge, conversation, Tasks and agents, using its workspace, Gadgets, Blueprints and capability-based Gatekeepers | exact official starter/core source pin, metadata-only Gatekeeper projections, a content-free local runtime receipt with 1060 passing tests, and a workspace-only security-overlay preflight with an observed generated-lock byte binding | frozen install and zero-high remediation proof, independent drift review, provider entitlement, Dynamic Worker provider execution, private Context, backup/restore, production |
+| Cloudflare edge | Bounded public ingress and application delivery through Workers and Access | Worker candidate whose every route requires the exact bound preview host and a verified Cloudflare Access JWT: content-free `/healthz` and `/version`, and a bounded Voice review projection (`GET /voice/review`, `POST /voice/review/{id}`) that calls only the configured Context Gateway with an Access service token (required values: [runtime bindings](../runtime/cloudflare-edge/README.md#runtime-bindings)); exact Wrangler binding; manual preview-upload workflow candidate that accepts only the current `main` tip | upload, Access application binding, runtime secret binding, Context Gateway implementation and reachability, route, origin, production traffic, provider log retention, independent review, Public Beta |
+| Official Cloudflare OS | Planned shared frontend for knowledge, conversation, Tasks and agents, using its workspace, Gadgets, Blueprints and capability-based Gatekeepers | exact official starter/core source pin, metadata-only Gatekeeper projections, a content-free local runtime receipt with 1060 passing tests, and a local security-overlay materialization (`LOCAL_MATERIALIZATION_VERIFIED_NOT_DEPLOYED`: parent-scoped `nanoid` 3.3.18 and `@puppeteer/browsers` 3.0.4 overrides, an observed generated-lock byte binding, scripts-disabled frozen install and zero-High production audit) | independent review of the overlay candidate bytes, provider/upstream remediation, independent drift review, provider entitlement, Dynamic Worker provider execution, private Context, backup/restore, production |
 | Proxmox | Protected local compute, storage, search and service runtime | lifecycle/profile documentation and historical local evidence outside this public candidate | current live topology and deployment parity in this repository |
 | Kotodama governance | Decision, Work Order, Promotion and Current Truth follow the selected governed owners | public Company governance contracts | canonical adoption or live authority execution |
 | Context Gateway | Default-deny Authorized Corpus query authority | architecture and adapter contract | real provider-to-local search E2E |
@@ -70,7 +70,10 @@ evaluation processes and listeners. The accepted matrix passed 1060 tests with
 The following gates remain before provider evaluation:
 
 1. independently review the starter-to-core drift and license/dependency policy;
-2. remediate or explicitly re-pin the open high `nanoid` advisory;
+2. independently review the local overlay for the high `nanoid` and
+   `extract-zip` advisories (materialized locally, not deployed; see
+   [below](#high-advisory-remediation-preflight)), then prove provider/upstream
+   remediation or explicitly re-pin;
 3. make telemetry and error-report retention default-deny and prove readback;
 4. independently verify the exact package-manager archive attestation signature;
 5. set an exact paid-plan budget, quota, billing owner and automatic stop;
