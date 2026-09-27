@@ -34,6 +34,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Fixed
 
 - A017・A022 の移植 validator で、manifest・出典表の固定内容と履歴 receipt digest を照合し、重複 JSON 項目・非有限数・通常のエスケープを含む Windows 個人 path を拒否。親を含む symlink・reparse point の拒否と上限付き読取りを統一。A017 の集計は検査済み bytes を使い、上限なしの再読取りを除いた（[#172](https://github.com/Kotodama-Project/Kotodama-project/issues/172)）。公開本文・出典表・過去の受入記録は変更せず、この validator 修正の review は別に行う。
+- Discord runtime の停止で一つの段階（Discord の切断、音声記録の文字起こし待ち〔既定で最大 120 秒〕、取消しに応じない作業、残った接続）が止まると、サービス管理の停止猶予を越えて強制終了され、host lock が残っていた（runtime domain を設定していない構成では次の起動が拒否される）。停止の各段階に上限を設け、超えた段階は `close_step_timeout` を記録して次へ進み、lock を解放してから終了する。
 - Cloudflare edge の preview upload は、退役した作業 branch ではなく現在の `main` の先頭 commit だけを受け付ける（手動起動・Environment 承認は従来どおり）。候補検証 workflow は `main` への push でも走る。Cloudflare の説明文から古い「draft」表記を直した。
 - 別のサーバーや別の Voice channel での入退室・ミュート切替で、Bot の返答が止まっていた（[#91](https://github.com/Kotodama-Project/Kotodama-project/issues/91)）。
 - 実行中 Task の毎秒の権限確認が Discord REST を大量に消費し、一時的な API エラーで Task を失敗させていた。確認をチャンネル単位にまとめて 3 秒だけ再利用し、確認不能は 5 秒・3 回まで猶予する（[#92](https://github.com/Kotodama-Project/Kotodama-project/issues/92)）。
