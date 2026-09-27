@@ -168,9 +168,27 @@ python tools/task_swarm.py demo --root work/live-demo --allow-local-fixture --li
 
 既存の出力先は上書きしません。`work/`内のowner入力・メッセージ本文・詳細runtime記録はprivateな実行証拠として保持し、Gitへ追加しません。`summary.json`はlease tokenを含まない要約、`protocol-verification.json`は実際のpayload/ACK対応です。モデルの最終文だけで成功にせず、owner受入直前にcandidate・receipt・stdout・runtime出力を読み直します。
 
+macOS・Linuxのvenvでは`python`がsymlinkのため、現在の実装はpeer MCP serverをvenvの外のinterpreterで起動し、`mcp`を読み込めずに失敗します（[#184](https://github.com/Kotodama-Project/Kotodama-project/issues/184)）。修正までは、同じ依存を入れたvenvをrepository rootの`venv-peer/`（gitignore済み）に置いてから実行します。
+
 Skill/TOMLの静的検査は、runtimeの自動選択やproject roleがhostへ読み込まれたことを証明しません。native routeは実hostのツールと親call/child UUIDを観測します。CLI routeの`peer_*`や永続mailboxがnative hostにも存在すると仮定しません。local fixtureをCompany authorityやdeployment proofと呼びません。
 
 `budget.verifier_reserve`はreview用に保護する試行数です。省略時はreview job数（総予算以下）を予約し、workの再試行はその枠を使えません。code・Skill・roleのハッシュを実行入力へ固定し、途中で変更された場合はそのrunを止めて新しい入力で検証します。
+
+### live 受入の記録
+
+2026-09-27に、ownerの許可（[#159](https://github.com/Kotodama-Project/Kotodama-project/issues/159)）のもとで上のliveコマンドを一度通しました。
+
+| 項目 | 結果 |
+|---|---|
+| revision | main `7df1aea`。実行入力に固定したcode・Skill・roleのhashが、このrevisionのファイルと一致 |
+| 経路 | ログイン済みのCodex CLI。macOS、Python 3.12、`requirements-task-swarm-ci.txt` |
+| モデル呼出し | 4回（3 workersと独立verifier 1）。4件ともturnがcompletedで、要求と観測がともに`gpt-5.6-luna`・`max`・`read-only`。threadは4つとも別 |
+| 通信 | messages 7・ACK 7、question/reply 2組、workerの報告3、payload digestの一致 |
+| 状態 | accepted 4・failed 0・blocked 0、試行4/6、run全体の期限内 |
+
+判定は、toolの照合（`audit_protocol`）と受入直前の読み直しがすべて通ったことと、その後に4件のreceiptを読み直したことに基づきます。`summary.json`・`protocol-verification.json`のsha256と、1回目がpeer MCP serverの起動失敗（モデル呼出し0回）で終わった経緯は#159に記録しています。
+
+この記録の上限は、synthetic fixtureでの`LOCAL_PASS`です。native host route、本番のagent swarm、provider・公開・人の承認の証明ではありません。code・Skill・roleを変えたrevisionには、この結果を流用しません。
 
 ## 配置された role
 

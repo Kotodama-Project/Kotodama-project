@@ -16,7 +16,7 @@ Kotodama is a local-first Company OS that turns conversation into auditable inte
 同じ製品の中で、利用の場面を選べます。
 
 - **仕事を進める**: Company Pack と review chain で、依頼を Work Order、Verification Receipt、Promotion まで辿る。
-- **「OK」の後は agent に任せる**: 人が一度許可した範囲で agent swarm が調査・実装・検証を自律的に進め、判断材料や権限が足りないときだけ人へ戻す。設計方向です。`main` には限定 Task 実行と、offline の fixture で確かめた [Luna Task swarm](docs/LUNA-TASK-SWARM.md) があります（実モデルでの受入は未実施）。
+- **「OK」の後は agent に任せる**: 人が一度許可した範囲で agent swarm が調査・実装・検証を自律的に進め、判断材料や権限が足りないときだけ人へ戻す。設計方向です。`main` には限定 Task 実行と、offline の fixture で確かめた [Luna Task swarm](docs/LUNA-TASK-SWARM.md) があります（実モデルでは、合成の fixture で一度だけ通した段階）。
 - **Voice channel で過ごす**: 楽しく過ごす、一緒に考える、必要なときだけ仕事を進める、のモードを選ぶ。雑談を勝手に仕事や追加の権限へ変えません。
 
 設計の全文は [docs/OVERVIEW.md](docs/OVERVIEW.md)、方向と現在地の対応は [docs/PRODUCT-DIRECTION.md](docs/PRODUCT-DIRECTION.md) と [docs/PROJECT-MAP.md](docs/PROJECT-MAP.md) にあります。
