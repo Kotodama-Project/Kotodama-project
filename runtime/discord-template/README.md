@@ -31,7 +31,7 @@ node bin/kotodama.mjs init --guild YOUR_GUILD_ID --app YOUR_NEW_APPLICATION_ID -
 node bin/kotodama.mjs doctor
 ```
 
-`doctor`は必要な道具の確認結果と、次に直す項目を日本語で表示します。Node.js、pnpmの版、Git、worker・analyzer、録音保存に使うffmpeg、書込みworkerのOS・Docker・検証設定を確認します。道具のversion確認は待ち時間と出力サイズの上限付きです。Windowsのpnpmは対応するshimとパッケージ情報を読み、shellを起動しません。対応する情報がない場合は未確認と表示し、端末での版の確認を案内します（JSONの`pnpm.cliVerified`は`false`）。設定したサービスへの接続・モデル呼出し・tokenの表示は行いません。機械で扱う場合は`doctor --json`を使います。従来のJSON項目に、`pnpm`・`ffmpeg`・`writeWorker`・`toolReasons`・`nextSteps`が追加されます。ローカルの確認後、実Discord・providerの接続は別に確かめてください。
+`doctor`は必要な道具の確認結果と、次に直す項目を日本語で表示します。Node.js、pnpmの版、Git、worker・analyzer、録音保存に使うffmpeg、書込みworkerのOS・Docker・検証設定を確認します。道具のversion確認は待ち時間と出力サイズの上限付きです。Windowsのpnpmは対応するshimとパッケージ情報を読み、shellを起動しません。対応する情報がない場合は未確認と表示し、端末での版の確認を案内します（JSONの`pnpm.cliVerified`は`false`）。有効にしたlocal ASR・remote owner・bridgeの認証条件も内容を出さずに確認します。Linuxの書込み設定では、既存verifierの読取専用preflightで検証imageを照合します。imageの取得・containerの起動、Discord・ASR・モデルAPIへの通信、tokenの表示は行いません。機械で扱う場合は`doctor --json`を使います。従来のJSON項目に、`pnpm`・`ffmpeg`・`writeWorker`・`toolReasons`・`nextSteps`と認証条件の確認が追加されます。ローカルの確認後、実Discord・providerの接続は別に確かめてください。
 
 生成した `.kotodama/config.json` で次を設定します。
 

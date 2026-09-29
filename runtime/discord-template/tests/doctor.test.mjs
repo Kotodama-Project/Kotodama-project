@@ -7,7 +7,8 @@ import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {exampleConfig} from '../src/config.mjs';
-import {diagnose,formatDoctor,probeTool,windowsPnpm,PROBE_TIMEOUT_MS,PROBE_MAX_BYTES} from '../src/doctor.mjs';
+import {diagnose,formatDoctor,probeTool,windowsPnpm,inspectVerificationImage,PROBE_TIMEOUT_MS,PROBE_MAX_BYTES} from '../src/doctor.mjs';
+import {DockerVerifier} from '../src/verification.mjs';
 
 const exec=promisify(execFile);
 const bin=fileURLToPath(new URL('../bin/kotodama.mjs',import.meta.url));
@@ -129,4 +130,54 @@ test('version probes stop a stalled child and bound excessive output',async()=>{
   assert.equal(stalled.available,false);assert(['timeout','stop_unconfirmed'].includes(stalled.reason));
   const oversized=await probeTool(process.execPath,['-e',"process.stdout.write('x'.repeat(50000));setInterval(()=>{},1000)"],{timeoutMs:5000,maxBytes:1024});
   assert.equal(oversized.available,false);assert(['output_limit','stop_unconfirmed'].includes(oversized.reason));
+});
+
+test('doctor reports the configured local ASR credential without requesting a connection',async()=>{
+  const config=exampleConfig();config.discord.voiceChannelId='100000000000000004';
+  config.voice.transcriptSource='local';config.voice.localAsr={apiKeyEnv:'FIXTURE_LOCAL_ASR',url:'https://fixture.invalid',model:'fixture'};
+  const missing=await diagnose(config,{platform:'linux',env:{},probe:availableProbe});
+  assert.equal(missing.localAsrCredential.required,true);assert.equal(missing.localAsrCredential.present,false);
+  assert(missing.nextSteps.some(step=>step.code==='LOCAL_ASR_CREDENTIAL_REQUIRED'));
+  const present=await diagnose(config,{platform:'linux',env:{FIXTURE_LOCAL_ASR:'fixture-value-not-output'},probe:availableProbe});
+  assert(present.localAsrCredential.present);assert(!present.nextSteps.some(step=>step.code==='LOCAL_ASR_CREDENTIAL_REQUIRED'));
+  assert(!JSON.stringify(present).includes('fixture-value-not-output'));
+});
+
+test('doctor reports enabled owner and bridge credentials with runtime-matching limits',async()=>{
+  const config=exampleConfig();config.owner={kind:'remote',url:'https://fixture.invalid',tokenEnv:'FIXTURE_REMOTE_OWNER'};
+  config.bridge={enabled:true,tokenEnv:'FIXTURE_BRIDGE'};
+  for(const bridgeValue of ['', 'fixture-short']){
+    const report=await diagnose(config,{platform:'linux',env:{FIXTURE_BRIDGE:bridgeValue},probe:availableProbe});
+    assert(report.nextSteps.some(step=>step.code==='OWNER_CREDENTIAL_REQUIRED'));
+    assert(report.nextSteps.some(step=>step.code==='BRIDGE_CREDENTIAL_REQUIRED'));
+  }
+  const value='fixture-long-credential-value';
+  const report=await diagnose(config,{platform:'linux',env:{FIXTURE_REMOTE_OWNER:value,FIXTURE_BRIDGE:value},probe:availableProbe});
+  assert(report.ownerCredential.present&&report.bridgeCredential.validLength);
+  assert(!report.nextSteps.some(step=>['OWNER_CREDENTIAL_REQUIRED','BRIDGE_CREDENTIAL_REQUIRED'].includes(step.code)));
+  assert(!JSON.stringify(report).includes(value));
+});
+
+test('doctor inspects the pinned image only for a configured Linux write worker',async()=>{
+  const config=exampleConfig();config.worker.actions=['develop'];config.worker.verify=[{executable:'node',args:['--test']}];
+  config.worker.verification={kind:'docker',image:'sha256:'+'a'.repeat(64)};
+  const calls=[];
+  const missing=await diagnose(config,{platform:'linux',env:{},probe:availableProbe,imageCheck:async value=>{calls.push(value);return {available:false,reason:'VERIFICATION_IMAGE_UNAVAILABLE'};}});
+  assert.equal(calls.length,1);assert.equal(missing.writeWorker.imageAvailable,false);
+  assert(missing.nextSteps.some(step=>step.code==='VERIFICATION_IMAGE_REQUIRED'));
+  const present=await diagnose(config,{platform:'linux',env:{},probe:availableProbe,imageCheck:async()=>({available:true,reason:null})});
+  assert(present.writeWorker.imageAvailable);assert(!present.nextSteps.some(step=>step.code==='VERIFICATION_IMAGE_REQUIRED'));
+  await diagnose(config,{platform:'darwin',env:{},probe:availableProbe,imageCheck:async()=>assert.fail('macOS must not inspect a Linux write image')});
+  config.worker.actions=['research'];
+  await diagnose(config,{platform:'linux',env:{},probe:availableProbe,imageCheck:async()=>assert.fail('read-only worker must not inspect an image')});
+});
+
+test('doctor image check reuses preflight and returns no image details',async t=>{
+  const hidden='fixture-image-detail-not-output';
+  t.mock.method(DockerVerifier.prototype,'preflight',async()=>({imageId:hidden}));
+  const present=await inspectVerificationImage({kind:'docker',image:'sha256:'+'a'.repeat(64)});
+  assert.deepEqual(present,{available:true,reason:null});assert(!JSON.stringify(present).includes(hidden));
+  t.mock.restoreAll();
+  t.mock.method(DockerVerifier.prototype,'preflight',async()=>{throw Object.assign(new Error(hidden),{code:'VERIFICATION_IMAGE_UNAVAILABLE'});});
+  assert.deepEqual(await inspectVerificationImage({}),{available:false,reason:'VERIFICATION_IMAGE_UNAVAILABLE'});
 });

@@ -2,6 +2,7 @@ import {runCommand} from './command.mjs';
 import path from 'node:path';
 import {lstat} from 'node:fs/promises';
 import {readArtifact} from './artifact.mjs';
+import {DockerVerifier} from './verification.mjs';
 import packageInfo from '../package.json' with {type:'json'};
 
 export const PROBE_TIMEOUT_MS=5000;
@@ -48,7 +49,15 @@ export async function probeTool(executable,args=['--version'],{timeoutMs=PROBE_T
   }
 }
 
-export async function diagnose(config,{platform=process.platform,nodeVersion=process.versions.node,env=process.env,probe=probeTool,pnpmMetadata=windowsPnpm}={}) {
+export async function inspectVerificationImage(config) {
+  try {await new DockerVerifier(config).preflight();return {available:true,reason:null};}
+  catch(error) {
+    const reason=['VERIFICATION_IMAGE_UNAVAILABLE','VERIFICATION_IMAGE_INVALID','VERIFICATION_IMAGE_CHANGED','COMMAND_TIMEOUT','COMMAND_UNAVAILABLE','STOP_UNCONFIRMED'].includes(error.code)?error.code:'VERIFICATION_IMAGE_UNVERIFIED';
+    return {available:false,reason};
+  }
+}
+
+export async function diagnose(config,{platform=process.platform,nodeVersion=process.versions.node,env=process.env,probe=probeTool,pnpmMetadata=windowsPnpm,imageCheck=inspectVerificationImage}={}) {
   const probes=new Map();
   const once=(executable,args=['--version'])=>{
     const key=JSON.stringify([executable,args]);
@@ -64,21 +73,33 @@ export async function diagnose(config,{platform=process.platform,nodeVersion=pro
     once('git'),pnpmProbe,once(config.archive?.ffmpeg??'ffmpeg',['-version']),
     writeRequested?once(config.worker.verification?.executable??'docker'):Promise.resolve({available:false,reason:'not_required'})
   ]);
+  const verificationConfigured=Boolean(config.worker.verification&&config.worker.verify.length);
+  const image=writeRequested&&platform==='linux'&&verificationConfigured&&docker.available
+    ?await imageCheck(config.worker.verification):{available:false,reason:'not_checked'};
+  const localAsrCredentialRequired=Boolean(config.discord.voiceChannelId&&config.voice.transcriptSource==='local'&&config.voice.localAsr?.apiKeyEnv);
+  const ownerCredentialRequired=config.owner.kind==='remote';
+  const bridgeCredentialRequired=Boolean(config.bridge?.enabled);
   const result={node:nodeVersion,nodeSupported:Number(nodeVersion.split('.')[0])>=24,taskOwner:config.owner.kind,
     discordCredentialPresent:Boolean(env[config.discord.botTokenEnv]),openaiCredentialPresent:Boolean(env[config.voice.apiKeyEnv]),
     analyzerAdapter:config.analyzer.kind,analyzerAvailable:analyzer.available,workerAvailable:worker.available,gitAvailable:git.available,
     voiceConfigured:Boolean(config.discord.voiceChannelId),privacyMode:config.voice.consentMode,voiceParticipantsConfigured:config.voice.participantIds.length,audioBudgetSeconds:config.voice.maxDailyAudioSeconds,
     browserConfigured:Boolean(config.browser.cdpUrl),localWriteWorkerSupported:platform==='linux',providerVerified:false,
+    localAsrCredential:{required:localAsrCredentialRequired,present:!localAsrCredentialRequired||Boolean(env[config.voice.localAsr.apiKeyEnv])},
+    ownerCredential:{required:ownerCredentialRequired,present:!ownerCredentialRequired||Boolean(env[config.owner.tokenEnv])},
+    bridgeCredential:{required:bridgeCredentialRequired,present:!bridgeCredentialRequired||Boolean(env[config.bridge.tokenEnv]),validLength:!bridgeCredentialRequired||(env[config.bridge.tokenEnv]?.length??0)>=24},
     pnpm:{...pnpm,expected:expectedPnpm,supported:pnpm.available&&pnpm.version===expectedPnpm},
     ffmpeg:{available:ffmpeg.available,reason:ffmpeg.reason,required:ffmpegRequired},
     writeWorker:{requested:writeRequested,platformSupported:platform==='linux',dockerAvailable:docker.available,
-      verificationConfigured:Boolean(config.worker.verification&&config.worker.verify.length)},
+      verificationConfigured,imageAvailable:image.available,imageReason:image.reason},
     toolReasons:{worker:worker.reason??null,analyzer:analyzer.reason??null,git:git.reason??null},nextSteps:[]};
   const add=(code,message)=>result.nextSteps.push({code,message});
   if(!result.nodeSupported)add('NODE_REQUIRED','Node.js 24以上を用意して、doctorを再実行してください。');
   if(!result.pnpm.supported)add('PNPM_REQUIRED',platform==='win32'&&!pnpm.available?`pnpmの版は未確認です。端末のpnpm --versionで${expectedPnpm}を確認してから、pnpm install --frozen-lockfile --ignore-scriptsを実行してください。`:`pnpm ${expectedPnpm}を用意し、pnpm install --frozen-lockfile --ignore-scriptsを実行してください。`);
   if(!result.gitAvailable)add('GIT_REQUIRED','Gitを用意し、CLIから実行できる状態にしてください。');
   if(!result.discordCredentialPresent)add('DISCORD_CREDENTIAL_REQUIRED','設定で指定した環境変数へDiscord Bot tokenを保存してください。tokenを診断結果へ貼り付ける必要はありません。');
+  if(!result.localAsrCredential.present)add('LOCAL_ASR_CREDENTIAL_REQUIRED','ローカルASR用の認証情報を、設定で指定した環境変数へ保存してください。');
+  if(!result.ownerCredential.present)add('OWNER_CREDENTIAL_REQUIRED','remote owner用の認証情報を、設定で指定した環境変数へ保存してください。');
+  if(!result.bridgeCredential.validLength)add('BRIDGE_CREDENTIAL_REQUIRED','有効にしたbridgeには、設定で指定した環境変数に24文字以上の認証情報が必要です。');
   if(!result.workerAvailable)add('WORKER_REQUIRED','workerの実行ファイルを確認してください。Windowsでは.cmdではなくネイティブの実行ファイルを指定します。');
   if(!result.analyzerAvailable)add('ANALYZER_REQUIRED',config.analyzer.kind==='responses'?'解析用APIキーを、設定で指定した環境変数へ保存してください。':'analyzerの実行ファイルを確認してください。');
   if(result.voiceConfigured&&!result.openaiCredentialPresent)add('VOICE_CREDENTIAL_REQUIRED','音声用APIキーを、設定で指定した環境変数へ保存してください。');
@@ -87,6 +108,7 @@ export async function diagnose(config,{platform=process.platform,nodeVersion=pro
   if(writeRequested&&!result.localWriteWorkerSupported)add('WRITE_WORKER_LINUX_REQUIRED','書込みworkerはLinuxで実行します。この端末では読取workerまたはCLIクライアントを利用してください。');
   if(writeRequested&&!result.writeWorker.verificationConfigured)add('WRITE_VERIFICATION_REQUIRED','書込みにはworker.verifyと、固定imageを使うworker.verificationの設定が必要です。');
   if(writeRequested&&result.localWriteWorkerSupported&&!docker.available)add('DOCKER_REQUIRED','Linuxの実行ホストにDockerと検証用の固定imageを用意してください。');
+  if(writeRequested&&result.localWriteWorkerSupported&&verificationConfigured&&docker.available&&!image.available)add('VERIFICATION_IMAGE_REQUIRED','設定した検証imageを事前に用意し、読取専用のimage確認が成功する状態にしてください。doctorはimageを取得・起動しません。');
   return result;
 }
 
