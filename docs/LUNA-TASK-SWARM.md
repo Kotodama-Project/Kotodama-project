@@ -172,7 +172,7 @@ peer MCP server を起動する Python は、次の順で選びます。
 2. repository root の `venv-peer/bin/python`（Windows は `venv-peer/Scripts/python.exe`）が通常ファイルとして存在すれば、その interpreter。
 3. 上記がなければ、このコマンドを実行している `sys.executable`。
 
-明示指定は `~` を展開して絶対パスにし、interpreter の symlink は辿りません。POSIX の仮想環境から実行した場合も、その環境の依存を保持します。`TASK_SWARM_PYTHON` は Python の実行ファイルを指定し、引数は含めません。選択したパスが存在しない、ディレクトリ、または OS が実行を許可しない場合は、Codex を起動する前に `peer_python_invalid` で停止し、別の interpreter へ自動で切り替えません。別環境を明示指定する場合は、その環境にも同じ hash 固定の依存を導入してください。
+明示指定は `~` を展開して絶対パスにします。起動前に `resolve()` で symlink の実体パスへ置き換えず、選択したパスを起動コマンドへ渡します。OS によるファイルの検査・実行時の symlink 参照は行われます。POSIX の仮想環境から実行した場合も、その環境の依存を保持します。`TASK_SWARM_PYTHON` は Python の実行ファイルを指定し、引数は含めません。選択したパスが存在しない、ディレクトリ、または OS が実行を許可しない場合は、Codex を起動する前に `peer_python_invalid` で停止し、別の interpreter へ自動で切り替えません。別環境を明示指定する場合は、その環境にも同じ hash 固定の依存を導入してください。
 
 既存の出力先は上書きしません。`work/`内のowner入力・メッセージ本文・詳細runtime記録はprivateな実行証拠として保持し、Gitへ追加しません。`summary.json`はlease tokenを含まない要約、`protocol-verification.json`は実際のpayload/ACK対応です。モデルの最終文だけで成功にせず、owner受入直前にcandidate・receipt・stdout・runtime出力を読み直します。
 
