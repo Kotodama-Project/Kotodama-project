@@ -1,9 +1,32 @@
 import {runCommand} from './command.mjs';
+import path from 'node:path';
+import {lstat} from 'node:fs/promises';
+import {readArtifact} from './artifact.mjs';
 import packageInfo from '../package.json' with {type:'json'};
 
 export const PROBE_TIMEOUT_MS=5000;
 export const PROBE_MAX_BYTES=16384;
 const expectedPnpm=packageInfo.packageManager.split('@')[1];
+
+export async function windowsPnpm({env=process.env}={}) {
+  // Read recognized npm/pnpm shims as data; never execute a shell to inspect them.
+  const searchPath=env.PATH??env.Path??'';
+  for(const directory of searchPath.split(';').filter(Boolean).slice(0,64)) {
+    try {
+      const shim=(await readArtifact(path.join(directory,'pnpm.cmd'),65536)).toString('utf8');
+      for(const match of shim.matchAll(/"((?:%~dp0|%dp0%)[^"\r\n]+pnpm\.(?:cjs|mjs|js))"/gi)) {
+        const relative=match[1].replace(/^%~dp0|^%dp0%/i,'');
+        if(/[%!]/.test(relative)||!/[\\/]node_modules[\\/]pnpm[\\/]bin[\\/]pnpm\.(?:cjs|mjs|js)$/i.test(relative))continue;
+        const entry=path.resolve(directory,relative.replace(/^[\\/]+/,'').replace(/[\\/]/g,path.sep));
+        if(!(await lstat(entry)).isFile())continue;
+        const info=JSON.parse((await readArtifact(path.join(path.dirname(entry),'../package.json'),65536)).toString('utf8'));
+        if(info.name==='pnpm'&&typeof info.version==='string'&&/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(info.version))
+          return {available:true,reason:null,version:info.version,source:'package_metadata',cliVerified:false};
+      }
+    } catch { /* Missing, linked, malformed or oversized files remain unverified. */ }
+  }
+  return {available:false,reason:'package_metadata_unavailable',version:null,source:'package_metadata',cliVerified:false};
+}
 
 export async function probeTool(executable,args=['--version'],{timeoutMs=PROBE_TIMEOUT_MS,maxBytes=PROBE_MAX_BYTES}={}) {
   try {
@@ -18,16 +41,14 @@ export async function probeTool(executable,args=['--version'],{timeoutMs=PROBE_T
   }
 }
 
-export async function diagnose(config,{platform=process.platform,nodeVersion=process.versions.node,env=process.env,probe=probeTool}={}) {
+export async function diagnose(config,{platform=process.platform,nodeVersion=process.versions.node,env=process.env,probe=probeTool,pnpmMetadata=windowsPnpm}={}) {
   const probes=new Map();
   const once=(executable,args=['--version'])=>{
     const key=JSON.stringify([executable,args]);
     if(!probes.has(key))probes.set(key,Promise.resolve(probe(executable,args)));
     return probes.get(key);
   };
-  // Only this fixed package-manager command uses the Windows command interpreter.
-  // Operator-configured executables stay native and are never interpolated into a shell.
-  const pnpmProbe=platform==='win32'?once('cmd.exe',['/d','/s','/c','pnpm --version']):once('pnpm');
+  const pnpmProbe=platform==='win32'?pnpmMetadata({env}):once('pnpm');
   const ffmpegRequired=Boolean(config.archive?.enabled);
   const writeRequested=config.worker.actions.some(action=>['write_file','develop'].includes(action));
   const [worker,analyzer,git,pnpm,ffmpeg,docker]=await Promise.all([
@@ -48,7 +69,7 @@ export async function diagnose(config,{platform=process.platform,nodeVersion=pro
     toolReasons:{worker:worker.reason??null,analyzer:analyzer.reason??null,git:git.reason??null},nextSteps:[]};
   const add=(code,message)=>result.nextSteps.push({code,message});
   if(!result.nodeSupported)add('NODE_REQUIRED','Node.js 24以上を用意して、doctorを再実行してください。');
-  if(!result.pnpm.supported)add('PNPM_REQUIRED',`pnpm ${expectedPnpm}を用意し、pnpm install --frozen-lockfile --ignore-scriptsを実行してください。`);
+  if(!result.pnpm.supported)add('PNPM_REQUIRED',platform==='win32'&&!pnpm.available?`pnpmの版は未確認です。端末のpnpm --versionで${expectedPnpm}を確認してから、pnpm install --frozen-lockfile --ignore-scriptsを実行してください。`:`pnpm ${expectedPnpm}を用意し、pnpm install --frozen-lockfile --ignore-scriptsを実行してください。`);
   if(!result.gitAvailable)add('GIT_REQUIRED','Gitを用意し、CLIから実行できる状態にしてください。');
   if(!result.discordCredentialPresent)add('DISCORD_CREDENTIAL_REQUIRED','設定で指定した環境変数へDiscord Bot tokenを保存してください。tokenを診断結果へ貼り付ける必要はありません。');
   if(!result.workerAvailable)add('WORKER_REQUIRED','workerの実行ファイルを確認してください。Windowsでは.cmdではなくネイティブの実行ファイルを指定します。');
@@ -69,6 +90,7 @@ export function formatDoctor(result) {
     `Git: ${mark(result.gitAvailable)}`,`worker: ${mark(result.workerAvailable)}`,`analyzer: ${mark(result.analyzerAvailable)}`,
     `ffmpeg: ${mark(result.ffmpeg.available)}${result.ffmpeg.required?'（録音保存に必要）':'（録音保存を使う場合）'}`,
     `書込みworkerの対応OS: ${result.localWriteWorkerSupported?'Linux / 対応':'Linuxで実行してください'}`];
+  if(result.pnpm.source==='package_metadata')lines.push('Windowsのpnpmはパッケージ情報から確認します。CLIの実行はこの診断に含みません。');
   if(result.nextSteps.length)lines.push('','次の手順:',...result.nextSteps.map((step,index)=>`${index+1}. ${step.message}`));
   else lines.push('','道具のローカル確認が完了しました。');
   lines.push('','実Discord・providerの接続や動作は別に確認してください。');

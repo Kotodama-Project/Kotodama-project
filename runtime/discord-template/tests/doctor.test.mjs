@@ -7,7 +7,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {exampleConfig} from '../src/config.mjs';
-import {diagnose,formatDoctor,probeTool,PROBE_TIMEOUT_MS,PROBE_MAX_BYTES} from '../src/doctor.mjs';
+import {diagnose,formatDoctor,probeTool,windowsPnpm,PROBE_TIMEOUT_MS,PROBE_MAX_BYTES} from '../src/doctor.mjs';
 
 const exec=promisify(execFile);
 const bin=fileURLToPath(new URL('../bin/kotodama.mjs',import.meta.url));
@@ -65,13 +65,33 @@ test('doctor checks configured archive ffmpeg without connecting to configured s
   assert(!JSON.stringify(calls).includes('fixture.invalid'));
 });
 
-test('doctor keeps Windows shell use fixed to pnpm and never interpolates configured executables',async()=>{
+test('doctor never starts a Windows shell to inspect pnpm',async()=>{
   const config=exampleConfig();config.worker.executable='fixture-native-model.exe';config.analyzer.executable='fixture-analyzer.exe';
   const calls=[];
-  await diagnose(config,{platform:'win32',env:{},probe:async (executable,args)=>{calls.push([executable,args]);return availableProbe(executable,args);}});
-  assert.deepEqual(calls.find(([executable])=>executable==='cmd.exe'),['cmd.exe',['/d','/s','/c','pnpm --version']]);
+  const result=await diagnose(config,{platform:'win32',env:{},pnpmMetadata:async()=>({available:true,reason:null,version:'11.19.0',source:'package_metadata',cliVerified:false}),probe:async (executable,args)=>{calls.push([executable,args]);return availableProbe(executable,args);}});
+  assert(!calls.some(([executable])=>['cmd.exe','pnpm','pnpm.cmd'].includes(executable)));
+  assert.equal(result.pnpm.supported,true);assert.equal(result.pnpm.cliVerified,false);
   assert(calls.some(([executable])=>executable==='fixture-native-model.exe'));
   assert(calls.some(([executable])=>executable==='fixture-analyzer.exe'));
+});
+
+test('Windows pnpm metadata supports known npm shims without executing their contents',async t=>{
+  const {mkdir}=await import('node:fs/promises');
+  const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-pnpm-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  const binDir=path.join(root,'node_modules/pnpm/bin');await mkdir(binDir,{recursive:true});
+  await writeFile(path.join(root,'node_modules/pnpm/package.json'),JSON.stringify({name:'pnpm',version:'11.19.0'}),'utf8');
+  await writeFile(path.join(binDir,'pnpm.cjs'),'fixture entrypoint; not executed','utf8');
+  const shim=path.join(root,'pnpm.cmd');
+  for(const prefix of ['%~dp0','%dp0%']){
+    await writeFile(shim,`@echo off\n"node.exe" "${prefix}\\node_modules\\pnpm\\bin\\pnpm.cjs" %*\n`,'utf8');
+    const result=await windowsPnpm({env:{PATH:root}});
+    assert.equal(result.version,'11.19.0');assert.equal(result.source,'package_metadata');assert.equal(result.cliVerified,false);
+    assert(!JSON.stringify(result).includes(root));
+  }
+  await writeFile(shim,'unsupported command; must not be executed','utf8');
+  assert.equal((await windowsPnpm({env:{PATH:root}})).available,false);
+  await writeFile(shim,'x'.repeat(70000),'utf8');
+  assert.equal((await windowsPnpm({env:{PATH:root}})).available,false);
 });
 
 test('doctor output does not expose configured values or credential contents',async()=>{
