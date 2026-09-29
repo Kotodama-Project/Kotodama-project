@@ -11,7 +11,7 @@ Kotodama is a local-first Company OS that turns conversation into auditable inte
 
 会話・音声・Issue・文書から意図を検知し、足りない要件だけを確認して仕事へ分解し、成果と検証証拠を残して採用を判断し、会社の知識へ戻す。この鎖を短絡しないまま速く回すための部品を、Evidence Chain、Company Pack、Context Platform、AI Workforce、そして Cloudflare edge と公式 Cloudflare OS を基盤として作っています。
 
-公式 Cloudflare OS を、知識・会話・Task・agent を扱う共通フロントとする設計です。操作は既存の各正本へ戻し、接続方法・画面構成・配備は今後の設計と検証で決めます。
+2026-09-30の方針として、[OpenAI Dotsを日常の入口と継続作業の第一候補](docs/OPENAI-ALIGNMENT.md)にします。Kotodamaは会社の知識・権限・訂正・Task・検証証拠を既存の各正本へ返します。Cloudflare edgeと公式Cloudflare OSは接続・専用画面の候補として維持し、実接続と配備は検証して決めます。
 
 同じ製品の中で、利用の場面を選べます。
 

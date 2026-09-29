@@ -2,7 +2,7 @@
 
 Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なときだけ仕事を進める一つの製品です。公開本体を統合・説明・導入の最優先の中心とし、[製品方向](PRODUCT-DIRECTION.md)からgoal、main、candidate、unconnected、hypothesisを確認できます。これはREADMEから実装と検証へ進む入口であり、Taskや会社のCurrent Truthを所有する台帳ではありません。
 
-共通フロントは[公式 Cloudflare OS](CLOUDFLARE-OS-ADOPTION.md)を使う設計です。知識・会話・Task・agent の表示と操作をまとめ、変更は既存の各 governed owner へ返します。BecomeOne は能力の移植元で、移行後は公開 Kotodama の版・内容 digest に固定した consumer とします。接続・画面構成・実配備は未確定で、この方針だけでは新しい正本や実行権限は作りません。
+日常の入口と継続作業は[OpenAI Dotsを第一候補](OPENAI-ALIGNMENT.md)とし、[Discord / Luma用plugin](../runtime/discord-template/dots-plugin/README.md)で必要な窓口をつなぎます。[公式Cloudflare OS](CLOUDFLARE-OS-ADOPTION.md)は専用画面の候補です。変更は既存の各governed ownerへ返します。BecomeOneは能力の移植元で、移行後は公開Kotodamaの版・内容digestに固定したconsumerとします。接続・実配備は未確定で、この方針だけでは新しい正本や実行権限は作りません。
 
 ## 要件と確認する場所
 

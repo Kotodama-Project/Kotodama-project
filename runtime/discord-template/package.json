@@ -5,9 +5,13 @@
   "description": "Discordの会話から意図・仕事・成果へつなぐ公式テンプレート",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=24.0.0" },
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "packageManager": "pnpm@11.19.0",
-  "bin": { "kotodama": "./bin/kotodama.mjs" },
+  "bin": {
+    "kotodama": "./bin/kotodama.mjs"
+  },
   "scripts": {
     "start": "node bin/kotodama.mjs start",
     "test": "node --test --test-concurrency=1 --test-timeout=30000 tests/*.test.mjs",
@@ -15,6 +19,7 @@
   },
   "dependencies": {
     "@discordjs/voice": "0.19.2",
+    "@modelcontextprotocol/sdk": "1.31.0",
     "@snazzah/davey": "0.1.12",
     "csv-parse": "7.0.2",
     "discord.js": "14.27.0",
