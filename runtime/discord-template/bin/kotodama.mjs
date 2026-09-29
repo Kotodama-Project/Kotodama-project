@@ -12,6 +12,7 @@ import {parseLumaCsv,lumaSource,parseIcs} from '../src/integrations.mjs';
 import {BrowserCli} from '../src/browser.mjs';
 import {CliAnalyzer} from '../src/llm.mjs';
 import {debugRequested,describeError,enableDebugLog} from '../src/debug-log.mjs';
+import {diagnose,formatDoctor} from '../src/doctor.mjs';
 
 const HELP=`ことだま — Discordの会話から仕事へ\n\n  init --config PATH [--guild ID --app ID --operator ID --channel ID --workspace PATH]\n  doctor --config PATH\n  start --config PATH [--offline]\n  register --config PATH\n  status | shutdown --config PATH --actor ID\n  tasks | result | stop | resume --config PATH --actor ID [--task ID]\n  request --config PATH --actor ID --action research|summarize|write_file|develop --text TEXT\n  voice --config PATH --actor ID --mode assist|minutes|join|pause|resume|stop_speech|leave\n  import-discord --config PATH --actor ID [--limit 10000]\n  import-luma --config PATH --actor ID --file CSV\n  import-file --config PATH --actor ID --file TEXT\n  export --config PATH --actor ID --output FILE\n  read-export --config PATH --actor ID --file FILE\n  browser list|open|read|click|fill|scroll|screenshot --config PATH [--tab 0 --url URL --selector CSS --role ROLE --name NAME --label LABEL --text TEXT --x N --y N --output FILE]\n\n--json で機械可読の結果を返します。--verbose（または環境変数 KOTODAMA_DEBUG=1）で、想定外のエラーの詳細をデータ領域の debug.log に記録します。秘密値は引数へ渡さず環境変数に設定してください。`;
 const spec={config:{type:'string',default:'.kotodama/config.json'},json:{type:'boolean',default:false},offline:{type:'boolean',default:false},guild:{type:'string'},app:{type:'string'},operator:{type:'string'},channel:{type:'string'},workspace:{type:'string'},actor:{type:'string'},task:{type:'string'},action:{type:'string'},text:{type:'string'},mode:{type:'string'},file:{type:'string'},output:{type:'string'},limit:{type:'string'},tab:{type:'string',default:'0'},url:{type:'string'},'expected-url':{type:'string'},checked:{type:'boolean'},selector:{type:'string'},role:{type:'string'},name:{type:'string'},label:{type:'string'},x:{type:'string'},y:{type:'string'},delta:{type:'string'},help:{type:'boolean'},verbose:{type:'boolean',default:false}};
@@ -27,12 +28,7 @@ try{
   }
   const config=await loadConfig(filename);if(debugRequested({verbose:options.verbose}))enableDebugLog(config.dataDir);
   if(command==='doctor'){
-    const {spawnSync}=await import('node:child_process');const binary=cmd=>{const r=spawnSync(cmd,['--version'],{encoding:'utf8',windowsHide:true});return !r.error&&r.status===0;};
-    output({node:process.versions.node,nodeSupported:Number(process.versions.node.split('.')[0])>=24,taskOwner:config.owner.kind,
-      discordCredentialPresent:Boolean(process.env[config.discord.botTokenEnv]),openaiCredentialPresent:Boolean(process.env[config.voice.apiKeyEnv]),
-      analyzerAdapter:config.analyzer.kind,analyzerAvailable:config.analyzer.kind==='responses'?Boolean(process.env[config.analyzer.apiKeyEnv]):binary(config.analyzer.executable),workerAvailable:binary(config.worker.executable),gitAvailable:binary('git'),
-      voiceConfigured:Boolean(config.discord.voiceChannelId),privacyMode:config.voice.consentMode,voiceParticipantsConfigured:config.voice.participantIds.length,audioBudgetSeconds:config.voice.maxDailyAudioSeconds,
-      browserConfigured:Boolean(config.browser.cdpUrl),localWriteWorkerSupported:process.platform!=='win32',providerVerified:false});
+    const result=await diagnose(config);output(options.json?result:formatDoctor(result));
   }else if(command==='start'){
     const runtime=await startRuntime(filename,{offline:options.offline,debug:debugRequested({verbose:options.verbose})});const stop=()=>runtime.close().then(()=>process.exit(0)).catch(()=>process.exit(1));process.once('SIGINT',stop);process.once('SIGTERM',stop);
   }else if(['status','shutdown','tasks','result','stop','resume','voice','request'].includes(command)){

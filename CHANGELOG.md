@@ -33,6 +33,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- Discordテンプレートの`doctor`を改善: pnpmの固定版とffmpeg、Linux専用の書込みworkerの前提を確認し、不足する項目と次の手順を日本語で表示。道具の確認に待ち時間・出力上限を設け、macOSをLinux用workerの対応OSと表示しない。`--json`は従来の項目を保持する（[#155](https://github.com/Kotodama-Project/Kotodama-project/issues/155)の導入準備）。
 - Luna Task swarm の peer MCP server が POSIX の仮想環境の symlink を辿って環境外の Python を選ぶ不具合を修正。既存の interpreter 選択順を保持し、不正な指定は Codex の起動前に拒否する（[#184](https://github.com/Kotodama-Project/Kotodama-project/issues/184)）。
 - A017・A022 の移植 validator で、manifest・出典表の固定内容と履歴 receipt digest を照合し、重複 JSON 項目・非有限数・通常のエスケープを含む Windows 個人 path を拒否。親を含む symlink・reparse point の拒否と上限付き読取りを統一。A017 の集計は検査済み bytes を使い、上限なしの再読取りを除いた（[#172](https://github.com/Kotodama-Project/Kotodama-project/issues/172)）。公開本文・出典表・過去の受入記録は変更せず、この validator 修正の review は別に行う。
 - Cloudflare edge の preview upload は、退役した作業 branch ではなく現在の `main` の先頭 commit だけを受け付ける（手動起動・Environment 承認は従来どおり）。候補検証 workflow は `main` への push でも走る。Cloudflare の説明文から古い「draft」表記を直した。
