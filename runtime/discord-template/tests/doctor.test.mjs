@@ -100,7 +100,8 @@ test('doctor output does not expose configured values or credential contents',as
   const config=exampleConfig();const secret='fixture-diagnostic-private-value';
   config.worker.executable=secret;config.browser.cdpUrl='http://127.0.0.1:9222/'+secret;
   config.discord.voiceChannelId='100000000000000004';
-  const env={DISCORD_BOT_TOKEN:secret,OPENAI_API_KEY:secret};
+  config.discord.botTokenEnv='FIXTURE_DOCTOR_BOT';config.voice.apiKeyEnv='FIXTURE_DOCTOR_AUDIO';
+  const env={FIXTURE_DOCTOR_BOT:secret,FIXTURE_DOCTOR_AUDIO:secret};
   const result=await diagnose(config,{platform:'linux',env,probe:availableProbe});
   assert(result.discordCredentialPresent&&result.openaiCredentialPresent);
   for(const output of [JSON.stringify(result),formatDoctor(result)])assert(!output.includes(secret));
