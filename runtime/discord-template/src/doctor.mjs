@@ -12,18 +12,25 @@ export async function windowsPnpm({env=process.env}={}) {
   // Read recognized npm/pnpm shims as data; never execute a shell to inspect them.
   const searchPath=env.PATH??env.Path??'';
   for(const directory of searchPath.split(';').filter(Boolean).slice(0,64)) {
+    const shimPath=path.join(directory,'pnpm.cmd');
+    try {if(!(await lstat(shimPath)).isFile())break;}
+    catch(error) {if(error.code==='ENOENT'||error.code==='ENOTDIR')continue;break;}
     try {
-      const shim=(await readArtifact(path.join(directory,'pnpm.cmd'),65536)).toString('utf8');
-      for(const match of shim.matchAll(/"((?:%~dp0|%dp0%)[^"\r\n]+pnpm\.(?:cjs|mjs|js))"/gi)) {
+      const shim=(await readArtifact(shimPath,65536)).toString('utf8');
+      const match=/"((?:%~dp0|%dp0%)[^"\r\n]+pnpm\.(?:cjs|mjs|js))"/i.exec(shim);
+      if(match) {
         const relative=match[1].replace(/^%~dp0|^%dp0%/i,'');
-        if(/[%!]/.test(relative)||!/[\\/]node_modules[\\/]pnpm[\\/]bin[\\/]pnpm\.(?:cjs|mjs|js)$/i.test(relative))continue;
+        if(/[%!]/.test(relative)||!/[\\/]node_modules[\\/]pnpm[\\/]bin[\\/]pnpm\.(?:cjs|mjs|js)$/i.test(relative))break;
         const entry=path.resolve(directory,relative.replace(/^[\\/]+/,'').replace(/[\\/]/g,path.sep));
-        if(!(await lstat(entry)).isFile())continue;
+        if(!(await lstat(entry)).isFile())break;
         const info=JSON.parse((await readArtifact(path.join(path.dirname(entry),'../package.json'),65536)).toString('utf8'));
         if(info.name==='pnpm'&&typeof info.version==='string'&&/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(info.version))
           return {available:true,reason:null,version:info.version,source:'package_metadata',cliVerified:false};
       }
     } catch { /* Missing, linked, malformed or oversized files remain unverified. */ }
+    // PATH selects the first shim. Read one reference/package only, never retry
+    // thousands of duplicate references or report a different later installation.
+    break;
   }
   return {available:false,reason:'package_metadata_unavailable',version:null,source:'package_metadata',cliVerified:false};
 }

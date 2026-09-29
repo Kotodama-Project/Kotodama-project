@@ -92,6 +92,8 @@ test('Windows pnpm metadata supports known npm shims without executing their con
   assert.equal((await windowsPnpm({env:{PATH:root}})).available,false);
   await writeFile(shim,'x'.repeat(70000),'utf8');
   assert.equal((await windowsPnpm({env:{PATH:root}})).available,false);
+  await writeFile(shim,'"node.exe" "%~dp0\\missing\\node_modules\\pnpm\\bin\\pnpm.cjs"\n"node.exe" "%~dp0\\node_modules\\pnpm\\bin\\pnpm.cjs"\n','utf8');
+  assert.equal((await windowsPnpm({env:{PATH:root}})).available,false,'only the first recognized reference is inspected');
 });
 
 test('doctor output does not expose configured values or credential contents',async()=>{
