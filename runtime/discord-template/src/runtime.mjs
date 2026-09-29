@@ -22,15 +22,25 @@ function pidRunning(pid){
   try{process.kill(pid,0);return true;}catch(error){return error.code!=='ESRCH';}
 }
 
-export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),log=value=>console.log(JSON.stringify(redact(value)))}={}){
+export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),shutdownLimits={},log=value=>console.log(JSON.stringify(redact(value)))}={}){
   if(runtimeDomain==='')runtimeDomain=undefined;
   if(runtimeDomain!==undefined)check(typeof runtimeDomain==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(runtimeDomain),'RUNTIME_DOMAIN_INVALID');
+  const limits={discord:15000,archive:20000,pipeline:15000,server:5000};
+  for(const [step,limit] of Object.entries(shutdownLimits??{})){check(Object.hasOwn(limits,step)&&Number.isSafeInteger(limit)&&limit>0&&limit<=600000,'SHUTDOWN_LIMIT_INVALID');limits[step]=limit;}
   const config=await loadConfig(filename);let current=config;const store=new Store(config.dataDir),ownerId=uid('host'),startedAt=new Date().toISOString();
   if(debug){enableDebugLog(config.dataDir);log({event:'debug_log',state:'enabled',file:'debug.log'});}
   const stopDebug=()=>{if(debug)disableDebugLog();};
   let owner,claimed=false;
   try{owner=config.owner.kind==='remote'?new RemoteOwner(config.owner):store;const stale=store.lock();if(stale){check(Boolean(runtimeDomain)&&stale.domain===runtimeDomain,'RUNTIME_RECOVERY_DOMAIN_MISMATCH');check(!pidRunning(stale.pid),'RUNTIME_ALREADY_OWNED');store.replaceStaleHost(stale,ownerId,process.pid,startedAt,runtimeDomain);}else store.claimHost(ownerId,process.pid,startedAt,runtimeDomain??null);claimed=true;store.reconcileInterrupted();}catch(e){if(claimed)store.releaseHost(ownerId);store.close();stopDebug();throw e;}
   let discord,voice,archive,archiveTimer,bridge,control,policyTimer,closing=false;
+  // A service manager stops a process that has not exited within its stop timeout
+  // (90 s by default). One hung step (Discord logout, a transcription in the archive,
+  // a worker that ignores cancellation, an idle keep-alive socket) must not keep the
+  // host lock until then, so every step has its own upper bound.
+  const bounded=(step,limit,run)=>new Promise(resolve=>{
+    const timer=setTimeout(()=>{log({event:'close_step_timeout',step});resolve();},limit);
+    Promise.resolve().then(run).catch(e=>log({event:'close_step_failed',step,code:errorCode(e)})).finally(()=>{clearTimeout(timer);resolve();});
+  });
   const authorize=async(task,purpose='execute',{monitor=false}={})=>{const c=await loadConfig(filename);check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(discord&&!offline){const channels=[];for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.provider==='discord')channels.push(source.channelId);}const access=await discord.actorAccess(task.actor,channels,{cached:monitor});check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
   const authorizeAnalysis=createAnalysisAuthorizer({readConfig:()=>loadConfig(filename),config,onPolicy:value=>{current=value;},voice:()=>voice,discord:()=>discord,owner,offline});
   const selectedAnalyzer=analyzer??(config.analyzer.kind==='responses'?new ResponsesAnalyzer(config):new CliAnalyzer(config));
@@ -69,7 +79,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     let checking=false;const accessMonitor=new AccessMonitor();policyTimer=setInterval(async()=>{if(checking||closing)return;checking=true;try{const previous=current;try{current=await loadConfig(filename);}catch{current={...config,discord:{...config.discord,operators:[],consentingUsers:[]},voice:{...config.voice,consentMode:'owner_managed',participantIds:[]}};log({event:'policy_unavailable'});}if(JSON.stringify(previous)!==JSON.stringify(current))void voice?.control.check();await Promise.all([...pipeline.active].map(async([id,run])=>{const kept=await accessMonitor.check(id,async()=>{const task=await owner.taskInternal(id);check(task.revision===run.revision&&task.state==='running','TASK_CHANGED');await owner.assertContext(id,task.actor);await authorize(task,'execute',{monitor:true});});if(!kept)run.controller.abort();else if(accessMonitor.grace.pending.has(id))log({event:'task_access',code:'ACCESS_UNAVAILABLE'});}));accessMonitor.retain(pipeline.active.keys());}finally{checking=false;}},1000);policyTimer.unref();
     log({event:'runtime_ready',pid:process.pid,port:runtime.port,discord:offline?'offline_fixture':'connected',voice:'not_joined',taskOwner:config.owner.kind});
   }catch(e){clearInterval(archiveTimer);await pipeline.close();await discord?.close();await archive?.close();control?.close();bridge?.close();store.releaseHost(ownerId);store.close();stopDebug();throw e;}
-  async function close(){if(closing)return;closing=true;pipeline.draining=true;clearInterval(policyTimer);clearInterval(archiveTimer);await discord?.close();await archive?.close();await pipeline.close();await new Promise(resolve=>bridge?bridge.close(resolve):resolve());await new Promise(resolve=>control?control.close(resolve):resolve());store.releaseHost(ownerId);store.close();log({event:'runtime_stopped',ownerId});stopDebug();}
+  async function close(){if(closing)return;closing=true;pipeline.draining=true;clearInterval(policyTimer);clearInterval(archiveTimer);await bounded('discord',limits.discord,()=>discord?.close());await bounded('archive',limits.archive,()=>archive?.close());await bounded('pipeline',limits.pipeline,()=>pipeline.close());await bounded('bridge',limits.server,()=>new Promise(resolve=>bridge?bridge.close(resolve):resolve()));await bounded('control',limits.server,()=>new Promise(resolve=>control?control.close(resolve):resolve()));store.releaseHost(ownerId);store.close();log({event:'runtime_stopped',ownerId});stopDebug();}
   return {config,store,owner,pipeline,discord,voice,close};
 }
 async function localControlRequest(port,route,token,payload){
