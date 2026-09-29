@@ -36,6 +36,8 @@ python -B tools/check_workflow_references.py
 python -m unittest discover -s tests -v
 ```
 
+全体の unittest には Git Steward の試験（`tests/test_git_steward_runtime.py`）が入り、Node 22.13 以上と Git を使います。無いときは skip せずに失敗します。`Trusted repository validation` は runner に最初から入っている Node で実行します。
+
 `runtime/task_swarm` の変更（Python 3.12）:
 
 ```text
