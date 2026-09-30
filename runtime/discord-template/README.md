@@ -2,6 +2,8 @@
 
 **Discordで話す・頼むところから、意図、仕事、成果へ。**
 
+作成済みのOpenAI Dotを使う場合は、[Discord / Luma plugin](dots-plugin/README.md)を設定できます。Dotへの受付と返答、Lumaイベント候補の確認を扱うlocal接続で、live接続は別途受け入れます。
+
 個人やコミュニティが自分のDiscordで使い、使って分かった不便さを直していくためのMITライセンスのテンプレートです。Cloudflare、n8n、組織全体の導入は必須ではありません。
 
 現在は開発候補です。ローカル試験と実Discord・音声・利用者の受入は[確認状況](docs/ACCEPTANCE.md)で分けています。

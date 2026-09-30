@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 作成済みOpenAI Dotを日常の入口とする方針と、Discord / Luma用のlocal plugin候補。指定operator/channelの受付、訂正・削除・取消、重複返答の抑止、Luma作成／更新候補の全文確認、一回の操作claimとDot報告を追加。Dots製品・live Bot・Luma websiteの受入、remote MCP Eventsは別途確認する。
+
 - A019 の registry 契約候補（task contract、task decomposition、worker capability catalog、worker result）を、[公開 PR #115](https://github.com/Kotodama-Project/Kotodama-project/pull/115) の固定 head `040a9becf0463e69887f126e30af6d38bdc02988` から再配置。出典表と非公開の元履歴走査 receipt は公開元の歴史的記録として維持し、この候補の独立 review は別 gate で検証する。4 schemas は candidate-only で、runtime や Task owner の統合ではない。追加 review により validator と試験を補強し、manifest・出典表の全階層と著者・履歴件数を固定する（独立 review の許可済み状態のみ別判定）。重複 JSON key、通常・escaped 表記の利用者絶対 path を拒否し、サイズ上限と symlink・reparse point の拒否を読取り前に検査する。
 - BecomeOne の A022 アーキテクチャ候補を再構成: 単一の記録 owner、複数 agent の協調、tool の監督、plan lifecycle の公開契約と、出典表・固定 bytes の validator。公開済み PR #114 の候補を現行 main に合わせ、今回の公開候補への独立 review を履歴証拠と分けて記録（`docs/architecture/README.md`）。
 

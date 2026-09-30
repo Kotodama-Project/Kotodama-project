@@ -39,7 +39,8 @@ export const Config = z.object({
   ]).default({kind:'local'}),
   bridge:z.object({enabled:z.boolean().default(false),host:z.enum(['127.0.0.1','::1']).default('127.0.0.1'),port:z.number().int().min(1024).max(65535).default(18796),tokenEnv:z.string().default('KOTODAMA_BRIDGE_TOKEN'),actorId:id.optional()}).strict().prefault({}),
   browser:z.object({cdpUrl:z.string().url().optional(),allowedOrigins:z.array(z.string().url()).default([])}).strict().prefault({}),
-  integrations:z.object({luma:z.object({eventUrl:z.string().url(),eventRef:z.string().min(1)}).strict().optional()}).strict().prefault({})
+  integrations:z.object({luma:z.object({eventUrl:z.string().url(),eventRef:z.string().min(1)}).strict().optional()}).strict().prefault({}),
+  dots:z.object({enabled:z.boolean().default(false),actorId:id.optional(),channelIds:z.array(id).max(20).default([]),replyMode:z.enum(['channel','dm']).default('channel'),requestTtlSeconds:z.number().int().min(300).max(86400).default(3600),draftRetentionDays:z.number().int().min(1).max(30).default(7)}).strict().prefault({})
 }).strict();
 
 export async function loadConfig(filename) {
@@ -51,6 +52,7 @@ export async function loadConfig(filename) {
   // Agent channels are text channels the Bot already reads; they only drop the @mention requirement for operators.
   check(config.discord.agentChannelIds.every(channel=>config.discord.textChannelIds.includes(channel)),'AGENT_CHANNEL_NOT_TEXT_CHANNEL');
   if(config.bridge.enabled)check(config.bridge.actorId&&config.discord.operators.includes(config.bridge.actorId),'BRIDGE_ACTOR_REQUIRED');
+  if(config.dots.enabled){check(config.dots.actorId&&config.discord.operators.includes(config.dots.actorId),'DOTS_ACTOR_REQUIRED');check(config.dots.channelIds.length>0&&config.dots.channelIds.every(channel=>config.discord.textChannelIds.includes(channel)),'DOTS_CHANNEL_REQUIRED');}
   if(config.browser.cdpUrl) {const u=new URL(config.browser.cdpUrl);check(['localhost','127.0.0.1','[::1]'].includes(u.hostname),'CDP_MUST_BE_LOOPBACK');}
   if(config.voice.localAsr){const u=new URL(config.voice.localAsr.url),host=u.hostname.toLowerCase(),v4=host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)?.slice(1).map(Number);const privateHost=['localhost','127.0.0.1','::1','[::1]'].includes(host)||host.endsWith('.ts.net')||Boolean(v4&&(v4[0]===10||v4[0]===127||v4[0]===192&&v4[1]===168||v4[0]===172&&v4[1]>=16&&v4[1]<=31||v4[0]===100&&v4[1]>=64&&v4[1]<=127));check(u.protocol==='https:'||u.protocol==='http:'&&privateHost,'LOCAL_ASR_TRANSPORT_REFUSED');check(!u.username&&!u.password&&!u.search&&!u.hash,'LOCAL_ASR_URL_INVALID');}
   if(config.analyzer.kind==='responses'){const u=new URL(config.analyzer.baseUrl);check(u.protocol==='https:'||(u.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(u.hostname)),'ANALYZER_TRANSPORT_REFUSED');check(!u.username&&!u.password&&!u.search&&!u.hash,'ANALYZER_URL_INVALID');}

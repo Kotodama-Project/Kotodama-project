@@ -1,0 +1,6 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "kotodama-dots-discord-luma",
+  "version": "0.1.0",
+  "description": "作成済みのDotとKotodama Discord Botを接続し、Lumaイベントを準備するローカルプラグイン"
+}
