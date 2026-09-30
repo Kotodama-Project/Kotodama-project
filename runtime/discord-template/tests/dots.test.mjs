@@ -139,5 +139,6 @@ test('the requester can reopen an undelivered review privately without changing 
   const replies=[],adapter=new DiscordAdapter({config:f.config,store:f.store,dots:f.bridge,pipeline:{}});adapter.verifiedInstallation=true;adapter.member=async()=>({});
   const i={isButton:()=>false,isChatInputCommand:()=>true,commandName:'kotodama',guildId:f.config.discord.guildId,channelId:channel,user:{id:actor},options:{getSubcommand:()=> 'luma_review',getString:()=>draft.id},deferReply:async()=>{},editReply:async body=>{replies.push(body);return {id:'private-review'};}};
   await adapter.interaction(i);assert.equal(replies[0].files.length,2);assert.equal(replies[0].components[0].components[0].custom_id,'kotodama-luma:'+draft.id+':'+draft.digest.slice(0,16));assert.equal(f.bridge.draft(draft.id).digest,draft.digest);
-  i.user={id:other};f.config.discord.operators.push(other);await adapter.interaction(i);assert(!replies[1].files);assert.match(replies[1].content,/DOTS_ACTOR_REQUIRED/);await adapter.client.destroy();
+  await assert.rejects(f.bridge.send(request.id,1,'確認待ちのための終了返答'),/LUMA_OPERATION_PENDING/);i.options.getString=()=>null;await adapter.interaction(i);assert.equal(replies[1].files.length,2);
+  i.user={id:other};f.config.discord.operators.push(other);await adapter.interaction(i);assert(!replies[2].files);assert.match(replies[2].content,/DOTS_ACTOR_REQUIRED/);await adapter.client.destroy();
 });

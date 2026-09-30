@@ -31,9 +31,11 @@ read its current settings through the connected plugin or official website and b
 the requester. Wait for the confirmation; read it with `luma_read_draft`.
 Candidate changes supersede earlier confirmations.
 
-If review delivery is unknown, tell the requester the draft ID and the
-`/kotodama luma_review` recovery command. It privately shows the same candidate;
-it does not authorize an action or automatically resend the unknown DM.
+If review delivery is unknown, guide the owner in the Dot conversation to
+`/kotodama luma_review` (ID optional for the latest candidate). It privately
+shows the same candidate. Keep `discord_reply` for the final result: it cannot
+close a request while an event review or operation is pending. Recovery neither
+authorizes an action nor automatically resends the unknown DM.
 
 Call `luma_claim_operation` immediately before applying the event operation. A successful
 claim permits exactly one create/update operation for that exact candidate and target, with no paid

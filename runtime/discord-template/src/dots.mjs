@@ -60,6 +60,7 @@ export class DotsBridge {
     check(typeof text==='string'&&text.trim()&&text.length<=1900,'DOTS_REPLY_SIZE');const bodyDigest=digest(text);
     const {row,source}=await this.current(id);check(row.source_revision===revision,'DOTS_SOURCE_CHANGED');
     if(row.state==='sent'){check(row.response_digest===bodyDigest,'DOTS_REPLY_CHANGED');return {state:'already_sent',messageId:row.message_id};}
+    check(!this.store.db.prepare("SELECT id FROM dot_event_drafts WHERE request_id=? AND state IN ('needs_review','approved','executing','uncertain')").get(id),'LUMA_OPERATION_PENDING');
     check(row.state==='pending'&&!this.inFlight.has(id),'DOTS_DELIVERY_UNCERTAIN');this.inFlight.add(id);
     try{
       await this.current(id);const changed=this.store.db.prepare("UPDATE dot_requests SET state='sending',response_digest=? WHERE id=? AND state='pending'").run(bodyDigest,id);check(changed.changes===1,'DOTS_DELIVERY_UNCERTAIN');
