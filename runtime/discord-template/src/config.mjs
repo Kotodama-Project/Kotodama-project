@@ -40,7 +40,7 @@ export const Config = z.object({
   bridge:z.object({enabled:z.boolean().default(false),host:z.enum(['127.0.0.1','::1']).default('127.0.0.1'),port:z.number().int().min(1024).max(65535).default(18796),tokenEnv:z.string().default('KOTODAMA_BRIDGE_TOKEN'),actorId:id.optional()}).strict().prefault({}),
   browser:z.object({cdpUrl:z.string().url().optional(),allowedOrigins:z.array(z.string().url()).default([])}).strict().prefault({}),
   integrations:z.object({luma:z.object({eventUrl:z.string().url(),eventRef:z.string().min(1)}).strict().optional()}).strict().prefault({}),
-  dots:z.object({enabled:z.boolean().default(false),actorId:id.optional(),channelIds:z.array(id).max(20).default([]),replyMode:z.enum(['channel','dm']).default('channel'),requestTtlSeconds:z.number().int().min(300).max(86400).default(3600)}).strict().prefault({})
+  dots:z.object({enabled:z.boolean().default(false),actorId:id.optional(),channelIds:z.array(id).max(20).default([]),replyMode:z.enum(['channel','dm']).default('channel'),requestTtlSeconds:z.number().int().min(300).max(86400).default(3600),draftRetentionDays:z.number().int().min(1).max(30).default(7)}).strict().prefault({})
 }).strict();
 
 export async function loadConfig(filename) {

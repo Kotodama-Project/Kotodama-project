@@ -97,3 +97,24 @@ test('enabled Dot configuration rejects missing owner and an unbound channel',as
   const f=await fixture(t),configFile=path.join(f.root,'bot.json');f.config.dots.actorId=other;await writeFile(configFile,JSON.stringify(f.config),'utf8');await assert.rejects(loadConfig(configFile),/DOTS_ACTOR_REQUIRED/);
   f.config.dots.actorId=actor;f.config.dots.channelIds=['100000000000000005'];await writeFile(configFile,JSON.stringify(f.config),'utf8');await assert.rejects(loadConfig(configFile),/DOTS_CHANNEL_REQUIRED/);
 });
+test('changes during asynchronous authorization prevent reply and event claims',async t=>{
+  let mutate=false,f;
+  f=await fixture(t,{authorize:async source=>{if(mutate){mutate=false;f.store.ingest({...source,revision:source.revision+1,text:'処理中の訂正'});}}});
+  const reply=f.bridge.enqueue(f.source);mutate=true;await assert.rejects(f.bridge.send(reply.id,1,'古い返答'),/DOTS_SOURCE_CHANGED/);assert.equal(f.sent.length,0);
+  const request=f.bridge.enqueue({...f.source,sourceId:'claim-source'}),draft=await f.bridge.prepareEvent(request.id,1,f.event);await f.bridge.approve(draft.id,draft.digest.slice(0,16),actor);mutate=true;await assert.rejects(f.bridge.claimEvent(draft.id),/DOTS_SOURCE_CHANGED/);
+});
+test('the final send guard rejects a Source changed during Discord fetches',async t=>{
+  let sent=0,f;f=await fixture(t,{delivery:async(source,_body,options)=>{f.store.ingest({...source,revision:source.revision+1,text:'送信直前の訂正'});options?.beforeSend?.();sent++;return {id:'should-not-send'};}});
+  const request=f.bridge.enqueue(f.source);assert.equal((await f.bridge.send(request.id,1,'古い返答')).state,'unknown');assert.equal(sent,0);
+});
+test('unavailable inbox rows are distinguishable from an empty inbox',async t=>{
+  const f=await fixture(t,{authorize:async()=>{throw new Error('ACCESS_UNAVAILABLE');}});f.bridge.enqueue(f.source);const result=await f.bridge.list();assert.equal(result.complete,false);assert.equal(result.unavailable,1);assert.equal(result.requests.length,0);
+});
+test('transport draft details expire while Source and content-free receipts remain',async t=>{
+  const f=await fixture(t),request=f.bridge.enqueue(f.source),draft=await f.bridge.prepareEvent(request.id,1,f.event);f.clock.now+=8*86400000;f.bridge.prune();
+  const row=f.store.db.prepare('SELECT * FROM dot_event_drafts WHERE id=?').get(draft.id);assert.equal(row.event,null);assert.equal(row.target_url,null);assert.equal(row.digest,draft.digest);assert.equal(f.store.sourceInternal(f.store.db.prepare('SELECT source_key FROM dot_requests WHERE id=?').get(request.id).source_key).text,f.source.text);
+});
+test('a human can refresh an expired unused approval, while a claimed operation cannot refresh',async t=>{
+  const f=await fixture(t),request=f.bridge.enqueue(f.source),draft=await f.bridge.prepareEvent(request.id,1,f.event);await f.bridge.approve(draft.id,draft.digest.slice(0,16),actor);f.clock.now+=300001;await assert.rejects(f.bridge.claimEvent(draft.id),/LUMA_APPROVAL_EXPIRED/);
+  await f.bridge.approve(draft.id,draft.digest.slice(0,16),actor);assert.equal((await f.bridge.claimEvent(draft.id)).state,'executing');await assert.rejects(f.bridge.approve(draft.id,draft.digest.slice(0,16),actor),/LUMA_DRAFT_ALREADY_DECIDED/);
+});
