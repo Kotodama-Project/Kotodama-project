@@ -19,7 +19,7 @@ export class DotsBridge {
     Object.assign(this,{config,store,policy,authorize,deliver,now});this.inFlight=new Set();
     store.db.exec(`
       CREATE TABLE IF NOT EXISTS dot_requests(id TEXT PRIMARY KEY,source_key TEXT NOT NULL,source_revision INTEGER NOT NULL,actor TEXT NOT NULL,state TEXT NOT NULL,created INTEGER NOT NULL,response_digest TEXT,message_id TEXT);
-      CREATE TABLE IF NOT EXISTS dot_event_drafts(id TEXT PRIMARY KEY,request_id TEXT NOT NULL,revision INTEGER NOT NULL,event TEXT,digest TEXT NOT NULL,state TEXT NOT NULL,operation TEXT NOT NULL,target_url TEXT,approved_at INTEGER,claim_id TEXT,review_message_id TEXT,reported TEXT);
+      CREATE TABLE IF NOT EXISTS dot_event_drafts(id TEXT PRIMARY KEY,request_id TEXT NOT NULL,revision INTEGER NOT NULL,event TEXT NOT NULL,digest TEXT NOT NULL,state TEXT NOT NULL,operation TEXT NOT NULL,target_url TEXT,approved_at INTEGER,claim_id TEXT,review_message_id TEXT,reported TEXT);
     `);
     // A interrupted send may already have reached Discord; never replay it.
     store.db.prepare("UPDATE dot_requests SET state='unknown' WHERE state='sending'").run();
@@ -38,7 +38,7 @@ export class DotsBridge {
   prune(){
     if(this.lastPrunedAt!==undefined&&this.now()>=this.lastPrunedAt&&this.now()-this.lastPrunedAt<60000)return 0;
     const days=this.policy().dots?.draftRetentionDays??7,cutoff=this.now()-days*86400000;this.lastPrunedAt=this.now();
-    return this.store.db.prepare("UPDATE dot_event_drafts SET event=NULL,target_url=NULL,reported=NULL,state='expired' WHERE event IS NOT NULL AND request_id IN (SELECT id FROM dot_requests WHERE created<?)").run(cutoff).changes;
+    return this.store.db.prepare("UPDATE dot_event_drafts SET event='{}',target_url=NULL,reported=NULL,state='expired' WHERE state<>'expired' AND request_id IN (SELECT id FROM dot_requests WHERE created<?)").run(cutoff).changes;
   }
   enqueue(source){
     const {config,dots}=this.settings();check(source.actorId===dots.actorId&&source.provider==='discord'&&source.guildId===config.discord.guildId&&dots.channelIds.includes(source.channelId),'DOTS_ACTOR_REQUIRED');
@@ -80,7 +80,7 @@ export class DotsBridge {
     this.store.db.prepare('UPDATE dot_event_drafts SET review_message_id=? WHERE id=?').run(message?.id??null,draftId);
     return {...this.draft(draftId),providerOperationPerformed:false};
   }
-  draft(id){const row=this.store.db.prepare('SELECT * FROM dot_event_drafts WHERE id=?').get(id);check(row,'LUMA_DRAFT_NOT_FOUND');check(row.event!==null,'LUMA_DRAFT_CONTENT_EXPIRED');return {id:row.id,requestId:row.request_id,revision:row.revision,event:JSON.parse(row.event),digest:row.digest,operation:row.operation,targetUrl:row.target_url,state:row.state,approvedAt:row.approved_at,claimId:row.claim_id,reviewDelivery:row.review_message_id?'sent':'unknown',reported:row.reported?JSON.parse(row.reported):null};}
+  draft(id){const row=this.store.db.prepare('SELECT * FROM dot_event_drafts WHERE id=?').get(id);check(row,'LUMA_DRAFT_NOT_FOUND');check(row.state!=='expired'&&row.event!==null,'LUMA_DRAFT_CONTENT_EXPIRED');return {id:row.id,requestId:row.request_id,revision:row.revision,event:JSON.parse(row.event),digest:row.digest,operation:row.operation,targetUrl:row.target_url,state:row.state,approvedAt:row.approved_at,claimId:row.claim_id,reviewDelivery:row.review_message_id?'sent':'unknown',reported:row.reported?JSON.parse(row.reported):null};}
   async readDraft(id){const draft=this.draft(id),{row}=await this.current(draft.requestId);check(draft.revision===row.source_revision,'DOTS_SOURCE_CHANGED');return draft;}
   reviewMessage(draft){return {content:eventPreview(draft),files:[{attachment:Buffer.from(eventDetails(draft),'utf8'),name:'luma-event.txt'},{attachment:Buffer.from(JSON.stringify({operation:draft.operation,targetUrl:draft.targetUrl,event:draft.event},null,2),'utf8'),name:'luma-event.json'}],components:[{type:1,components:[{type:2,style:1,label:'この内容でLuma操作を許可',custom_id:'kotodama-luma:'+draft.id+':'+draft.digest.slice(0,16)}]}],allowedMentions:{parse:[]}};}
   async approve(id,prefix,actor){

@@ -112,9 +112,16 @@ test('unavailable inbox rows are distinguishable from an empty inbox',async t=>{
 });
 test('transport draft details expire while Source and content-free receipts remain',async t=>{
   const f=await fixture(t),request=f.bridge.enqueue(f.source),draft=await f.bridge.prepareEvent(request.id,1,f.event);f.clock.now+=8*86400000;f.bridge.prune();
-  const row=f.store.db.prepare('SELECT * FROM dot_event_drafts WHERE id=?').get(draft.id);assert.equal(row.event,null);assert.equal(row.target_url,null);assert.equal(row.digest,draft.digest);assert.equal(f.store.sourceInternal(f.store.db.prepare('SELECT source_key FROM dot_requests WHERE id=?').get(request.id).source_key).text,f.source.text);
+  const row=f.store.db.prepare('SELECT * FROM dot_event_drafts WHERE id=?').get(draft.id);assert.equal(row.event,'{}');assert.equal(row.target_url,null);assert.equal(row.digest,draft.digest);assert.equal(f.store.sourceInternal(f.store.db.prepare('SELECT source_key FROM dot_requests WHERE id=?').get(request.id).source_key).text,f.source.text);
 });
 test('a human can refresh an expired unused approval, while a claimed operation cannot refresh',async t=>{
   const f=await fixture(t),request=f.bridge.enqueue(f.source),draft=await f.bridge.prepareEvent(request.id,1,f.event);await f.bridge.approve(draft.id,draft.digest.slice(0,16),actor);f.clock.now+=300001;await assert.rejects(f.bridge.claimEvent(draft.id),/LUMA_APPROVAL_EXPIRED/);
   await f.bridge.approve(draft.id,draft.digest.slice(0,16),actor);assert.equal((await f.bridge.claimEvent(draft.id)).state,'executing');await assert.rejects(f.bridge.approve(draft.id,draft.digest.slice(0,16),actor),/LUMA_DRAFT_ALREADY_DECIDED/);
+});
+test('startup retirement preserves compatibility with an existing NOT NULL draft table',async t=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-dots-old-schema-')),store=new Store(root);t.after(async()=>{store.close();assert(path.basename(root).startsWith('ktdm-dots-old-schema-'));await rm(root,{recursive:true,force:true});});
+  store.db.exec("CREATE TABLE dot_event_drafts(id TEXT PRIMARY KEY,request_id TEXT NOT NULL,revision INTEGER NOT NULL,event TEXT NOT NULL,digest TEXT NOT NULL,state TEXT NOT NULL,operation TEXT NOT NULL,target_url TEXT,approved_at INTEGER,claim_id TEXT,review_message_id TEXT,reported TEXT)");
+  const config=exampleConfig();config.dots={enabled:true,actorId:actor,channelIds:[channel],requestTtlSeconds:3600};let now=0;const bridge=new DotsBridge({config,store,now:()=>now,deliver:async()=>({id:'preview'})});const request=bridge.enqueue({provider:'discord',guildId:config.discord.guildId,channelId:channel,sourceId:'old-schema',actorId:actor,readers:[actor],revision:1,final:true,text:'old draft',metadata:{kind:'text'}});
+  store.db.prepare("INSERT INTO dot_event_drafts(id,request_id,revision,event,digest,state,operation) VALUES(?,?,1,?,?,?,'create')").run('legacy-draft',request.id,'{"description_md":"old synthetic draft"}','synthetic-digest','needs_review');now=8*86400000;
+  assert.doesNotThrow(()=>new DotsBridge({config,store,now:()=>now}));const row=store.db.prepare('SELECT * FROM dot_event_drafts WHERE id=?').get('legacy-draft');assert.equal(row.state,'expired');assert.equal(row.event,'{}');
 });
