@@ -34,6 +34,8 @@ IDsは合成例です。actorは`discord.operators`、channelは`discord.textCha
 
 Luma候補の説明・場所・URLなど、このtransportが複製した詳細は既定7日で消去します。`dots.draftRetentionDays`で1〜30日に設定できます。起動時・読取時・稼働中の定期回収で適用し、内容を含まないdigestと操作状態は残します。元のSourceやTask ownerの記録を消す操作ではありません。
 
+開始済みの操作は、受付期限の後でも同じclaimと不変のSource・現在の閲覧権限で読戻しを記録できます。これは新しい操作や期限後のDiscord送信の許可ではありません。期限後の結果はDotと保存済みreportで確認し、Botからの新しい返答には新しい受付を使います。
+
 ## Pluginの設定
 
 portable manifestは`plugin.json`、MCP設定は`mcp.json`、運用skillは`skills/discord-luma/SKILL.md`です。公式SDKのstdio serverを使います。MCP hostへ次の環境変数を渡します。

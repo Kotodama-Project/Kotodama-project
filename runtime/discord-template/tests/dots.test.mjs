@@ -125,3 +125,8 @@ test('startup retirement preserves compatibility with an existing NOT NULL draft
   store.db.prepare("INSERT INTO dot_event_drafts(id,request_id,revision,event,digest,state,operation) VALUES(?,?,1,?,?,?,'create')").run('legacy-draft',request.id,'{"description_md":"old synthetic draft"}','synthetic-digest','needs_review');now=8*86400000;
   assert.doesNotThrow(()=>new DotsBridge({config,store,now:()=>now}));const row=store.db.prepare('SELECT * FROM dot_event_drafts WHERE id=?').get('legacy-draft');assert.equal(row.state,'expired');assert.equal(row.event,'{}');
 });
+test('an already claimed browser operation can reconcile after inbox expiry without granting another action',async t=>{
+  const f=await fixture(t),request=f.bridge.enqueue(f.source),draft=await f.bridge.prepareEvent(request.id,1,f.event);f.clock.now+=3599000;await f.bridge.approve(draft.id,draft.digest.slice(0,16),actor);const claim=await f.bridge.claimEvent(draft.id);f.clock.now+=2000;
+  const result=await f.bridge.recordEvent(draft.id,claim.claimId,'https://luma.com/synthetic-late',f.event);assert.equal(result.state,'reported');assert.equal(result.evidence,'DOT_REPORTED_NOT_INDEPENDENTLY_VERIFIED');await assert.rejects(f.bridge.claimEvent(draft.id),/DOTS_REQUEST_EXPIRED/);await assert.rejects(f.bridge.send(request.id,1,'期限後の新しい返答'),/DOTS_REQUEST_EXPIRED/);
+  f.store.ingest({...f.source,revision:2,withdrawn:true});await assert.rejects(f.bridge.recordEvent(draft.id,claim.claimId,result.url,f.event),/SOURCE_ACCESS_DENIED/);
+});

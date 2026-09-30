@@ -27,14 +27,14 @@ export class DotsBridge {
     this.prune();
   }
   settings(){const config=this.policy(),dots=config.dots;check(dots?.enabled,'DOTS_DISABLED');check(dots.actorId===this.config.dots.actorId&&dots.actorId&&config.discord.operators.includes(dots.actorId),'DOTS_OWNER_CHANGED');return {config,dots};}
-  snapshot(id){
+  snapshot(id,{reconcile=false}={}){
     const {config,dots}=this.settings();
     const row=this.store.db.prepare('SELECT * FROM dot_requests WHERE id=?').get(id);check(row&&row.actor===dots.actorId,'DOTS_REQUEST_NOT_FOUND');
     const source=this.store.source(row.source_key,row.actor);check(source.revision===row.source_revision,'DOTS_SOURCE_CHANGED');
     check(source.provider==='discord'&&source.guildId===config.discord.guildId&&dots.channelIds.includes(source.channelId),'DOTS_SOURCE_SCOPE_CHANGED');
-    check(this.now()>=row.created&&this.now()-row.created<=dots.requestTtlSeconds*1000,'DOTS_REQUEST_EXPIRED');return {row,source};
+    check(this.now()>=row.created&&(reconcile||this.now()-row.created<=dots.requestTtlSeconds*1000),'DOTS_REQUEST_EXPIRED');return {row,source};
   }
-  async current(id){const initial=this.snapshot(id);await this.authorize(initial.source);return this.snapshot(id);}
+  async current(id,options){const initial=this.snapshot(id,options);await this.authorize(initial.source);return this.snapshot(id,options);}
   prune(){
     if(this.lastPrunedAt!==undefined&&this.now()>=this.lastPrunedAt&&this.now()-this.lastPrunedAt<60000)return 0;
     const days=this.policy().dots?.draftRetentionDays??7,cutoff=this.now()-days*86400000;this.lastPrunedAt=this.now();
@@ -81,7 +81,7 @@ export class DotsBridge {
     return {...this.draft(draftId),providerOperationPerformed:false};
   }
   draft(id){const row=this.store.db.prepare('SELECT * FROM dot_event_drafts WHERE id=?').get(id);check(row,'LUMA_DRAFT_NOT_FOUND');check(row.state!=='expired'&&row.event!==null,'LUMA_DRAFT_CONTENT_EXPIRED');return {id:row.id,requestId:row.request_id,revision:row.revision,event:JSON.parse(row.event),digest:row.digest,operation:row.operation,targetUrl:row.target_url,state:row.state,approvedAt:row.approved_at,claimId:row.claim_id,reviewDelivery:row.review_message_id?'sent':'unknown',reported:row.reported?JSON.parse(row.reported):null};}
-  async readDraft(id){const draft=this.draft(id),{row}=await this.current(draft.requestId);check(draft.revision===row.source_revision,'DOTS_SOURCE_CHANGED');return draft;}
+  async readDraft(id){const draft=this.draft(id),reconcile=Boolean(draft.claimId)&&['executing','uncertain','reported'].includes(draft.state),{row}=await this.current(draft.requestId,{reconcile});check(draft.revision===row.source_revision,'DOTS_SOURCE_CHANGED');return this.draft(id);}
   reviewMessage(draft){return {content:eventPreview(draft),files:[{attachment:Buffer.from(eventDetails(draft),'utf8'),name:'luma-event.txt'},{attachment:Buffer.from(JSON.stringify({operation:draft.operation,targetUrl:draft.targetUrl,event:draft.event},null,2),'utf8'),name:'luma-event.json'}],components:[{type:1,components:[{type:2,style:1,label:'この内容でLuma操作を許可',custom_id:'kotodama-luma:'+draft.id+':'+draft.digest.slice(0,16)}]}],allowedMentions:{parse:[]}};}
   async approve(id,prefix,actor){
     const draft=this.draft(id),{row}=await this.current(draft.requestId);check(actor===row.actor&&draft.revision===row.source_revision&&draft.digest.slice(0,16)===prefix,'LUMA_APPROVAL_BINDING_CHANGED');
