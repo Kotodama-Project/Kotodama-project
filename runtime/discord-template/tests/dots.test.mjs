@@ -130,3 +130,14 @@ test('an already claimed browser operation can reconcile after inbox expiry with
   const result=await f.bridge.recordEvent(draft.id,claim.claimId,'https://luma.com/synthetic-late',f.event);assert.equal(result.state,'reported');assert.equal(result.evidence,'DOT_REPORTED_NOT_INDEPENDENTLY_VERIFIED');await assert.rejects(f.bridge.claimEvent(draft.id),/DOTS_REQUEST_EXPIRED/);await assert.rejects(f.bridge.send(request.id,1,'期限後の新しい返答'),/DOTS_REQUEST_EXPIRED/);
   f.store.ingest({...f.source,revision:2,withdrawn:true});await assert.rejects(f.bridge.recordEvent(draft.id,claim.claimId,result.url,f.event),/SOURCE_ACCESS_DENIED/);
 });
+test('a remote owner outage cannot leave a deleted Dot Source locally readable',async t=>{
+  const f=await fixture(t),request=f.bridge.enqueue(f.source);f.config.owner={kind:'remote',url:'https://example.invalid',tokenEnv:'FIXTURE_REMOTE_OWNER'};const adapter=new DiscordAdapter({config:f.config,store:f.store,dots:f.bridge,pipeline:{ingest:async()=>{throw new Error('SYNTHETIC_REMOTE_OUTAGE');}}});adapter.verifiedInstallation=true;
+  await assert.rejects(adapter.withdraw({guildId:f.source.guildId,channelId:channel,id:f.source.sourceId}),/SYNTHETIC_REMOTE_OUTAGE/);await assert.rejects(f.bridge.send(request.id,1,'削除後の返答'),/SOURCE_ACCESS_DENIED/);await adapter.client.destroy();
+});
+test('the requester can reopen an undelivered review privately without changing its candidate',async t=>{
+  const f=await fixture(t,{delivery:async()=>{throw new Error('SYNTHETIC_REVIEW_NOT_DELIVERED');}}),request=f.bridge.enqueue(f.source),draft=await f.bridge.prepareEvent(request.id,1,f.event);assert.equal(draft.reviewDelivery,'unknown');
+  const replies=[],adapter=new DiscordAdapter({config:f.config,store:f.store,dots:f.bridge,pipeline:{}});adapter.verifiedInstallation=true;adapter.member=async()=>({});
+  const i={isButton:()=>false,isChatInputCommand:()=>true,commandName:'kotodama',guildId:f.config.discord.guildId,channelId:channel,user:{id:actor},options:{getSubcommand:()=> 'luma_review',getString:()=>draft.id},deferReply:async()=>{},editReply:async body=>{replies.push(body);return {id:'private-review'};}};
+  await adapter.interaction(i);assert.equal(replies[0].files.length,2);assert.equal(replies[0].components[0].components[0].custom_id,'kotodama-luma:'+draft.id+':'+draft.digest.slice(0,16));assert.equal(f.bridge.draft(draft.id).digest,draft.digest);
+  i.user={id:other};f.config.discord.operators.push(other);await adapter.interaction(i);assert(!replies[1].files);assert.match(replies[1].content,/DOTS_ACTOR_REQUIRED/);await adapter.client.destroy();
+});

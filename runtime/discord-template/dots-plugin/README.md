@@ -13,7 +13,7 @@ Lumaの新規作成・既存イベント更新を準備できます。設定と�
 - Node 24以上、templateの固定依存、Discord Botのconfigとcredential。
 - 作成済みDotがpluginを使えるcomputer/environmentへ接続されている。local skillには接続computerが必要で、そのcomputerとChatGPT appを開いておく。
 - Dot ownerのDiscord operatorを一人、利用channelを明示する。
-- Luma pluginがDotに接続され、操作と読戻しが使えるか確認する。websiteを使う場合はDotのbrowserでloginし、手元のloginがクラウドへ継承されるとは扱わない。
+- 既存の認証済みLuma plugin接続を優先する。websiteでは利用者がすでにloginしたbrowser sessionを再利用する。別browser/profileは本人が明示的に選んだ場合の選択肢で、defaultにしない。新しいloginは本人が行い、cookieのコピーや既存browserの再起動で移さない。
 
 configの追加例:
 
@@ -35,6 +35,8 @@ IDsは合成例です。actorは`discord.operators`、channelは`discord.textCha
 Luma候補の説明・場所・URLなど、このtransportが複製した詳細は既定7日で消去します。`dots.draftRetentionDays`で1〜30日に設定できます。起動時・読取時・稼働中の定期回収で適用し、内容を含まないdigestと操作状態は残します。元のSourceやTask ownerの記録を消す操作ではありません。
 
 開始済みの操作は、受付期限の後でも同じclaimと不変のSource・現在の閲覧権限で読戻しを記録できます。これは新しい操作や期限後のDiscord送信の許可ではありません。期限後の結果はDotと保存済みreportで確認し、Botからの新しい返答には新しい受付を使います。
+
+内容確認のDMが届かなかった場合は、本人が`/kotodama luma_review draft:...`で同じ候補を自分だけの表示として開けます。未知のDMを自動再送せず、candidateを変えずに全文と確認buttonを表示します。許可後の操作は引き続き一回だけです。
 
 ## Pluginの設定
 
