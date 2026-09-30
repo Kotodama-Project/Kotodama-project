@@ -6,14 +6,14 @@
 
 `/kotodama dots text:...`、または許可channelのBotへのmentionで受付します。agent channelでは依頼者の新しいmessageを受付できます。訂正・削除は古い返答を止めます。`/kotodama dots_stop request:...`で受付を取消せます。Dotの別の背景作業はChatGPTのActivityで確認・停止します。
 
-Lumaの新規作成・既存イベント更新を準備できます。設定と説明の全文JSON、確認buttonを本人へ送ります。本人の許可は5分間、一つの内容・対象に一回だけ有効です。Dotが公式websiteで操作し、読戻しを記録します。有料ticketや招待送信は含みません。
+Lumaの新規作成・既存イベント更新を準備できます。設定と説明の全文、確認buttonを本人へ送ります。本人の許可は5分間、一つの内容・対象に一回だけ有効です。Dotが接続済みLuma pluginを優先し、必要な接続や機能がなければ公式websiteで操作します。読戻しを記録し、有料ticketや招待送信は含みません。
 
 ## 事前条件
 
 - Node 24以上、templateの固定依存、Discord Botのconfigとcredential。
 - 作成済みDotがpluginを使えるcomputer/environmentへ接続されている。local skillには接続computerが必要で、そのcomputerとChatGPT appを開いておく。
 - Dot ownerのDiscord operatorを一人、利用channelを明示する。
-- LumaはDotのbrowserでloginする。手元のbrowserのloginはクラウドbrowserへ継承されない。
+- Luma pluginがDotに接続され、操作と読戻しが使えるか確認する。websiteを使う場合はDotのbrowserでloginし、手元のloginがクラウドへ継承されるとは扱わない。
 
 configの追加例:
 

@@ -91,7 +91,7 @@ export class DotsBridge {
   }
   async approvedEvent(id){
     const draft=this.draft(id),{row}=await this.current(draft.requestId);check(draft.state==='approved'&&draft.revision===row.source_revision&&row.state==='pending','LUMA_APPROVAL_REQUIRED');
-    check(this.now()>=draft.approvedAt&&this.now()-draft.approvedAt<=300000,'LUMA_APPROVAL_EXPIRED');return {...draft,action:draft.operation+'_event_once',executionRoute:'official_luma_browser',invitesAllowed:false,paidTicketsAllowed:false};
+    check(this.now()>=draft.approvedAt&&this.now()-draft.approvedAt<=300000,'LUMA_APPROVAL_EXPIRED');return {...draft,action:draft.operation+'_event_once',executionRoute:'connected_luma_plugin_or_official_browser',invitesAllowed:false,paidTicketsAllowed:false};
   }
   async claimEvent(id){const draft=await this.approvedEvent(id),claimId=uid('luma');check(this.snapshot(draft.requestId).row.state==='pending','DOTS_REQUEST_NOT_PENDING');const changed=this.store.db.prepare("UPDATE dot_event_drafts SET state='executing',claim_id=? WHERE id=? AND state='approved' AND approved_at=?").run(claimId,id,draft.approvedAt);check(changed.changes===1,'LUMA_OPERATION_ALREADY_STARTED');return {...draft,state:'executing',claimId};}
   async recordEvent(id,claimId,url,observed){

@@ -26,7 +26,7 @@ Dotsの常駐agent、クラウドcomputer、継続作業、音声、プラグイ
 
 [Dotsプラグイン](../runtime/discord-template/dots-plugin/README.md)は既存BotのSourceを使う窓口です。指定した依頼者とchannelの相談を読み、本人へ返答します。Sourceの訂正・削除、権限の失効、期限切れを反映し、普通の相談で新しいTaskを作りません。
 
-Lumaでは新規作成と既存イベントの更新を準備できます。Discordで操作・対象・設定・説明全文を確認し、本人がbuttonで許可した候補を一回だけ取得します。Dotがwebsiteで操作し、URLと全項目を読戻して報告します。未知の結果を再実行せず、Dotの報告を独立したprovider検証へ昇格しません。
+Lumaでは新規作成と既存イベントの更新を準備できます。Discordで操作・対象・設定・説明全文を確認し、本人がbuttonで許可した候補を一回だけ取得します。Dotが対応する接続済みLuma pluginを優先し、必要な機能や接続がない場合に公式websiteを使います。URLと全項目を読戻して報告し、未知の結果を再実行しません。Dotの報告をこのtransportの独立検証へ昇格しません。
 
 実接続は、作成済みDot、Bot、plugin、running host、Luma loginを同じ窓で受け入れてからです。local code/SDK試験だけではDotのDiscord返答やLuma操作の完了を証明しません。
 

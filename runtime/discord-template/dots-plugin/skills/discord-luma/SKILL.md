@@ -34,12 +34,13 @@ Candidate changes supersede earlier confirmations.
 Call `luma_claim_operation` immediately before applying the event operation. A successful
 claim permits exactly one create/update operation for that exact candidate and target, with no paid
 tickets or invitations. For an update, re-read the current provider state first;
-if it changed, prepare the corrected candidate for a new confirmation. Use the official Luma website in your browser; use
-the private login/takeover flow if sign-in is needed. If the creation may have
+if it changed, prepare the corrected candidate for a new confirmation. Prefer
+the connected Luma plugin when it offers the required action and readback.
+Otherwise use the official website and its private login/takeover flow. If the creation may have
 succeeded, inspect the website before any retry and obtain a fresh exact
 decision where needed. A claim or local test is not provider acceptance.
 
-Read back the event URL and every candidate field from the website. Call
+Read back the event URL and every candidate field through the plugin or website. Call
 `luma_report_event` with the claim ID and exact settings, then send the
 requester the URL and the report's evidence label with `discord_reply`.
 Report missing fields, an uncertain operation, or a mismatch plainly. The
