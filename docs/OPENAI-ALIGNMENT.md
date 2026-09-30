@@ -18,7 +18,7 @@ Dotsの常駐agent、クラウドcomputer、継続作業、音声、プラグイ
 - [GPT-Live](https://developers.openai.com/api/docs/guides/live)、[delegation](https://developers.openai.com/api/docs/guides/live-delegation): 会話を続けながらbackendへ委譲できる。現在のDiscord音声経路を維持し、Dotsのnative callとの接続は未確認とする。
 - [Plugin package](https://developers.openai.com/plugins/build/plugins)、[MCP server](https://developers.openai.com/plugins/build/mcp-server): portable `plugin.json`、`mcp.json`、`skills/`を採用。公式SDKで接続を検証する。
 - [MCP Events](https://developers.openai.com/plugins/build/mcp-events): protocol `2026-07-28`、永続subscription、署名とcallback検証を持つwebhookが必要。今回のlocal stdio読取ツールをMCP Eventsや即時通知とは表示しない。remote HTTPSとEventsは別の接続受入が必要。
-- [Lumaイベント仕様](https://docs.luma.com/reference/post_v1-events-create): 日時、timezone、description、場所の公開範囲、capacity、visibility、participant approvalを独立した値として扱う。今回の操作はDotの公式browserを使い、API接続済みとは表示しない。
+- [Lumaイベント仕様](https://docs.luma.com/reference/post_v1-events-create): 日時、timezone、description、場所の公開範囲、capacity、visibility、participant approvalを独立した値として扱う。対応する接続済みpluginを優先し、未接続や機能不足では公式browserを使う。資料だけでDotのAPI接続を証明したとは扱わない。
 
 同じOpenAI系列の複数ページは、独立した性能検証ではありません。発表、資料上の対応、アカウント状態、一連の実操作を分けます。
 

@@ -26,7 +26,7 @@ request stops this response.
 
 For a Luma event, gather the name, exact times and timezone, location, capacity,
 description, visibility and participant-approval choice. For an existing event,
-read its current settings in the official website and bind its exact URL. Call
+read its current settings through the connected plugin or official website and bind its exact URL. Call
 `luma_prepare_event`. The Bot sends the full JSON and a confirmation button to
 the requester. Wait for the confirmation; read it with `luma_read_draft`.
 Candidate changes supersede earlier confirmations.
@@ -37,7 +37,7 @@ tickets or invitations. For an update, re-read the current provider state first;
 if it changed, prepare the corrected candidate for a new confirmation. Prefer
 the connected Luma plugin when it offers the required action and readback.
 Otherwise use the official website and its private login/takeover flow. If the creation may have
-succeeded, inspect the website before any retry and obtain a fresh exact
+succeeded, inspect current provider state before any retry and obtain a fresh exact
 decision where needed. A claim or local test is not provider acceptance.
 
 Read back the event URL and every candidate field through the plugin or website. Call

@@ -56,6 +56,6 @@ Dotへoperator/channel、返答先、監視期間を伝えます。`discord_requ
 3. 別の相談を訂正・削除し、古い返答が拒否されることを確認する。
 4. Lumaの合成候補と全文JSONを確認する。未許可・別人・訂正後・期限切れで操作を取得できないことを確認する。
 5. 本人の許可後、`luma_claim_operation`で一回だけ取得する。既存イベントは対象URLと設定を読み直し、変更があれば候補と許可を更新する。
-6. websiteのURLと全項目を読戻し、`luma_report_event`へ記録する。`DOT_REPORTED_NOT_INDEPENDENTLY_VERIFIED`は別の確認までprovider PASSにしない。
+6. 接続済みLuma pluginまたは公式websiteからURLと全項目を読戻し、`luma_report_event`へ記録する。`DOT_REPORTED_NOT_INDEPENDENTLY_VERIFIED`は別の確認までprovider PASSにしない。
 
-`tests/dots.test.mjs`は受付・権限・訂正・重複送信・中断・Luma bindingと公式SDKのstdio接続を確認します。live Discord、Dot自身の呼出し、Luma website操作は別の受入です。
+`tests/dots.test.mjs`は受付・権限・訂正・重複送信・中断・Luma bindingと公式SDKのstdio接続を確認します。live Discord、Dot自身の呼出し、Luma plugin／websiteの実操作は別の受入です。
