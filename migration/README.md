@@ -34,9 +34,7 @@ receipt を出して初めて確定します。まだ存在しない digest を�
    内部整合性だけの candidate-only 検査である。
 
 ```
-python tools/validate_public_migration_ledger.py `
-  migration/public-migration-ledger.v1.jsonl `
-  --anchor <trusted-previous-head-sha256>
+python tools/validate_public_migration_ledger.py migration/public-migration-ledger.v1.jsonl --anchor TRUSTED_PREVIOUS_HEAD_SHA256
 ```
 
 台帳が空、または存在しない状態で verifier を実行すると `INPUT_INVALID` で
@@ -47,3 +45,5 @@ fail-closed します。これは意図した挙動で、空の台帳を「移�
 Public Beta GO のいずれも意味しません。同じ `subject_ref` に複数 record がある場合は
 sequence が最大の record が現在の disposition として集計されます。拒否時の
 `zero_unclassified` は `null` です。Public Beta は `NO_GO_UNPUBLISHED` のままです。
+
+この一行はPOSIX shellとPowerShellの両方で使えます。`TRUSTED_PREVIOUS_HEAD_SHA256` は独立に保持した64桁のhead digestへ置き換えます。

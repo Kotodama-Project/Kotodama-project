@@ -44,7 +44,7 @@
 
 各行は 1 レコードの JSONL です。
 
-入力は最大 8 MiB、各行の JSON nesting は 64 段までです。深さは decoder 前に
+入力は最大 8 MiB、record は最大 10,000 件、各行の JSON nesting は 64 段までです。深さは decoder 前に
 文字列内の括弧と escape を区別して検査し、platform の stack 上限に依存せず
 `REFUSED / INPUT_INVALID` を返します。
 
@@ -86,9 +86,7 @@ branch 不存在はこの verifier の責任範囲ではありません。`--anc
 ## 実行
 
 ```
-python tools/validate_public_migration_ledger.py `
-  migration/public-migration-ledger.v1.jsonl `
-  --anchor <trusted-previous-head-sha256>
+python tools/validate_public_migration_ledger.py migration/public-migration-ledger.v1.jsonl --anchor TRUSTED_PREVIOUS_HEAD_SHA256
 ```
 
 成功時の出力は次の形です。
@@ -135,3 +133,13 @@ Current Truth、Public Beta GO のいずれも意味しません。verifier の�
 残る append-only chain では、同じ subject の最新 disposition だけを集計します。
 拒否された入力では `zero_unclassified` は `null` で、coverage の positive signal を
 返しません。台帳に載っていない対象があるかどうかは、この契約の範囲外です。
+
+この一行はPOSIX shellとPowerShellの両方で使えます。`TRUSTED_PREVIOUS_HEAD_SHA256` は独立に保持した64桁のhead digestへ置き換えます。
+
+## 元契約からの bounded verifier 修正
+
+元 #35 commit `18cc2b027d88c040905a1255d013edea1a04a9c5` の schema とfixture、claims=false / candidate-only境界を保持しています。#178 re-land後の検査で、入力のpathname確認とopenの間の差替え、opaque ID末尾改行、date-time format checkerのoptional依存差、record数の無制限materializationを修正しました。
+
+verifierはsymlink/reparse/hardlinkを拒否し、checked regular fileとopened descriptorのidentityを照合します。NOFOLLOW / NONBLOCKはplatformに存在するときに使用し、bounded read後にdescriptorと最終pathnameのidentity・size・mtimeを再確認します。ctimeはWindowsのlstat/fstat間で異なる意味を持ち得るため、同じdescriptorの前後だけで比較します。owned temporary regular-file swapで検証し、FIFOによるblocking再現は行いません。
+
+JSONLはline iterationで処理し、上限を超える次recordをdecode/materializeする前に`RECORD_LIMIT_EXCEEDED`で拒否します。schema違反は最初の一件で打ち切り、巨大なerror listを作りません。全opaque referenceとdigest fieldはfullmatchでcontrol文字を拒否します。`recorded_at`はstrict UTC syntaxと実在日時をschema前に検査し、optional format checkerの有無にかかわらず`RECORDED_AT_INVALID`を返します。拒否ではcountsによるpositive coverageを返しません。
