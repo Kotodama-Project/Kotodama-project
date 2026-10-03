@@ -33,6 +33,7 @@ except ImportError:  # pragma: no cover - dependency-free installs fail closed
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas" / "public-migration-ledger.schema.json"
 MAX_INPUT_BYTES = 8_388_608
+MAX_JSON_NESTING_DEPTH = 64
 GENESIS_HASH = "0" * 64
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
@@ -113,12 +114,34 @@ def read_bounded(path: Path) -> bytes:
     return raw
 
 
+def reject_excessive_json_nesting(text: str) -> None:
+    """Use an explicit cross-platform bound before the JSON decoder."""
+    depth, in_string, escaped = 0, False, False
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+        elif character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            if depth > MAX_JSON_NESTING_DEPTH:
+                raise ValueError("JSON nesting limit")
+        elif character in "]}":
+            depth -= 1
+
+
 def _parse_lines(raw: bytes) -> list[dict[str, Any]]:
     text = raw.decode("utf-8")
     records: list[dict[str, Any]] = []
     for line in text.splitlines():
         if not line.strip():
             raise ValueError("blank line")
+        reject_excessive_json_nesting(line)
         record = json.loads(line, object_pairs_hook=reject_duplicate_keys)
         if not isinstance(record, dict):
             raise ValueError("record is not an object")

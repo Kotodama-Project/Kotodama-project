@@ -44,6 +44,10 @@
 
 各行は 1 レコードの JSONL です。
 
+入力は最大 8 MiB、各行の JSON nesting は 64 段までです。深さは decoder 前に
+文字列内の括弧と escape を区別して検査し、platform の stack 上限に依存せず
+`REFUSED / INPUT_INVALID` を返します。
+
 - `sequence` は 1 から始まり、欠番なく連続します。
 - `prev_hash` は直前レコードの `content_hash` で、先頭レコードは 64 個の `0` です。
 - `content_hash` は、`content_hash` を除いたレコードを

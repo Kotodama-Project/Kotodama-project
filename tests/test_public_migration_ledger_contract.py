@@ -442,6 +442,14 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         self.assertEqual("REFUSED", payload["result"])
         self.assertIn("INPUT_INVALID", payload["reason_codes"])
 
+    def test_nesting_limit_ignores_quoted_and_escaped_brackets(self) -> None:
+        for content in ['[' * 5000, 'escaped "[{' * 100]:
+            raw = json.dumps({"quoted": content}).encode("utf-8")
+            self.assertEqual(content, validator_module._parse_lines(raw)[0]["quoted"])
+        raw = ('{"nested":' + '[' * validator_module.MAX_JSON_NESTING_DEPTH + '0' + ']' * validator_module.MAX_JSON_NESTING_DEPTH + '}').encode()
+        with self.assertRaises(ValueError):
+            validator_module._parse_lines(raw)
+
     # --- documentation ---------------------------------------------------
 
     def test_documentation_states_the_boundary_and_is_linked(self) -> None:
