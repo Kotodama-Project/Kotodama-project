@@ -17,6 +17,7 @@ Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なと�
 | 小さな成果を検証して学習へ戻す | [5-minute tour](FIVE-MINUTE-TOUR.md)、[Runtime](../runtime/README.md)、[Business Loop](OVERVIEW.md#ai-business-loop) | テスト件数だけでなく成果の有用性、失敗、rollbackと次の改善を確認する |
 | 手元の環境で再現・停止・復旧できる | [Installation lifecycle](INSTALLATION-LIFECYCLE.md)、[Runtime](../runtime/README.md) | 対象profileでinstall、実行、停止、backup/restoreを検証する。構成検査を実稼働としない |
 | 参加者と事業に価値を返す | [Community / Office](OVERVIEW.md#discord-の中に会社を作る)、[Business Loop](OVERVIEW.md#ai-business-loop) | 参加・相談・通報・復旧の体験と、顧客需要や費用を含む成果を実測する |
+| 情報アクセス | [情報の分類と閲覧者](INFORMATION-ACCESS.md)、[Gateway](../runtime/local-review-gateway/README.md) | 情報IDと主体IDでread/reviewを検査し、取消・失効を反映する。分類、custodian、reader、reviewer、公開判断を分離し、未分類とsecretを出さない。local snapshotは身元確認サービスではない |
 | 公開と非公開、権利の範囲を守る | [License scope](LICENSE-SCOPE.md)、[STATUS](../STATUS.md)、[ROADMAP](../ROADMAP.md) | Kotodamaが扱える範囲のMITと第三者条件を区別し、private source・認証・実会話を公開候補へ混ぜない |
 
 これは要件の地図です。各項目が運用済みであることは意味しません。このcheckoutで実行できるものは現在のファイルとSTATUS、実稼働は担当環境の証拠で確認します。新しい正式な決定・訂正があれば、その対象行と根拠を更新します。

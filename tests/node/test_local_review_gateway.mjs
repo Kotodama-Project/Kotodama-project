@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { startReviewGateway, startReviewGatewayFromCli } from "../../runtime/local-review-gateway/server.mjs";
-import { syntheticSeed } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
+import { syntheticSeed, syntheticCatalog } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
 
 function options(stateRoot) {
   return { stateRoot, clientId: "synthetic-client-id", clientSecret: randomBytes(32).toString("hex") };
@@ -47,7 +47,7 @@ test("a store swapped to a symlink while opening is rejected", async (context) =
   let gateway;
   let open;
   try {
-    gateway = await startReviewGateway({ ...config, seeds: [syntheticSeed()] });
+    gateway = await startReviewGateway({ ...config, seeds: syntheticCatalog() });
     await gateway.close();
     gateway = null;
     const path = join(stateRoot, "voice-reviews.json");
@@ -87,7 +87,7 @@ test("default HTTP port accepts canonical Host without binding privileged port",
   let gateway;
   let address;
   try {
-    gateway = await startReviewGateway({ ...config, seeds: [syntheticSeed()] });
+    gateway = await startReviewGateway({ ...config, seeds: syntheticCatalog() });
     const original = NetServer.prototype.address;
     address = context.mock.method(NetServer.prototype, "address", function () {
       const value = original.call(this);
@@ -116,7 +116,7 @@ test("local HTTP review survives restart; another actor and stale writers cannot
   const config = options(stateRoot);
   let gateway;
   try {
-    gateway = await startReviewGateway({ ...config, seeds: [syntheticSeed()] });
+    gateway = await startReviewGateway({ ...config, seeds: syntheticCatalog() });
     const url = `${gateway.origin}/v1/voice/handoffs`;
     const initial = await (await fetch(url, { headers: headers(config) })).json();
     assert.equal(initial.revision, 1);
@@ -155,7 +155,7 @@ test("backend authentication, private keys, malformed UTF-8, duplicate keys and 
   const config = options(stateRoot);
   let gateway;
   try {
-    gateway = await startReviewGateway({ ...config, seeds: [syntheticSeed()] });
+    gateway = await startReviewGateway({ ...config, seeds: syntheticCatalog() });
     const url = `${gateway.origin}/v1/voice/handoffs`;
     assert.equal((await fetch(url, { headers: { "x-kotodama-access-subject": syntheticSeed().actor.subject } })).status, 401);
     assert.equal((await fetch(url, { headers: { ...headers(config), "cf-access-client-secret": "wrong" } })).status, 401);
@@ -176,7 +176,7 @@ test("backend authentication, private keys, malformed UTF-8, duplicate keys and 
     }
     assert.equal((await fetch(`${url}?q=${"x".repeat(257)}`, { headers: headers(config) })).status, 400);
     assert.deepEqual(readFileSync(join(stateRoot, "voice-reviews.json")), before);
-    await assert.rejects(startReviewGateway({ ...config, seeds: [syntheticSeed()] }), /store_locked/);
+    await assert.rejects(startReviewGateway({ ...config, seeds: syntheticCatalog() }), /store_locked/);
   } finally {
     if (gateway) await gateway.close();
     rmSync(stateRoot, { recursive: true, force: true });
@@ -187,12 +187,12 @@ test("startup refuses public bind, untrusted auth, private seeds and a non-direc
   const stateRoot = mkdtempSync(join(tmpdir(), "kotodama-local-review-"));
   try {
     const config = options(stateRoot);
-    await assert.rejects(startReviewGateway({ ...config, host: "0.0.0.0", seeds: [syntheticSeed()] }), /configuration_denied/);
-    await assert.rejects(startReviewGateway({ ...config, clientSecret: "", seeds: [syntheticSeed()] }), /configuration_denied/);
+    await assert.rejects(startReviewGateway({ ...config, host: "0.0.0.0", seeds: syntheticCatalog() }), /configuration_denied/);
+    await assert.rejects(startReviewGateway({ ...config, clientSecret: "", seeds: syntheticCatalog() }), /configuration_denied/);
     const seed = syntheticSeed();
     seed.projection.source_body = "private";
-    await assert.rejects(startReviewGateway({ ...config, seeds: [seed] }), /seed_denied/);
-    await assert.rejects(startReviewGateway({ ...config, stateRoot: join(stateRoot, "missing"), seeds: [syntheticSeed()] }));
+    await assert.rejects(startReviewGateway({ ...config, seeds: syntheticCatalog([seed]) }), /seed_denied/);
+    await assert.rejects(startReviewGateway({ ...config, stateRoot: join(stateRoot, "missing"), seeds: syntheticCatalog() }));
   } finally {
     rmSync(stateRoot, { recursive: true, force: true });
   }
@@ -205,17 +205,17 @@ test("store paths cannot follow directory links or hardlinks; corrupt saved inpu
   try {
     const linkedDirectory = join(stateRoot, "linked-store");
     symlinkSync(external, linkedDirectory, process.platform === "win32" ? "junction" : "dir");
-    await assert.rejects(startReviewGateway({ ...config, stateRoot: linkedDirectory, seeds: [syntheticSeed()] }), /store_path_denied/);
+    await assert.rejects(startReviewGateway({ ...config, stateRoot: linkedDirectory, seeds: syntheticCatalog() }), /store_path_denied/);
     const source = join(external, "control.json");
     writeFileSync(source, "{}", "utf8");
     linkSync(source, join(stateRoot, "voice-reviews.json"));
-    await assert.rejects(startReviewGateway({ ...config, seeds: [syntheticSeed()] }), /store_denied/);
+    await assert.rejects(startReviewGateway({ ...config, seeds: syntheticCatalog() }), /store_denied/);
     assert.equal(readFileSync(source, "utf8"), "{}");
     rmSync(join(stateRoot, "voice-reviews.json"));
-    const gateway = await startReviewGateway({ ...config, seeds: [syntheticSeed()] });
+    const gateway = await startReviewGateway({ ...config, seeds: syntheticCatalog() });
     await gateway.close();
     writeFileSync(join(stateRoot, "voice-reviews.json"), "{malformed", "utf8");
-    await assert.rejects(startReviewGateway({ ...config, seeds: [syntheticSeed()] }));
+    await assert.rejects(startReviewGateway({ ...config, seeds: syntheticCatalog() }));
     assert.equal(readFileSync(join(stateRoot, "voice-reviews.json"), "utf8"), "{malformed");
   } finally {
     rmSync(stateRoot, { recursive: true, force: true });
@@ -232,7 +232,7 @@ test("exact local candidate file import -> HTTP review -> restart preserves the 
   candidate.projection.handoff_id = "manual-candidate-1";
   candidate.projection.overview = "手動で用意した sanitized candidate。";
   const importFile = join(directory, "candidate.json");
-  const bytes = Buffer.from(JSON.stringify([candidate]), "utf8");
+  const bytes = Buffer.from(JSON.stringify(syntheticCatalog([candidate])), "utf8");
   writeFileSync(importFile, bytes);
   const expectedSha256 = createHash("sha256").update(bytes).digest("hex");
   let gateway;
@@ -274,7 +274,7 @@ test("candidate import refuses digest drift, private keys, missing actor, non-pe
   const config = options(stateRoot);
   const importFile = join(directory, "candidate.json");
   const valid = [syntheticSeed()];
-  const encode = (value) => Buffer.from(JSON.stringify(value), "utf8");
+  const encode = (value) => Buffer.from(JSON.stringify(syntheticCatalog(value)), "utf8");
   const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
   const privateCandidate = syntheticSeed();
   privateCandidate.projection.private_transcript = "private-body-must-not-enter-store";
