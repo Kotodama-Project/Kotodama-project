@@ -130,3 +130,8 @@ Task に束縛した SQLite の実行記録です。この公開 JSONL を読み
 常に 0 にすることです。成功集計は schema・参照・receipt binding・event history を含む
 semantic 検証が通った入力だけで行います。それぞれ CLI 回帰試験を追加しました。
 その他の source fields、schema、合成 fixture、authority boundaries は維持しています。
+
+JSON decoder の platform ごとの stack 上限に依存しないよう、各行の parse 前に
+object/array の nesting を 64 段までに制限します。文字列内の括弧と escape は数えません。
+65 段以上は `INPUT_INVALID` です。境界64/65、quoted bracket/escape、depth5000の
+回帰試験で確認します。この明示的な入力上限も固定 source #36 からの追加差分です。

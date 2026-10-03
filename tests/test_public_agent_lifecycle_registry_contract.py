@@ -91,6 +91,27 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
         self.assertIn("RUN_EVIDENCE_UNKNOWN", payload["reason_codes"])
         self.assertEqual(payload["derived_success_count"], 0)
 
+    def test_json_depth_cap_is_checked_before_decoder(self):
+        depth = validator_module.MAX_JSON_DEPTH
+        at_limit = '{"nested":' * depth + '0' + '}' * depth
+        records = validator_module._parse_lines((at_limit + "\n").encode("utf-8"))
+        self.assertEqual(len(records), 1)
+        over_limit = '{"nested":' * (depth + 1) + '0' + '}' * (depth + 1)
+        with self.assertRaisesRegex(ValueError, "nesting exceeds limit"):
+            validator_module._parse_lines((over_limit + "\n").encode("utf-8"))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "depth.jsonl"
+            path.write_text(over_limit + "\n", encoding="utf-8")
+            code, payload = self.run_validator_path(path)
+        self.assertEqual(code, 2)
+        self.assertEqual(payload["reason_codes"], ["INPUT_INVALID"])
+
+    def test_json_depth_guard_ignores_quoted_brackets_and_escapes(self):
+        value = '[{' * 200 + '\\' + '"' + ']}' * 200
+        line = json.dumps({"text": value, "nested": ["\\", '"', "[{}]"]})
+        records = validator_module._parse_lines((line + "\n").encode("utf-8"))
+        self.assertEqual(records, [{"text": value, "nested": ["\\", '"', "[{}]"]}])
+
     def setUp(self) -> None:
         self.records = [
             json.loads(line)

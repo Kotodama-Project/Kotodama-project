@@ -154,11 +154,39 @@ def derived_success(run: dict[str, Any]) -> bool:
     )
 
 
+MAX_JSON_DEPTH = 64
+
+
+def _check_json_depth(line: str) -> None:
+    """Bound decoder nesting while ignoring delimiters inside JSON strings."""
+    depth = 0
+    in_string = False
+    escaped = False
+    for character in line:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+        elif character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            if depth > MAX_JSON_DEPTH:
+                raise ValueError("JSON nesting exceeds limit")
+        elif character in "]}":
+            depth -= 1
+    # JSON syntax and matching delimiters remain the decoder's responsibility.
+
+
 def _parse_lines(raw: bytes) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for line in raw.decode("utf-8").splitlines():
         if not line.strip():
             raise ValueError("blank line")
+        _check_json_depth(line)
         record = json.loads(line, object_pairs_hook=reject_duplicate_keys)
         if not isinstance(record, dict):
             raise ValueError("record is not an object")
