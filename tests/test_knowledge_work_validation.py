@@ -154,6 +154,24 @@ class KnowledgeWorkTests(unittest.TestCase):
         self.assertIsNone(package)
         self.assertNotIn("UNCLASSIFIED_FIXTURE", json.dumps(report))
 
+    def test_downgraded_classification_never_returns_package_even_at_restricted_ceiling(self):
+        self.package["sources"][0]["sensitivity"] = "restricted"
+        self.save()
+        report, package = validator.validate_package(self.root, NOW, ceiling="restricted")
+        self.assertIn("SENSITIVITY_DOWNGRADE", report["errors"])
+        self.assertIsNone(package)
+
+    def test_candidate_requires_source_backed_material_claim(self):
+        for sources in [[], self.package["sources"]]:
+            with self.subTest(has_sources=bool(sources)):
+                self.package["sources"] = sources
+                self.package["claims"] = [{"id": "claim-assumption", "kind": "assumption", "statement": "Unproven fixture hypothesis.", "source_refs": [], "material": False, "sensitivity": "public"}]
+                self.package["assumptions"] = [{"id": "hypothesis", "statement": "Unproven fixture hypothesis.", "claim_refs": ["claim-assumption"]}]
+                self.save()
+                report, package = validator.validate_package(self.root, NOW)
+                self.assertIn("CANDIDATE_INCOMPLETE", report["errors"])
+                self.assertIsNone(package)
+
     def test_related_claims_cannot_be_dropped_under_assumptions_or_contradictions(self):
         optional = copy.deepcopy(self.package["claims"][0])
         optional.update(id="claim-optional", kind="assumption", material=False)

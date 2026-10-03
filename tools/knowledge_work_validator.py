@@ -135,7 +135,7 @@ def validate_package(root: Path, now=None, *, source_root: Path | None = None, c
             raise Refusal("SCHEMA_INVALID")
         declared = [package["sensitivity"], *[item["sensitivity"] for key in ["sources", "claims"] for item in package[key]]]
         if any(SENSITIVITY[value] > SENSITIVITY[package["sensitivity"]] for value in declared):
-            errors.append("SENSITIVITY_DOWNGRADE")
+            raise Refusal("SENSITIVITY_DOWNGRADE")
         # Refuse before reading bound evidence or reporting private identifiers.
         if any(SENSITIVITY[value] > SENSITIVITY[ceiling] for value in declared):
             raise Refusal("SENSITIVITY_CEILING")
@@ -202,7 +202,12 @@ def validate_package(root: Path, now=None, *, source_root: Path | None = None, c
                 errors.append("CRITERION_REF_UNKNOWN")
             elif any(deliverable["id"] not in criteria[c]["deliverable_refs"] for c in refs):
                 errors.append("CRITERION_MAPPING_MISMATCH")
-        if package["state"] == "candidate" and (package["work_ref"] is None or not claims or not criteria or not deliverables):
+        supported_material = any(
+            claim["material"] and claim["kind"] != "assumption" and claim["source_refs"]
+            and set(claim["source_refs"]) <= sources.keys()
+            for claim in claims.values()
+        )
+        if package["state"] == "candidate" and (package["work_ref"] is None or not sources or not supported_material or not criteria or not deliverables):
             errors.append("CANDIDATE_INCOMPLETE")
         review = package["review"]
         if review["state"] == "performed":
@@ -229,9 +234,8 @@ def validate_package(root: Path, now=None, *, source_root: Path | None = None, c
         errors.append(str(error) if isinstance(error, Refusal) else "INPUT_INVALID")
     report["errors"] = sorted(set(errors))
     report["warnings"] = sorted(set(warnings))
-    # Only return a parsed package after schema and sensitivity admission.
-    # Early refusals must not hand unclassified or above-ceiling bodies to API callers.
-    return report, package if report["package_id"] is not None else None
+    # Failed validation never exposes a parsed package to downstream API consumers.
+    return report, package if report["status"] == "PASS" else None
 
 
 def emit(value, format="json"):
