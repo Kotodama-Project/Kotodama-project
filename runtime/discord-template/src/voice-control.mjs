@@ -56,7 +56,7 @@ export class VoiceControl {
       if(mode==='start_conversation'){
         check(room.mode==='assist'&&!this.suspension,'VOICE_CONVERSATION_UNAVAILABLE');
         const session=await room.session(actor);session.conversationActive=true;session.lastHumanInput=Date.now();
-      }else{const session=room.sessions.get(actor);if(session)await room.endSession(session);}
+      }else{const session=room.sessions.get(actor);if(session)await room.endSession(session,{reason:'voice_command'});}
     }else if(mode==='pause'||mode==='leave'){
       this.suspend(mode); // Invalidate before awaiting any pending connection or drain.
       if(mode==='leave'||room.joining)await room.close();else await room.pause();

@@ -2,7 +2,7 @@
 
 Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なときだけ仕事を進める一つの製品です。公開本体を統合・説明・導入の最優先の中心とし、[製品方向](PRODUCT-DIRECTION.md)からgoal、main、candidate、unconnected、hypothesisを確認できます。これはREADMEから実装と検証へ進む入口であり、Taskや会社のCurrent Truthを所有する台帳ではありません。
 
-共通フロントは[公式 Cloudflare OS](CLOUDFLARE-OS-ADOPTION.md)を使う設計です。知識・会話・Task・agent の表示と操作をまとめ、変更は既存の各 governed owner へ返します。BecomeOne は能力の移植元で、移行後は公開 Kotodama の版・内容 digest に固定した consumer とします。接続・画面構成・実配備は未確定で、この方針だけでは新しい正本や実行権限は作りません。
+日常の入口と継続作業は[OpenAI Dotsを第一候補](OPENAI-ALIGNMENT.md)とし、[Discord / Luma用plugin](../runtime/discord-template/dots-plugin/README.md)で必要な窓口をつなぎます。[公式Cloudflare OS](CLOUDFLARE-OS-ADOPTION.md)は専用画面の候補です。変更は既存の各governed ownerへ返します。BecomeOneは能力の移植元で、移行後は公開Kotodamaの版・内容digestに固定したconsumerとします。接続・実配備は未確定で、この方針だけでは新しい正本や実行権限は作りません。
 
 ## 要件と確認する場所
 
@@ -33,8 +33,8 @@ mainには、[#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43)
 |---|---|---|
 | 仕事・文脈の継続 | [#44](https://github.com/Kotodama-Project/Kotodama-project/pull/44) → [#45](https://github.com/Kotodama-Project/Kotodama-project/pull/45) → [#46](https://github.com/Kotodama-Project/Kotodama-project/pull/46) → [#47](https://github.com/Kotodama-Project/Kotodama-project/pull/47) | 前提順にコードと契約だけをmainへ取り込む。日付付きのsnapshotと運用方針の写しは入れない |
 | 知識と検索 | [#48](https://github.com/Kotodama-Project/Kotodama-project/pull/48)、[#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)、[#59](https://github.com/Kotodama-Project/Kotodama-project/pull/59) | 知識基盤の正本はこの系統（2026-09-24 owner判断）。schema適合と、判断に使える根拠・鮮度を分ける |
-| 音声 | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)、[#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) | Node runtime（`runtime/discord-template`）に一本化する（2026-09-24 owner判断）。別runtimeは取り込まず、方針文書とNodeに無い考え方を移す |
-| 並列実行 | [Luna Task swarm](LUNA-TASK-SWARM.md)（[#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67)・[#85](https://github.com/Kotodama-Project/Kotodama-project/pull/85)を統合） | Linux・Windowsの必須CIと独立reviewを通したlocal fixtureの段階。実Codex/Lunaのlive受入は残件。契約候補#34〜#36はこのruntimeとの対応表を付けて取り込む |
+| 音声 | [GPT-Liveの採用方針](GPT-LIVE-ADOPTION.md)、[#142](https://github.com/Kotodama-Project/Kotodama-project/issues/142)〜[#146](https://github.com/Kotodama-Project/Kotodama-project/issues/146) | Node runtime（`runtime/discord-template`）に一本化する（2026-09-24 owner判断）。#69・#71の別runtimeは取り込まず、方針文書だけをNodeに合わせて取り込んだ。Nodeに無い考え方は後継のIssueで進める |
+| 並列実行 | [Luna Task swarm](LUNA-TASK-SWARM.md)（[#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67)・[#85](https://github.com/Kotodama-Project/Kotodama-project/pull/85)を統合） | Linux・Windowsの必須CIと独立reviewを通したlocal fixtureの段階。実Codex/Lunaのlive受入は残件。契約候補[#34](https://github.com/Kotodama-Project/Kotodama-project/pull/34)（agent swarm・route binding）は[このruntimeとの対応表](AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md#luna-task-swarm-との対応)を付けて取り込み済み。#35・#36は同じ方式で取り込む |
 | 別系統のcontrol-plane | [#49](https://github.com/Kotodama-Project/Kotodama-project/pull/49)と後続stack | 競合するOKFの表現を外し、#48の知識bundleにつないで取り込む |
 | 既存能力の移植 | [Migration Epic #24](https://github.com/Kotodama-Project/Kotodama-project/issues/24)、[出典と権利 #25](https://github.com/Kotodama-Project/Kotodama-project/issues/25) | capabilityごとに出典・第三者条件・consumerを確認する。[A022の公開architecture候補](architecture/README.md)はowner・協調・監督・planの契約を再利用する入口（独立review記録、liveは未検証）。[A019のregistry契約候補](../migration/a019-registry-contracts.manifest.json)は[Task契約](../schemas/task-contract.schema.json)など4 schemasの入口（runtime・Task ownerは未統合） |
 

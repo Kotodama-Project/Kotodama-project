@@ -2,6 +2,11 @@
 
 Kotodama adopts two related but distinct Cloudflare planes.
 
+The 2026-09-30 [OpenAI alignment direction](OPENAI-ALIGNMENT.md) makes Dots
+the first candidate for everyday interaction and ongoing work. The frontend
+roles below remain candidates for dedicated views; daily interaction no
+longer requires Cloudflare OS.
+
 | Plane | Adopted role | Current public evidence | Not proven |
 |---|---|---|---|
 | Cloudflare edge | Bounded public ingress and application delivery through Workers and Access | Worker candidate whose every route requires the exact bound preview host and a verified Cloudflare Access JWT: content-free `/healthz` and `/version`, and a bounded Voice review projection (`GET /voice/review`, `POST /voice/review/{id}`) that calls only the configured Context Gateway with an Access service token (required values: [runtime bindings](../runtime/cloudflare-edge/README.md#runtime-bindings)); exact Wrangler binding; manual preview-upload workflow candidate that accepts only the current `main` tip | upload, Access application binding, runtime secret binding, Context Gateway implementation and reachability, route, origin, production traffic, provider log retention, independent review, Public Beta |

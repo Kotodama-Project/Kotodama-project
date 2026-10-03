@@ -717,10 +717,13 @@ def _peer_config(peer: Mapping[str, Any], *, authorize_peer_writes: bool) -> dic
     server_path = Path(__file__).resolve().with_name("mcp_server.py")
     python_env = os.environ.get("TASK_SWARM_PYTHON")
     if python_env:
-        peer_python = Path(python_env).expanduser().resolve(strict=False)
+        peer_python = Path(python_env).expanduser().absolute()
     else:
         candidate = package_root.parent / "venv-peer" / ("Scripts" if os.name == "nt" else "bin") / ("python.exe" if os.name == "nt" else "python")
-        peer_python = candidate if candidate.is_file() else Path(sys.executable).resolve()
+        peer_python = candidate if candidate.is_file() else Path(sys.executable).absolute()
+    # Resolving a POSIX venv's symlink selects the base Python and loses its packages.
+    if not peer_python.is_file() or not os.access(peer_python, os.X_OK):
+        raise BackendError("peer_python_invalid", "peer Python must be an existing executable file", retryable=False)
     args = [
         "-u",
         str(server_path),

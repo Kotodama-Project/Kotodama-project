@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 作成済みOpenAI Dotを日常の入口とする方針と、Discord / Luma用のlocal plugin候補。指定operator/channelの受付、訂正・削除・取消、重複返答の抑止、Luma作成／更新候補の全文確認、一回の操作claimとDot報告を追加。Dots製品・live Bot・Luma websiteの受入、remote MCP Eventsは別途確認する。
+
 - A019 の registry 契約候補（task contract、task decomposition、worker capability catalog、worker result）を、[公開 PR #115](https://github.com/Kotodama-Project/Kotodama-project/pull/115) の固定 head `040a9becf0463e69887f126e30af6d38bdc02988` から再配置。出典表と非公開の元履歴走査 receipt は公開元の歴史的記録として維持し、この候補の独立 review は別 gate で検証する。4 schemas は candidate-only で、runtime や Task owner の統合ではない。追加 review により validator と試験を補強し、manifest・出典表の全階層と著者・履歴件数を固定する（独立 review の許可済み状態のみ別判定）。重複 JSON key、通常・escaped 表記の利用者絶対 path を拒否し、サイズ上限と symlink・reparse point の拒否を読取り前に検査する。
 - BecomeOne の A022 アーキテクチャ候補を再構成: 単一の記録 owner、複数 agent の協調、tool の監督、plan lifecycle の公開契約と、出典表・固定 bytes の validator。公開済み PR #114 の候補を現行 main に合わせ、今回の公開候補への独立 review を履歴証拠と分けて記録（`docs/architecture/README.md`）。
 
@@ -19,6 +21,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - OpenManus を Proxmox 上の限定 executor として評価するための候補: schema、例、読み取り専用の validator（必須の権限 binding と出力、文字列への秘密の混入、不正 UTF-8、空白だけの値を拒否）と試験。配備や採用は含まない（[#55](https://github.com/Kotodama-Project/Kotodama-project/pull/55)）。
 - agent swarm と route binding の契約候補: schema、読み取り専用の preflight、否定の試験。main の Luna Task swarm との対応表を付けた（[#34](https://github.com/Kotodama-Project/Kotodama-project/pull/34)）。
 - BecomeOne から移植した階層テンプレート（A017: project / phase / requirement / plan / task と session context）。移植元の固定 commit・作者の GitHub handle・ライセンスを載せた出典表（`migration/a017-hierarchy-templates.provenance.json`）と、Issue #25 の owner 判断・非公開の元履歴走査 receipt・独立 review による受入の記録を付けた（[#27](https://github.com/Kotodama-Project/Kotodama-project/pull/27) を main に合わせて取り込み）。
+- GPT-Live の採用方針（`docs/GPT-LIVE-ADOPTION.md`）: [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) の方針文書だけを日本語で書き直し、main の Node runtime（`runtime/discord-template`）の現状に合わせて取り込んだ。#71・#69 の別 runtime は取り込まず、Node に無い考え方は #142〜#146 で扱う。candidate-only で、実 VC の受入ではない。
 
 ### Changed
 
@@ -33,6 +36,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- Discordテンプレートの`doctor`を改善: pnpmの固定版とffmpeg、Linux専用の書込みworkerの前提を確認し、不足する項目と次の手順を日本語で表示。道具の確認に待ち時間・出力上限を設け、macOSをLinux用workerの対応OSと表示しない。`--json`は従来の項目を保持する（[#155](https://github.com/Kotodama-Project/Kotodama-project/issues/155)の導入準備）。
+- Luna Task swarm の peer MCP server が POSIX の仮想環境の symlink を辿って環境外の Python を選ぶ不具合を修正。既存の interpreter 選択順を保持し、不正な指定は Codex の起動前に拒否する（[#184](https://github.com/Kotodama-Project/Kotodama-project/issues/184)）。
 - A017・A022 の移植 validator で、manifest・出典表の固定内容と履歴 receipt digest を照合し、重複 JSON 項目・非有限数・通常のエスケープを含む Windows 個人 path を拒否。親を含む symlink・reparse point の拒否と上限付き読取りを統一。A017 の集計は検査済み bytes を使い、上限なしの再読取りを除いた（[#172](https://github.com/Kotodama-Project/Kotodama-project/issues/172)）。公開本文・出典表・過去の受入記録は変更せず、この validator 修正の review は別に行う。
 - Cloudflare edge の preview upload は、退役した作業 branch ではなく現在の `main` の先頭 commit だけを受け付ける（手動起動・Environment 承認は従来どおり）。候補検証 workflow は `main` への push でも走る。Cloudflare の説明文から古い「draft」表記を直した。
 - 別のサーバーや別の Voice channel での入退室・ミュート切替で、Bot の返答が止まっていた（[#91](https://github.com/Kotodama-Project/Kotodama-project/issues/91)）。
@@ -41,6 +46,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - CodeQL の指摘 2 件（成果ファイル読込みの確認と使用の間の競合、検証テストのコード組立て）（[#99](https://github.com/Kotodama-Project/Kotodama-project/pull/99)）。
 - Task swarm が Windows で失敗していた（ディレクトリ一覧の link 数を信用して既存 payload を拒否、SQLite 接続の閉じ忘れ）。
 - Windows の CI で Chocolatey の配布元が一時的に 406 を返すと、ffmpeg が入らないまま導入の step が成功扱いになり、後の音声の試験が失敗していた。導入を 3 回まで試し、それでも無ければ導入の step で止める。
+- Discord の音声会話で、一度返答した後の続きの質問に答えなくなる経路を直した。Live の命令が 1 件拒否されただけでは会話を閉じず、最後まで再生した返答のたびに停止の指示を Live へ送らず、Live の文字起こしでも会話の続きであることを返答の判断に渡す。原因を絞るため、本文・音声・Discord の ID を含まない診断記録を足した（`runtime/discord-template/docs/OPERATIONS.md`）。実マイクでの連続応答は未確認（[#147](https://github.com/Kotodama-Project/Kotodama-project/issues/147)）。
 
 ## [0.1.0-preview] - 2026-09-14
 

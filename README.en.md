@@ -11,7 +11,7 @@ The Japanese [README.md](README.md) is the canonical entry point. This page is a
 
 Kotodama detects intent in conversation, voice, issues, and documents, confirms only the requirements that are missing, decomposes the work, keeps results and verification evidence, lets an authority decide adoption, and returns the learning to the company. The parts are the Evidence Chain, Company Packs, a Context Platform, an AI workforce, and a deployment foundation on Cloudflare edge plus the official Cloudflare OS.
 
-The official Cloudflare OS is the planned shared frontend for knowledge, conversation, Tasks, and agents. Operations return to their existing governed owners; connection details, UI composition, and deployment remain subject to design and validation.
+The 2026-09-30 [OpenAI alignment direction](docs/OPENAI-ALIGNMENT.md) makes Dots the first candidate for everyday interaction and ongoing work. Kotodama keeps knowledge, permissions, corrections, Tasks, and verification with their existing governed owners. Cloudflare edge and official Cloudflare OS remain candidates for connectivity and dedicated views; live integration and deployment require validation.
 
 You choose how to use it:
 
@@ -37,8 +37,8 @@ On Windows PowerShell, use `python` instead of `python3`. A success prints one l
 |---|---|---|---|
 | Company Pack / Evidence Chain | starter with 9 Blocks, 9 Records, 3 MOCs; schemas, validators, review chain, smoke | | Promotion policy per lane |
 | Session / conversation ledger | schema and validator | | runtime ingestion |
-| Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | #69 and #71 (not taken in as separate runtimes; their ideas move into this Node runtime) | 15-minute rotation, Voice-to-Verified-Handoff, GrillU |
-| Agent swarm / autonomy | bounded Task execution, Luna Task swarm | swarm, route-binding, migration-ledger, and agent-lifecycle contracts (#34 to #36) | Goal Completion Loop after a human GO |
+| Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | | 15-minute rotation, Voice-to-Verified-Handoff, GrillU, the rest of the [GPT-Live adoption policy](docs/GPT-LIVE-ADOPTION.md) (#142 to #146) |
+| Agent swarm / autonomy | bounded Task execution, Luna Task swarm, swarm and route-binding contracts (#34) | migration-ledger and agent-lifecycle contracts (#35, #36) | Goal Completion Loop after a human GO |
 | Knowledge / Context | | OKF v0.2 knowledge bundle (#48, #61, #59, chosen as the canonical line), control plane (#49 line) | Context Gateway, TiDB evaluation |
 | Runtime | Compose / Proxmox lifecycle contracts, Cloudflare candidates | | deployment on Cloudflare edge and the official Cloudflare OS |
 

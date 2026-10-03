@@ -9,6 +9,9 @@ import {resultFiles} from './result-files.mjs';
 
 export const commandDefinition={name:'kotodama',description:'ことだまに相談・依頼し、仕事と音声を操作します',options:[
   {type:1,name:'ask',description:'相談する',options:[{type:3,name:'text',description:'知りたいこと',required:true}]},
+  {type:1,name:'dots',description:'作成済みのDotへ相談する（返答はDM）',options:[{type:3,name:'text',description:'Dotへの相談・イベントの依頼',required:true}]},
+  {type:1,name:'dots_stop',description:'Dot宛の受付を取消す',options:[{type:3,name:'request',description:'Dot宛の受付ID',required:true}]},
+  {type:1,name:'luma_review',description:'Lumaの内容確認を自分だけに再表示する',options:[{type:3,name:'draft',description:'Luma候補のID（省略時は最新）',required:false}]},
   {type:1,name:'do',description:'許可範囲で仕事を実行する',options:[{type:3,name:'action',description:'仕事の種類',required:true,choices:['research','summarize','write_file','develop'].map(v=>({name:v,value:v}))},{type:3,name:'text',description:'やってほしいこと',required:true}]},
   {type:1,name:'tasks',description:'自分の仕事を見る'},
   {type:1,name:'consent',description:'音声処理の運用と、自分の停止設定を確認する'},
@@ -29,8 +32,8 @@ export function deferredAnalysisText(reason){
 export function accessFailure(error){const status=error?.status;return Number.isInteger(status)&&status>=400&&status<500&&status!==429?'denied':'unavailable';}
 
 export class DiscordAdapter {
-  constructor({config,store,pipeline,policy=()=>config,onError=()=>{}}){
-    Object.assign(this,{config,store,pipeline,policy,onError});this.voice=null;this.verifiedInstallation=false;
+  constructor({config,store,pipeline,dots,policy=()=>config,onError=()=>{}}){
+    Object.assign(this,{config,store,pipeline,dots,policy,onError});this.voice=null;this.verifiedInstallation=false;
     this.notifications=store.db?new NotificationQueue(store.db,()=>this.policy().notifications?.quietHours,{onError}):null;
     this.client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent,GatewayIntentBits.GuildVoiceStates]});
     this.client.on('messageCreate',m=>this.message(m).catch(e=>onError(errorCode(e))));
@@ -120,6 +123,11 @@ export class DiscordAdapter {
     const forBot=mentioned||(agentChannel&&!edited&&!others);
     const addressed=operator&&forBot;
     source.metadata.directlyAddressed=operator&&mentioned;if(agentChannel)source.metadata.agentChannel=true;
+    if(cfg.dots?.enabled&&cfg.dots.channelIds.includes(message.channelId)&&message.author.id===cfg.dots.actorId){
+      if(edited){this.store.ingest(source);return;}
+      if(addressed){const request=this.dots.enqueue(source);if(request.created)await message.reply({content:`Dotへの相談を受け付けました。${cfg.dots.replyMode==='dm'?'返答はDMへ届けます。':'このチャンネルへ返答します。'}\nID: ${request.id}`,allowedMentions:{parse:[]}});}
+      return;
+    }
     await this.pipeline.ingest(source,{execute:addressed,reply:addressed});
   }
   // Immediate DM to the requester when conversation became running work; the result follows on completion.
@@ -131,14 +139,26 @@ export class DiscordAdapter {
     const user=await this.client.users.fetch(task.actor);const message=await user.send({content:shortText(text),allowedMentions:{parse:[]}});
     check(message?.id,'NOTIFICATION_SEND_UNCONFIRMED');return {state:'sent'};
   }
-  async withdraw(message){if(!this.verifiedInstallation)return;if(message.guildId!==this.config.discord.guildId)return;const key=sourceIdentity({provider:'discord',guildId:message.guildId,channelId:message.channelId,sourceId:message.id});const old=this.store.sourceInternal(key);if(old)await this.pipeline.ingest({...old,revision:Math.max(Date.now(),old.revision+1),text:'',withdrawn:true,metadata:{...old.metadata,withdrawalActorUnknown:true}},{execute:false});}
+  async withdraw(message){
+    if(!this.verifiedInstallation||message.guildId!==this.config.discord.guildId)return;
+    const key=sourceIdentity({provider:'discord',guildId:message.guildId,channelId:message.channelId,sourceId:message.id}),old=this.store.sourceInternal(key);if(!old)return;
+    const withdrawn={...old,revision:Math.max(Date.now(),old.revision+1),text:'',withdrawn:true,metadata:{...old.metadata,withdrawalActorUnknown:true}};
+    // Dot transport Sources are local caches. Withdrawal must survive an
+    // unavailable remote Task owner; it does not write a second Task owner.
+    if(this.dots&&old.actorId===this.dots.config.dots.actorId)this.store.ingest(withdrawn);
+    await this.pipeline.ingest(withdrawn,{execute:false});
+  }
   interactionSource(i,text){return {provider:'discord',guildId:i.guildId,channelId:i.channelId,sourceId:i.id,actorId:i.user.id,readers:[i.user.id],revision:i.createdTimestamp,final:true,text,metadata:{kind:'command'}};}
   async interaction(i){
+    if(this.verifiedInstallation&&i.isButton?.()&&i.customId.startsWith('kotodama-luma:')){await i.deferReply({flags:MessageFlags.Ephemeral});try{check(this.dots,'DOTS_DISABLED');const [,id,prefix]=i.customId.split(':');const draft=await this.dots.approve(id,prefix,i.user.id);await i.editReply({content:`この内容でのLuma操作を許可しました。5分以内の一回に限ります。\n${draft.id}`,allowedMentions:{parse:[]}});}catch(e){await i.editReply({content:`確認できませんでした：${errorCode(e)}`,allowedMentions:{parse:[]}});}return;}
     if(this.verifiedInstallation&&i.guildId===this.config.discord.guildId&&(i.isButton?.()&&i.customId.startsWith('kotodama-consent:')||i.isChatInputCommand()&&i.commandName==='kotodama'&&i.options.getSubcommand()==='consent')){await this.consentInteraction(i);return;}
     if(!this.verifiedInstallation||!i.isChatInputCommand()||i.commandName!=='kotodama'||i.guildId!==this.config.discord.guildId)return;
     await i.deferReply({flags:MessageFlags.Ephemeral});
     try{this.operator(i.user.id);await this.member(i.user.id);const sub=i.options.getSubcommand();let text;
-      if(sub==='do'){const request=i.options.getString('text',true),action=i.options.getString('action',true);const t=await this.pipeline.request(this.interactionSource(i,request),{title:request.slice(0,120),request,action});text=`受け付けました。\n${t.id}\n結果はこの仕事の「result」で確認できます。`;}
+      if(sub==='dots'){check(this.dots,'DOTS_DISABLED');const source=this.interactionSource(i,i.options.getString('text',true));const request=this.dots.enqueue(source);text=`Dotへの相談を受け付けました。返答はDMへ届けます。\nID: ${request.id}`;}
+      else if(sub==='dots_stop'){check(this.dots,'DOTS_DISABLED');await this.dots.cancel(i.options.getString('request',true),i.user.id);text='この受付の返答・新しいイベント操作を止めました。Dotの別の作業は、ChatGPTのActivityで確認・停止してください。';}
+      else if(sub==='luma_review'){check(this.dots&&this.policy().dots.actorId===i.user.id,'DOTS_ACTOR_REQUIRED');const id=i.options.getString('draft')??this.store.db.prepare("SELECT d.id FROM dot_event_drafts d JOIN dot_requests r ON r.id=d.request_id WHERE r.actor=? AND d.state IN ('needs_review','approved') ORDER BY d.rowid DESC LIMIT 1").get(i.user.id)?.id;check(id,'LUMA_DRAFT_NOT_FOUND');const draft=await this.dots.readDraft(id);check(['needs_review','approved'].includes(draft.state),'LUMA_OPERATION_ALREADY_STARTED');await i.editReply(this.dots.reviewMessage(draft));return;}
+      else if(sub==='do'){const request=i.options.getString('text',true),action=i.options.getString('action',true);const t=await this.pipeline.request(this.interactionSource(i,request),{title:request.slice(0,120),request,action});text=`受け付けました。\n${t.id}\n結果はこの仕事の「result」で確認できます。`;}
       else if(sub==='ask'){const source=this.interactionSource(i,i.options.getString('text',true));source.metadata.operation='ask';const receipt=await this.pipeline.ingest(source,{execute:false,reply:false});for(const b of receipt.contextSources??[]){const s=this.store.source(b.key,i.user.id);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord'){const channel=await this.client.channels.fetch(s.channelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}}text=receipt.analysis==='deferred'?deferredAnalysisText(receipt.reason):receipt.answer??receipt.summary??'整理しました。';}
       else if(sub==='tasks'){const tasks=await this.pipeline.owner.tasks(i.user.id);const visible=[];for(const task of tasks)try{await this.pipeline.authorize(task,'read_result');visible.push(task);}catch{}text=visible.slice(0,15).map(t=>`${t.id} · ${taskStateText(t.state)}\n${t.title}`).join('\n')||'読取可能な仕事はまだありません。';}
       else if(sub==='result'){const result=await this.pipeline.result(i.options.getString('task',true),i.user.id);const files=await resultFiles(result,{artifactRoot:this.artifactRoot()});await i.editReply({content:shortText(result.summary),files,allowedMentions:{parse:[]}});return;}
@@ -153,7 +173,7 @@ export class DiscordAdapter {
   async consentInteraction(i){
     await i.deferReply({flags:MessageFlags.Ephemeral});
     try{const cfg=this.policy();check(cfg.discord.voiceChannelId,'VOICE_CHANNEL_REQUIRED');const notice=voiceNotice(cfg);const revoke=i.isButton?.()&&i.customId.startsWith('kotodama-consent:revoke:');if(!revoke){const channel=await this.client.channels.fetch(cfg.discord.voiceChannelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}
-      if(i.isButton?.()){const [,action,noticeId]=i.customId.split(':');check(['agree','revoke'].includes(action)&&(action==='revoke'||noticeId===notice.id),'CONSENT_NOTICE_CHANGED');this.store.recordConsent({guild:cfg.discord.guildId,channel:cfg.discord.voiceChannelId,actor:i.user.id,notice:notice.id,granted:action==='agree',interactionId:i.id});if(action==='revoke'){await this.voice?.stopSpeech();const session=this.voice?.sessions.get(i.user.id);if(session)await this.voice.endSession(session,{drain:false});}}
+      if(i.isButton?.()){const [,action,noticeId]=i.customId.split(':');check(['agree','revoke'].includes(action)&&(action==='revoke'||noticeId===notice.id),'CONSENT_NOTICE_CHANGED');this.store.recordConsent({guild:cfg.discord.guildId,channel:cfg.discord.voiceChannelId,actor:i.user.id,notice:notice.id,granted:action==='agree',interactionId:i.id});if(action==='revoke'){await this.voice?.stopSpeech();const session=this.voice?.sessions.get(i.user.id);if(session)await this.voice.endSession(session,{drain:false,reason:'consent_revoked'});}}
       void this.voice?.control.check();
       const granted=this.store.consent(cfg.discord.guildId,cfg.discord.voiceChannelId,i.user.id,notice.id),managed=cfg.voice.consentMode==='owner_managed',optedOut=this.store.voiceOptedOut(cfg.discord.guildId,cfg.discord.voiceChannelId,i.user.id);
       const status=managed?(optedOut?'本人の希望で停止中':cfg.voice.participantIds.includes(i.user.id)?'人間側が管理する処理対象':'処理対象外'):(granted?'同意済み':'未同意');

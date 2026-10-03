@@ -4,7 +4,9 @@ Kotodamaは一つの製品です。公開のKotodama-projectを、製品統合�
 
 ## 2026-09-14 の補足
 
-「楽しく過ごし、一緒に考え、必要なときだけ仕事を進める」は、Voice channel でそのモードを選んだときの体験を指します。製品の本体は、Cloudflare edge と公式 Cloudflare OS を基盤とする設計、Company OS、Evidence Chain を含めて徹底して作ることで、矛盾を残さずに選択肢を増やしていきます。最も大切な体験は、人が「OK」と言った後に、agent swarm が許可された範囲でやりたいことを自律的に進めることです。カジュアルな場面でも同じ仕組みを使いたいことがある、という位置づけであり、カジュアル利用を製品の中心にする意味ではありません。
+2026-09-30の入口・継続作業の方針は[OpenAIへの適合方針](OPENAI-ALIGNMENT.md)で更新しました。Dotsを第一候補として、Discord BotとLumaイベントを接続する方向です。以下のCompany OS全体と既存ownerを守る目的は維持します。
+
+「楽しく過ごし、一緒に考え、必要なときだけ仕事を進める」は、Voice channelでそのモードを選んだときの体験を指します。製品の本体はCompany OS、Evidence Chain、既存の各ownerを含めて徹底して作ることです。2026-09-30以降の入口と継続作業はDotsを第一候補とし、Cloudflare edgeと公式Cloudflare OSは接続・専用画面の候補として使います。最も大切な体験は、人が「OK」と言った後にagentが許可された範囲でやりたいことを自律的に進めることです。カジュアルな場面でも同じ仕組みを使えますが、カジュアル利用だけを製品の中心にはしません。
 
 ## 選べる体験
 
@@ -46,8 +48,8 @@ localとcloudの双方を認めます。Tailscaleはprivate接続の強い候補
 | OKF適合と判断readyの分離 | candidate | [#61](https://github.com/Kotodama-Project/Kotodama-project/pull/61)。#48系の一部として取り込む予定。構造PASSは内容・権限・意思決定の証明ではない |
 | 診断／Knowledge Work合流 | candidate | [#64](https://github.com/Kotodama-Project/Kotodama-project/pull/64)。#48の知識bundleにつないで取り込む予定。読取診断の候補。GUI、live observer、実Work接続は未受入 |
 | 専門agent協調 | main | [Luna Task swarm](LUNA-TASK-SWARM.md)。#67と#85の修復を統合し、Linux・Windowsの必須CIでoffline fixtureを確認。実Codex/Lunaのlive受入は未実施。全利用の必須構成にしない |
-| room別Live／workspace | goal | [#69](https://github.com/Kotodama-Project/Kotodama-project/pull/69)の考え方をNode runtimeへ移す（別runtimeは取り込まない、2026-09-24 owner判断）。Source/Task/mediaの実接続は未受入 |
-| 静音Liveと会話制御 | goal | [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71)の方針文書を取り込み、継続発話、退出と仕事の分離をNode runtimeで検証する |
+| room別Live／workspace | goal | 複数VCの同時運用は[#142](https://github.com/Kotodama-Project/Kotodama-project/issues/142)、チャンネル別の作業場は[#143](https://github.com/Kotodama-Project/Kotodama-project/issues/143)でNode runtimeへ移す（#69の別runtimeは取り込まない、2026-09-24 owner判断）。Source/Task/mediaの実接続は未受入 |
+| 静音Liveと会話制御 | goal | [GPT-Liveの採用方針](GPT-LIVE-ADOPTION.md)（#71の方針文書をNode runtimeに合わせて取り込み）。静かな進捗は[#144](https://github.com/Kotodama-Project/Kotodama-project/issues/144)、確認の方針は[#145](https://github.com/Kotodama-Project/Kotodama-project/issues/145)。継続発話、退出と仕事の分離をNode runtimeで検証する |
 | Slack／Salesforce | unconnected | #70／#77。公開mainで接続済みとはしない |
 | 自発参加／native UI統合 | goal | 個別候補があっても、同じ実会話での統合受入は未達 |
 | object情報からCRM体験を構成 | hypothesis | 対象用途・権限・同期方向・人向け表示の実証が必要 |

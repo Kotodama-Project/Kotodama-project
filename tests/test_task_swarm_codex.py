@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 import textwrap
+from types import SimpleNamespace
+import venv
 
 try:
     import pytest
@@ -17,6 +21,7 @@ if str(RUNTIME) not in sys.path:
     sys.path.insert(0, str(RUNTIME))
 
 from task_swarm.codex import BackendError, CodexBackend, _build_command
+import task_swarm.codex as codex
 
 
 THREAD = "11111111-1111-4111-8111-111111111111"
@@ -176,6 +181,92 @@ def test_peer_command_contains_exact_tools_and_write_opt_in(tmp_path: Path) -> N
     assert not any("tools.peer_send.approval_mode" in item for item in readonly)
     assert any("tools.peer_send.approval_mode" in item for item in enabled)
     assert "--dangerously-bypass-approvals-and-sandbox" not in enabled
+
+
+@pytest.fixture
+def peer_startup(tmp_path, monkeypatch):
+    monkeypatch.delenv("TASK_SWARM_PYTHON", raising=False)
+    monkeypatch.setattr(codex, "__file__", str(tmp_path / "repo/runtime/task_swarm/codex.py"))
+    owner = SimpleNamespace(
+        task_id="task-1",
+        read_binding=lambda task, actor: {"epoch": 1, "invocation_ref": "invocation-a"},
+        storage=lambda: {},
+    )
+    monkeypatch.setattr(codex, "OwnerFile", lambda binding: owner)
+    return {"binding": str(tmp_path / "owner.json"), "actor": "actor-a", "epoch": 1, "invocation": "invocation-a"}
+
+
+@pytest.mark.parametrize("selection", ["default", "environment"])
+def test_peer_python_preserves_venv_and_its_installed_packages(tmp_path, monkeypatch, peer_startup, selection):
+    environment = tmp_path / "peer-venv"
+    venv.EnvBuilder(with_pip=False, symlinks=os.name != "nt").create(environment)
+    executable = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if os.name != "nt":
+        assert executable.is_symlink(), "POSIX regression must exercise a symlinked venv interpreter"
+    child_env = {key: value for key, value in os.environ.items() if key not in {"PYTHONHOME", "PYTHONPATH"}}
+    site = subprocess.run(
+        [str(executable), "-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
+        check=True, capture_output=True, text=True, timeout=30, env=child_env,
+    ).stdout.strip()
+    Path(site, "peer_fixture_dependency.py").write_text("MARKER = 'venv-only'\n", encoding="utf-8")
+    alias = tmp_path / "venv-alias"
+    if os.name == "nt":
+        import _winapi
+        _winapi.CreateJunction(str(environment), str(alias))
+    else:
+        alias.symlink_to(environment, target_is_directory=True)
+    selected = alias / executable.relative_to(environment)
+    if selection == "environment":
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("TASK_SWARM_PYTHON", str(selected.relative_to(tmp_path)))
+    else:
+        monkeypatch.setattr(codex.sys, "executable", str(selected))
+    config = codex._peer_config(peer_startup, authorize_peer_writes=False)
+    assert config["command"] == str(selected.absolute())
+    child = subprocess.run(
+        [config["command"], "-c", "import peer_fixture_dependency as p; print(p.MARKER)"],
+        check=True, capture_output=True, text=True, timeout=30, env=child_env,
+    )
+    assert child.stdout.strip() == "venv-only"
+
+
+def test_peer_python_selection_keeps_existing_precedence(tmp_path, monkeypatch, peer_startup):
+    candidate = tmp_path / "repo/venv-peer" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    candidate.parent.mkdir(parents=True)
+    candidate.write_bytes(b"fixture")
+    candidate.chmod(0o755)
+    assert codex._peer_config(peer_startup, authorize_peer_writes=False)["command"] == str(candidate)
+    monkeypatch.setenv("TASK_SWARM_PYTHON", sys.executable)
+    assert codex._peer_config(peer_startup, authorize_peer_writes=False)["command"] == str(Path(sys.executable).absolute())
+
+
+def test_peer_python_requires_os_execute_permission(monkeypatch, peer_startup):
+    monkeypatch.setattr(codex.os, "access", lambda path, mode: False)
+    with pytest.raises(BackendError) as raised:
+        codex._peer_config(peer_startup, authorize_peer_writes=False)
+    assert raised.value.code == "peer_python_invalid"
+    assert raised.value.retryable is False
+
+
+@pytest.mark.parametrize("selection", ["default", "environment"])
+@pytest.mark.parametrize("kind", ["missing", "directory"])
+def test_invalid_peer_python_is_refused_before_codex_start(tmp_path, monkeypatch, peer_startup, selection, kind):
+    selected = tmp_path / "invalid-python"
+    if kind == "directory":
+        selected.mkdir()
+    if selection == "environment":
+        monkeypatch.setenv("TASK_SWARM_PYTHON", str(selected))
+    else:
+        monkeypatch.setattr(codex.sys, "executable", str(selected))
+
+    def unexpected_start(*args, **kwargs):
+        pytest.fail("invalid peer interpreter must be rejected before starting Codex")
+
+    monkeypatch.setattr(codex.subprocess, "Popen", unexpected_start)
+    with pytest.raises(BackendError) as raised:
+        CodexBackend("unused-codex").invoke("fixture", SCHEMA, tmp_path / "attempts", peer=peer_startup)
+    assert raised.value.code == "peer_python_invalid"
+    assert raised.value.retryable is False
 
 
 FREE_SCHEMA = {
