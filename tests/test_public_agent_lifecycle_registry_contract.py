@@ -112,6 +112,32 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
         records = validator_module._parse_lines((line + "\n").encode("utf-8"))
         self.assertEqual(records, [{"text": value, "nested": ["\\", '"', "[{}]"]}])
 
+    def test_later_instance_observation_cannot_expand_prior_run_budget(self):
+        records = copy.deepcopy(self.records)
+        original = next(r for r in records if r["kind"] == "agent_spec" and r["spec_ref"] == "ref/spec/orchestrator")
+        original["max_fan_out"] = 2
+        expanded = copy.deepcopy(original)
+        expanded.update(record_id="ref/record/expanded-spec", spec_ref="ref/spec/expanded", max_fan_out=4)
+        later = next(r for r in reversed(records) if r["kind"] == "agent_instance" and r["instance_ref"] == "ref/instance/root")
+        later["spec_ref"] = expanded["spec_ref"]
+        records.insert(records.index(later), expanded)
+        for record in records:
+            record["recorded_at"] = "2026-08-24T00:00:00Z"
+        self.assert_refused(self.rechain(records), "FAN_OUT_BUDGET_EXCEEDED")
+
+    def test_terminal_event_cannot_precede_its_earlier_subject_events(self):
+        for run_ref in ("ref/run/root-1", "ref/run/worker-b-1"):
+            with self.subTest(run_ref=run_ref):
+                records = copy.deepcopy(self.records)
+                terminal = next(r for r in records if r["kind"] == "run_event" and r["run_ref"] == run_ref
+                                and r["to_state"] in {"completed", "failed"})
+                records.remove(terminal)
+                first = next(i for i, r in enumerate(records) if r["kind"] == "run_event" and r["run_ref"] == run_ref)
+                records.insert(first, terminal)
+                for record in records:
+                    record["recorded_at"] = "2026-08-24T00:00:00Z"
+                self.assert_refused(self.rechain(records), "EVENT_APPEND_ORDER_MISMATCH")
+
     def setUp(self) -> None:
         self.records = [
             json.loads(line)

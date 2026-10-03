@@ -328,13 +328,24 @@ def _outcome_reasons(grouped: dict[str, list[dict[str, Any]]]) -> list[str]:
 def _budget_reasons(grouped: dict[str, list[dict[str, Any]]]) -> list[str]:
     reasons: list[str] = []
     specs = {r["spec_ref"]: r for r in grouped["agent_spec"]}
-    instances = {r["instance_ref"]: r for r in grouped["agent_instance"]}
+    def applicable_spec(run: dict[str, Any]) -> dict[str, Any] | None:
+        observations = [instance for instance in grouped["agent_instance"]
+                        if instance["instance_ref"] == run["instance_ref"]
+                        and instance["sequence"] < run["sequence"]]
+        if not observations:
+            reasons.append("RUN_WITHOUT_PRIOR_INSTANCE_OBSERVATION")
+            return None
+        instance = max(observations, key=lambda record: record["sequence"])
+        spec = specs.get(instance["spec_ref"])
+        if spec is not None and spec["sequence"] >= instance["sequence"]:
+            reasons.append("INSTANCE_WITHOUT_PRIOR_SPEC")
+            return None
+        return spec
     runs = {r["run_ref"]: r for r in grouped["agent_run"]}
     children: Counter[str] = Counter()
 
     for run in grouped["agent_run"]:
-        instance = instances.get(run["instance_ref"])
-        spec = specs.get(instance["spec_ref"]) if instance else None
+        spec = applicable_spec(run)
         if spec is not None and run["depth"] > spec["max_depth"]:
             reasons.append("DEPTH_BUDGET_EXCEEDED")
 
@@ -351,8 +362,7 @@ def _budget_reasons(grouped: dict[str, list[dict[str, Any]]]) -> list[str]:
 
     for parent_ref, count in children.items():
         parent = runs[parent_ref]
-        instance = instances.get(parent["instance_ref"])
-        spec = specs.get(instance["spec_ref"]) if instance else None
+        spec = applicable_spec(parent)
         if spec is not None and count > spec["max_fan_out"]:
             reasons.append("FAN_OUT_BUDGET_EXCEEDED")
     return reasons
@@ -379,6 +389,10 @@ def _idempotency_reasons(grouped: dict[str, list[dict[str, Any]]]) -> list[str]:
             terminal_events = [event for event in events[previous["run_ref"]]
                                if event["to_state"] in {"failed", "cancelled", "expired"}]
             current_events = events[current["run_ref"]]
+            predecessor_events = sorted(events[previous["run_ref"]], key=lambda event: event["subject_sequence"])
+            if any(left["sequence"] >= right["sequence"]
+                   for left, right in zip(predecessor_events, predecessor_events[1:])):
+                reasons.append("RETRY_PREDECESSOR_EVENT_ORDER_INVALID")
             # Envelope sequence is the append order; recorded_at is also
             # checked for monotonicity. Final run snapshots cannot prove that
             # the predecessor had terminated when the retry began.
@@ -407,6 +421,9 @@ def _event_reasons(grouped: dict[str, list[dict[str, Any]]]) -> list[str]:
         ordered = sorted(events, key=lambda e: e["subject_sequence"])
         if [e["subject_sequence"] for e in ordered] != list(range(1, len(ordered) + 1)):
             reasons.append("SUBJECT_SEQUENCE_NOT_CONTIGUOUS")
+        if any(left["sequence"] >= right["sequence"]
+               for left, right in zip(ordered, ordered[1:])):
+            reasons.append("EVENT_APPEND_ORDER_MISMATCH")
         state: str | None = None
         for event in ordered:
             if event["from_state"] != state:

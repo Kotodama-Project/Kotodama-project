@@ -135,3 +135,10 @@ JSON decoder の platform ごとの stack 上限に依存しないよう、各�
 object/array の nesting を 64 段までに制限します。文字列内の括弧と escape は数えません。
 65 段以上は `INPUT_INVALID` です。境界64/65、quoted bracket/escape、depth5000の
 回帰試験で確認します。この明示的な入力上限も固定 source #36 からの追加差分です。
+
+追加 review では、budget を run の append sequence より前の最後の instance observation と、
+その observation より前の spec に束縛しました。後の観測による cap 拡大を過去の run に
+遡及適用しません。先行 observation/spec が無い場合は拒否します。また run_event の
+subject sequence と envelope append sequence の順序を一致させ、retry の前 attempt にも
+この順序を要求します。同時刻 metadata の終端先行と、後の spec 切替による budget 緩和を
+CLI 負例で検証しました。これらも固定 source #36 からの明示的な差分です。
