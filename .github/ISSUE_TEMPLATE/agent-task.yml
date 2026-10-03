@@ -1,0 +1,77 @@
+name: エージェントへの作業依頼 / Agent task
+description: 目的・担当・手順・検証・停止条件が明確な作業を委任する
+title: "[Agent] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        着手前に [作業ガイド #118](https://github.com/Kotodama-Project/Kotodama-project/issues/118) と [委任インデックス #117](https://github.com/Kotodama-Project/Kotodama-project/issues/117)、対象の AGENTS.md を読んでください。
+        Issue は作業候補です。作成だけで実行権限、採用、Promotion、Current Truth は生まれません。
+        credential、private host・絶対 path、個人情報、実際の会話・音声を書かないでください。local PASS を live、deployed、Public Beta、Human GO と呼びません。公開面は NO_GO_UNPUBLISHED のままです。
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 目的 / Purpose
+      description: README のどの成果を進めるか、利用者の困りごとと完成時の動作を書く
+    validations:
+      required: true
+  - type: textarea
+    id: current_state
+    attributes:
+      label: 現状・背景 / Current state and background
+      description: 読み戻した日付、公開 revision、対象 component、現状の根拠を記載する
+    validations:
+      required: true
+  - type: textarea
+    id: ownership
+    attributes:
+      label: 担当区分 / Ownership
+      description: "🤖 agent の作業と 👤 人の判断・操作、担当ファイル、共有資源の writer を分ける"
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: 前提・依存 / Prerequisites and dependencies
+      description: 関連 Issue / PR と着手可能になる条件。未解決の判断を推測で埋めない
+  - type: textarea
+    id: steps
+    attributes:
+      label: 手順 / Steps
+      description: 一件ずつ進める具体的な順番、対象ファイル、既存の正本との接続を書く
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: 確認コマンド / Verification commands
+      description: toolchain、実行場所、具体的なコマンドと期待する結果。公開可能な相対 path だけを使う
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受入条件 / Acceptance criteria
+      description: 観測できる成果、負のケース、必要な証拠の段階、未検証の境界を列挙する
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: 操作範囲・停止条件 / Boundaries and stop conditions
+      description: 許可された操作、してはいけないこと、人へ戻す条件、rollback を記載する。スキルや Issue で権限を拡張しない
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 領域 / Area
+      options:
+        - onboarding / docs
+        - company-pack / evidence chain
+        - discord / voice
+        - agent swarm / 自律実行
+        - knowledge / OKF / context
+        - cloudflare / runtime
+        - adapter (Slack / Teams / CRM)
+        - ci / governance / security
