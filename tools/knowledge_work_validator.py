@@ -229,7 +229,9 @@ def validate_package(root: Path, now=None, *, source_root: Path | None = None, c
         errors.append(str(error) if isinstance(error, Refusal) else "INPUT_INVALID")
     report["errors"] = sorted(set(errors))
     report["warnings"] = sorted(set(warnings))
-    return report, package
+    # Only return a parsed package after schema and sensitivity admission.
+    # Early refusals must not hand unclassified or above-ceiling bodies to API callers.
+    return report, package if report["package_id"] is not None else None
 
 
 def emit(value, format="json"):

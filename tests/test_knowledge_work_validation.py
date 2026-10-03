@@ -36,8 +36,9 @@ class KnowledgeWorkTests(unittest.TestCase):
         return validator.validate_package(self.root, NOW)[0]["errors"]
 
     def test_valid_candidate_binds_bytes_but_does_not_grant_authority(self):
-        report, _ = validator.validate_package(self.root, NOW)
+        report, package = validator.validate_package(self.root, NOW)
         self.assertEqual(report["status"], "PASS")
+        self.assertEqual(package, self.package)
         self.assertEqual(len(report["bindings"]), 2)
         self.assertFalse(any(report["claims"].values()))
         self.assertIn("SEMANTIC_REVIEW_NOT_RUN", report["warnings"])
@@ -136,12 +137,22 @@ class KnowledgeWorkTests(unittest.TestCase):
         self.package["sensitivity"] = "restricted"
         self.package["objective"] = "PRIVATE_FIXTURE_NOT_FOR_PUBLIC_REPORT"
         self.save()
-        report, _ = validator.validate_package(self.root, NOW)
+        report, package = validator.validate_package(self.root, NOW)
         self.assertEqual(report["errors"], ["SENSITIVITY_CEILING"])
+        self.assertIsNone(package)
         self.assertIsNone(report["package_id"])
         self.assertIsNone(report["package_sha256"])
         self.assertEqual(report["bindings"], [])
         self.assertNotIn("PRIVATE_FIXTURE", json.dumps(report))
+
+    def test_invalid_schema_cannot_return_an_unclassified_package(self):
+        self.package["sensitivity"] = "unknown"
+        self.package["objective"] = "UNCLASSIFIED_FIXTURE_NOT_FOR_API"
+        self.save()
+        report, package = validator.validate_package(self.root, NOW)
+        self.assertEqual(report["errors"], ["SCHEMA_INVALID"])
+        self.assertIsNone(package)
+        self.assertNotIn("UNCLASSIFIED_FIXTURE", json.dumps(report))
 
     def test_related_claims_cannot_be_dropped_under_assumptions_or_contradictions(self):
         optional = copy.deepcopy(self.package["claims"][0])
