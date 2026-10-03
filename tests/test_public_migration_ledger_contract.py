@@ -439,7 +439,7 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
             path.write_text('{"nested":' + '[' * 5000 + '0' + ']' * 5000 + '}\n', encoding="utf-8")
             code, payload = self.run_validator_path(path)
         self.assertEqual(2, code, payload)
-        self.assertEqual("REFUSED", payload["status"])
+        self.assertEqual("REFUSED", payload["result"])
         self.assertIn("INPUT_INVALID", payload["reason_codes"])
 
     # --- documentation ---------------------------------------------------
