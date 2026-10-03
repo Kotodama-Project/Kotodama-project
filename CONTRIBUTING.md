@@ -9,6 +9,8 @@ Kotodama は Incomplete Public Preview です。狭い範囲の Issue と Pull R
 
 ## 3 つの経路
 
+エージェントへ委任する作業は [Agent task form](https://github.com/Kotodama-Project/Kotodama-project/issues/new?template=agent-task.yml) を使い、目的・担当・手順・検証・停止条件を明示します。
+
 | 変更 | 先にすること | 手元で通すもの |
 |---|---|---|
 | 文書だけ（README、docs/、STATUS、ROADMAP） | Issue は不要。小さな PR にする | `python -S -B tools/lint_docs.py`、`python -S -B tools/smoke_company_pack_review_chain.py`、`git diff --check` |
