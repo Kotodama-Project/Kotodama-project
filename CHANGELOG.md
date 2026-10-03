@@ -8,6 +8,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- エージェントへの作業依頼用 Issue form を追加。目的、現状、担当、手順、確認コマンド、受入条件、操作範囲・停止条件を必須にし、作業ガイドと委任インデックスへ案内する（#163）。
 - Release 候補に 3 つの依存 lock の CycloneDX 1.6 SBOM を追加。入力 digest、distribution hash、SHA256SUMS、build provenance、draft 添付を結び、未固定依存と成果物の上書きを拒否する。実 release での署名・添付の受入は残件（#166）。
 
 - 作成済みOpenAI Dotを日常の入口とする方針と、Discord / Luma用のlocal plugin候補。指定operator/channelの受付、訂正・削除・取消、重複返答の抑止、Luma作成／更新候補の全文確認、一回の操作claimとDot報告を追加。Dots製品・live Bot・Luma websiteの受入、remote MCP Eventsは別途確認する。
