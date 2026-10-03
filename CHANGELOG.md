@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Release 候補に 3 つの依存 lock の CycloneDX 1.6 SBOM を追加。入力 digest、distribution hash、SHA256SUMS、build provenance、draft 添付を結び、未固定依存と成果物の上書きを拒否する。実 release での署名・添付の受入は残件（#166）。
+
 - 作成済みOpenAI Dotを日常の入口とする方針と、Discord / Luma用のlocal plugin候補。指定operator/channelの受付、訂正・削除・取消、重複返答の抑止、Luma作成／更新候補の全文確認、一回の操作claimとDot報告を追加。Dots製品・live Bot・Luma websiteの受入、remote MCP Eventsは別途確認する。
 
 - A019 の registry 契約候補（task contract、task decomposition、worker capability catalog、worker result）を、[公開 PR #115](https://github.com/Kotodama-Project/Kotodama-project/pull/115) の固定 head `040a9becf0463e69887f126e30af6d38bdc02988` から再配置。出典表と非公開の元履歴走査 receipt は公開元の歴史的記録として維持し、この候補の独立 review は別 gate で検証する。4 schemas は candidate-only で、runtime や Task owner の統合ではない。追加 review により validator と試験を補強し、manifest・出典表の全階層と著者・履歴件数を固定する（独立 review の許可済み状態のみ別判定）。重複 JSON key、通常・escaped 表記の利用者絶対 path を拒否し、サイズ上限と symlink・reparse point の拒否を読取り前に検査する。
