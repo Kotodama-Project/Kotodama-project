@@ -17,6 +17,43 @@
 
 必須チェックは `Trusted repository validation`、`test (ubuntu-latest)`、`test (windows-latest)`、`Dependency review` の 4 件で、`strict: true`（PR branch が main に追いついていること）です。`Trusted repository validation` は Discord と Task swarm の matrix を呼び出し、どちらかが failure / skipped / cancelled / 未実行なら成功しません。`gh api repos/Kotodama-Project/Kotodama-project/branches/main/protection` で読み戻せます。
 
+## Release の SBOM と provenance を確認する
+
+Release workflow は `requirements-ci.txt`、`requirements-task-swarm-ci.txt`、
+`runtime/discord-template/pnpm-lock.yaml` から、それぞれ CycloneDX 1.6 JSON の
+SBOM を作ります。既存の hash-locked PyYAML を使い、追加の依存や action はありません。
+全 platform・marker の distribution 候補を含む lock inventory であり、実際に
+install された部品、依存 graph、ライセンス、脆弱性の不存在は証明しません。
+各 SBOM の metadata は入力 lock の相対 path と SHA-256 を保持します。
+
+手元で生成するときは Python 3.12 と共通 lock の依存を用意してから実行します。
+保存済み SBOM は上書きしません。
+
+```text
+python -B tools/build_release_sbom.py --release v0.2.0-preview --output-dir work/release-sbom
+```
+
+`sbom-python-ci-<tag>.cdx.json`、`sbom-python-task-swarm-<tag>.cdx.json`、
+`sbom-discord-<tag>.cdx.json` を source archive、smoke report とともに
+SHA256SUMS と draft release に含めます。既存の build provenance action は
+この 3 ファイルと checksum manifest も subject とします。これは build provenance
+であり、専用の SBOM predicate による部品と archive の関係の attestation ではありません。
+
+draft release から成果物を取得した reviewer は、各 SBOM と checksum manifest を
+以下の形で確認します（tag とファイル名は対象 release に置き換える）。
+
+```text
+gh attestation verify sbom-discord-v0.2.0-preview.cdx.json --repo Kotodama-Project/Kotodama-project --signer-workflow Kotodama-Project/Kotodama-project/.github/workflows/release.yml --source-ref refs/tags/v0.2.0-preview
+gh attestation verify SHA256SUMS-v0.2.0-preview.txt --repo Kotodama-Project/Kotodama-project --signer-workflow Kotodama-Project/Kotodama-project/.github/workflows/release.yml --source-ref refs/tags/v0.2.0-preview
+```
+
+期待する signer はこの repo の `release.yml`、source ref は確認対象の正確な
+`refs/tags/v*` です。POSIX では `sha256sum -c SHA256SUMS-<tag>.txt`、PowerShell
+では `Get-FileHash <artifact> -Algorithm SHA256` を manifest と照合します。
+SBOM metadata の lock digest も取得した source archive 内の lock と照合します。
+署名者の運用方針と tag push / publish は owner の判断です。今回の local 生成は
+provider attestation や draft release の受入を証明しません（Issue #166 / #122）。
+
 ## ローカルで同じ確認をする
 
 文書だけの変更:
