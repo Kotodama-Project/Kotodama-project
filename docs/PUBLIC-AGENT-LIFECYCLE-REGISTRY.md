@@ -142,3 +142,12 @@ object/array の nesting を 64 段までに制限します。文字列内の括
 subject sequence と envelope append sequence の順序を一致させ、retry の前 attempt にも
 この順序を要求します。同時刻 metadata の終端先行と、後の spec 切替による budget 緩和を
 CLI 負例で検証しました。これらも固定 source #36 からの明示的な差分です。
+
+同じ入力境界を持つ #35 の防御を再利用しました。通常ファイルの parent chain と hardlink/
+symlink/reparse を検査し、同じ descriptor の bounded read・読取前後の file identity と
+変更検知を確認します。Windows の ctime は同じ descriptor の前後だけで比較します。
+JSONL は StringIO で行ごとに最大10000 records、schema の最初の error で停止します。
+超過は `RECORD_LIMIT_EXCEEDED` で positive signal を出しません。opaque namespace は
+元の `ref/[a-z0-9][a-z0-9/_-]{1,510}` を維持し、digest・revision・policy・timestamp と
+配列内参照も全文一致に限定します。末尾 newline は schema と verifier の両方で拒否します。
+これらは固定 source #36 からの入力防御差分で、provider/identity/continuity の証明ではありません。

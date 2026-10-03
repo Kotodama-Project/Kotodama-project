@@ -138,6 +138,125 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
                     record["recorded_at"] = "2026-08-24T00:00:00Z"
                 self.assert_refused(self.rechain(records), "EVENT_APPEND_ORDER_MISMATCH")
 
+    def test_owned_regular_file_swap_during_open_is_refused(self) -> None:
+        import os
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "ledger.jsonl"
+            path.write_bytes(b"original")
+            saved = path.with_suffix(".saved")
+            original_open, original_path_open = os.open, Path.open
+            swapped = False
+            def swap(target):
+                nonlocal swapped
+                if Path(target) == path and not swapped:
+                    swapped = True
+                    path.rename(saved)
+                    path.write_bytes(b"replacement")
+            def fd_open(target, *args, **kwargs):
+                swap(target)
+                return original_open(target, *args, **kwargs)
+            def stream_open(target, *args, **kwargs):
+                swap(target)
+                return original_path_open(target, *args, **kwargs)
+            with mock.patch("os.open", fd_open), mock.patch.object(Path, "open", stream_open):
+                with self.assertRaises(validator_module.InputNotRegularFileError):
+                    validator_module.read_bounded(path)
+            self.assertTrue(swapped)
+
+    def test_existing_hardlink_is_refused(self) -> None:
+        import os
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "ledger.jsonl"
+            path.write_bytes(b"original")
+            linked = Path(temporary) / "hardlink.jsonl"
+            try: os.link(path, linked)
+            except OSError as error: self.skipTest(str(error))
+            with self.assertRaises(validator_module.InputNotRegularFileError):
+                validator_module.read_bounded(path)
+
+    def test_small_record_limit_rejects_before_next_materialization(self) -> None:
+        from unittest import mock
+        raw = b"{}\n" * 4
+        with mock.patch.object(validator_module, "MAX_RECORDS", 3):
+            with self.assertRaises(validator_module.InputTooManyRecordsError):
+                validator_module._parse_lines(raw)
+        with mock.patch.object(validator_module, "MAX_RECORDS", 3):
+            self.assertEqual(3, len(validator_module._parse_lines(b"{}\n" * 3)))
+
+    def test_schema_validation_stops_on_first_error_before_next_record(self) -> None:
+        calls = []
+        class FirstErrorValidator:
+            def iter_errors(self, record):
+                calls.append(record)
+                yield object()
+                raise AssertionError("must not collect further schema errors")
+        with self.assertRaises(validator_module.SchemaInvalidError):
+            validator_module._parse_lines(b"{}\n{}\n", validator=FirstErrorValidator())
+        self.assertEqual([{}], calls)
+
+    def test_regular_read_allows_cross_api_ctime_representation_difference(self) -> None:
+        import os
+        from types import SimpleNamespace
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "ledger.jsonl"
+            path.write_bytes(b"original")
+            actual_fstat = os.fstat
+            def alternate_ctime(fd):
+                info = actual_fstat(fd)
+                values = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+                values["st_ctime_ns"] += 100
+                return SimpleNamespace(**values)
+            with mock.patch("os.fstat", alternate_ctime):
+                self.assertEqual(b"original", validator_module.read_bounded(path))
+
+    def test_final_pathname_identity_change_is_refused(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as temporary:
+            path, other = Path(temporary) / "ledger.jsonl", Path(temporary) / "other.jsonl"
+            path.write_bytes(b"original")
+            other.write_bytes(b"original")
+            before, replacement = validator_module._plain_metadata(path), validator_module._plain_metadata(other)
+            with mock.patch.object(validator_module, "_plain_metadata", side_effect=[before, replacement]):
+                with self.assertRaises(validator_module.InputNotRegularFileError):
+                    validator_module.read_bounded(path)
+
+    def test_record_limit_refusal_payload_is_bounded(self):
+        import contextlib
+        import io
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "records.jsonl"
+            path.write_text("\n".join(json.dumps(record) for record in self.records[:4]) + "\n", encoding="utf-8")
+            output = io.StringIO()
+            with mock.patch.object(validator_module, "MAX_RECORDS", 3), contextlib.redirect_stdout(output):
+                code = validator_module.main(["validator", str(path)])
+        payload = json.loads(output.getvalue())
+        self.assertEqual(code, 2)
+        self.assertEqual(payload["reason_codes"], ["RECORD_LIMIT_EXCEEDED"])
+        self.assertEqual(payload["record_count"], 0)
+        self.assertEqual(payload["derived_success_count"], 0)
+        self.assertTrue(all(value is False for value in payload["claims"].values()))
+
+    def test_reference_and_digest_fields_reject_terminal_newline(self):
+        validator = Draft202012Validator(self.schema, format_checker=FormatChecker())
+        for record in self.records:
+            for field, value in record.items():
+                if field == "record_id" or field.endswith("_ref") or field.endswith("_digest") or field in {"prev_hash", "content_hash", "revision", "policy_version", "recorded_at", "heartbeat_at", "expires_at", "capability_refs", "evidence_receipt_refs"}:
+                    with self.subTest(kind=record["kind"], field=field):
+                        changed = copy.deepcopy(record)
+                        if isinstance(value, list):
+                            if not value: continue
+                            changed[field][0] += "\n"
+                        else:
+                            changed[field] += "\n"
+                        self.assertFalse(validator_module._strict_reference_fields(changed))
+                        self.assertIsNotNone(next(validator.iter_errors(changed), None))
+                        raw = (json.dumps(changed) + "\n").encode("utf-8")
+                        with self.assertRaises(validator_module.SchemaInvalidError):
+                            validator_module._parse_lines(raw, validator=validator)
+
     def setUp(self) -> None:
         self.records = [
             json.loads(line)

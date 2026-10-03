@@ -27,6 +27,9 @@ Two results are deliberately impossible to obtain from this tool:
 from __future__ import annotations
 
 import hashlib
+import io
+import os
+import re
 import json
 import stat
 import sys
@@ -44,6 +47,7 @@ except ImportError:  # pragma: no cover - dependency-free installs fail closed
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas" / "public-agent-lifecycle-registry.schema.json"
 MAX_INPUT_BYTES = 8_388_608
+MAX_RECORDS = 10_000
 GENESIS_HASH = "0" * 64
 
 NON_TERMINAL_STATES = ["prepared", "dispatched", "running"]
@@ -107,6 +111,14 @@ class InputNotRegularFileError(ValueError):
     pass
 
 
+class InputTooManyRecordsError(ValueError):
+    pass
+
+
+class SchemaInvalidError(ValueError):
+    pass
+
+
 def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -125,17 +137,55 @@ def canonical_content_hash(record: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def read_bounded(path: Path) -> bytes:
-    metadata = path.stat()
-    if not stat.S_ISREG(metadata.st_mode):
+def _plain_metadata(path: Path):
+    for candidate in (path, *path.parents):
+        metadata = candidate.lstat()
+        if stat.S_ISLNK(metadata.st_mode) or getattr(metadata, "st_file_attributes", 0) & 0x400:
+            raise InputNotRegularFileError
+        if candidate != path and not stat.S_ISDIR(metadata.st_mode):
+            raise InputNotRegularFileError
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
         raise InputNotRegularFileError
-    if metadata.st_size > MAX_INPUT_BYTES:
+    return metadata
+
+
+def _file_snapshot(metadata):
+    # Windows lstat ctime is creation time, while descriptor fstat may expose
+    # change time. Compare ctime only between snapshots of the same descriptor.
+    return (metadata.st_dev, metadata.st_ino, metadata.st_mode, metadata.st_nlink,
+            metadata.st_size, metadata.st_mtime_ns,
+            getattr(metadata, "st_file_attributes", 0))
+
+
+def read_bounded(path: Path) -> bytes:
+    """Read only the checked regular file through one stable bounded descriptor."""
+    path = path.absolute()
+    before = _plain_metadata(path)
+    if before.st_size > MAX_INPUT_BYTES:
         raise InputTooLargeError
-    with path.open("rb") as stream:
-        raw = stream.read(MAX_INPUT_BYTES + 1)
-    if len(raw) > MAX_INPUT_BYTES:
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1 or getattr(opened, "st_file_attributes", 0) & 0x400 or _file_snapshot(before) != _file_snapshot(opened):
+            raise InputNotRegularFileError
+        chunks, size = [], 0
+        while size <= MAX_INPUT_BYTES:
+            chunk = os.read(descriptor, min(65536, MAX_INPUT_BYTES + 1 - size))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            size += len(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    if size > MAX_INPUT_BYTES:
         raise InputTooLargeError
-    return raw
+    final = _plain_metadata(path)
+    if size != opened.st_size or opened.st_ctime_ns != after.st_ctime_ns or _file_snapshot(before) != _file_snapshot(after) or _file_snapshot(after) != _file_snapshot(final):
+        raise InputNotRegularFileError
+    return b"".join(chunks)
 
 
 def derived_success(run: dict[str, Any]) -> bool:
@@ -181,15 +231,48 @@ def _check_json_depth(line: str) -> None:
     # JSON syntax and matching delimiters remain the decoder's responsibility.
 
 
-def _parse_lines(raw: bytes) -> list[dict[str, Any]]:
+def _strict_reference_fields(record: dict[str, Any]) -> bool:
+    patterns = {
+        "opaque": r"ref/[a-z0-9][a-z0-9/_-]{1,510}",
+        "digest": r"[0-9a-f]{64}",
+        "revision": r"[0-9a-f]{40}",
+        "policy_version": r"v[0-9]+",
+        "timestamp": r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z",
+    }
+    for field, value in record.items():
+        if field in {"capability_refs", "evidence_receipt_refs"}:
+            if not isinstance(value, list) or any(not isinstance(item, str) or re.fullmatch(patterns["opaque"], item) is None for item in value):
+                return False
+            continue
+        if field == "record_id" or field.endswith("_ref"):
+            pattern = patterns["opaque"]
+        elif field.endswith("_digest") or field in {"prev_hash", "content_hash"}:
+            pattern = patterns["digest"]
+        elif field in {"revision", "policy_version"}:
+            pattern = patterns[field]
+        elif field in {"recorded_at", "heartbeat_at", "expires_at"}:
+            pattern = patterns["timestamp"]
+        else:
+            continue
+        if not isinstance(value, str) or re.fullmatch(pattern, value) is None:
+            return False
+    return True
+
+
+def _parse_lines(raw: bytes, *, validator=None) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
-    for line in raw.decode("utf-8").splitlines():
+    for count, line in enumerate(io.StringIO(raw.decode("utf-8")), start=1):
+        if count > MAX_RECORDS:
+            raise InputTooManyRecordsError
         if not line.strip():
             raise ValueError("blank line")
         _check_json_depth(line)
         record = json.loads(line, object_pairs_hook=reject_duplicate_keys)
         if not isinstance(record, dict):
             raise ValueError("record is not an object")
+        if validator is not None:
+            if not _strict_reference_fields(record) or next(validator.iter_errors(record), None) is not None:
+                raise SchemaInvalidError
         records.append(record)
     if not records:
         raise ValueError("empty registry")
@@ -552,7 +635,6 @@ def main(argv: list[str]) -> int:
     registry_path = Path(argv[1])
     try:
         raw = read_bounded(registry_path)
-        records = _parse_lines(raw)
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         if not isinstance(schema, dict):
             raise ValueError
@@ -573,11 +655,15 @@ def main(argv: list[str]) -> int:
         return reject(["VALIDATOR_UNAVAILABLE"])
     try:
         validator = Draft202012Validator(schema, format_checker=FormatChecker())
-        schema_errors = [error for record in records for error in validator.iter_errors(record)]
-    except (TypeError, ValueError):
-        return reject(["VALIDATOR_UNAVAILABLE"])
-    if schema_errors:
+        records = _parse_lines(raw, validator=validator)
+    except InputTooManyRecordsError:
+        return reject(["RECORD_LIMIT_EXCEEDED"])
+    except SchemaInvalidError:
         return reject(["SCHEMA_INVALID"])
+    except (UnicodeDecodeError, json.JSONDecodeError, DuplicateKeyError, ValueError, RecursionError):
+        return reject(["INPUT_INVALID"])
+    except TypeError:
+        return reject(["VALIDATOR_UNAVAILABLE"])
 
     reasons = _semantic_reasons(records)
     return reject(reasons, records) if reasons else success(records)

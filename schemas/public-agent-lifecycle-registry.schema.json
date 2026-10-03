@@ -105,23 +105,23 @@
   "$defs": {
     "opaque_ref": {
       "type": "string",
-      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$"
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}(?![\\s\\S])"
     },
     "sha256": {
       "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
     },
     "timestamp": {
       "type": "string",
       "format": "date-time",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z(?![\\s\\S])"
     },
     "agent_spec": {
       "required": ["spec_ref", "spec_digest", "policy_version", "capability_refs", "max_depth", "max_fan_out"],
       "properties": {
         "spec_ref": { "$ref": "#/$defs/opaque_ref" },
         "spec_digest": { "$ref": "#/$defs/sha256" },
-        "policy_version": { "type": "string", "pattern": "^v[0-9]+$" },
+        "policy_version": { "type": "string", "pattern": "^v[0-9]+(?![\\s\\S])" },
         "capability_refs": {
           "type": "array",
           "minItems": 1,
@@ -149,7 +149,7 @@
         "instance_ref": { "$ref": "#/$defs/opaque_ref" },
         "spec_ref": { "$ref": "#/$defs/opaque_ref" },
         "spec_digest": { "$ref": "#/$defs/sha256" },
-        "policy_version": { "type": "string", "pattern": "^v[0-9]+$" },
+        "policy_version": { "type": "string", "pattern": "^v[0-9]+(?![\\s\\S])" },
         "backend": { "enum": ["PROVIDER_NEUTRAL_CANDIDATE"] },
         "provider_locator_ref": {
           "$ref": "#/$defs/opaque_ref",
@@ -157,7 +157,7 @@
         },
         "context_capsule_digest": { "$ref": "#/$defs/sha256" },
         "repository_ref": { "$ref": "#/$defs/opaque_ref" },
-        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}(?![\\s\\S])" }
       }
     },
     "agent_run": {
