@@ -259,7 +259,7 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
     def test_timestamp_must_be_a_real_date(self) -> None:
         records = copy.deepcopy(self.records)
         records[0]["recorded_at"] = "2026-02-30T25:61:61Z"
-        self.assert_refused(self.rechain(records), "SCHEMA_INVALID")
+        self.assert_refused(self.rechain(records), "RECORDED_AT_INVALID")
 
     def test_duplicate_json_key_in_a_line_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -449,6 +449,127 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         raw = ('{"nested":' + '[' * validator_module.MAX_JSON_NESTING_DEPTH + '0' + ']' * validator_module.MAX_JSON_NESTING_DEPTH + '}').encode()
         with self.assertRaises(ValueError):
             validator_module._parse_lines(raw)
+
+    def test_owned_regular_file_swap_during_open_is_refused(self) -> None:
+        import os
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "ledger.jsonl"
+            path.write_bytes(b"original")
+            saved = path.with_suffix(".saved")
+            original_open, original_path_open = os.open, Path.open
+            swapped = False
+            def swap(target):
+                nonlocal swapped
+                if Path(target) == path and not swapped:
+                    swapped = True
+                    path.rename(saved)
+                    path.write_bytes(b"replacement")
+            def fd_open(target, *args, **kwargs):
+                swap(target)
+                return original_open(target, *args, **kwargs)
+            def stream_open(target, *args, **kwargs):
+                swap(target)
+                return original_path_open(target, *args, **kwargs)
+            with mock.patch("os.open", fd_open), mock.patch.object(Path, "open", stream_open):
+                with self.assertRaises(validator_module.InputNotRegularFileError):
+                    validator_module.read_bounded(path)
+            self.assertTrue(swapped)
+
+    def test_existing_hardlink_is_refused(self) -> None:
+        import os
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "ledger.jsonl"
+            path.write_bytes(b"original")
+            linked = Path(temporary) / "hardlink.jsonl"
+            try: os.link(path, linked)
+            except OSError as error: self.skipTest(str(error))
+            with self.assertRaises(validator_module.InputNotRegularFileError):
+                validator_module.read_bounded(path)
+
+    def test_opaque_and_digest_fields_reject_terminal_control_character(self) -> None:
+        for field in ("record_id", "subject_ref", "owner_ref", "proposed_action", "private_receipt_ref", "subject_digest", "private_receipt_digest", "prev_hash", "content_hash"):
+            with self.subTest(field=field):
+                records = copy.deepcopy(self.records)
+                records[0][field] = (records[0][field] or "ref/" + "a" * 64) + "\n"
+                if field not in {"prev_hash", "content_hash"}: self.rechain(records)
+                code, payload = self.run_validator(records)
+                self.assertEqual(2, code, payload)
+                self.assertEqual("REFUSED", payload["result"])
+                self.assertIn("SCHEMA_INVALID", payload["reason_codes"])
+
+    def test_small_record_limit_rejects_before_next_materialization(self) -> None:
+        from unittest import mock
+        raw = b"{}\n" * 4
+        with mock.patch.object(validator_module, "MAX_RECORDS", 3):
+            with self.assertRaises(validator_module.InputTooManyRecordsError):
+                validator_module._parse_lines(raw)
+        with mock.patch.object(validator_module, "MAX_RECORDS", 3):
+            self.assertEqual(3, len(validator_module._parse_lines(b"{}\n" * 3)))
+
+    def test_schema_validation_stops_on_first_error_before_next_record(self) -> None:
+        calls = []
+        class FirstErrorValidator:
+            def iter_errors(self, record):
+                calls.append(record)
+                yield object()
+                raise AssertionError("must not collect further schema errors")
+        with self.assertRaises(validator_module.SchemaInvalidError):
+            validator_module._parse_lines(b"{}\n{}\n", validator=FirstErrorValidator())
+        self.assertEqual([{}], calls)
+
+    def test_timestamp_reason_does_not_depend_on_optional_format_checker(self) -> None:
+        checker = FormatChecker()
+        checker.checkers.pop("date-time", None)
+        records = copy.deepcopy(self.records)
+        records[0]["recorded_at"] = "2026-02-30T25:61:61Z"
+        raw = (json.dumps(self.rechain(records)[0]) + "\n").encode("utf-8")
+        validator = Draft202012Validator(self.schema, format_checker=checker)
+        with self.assertRaises(validator_module.RecordedAtInvalidError):
+            validator_module._parse_lines(raw, validator=validator)
+
+    def test_regular_read_allows_cross_api_ctime_representation_difference(self) -> None:
+        import os
+        from types import SimpleNamespace
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "ledger.jsonl"
+            path.write_bytes(b"original")
+            actual_fstat = os.fstat
+            def alternate_ctime(fd):
+                info = actual_fstat(fd)
+                values = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+                values["st_ctime_ns"] += 100
+                return SimpleNamespace(**values)
+            with mock.patch("os.fstat", alternate_ctime):
+                self.assertEqual(b"original", validator_module.read_bounded(path))
+
+    def test_record_limit_refusal_payload_is_bounded(self) -> None:
+        import contextlib
+        import io
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "ledger.jsonl"
+            path.write_text("\n".join(json.dumps(v) for v in self.records[:4]) + "\n", encoding="utf-8")
+            output = io.StringIO()
+            with mock.patch.object(validator_module, "MAX_RECORDS", 3), contextlib.redirect_stdout(output):
+                code = validator_module.main(["validator", str(path)])
+            payload = json.loads(output.getvalue())
+            self.assertEqual(2, code)
+            self.assertEqual(["RECORD_LIMIT_EXCEEDED"], payload["reason_codes"])
+            self.assertIsNone(payload["zero_unclassified"])
+            self.assertTrue(all(value is False for value in payload["claims"].values()))
+
+    def test_final_pathname_identity_change_is_refused(self) -> None:
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as temporary:
+            path, other = Path(temporary) / "ledger.jsonl", Path(temporary) / "other.jsonl"
+            path.write_bytes(b"original")
+            other.write_bytes(b"original")
+            before, replacement = validator_module._plain_metadata(path), validator_module._plain_metadata(other)
+            with mock.patch.object(validator_module, "_plain_metadata", side_effect=[before, replacement]):
+                with self.assertRaises(validator_module.InputNotRegularFileError):
+                    validator_module.read_bounded(path)
 
     # --- documentation ---------------------------------------------------
 
