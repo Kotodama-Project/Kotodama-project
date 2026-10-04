@@ -58,9 +58,13 @@ class ValidationGuideEntryNavigationTests(unittest.TestCase):
         end = document.index("## Boundary", start)
         section = document[start:end]
         required = (
-            "python -m pip install -r requirements-test.txt",
+            "python -S -B tools/check_tracked_secret_hygiene.py",
+            "python -m pip install --require-hashes -r requirements-ci.txt",
+            "python -B tools/check_workflow_references.py",
             "python -m unittest discover -s tests -v",
-            "python3 -m pip install -r requirements-test.txt",
+            "python3 -S -B tools/check_tracked_secret_hygiene.py",
+            "python3 -m pip install --require-hashes -r requirements-ci.txt",
+            "python3 -B tools/check_workflow_references.py",
             "python3 -m unittest discover -s tests -v",
             "test-only",
             "Draft202012Validator",
@@ -69,13 +73,20 @@ class ValidationGuideEntryNavigationTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, section)
         self.assertLess(
-            section.index("python -m pip install -r requirements-test.txt"),
+            section.index("python -m pip install --require-hashes -r requirements-ci.txt"),
             section.index("python -m unittest discover -s tests -v"),
         )
         self.assertLess(
-            section.index("python3 -m pip install -r requirements-test.txt"),
+            section.index("python3 -m pip install --require-hashes -r requirements-ci.txt"),
             section.index("python3 -m unittest discover -s tests -v"),
         )
+        for prefix in ("python", "python3"):
+            self.assertLess(section.index(f"{prefix} -S -B tools/check_tracked_secret_hygiene.py"),
+                            section.index(f"{prefix} -m pip install --require-hashes -r requirements-ci.txt"))
+            self.assertLess(section.index(f"{prefix} -m pip install --require-hashes -r requirements-ci.txt"),
+                            section.index(f"{prefix} -B tools/check_workflow_references.py"))
+            self.assertLess(section.index(f"{prefix} -B tools/check_workflow_references.py"),
+                            section.index(f"{prefix} -m unittest discover -s tests -v"))
 
     def test_validation_guide_exposes_customization_and_bundle_stop_semantics(self) -> None:
         document = (ROOT / "docs" / "VALIDATION.md").read_text(encoding="utf-8")

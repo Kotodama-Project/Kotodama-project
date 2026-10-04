@@ -1,10 +1,12 @@
 import copy
 import importlib.util
+import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -81,7 +83,7 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         return records
 
     def run_validator(
-        self, records: list[dict], anchor: str | None = None
+        self, records: list[dict], anchor: str | None = None, *, via_cli: bool = False
     ) -> tuple[int, dict]:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "ledger.jsonl"
@@ -94,18 +96,25 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
                 encoding="utf-8",
                 newline="\n",
             )
-            command = [sys.executable, "-B", str(VALIDATOR), str(path)]
+            argv = [str(VALIDATOR), str(path)]
             if anchor is not None:
-                command.extend(["--anchor", anchor])
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=False,
-            )
-        return completed.returncode, json.loads(completed.stdout)
+                argv.extend(["--anchor", anchor])
+            if via_cli:
+                completed = subprocess.run(
+                    [sys.executable, "-B", *argv],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    check=False,
+                )
+                return completed.returncode, json.loads(completed.stdout)
+            # Same public main and real bounded input; semantic variants do not
+            # need repeated interpreter/jsonschema imports. CLI seams stay real.
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                code = validator_module.main(argv)
+            return code, json.loads(stdout.getvalue())
 
     def assert_refused(self, records: list[dict], reason: str) -> None:
         code, payload = self.run_validator(records)
@@ -136,7 +145,7 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         for record in self.records:
             with self.subTest(sequence=record["sequence"]):
                 self.assertEqual([], list(checker.iter_errors(record)))
-        code, payload = self.run_validator(self.records)
+        code, payload = self.run_validator(self.records, via_cli=True)
         self.assertEqual(0, code, payload)
         self.assertEqual("LEDGER_CONSISTENT_UNVERIFIED", payload["result"])
         self.assertEqual(len(self.records), payload["record_count"])
@@ -341,7 +350,9 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
         self.assertEqual({"provided": True, "matched": False}, payload["chain_anchor"])
 
     def test_invalid_anchor_is_rejected(self) -> None:
-        code, payload = self.run_validator_with_anchor(self.records, "not-a-sha256")
+        code, payload = self.run_validator(
+            self.records, "not-a-sha256", via_cli=True
+        )
         self.assertEqual(2, code, payload)
         self.assertIn("ANCHOR_INVALID", payload["reason_codes"])
 

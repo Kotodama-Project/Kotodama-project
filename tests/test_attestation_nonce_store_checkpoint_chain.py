@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -7,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -265,6 +267,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             )
             output = temporary / "deep-checkpoint-bundle.json"
             created = self.create_bundle(case, output)
+            self.assertFalse(output.exists())
 
         self.assertEqual(created.returncode, 1)
         self.assertEqual(created.stderr, "")
@@ -272,7 +275,6 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         self.assertEqual(report["status"], "INVALID")
         self.assertEqual(report["errors"], ["chain bundle creation failed"])
         self.assertTrue(all(not value for value in report["claims"].values()))
-        self.assertFalse(output.exists())
 
     def test_deep_outer_bundle_json_is_a_structured_verification_refusal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -524,28 +526,46 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             helper.sign_checkpoint(checkpoints[1], temporary / "inputs" / "reviewer-key")
             output = temporary / "must-not-exist.json"
             result = self.create_bundle(case, output)
+            self.assertFalse(output.exists())
 
         self.assertEqual(result.returncode, 1)
         self.assertEqual(json.loads(result.stdout)["status"], "INVALID")
-        self.assertFalse(output.exists())
 
     def test_aggregate_chain_byte_budget_is_enforced_before_json_parsing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
             chain = temporary / "chain"
             chain.mkdir()
-            payload = b"{" + b" " * (2 * 1024 * 1024 - 1)
-            for sequence in range(9):
+            # Valid JSON and individually small files isolate the aggregate guard.
+            payload = b"{}" + b" " * 62
+            for sequence in range(2):
                 name = f"checkpoint-{sequence:06d}.json"
                 (chain / name).write_bytes(payload)
                 (chain / (name + ".sig")).write_bytes(b"x")
-            case: dict[str, object] = {"chain": chain}
             output = temporary / "must-not-exist.json"
-            result = self.create_bundle(case, output)
+            stdout = io.StringIO()
+            with (
+                mock.patch.object(chain_tool, "MAX_CHAIN_TOTAL_BYTES", 100),
+                mock.patch.object(
+                    chain_tool, "load_strict_json_bytes",
+                    side_effect=AssertionError("aggregate refusal must precede parsing"),
+                ) as parser,
+            ):
+                checkpoints, errors = chain_tool.read_chain_directory(chain)
+                self.assertIsNone(checkpoints)
+                self.assertEqual(errors, ["chain directory exceeds aggregate byte limit"])
+                with redirect_stdout(stdout):
+                    status = chain_tool.main(
+                        [str(CREATE_CHAIN), str(chain), "--output", str(output)]
+                    )
+                parser.assert_not_called()
+            self.assertFalse(output.exists())
 
-        self.assertEqual(result.returncode, 1)
-        self.assertEqual(json.loads(result.stdout)["status"], "INVALID")
-        self.assertFalse(output.exists())
+        self.assertEqual(status, 1)
+        report = json.loads(stdout.getvalue())
+        self.assertEqual(report["status"], "INVALID")
+        self.assertEqual(report["errors"], ["chain bundle creation failed"])
+        self.assertTrue(all(value is False for value in report["claims"].values()))
 
     def test_file_and_store_limits_apply_before_open_or_sqlite_query(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
