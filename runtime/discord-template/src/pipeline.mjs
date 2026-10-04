@@ -103,6 +103,11 @@ export class Pipeline {
   }
   async stop(id,actor){await this.owner.cancel(id,actor);this.active.get(id)?.controller.abort();}
   async resume(id,actor){check(!this.closing&&!this.draining,'RUNTIME_STOPPING');check(!this.active.has(id),'STOP_NOT_FINISHED');await this.authorize(await this.owner.task(id,actor));const t=await this.owner.resume(id,actor);await this.authorize(t);this.enqueue(id,actor,t.revision);return t;}
+  async tasks(actor){
+    const visible=[];
+    for(const task of await this.owner.tasks(actor))try{check(task.actor===actor,'TASK_ACCESS_DENIED');await this.authorize(task,'read_result');visible.push(task);}catch{}
+    return visible;
+  }
   async result(id,actor){const task=await this.owner.task(id,actor);await this.authorize(task,'read_result');return verifyArtifacts(task);}
   async close(){this.closing=true;this.analysisAdmission.close();for(const c of this.analysisControllers.values())c.abort();for(const run of this.active.values())run.controller.abort();await Promise.allSettled([...this.analysis.values()]);await this.tail;}
 }

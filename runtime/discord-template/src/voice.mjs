@@ -112,7 +112,7 @@ export class VoiceRoom {
         return this.pipeline.ingest(source,{execute:active&&cfgNow.discord.operators.includes(actor),reply:active&&s.mode==='assist',analyze:s.mode==='minutes'||active});
       }).catch(e=>{if(!e.voiceProviderReported)this.onError(errorCode(e));});return s.chain;
     };
-    s.turns=new TranscriptTurns({onTurn:emit});s.readers=this.audience().filter(actor=>this.allowed(actor));if(cfg.voice.naturalConversation)s.conversationActive=true;
+    s.turns=new TranscriptTurns({onTurn:emit,onError:e=>this.onError(errorCode(e))});s.readers=this.audience().filter(actor=>this.allowed(actor));if(cfg.voice.naturalConversation)s.conversationActive=true;
     s.provider=this.providerFactory({mode:s.mode,naturalConversation:cfg.voice.naturalConversation,onContext:async query=>{check(this.current(s)&&this.policy().discord.operators.includes(actor),'SOURCE_ACCESS_DENIED');if(this.audience().some(id=>id!==actor))return {status:'individual_conversation_required'};const result=await readProjectContext(cfg.worker.workspace,query);check(this.current(s)&&this.policy().discord.operators.includes(actor)&&this.audience().every(id=>id===actor),'SOURCE_ACCESS_DENIED');s.readers=[actor];if(this.reply?.naturalSession===s)this.reply.readers=s.readers;return result;},onStatus:async()=>{check(this.current(s),'VOICE_SESSION_SUPERSEDED');return {scope:'current_installation',recordingEnabled:Boolean(this.archive),recordingHealthy:!this.archiveFailure,configuredAgent:cfg.agentBinding??null,...this.control.status()};},onPark:()=>{void this.endSession(s,{reason:'provider_park'}).catch(e=>this.onError(errorCode(e)));},onEvent:(type,data)=>{if(type==='native.response.usage')this.store.event('voice.native_usage',data);else if(type==='session.command.rejected')this.diagnose('voice.provider_command_rejected',{voiceSession:s.id,commandType:diagnosticCode(data?.commandType),code:diagnosticCode(data?.code)});},model:cfg.voice.assistModel,initialHistory,apiKey:process.env[cfg.voice.apiKeyEnv],onFragment:f=>{if(cfg.voice.transcriptSource!=='local')s.turns.fragment(f);},onCompleted:t=>{if(cfg.voice.transcriptSource!=='local')emit({...t,revision:++s.revision});},
       onAudio:(pcm,sessionId,outputGeneration)=>this.receiveReplyAudio(s,pcm,sessionId,outputGeneration),onDelegation:d=>s.delegations.push(d),onUsage:usage=>{s.providerUsageSeconds=usage.seconds;if(usage.final||usage.seconds-s.lastUsageRecorded>=5){s.lastUsageRecorded=usage.seconds;this.store.event('voice.usage_snapshot',{voiceSession:s.id,seconds:usage.seconds,contextUsageRatio:usage.contextUsageRatio,final:usage.final});}},onError:code=>{
       if(s.stopped||s.epoch!==this.epoch||this.sessions.get(actor)!==s)return;
@@ -172,7 +172,7 @@ export class VoiceRoom {
       if(!turn.text||!this.allowed(state.actor))return;const readers=await this.sourceReaders();if(!this.allowed(state.actor))return;
       const cfg=this.policy(),identified=!cfg.discord.unattributedUsers.includes(state.actor);let transcriptCorrection=null;
       if(cfg.voice.contextCorrection&&identified&&typeof this.pipeline.analyzer?.correctTranscript==='function'){
-        try{const context=this.store.sources(state.actor).filter(s=>s.guildId===cfg.discord.guildId&&s.channelId===cfg.discord.voiceChannelId&&s.actorId===state.actor).slice(-3);transcriptCorrection=await this.pipeline.analyzer.correctTranscript(turn.text,context,cfg.voice.wakeWords);}
+        try{const context=this.store.recentSources(state.actor,{guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceActor:state.actor,limit:3,order:'revision'}).reverse();transcriptCorrection=await this.pipeline.analyzer.correctTranscript(turn.text,context,cfg.voice.wakeWords);}
         catch{this.onError('TRANSCRIPT_CORRECTION_FAILED');}
       }
       if(!this.allowed(state.actor))return;
@@ -264,7 +264,11 @@ export class VoiceRoom {
   async applyModelAction(action,source){
     check(['stop_speech','end_conversation'].includes(action)&&source?.metadata?.kind==='voice','VOICE_ACTION_INVALID');if(source.metadata.voiceEpoch!==this.epoch||!source.actorId)return;
     const currentSession=this.sessions.get(source.actorId);if(!currentSession||currentSession.id!==source.metadata.sessionId)return;
-    await this.stopSpeech({interruptProvider:action==='stop_speech'});if(action==='end_conversation'){const session=this.sessions.get(source.actorId);if(session&&session.epoch===this.epoch){session.conversationActive=false;await this.endSession(session,{reason:'model_end_conversation'});}}
+    await this.stopSpeech({interruptProvider:action==='stop_speech'});if(action==='end_conversation'){const session=this.sessions.get(source.actorId);if(session&&session.epoch===this.epoch){session.conversationActive=false;
+      // This action may run inside the transcript callback that shutdown drains.
+      // endSession disables input synchronously; its drain settles after this callback.
+      void this.endSession(session,{reason:'model_end_conversation'}).catch(e=>this.onError(errorCode(e)));
+    }}
   }
   async pause({sealLocal=false}={}){
     this.controlGeneration++;this.paused=true;this.epoch++;const attempt=this.joining;this.joining=null;attempt?.abort.abort();

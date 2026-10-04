@@ -1,5 +1,7 @@
 import {z} from 'zod';
+import {performance} from 'node:perf_hooks';
 import {check,digest,uid,errorCode} from './common.mjs';
+import {awaitWithSignal,deadlineScope} from './http-limits.mjs';
 
 export const lumaEventSchema=z.object({
   name:z.string().trim().min(1).max(150),description_md:z.string().max(12000),
@@ -12,13 +14,23 @@ export const lumaEventSchema=z.object({
   try{new Intl.DateTimeFormat('ja-JP',{timeZone:event.timezone});}catch{ctx.addIssue({code:'custom',message:'LUMA_TIMEZONE_INVALID'});}
 });
 function eventUrl(value){check(typeof value==='string'&&value.length<=1000,'LUMA_EVENT_URL_INVALID');const parsed=new URL(value);check(parsed.protocol==='https:'&&['luma.com','lu.ma'].includes(parsed.hostname)&&!parsed.username&&!parsed.password&&!parsed.search&&!parsed.hash&&parsed.pathname.length>1,'LUMA_EVENT_URL_INVALID');return parsed.href;}
+const staleRequestCodes=new Set(['DOTS_SOURCE_CHANGED','DOTS_SOURCE_SCOPE_CHANGED','DOTS_REQUEST_EXPIRED','SOURCE_ACCESS_DENIED','SOURCE_NOT_FOUND']);
+function inboxCursor(value,scope){
+  if(value===null)return null;
+  check(typeof value==='string'&&/^[A-Za-z0-9_-]{1,320}$/.test(value),'DOTS_CURSOR_INVALID');
+  let cursor;try{cursor=JSON.parse(Buffer.from(value,'base64url').toString('utf8'));}catch{check(false,'DOTS_CURSOR_INVALID');}
+  check(cursor&&cursor.scope===scope&&Object.keys(cursor).sort().join(',')==='after,scope,through,unavailable'&&Number.isSafeInteger(cursor.after)&&cursor.after>=0&&Number.isSafeInteger(cursor.through)&&cursor.through>=cursor.after&&Number.isSafeInteger(cursor.unavailable)&&cursor.unavailable>=0&&cursor.unavailable<=100,'DOTS_CURSOR_INVALID');return cursor;
+}
+function splitPair(text,offset){return offset>0&&offset<text.length&&text.charCodeAt(offset-1)>=0xd800&&text.charCodeAt(offset-1)<=0xdbff&&text.charCodeAt(offset)>=0xdc00&&text.charCodeAt(offset)<=0xdfff;}
 
 // These tables are transport receipts, not a second Task owner.
 export class DotsBridge {
-  constructor({config,store,policy=()=>config,authorize=async()=>{},deliver,now=()=>Date.now()}){
-    Object.assign(this,{config,store,policy,authorize,deliver,now});this.inFlight=new Set();
+  constructor({config,store,policy=()=>config,authorize=async()=>{},deliver,now=()=>Date.now(),authorizationTimeoutMs=2000,authorizationLimit=8,listDeadlineMs=8000}){
+    check([authorizationTimeoutMs,authorizationLimit,listDeadlineMs].every(n=>Number.isSafeInteger(n)&&n>0),'DOTS_READ_LIMIT_INVALID');
+    Object.assign(this,{config,store,policy,authorize,deliver,now,authorizationTimeoutMs,authorizationLimit,listDeadlineMs});this.inFlight=new Set();this.authorizations=new Map();
     store.db.exec(`
       CREATE TABLE IF NOT EXISTS dot_requests(id TEXT PRIMARY KEY,source_key TEXT NOT NULL,source_revision INTEGER NOT NULL,actor TEXT NOT NULL,state TEXT NOT NULL,created INTEGER NOT NULL,response_digest TEXT,message_id TEXT);
+      CREATE INDEX IF NOT EXISTS dot_requests_inbox ON dot_requests(state,actor);
       CREATE TABLE IF NOT EXISTS dot_event_drafts(id TEXT PRIMARY KEY,request_id TEXT NOT NULL,revision INTEGER NOT NULL,event TEXT NOT NULL,digest TEXT NOT NULL,state TEXT NOT NULL,operation TEXT NOT NULL,target_url TEXT,approved_at INTEGER,claim_id TEXT,review_message_id TEXT,reported TEXT);
     `);
     // A interrupted send may already have reached Discord; never replay it.
@@ -34,7 +46,18 @@ export class DotsBridge {
     check(source.provider==='discord'&&source.guildId===config.discord.guildId&&dots.channelIds.includes(source.channelId),'DOTS_SOURCE_SCOPE_CHANGED');
     check(this.now()>=row.created&&(reconcile||this.now()-row.created<=dots.requestTtlSeconds*1000),'DOTS_REQUEST_EXPIRED');return {row,source};
   }
-  async current(id,options){const initial=this.snapshot(id,options);await this.authorize(initial.source);return this.snapshot(id,options);}
+  async current(id,options={}){
+    const initial=this.snapshot(id,options);let raw=this.authorizations.get(id);
+    if(!raw){
+      check(this.authorizations.size<this.authorizationLimit,'DOTS_ACCESS_BUSY');
+      raw=Promise.resolve().then(()=>this.authorize(initial.source));this.authorizations.set(id,raw);
+      const settled=()=>{if(this.authorizations.get(id)===raw)this.authorizations.delete(id);};raw.then(settled,settled);
+    }
+    // A timed-out caller cannot free an SDK read that ignores cancellation or
+    // dispatch another read for the same request while that raw call is pending.
+    const deadline=deadlineScope(options.authorizationTimeoutMs??this.authorizationTimeoutMs,'DOTS_ACCESS_TIMEOUT');
+    try{await awaitWithSignal(raw,deadline.signal);return this.snapshot(id,options);}finally{deadline.dispose();}
+  }
   prune(){
     if(this.lastPrunedAt!==undefined&&this.now()>=this.lastPrunedAt&&this.now()-this.lastPrunedAt<60000)return 0;
     const days=this.policy().dots?.draftRetentionDays??7,cutoff=this.now()-days*86400000;this.lastPrunedAt=this.now();
@@ -50,11 +73,30 @@ export class DotsBridge {
     const inserted=this.store.db.prepare("INSERT OR IGNORE INTO dot_requests(id,source_key,source_revision,actor,state,created) VALUES(?,?,?,?,'pending',?)").run(id,key,source.revision,source.actorId,this.now());
     return {id,revision:source.revision,state:this.store.db.prepare('SELECT state FROM dot_requests WHERE id=?').get(id).state,created:inserted.changes===1};
   }
-  async list(){
-    const {dots}=this.settings();this.prune();const result=[];let unavailable=0,checked=0;
-    const rows=this.store.db.prepare("SELECT id FROM dot_requests WHERE actor=? AND state='pending' ORDER BY created LIMIT 100").all(dots.actorId);
-    for(const {id} of rows){checked++;try{const {row,source}=await this.current(id);result.push({id,revision:row.source_revision,text:source.text,channelId:source.channelId,createdAt:new Date(row.created).toISOString(),authority:'conversation_and_event_draft_only'});if(result.length===10)break;}catch(e){if(['DOTS_SOURCE_CHANGED','DOTS_SOURCE_SCOPE_CHANGED','DOTS_REQUEST_EXPIRED','SOURCE_ACCESS_DENIED','SOURCE_NOT_FOUND'].includes(errorCode(e)))this.store.db.prepare("UPDATE dot_requests SET state='stale' WHERE id=? AND state='pending'").run(id);else unavailable++;}}
-    return {requests:result,complete:unavailable===0&&checked===rows.length,unavailable,uninspected:rows.length-checked,taskOwnerUnchanged:true};
+  async list({cursor=null,includeText=true,limit=10}={}){
+    check(typeof includeText==='boolean'&&Number.isSafeInteger(limit)&&limit>=1&&limit<=10,'DOTS_LIST_INVALID');
+    const {config,dots}=this.settings();this.prune();const scope=digest([dots.actorId,config.discord.guildId,[...dots.channelIds].sort()]);
+    const page=inboxCursor(cursor,scope)??{after:0,through:this.store.db.prepare("SELECT coalesce(max(rowid),0) AS n FROM dot_requests WHERE actor=? AND state='pending'").get(dots.actorId).n,unavailable:0};
+    const rows=this.store.db.prepare("SELECT id,rowid AS ordinal FROM dot_requests WHERE actor=? AND state='pending' AND rowid>? AND rowid<=? ORDER BY rowid LIMIT 20").all(dots.actorId,page.after,page.through);
+    const started=performance.now(),result=[];let unavailable=page.unavailable,after=page.after;
+    const refused=(id,e)=>{if(staleRequestCodes.has(errorCode(e)))this.store.db.prepare("UPDATE dot_requests SET state='stale' WHERE id=? AND state='pending'").run(id);else if(errorCode(e)!=='DOTS_REQUEST_NOT_PENDING')unavailable++;};
+    for(const {id,ordinal} of rows){const remaining=this.listDeadlineMs-(performance.now()-started);if(remaining<=0)break;after=ordinal;try{
+      const {row,source}=await this.current(id,{authorizationTimeoutMs:Math.max(1,Math.min(this.authorizationTimeoutMs,Math.ceil(remaining)))});check(row.state==='pending','DOTS_REQUEST_NOT_PENDING');
+      result.push({id,revision:row.source_revision,...(includeText?{text:source.text}:{preview:source.text.slice(0,splitPair(source.text,120)?119:120)}),textLength:source.text.length,textDigest:digest(source.text),channelId:source.channelId,createdAt:new Date(row.created).toISOString(),authority:'conversation_and_event_draft_only'});if(result.length===limit)break;
+    }catch(e){refused(id,e);}}
+    // A later authorization may have allowed a correction/cancellation of an
+    // earlier item. Recheck every returned binding immediately before emission.
+    const current=[];for(const request of result)try{const fresh=this.snapshot(request.id);check(fresh.row.state==='pending','DOTS_REQUEST_NOT_PENDING');current.push(request);}catch(e){refused(request.id,e);}
+    const uninspected=this.store.db.prepare("SELECT count(*) AS n FROM dot_requests WHERE actor=? AND state='pending' AND rowid>? AND rowid<=?").get(dots.actorId,after,page.through).n;
+    const nextCursor=uninspected?Buffer.from(JSON.stringify({scope,after,through:page.through,unavailable})).toString('base64url'):null;
+    return {requests:current,nextCursor,complete:unavailable===0&&uninspected===0,unavailable,uninspected,taskOwnerUnchanged:true};
+  }
+  async read(id,revision,{offset=0,limit=4096}={}){
+    check(Number.isSafeInteger(revision)&&revision>=0&&Number.isSafeInteger(offset)&&offset>=0&&offset<=16000&&Number.isSafeInteger(limit)&&limit>=128&&limit<=4096,'DOTS_TEXT_RANGE_INVALID');
+    const {row,source}=await this.current(id);check(row.source_revision===revision,'DOTS_SOURCE_CHANGED');check(row.state==='pending','DOTS_REQUEST_NOT_PENDING');
+    check(offset<=source.text.length&&!splitPair(source.text,offset),'DOTS_TEXT_OFFSET_INVALID');
+    let end=Math.min(offset+limit,source.text.length);if(splitPair(source.text,end))end--;
+    return {id,revision,text:source.text.slice(offset,end),textDigest:digest(source.text),offset,nextOffset:end<source.text.length?end:null,textLength:source.text.length,offsetEncoding:'utf-16',channelId:source.channelId,authority:'conversation_and_event_draft_only',taskOwnerUnchanged:true};
   }
   async send(id,revision,text){
     check(typeof text==='string'&&text.trim()&&text.length<=1900,'DOTS_REPLY_SIZE');const bodyDigest=digest(text);

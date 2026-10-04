@@ -88,3 +88,30 @@ test('a hung check is not duplicated and a late success cannot confirm access',a
   release();await sleep(0);assert.equal(monitor.grace.pending.get('task-a').count,2,'the late result does not clear the failure');
   assert.equal(await monitor.check('task-a',async()=>{}),true);assert.equal(calls,1);assert.equal(monitor.grace.pending.has('task-a'),false);
 });
+
+test('stopping prevents both a scheduled probe and any later probe from starting',async()=>{
+  const monitor=new AccessMonitor();let calls=0;
+  const checked=monitor.check('task-a',async()=>{calls++;});monitor.stop();
+  assert.equal(await checked,false);assert.equal(await monitor.check('task-b',async()=>{calls++;}),false);
+  await monitor.drain({timeoutMs:20});assert.equal(calls,0);assert.equal(monitor.inflight.size,0);
+});
+
+test('a timed-out verifier remains owned through uncertain drain and a retry',async t=>{
+  let release,calls=0;const gate=new Promise(resolve=>release=resolve),monitor=new AccessMonitor({limitMs:10});
+  const keepAlive=setTimeout(()=>{},1000);t.after(()=>{release();clearTimeout(keepAlive);});
+  assert.equal(await monitor.check('task-a',async()=>{calls++;await gate;}),true);assert.equal(monitor.inflight.size,1);
+  await assert.rejects(monitor.drain({timeoutMs:15}),{code:'POLICY_DRAIN_UNCERTAIN'});assert.equal(monitor.inflight.size,1);
+  assert.equal(await monitor.check('task-b',async()=>{calls++;}),false);assert.equal(calls,1);
+  release();await monitor.drain({timeoutMs:100});assert.equal(monitor.inflight.size,0);
+});
+
+test('distinct Tasks cannot accumulate verifiers past the global raw-work cap',async t=>{
+  const monitor=new AccessMonitor({limitMs:10,maxInflight:2}),releases=[];let calls=0;
+  const keepAlive=setTimeout(()=>{},1000);t.after(()=>{for(const release of releases)release();clearTimeout(keepAlive);});
+  for(const id of ['first','second'])assert.equal(await monitor.check(id,()=>{calls++;return new Promise(resolve=>releases.push(resolve));}),true);
+  for(let n=0;n<10;n++)assert.equal(await monitor.check('excess-'+n,async()=>{calls++;}),true);
+  assert.equal(calls,2);assert.equal(monitor.inflight.size,2);
+  releases[0]();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(await monitor.check('replacement',async()=>{calls++;}),true);assert.equal(calls,3);
+  releases[1]();await monitor.drain({timeoutMs:100});assert.equal(monitor.inflight.size,0);
+});

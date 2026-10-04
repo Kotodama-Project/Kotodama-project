@@ -93,7 +93,7 @@ pnpm check
 
 - **docs lint が FAIL**: 出力の `errors` にファイルと理由（リンク切れ、未解決アンカー、README の行数超過、入口文書での内部語）が出ます。`tools/lint_docs.py` の docstring に規則があります。
 - **`tests.test_public_status_roadmap_sync` が FAIL**: `STATUS.md` を変えたら `Updated:` の日付を更新します。過去の revision を「current」と書かないでください（履歴は `docs/HISTORY.md`）。
-- **Dependabot の PR が FAIL**: action の更新は、#82 以降「action 名 + 40 桁 SHA + version comment」の検査で通ります。hash 付き lock の中の依存だけを上げた PR（例: pydantic なしの pydantic-core）は `pip install --require-hashes` の依存解決で失敗します。その場合は取り込まず、入力の requirements から CONTRIBUTING の手順で lock を作り直します。
+- **Dependabot の PR が FAIL**: action の更新は、#82 以降「action 名 + 40 桁 SHA + version comment」の検査で通ります。hash 付き lock の中の依存だけを上げた PR（例: pydantic なしの pydantic-core）は `pip install --require-hashes` の依存解決で失敗します。その場合は取り込まず、入力の requirements から CONTRIBUTING の手順で lock を作り直します。exact version で連動する `httpx2` / `httpcore2` の minor・patch 更新は一つの Dependabot group にまとめます。共通 lock と Task swarm lock の共有依存は同じ version に保ち、検査は特定の transitive version ではなく、入力の直接依存・全 entry の hash・共有依存の一致を確認します。
 - **tracked credential hygiene が FAIL**: 出力は path、行番号、detector 名だけです。値は revoke / rotate してから履歴の扱いを別途決めます（`SECURITY.md`）。
 - **`git status --porcelain` が空でない**: テストが生成物を残しています。生成物を書き戻す変更は、その generator の実行結果を commit に含めてください。
 

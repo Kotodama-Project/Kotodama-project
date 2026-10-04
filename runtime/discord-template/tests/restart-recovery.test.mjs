@@ -20,3 +20,13 @@ test('revoked permission leaves a paused task unchanged, then one authorized res
 test('withdrawn source prevents paused recovery and never resurrects an old task',async t=>{
   const f=await fixture(t);f.store.reconcileInterrupted();const s=f.store.source(f.task.source_key,actor);f.store.ingest({...s,revision:2,text:'',withdrawn:true});assert.throws(()=>f.store.resume(f.task.id,actor),/SOURCE_ACCESS_DENIED/);assert.equal(f.store.taskInternal(f.task.id).state,'stale');
 });
+
+for(const stage of ['authorize','claim'])for(const mode of ['draining','closing'])test(`${mode} during ${stage} cannot launch a late worker`,async t=>{
+  const f=await fixture(t);let release,entered,calls=0;
+  const gate=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});
+  const originalClaim=f.store.claim.bind(f.store);if(stage==='claim')f.store.claim=async(...args)=>{entered();await gate;return originalClaim(...args);};
+  const p=new Pipeline({store:f.store,config:exampleConfig({workspace:f.dir}),authorize:async()=>{if(stage==='authorize'){entered();await gate;}},worker:{run:async()=>{calls++;return {state:'needs_review',summary:'fixture',artifacts:[]};}}});
+  p.enqueue(f.task.id,actor,1);await started;let stopped;
+  if(mode==='closing')stopped=p.close();else{p.draining=true;for(const run of p.active.values())run.controller.abort();}
+  release();await p.tail;await stopped;assert.equal(calls,0);assert.equal(p.active.size,0);assert.equal(f.store.taskInternal(f.task.id).state,stage==='authorize'?'queued':'failed');await p.close();
+});

@@ -5,7 +5,8 @@ const normalized=k=>k.toLowerCase().replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9fff]
 const pick=(row,names)=>{for(const name of names){const key=Object.keys(row).find(k=>normalized(k)===normalized(name));if(key!==undefined)return String(row[key]??'').trim();}return '';};
 export function parseLumaCsv(csv,{eventRef}){
   check(typeof csv==='string'&&Buffer.byteLength(csv)<=2000000,'CSV_SIZE_LIMIT');check(typeof eventRef==='string'&&eventRef.length>0,'EVENT_REF_REQUIRED');
-  const rows=parse(csv,{columns:true,bom:true,skip_empty_lines:true,max_record_size:50000});check(rows.length<=10000,'CSV_ROW_LIMIT');
+  let rowCount=0;
+  const rows=parse(csv,{columns:true,bom:true,skip_empty_lines:true,max_record_size:50000,on_record:row=>{check(++rowCount<=10000,'CSV_ROW_LIMIT');return row;}});
   const people=new Set(),tickets=new Set(),statusCounts={},records=[];let unknownPeople=0,unkeyedTickets=0;
   for(const row of rows){
     const email=pick(row,['email','email address','メールアドレス']).toLowerCase();
