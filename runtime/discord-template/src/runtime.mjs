@@ -2,6 +2,7 @@ import {ArchiveRuntime} from './archive-runtime.mjs';
 import http from 'node:http';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {loadConfig} from './config.mjs';
 import {Store} from './store.mjs';
 import {CliAnalyzer,ResponsesAnalyzer} from './llm.mjs';
@@ -18,13 +19,17 @@ import {startBridge} from './bridge.mjs';
 import {awaitWithSignal,deadlineScope,readHttpBody,sendHttpJson} from './http-limits.mjs';
 import {DotsBridge} from './dots.mjs';
 import {atomicJson,atomicText,check,uid,errorCode,redact,Refused} from './common.mjs';
+import {bindRuntimeSource} from './source-binding.mjs';
+const packageRoot=fileURLToPath(new URL('..',import.meta.url));
 
 function pidRunning(pid){
   if(!Number.isSafeInteger(pid)||pid<=0)return true;
   try{process.kill(pid,0);return true;}catch(error){return error.code!=='ESRCH';}
 }
 
-export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),log=value=>console.log(JSON.stringify(redact(value)))}={}){
+export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),sourceRoot=packageRoot,log=value=>console.log(JSON.stringify(redact(value)))}={}){
+  // Bound once at startup; later disk changes do not alter this readback.
+  const source=await bindRuntimeSource(sourceRoot);
   if(runtimeDomain==='')runtimeDomain=undefined;
   if(runtimeDomain!==undefined)check(typeof runtimeDomain==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(runtimeDomain),'RUNTIME_DOMAIN_INVALID');
   const config=await loadConfig(filename);let current=config;const store=new Store(config.dataDir),ownerId=uid('host'),startedAt=new Date().toISOString();
@@ -79,7 +84,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
       let scope;
       try{
         const auth=Buffer.from(String(req.headers.authorization??'')),expected=Buffer.from('Bearer '+secret);check(auth.length===expected.length&&timingSafeEqual(auth,expected),'UNAUTHORIZED');
-        if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status()});return;}
+        if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status(),source});return;}
         check(req.method==='POST'&&req.url==='/v1/command','ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');check(controlOperations.size<8,'CONTROL_BUSY');
         scope=deadlineScope(10000,'CONTROL_BODY_TIMEOUT');controlReads.add(scope);
         const body=await readHttpBody(req,{maxBytes:200000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});

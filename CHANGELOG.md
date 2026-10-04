@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Discord runtimeに`integrity`を追加し、起動時に保持したsource digestを認証済みlocal controlで読み戻して候補・現在のdiskと照合する。大きなsource集合は拒否し、制御応答の上限を守る。live切替・rollbackと`PB-G4`は未証明のまま（#157、元#182）。
+
 - Local review gateway に分類・明示reader/reviewer・期限・取消のcatalog v2を追加。unclassified/secretの内容を返さず、人のreviewはhuman種別だけに保存する。kindとpolicyはoperatorのsnapshotであり、本人認証・Promotionではない（#123、元#44）。
 
 - Dots pluginにcursor一覧とrevision/権限付き全文pageを追加。簡略一覧は合成SDK試験で転送JSONを約97.6%削減し、元の全文一覧を維持する。長文・多言語・複雑な依存の通信benchmarkを必須CIで検査する（#204）。
