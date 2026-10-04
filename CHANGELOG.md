@@ -8,6 +8,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 正本 #48 の公開知識基盤と #61 の互換 verdict/readiness 修正を現行 main へ再配置。9つの公開Concept、出典に束縛した catalog/graph、字句検索と限定context、schema/profile/判断readinessを分ける監査を追加。除外した旧運用文書やCloudflare baseを取り込まず、内容・実agent入力・権限の独立検証を未成立のまま明示する（`docs/KNOWLEDGE-BASE.md`）。
 - Local review gateway に分類・明示reader/reviewer・期限・取消のcatalog v2を追加。unclassified/secretの内容を返さず、人のreviewはhuman種別だけに保存する。kindとpolicyはoperatorのsnapshotであり、本人認証・Promotionではない（#123、元#44）。
 
 - Dots pluginにcursor一覧とrevision/権限付き全文pageを追加。簡略一覧は合成SDK試験で転送JSONを約97.6%削減し、元の全文一覧を維持する。長文・多言語・複雑な依存の通信benchmarkを必須CIで検査する（#204）。

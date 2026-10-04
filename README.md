@@ -42,7 +42,7 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 | 既存 Task に結び付けて Company Pack を実生成し、確認・訂正する | `tools/run_company_pack_task.py` と local review gateway | [Task-bound execution](docs/COMPANY-PACK-TASK-EXECUTION.md)、[Gateway](runtime/local-review-gateway/README.md) |
 | 会社の runtime を配備する | Compose minimum / Proxmox segmented の lifecycle contract と validator（live receipt なし）。Cloudflare edge と公式 Cloudflare OS の候補（未 upload、未 deploy） | [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)、[Cloudflare OS](docs/CLOUDFLARE-OS-ADOPTION.md) |
 | agent swarm に任せる | Luna Task swarm（owner に束縛した計画・予算・ACK 付きの通信・独立した検証者。offline の fixture で動く）。agent swarm と route binding の契約（schema と読み取り専用の事前検査。agent は起動しない。#34）。[移行台帳の契約](docs/PUBLIC-MIGRATION-LEDGER.md)（#35）は schema・read-only verifier と合成 fixture の段階。[agent lifecycle の契約](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md)（#36）は schema・read-only verifier・合成 fixture の段階。実 registry は未作成 | [Luna Task swarm](docs/LUNA-TASK-SWARM.md)、[Agent swarm の契約](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) |
-| 知識基盤を使う | まだ main にはありません。正本は #48・#61・#59 の系統に決まり、取り込み中です（[#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)） | [PROJECT-MAP](docs/PROJECT-MAP.md) |
+| 知識基盤を使う | #48・#61 系の公開 knowledge projection。9つのConcept、出典・鮮度の検査、字句検索、限定context、判断ready度の監査。内容の独立検証と実agent入力への接続は未成立 | [Knowledge base](docs/KNOWLEDGE-BASE.md)、[公開知識の入口](knowledge/index.md) |
 
 ## 今 `main` にあるもの、候補、方向
 
@@ -52,7 +52,7 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 | Session / conversation ledger | schema と validator | | runtime への取込 |
 | Discord / Voice | `runtime/discord-template` | | 15 分 rotation、Voice-to-Verified-Handoff、GrillU、[GPT-Live の採用方針](docs/GPT-LIVE-ADOPTION.md)の残り（#142〜#146） |
 | Agent swarm / 自律実行 | 限定 Task 実行、Luna Task swarm、agent swarm・route binding の契約（#34）、移行台帳の契約（#35）、agent lifecycle の契約（#36） | 実 registry と runtime/continuity 受入 | 「OK」後の Goal Completion Loop、reversible delegation |
-| 知識・Context | | OKF v0.2 の知識 bundle（#48・#61・#59）、control plane（#49 の系統） | Context Gateway、TiDB 評価 |
+| 知識・Context | #48・#61 系の公開 OKF bundle と read-only CLI | #59 の実入力束縛、control plane の残件 | Context Gateway、TiDB 評価 |
 | Runtime | Compose / Proxmox contract、Cloudflare candidate | | Cloudflare edge と公式 Cloudflare OS を基盤にした配備 |
 | 組織・事業 | | | Resident Clone、Agent Foundry、AI Business Loop |
 

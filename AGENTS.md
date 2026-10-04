@@ -8,6 +8,7 @@ and public access have different owners; do not create another status ledger her
 1. Read [README.md](README.md), [STATUS.md](STATUS.md), and [ROADMAP.md](ROADMAP.md).
 2. Use [the project map](docs/PROJECT-MAP.md) to select the relevant component,
    existing documentation, and PR dependency.
+   Public knowledge context starts at [knowledge/index.md](knowledge/index.md).
 3. Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and the
    component's instructions before editing.
 4. Pin the repository, branch, HEAD, working-tree changes, intended outcome,

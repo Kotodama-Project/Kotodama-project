@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/kotodama-okf-concept.schema.json",
+  "title": "Kotodama OKF concept frontmatter",
+  "description": "Producer-side checks for public Kotodama OKF v0.2 concepts. Unknown standard OKF or producer extension fields remain allowed at the top level.",
+  "type": "object",
+  "required": [
+    "type",
+    "title",
+    "description",
+    "status",
+    "generated",
+    "sources",
+    "kotodama"
+  ],
+  "properties": {
+    "type": {"type": "string", "minLength": 1, "maxLength": 128},
+    "title": {"type": "string", "minLength": 1, "maxLength": 256},
+    "description": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "resource": {"type": "string", "minLength": 1, "maxLength": 2048},
+    "tags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 64}
+    },
+    "status": {"enum": ["draft", "stable", "deprecated"]},
+    "stale_after": {"type": "string", "format": "date-time"},
+    "generated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["by", "at"],
+      "properties": {
+        "by": {"$ref": "#/$defs/actor"},
+        "at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "verified": {
+      "oneOf": [
+        {"$ref": "#/$defs/verification"},
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/verification"}
+        }
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/source"}
+    },
+    "usage_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": {"type": "string", "format": "date-time"},
+        "to": {"type": "string", "format": "date-time"}
+      }
+    },
+    "kotodama": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "id",
+        "classification",
+        "authority",
+        "knowledge_state",
+        "owner_role",
+        "reviewer_role",
+        "context_priority",
+        "goal_refs",
+        "kgi_refs",
+        "initiative_refs",
+        "agent_use"
+      ],
+      "properties": {
+        "profile": {"const": "0.1"},
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9/_-]{2,254}$"
+        },
+        "classification": {
+          "enum": [
+            "unclassified",
+            "public_candidate",
+            "internal",
+            "restricted",
+            "secret"
+          ]
+        },
+        "authority": {"const": "projection_only"},
+        "knowledge_state": {
+          "enum": [
+            "candidate",
+            "confirmed",
+            "conflicted",
+            "unknown",
+            "deprecated",
+            "revoked"
+          ]
+        },
+        "owner_role": {"type": "string", "minLength": 1, "maxLength": 128},
+        "reviewer_role": {"type": "string", "minLength": 1, "maxLength": 128},
+        "context_priority": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "goal_refs": {"$ref": "#/$defs/refs"},
+        "kgi_refs": {"$ref": "#/$defs/refs"},
+        "initiative_refs": {"$ref": "#/$defs/refs"},
+        "agent_use": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "discoverable",
+            "answer_mode",
+            "decision_authority",
+            "runtime_authority"
+          ],
+          "properties": {
+            "discoverable": {"type": "boolean"},
+            "answer_mode": {
+              "enum": ["navigation_only", "source_required", "summary_allowed"]
+            },
+            "decision_authority": {"const": false},
+            "runtime_authority": {"const": false}
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "actor": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 256,
+      "pattern": "^(?:human:[a-zA-Z0-9._-]+|process:[a-zA-Z0-9._-]+|team:[a-zA-Z0-9._-]+|[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+)$"
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["by", "at"],
+      "properties": {
+        "by": {"$ref": "#/$defs/actor"},
+        "at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["resource"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
+        },
+        "resource": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "title": {"type": "string", "minLength": 1, "maxLength": 512},
+        "author": {"$ref": "#/$defs/actor"},
+        "usage_count": {"type": "integer", "minimum": 0},
+        "last_modified": {"type": "string", "format": "date-time"},
+        "usage_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": {"type": "string", "format": "date-time"},
+            "to": {"type": "string", "format": "date-time"}
+          }
+        }
+      }
+    },
+    "refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_-]{1,127}$"
+      }
+    }
+  }
+}
