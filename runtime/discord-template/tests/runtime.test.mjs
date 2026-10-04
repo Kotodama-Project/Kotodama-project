@@ -12,6 +12,9 @@ import {CliAnalyzer} from '../src/llm.mjs';
 import {CliWorker} from '../src/worker.mjs';
 import {runCommand} from '../src/command.mjs';
 import {Store} from '../src/store.mjs';
+import fsPromises from 'node:fs/promises';
+import {syncBuiltinESMExports} from 'node:module';
+import {AccessMonitor} from '../src/access-grace.mjs';
 
 // Synthetic subprocess fixture only. Real isolation is checked separately.
 const fixtureVerifier={preflight:async()=>{},verify:async(command,options)=>({...await runCommand(command.executable,command.args,options),isolation:{kind:'synthetic_fixture'}})};
@@ -98,6 +101,49 @@ test('policy polling continues while only outage and recovery transitions are lo
   await writeFile(file,'{');await waitFor(()=>policyEvents().length===3);
   assert.deepEqual(policyEvents(),['policy_unavailable','policy_restored','policy_unavailable']);
   assert.deepEqual(runtime.pipeline.policy().discord.operators,[]);
+});
+
+for(const failure of [false,true])test(`shutdown retains a pending policy read and skips late pruning (${failure?'failed':'successful'} read)`,async t=>{
+  const {config,file,cleanup}=await configFixture(t);let runtime,entered,release;
+  const ready=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve);
+  t.after(async()=>{release();t.mock.restoreAll();syncBuiltinESMExports();await runtime?.close();await cleanup();});
+  config.dots={...config.dots,enabled:true,actorId:actor,channelIds:[config.discord.resultChannelId]};await atomicJson(file,config);
+  runtime=await startRuntime(file,{offline:true,log:()=>{}});runtime.dots.lastPrunedAt=0;
+  const previousPolicy=runtime.pipeline.policy(),originalRead=fsPromises.readFile,originalDrain=AccessMonitor.prototype.drain;let intercepted=false,prunes=0;
+  t.mock.method(runtime.dots,'prune',()=>{prunes++;assert(runtime.store.db.isOpen);});
+  t.mock.method(fsPromises,'readFile',async function(filename,...args){if(filename===file&&!intercepted){intercepted=true;entered();await gate;if(failure)throw Error('synthetic read failure');}return originalRead.call(this,filename,...args);});syncBuiltinESMExports();
+  t.mock.method(AccessMonitor.prototype,'drain',function(options){return originalDrain.call(this,{...options,timeoutMs:20});});
+  await ready;await assert.rejects(runtime.close(),{code:'POLICY_DRAIN_UNCERTAIN'});
+  assert.equal(runtime.store.db.isOpen,true);assert.equal(runtime.store.lock().pid,process.pid);assert.equal(prunes,0);
+  release();await runtime.close();assert.equal(runtime.store.db.isOpen,false);assert.equal(prunes,0);assert.equal(runtime.pipeline.policy(),previousPolicy);
+  const reopened=new Store(config.dataDir);try{assert.equal(reopened.lock(),undefined);}finally{reopened.close();}
+});
+
+test('shutdown drains the actual monitor probe after its check deadline has returned',async t=>{
+  const {config,file,cleanup}=await configFixture(t);let release,entered,returned;
+  const gate=new Promise(resolve=>release=resolve),ready=new Promise(resolve=>entered=resolve),checked=new Promise(resolve=>returned=resolve);
+  const runtime=await startRuntime(file,{offline:true,log:()=>{}});
+  t.after(async()=>{release();runtime.pipeline.active.clear();t.mock.restoreAll();await runtime.close();await cleanup();});
+  const source={provider:'discord',guildId:config.discord.guildId,channelId:config.discord.resultChannelId,sourceId:'monitor-fixture',actorId:actor,readers:[actor],revision:1,final:true,text:'合成の監視fixture'};
+  const key=runtime.store.ingest(source).key,task=runtime.store.createTask(runtime.store.source(key,actor),{title:'fixture',request:'fixture',action:'research',acceptance:[],key:'fixture'});runtime.store.claim(task.id,task.revision);
+  const controller=new AbortController();runtime.pipeline.active.set(task.id,{revision:task.revision,controller});
+  const taskInternal=runtime.owner.taskInternal.bind(runtime.owner),originalCheck=AccessMonitor.prototype.check,originalDrain=AccessMonitor.prototype.drain;let contexts=0;
+  runtime.owner.taskInternal=async id=>{entered();await gate;assert(runtime.store.db.isOpen,'raw verifier still owns SQLite');return taskInternal(id);};
+  runtime.owner.assertContext=()=>{contexts++;};
+  t.mock.method(AccessMonitor.prototype,'check',async function(id,probe){this.limitMs=10;const result=await originalCheck.call(this,id,probe);returned();return result;});
+  t.mock.method(AccessMonitor.prototype,'drain',function(options){return originalDrain.call(this,{...options,timeoutMs:20});});
+  await ready;await checked;await new Promise(resolve=>setImmediate(resolve));
+  await assert.rejects(runtime.close(),{code:'POLICY_DRAIN_UNCERTAIN'});assert.equal(controller.signal.aborted,true);assert.equal(runtime.store.lock().pid,process.pid);
+  release();await runtime.close();assert.equal(contexts,0,'a resumed probe stops before its next Store call');assert.equal(runtime.store.db.isOpen,false);
+});
+
+test('an unexpected policy-cycle failure stops active workers and logs once while polling continues',async t=>{
+  const {config,file,cleanup}=await configFixture(t),logs=[];config.dots={...config.dots,enabled:true,actorId:actor,channelIds:[config.discord.resultChannelId]};await atomicJson(file,config);
+  const runtime=await startRuntime(file,{offline:true,log:value=>logs.push(value)}),controller=new AbortController();let polls=0;
+  t.after(async()=>{runtime.pipeline.active.clear();await runtime.close();await cleanup();});
+  runtime.pipeline.active.set('synthetic-active-worker',{controller});runtime.dots.prune=()=>{polls++;throw new Refused('POLICY_PRUNE_FAILED');};
+  const deadline=Date.now()+5000;while(polls<2){assert(Date.now()<deadline,'policy monitor stopped polling');await new Promise(resolve=>setTimeout(resolve,10));}
+  assert.equal(controller.signal.aborted,true);assert.equal(logs.filter(value=>value.event==='policy_check_failed').length,1);assert.equal(logs.find(value=>value.event==='policy_check_failed').code,'POLICY_PRUNE_FAILED');
 });
 
 test('control admits eight commands, rejects excess, and keeps status responsive',async t=>{

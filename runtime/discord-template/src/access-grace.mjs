@@ -1,4 +1,5 @@
 import {Refused} from './common.mjs';
+import {awaitWithSignal,deadlineScope} from './http-limits.mjs';
 
 // A transient Discord failure (rate limit, server error, timeout, transport
 // error) does not prove that access was revoked. A running Task survives only a
@@ -23,12 +24,13 @@ export class AccessGrace{
 // the next tick is not duplicated: it counts as unavailable again. Only a
 // check started in this tick can confirm access.
 export class AccessMonitor{
-  constructor({grace=new AccessGrace(),limitMs=2000}={}){this.grace=grace;this.limitMs=limitMs;this.inflight=new Set();}
+  constructor({grace=new AccessGrace(),limitMs=2000,maxInflight=8}={}){this.grace=grace;this.limitMs=limitMs;this.maxInflight=maxInflight;this.inflight=new Map();this.stopping=false;}
   async check(id,probe){
+    if(this.stopping)return false;
     const startedAt=this.grace.now();
-    if(this.inflight.has(id))return this.grace.tolerate(id,new Refused('ACCESS_UNAVAILABLE'),startedAt);
-    this.inflight.add(id);
-    const pending=Promise.resolve().then(probe).finally(()=>this.inflight.delete(id));
+    if(this.inflight.has(id)||this.inflight.size>=this.maxInflight)return this.grace.tolerate(id,new Refused('ACCESS_UNAVAILABLE'),startedAt);
+    const pending=Promise.resolve().then(()=>{if(this.stopping)throw new Refused('RUNTIME_STOPPING');return probe();});
+    this.inflight.set(id,pending);const finished=()=>this.inflight.delete(id);pending.then(finished,finished);
     let timer;
     const limit=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Refused('ACCESS_UNAVAILABLE')),this.limitMs);timer.unref?.();});
     try{await Promise.race([pending,limit]);this.grace.clear(id);return true;}
@@ -36,4 +38,10 @@ export class AccessMonitor{
     finally{clearTimeout(timer);}
   }
   retain(ids){this.grace.retain(ids);}
+  stop(){this.stopping=true;}
+  async drain({pending=[],timeoutMs=15000}={}){
+    // A check deadline does not settle its underlying verifier.
+    this.stop();const deadline=deadlineScope(timeoutMs,'POLICY_DRAIN_UNCERTAIN');
+    try{await awaitWithSignal(Promise.allSettled([...pending,...this.inflight.values()]),deadline.signal);}finally{deadline.dispose();}
+  }
 }
