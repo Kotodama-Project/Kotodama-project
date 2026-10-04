@@ -2,7 +2,6 @@ import {ArchiveRuntime} from './archive-runtime.mjs';
 import http from 'node:http';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {loadConfig} from './config.mjs';
 import {Store} from './store.mjs';
 import {CliAnalyzer,ResponsesAnalyzer} from './llm.mjs';
@@ -19,17 +18,18 @@ import {startBridge} from './bridge.mjs';
 import {awaitWithSignal,deadlineScope,readHttpBody,sendHttpJson} from './http-limits.mjs';
 import {DotsBridge} from './dots.mjs';
 import {atomicJson,atomicText,check,uid,errorCode,redact,Refused} from './common.mjs';
-import {bindRuntimeSource} from './source-binding.mjs';
-const packageRoot=fileURLToPath(new URL('..',import.meta.url));
+import {consumeBootstrapBinding,registerRuntimeModule} from './source-bootstrap.mjs';
+registerRuntimeModule(startRuntime,import.meta.url);
 
 function pidRunning(pid){
   if(!Number.isSafeInteger(pid)||pid<=0)return true;
   try{process.kill(pid,0);return true;}catch(error){return error.code!=='ESRCH';}
 }
 
-export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),sourceRoot=packageRoot,log=value=>console.log(JSON.stringify(redact(value)))}={}){
-  // Bound once at startup; later disk changes do not alter this readback.
-  const source=await bindRuntimeSource(sourceRoot);
+export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),sourceBootstrap,log=value=>console.log(JSON.stringify(redact(value)))}={}){
+  // Only the cold official CLI can supply a bootstrap-owned one-use record.
+  // Direct/cached imports have already loaded code and stay unverified.
+  const source=consumeBootstrapBinding(sourceBootstrap,startRuntime);
   if(runtimeDomain==='')runtimeDomain=undefined;
   if(runtimeDomain!==undefined)check(typeof runtimeDomain==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(runtimeDomain),'RUNTIME_DOMAIN_INVALID');
   const config=await loadConfig(filename);let current=config;const store=new Store(config.dataDir),ownerId=uid('host'),startedAt=new Date().toISOString();

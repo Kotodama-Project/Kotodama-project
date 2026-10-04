@@ -62,13 +62,15 @@ GPT-Liveの利用量は `session.usage.updated` の累積秒を前回値と置�
 
 ## 稼働中のソースと候補の照合
 
-`integrity` は、稼働中のruntimeがどの版のファイルで動いているかを、中身を出さずにSHA-256のdigestで確かめます。比べるのは次の三つです。
+`integrity` は、信頼済みの最小CLI/bootstrapから直接起動したruntimeのソース候補を、中身を出さずにSHA-256のdigestで照合します。Node自身、`bin/kotodama.mjs`とbuiltinsだけを使う`src/source-bootstrap.mjs`は、改変されない起動の土台として信頼します。一般のJavaScript callerや改変されたプロセスの実行コードを証明するremote attestationではありません。比べるのは次の三つです。
 
 - 候補: `--candidate` に渡したディレクトリ。候補のcommitから `git archive` で空のディレクトリへ展開して作ります。
 - disk: `integrity` を実行したCLI自身のパッケージに、今置かれているファイル。
-- 稼働中のruntime: `start` が起動の最初に一度だけ計算し、プロセスの中に保持した値。`status` と同じ認証付きのlocal controlで、`runtime.json` の所有者・PID・起動時刻と照合したうえで、その場で読み戻します。起動後にdiskを読み直した値ではありません。`status` の出力にも同じ `source`（各ファイルの相対pathとdigest）が含まれます。
+- 稼働中のruntime: 直接起動したCLIの`start`が、applicationの`src`をimportする前に取得する値。import後に同じ範囲のbytesとfile/directoryのidentity・mtime・ctimeを再検査し、変化がなければ一回だけ使えるbootstrapの内部記録から起動へ渡します。`status`と同じ認証付きlocal controlで、所有者・PID・起動時刻を照合してその場で読み戻します。起動後のdiskで上書きせず、`status`の同じ`source`に相対pathとdigestを含めます。
 
 対象は `bin/` と `src/` の下のすべてのファイル、`package.json`、`pnpm-lock.yaml` です。設定、データ領域、`docs/`、`tests/`、`node_modules/` は含みません。`node_modules/` は `pnpm-lock.yaml` のdigestと `pnpm install --frozen-lockfile` を前提に束縛するだけで、その中のファイルは比べません。対象の中のsymlink、hard link、通常でないファイルは読まずに拒否します。探索は10,000 entries・深さ64、通常ファイルは5,000件・各2 MB・合計64 MB、statusに載せる束縛は750 KBまでに制限します。上限超過は `SOURCE_SET_LIMIT` として拒否します。起動時に束縛できなかった場合もruntimeは起動し、照合は `unverified` になります。
+
+直接の`startRuntime` API、既にmoduleを読み込んだcaller、任意の`sourceRoot`やcallerが作った記録からは正の照合を作りません（`SOURCE_BOOTSTRAP_REQUIRED`）。Nodeのpreload/loaderを含む起動optionや`NODE_OPTIONS`がある起動も同様です。Windowsではctimeがcreation timeを表す場合があり、変更して戻した履歴をこのguardで確実に検出できないため`SOURCE_BOOTSTRAP_UNSUPPORTED`として`unverified`にします。runtimeとstatus/tasks/shutdownは引き続き使えます。POSIXの起動中変更は、内容を戻してもmetadataの変化を検出して`SOURCE_CHANGED_DURING_STARTUP`とします。内部metadataは10,000 entriesと1.5 MBまでに制限し、応答には出しません。source検査は起動の二回だけで、各control commandには追加しません。
 
 結果の `parity` は三通りです。
 
@@ -78,7 +80,7 @@ GPT-Liveの利用量は `session.usage.updated` の累積秒を前回値と置�
 
 出力にはPID、所有者ID、port、絶対path、設定値、control secretを含めません。`--revision` は表示用のラベルで、道具はcommitとの対応を確かめません。commitとの対応は、そのcommitから候補を作ることで取ります。
 
-前提として、起動中のファイルを置き換えません。新しい版は別のディレクトリへ置き、停止してから新しいディレクトリで起動します。同じ場所へ上書きすると、Nodeが起動時にファイルを読んだ時点と束縛を計算した時点の差を説明できません。
+前提として、起動中のファイルを置き換えません。新しい版は別のディレクトリへ置き、停止してから新しいディレクトリで起動します。起動guardは誤った一致を防ぐ検査で、更新手順・sourceへの書込み権限・固定依存の確認を代替しません。
 
 許可された切り替えとrollbackでは、次の順に読み戻します。候補はGitのcloneがある場所で作り、ディレクトリごと実行hostへ運んでもかまいません。
 

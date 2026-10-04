@@ -3,23 +3,17 @@ import {parseArgs} from 'node:util';
 import {readFile,writeFile,mkdir,lstat} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {exampleConfig,loadConfig} from '../src/config.mjs';
-import {check,atomicJson,errorCode,redact,uid,digest} from '../src/common.mjs';
-import {Store} from '../src/store.mjs';
-import {startRuntime,controlCommand} from '../src/runtime.mjs';
-import {registerShutdownSignals} from '../src/shutdown.mjs';
-import {DiscordAdapter} from '../src/discord.mjs';
-import {exportDocument,readExport} from '../src/documents.mjs';
-import {parseLumaCsv,lumaSource,parseIcs} from '../src/integrations.mjs';
-import {BrowserCli} from '../src/browser.mjs';
-import {CliAnalyzer} from '../src/llm.mjs';
-import {debugRequested,describeError,enableDebugLog} from '../src/debug-log.mjs';
-import {diagnose,formatDoctor} from '../src/doctor.mjs';
-import {integrityReport} from '../src/source-binding.mjs';
+import {bootstrapCLI} from '../src/source-bootstrap.mjs';
 
 const HELP=`ことだま — Discordの会話から仕事へ\n\n  init --config PATH [--guild ID --app ID --operator ID --channel ID --workspace PATH]\n  doctor --config PATH\n  start --config PATH [--offline]\n  register --config PATH\n  status | shutdown --config PATH --actor ID\n  integrity --config PATH [--candidate DIR --revision SHA]\n  tasks | result | stop | resume --config PATH --actor ID [--task ID]\n  request --config PATH --actor ID --action research|summarize|write_file|develop --text TEXT\n  voice --config PATH --actor ID --mode assist|minutes|join|pause|resume|stop_speech|leave\n  import-discord --config PATH --actor ID [--limit 10000]\n  import-luma --config PATH --actor ID --file CSV\n  import-file --config PATH --actor ID --file TEXT\n  export --config PATH --actor ID --output FILE\n  read-export --config PATH --actor ID --file FILE\n  browser list|open|read|click|fill|scroll|screenshot --config PATH [--tab 0 --url URL --selector CSS --role ROLE --name NAME --label LABEL --text TEXT --x N --y N --output FILE]\n\n--json で機械可読の結果を返します。--verbose（または環境変数 KOTODAMA_DEBUG=1）で、想定外のエラーの詳細をデータ領域の debug.log に記録します。秘密値は引数へ渡さず環境変数に設定してください。`;
 const spec={config:{type:'string',default:'.kotodama/config.json'},json:{type:'boolean',default:false},offline:{type:'boolean',default:false},guild:{type:'string'},app:{type:'string'},operator:{type:'string'},channel:{type:'string'},workspace:{type:'string'},actor:{type:'string'},task:{type:'string'},action:{type:'string'},text:{type:'string'},mode:{type:'string'},file:{type:'string'},output:{type:'string'},limit:{type:'string'},tab:{type:'string',default:'0'},url:{type:'string'},'expected-url':{type:'string'},checked:{type:'boolean'},selector:{type:'string'},role:{type:'string'},name:{type:'string'},label:{type:'string'},x:{type:'string'},y:{type:'string'},delta:{type:'string'},help:{type:'boolean'},verbose:{type:'boolean',default:false},candidate:{type:'string'},revision:{type:'string'}};
 const {values:options,positionals}=parseArgs({options:spec,allowPositionals:true});const [command='help',sub]=positionals;
+const loadCLI=async()=>{
+  const config=await import('../src/config.mjs');
+  const modules=await Promise.all(['common','store','runtime','shutdown','discord','documents','integrations','browser','llm','debug-log','doctor','source-binding'].map(name=>import('../src/'+name+'.mjs')));
+  return Object.assign({},config,...modules);
+};
+const {exampleConfig,loadConfig,check,atomicJson,errorCode,redact,uid,digest,Store,startRuntime,controlCommand,registerShutdownSignals,DiscordAdapter,exportDocument,readExport,parseLumaCsv,lumaSource,parseIcs,BrowserCli,CliAnalyzer,debugRequested,describeError,enableDebugLog,diagnose,formatDoctor,integrityReport,sourceBootstrap}=command==='start'?await bootstrapCLI(loadCLI):await loadCLI();
 function output(value){if(options.json)console.log(JSON.stringify(redact(value)));else if(typeof value==='string')console.log(value);else console.log(JSON.stringify(redact(value),null,2));}
 try{
   if(command==='help'||options.help){output(HELP);process.exit(0);}
@@ -33,7 +27,7 @@ try{
   if(command==='doctor'){
     const result=await diagnose(config);output(options.json?result:formatDoctor(result));
   }else if(command==='start'){
-    const runtime=await startRuntime(filename,{offline:options.offline,debug:debugRequested({verbose:options.verbose})});registerShutdownSignals(runtime);
+    const runtime=await startRuntime(filename,{offline:options.offline,debug:debugRequested({verbose:options.verbose}),sourceBootstrap});registerShutdownSignals(runtime);
   }else if(command==='integrity'){
     // Disk is this CLI's package; the instance comes from checked live control.
     const report=await integrityReport({diskRoot:fileURLToPath(new URL('..',import.meta.url)),candidateRoot:options.candidate===undefined?undefined:path.resolve(options.candidate),revision:options.revision,readStatus:()=>controlCommand(config,{action:'status'})});
