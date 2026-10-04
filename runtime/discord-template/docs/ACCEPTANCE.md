@@ -58,3 +58,24 @@ Still separate and not claimed here: a second person's clean installation,
 2-person/30-minute real Discord voice, measured interruption/latency, provider
 billing, configured production Docker daemon/image, and Human GO. Existing live
 receipts apply only to their own revisions and unchanged behaviors.
+
+## 履歴増加時の保存・検索
+
+`tests/store-scale.test.mjs` は100チャンネル・12,000出典・2,400 Taskの合成履歴で、
+会話contextのJSON読取りが設定した12出典に収まり、出典・Taskの検索と訂正の
+無効化が索引を使うことを検査します。閲覧不可・撤回済みの出典は件数制限の
+前に除き、読取可能なarchiveだけが対応する速い文字起こしを置き換えます。
+時刻・版・出典IDの順序、本文の総文字数上限、同じguild/channelにある異なる
+providerの出典も従来の条件を維持します。
+
+既存SQLiteへの索引用projectionの移行は一度のtransactionで行い、原文・
+fingerprint・過去版・Task本文を変更しません。再起動時の全履歴の再解析、
+訂正時の全Task本文のJSON走査、予約ごとの全日付の合計読取りを避けます。
+Taskのcontext再束縛・訂正、権限の変化、予算のrollbackも回帰試験で検査します。
+旧版での単独書込み・削除を経た再upgradeでは、SQLiteに残るtriggerの印を使って
+projectionを再構築します。原文の閲覧制限も返却時に再確認します。
+
+初回移行は現在の出典とTaskの件数に比例します。全資料のexportと全件一覧は
+要求した件数に比例し、remote Task ownerの一覧取得は既存契約のままです。
+この合成試験は同時書込みの実測、世界規模のthroughput、実provider・Discordの
+遅延を証明しません。

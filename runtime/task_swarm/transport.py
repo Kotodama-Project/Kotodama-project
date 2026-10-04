@@ -88,6 +88,10 @@ CREATE INDEX IF NOT EXISTS ix_messages_recipient
     ON messages(task_id, revision, context_digest, recipient_ref, expires_at, row_id);
 CREATE INDEX IF NOT EXISTS ix_messages_scope
     ON messages(task_id, revision, context_digest, expires_at, row_id);
+CREATE INDEX IF NOT EXISTS ix_messages_live_scope
+    ON messages(task_id, revision, context_digest, owner_ref, active_home, authority_ref, expires_at);
+CREATE INDEX IF NOT EXISTS ix_messages_live_recipient
+    ON messages(task_id, revision, context_digest, owner_ref, active_home, authority_ref, recipient_ref, expires_at);
 CREATE INDEX IF NOT EXISTS ix_messages_parent
     ON messages(parent_message_id, row_id);
 CREATE TABLE IF NOT EXISTS acknowledgements (
@@ -419,6 +423,10 @@ class PeerTransport:
 
     def _ack_record(self, connection: sqlite3.Connection, message: sqlite3.Row) -> dict[str, Any] | None:
         row = connection.execute("SELECT * FROM acknowledgements WHERE message_id=?", (message["message_id"],)).fetchone()
+        return self._validated_ack(message, row)
+
+    @staticmethod
+    def _validated_ack(message: sqlite3.Row, row: Mapping[str, Any] | None) -> dict[str, Any] | None:
         if row is None:
             return None
         if message["payload_state"] != "ready":
@@ -440,15 +448,27 @@ class PeerTransport:
     def _pending_count(self, connection: sqlite3.Connection, request: Mapping[str, Any], now: float) -> int:
         recipient = self._binding(request["task_id"], request["recipient_ref"], active=False)
         rows = connection.execute(
-            """SELECT * FROM messages WHERE task_id=? AND revision=? AND context_digest=?
-               AND owner_ref=? AND active_home=? AND authority_ref=? AND recipient_ref=? AND expires_at>?
-               ORDER BY row_id LIMIT ?""",
+            """SELECT m.*, a.message_id AS ack_message_id, a.actor_ref AS ack_actor_ref,
+                      a.payload_digest AS ack_payload_digest, a.epoch AS ack_epoch,
+                      a.invocation_ref AS ack_invocation_ref, a.acked_at AS ack_acked_at
+               FROM messages m LEFT JOIN acknowledgements a ON a.message_id=m.message_id
+               WHERE m.task_id=? AND m.revision=? AND m.context_digest=?
+                 AND m.owner_ref=? AND m.active_home=? AND m.authority_ref=?
+                 AND m.recipient_ref=? AND m.expires_at>?
+               ORDER BY m.row_id LIMIT ?""",
             (*self._scope_params(request), request["recipient_ref"], now, self.max_messages + 1),
-        ).fetchall()
+        )
         count = 0
         for row in rows:
             self._envelope(row)
-            if self._ack_record(connection, row) is not None:
+            ack = None if row["ack_message_id"] is None else {
+                key: row[f"ack_{key}"] for key in (
+                    "message_id", "actor_ref", "payload_digest", "epoch", "invocation_ref", "acked_at"
+                )
+            }
+            # Admission still validates retained ACKs. A SQL anti-join alone
+            # would hide a corrupted ACK and incorrectly free pending quota.
+            if self._validated_ack(row, ack) is not None:
                 continue
             try:
                 self._allowed(recipient, request["recipient_ref"], row["sender_ref"], "receive")
@@ -577,7 +597,7 @@ class PeerTransport:
                      AND NOT EXISTS (SELECT 1 FROM acknowledgements a WHERE a.message_id=m.message_id)
                    ORDER BY m.row_id LIMIT ?""",
                 (*scope_key(binding), actor_ref, now, scan_limit),
-            ).fetchall()
+            )
             result: list[dict[str, Any]] = []
             for row in rows:
                 # An owner can revoke a particular directed peer without

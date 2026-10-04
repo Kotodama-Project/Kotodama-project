@@ -141,6 +141,8 @@ class SwarmState:
         );
         CREATE INDEX IF NOT EXISTS attempts_run_job ON attempts(run_id, job_id, attempt);
         CREATE INDEX IF NOT EXISTS attempts_running ON attempts(run_id, state);
+        CREATE INDEX IF NOT EXISTS jobs_leased ON jobs(run_id, exclusive_keys_json)
+            WHERE state = 'leased';
         """
         for retry in range(6):
             conn: sqlite3.Connection | None = None
@@ -608,23 +610,16 @@ class SwarmState:
         return row is None
 
     @staticmethod
-    def _exclusive_conflict(
-        conn: sqlite3.Connection,
-        run_id: str,
-        keys: list[str],
-    ) -> bool:
-        if not keys:
-            return False
+    def _leased_exclusive_keys(conn: sqlite3.Connection) -> set[str]:
         # Keys name owner-resolved resources (a worktree, a file), so a lease in
         # any run of this state store conflicts, not only one in the same run.
         leases = conn.execute(
             "SELECT exclusive_keys_json FROM jobs WHERE state = 'leased'"
-        ).fetchall()
+        )
+        keys: set[str] = set()
         for other in leases:
-            other_keys = set(SwarmState._decode_list(other["exclusive_keys_json"], "exclusive keys"))
-            if other_keys.intersection(keys):
-                return True
-        return False
+            keys.update(SwarmState._decode_list(other["exclusive_keys_json"], "exclusive keys"))
+        return keys
 
     def claim(
         self,
@@ -668,6 +663,7 @@ class SwarmState:
             jobs = self._dependency_map(conn, run_id)
             work_remaining, _ = self._work_remaining(conn, run)
             selected: sqlite3.Row | None = None
+            leased_keys: set[str] | None = None
             for job in sorted(jobs.values(), key=lambda item: str(item["job_id"])):
                 if job["state"] != "pending":
                     continue
@@ -678,8 +674,13 @@ class SwarmState:
                 if not self._reviewer_is_independent(conn, run_id, job, worker_ref):
                     continue
                 keys = self._decode_list(job["exclusive_keys_json"], "exclusive keys")
-                if self._exclusive_conflict(conn, run_id, keys):
-                    continue
+                if keys:
+                    # One consistent set for this claim transaction, shared
+                    # by every candidate rather than re-reading every lease.
+                    if leased_keys is None:
+                        leased_keys = self._leased_exclusive_keys(conn)
+                    if leased_keys.intersection(keys):
+                        continue
                 selected = job
                 break
             if selected is None:
@@ -1084,12 +1085,15 @@ class SwarmState:
     # Readback
     # ------------------------------------------------------------------
     @staticmethod
-    def _attempts_for_job(conn: sqlite3.Connection, run_id: str, job_id: str) -> list[dict[str, Any]]:
+    def _attempts_by_job(conn: sqlite3.Connection, run_id: str) -> dict[str, list[dict[str, Any]]]:
         rows = conn.execute(
-            "SELECT * FROM attempts WHERE run_id = ? AND job_id = ? ORDER BY attempt ASC",
-            (run_id, job_id),
-        ).fetchall()
-        return [SwarmState._attempt_public(row) for row in rows]
+            "SELECT * FROM attempts WHERE run_id = ? ORDER BY job_id, attempt ASC",
+            (run_id,),
+        )
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            grouped.setdefault(str(row["job_id"]), []).append(SwarmState._attempt_public(row))
+        return grouped
 
     @staticmethod
     def _claimable_for_snapshot(
@@ -1130,9 +1134,10 @@ class SwarmState:
             )
             states: dict[str, dict[str, Any]] = {}
             reasons: list[str] = []
+            attempts_by_job = self._attempts_by_job(conn, run_id)
             for job_id, row in sorted(jobs.items()):
                 public = self._job_public(row)
-                attempts = self._attempts_for_job(conn, run_id, job_id)
+                attempts = attempts_by_job.get(job_id, [])
                 public["attempts"] = attempts
                 public["attempt_count"] = len(attempts)
                 public["current_attempt"] = attempts[-1] if attempts else None

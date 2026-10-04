@@ -67,6 +67,8 @@ native の callable surface が一つも無い場合は、native の success と
 
 新しい invocation は新しい epoch/token を受けます。古い epoch の report、send、ACK、reply は stale として拒否されます。続行時に最初の attempt ID、spawn receipt、child UUID を再利用しません。root が runtime provenance をまだ束縛していない場合、worker は unknown のまま返します。
 
+履歴を保持したまま、scheduler snapshot は一つの照会で attempt を集め、claim は稼働中の lease を一回読む構成です。peer 通信は現在の owner scope・expiry の索引と ACK の結合照会を使い、receive は許可された要求件数に達したところで行の読取りを止めます。ACK の不整合、閲覧権限、epoch、budget の照合は省略しません。`tests/test_task_swarm_scalability.py` の合成履歴で照会数と SQLite の処理量を検証しています。ローカル SQLite の writer 直列化と payload 領域の quota 検査は残り、実 provider や世界規模の負荷を検証したことにはなりません。
+
 ## peer 通信の意味
 
 `PeerTransport` と MCP surface の意味を混同しないようにします。送信者と受信者の両方で Task scope、recipient grant、current epoch/invocation、expiry を再検証します。idle recipient に送ることはできますが、sender が終了した後に accepted message を読む場合も同じ scope と grant が必要です。
