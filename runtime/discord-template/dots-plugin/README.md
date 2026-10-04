@@ -51,6 +51,12 @@ serverはrunning templateのloopback controlを使い、hostのowner/pid/start t
 
 Dotへoperator/channel、返答先、監視期間を伝えます。`discord_requests`は呼ばれた時点の読取です。MCP Eventsや即時起動にはprotocol 2026-07-28のwebhook、callback検証、remote HTTPSと接続受入が別途必要です。固定間隔の監視も、設定と実際の新着受付を確認してください。
 
+`discord_requests`は既定で10件までの全文を返します。`nextCursor`があれば最後まで辿ると、先に来た未返答の相談で後続が隠れません。一回のscanは開始時点の到着範囲で終わり、次のscanをcursorなしで始めると新着も読めます。一時的に閲覧できなかった相談は`unavailable`と`complete: false`で分かり、次のscanで再確認します。読取は相談の処理済み化や常時監視の設定を行いません。
+
+閲覧確認は一回2秒、一覧の一ページは8秒を上限に待ちます。timeout後も実際のSDK読取が終わるまで最大8件の枠を保持し、同じ相談の再読で未終了の確認を重ねません。遅い確認で一覧全体を待ち続けず、残りはcursorから続けます。timeoutや`DOTS_ACCESS_BUSY`は許可の失効と区別し、本文を返さず次の読取で確認します。
+
+長い相談が多い場合は`includeText: false`でID・revision・短いpreviewを読み、必要な相談だけ`discord_read_request`で全文を取得できます。offset 0から`nextOffset`がnullになるまで同じrevisionと`textDigest`で読みます。一回は最大4096 UTF-16単位で、surrogate pairを切らずに返します。previewは全文ではありません。ページごとに元のSource・閲覧範囲・受付状態を確認し、訂正・取消・期限切れ・失効があれば古い文脈の続きは拒否します。通常の相談・返答の操作は変わりません。
+
 ## 受入の流れ
 
 1. 合成の相談をDiscordで受付し、Dotから同じID/revisionを読む。
@@ -60,4 +66,12 @@ Dotへoperator/channel、返答先、監視期間を伝えます。`discord_requ
 5. 本人の許可後、`luma_claim_operation`で一回だけ取得する。既存イベントは対象URLと設定を読み直し、変更があれば候補と許可を更新する。
 6. 接続済みLuma pluginまたは公式websiteからURLと全項目を読戻し、`luma_report_event`へ記録する。`DOT_REPORTED_NOT_INDEPENDENTLY_VERIFIED`は別の確認までprovider PASSにしない。
 
-`tests/dots.test.mjs`は受付・権限・訂正・重複送信・中断・Luma bindingと公式SDKのstdio接続を確認します。live Discord、Dot自身の呼出し、Luma plugin／websiteの実操作は別の受入です。
+`tests/dots.test.mjs`は受付・権限・訂正・重複送信・中断・Luma binding、cursorの公平な読取、長文の復元と公式SDKのstdio接続を確認します。live Discord、Dot自身の呼出し、Luma plugin／websiteの実操作は別の受入です。
+
+長文のtransport benchmarkはtemplate directoryから次で実行できます。通常の`pnpm test`にも同じ検証を含めます。
+
+```bash
+node tools/benchmark-dots-context.mjs
+```
+
+合成の38件、50万UTF-16単位以上の日本語・Arabic・English・emojiを、packageの公式SDK stdioとrunning runtimeのloopbackを通して読み戻します。全文一致、末尾の訂正条件、compact discovery、選択した相談の全文page、Source訂正・取消・config失効の拒否を確かめ、内容を含まないJSONで転送量・呼出し数・時間を返します。時間はその実行環境の観測値です。modelの推論品質や実Dotの常時読取、live Discord／Lumaの受入は測定しません。

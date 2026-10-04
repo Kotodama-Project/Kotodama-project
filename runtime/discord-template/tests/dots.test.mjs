@@ -16,10 +16,10 @@ import {createDotsServer} from '../dots-plugin/scripts/server.mjs';
 
 const runtimeRoot=fileURLToPath(new URL('..',import.meta.url));
 const actor='100000000000000002',other='100000000000000004',channel='100000000000000003';
-async function fixture(t,{delivery,authorize}={}){
+async function fixture(t,{delivery,authorize,bridgeOptions={}}={}){
   const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-dots-')),config=exampleConfig();config.dataDir=root;config.dots={enabled:true,actorId:actor,channelIds:[channel],requestTtlSeconds:3600};
   const store=new Store(root),sent=[],clock={now:Date.parse('2030-01-01T00:00:00Z')};
-  const bridge=new DotsBridge({config,store,authorize:authorize??(async()=>{}),deliver:delivery??(async(source,body)=>{sent.push({source,body});return {id:'message-'+sent.length};}),now:()=>clock.now});
+  const bridge=new DotsBridge({config,store,authorize:authorize??(async()=>{}),deliver:delivery??(async(source,body)=>{sent.push({source,body});return {id:'message-'+sent.length};}),now:()=>clock.now,...bridgeOptions});
   t.after(async()=>{store.close();assert(path.basename(root).startsWith('ktdm-dots-'));await rm(root,{recursive:true,force:true});});
   const source={provider:'discord',guildId:config.discord.guildId,channelId:channel,sourceId:'message-source',actorId:actor,readers:[actor],revision:1,final:true,text:'イベントの相談をしたい',metadata:{kind:'text'}};
   const event={name:'合成イベント',description_md:'試験用の説明',start_at:'2030-01-02T09:00:00+09:00',end_at:'2030-01-02T10:00:00+09:00',timezone:'Asia/Tokyo',location:'合成テスト会場',location_visibility:'guests-only',visibility:'private',max_capacity:30,require_approval:true};
@@ -73,15 +73,16 @@ test('Dot channel routing skips the analyzer and corrections do not enqueue anot
   const message={guildId:f.config.discord.guildId,channelId:channel,author:{id:actor},mentions:{users:new Map([[adapter.client.user.id,{}]])},reply:async body=>{replies.push(body);return {id:'ack'};}};
   await adapter.message(message);await adapter.message(message);assert.equal(analyzed,0);assert.equal(replies.length,1);adapter.source=async()=>({...f.source,revision:2,text:'訂正'});await adapter.message(message,{edited:true});assert.equal(replies.length,1);assert.equal((await f.bridge.list()).requests.length,0);await adapter.client.destroy();
 });
-test('SDK client sees six scoped tools and no programmatic approval tool',async t=>{
+test('SDK client sees seven scoped tools and no programmatic approval tool',async t=>{
   const f=await fixture(t),configFile=path.join(f.root,'bot.json');await writeFile(configFile,JSON.stringify(f.config),'utf8');let invoked;
   const {server}=await createDotsServer({runtimeRoot,configFile,call:async input=>{invoked=input;return {requests:[],taskOwnerUnchanged:true};}});const client=new Client({name:'synthetic-test',version:'1'});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);t.after(async()=>{await client.close();await server.close();});
-  const catalog=await client.listTools();assert.equal(catalog.tools.length,6);assert(!catalog.tools.some(tool=>/approve/.test(tool.name)));const result=await client.callTool({name:'discord_requests',arguments:{}});assert.equal(result.structuredContent.taskOwnerUnchanged,true);assert.equal(invoked.operation,'list');
+  const catalog=await client.listTools();assert.equal(catalog.tools.length,7);assert(!catalog.tools.some(tool=>/approve/.test(tool.name)));const result=await client.callTool({name:'discord_requests',arguments:{}});assert.equal(result.structuredContent.taskOwnerUnchanged,true);assert.equal(invoked.operation,'list');
+  const page=await client.callTool({name:'discord_read_request',arguments:{id:'dot_'+('a'.repeat(24)),revision:1,offset:128,limit:256}});assert.equal(page.isError,undefined);assert.equal(invoked.operation,'read_request');assert.equal(invoked.offset,128);
   const invalid=await client.callTool({name:'discord_reply',arguments:{id:'dot_invalid',revision:1,text:'x'}});assert.equal(invalid.isError,true);
 });
 test('packaged stdio server negotiates with the official SDK without leaking setup details',async t=>{
   const f=await fixture(t),configFile=path.join(f.root,'bot.json');await writeFile(configFile,JSON.stringify(f.config),'utf8');const client=new Client({name:'synthetic-test',version:'1'});
-  const transport=new StdioClientTransport({command:process.execPath,args:[path.join(runtimeRoot,'dots-plugin/scripts/server.mjs')],env:{...process.env,KOTODAMA_DISCORD_ROOT:runtimeRoot,KOTODAMA_DOTS_CONFIG:configFile},stderr:'pipe'});await client.connect(transport);t.after(()=>client.close());assert.equal((await client.listTools()).tools.length,6);
+  const transport=new StdioClientTransport({command:process.execPath,args:[path.join(runtimeRoot,'dots-plugin/scripts/server.mjs')],env:{...process.env,KOTODAMA_DISCORD_ROOT:runtimeRoot,KOTODAMA_DOTS_CONFIG:configFile},stderr:'pipe'});await client.connect(transport);t.after(()=>client.close());assert.equal((await client.listTools()).tools.length,7);
   const result=await client.callTool({name:'discord_requests',arguments:{}});assert.equal(result.isError,true);assert(!JSON.stringify(result).includes(f.root));
 });
 test('packaged plugin reads the actual loopback runtime and respects a revoked configuration',async t=>{
@@ -91,6 +92,7 @@ test('packaged plugin reads the actual loopback runtime and respects a revoked c
   runtime=await startRuntime(file,{offline:true,log:()=>{}});const request=runtime.dots.enqueue({provider:'discord',guildId:config.discord.guildId,channelId:channel,sourceId:'runtime-source',actorId:actor,readers:[actor],revision:1,final:true,text:'合成の相談',metadata:{kind:'text'}});
   client=new Client({name:'synthetic-runtime-client',version:'1'});const transport=new StdioClientTransport({command:process.execPath,args:[path.join(runtimeRoot,'dots-plugin/scripts/server.mjs')],env:{...process.env,KOTODAMA_DISCORD_ROOT:runtimeRoot,KOTODAMA_DOTS_CONFIG:file},stderr:'pipe'});await client.connect(transport);
   const result=await client.callTool({name:'discord_requests',arguments:{actor:other}});assert.equal(result.structuredContent.requests[0].id,request.id);assert.equal(runtime.store.tasks(actor).length,0);
+  const malformed=await client.callTool({name:'discord_requests',arguments:{cursor:'not_json'}});assert.equal(malformed.isError,true);assert.equal(malformed.content[0].text,'DOTS_CURSOR_INVALID');
   config.dots.enabled=false;await writeFile(file,JSON.stringify(config),'utf8');const revoked=await client.callTool({name:'discord_requests',arguments:{}});assert.equal(revoked.isError,true);assert.equal(revoked.content[0].text,'DOTS_PLUGIN_SCOPE_CHANGED');
 });
 test('enabled Dot configuration rejects missing owner and an unbound channel',async t=>{
@@ -141,4 +143,66 @@ test('the requester can reopen an undelivered review privately without changing 
   await adapter.interaction(i);assert.equal(replies[0].files.length,2);assert.equal(replies[0].components[0].components[0].custom_id,'kotodama-luma:'+draft.id+':'+draft.digest.slice(0,16));assert.equal(f.bridge.draft(draft.id).digest,draft.digest);
   await assert.rejects(f.bridge.send(request.id,1,'確認待ちのための終了返答'),/LUMA_OPERATION_PENDING/);i.options.getString=()=>null;await adapter.interaction(i);assert.equal(replies[1].files.length,2);
   i.user={id:other};f.config.discord.operators.push(other);await adapter.interaction(i);assert(!replies[2].files);assert.match(replies[2].content,/DOTS_ACTOR_REQUIRED/);await adapter.client.destroy();
+});
+
+test('inbox cursors reach later pending requests and use a finite horizon for new arrivals',async t=>{
+  const f=await fixture(t),expected=[];for(let n=0;n<32;n++)expected.push(f.bridge.enqueue({...f.source,sourceId:'page-'+n}).id);
+  let page=await f.bridge.list(),found=page.requests.map(r=>r.id);assert.equal(page.complete,false);assert.equal(page.uninspected,22);
+  const late=f.bridge.enqueue({...f.source,sourceId:'later-arrival'});await f.bridge.cancel(expected[12],actor);
+  while(page.nextCursor){page=await f.bridge.list({cursor:page.nextCursor});found.push(...page.requests.map(r=>r.id));}
+  assert.equal(page.complete,true);assert.deepEqual(found,expected.filter((_,n)=>n!==12));assert(!found.includes(late.id));assert.equal(new Set(found).size,found.length);
+  page=await f.bridge.list();found=page.requests.map(r=>r.id);while(page.nextCursor){page=await f.bridge.list({cursor:page.nextCursor});found.push(...page.requests.map(r=>r.id));}assert(found.includes(late.id));
+});
+test('unavailable older requests do not block cursor progress and remain retryable',async t=>{
+  let blocked=true;const f=await fixture(t,{authorize:async source=>{if(blocked&&source.sourceId.startsWith('blocked-'))throw new Error('ACCESS_UNAVAILABLE');}});
+  for(let n=0;n<20;n++)f.bridge.enqueue({...f.source,sourceId:'blocked-'+n});const later=f.bridge.enqueue({...f.source,sourceId:'available'});
+  const first=await f.bridge.list();assert.equal(first.requests.length,0);assert.equal(first.unavailable,20);assert(first.nextCursor);
+  const second=await f.bridge.list({cursor:first.nextCursor});assert.equal(second.requests[0].id,later.id);assert.equal(second.nextCursor,null);assert.equal(second.complete,false);assert.equal(second.unavailable,20);
+  blocked=false;assert.equal((await f.bridge.list()).requests.length,10);assert.equal(f.store.db.prepare("SELECT count(*) AS n FROM dot_requests WHERE state='pending'").get().n,21);
+});
+test('cursor input is bounded and tied to the current owner and channel scope',async t=>{
+  const f=await fixture(t);for(let n=0;n<11;n++)f.bridge.enqueue({...f.source,sourceId:'scope-'+n});const first=await f.bridge.list();
+  await assert.rejects(f.bridge.list({cursor:'x'.repeat(321)}),/DOTS_CURSOR_INVALID/);await assert.rejects(f.bridge.list({cursor:'not_json'}),/DOTS_CURSOR_INVALID/);
+  f.config.dots.channelIds.push('100000000000000005');await assert.rejects(f.bridge.list({cursor:first.nextCursor}),/DOTS_CURSOR_INVALID/);
+  await assert.rejects(f.bridge.list({limit:11}),/DOTS_LIST_INVALID/);await assert.rejects(f.bridge.list({includeText:'false'}),/DOTS_LIST_INVALID/);
+});
+test('retained receipt history does not require an inbox table scan',async t=>{
+  const f=await fixture(t),insert=f.store.db.prepare("INSERT INTO dot_requests(id,source_key,source_revision,actor,state,created) VALUES(?,? ,1,?,'sent',0)");
+  f.store.transaction(()=>{for(let n=0;n<10000;n++)insert.run('retained-'+n,'retained-source',actor);});const req=f.bridge.enqueue(f.source);assert.equal((await f.bridge.list()).requests[0].id,req.id);
+  const plan=f.store.db.prepare("EXPLAIN QUERY PLAN SELECT id,rowid AS ordinal FROM dot_requests WHERE actor=? AND state='pending' AND rowid>? AND rowid<=? ORDER BY rowid LIMIT 20").all(actor,0,20000).map(r=>r.detail).join(' ');assert.match(plan,/dot_requests_inbox/);assert(!/USE TEMP B-TREE/.test(plan));
+  const admission=f.store.db.prepare("EXPLAIN QUERY PLAN SELECT count(*) AS n FROM dot_requests WHERE state='pending'").all().map(r=>r.detail).join(' ');assert.match(admission,/SEARCH.*dot_requests_inbox/);
+});
+test('compact discovery and bounded Unicode text pages preserve the complete request',async t=>{
+  const f=await fixture(t),text='a'.repeat(127)+'🧑‍💻'+('条件。العربية e\u0301 🛰️\n'.repeat(750)),req=f.bridge.enqueue({...f.source,text});
+  const listed=(await f.bridge.list({includeText:false})).requests[0];assert(!Object.hasOwn(listed,'text'));assert.equal(listed.textLength,text.length);assert.equal((await f.bridge.list()).requests[0].text,text);
+  let offset=0,reconstructed='',pages=0;do{const part=await f.bridge.read(req.id,1,{offset,limit:128});assert.equal(part.textDigest,listed.textDigest);assert.equal(part.offsetEncoding,'utf-16');assert(!/^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/.test(part.text));reconstructed+=part.text;offset=part.nextOffset;pages++;}while(offset!==null);
+  assert.equal(reconstructed,text);assert(pages>100);await assert.rejects(f.bridge.read(req.id,1,{offset:128}),/DOTS_TEXT_OFFSET_INVALID/);await assert.rejects(f.bridge.read(req.id,1,{offset:text.length+1}),/DOTS_TEXT_OFFSET_INVALID/);await assert.rejects(f.bridge.read(req.id,1,{limit:4097}),/DOTS_TEXT_RANGE_INVALID/);
+});
+test('a correction, cancellation or access loss stops subsequent request pages',async t=>{
+  let denied=false;const f=await fixture(t,{authorize:async()=>{if(denied)throw new Error('SOURCE_ACCESS_DENIED');}}),req=f.bridge.enqueue({...f.source,text:'長い条件'.repeat(3000)});
+  await f.bridge.read(req.id,1);f.store.ingest({...f.source,revision:2,text:'訂正'});await assert.rejects(f.bridge.read(req.id,1,{offset:4096}),/DOTS_SOURCE_CHANGED/);
+  const next=f.bridge.enqueue({...f.source,sourceId:'cancelled-page'});await f.bridge.cancel(next.id,actor);await assert.rejects(f.bridge.read(next.id,1),/DOTS_REQUEST_NOT_PENDING/);
+  const revoked=f.bridge.enqueue({...f.source,sourceId:'revoked-page'});denied=true;await assert.rejects(f.bridge.read(revoked.id,1),/SOURCE_ACCESS_DENIED/);
+});
+test('later authorization cannot emit an earlier request after it changed',async t=>{
+  let f,mutate=false;f=await fixture(t,{authorize:async source=>{if(mutate&&source.sourceId==='second'){mutate=false;f.store.ingest({...f.source,revision:2,text:'後から訂正'});}}});
+  f.bridge.enqueue(f.source);const second=f.bridge.enqueue({...f.source,sourceId:'second'});mutate=true;const result=await f.bridge.list();assert.deepEqual(result.requests.map(r=>r.id),[second.id]);assert.equal(result.complete,true);
+});
+test('authorization timeouts retain raw admission and coalesce retries until settlement',async t=>{
+  const pending=[];let calls=0;const f=await fixture(t,{authorize:()=>{calls++;return new Promise(resolve=>pending.push(resolve));},bridgeOptions:{authorizationLimit:2,authorizationTimeoutMs:15}});
+  const first=f.bridge.enqueue(f.source),second=f.bridge.enqueue({...f.source,sourceId:'raw-second'}),third=f.bridge.enqueue({...f.source,sourceId:'raw-third'});
+  await assert.rejects(f.bridge.read(first.id,1),/DOTS_ACCESS_TIMEOUT/);await assert.rejects(f.bridge.read(first.id,1),/DOTS_ACCESS_TIMEOUT/);assert.equal(calls,1);
+  await assert.rejects(f.bridge.read(second.id,1),/DOTS_ACCESS_TIMEOUT/);assert.equal(calls,2);assert.equal(f.bridge.authorizations.size,2);
+  await assert.rejects(f.bridge.read(third.id,1),/DOTS_ACCESS_BUSY/);assert.equal(calls,2);
+  pending.splice(0).forEach(resolve=>resolve());await new Promise(resolve=>setImmediate(resolve));assert.equal(f.bridge.authorizations.size,0);
+  const fresh=f.bridge.read(third.id,1);await new Promise(resolve=>setImmediate(resolve));pending.splice(0).forEach(resolve=>resolve());assert.equal((await fresh).id,third.id);assert.equal(calls,3);
+});
+test('coalesced authorizations recheck current Source scope after the raw read settles',async t=>{
+  let resolve,calls=0;const gate=new Promise(done=>{resolve=done;}),f=await fixture(t,{authorize:()=>{calls++;return gate;}}),req=f.bridge.enqueue(f.source);
+  const first=f.bridge.read(req.id,1),second=f.bridge.read(req.id,1);f.config.dots.channelIds=[];resolve();await assert.rejects(first,/DOTS_SOURCE_SCOPE_CHANGED/);await assert.rejects(second,/DOTS_SOURCE_SCOPE_CHANGED/);assert.equal(calls,1);assert.equal(f.bridge.authorizations.size,0);
+});
+test('a slow inbox page stops at its wall budget and preserves the remaining cursor',async t=>{
+  let release;const gate=new Promise(resolve=>{release=resolve;}),f=await fixture(t,{authorize:()=>gate,bridgeOptions:{authorizationTimeoutMs:30,listDeadlineMs:45}});
+  for(let n=0;n<20;n++)f.bridge.enqueue({...f.source,sourceId:'slow-'+n});const started=performance.now(),page=await f.bridge.list();assert.equal(page.requests.length,0);assert(page.nextCursor);assert(page.uninspected>=10);assert.equal(page.unavailable+page.uninspected,20);assert.equal(page.complete,false);assert(f.bridge.authorizations.size<=f.bridge.authorizationLimit);assert(performance.now()-started<1000);
+  release();await new Promise(resolve=>setImmediate(resolve));const next=await f.bridge.list({cursor:page.nextCursor});assert.equal(next.requests.length,10);assert.equal(next.unavailable,page.unavailable);assert.equal(f.store.db.prepare("SELECT count(*) AS n FROM dot_requests WHERE state='pending'").get().n,20);
 });

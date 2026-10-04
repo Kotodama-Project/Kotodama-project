@@ -29,3 +29,5 @@ jobs:
         run: python -m pip install --require-hashes -r requirements-task-swarm-ci.txt
       - run: python -m pytest -q -p no:cacheprovider tests -k task_swarm
       - run: python tools/task_swarm.py demo --root work/ci-offline-demo --allow-local-fixture
+      - name: Benchmark long context, corrections, restart and retained history
+        run: python -B tools/task_swarm_benchmark.py --allow-local-fixture --output work/ci-swarm-benchmark.json --github-summary
