@@ -29,24 +29,30 @@ class StrictJsonError(ValueError):
     pass
 
 
+class SafeArgumentParser(argparse.ArgumentParser):
+    def error(self, _message: str) -> None:
+        self.print_usage(sys.stderr)
+        self.exit(2, "error: invalid command-line arguments\n")
+
+
 def _reject_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
         if key in result:
-            raise StrictJsonError(f"duplicate JSON key: {key}")
+            raise StrictJsonError("duplicate JSON key")
         result[key] = value
     return result
 
 
 def _reject_constant(value: str) -> None:
-    raise StrictJsonError(f"non-finite JSON number is not allowed: {value}")
+    raise StrictJsonError("non-finite JSON number is not allowed")
 
 
 def _read_utf8(path: Path) -> str:
     try:
         return path.read_bytes().decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise StrictJsonError(f"{path.name} is not valid UTF-8 (byte {exc.start})") from None
+        raise StrictJsonError(f"input is not valid UTF-8 (byte {exc.start})") from None
 
 
 def _parse_strict_json(text: str) -> object:
@@ -70,15 +76,20 @@ def validate(candidate_path: Path) -> list[str]:
         schema = load_strict_json(SCHEMA_PATH)
         raw_candidate = _read_utf8(candidate_path)
         candidate = _parse_strict_json(raw_candidate)
-    except (OSError, json.JSONDecodeError, StrictJsonError) as exc:
+    except OSError:
+        return ["input could not be read"]
+    except (json.JSONDecodeError, RecursionError):
+        return ["input JSON is invalid"]
+    except StrictJsonError as exc:
         return [str(exc)]
 
     validator = Draft202012Validator(schema)
     errors = sorted(validator.iter_errors(candidate), key=lambda error: list(error.absolute_path))
     messages: list[str] = []
     for error in errors:
-        location = ".".join(str(part) for part in error.absolute_path) or "<root>"
-        messages.append(f"{location}: {error.message}")
+        # Schema messages and instance paths can quote rejected private values.
+        # Only the validator keyword comes from the repository-owned schema.
+        messages.append(f"schema validation failed ({error.validator})")
     # Report only the detector and line; never echo the value.
     for _path, line, detector in scan_text(candidate_path, raw_candidate):
         messages.append(f"line {line}: secret-like value ({detector})")
@@ -86,7 +97,9 @@ def validate(candidate_path: Path) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = SafeArgumentParser(
+        prog="validate_executor_runtime_candidate.py", description=__doc__
+    )
     parser.add_argument("candidate", type=Path, help="executor runtime candidate JSON")
     args = parser.parse_args()
 

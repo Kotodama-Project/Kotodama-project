@@ -8,12 +8,17 @@ opens a credential, writes a receipt, or emits input values.
 from __future__ import annotations
 
 import json
+import math
+import os
+import stat
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
+
+from validate_public_migration_ledger import reject_excessive_json_nesting
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +28,48 @@ MAX_INPUT_BYTES = 1_048_576
 
 class DuplicateKeyError(ValueError):
     pass
+
+
+class InputTooLargeError(ValueError):
+    pass
+
+
+def read_bounded(path: Path) -> bytes:
+    before = path.lstat()
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or getattr(before, "st_file_attributes", 0) & 0x400
+        or getattr(before, "st_reparse_tag", 0)
+    ):
+        raise OSError("regular file required")
+    if before.st_size > MAX_INPUT_BYTES:
+        raise InputTooLargeError
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            raise OSError("input changed before read")
+        if opened.st_size > MAX_INPUT_BYTES:
+            raise InputTooLargeError
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            raw = stream.read(MAX_INPUT_BYTES + 1)
+    finally:
+        os.close(descriptor)
+    if len(raw) > MAX_INPUT_BYTES:
+        raise InputTooLargeError
+    return raw
+
+
+def reject_nonfinite_constant(_value: str) -> None:
+    raise ValueError("non-finite JSON number")
+
+
+def finite_json_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("non-finite JSON number")
+    return number
 
 
 def reject(reason_codes: list[str]) -> int:
@@ -98,14 +145,18 @@ def main(argv: list[str]) -> int:
 
     candidate_path = Path(argv[1])
     try:
-        raw = candidate_path.read_bytes()
-        if len(raw) > MAX_INPUT_BYTES:
-            return reject(["INPUT_TOO_LARGE"])
+        raw = read_bounded(candidate_path)
+        text = raw.decode("utf-8")
+        reject_excessive_json_nesting(text)
         candidate = json.loads(
-            raw.decode("utf-8"),
+            text,
             object_pairs_hook=reject_duplicate_keys,
+            parse_constant=reject_nonfinite_constant,
+            parse_float=finite_json_float,
         )
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, DuplicateKeyError):
+    except InputTooLargeError:
+        return reject(["INPUT_TOO_LARGE"])
+    except (OSError, UnicodeError, ValueError, RecursionError):
         return reject(["INPUT_INVALID"])
 
     try:
