@@ -6,6 +6,10 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ## [Unreleased]
 
+## [0.2.0-preview] - 2026-10-04
+
+Incomplete Public Preview の source release 候補です。Public Beta の受付、Discord 招待、公開 Voice Bot、live deployment、Final Human GO は含みません。
+
 ### Added
 
 - Public agent lifecycle の公開契約を #36 の固定 source から再導入。Luna との概念対応と deep JSON の構造化 refusal を追加。実 registry・runtime・continuity は未検証。
@@ -55,6 +59,13 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Windows の CI で Chocolatey の配布元が一時的に 406 を返すと、ffmpeg が入らないまま導入の step が成功扱いになり、後の音声の試験が失敗していた。導入を 3 回まで試し、それでも無ければ導入の step で止める。
 - Discord の音声会話で、一度返答した後の続きの質問に答えなくなる経路を直した。Live の命令が 1 件拒否されただけでは会話を閉じず、最後まで再生した返答のたびに停止の指示を Live へ送らず、Live の文字起こしでも会話の続きであることを返答の判断に渡す。原因を絞るため、本文・音声・Discord の ID を含まない診断記録を足した（`runtime/discord-template/docs/OPERATIONS.md`）。実マイクでの連続応答は未確認（[#147](https://github.com/Kotodama-Project/Kotodama-project/issues/147)）。
 
+### Not included
+
+- Voice の実マイク E2E、2 人 30 分の会話、別設定での再現。
+- 実 Codex / Luna の受入、agent lifecycle の実 registry / identity / continuity。
+- OKF 知識基盤と各 adapter の実接続、live Compose / Proxmox / Cloudflare deployment。
+- Public Beta、招待、公開 Voice Bot、Final Human GO。
+
 ## [0.1.0-preview] - 2026-09-14
 
 最初の tag です。Public Beta の受付、Discord 招待、公開 Voice Bot、live deployment、Final Human GO は含みません。
@@ -84,5 +95,6 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - agent swarm、OKF control plane、Slack / Teams / Salesforce adapter（open PR と Issue の候補のみ）。
 - live Compose / Proxmox / Cloudflare deployment、Public Beta、Final Human GO。
 
-[Unreleased]: https://github.com/Kotodama-Project/Kotodama-project/compare/v0.1.0-preview...HEAD
+[Unreleased]: https://github.com/Kotodama-Project/Kotodama-project/compare/v0.2.0-preview...HEAD
+[0.2.0-preview]: https://github.com/Kotodama-Project/Kotodama-project/releases/tag/v0.2.0-preview
 [0.1.0-preview]: https://github.com/Kotodama-Project/Kotodama-project/releases/tag/v0.1.0-preview
