@@ -14,6 +14,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- 公開候補validatorで深いJSON・不正な型・非有限数・上限超過を定型の拒否結果に統一。A022、protected handoff、executorの診断へ入力本文を反映せず、handoffは有限の通常ファイル読取りと確実なクローズを検査する。
 - 履歴増加時のSQLite context、訂正、累積予算、Task swarm検索を索引化。原文と過去版を保持し、初回backfillと全件exportの制約を明記する（#205）。
 - 遅いHTTP/ASR/通知の実未完了処理を有限化し、停止時は受付を止めて保存の所有権を確認する。不確実な書込みは再送せず、不確実な停止は同じプロセスで再試行する（#206）。
 - 制御サーバーの待受に失敗した起動はSQLiteとhost lockを閉じ、同じ設定で再起動できるようにする。HTTPとDiscordのTask一覧は要求者とTaskのactorを照合し、現在の閲覧権限を確認する（#206）。
