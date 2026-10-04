@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Discord runtimeに`integrity`を追加し、信頼済みの直接CLI起動でapplication import前後のsourceとmetadataを検査し、認証済みlocal controlで候補・現在のdiskと照合する。cached/direct API・preload起動とWindowsではsource証明を未成立とし、起動中変更・大きなsource集合を一致にせず制御応答の上限を守る。live切替・rollbackと`PB-G4`は未証明のまま（#157、元#182）。
+
 - 複数の人・AI の作業範囲、lease/epoch、独立review、SQLite journal を扱う Git Steward の調整コア候補を、公開済み #179 の R1 から現行 main へ再配置。46 synthetic Node tests と Python launcher を含み、Linux の Repository checks は Node 24 を明示的に用意する。関連pathのPR・main pushでは、任意workflowがWindows/LinuxのNode試験だけを実行する。Git observerはpartial/promisor repositoryを拒否し、欠けたobjectを自動取得しない。非SHA-1 repositoryもrevision解決前に拒否する。Git・GitHub・provider への書込みや配備を行わず、設計文書・業務演習は #132 の後続（`runtime/git-steward/README.md`）。
 - Local review gateway に分類・明示reader/reviewer・期限・取消のcatalog v2を追加。unclassified/secretの内容を返さず、人のreviewはhuman種別だけに保存する。kindとpolicyはoperatorのsnapshotであり、本人認証・Promotionではない（#123、元#44）。
 
