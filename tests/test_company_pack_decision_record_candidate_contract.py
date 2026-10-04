@@ -169,7 +169,7 @@ class CompanyPackDecisionRecordCandidateContractTests(unittest.TestCase):
             },
         )
         readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
-        self.assertIn("python -m pip install -r requirements-test.txt", readme)
+        self.assertIn("python -m pip install --require-hashes -r requirements-ci.txt", readme)
 
     def test_schema_closes_every_authority_and_execution_claim(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
