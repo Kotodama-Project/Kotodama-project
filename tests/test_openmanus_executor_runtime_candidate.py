@@ -145,7 +145,11 @@ class ExecutorRuntimeValidatorTest(unittest.TestCase):
         marker = "private-synthetic-input-marker"
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / f"{marker}.json"
-            for raw in (b'"\xff"', f'{{"{marker}": 1, "{marker}": 2}}'.encode(), b'{"incomplete":', b'[' * 50_000):
+            for raw in (
+                b'"\xff"', f'{{"{marker}": 1, "{marker}": 2}}'.encode(),
+                b'{"incomplete":', b'[' * 50_000,
+                b'{"owned-number":' + b'1' * 5_000 + b'}',
+            ):
                 with self.subTest(raw_kind=raw[:10]):
                     path.write_bytes(raw)
                     result = subprocess.run(

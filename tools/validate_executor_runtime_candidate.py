@@ -78,10 +78,10 @@ def validate(candidate_path: Path) -> list[str]:
         candidate = _parse_strict_json(raw_candidate)
     except OSError:
         return ["input could not be read"]
-    except (json.JSONDecodeError, RecursionError):
-        return ["input JSON is invalid"]
     except StrictJsonError as exc:
         return [str(exc)]
+    except (ValueError, RecursionError):
+        return ["input JSON is invalid"]
 
     validator = Draft202012Validator(schema)
     errors = sorted(validator.iter_errors(candidate), key=lambda error: list(error.absolute_path))
