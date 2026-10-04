@@ -2,6 +2,7 @@
 from itertools import product
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import unittest
 
@@ -78,14 +79,23 @@ class RepositoryRequiredGateTests(unittest.TestCase):
         results = ("success", "failure", "skipped", "cancelled", "", "unknown")
         # bash -e matches the Actions Linux shell: failure in an earlier gate
         # cannot be hidden by a successful later matrix check.
-        for combination in product(results, repeat=len(variables)):
+        combinations = list(product(results, repeat=len(variables)))
+        blocks = []
+        for combination in combinations:
+            assignments = "\n".join(f"export {name}={shlex.quote(value)}"
+                                    for name, value in zip(variables, combination))
+            # A standalone subshell keeps -e active. An if/&& wrapper would
+            # suppress errexit and could hide an earlier failed gate.
+            blocks.append("(\nset -e\n" + assignments + "\n" + script
+                          + "\n)\nprintf '%s\\n' \"$?\"")
+        status = subprocess.run(["bash", "-c", "set +e\n" + "\n".join(blocks)],
+                                env=os.environ, capture_output=True, text=True,
+                                check=True, timeout=30)
+        codes = status.stdout.splitlines()
+        self.assertEqual(len(codes), len(combinations), status.stderr)
+        for combination, code in zip(combinations, codes):
             with self.subTest(results=combination):
-                status = subprocess.run(
-                    ["bash", "-e", "-c", script],
-                    env={**os.environ, **dict(zip(variables, combination))},
-                    check=False,
-                )
-                self.assertEqual(status.returncode == 0,
+                self.assertEqual(int(code) == 0,
                                  all(result == "success" for result in combination))
 
 

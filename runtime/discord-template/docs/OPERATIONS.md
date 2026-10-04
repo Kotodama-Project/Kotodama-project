@@ -59,3 +59,38 @@ GPT-Liveの利用量は `session.usage.updated` の累積秒を前回値と置�
 音声はDiscordの入力アカウントごとに扱います。共有マイクなど本人を特定できない入力は `discord.unattributedUsers` へ登録し、話者不明として記録します。その発言からは自動実行・音声回答を始めません。重なった別アカウントの入力は別トラックです。
 
 一回だけの音声確認枠は `voice.maxTotalAudioSeconds` に累計上限を設定します。日次上限とは別に、日付や再起動をまたいでも同じ累計で停止します。聞き取り接続と回答用接続が同じ枠を消費し、原音は保存しません。説明・同意確認は人間側の運用責任で扱い、Botは確認を繰り返しません。`participant_opt_in`を選んだ場合だけ、説明の版に紐づく参加者記録を利用します。
+
+## 稼働中のソースと候補の照合
+
+`integrity` は、信頼済みの最小CLI/bootstrapから直接起動したruntimeのソース候補を、中身を出さずにSHA-256のdigestで照合します。Node自身、`bin/kotodama.mjs`とbuiltinsだけを使う`src/source-bootstrap.mjs`は、改変されない起動の土台として信頼します。一般のJavaScript callerや改変されたプロセスの実行コードを証明するremote attestationではありません。比べるのは次の三つです。
+
+- 候補: `--candidate` に渡したディレクトリ。候補のcommitから `git archive` で空のディレクトリへ展開して作ります。
+- disk: `integrity` を実行したCLI自身のパッケージに、今置かれているファイル。
+- 稼働中のruntime: 直接起動したCLIの`start`が、applicationの`src`をimportする前に取得する値。import後に同じ範囲のbytesとfile/directoryのidentity・mtime・ctimeを再検査し、変化がなければ一回だけ使えるbootstrapの内部記録から起動へ渡します。`status`と同じ認証付きlocal controlで、所有者・PID・起動時刻を照合してその場で読み戻します。起動後のdiskで上書きせず、`status`の同じ`source`に相対pathとdigestを含めます。
+
+対象は `bin/` と `src/` の下のすべてのファイル、`package.json`、`pnpm-lock.yaml` です。設定、データ領域、`docs/`、`tests/`、`node_modules/` は含みません。`node_modules/` は `pnpm-lock.yaml` のdigestと `pnpm install --frozen-lockfile` を前提に束縛するだけで、その中のファイルは比べません。対象の中のsymlink、hard link、通常でないファイルは読まずに拒否します。探索は10,000 entries・深さ64、通常ファイルは5,000件・各2 MB・合計64 MB、statusに載せる束縛は750 KBまでに制限します。上限超過は `SOURCE_SET_LIMIT` として拒否します。起動時に束縛できなかった場合もruntimeは起動し、照合は `unverified` になります。
+
+直接の`startRuntime` API、既にmoduleを読み込んだcaller、任意の`sourceRoot`やcallerが作った記録からは正の照合を作りません（`SOURCE_BOOTSTRAP_REQUIRED`）。Nodeのpreload/loaderを含む起動optionや`NODE_OPTIONS`がある起動も同様です。Windowsではctimeがcreation timeを表す場合があり、変更して戻した履歴をこのguardで確実に検出できないため`SOURCE_BOOTSTRAP_UNSUPPORTED`として`unverified`にします。runtimeとstatus/tasks/shutdownは引き続き使えます。POSIXのguardは、変更を正確に反映するidentity・mtime・ctimeを返すfilesystemと、改変されないCLI/bootstrapを前提にします。この条件で起動中の内容を戻してもmetadataの変化を検出した場合は`SOURCE_CHANGED_DURING_STARTUP`とします。粗い・古い・改変されたfilesystem metadataの下で実行コードを証明しません。内部metadataは10,000 entriesと1.5 MBまでに制限し、応答には出しません。source検査は起動の二回だけで、各control commandには追加しません。
+
+結果の `parity` は三通りです。
+
+- `match`: 三つのdigestが一致し、稼働中のruntimeから60秒以内に読み戻せたときだけです。終了コード0はこの場合だけです。
+- `mismatch`: どれかの組が異なります。`INSTANCE_DISK_DIFFERS`（旧プロセスのまま新しいファイルを置いた場合など）、`INSTANCE_CANDIDATE_DIFFERS`、`CANDIDATE_DISK_DIFFERS` と、異なるファイルの相対pathを返します。
+- `unverified`: 停止・到達不能（`RUNTIME_NOT_AVAILABLE`）、別のinstance（`RUNTIME_OWNER_CHANGED`）、束縛のない旧版や束縛できなかった起動（`INSTANCE_BINDING_MISSING`）、読み戻した値の矛盾（`INSTANCE_BINDING_INVALID`）、古い読み戻し（`STALE_READBACK`）、候補の指定なし（`CANDIDATE_REQUIRED`）です。一致として扱いません。保存したJSONは入力に使えません。
+
+出力にはPID、所有者ID、port、絶対path、設定値、control secretを含めません。`--revision` は表示用のラベルで、道具はcommitとの対応を確かめません。commitとの対応は、そのcommitから候補を作ることで取ります。
+
+前提として、起動中のファイルを置き換えません。新しい版は別のディレクトリへ置き、停止してから新しいディレクトリで起動します。起動guardは誤った一致を防ぐ検査で、更新手順・sourceへの書込み権限・固定依存の確認を代替しません。
+
+許可された切り替えとrollbackでは、次の順に読み戻します。候補はGitのcloneがある場所で作り、ディレクトリごと実行hostへ運んでもかまいません。
+
+```sh
+# 1. 候補を作る（commitごとに空のディレクトリへ）
+git archive <commit> runtime/discord-template | tar -x -C <空のディレクトリ>
+# 2. 切り替え前: 今動いている版のcommitで作った候補と比べる
+node bin/kotodama.mjs integrity --config <設定> --candidate <空のディレクトリ>/runtime/discord-template --revision <commit> --json
+# 3. 停止 → 新しい版を別のディレクトリへ置く → そこで start → そのディレクトリのCLIで同じ integrity を実行する
+# 4. rollback 後も、戻した版のcommitで作った候補で同じ読み戻しを行う
+```
+
+共有してよいのは、候補のcommit、`setDigest`（必要なら `packageDigest` と `lockDigest`）、`readAt`、`parity` と理由コードだけです。PID、control secret、host名、絶対pathは共有しません。手元の試験の結果やdiskだけの一致は、稼働中のruntimeと候補が一致した証拠になりません。

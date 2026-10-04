@@ -1,10 +1,16 @@
 import copy
+from contextlib import contextmanager, redirect_stdout
+import importlib.util
+import io
 import json
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -13,6 +19,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / "schemas" / "company-pack-protected-execution-request-handoff-candidate.schema.json"
 RUNBOOK = ROOT / "docs" / "PROTECTED-EXECUTION-REQUEST-HANDOFF-CANDIDATE.md"
 VALIDATOR = ROOT / "tools" / "validate_company_pack_protected_execution_request_handoff.py"
+sys.path.insert(0, str(ROOT / "tools"))
+SPEC = importlib.util.spec_from_file_location("protected_handoff_preflight", VALIDATOR)
+assert SPEC is not None and SPEC.loader is not None
+PREFLIGHT = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(PREFLIGHT)
 
 EXPECTED_PRIVATE_ROLES = [
     "source_record",
@@ -388,6 +399,149 @@ class ProtectedExecutionRequestHandoffCandidateContractTests(unittest.TestCase):
         refused = run(parent_expired)
         self.assertEqual(refused.returncode, 2)
         self.assertIn("WINDOW_EXCEEDS_PARENT_EXPIRY", refused.stdout)
+
+    def test_bounded_reader_refuses_metadata_without_opening_the_input(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            oversized = root / "oversized.json"
+            oversized.write_bytes(b"x" * 9)
+            special = root / "special.json"
+            special.write_bytes(b"{}")
+            cases = ("directory", "oversized", "fifo metadata")
+            for case in cases:
+                with self.subTest(case=case), mock.patch.object(PREFLIGHT, "MAX_INPUT_BYTES", 8):
+                    with mock.patch.object(PREFLIGHT.os, "open", side_effect=AssertionError("input opened")):
+                        if case == "fifo metadata":
+                            with mock.patch.object(Path, "lstat", return_value=SimpleNamespace(st_mode=stat.S_IFIFO)):
+                                with self.assertRaises(OSError):
+                                    PREFLIGHT.read_bounded(special)
+                        elif case == "directory":
+                            with self.assertRaises(OSError):
+                                PREFLIGHT.read_bounded(root)
+                        else:
+                            with self.assertRaises(PREFLIGHT.InputTooLargeError):
+                                PREFLIGHT.read_bounded(oversized)
+
+    def test_bounded_reader_accepts_limit_and_refuses_growth_without_leaking_descriptor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "candidate.json"
+            original_open = PREFLIGHT.os.open
+            original_fdopen = PREFLIGHT.os.fdopen
+            original_fstat = PREFLIGHT.os.fstat
+            for grew in (False, True):
+                with self.subTest(grew=grew):
+                    path.write_bytes(b"x" * 8)
+                    descriptors, reads = [], []
+
+                    def observed_open(*args, **kwargs):
+                        descriptor = original_open(*args, **kwargs)
+                        descriptors.append(descriptor)
+                        return descriptor
+
+                    @contextmanager
+                    def observed_fdopen(descriptor, mode, *, closefd):
+                        self.assertFalse(closefd)
+                        with original_fdopen(descriptor, mode, closefd=closefd) as stream:
+                            proxy = mock.Mock(wraps=stream)
+
+                            def bounded_read(size):
+                                reads.append(size)
+                                if grew:
+                                    with path.open("ab") as writer:
+                                        writer.write(b"x")
+                                return stream.read(size)
+
+                            proxy.read.side_effect = bounded_read
+                            yield proxy
+
+                    with mock.patch.object(PREFLIGHT, "MAX_INPUT_BYTES", 8), mock.patch.object(
+                        PREFLIGHT.os, "open", side_effect=observed_open
+                    ), mock.patch.object(PREFLIGHT.os, "fdopen", side_effect=observed_fdopen):
+                        if grew:
+                            with self.assertRaises(PREFLIGHT.InputTooLargeError):
+                                PREFLIGHT.read_bounded(path)
+                        else:
+                            self.assertEqual(PREFLIGHT.read_bounded(path), b"x" * 8)
+                    self.assertEqual(reads, [9])
+                    self.assertEqual(len(descriptors), 1)
+                    with self.assertRaises(OSError):
+                        original_fstat(descriptors[0])
+
+    def test_bounded_reader_rechecks_opened_size_and_identity_and_closes_on_refusal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "candidate.json"
+            path.write_bytes(b"x" * 8)
+            original_open, original_fstat = PREFLIGHT.os.open, PREFLIGHT.os.fstat
+            for case in ("opened size", "opened identity"):
+                with self.subTest(case=case):
+                    descriptors = []
+
+                    def observed_open(*args, **kwargs):
+                        descriptor = original_open(*args, **kwargs)
+                        descriptors.append(descriptor)
+                        return descriptor
+
+                    def changed_metadata(descriptor):
+                        info = original_fstat(descriptor)
+                        return SimpleNamespace(
+                            st_mode=info.st_mode, st_dev=info.st_dev,
+                            st_ino=info.st_ino + (case == "opened identity"),
+                            st_size=9 if case == "opened size" else info.st_size,
+                        )
+
+                    with mock.patch.object(PREFLIGHT, "MAX_INPUT_BYTES", 8), mock.patch.object(
+                        PREFLIGHT.os, "open", side_effect=observed_open
+                    ), mock.patch.object(PREFLIGHT.os, "fstat", side_effect=changed_metadata), mock.patch.object(
+                        PREFLIGHT.os, "fdopen", side_effect=AssertionError("refused descriptor was read")
+                    ):
+                        expected = PREFLIGHT.InputTooLargeError if case == "opened size" else OSError
+                        with self.assertRaises(expected):
+                            PREFLIGHT.read_bounded(path)
+                    self.assertEqual(len(descriptors), 1)
+                    with self.assertRaises(OSError):
+                        original_fstat(descriptors[0])
+
+    def test_cli_deep_and_nonfinite_json_are_content_free_refusals(self) -> None:
+        marker = "owned-input-must-not-be-reflected"
+        cases = {
+            "deep": b'{"nested":' + b"[" * 5_000 + json.dumps(marker).encode() + b"]" * 5_000 + b"}",
+            **{number: ('{"' + marker + '":' + number + '}').encode() for number in ("NaN", "Infinity", "1e999")},
+        }
+        for label, payload in cases.items():
+            with self.subTest(input=label), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / (marker + ".json")
+                path.write_bytes(payload)
+                result = subprocess.run(
+                    [sys.executable, "-B", str(VALIDATOR), str(path)],
+                    cwd=ROOT, text=True, encoding="utf-8", capture_output=True, check=False, timeout=10,
+                )
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(result.stderr, "")
+            report = json.loads(result.stdout)
+            self.assertEqual(report["result"], "REFUSED")
+            self.assertEqual(report["reason_codes"], ["INPUT_INVALID"])
+            self.assertTrue(all(value is False for value in report["claims"].values()))
+            self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+            self.assertNotIn(marker, result.stdout + result.stderr)
+
+    def test_decoder_recursion_and_schema_refusal_do_not_echo_input(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "candidate.json"
+            path.write_bytes(b"{}")
+            output = io.StringIO()
+            with redirect_stdout(output), mock.patch.object(PREFLIGHT.json, "loads", side_effect=RecursionError):
+                self.assertEqual(PREFLIGHT.main([str(VALIDATOR), str(path)]), 2)
+            self.assertEqual(json.loads(output.getvalue())["reason_codes"], ["INPUT_INVALID"])
+
+            marker = "owned-invalid-field-must-not-be-reflected"
+            candidate = request_candidate()
+            candidate[marker] = ('[\\\"{}]' * 100)
+            path.write_text(json.dumps(candidate), encoding="utf-8")
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(PREFLIGHT.main([str(VALIDATOR), str(path)]), 2)
+            self.assertEqual(json.loads(output.getvalue())["reason_codes"], ["SCHEMA_INVALID"])
+            self.assertNotIn(marker, output.getvalue())
 
     def test_runbook_and_public_navigation_links_are_discoverable(self) -> None:
         readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")

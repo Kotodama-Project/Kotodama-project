@@ -10,12 +10,17 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 - OpenMaus / Cloudflare OS の設計契約とread-only検証を追加。必要なagent表示項目・MCP能力境界・知識bundle参照を検査する契約候補で、UI・provider資源・実runtimeの有効化は含まない（元#56）。
 
+- 正本 #48 の公開知識基盤と #61 の互換 verdict/readiness 修正を現行 main へ再配置。9つの公開Concept、出典に束縛した catalog/graph、字句検索と限定context、schema/profile/判断readinessを分ける監査を追加。除外した旧運用文書やCloudflare baseを取り込まず、内容・実agent入力・権限の独立検証を未成立のまま明示する（`docs/KNOWLEDGE-BASE.md`）。
+- Discord runtimeに`integrity`を追加し、信頼済みの直接CLI起動でapplication import前後のsourceとmetadataを検査し、認証済みlocal controlで候補・現在のdiskと照合する。cached/direct API・preload起動とWindowsではsource証明を未成立とし、起動中変更・大きなsource集合を一致にせず制御応答の上限を守る。live切替・rollbackと`PB-G4`は未証明のまま（#157、元#182）。
+
+- 複数の人・AI の作業範囲、lease/epoch、独立review、SQLite journal を扱う Git Steward の調整コア候補を、公開済み #179 の R1 から現行 main へ再配置。46 synthetic Node tests と Python launcher を含み、Linux の Repository checks は Node 24 を明示的に用意する。関連pathのPR・main pushでは、任意workflowがWindows/LinuxのNode試験だけを実行する。Git observerはpartial/promisor repositoryを拒否し、欠けたobjectを自動取得しない。非SHA-1 repositoryもrevision解決前に拒否する。Git・GitHub・provider への書込みや配備を行わず、設計文書・業務演習は #132 の後続（`runtime/git-steward/README.md`）。
 - Local review gateway に分類・明示reader/reviewer・期限・取消のcatalog v2を追加。unclassified/secretの内容を返さず、人のreviewはhuman種別だけに保存する。kindとpolicyはoperatorのsnapshotであり、本人認証・Promotionではない（#123、元#44）。
 
 - Dots pluginにcursor一覧とrevision/権限付き全文pageを追加。簡略一覧は合成SDK試験で転送JSONを約97.6%削減し、元の全文一覧を維持する。長文・多言語・複雑な依存の通信benchmarkを必須CIで検査する（#204）。
 
 ### Fixed
 
+- 公開候補validatorで深いJSON・不正な型・非有限数・上限超過を定型の拒否結果に統一。A022、protected handoff、executorの診断へ入力本文を反映せず、handoffは有限の通常ファイル読取りと確実なクローズを検査する。
 - 履歴増加時のSQLite context、訂正、累積予算、Task swarm検索を索引化。原文と過去版を保持し、初回backfillと全件exportの制約を明記する（#205）。
 - 遅いHTTP/ASR/通知の実未完了処理を有限化し、停止時は受付を止めて保存の所有権を確認する。不確実な書込みは再送せず、不確実な停止は同じプロセスで再試行する（#206）。
 - 制御サーバーの待受に失敗した起動はSQLiteとhost lockを閉じ、同じ設定で再起動できるようにする。HTTPとDiscordのTask一覧は要求者とTaskのactorを照合し、現在の閲覧権限を確認する（#206）。
@@ -25,6 +30,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Changed
 
+- Python検査の全1,193 casesと3委譲表示を個別レビューし、運用手順・リンク・拒否時出力・UTF-8・実Git ignoreのoracleを改善。既存mutationと実CLI境界を保ってlifecycle/ledger/scannerの重複コストとpytest collectionを減らした（[#212](https://github.com/Kotodama-Project/Kotodama-project/issues/212)、[レビュー](docs/PYTHON-TEST-REVIEW.md)）。
 - Discord CIを一つのLinux/Windows matrixへ統合し、全テスト・Docker probe・必須check名と失敗時の拒否を保持する。製品の理想との照合と、履歴を失わないbranch/parked候補の整理を改善ループに追加する。
 
 ## [0.2.0-preview] - 2026-10-04

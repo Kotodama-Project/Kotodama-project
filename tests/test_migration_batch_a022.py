@@ -6,6 +6,8 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -14,6 +16,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
 VALIDATOR_PATH = ROOT / "tools" / "validate_migration_batch_a022.py"
 SPEC = importlib.util.spec_from_file_location("validate_migration_batch_a022", VALIDATOR_PATH)
 assert SPEC is not None and SPEC.loader is not None
@@ -30,6 +33,10 @@ class A022MigrationBatchTests(unittest.TestCase):
             destination = root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / relative, destination)
+        shutil.copy2(
+            ROOT / "tools/validate_public_migration_ledger.py",
+            root / "tools/validate_public_migration_ledger.py",
+        )
         return temporary, root
 
     @staticmethod
@@ -113,7 +120,7 @@ class A022MigrationBatchTests(unittest.TestCase):
 
     def test_duplicate_fields_and_nonfinite_json_are_refused(self) -> None:
         for relative in (VALIDATOR.MANIFEST_PATH, VALIDATOR.PROVENANCE_PATH):
-            for invalid in ("duplicate", "NaN", "Infinity", "1e999"):
+            for invalid in ("duplicate", "NaN", "Infinity", "1e999", "surrogate string", "surrogate key", "surrogate array"):
                 with self.subTest(path=relative, invalid=invalid):
                     temporary, root = self._fixture()
                     with temporary:
@@ -123,6 +130,13 @@ class A022MigrationBatchTests(unittest.TestCase):
                             field = '"batch_id": "A022",'
                             self.assertEqual(text.count(field), 1)
                             text = text.replace(field, field + " " + field, 1)
+                        elif invalid.startswith("surrogate"):
+                            malformed = {
+                                "surrogate string": chr(0xD800),
+                                "surrogate key": {chr(0xD800): "ordinary"},
+                                "surrogate array": [chr(0xD800)],
+                            }[invalid]
+                            text = text.replace("{", '{"unicode_fixture": ' + json.dumps(malformed) + ",", 1)
                         else:
                             text = text.replace("{", '{"numeric_fixture": ' + invalid + ",", 1)
                         path.write_text(text, encoding="utf-8")
@@ -130,6 +144,93 @@ class A022MigrationBatchTests(unittest.TestCase):
                         self.assertEqual(result["status"], "FAIL", result["errors"])
                         self.assertEqual(result["admission_status"], "BLOCKED")
                         self.assertTrue(any("UTF-8 JSON" in error for error in result["errors"]), result["errors"])
+
+    def test_deep_json_is_a_redacted_cli_refusal_for_both_records(self) -> None:
+        marker = "owned-nested-input-must-not-be-reflected"
+        payload = (
+            b'{"nested":' + b"[" * 5_000
+            + json.dumps(marker).encode("utf-8") + b"]" * 5_000 + b"}"
+        )
+        self.assertLess(len(payload), VALIDATOR.MAX_FILE_BYTES)
+        for relative in (VALIDATOR.MANIFEST_PATH, VALIDATOR.PROVENANCE_PATH):
+            with self.subTest(record=relative.name):
+                temporary, root = self._fixture()
+                with temporary:
+                    (root / relative).write_bytes(payload)
+                    completed = subprocess.run(
+                        [sys.executable, "-S", "-B", str(root / "tools/validate_migration_batch_a022.py")],
+                        cwd=root, capture_output=True, text=True, check=False, timeout=10,
+                    )
+                    self.assertEqual(completed.returncode, 1, completed.stderr)
+                    self.assertEqual(completed.stderr, "")
+                    report = json.loads(completed.stdout)
+                    self.assertEqual(report["status"], "FAIL")
+                    self.assertEqual(report["admission_status"], "BLOCKED")
+                    self.assertFalse(report["changed"])
+                    self.assertTrue(any("UTF-8 JSON" in error for error in report["errors"]))
+                    self.assertNotIn(marker, completed.stdout + completed.stderr)
+
+    def test_json_depth_boundary_ignores_quoted_and_escaped_delimiters(self) -> None:
+        quoted = json.dumps({"note": ('[\\\"{}]' * 100)})
+        self.assertEqual(VALIDATOR._parse_json(quoted.encode()), json.loads(quoted))
+        boundary = b"[" * 64 + b"0" + b"]" * 64
+        self.assertIsInstance(VALIDATOR._parse_json(boundary), list)
+        with self.assertRaises(ValueError):
+            VALIDATOR._parse_json(b"[" + boundary + b"]")
+
+    def test_unexpected_decoder_recursion_is_a_structured_refusal(self) -> None:
+        temporary, root = self._fixture()
+        with temporary, mock.patch.object(VALIDATOR, "_parse_json", side_effect=RecursionError):
+            report = VALIDATOR.validate(root)
+        self.assertEqual(report["status"], "FAIL")
+        self.assertEqual(report["admission_status"], "BLOCKED")
+        self.assertIn("invalid UTF-8 JSON: migration/a022-public-architecture.manifest.json", report["errors"])
+        self.assertIn("provenance file is not valid UTF-8 JSON", report["errors"])
+
+    def test_unhashable_entry_and_provenance_fields_are_structured_refusals(self) -> None:
+        mutations = {
+            "blob object": lambda m, p: m["entries"][0].update(source_blob_sha={}),
+            "decision array": lambda m, p: m["entries"][0].update(decision=[]),
+            "group object": lambda m, p: next(e for e in m["entries"] if e["decision"] == "PUBLIC_REAUTHOR").update(consolidation_group={}),
+            "coverage nested array": lambda m, p: next(e for e in m["entries"] if e["decision"] == "PUBLIC_REAUTHOR").update(semantic_coverage=[[]]),
+            "coverage null": lambda m, p: next(e for e in m["entries"] if e["decision"] == "PUBLIC_REAUTHOR").update(semantic_coverage=None),
+            "public destination object": lambda m, p: next(e for e in m["entries"] if e["decision"] == "PUBLIC_REAUTHOR").update(destination_path={}),
+            "exported path array": lambda m, p: next(e for e in m["entries"] if e["decision"] == "PUBLIC_REAUTHOR").update(source_path=[]),
+            "superseded destination array": lambda m, p: next(e for e in m["entries"] if e["decision"] == "SUPERSEDED").update(destination_path=[]),
+            "consolidation group array": lambda m, p: m["consolidations"][0].update(group=[]),
+            "provenance result array": lambda m, p: p.update(private_source_history_result=[]),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(field=label):
+                temporary, root = self._fixture()
+                with temporary:
+                    manifest = self._manifest(root)
+                    path = root / VALIDATOR.PROVENANCE_PATH
+                    provenance = json.loads(path.read_text(encoding="utf-8"))
+                    mutate(manifest, provenance)
+                    self._write_manifest(root, manifest)
+                    path.write_text(json.dumps(provenance), encoding="utf-8")
+                    report = VALIDATOR.validate(root)
+                    self.assertEqual(report["status"], "FAIL")
+                    self.assertEqual(report["admission_status"], "BLOCKED")
+                    self.assertTrue(report["errors"])
+
+    def test_unknown_field_names_and_decisions_are_not_reflected_in_reports(self) -> None:
+        marker = "owned-unknown-field-and-decision-must-not-be-reflected"
+        value = "https://fixture.example.invalid/input"
+        temporary, root = self._fixture()
+        with temporary:
+            manifest = self._manifest(root)
+            manifest[marker] = {marker: value}
+            manifest["entries"][0]["decision"] = marker
+            self._write_manifest(root, manifest)
+            report = VALIDATOR.validate(root)
+        self.assertEqual(report["status"], "FAIL")
+        self.assertEqual(report["admission_status"], "BLOCKED")
+        self.assertGreater(report["candidate_scan_findings"], 0)
+        self.assertLessEqual(set(report["decisions"]), {"PUBLIC_REAUTHOR", "PRIVATE_RETAIN", "SUPERSEDED"})
+        self.assertNotIn(marker, json.dumps(report))
+        self.assertNotIn(value, json.dumps(report))
 
     def test_windows_user_path_scan_covers_serialized_text(self) -> None:
         value = "C:" + chr(92) + "Users" + chr(92) + "fixture" + chr(92) + "note.txt"

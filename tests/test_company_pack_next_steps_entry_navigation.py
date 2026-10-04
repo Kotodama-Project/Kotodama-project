@@ -1,6 +1,8 @@
 from pathlib import Path
 import unittest
 
+from tools import lint_docs
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,9 +40,8 @@ class CompanyPackNextStepsEntryNavigationTests(unittest.TestCase):
         self.assertLess(start, run)
 
     def test_next_steps_navigation_targets_are_repository_files(self) -> None:
-        document = (ROOT / "docs/COMPANY-PACK-NEXT-STEPS.md").read_text(
-            encoding="utf-8"
-        )
+        source = ROOT / "docs/COMPANY-PACK-NEXT-STEPS.md"
+        document = source.read_text(encoding="utf-8")
         for target in (
             "../docs/TEMPLATE-GUIDE.md",
             "../templates/company/README.md",
@@ -55,6 +56,9 @@ class CompanyPackNextStepsEntryNavigationTests(unittest.TestCase):
         ):
             with self.subTest(target=target):
                 self.assertIn(target, document)
+                self.assertTrue((source.parent / target).is_file(), target)
+
+        self.assertEqual([], lint_docs.check_links(ROOT, [source]))
 
         ordered_markers = (
             "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",

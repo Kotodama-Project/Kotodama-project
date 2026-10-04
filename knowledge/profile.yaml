@@ -1,0 +1,33 @@
+profile_version: "0.1"
+okf_version: "0.2"
+bundle_id: kotodama-project-public-knowledge
+bundle_root: knowledge
+public_repository: true
+required_frontmatter:
+  - type
+  - title
+  - description
+  - status
+  - generated
+  - sources
+  - kotodama
+allowed_classifications:
+  - public_candidate
+roles:
+  librarian: AI-LIBRARIAN
+  reviewer: AI-AUDITOR
+  coordinator: AI-CHIEF
+  builder: AI-BUILDER
+quality:
+  require_sources: true
+  require_independent_review_for_confirmed: true
+  fail_on_broken_internal_links: true
+  fail_on_missing_repository_sources: true
+  max_context_concepts: 12
+  critical_tags:
+    - goal
+    - current-state
+    - governance
+generated_outputs:
+  catalog: knowledge/_generated/catalog.json
+  graph: knowledge/_generated/graph.json

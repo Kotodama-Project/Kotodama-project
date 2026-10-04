@@ -18,13 +18,18 @@ import {startBridge} from './bridge.mjs';
 import {awaitWithSignal,deadlineScope,readHttpBody,sendHttpJson} from './http-limits.mjs';
 import {DotsBridge} from './dots.mjs';
 import {atomicJson,atomicText,check,uid,errorCode,redact,Refused} from './common.mjs';
+import {consumeBootstrapBinding,registerRuntimeModule} from './source-bootstrap.mjs';
+registerRuntimeModule(startRuntime,import.meta.url);
 
 function pidRunning(pid){
   if(!Number.isSafeInteger(pid)||pid<=0)return true;
   try{process.kill(pid,0);return true;}catch(error){return error.code!=='ESRCH';}
 }
 
-export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),log=value=>console.log(JSON.stringify(redact(value)))}={}){
+export async function startRuntime(filename,{offline=false,analyzer,worker,runtimeDomain=process.env.KOTODAMA_RUNTIME_DOMAIN,debug=debugRequested(),sourceBootstrap,log=value=>console.log(JSON.stringify(redact(value)))}={}){
+  // Only the cold official CLI can supply a bootstrap-owned one-use record.
+  // Direct/cached imports have already loaded code and stay unverified.
+  const source=consumeBootstrapBinding(sourceBootstrap,startRuntime);
   if(runtimeDomain==='')runtimeDomain=undefined;
   if(runtimeDomain!==undefined)check(typeof runtimeDomain==='string'&&/^[A-Za-z0-9._:-]{1,128}$/.test(runtimeDomain),'RUNTIME_DOMAIN_INVALID');
   const config=await loadConfig(filename);let current=config;const store=new Store(config.dataDir),ownerId=uid('host'),startedAt=new Date().toISOString();
@@ -79,7 +84,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
       let scope;
       try{
         const auth=Buffer.from(String(req.headers.authorization??'')),expected=Buffer.from('Bearer '+secret);check(auth.length===expected.length&&timingSafeEqual(auth,expected),'UNAUTHORIZED');
-        if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status()});return;}
+        if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status(),source});return;}
         check(req.method==='POST'&&req.url==='/v1/command','ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');check(controlOperations.size<8,'CONTROL_BUSY');
         scope=deadlineScope(10000,'CONTROL_BODY_TIMEOUT');controlReads.add(scope);
         const body=await readHttpBody(req,{maxBytes:200000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});
