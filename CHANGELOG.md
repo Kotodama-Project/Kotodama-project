@@ -8,6 +8,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 複数の人・AI の作業範囲、lease/epoch、独立review、SQLite journal を扱う Git Steward の調整コア候補を、公開済み #179 の R1 から現行 main へ再配置。45 synthetic Node tests と Python launcher を含み、Linux の Repository checks は Node 24 を明示的に用意する。Git observerはpartial/promisor repositoryを拒否し、欠けたobjectを自動取得しない。Git・GitHub・provider への書込みや配備を行わず、設計文書・業務演習は #132 の後続（`runtime/git-steward/README.md`）。
 - Local review gateway に分類・明示reader/reviewer・期限・取消のcatalog v2を追加。unclassified/secretの内容を返さず、人のreviewはhuman種別だけに保存する。kindとpolicyはoperatorのsnapshotであり、本人認証・Promotionではない（#123、元#44）。
 
 - Dots pluginにcursor一覧とrevision/権限付き全文pageを追加。簡略一覧は合成SDK試験で転送JSONを約97.6%削減し、元の全文一覧を維持する。長文・多言語・複雑な依存の通信benchmarkを必須CIで検査する（#204）。
