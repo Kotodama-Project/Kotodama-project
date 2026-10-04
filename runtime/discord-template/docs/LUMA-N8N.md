@@ -30,12 +30,17 @@ Botが起動している場合、取込結果は `bridge.actorId` 本人のDisco
 
 HTTP応答の `state` は取込結果、`notification.state` は通知結果です。通知の失敗で取込成功を失敗へ変更しません。
 
+bridgeは同時に受け付ける要求を8件、接続を32件、本文を2,200,000 bytesに制限します。CSVは2,000,000 bytes・10,000行が上限で、行数超過を読取中に拒否します。取込は一つのwriterへ順番に渡し、要求開始から15秒で未完了の読取・待機を取り消します。満杯はHTTP 503 `BRIDGE_BUSY`、本文超過は413 `BODY_TOO_LARGE`、未完了の読取・待機は408 `BRIDGE_REQUEST_TIMEOUT` です。
+
+送信済みの取込の期限超過は504 `BRIDGE_IMPORT_UNCERTAIN` です。取込が未実行だったとは扱わず、実際に完了するまでwriterと受付枠を保持して重複書込を防ぎます。通知は取込とは別に最大4件、各3秒で待機を打ち切ります。送信を試みた通知の結果は `unknown` として扱い、配送claimを自動再送しません。通知枠の満杯は `unavailable` として返し、後続CSVの取込は続けられます。停止時は新規受付を止め、未送信の通知を取り消し、dispatch済みの処理を最大15秒待ちます。`BRIDGE_DRAIN_UNCERTAIN` ではデータ領域の所有を保持して未確定の処理を確認します。
+
 | notification.state | 意味 |
 |---|---|
 | `sent` | 本人DMの送信結果を確認 |
 | `already_sent` | 同じ取込結果を通知済み |
 | `unknown` | 配送結果不明。重複を避けるため再送しない |
 | `blocked` | 現在の出典・操作者・閲覧権限を確認できず未送信 |
+| `deferred` | quiet hoursのため永続queueに保留 |
 | `unavailable` / `not_configured` | 通知経路を利用できない、または未設定 |
 
 iCalは日程情報の取込に使えます。参加者・申込情報をiCalから取得したとは扱いません。

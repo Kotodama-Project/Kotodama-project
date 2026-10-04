@@ -24,6 +24,13 @@ async function fixture(t,providerFactory,{configure=()=>{},localAsrFactory}={}){
   return {store,config,room,channel,client,sources};
 }
 const provider=options=>({options,active:false,sessionId:'fixture-live',outputGeneration:0,start:async function(){this.active=true;},append(){},commit(){},respond:async function(){return {outputGeneration:++this.outputGeneration};},interrupt(){this.interrupted=true;},abort(){this.active=false;},close:async function(){this.active=false;}});
+test('model conversation end drains the transcript callback without waiting on itself',async t=>{
+  const {room,sources}=await fixture(t,provider);let ended=0;
+  room.pipeline.ingest=async(source,flags)=>{sources.push({s:source,flags});await room.applyModelAction('end_conversation',source);ended++;};
+  const session=await room.session(a),turn=session.turns.begin(0);session.turns.fragment({id:'ending',text:'ことだま、会話を終了して',startMs:0,endMs:100});session.turns.end(turn,100);
+  let timer;try{await Promise.race([session.turns.flush(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('TRANSCRIPT_DRAIN_DEADLOCK')),500);})]);}finally{clearTimeout(timer);}
+  await session.ending;assert.equal(ended,1);assert.equal(sources.length,1);assert.equal(session.stopped,true);assert.equal(room.sessions.size,0);assert.equal(session.turns.closed,true);
+});
 test('consent is bound to the current notice and does not add execution operators',async t=>{const {store,config,room}=await fixture(t,provider);assert(room.allowed(b));assert(!config.discord.operators.includes(b));config.discord.operators.push('100000000000000006');assert(!room.allowed(b));store.recordConsent({guild:config.discord.guildId,channel:config.discord.voiceChannelId,actor:b,notice:voiceNotice(config).id,granted:false,interactionId:'900000000000000003'});assert(!room.allowed(b));});
 test('a failed old start cannot remove the replacement session after a mode switch',async t=>{
   let rejectOld,count=0;const {room}=await fixture(t,options=>{const p=provider(options);if(++count===1)p.start=()=>new Promise((_,reject)=>{rejectOld=reject;});return p;});

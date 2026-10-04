@@ -15,8 +15,9 @@ import {VoiceRoom} from './voice.mjs';
 import {voiceCommand} from './voice-control.mjs';
 import {RemoteOwner} from './remote-owner.mjs';
 import {startBridge} from './bridge.mjs';
+import {awaitWithSignal,deadlineScope,readHttpBody,sendHttpJson} from './http-limits.mjs';
 import {DotsBridge} from './dots.mjs';
-import {atomicJson,atomicText,check,uid,errorCode,redact} from './common.mjs';
+import {atomicJson,atomicText,check,uid,errorCode,redact,Refused} from './common.mjs';
 
 function pidRunning(pid){
   if(!Number.isSafeInteger(pid)||pid<=0)return true;
@@ -31,8 +32,17 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   const stopDebug=()=>{if(debug)disableDebugLog();};
   let owner,claimed=false;
   try{owner=config.owner.kind==='remote'?new RemoteOwner(config.owner):store;const stale=store.lock();if(stale){check(Boolean(runtimeDomain)&&stale.domain===runtimeDomain,'RUNTIME_RECOVERY_DOMAIN_MISMATCH');check(!pidRunning(stale.pid),'RUNTIME_ALREADY_OWNED');store.replaceStaleHost(stale,ownerId,process.pid,startedAt,runtimeDomain);}else store.claimHost(ownerId,process.pid,startedAt,runtimeDomain??null);claimed=true;store.reconcileInterrupted();}catch(e){if(claimed)store.releaseHost(ownerId);store.close();stopDebug();throw e;}
-  let discord,voice,archive,archiveTimer,bridge,control,policyTimer,dots,closing=false;
-  const authorize=async(task,purpose='execute',{monitor=false}={})=>{const c=await loadConfig(filename);check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(discord&&!offline){const channels=[];for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.provider==='discord')channels.push(source.channelId);}const access=await discord.actorAccess(task.actor,channels,{cached:monitor});check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
+  let discord,voice,archive,archiveTimer,bridge,control,policyTimer,policyWork,dots,closing=false,closePromise,controlClosed,shutdownKeepAlive;
+  const controlOperations=new Set(),controlReads=new Set();
+  const accessMonitor=new AccessMonitor();
+  const stopControl=()=>{
+    if(!control)return Promise.resolve();
+    // A failed listen leaves no server to drain; other close errors still retain ownership.
+    controlClosed??=new Promise((resolve,reject)=>control.close(error=>error&&error.code!=='ERR_SERVER_NOT_RUNNING'?reject(error):resolve()));
+    for(const scope of controlReads)scope.abort(new Refused('RUNTIME_STOPPING'));
+    control.closeIdleConnections();return controlClosed;
+  };
+  const authorize=async(task,purpose='execute',{monitor=false}={})=>{const c=await loadConfig(filename);check(!monitor||!closing,'RUNTIME_STOPPING');check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(discord&&!offline){const channels=[];for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.provider==='discord')channels.push(source.channelId);}const access=await discord.actorAccess(task.actor,channels,{cached:monitor});check(!monitor||!closing,'RUNTIME_STOPPING');check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
   const authorizeAnalysis=createAnalysisAuthorizer({readConfig:()=>loadConfig(filename),config,onPolicy:value=>{current=value;},voice:()=>voice,discord:()=>discord,owner,offline});
   const selectedAnalyzer=analyzer??(config.analyzer.kind==='responses'?new ResponsesAnalyzer(config):new CliAnalyzer(config));
   const pipeline=new Pipeline({store,owner,config,policy:()=>current,analyzer:selectedAnalyzer,worker:worker??new CliWorker(config),authorize,authorizeAnalysis,onTask:async task=>{if(discord)await discord.deliver(task);},onTaskQueued:async(task,options)=>{if(discord)await discord.acknowledgeTask(task,options);},onReply:async reply=>{if(discord)await discord.reply(reply);},onVoiceAction:async action=>{if(discord)await discord.voiceAction(action);},onError:code=>log({event:'operation_failed',code})});
@@ -64,15 +74,19 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     }
     voice?.control.start();
     const secret=randomBytes(32).toString('hex');const secretFile=path.join(config.dataDir,'control.secret');await atomicText(secretFile,secret);
-    control=http.createServer(async(req,res)=>{
-      const send=(status,body)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(body));};
+    const handleControl=async(req,res)=>{
+      const send=(status,body,close=false)=>sendHttpJson(res,status,body,{close});
+      let scope;
       try{
-        const auth=String(req.headers.authorization??''),expected='Bearer '+secret;check(auth.length===expected.length&&timingSafeEqual(Buffer.from(auth),Buffer.from(expected)),'UNAUTHORIZED');
+        const auth=Buffer.from(String(req.headers.authorization??'')),expected=Buffer.from('Bearer '+secret);check(auth.length===expected.length&&timingSafeEqual(auth,expected),'UNAUTHORIZED');
         if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status()});return;}
-        check(req.method==='POST'&&req.url==='/v1/command','ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;check(size<=200000,'CONTROL_BODY_LIMIT');chunks.push(chunk);}
-        const input=JSON.parse(Buffer.concat(chunks).toString('utf8'));current=await loadConfig(filename);check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
+        check(req.method==='POST'&&req.url==='/v1/command','ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');check(controlOperations.size<8,'CONTROL_BUSY');
+        scope=deadlineScope(10000,'CONTROL_BODY_TIMEOUT');controlReads.add(scope);
+        const body=await readHttpBody(req,{maxBytes:200000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});
+        const input=JSON.parse(body.toString('utf8'));current=await awaitWithSignal(loadConfig(filename),scope.signal);check(!closing,'RUNTIME_STOPPING');check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
+        controlReads.delete(scope);scope.dispose();scope=null;
         let result;
-        if(input.action==='tasks'){result=[];for(const task of await owner.tasks(input.actor))try{await authorize(task,'read_result');result.push(task);}catch{}}
+        if(input.action==='tasks')result=await pipeline.tasks(input.actor);
         else if(input.action==='result')result=await pipeline.result(input.taskId,input.actor);
         else if(input.action==='stop'){await pipeline.stop(input.taskId,input.actor);result={state:'stop_requested'};}
         else if(input.action==='resume')result=await pipeline.resume(input.taskId,input.actor);
@@ -88,17 +102,65 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
           else throw new Error('UNKNOWN_DOTS_OPERATION');
         }
         else if(input.action==='request'){check(typeof input.text==='string'&&input.text.trim()&&input.text.length<=16000,'REQUEST_INVALID');const source={provider:'discord',guildId:config.discord.guildId,channelId:config.discord.resultChannelId,sourceId:input.requestId??uid('cli'),actorId:input.actor,revision:1,final:true,readers:[input.actor],text:input.text,metadata:{kind:'trusted_cli'}};result=await pipeline.request(source,{title:input.text.slice(0,120),request:input.text,action:input.operation,acceptance:input.acceptance??[]});}
-        else if(input.action==='shutdown'){result={state:'stopping'};setImmediate(()=>close());}
+        else if(input.action==='shutdown'){result={state:'stopping'};setImmediate(()=>{void close().catch(e=>log({event:'runtime_shutdown_failed',code:errorCode(e)}));});}
         else throw new Error('UNKNOWN_COMMAND');send(200,{ok:true,result});
-      }catch(e){send(errorCode(e)==='UNAUTHORIZED'?401:400,{ok:false,error:errorCode(e)});}
+      }catch(e){const code=errorCode(e);send(code==='UNAUTHORIZED'?401:code==='CONTROL_BUSY'||code==='RUNTIME_STOPPING'?503:code==='CONTROL_BODY_LIMIT'?413:code==='CONTROL_BODY_TIMEOUT'?408:400,{ok:false,error:code},true);}
+      finally{if(scope){controlReads.delete(scope);scope.dispose();}}
+    };
+    control=http.createServer({maxHeaderSize:16384,requestTimeout:15000,headersTimeout:10000},(req,res)=>{
+      const operation=handleControl(req,res);controlOperations.add(operation);void operation.finally(()=>controlOperations.delete(operation)).catch(()=>{});
     });
+    control.maxConnections=32;control.setTimeout(15000,socket=>socket.destroy());
     await new Promise((resolve,reject)=>{control.once('error',reject);control.listen(0,'127.0.0.1',resolve);});
-    if(config.bridge.enabled)bridge=await startBridge({config,store,pipeline,readConfig:()=>loadConfig(filename),onImported:receipt=>discord?discord.notifyLumaImport(receipt,{readConfig:()=>loadConfig(filename)}):{state:'unavailable'}});
+    if(config.bridge.enabled)bridge=await startBridge({config,store,pipeline,readConfig:()=>loadConfig(filename),onImported:(receipt,{signal}={})=>discord?discord.notifyLumaImport(receipt,{readConfig:()=>loadConfig(filename),signal}):{state:'unavailable'}});
     const runtime={ownerId,pid:process.pid,startedAt,port:control.address().port,secretFile,configFile:path.resolve(filename),offline};await atomicJson(path.join(config.dataDir,'runtime.json'),runtime);
-    let checking=false;const accessMonitor=new AccessMonitor();policyTimer=setInterval(async()=>{if(checking||closing)return;checking=true;try{const previous=current;try{current=await loadConfig(filename);}catch{current={...config,discord:{...config.discord,operators:[],consentingUsers:[]},voice:{...config.voice,consentMode:'owner_managed',participantIds:[]}};log({event:'policy_unavailable'});}dots?.prune();if(JSON.stringify(previous)!==JSON.stringify(current))void voice?.control.check();await Promise.all([...pipeline.active].map(async([id,run])=>{const kept=await accessMonitor.check(id,async()=>{const task=await owner.taskInternal(id);check(task.revision===run.revision&&task.state==='running','TASK_CHANGED');await owner.assertContext(id,task.actor);await authorize(task,'execute',{monitor:true});});if(!kept)run.controller.abort();else if(accessMonitor.grace.pending.has(id))log({event:'task_access',code:'ACCESS_UNAVAILABLE'});}));accessMonitor.retain(pipeline.active.keys());}finally{checking=false;}},1000);policyTimer.unref();
+    // Keep polling during an outage; log only its start and recovery.
+    let policyAvailable=true,policyFailed=false;
+    const pollPolicy=async()=>{
+      const previous=current;
+      try{
+        const next=await loadConfig(filename);if(closing)return;current=next;
+        if(!policyAvailable){policyAvailable=true;log({event:'policy_restored'});}
+      }catch{
+        if(closing)return;
+        current={...config,discord:{...config.discord,operators:[],consentingUsers:[]},voice:{...config.voice,consentMode:'owner_managed',participantIds:[]}};
+        if(policyAvailable){policyAvailable=false;log({event:'policy_unavailable'});}
+      }
+      dots?.prune();if(JSON.stringify(previous)!==JSON.stringify(current))void voice?.control.check();
+      await Promise.all([...pipeline.active].map(async([id,run])=>{
+        const kept=await accessMonitor.check(id,async()=>{
+          check(!closing,'RUNTIME_STOPPING');const task=await owner.taskInternal(id);check(!closing,'RUNTIME_STOPPING');
+          check(task.revision===run.revision&&task.state==='running','TASK_CHANGED');await owner.assertContext(id,task.actor);check(!closing,'RUNTIME_STOPPING');
+          await authorize(task,'execute',{monitor:true});
+        });
+        if(!kept)run.controller.abort();else if(accessMonitor.grace.pending.has(id))log({event:'task_access',code:'ACCESS_UNAVAILABLE'});
+      }));
+      accessMonitor.retain(pipeline.active.keys());policyFailed=false;
+    };
+    policyTimer=setInterval(()=>{
+      if(policyWork||closing)return;
+      policyWork=pollPolicy().catch(error=>{
+        for(const run of pipeline.active.values())run.controller.abort();
+        if(!closing&&!policyFailed){policyFailed=true;try{log({event:'policy_check_failed',code:errorCode(error)});}catch{}}
+      });
+      const finished=()=>{policyWork=null;};policyWork.then(finished,finished);
+    },1000);policyTimer.unref();
     log({event:'runtime_ready',pid:process.pid,port:runtime.port,discord:offline?'offline_fixture':'connected',voice:'not_joined',taskOwner:config.owner.kind});
-  }catch(e){clearInterval(archiveTimer);await pipeline.close();await discord?.close();await archive?.close();control?.close();bridge?.close();store.releaseHost(ownerId);store.close();stopDebug();throw e;}
-  async function close(){if(closing)return;closing=true;pipeline.draining=true;clearInterval(policyTimer);clearInterval(archiveTimer);await discord?.close();await archive?.close();await pipeline.close();await new Promise(resolve=>bridge?bridge.close(resolve):resolve());await new Promise(resolve=>control?control.close(resolve):resolve());store.releaseHost(ownerId);store.close();log({event:'runtime_stopped',ownerId});stopDebug();}
+  }catch(e){await close();throw e;}
+  function close(){
+    if(closePromise)return closePromise;closing=true;pipeline.draining=true;
+    // A later uncertain drain must not leave workers running without their monitor.
+    for(const run of pipeline.active.values())run.controller.abort();
+    clearInterval(policyTimer);clearInterval(archiveTimer);accessMonitor.stop();
+    const stopped=stopControl();
+    closePromise=(async()=>{
+      // Keep the store and host lock if a dispatched import has an uncertain drain.
+      await bridge?.drain();await discord?.close();await archive?.close();await pipeline.close();
+      await Promise.allSettled([...controlOperations]);await stopped;await accessMonitor.drain({pending:policyWork?[policyWork]:[]});if(owner.kind==='remote')await owner.close();
+      store.releaseHost(ownerId);store.close();clearInterval(shutdownKeepAlive);log({event:'runtime_stopped',ownerId});stopDebug();
+    })().catch(error=>{closePromise=null;if(errorCode(error).endsWith('_DRAIN_UNCERTAIN'))shutdownKeepAlive??=setInterval(()=>{},1000);throw error;});
+    return closePromise;
+  }
   return {config,store,owner,pipeline,discord,voice,dots,close};
 }
 async function localControlRequest(port,route,token,payload){

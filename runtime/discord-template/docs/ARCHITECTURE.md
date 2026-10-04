@@ -55,6 +55,37 @@ uncertain. Only paused/cancelled/failed may explicitly resume after current gran
 and Source checks. An uncertain execution is never automatically replayed. Remote
 Task owners remain authoritative; this does not add another remote recovery ledger.
 
+## Growing history and slow connections
+
+Local model context reads use indexed current reader/room projections before
+their source and Task limits. Source corrections invalidate indexed Task bindings
+in the same transaction. Original bodies, revisions and audit events remain
+retained. The first upgrade backfills projections once; older single-writer
+changes mark them for rebuilding on the next upgraded open. Budget totals are
+maintained transactionally. Complete listing/export APIs and first backfill still
+scale with history; this is one SQLite writer per installation.
+
+Transcript overlap indexes target matching utterances and fragments, and settled
+delivery promises are released. Late corrections keep the same utterance identity.
+Original session evidence remains retained. A model-requested conversation end
+disables the session before asynchronously draining its own transcript callback.
+Local ASR deadlines cover connection and body reading, with response cancellation
+on refusal and classified errors.
+
+Local control, import and remote-owner admission have finite request sets and
+bounded HTTP bodies. Imports share one writer lane; timed-out dispatched work
+keeps its admission until it actually settles. Notification receipt admission is
+separate from ingestion. Shutdown stops intake and waits for dispatched work
+before closing SQLite. An uncertain import/owner drain leaves the host lock and
+store intact for a retry; transport cancellation does not prove a remote write
+was undone. Deferred notifications use indexed, finite rounds so blocked
+recipients and new arrivals cannot indefinitely delay other recipients.
+
+These are local runtime improvements. Multi-region routing, tenant isolation in
+a shared hosted service, provider quotas/billing, production database failover,
+backup/restore and global load/latency acceptance require their own deployments
+and measurements.
+
 The existing required `Trusted repository validation` workflow calls the complete
 Discord reusable matrix and fails unless its result is success. Failure, skipped,
 cancelled and missing matrix results cannot produce a green required context.

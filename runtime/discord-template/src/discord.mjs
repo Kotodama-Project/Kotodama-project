@@ -160,7 +160,7 @@ export class DiscordAdapter {
       else if(sub==='luma_review'){check(this.dots&&this.policy().dots.actorId===i.user.id,'DOTS_ACTOR_REQUIRED');const id=i.options.getString('draft')??this.store.db.prepare("SELECT d.id FROM dot_event_drafts d JOIN dot_requests r ON r.id=d.request_id WHERE r.actor=? AND d.state IN ('needs_review','approved') ORDER BY d.rowid DESC LIMIT 1").get(i.user.id)?.id;check(id,'LUMA_DRAFT_NOT_FOUND');const draft=await this.dots.readDraft(id);check(['needs_review','approved'].includes(draft.state),'LUMA_OPERATION_ALREADY_STARTED');await i.editReply(this.dots.reviewMessage(draft));return;}
       else if(sub==='do'){const request=i.options.getString('text',true),action=i.options.getString('action',true);const t=await this.pipeline.request(this.interactionSource(i,request),{title:request.slice(0,120),request,action});text=`受け付けました。\n${t.id}\n結果はこの仕事の「result」で確認できます。`;}
       else if(sub==='ask'){const source=this.interactionSource(i,i.options.getString('text',true));source.metadata.operation='ask';const receipt=await this.pipeline.ingest(source,{execute:false,reply:false});for(const b of receipt.contextSources??[]){const s=this.store.source(b.key,i.user.id);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord'){const channel=await this.client.channels.fetch(s.channelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}}text=receipt.analysis==='deferred'?deferredAnalysisText(receipt.reason):receipt.answer??receipt.summary??'整理しました。';}
-      else if(sub==='tasks'){const tasks=await this.pipeline.owner.tasks(i.user.id);const visible=[];for(const task of tasks)try{await this.pipeline.authorize(task,'read_result');visible.push(task);}catch{}text=visible.slice(0,15).map(t=>`${t.id} · ${taskStateText(t.state)}\n${t.title}`).join('\n')||'読取可能な仕事はまだありません。';}
+      else if(sub==='tasks'){const visible=await this.pipeline.tasks(i.user.id);text=visible.slice(0,15).map(t=>`${t.id} · ${taskStateText(t.state)}\n${t.title}`).join('\n')||'読取可能な仕事はまだありません。';}
       else if(sub==='result'){const result=await this.pipeline.result(i.options.getString('task',true),i.user.id);const files=await resultFiles(result,{artifactRoot:this.artifactRoot()});await i.editReply({content:shortText(result.summary),files,allowedMentions:{parse:[]}});return;}
       else if(sub==='stop'){await this.pipeline.stop(i.options.getString('task',true),i.user.id);text='停止を受け付けました。実行中の処理の終了を確認しています。';}
       else if(sub==='resume'){const t=await this.pipeline.resume(i.options.getString('task',true),i.user.id);text=`再開しました。${t.id}`;}
@@ -181,12 +181,17 @@ export class DiscordAdapter {
       await i.editReply({content:`${managed?'プライバシーの説明・同意確認は人間側が責任を持つ運用です。Botの同意クリックは必須ではありません。\n\n':''}${notice.text}\n\nあなたの状態：${status}`,components:[{type:1,components:buttons}],allowedMentions:{parse:[]}});
     }catch(e){await i.editReply({content:`設定できませんでした：${errorCode(e)}`,components:[],allowedMentions:{parse:[]}});}
   }
-  async notifyLumaImport(receipt,{readConfig=async()=>this.policy()}={}){
+  async notifyLumaImport(receipt,{readConfig=async()=>this.policy(),signal}={}){
+    if(signal?.aborted)return {state:'blocked'};
     if(this.notifications?.quiet()){this.notifications.defer(digest(['luma',receipt.key,receipt.sourceDigest,receipt.actorId]),'luma',receipt);return {state:'deferred'};}
     let claimed=false;
     try{
       const actor=receipt.actorId;
+      // The bridge owns the response deadline. Keep this callback pending until
+      // the actual provider call settles so cancellation cannot free its lane.
+      const wait=async value=>{const result=await value;signal?.throwIfAborted();return result;};
       const readSource=cfg=>{
+        signal?.throwIfAborted();
         check(this.verifiedInstallation&&cfg.discord.guildId===this.config.discord.guildId,'BOT_INSTALLATION_NOT_VERIFIED');
         check(cfg.bridge.enabled&&cfg.bridge.actorId===actor&&cfg.discord.operators.includes(actor),'OPERATOR_REQUIRED');
         check(cfg.integrations.luma?.eventRef===receipt.eventRef,'EVENT_NOT_ALLOWED');
@@ -195,17 +200,17 @@ export class DiscordAdapter {
         check(source.revision===receipt.revision&&source.sourceId===receipt.eventRef+':guest-snapshot'&&source.metadata?.kind==='guest_snapshot'&&source.metadata.imported===true&&source.metadata.eventRef===receipt.eventRef&&source.metadata.sourceDigest===receipt.sourceDigest,'SOURCE_CHANGED');
         return source;
       };
-      const cfg=await readConfig();readSource(cfg);
-      const member=await this.member(actor);check(member.id===actor&&member.guild.id===cfg.discord.guildId,'GUILD_MEMBER_REQUIRED');
-      const user=await this.client.users.fetch(actor,{force:true});check(user.id===actor,'NOTIFICATION_RECIPIENT_MISMATCH');
-      const channel=await this.client.channels.fetch(cfg.discord.resultChannelId,{force:true});check(channel?.guildId===cfg.discord.guildId&&await this.canRead(channel,actor),'SOURCE_ACCESS_DENIED');
-      const latest=await readConfig();check(latest.discord.resultChannelId===channel.id,'SOURCE_ACCESS_DENIED');const source=readSource(latest);
+      const cfg=await wait(readConfig());readSource(cfg);
+      const member=await wait(this.member(actor));check(member.id===actor&&member.guild.id===cfg.discord.guildId,'GUILD_MEMBER_REQUIRED');
+      const user=await wait(this.client.users.fetch(actor,{force:true}));check(user.id===actor,'NOTIFICATION_RECIPIENT_MISMATCH');
+      const channel=await wait(this.client.channels.fetch(cfg.discord.resultChannelId,{force:true}));check(channel?.guildId===cfg.discord.guildId&&await wait(this.canRead(channel,actor)),'SOURCE_ACCESS_DENIED');
+      const latest=await wait(readConfig());check(latest.discord.resultChannelId===channel.id,'SOURCE_ACCESS_DENIED');const source=readSource(latest);
       const records=source.metadata.records;check(Array.isArray(records)&&records.length<=10000&&records.every(row=>row&&[row.personKey,row.ticketKey].every(key=>key===null||typeof key==='string'&&/^[a-f0-9]{64}$/.test(key))),'LUMA_SUMMARY_INVALID');
       const people=new Set(records.map(row=>row.personKey).filter(Boolean)).size,tickets=new Set(records.map(row=>row.ticketKey).filter(Boolean)).size;
       const text=`Lumaの取込が完了しました。\n取込行数: ${records.length}\n識別できた参加者: ${people}\n識別できたチケット: ${tickets}\nCSV取得後の変更は含みません。`;
       const key=digest(['luma-import',source.guildId,receipt.eventRef,receipt.sourceDigest,actor]);
       claimed=this.store.claimDelivery(key,text);if(!claimed)return {state:this.store.deliveryState(key)==='sent'?'already_sent':'unknown'};
-      const message=await user.send({content:text,allowedMentions:{parse:[]}});check(message?.id,'NOTIFICATION_SEND_UNCONFIRMED');this.store.delivered(key,message.id);return {state:'sent'};
+      signal?.throwIfAborted();const message=await wait(user.send({content:text,allowedMentions:{parse:[]}}));check(message?.id,'NOTIFICATION_SEND_UNCONFIRMED');this.store.delivered(key,message.id);return {state:'sent'};
     }catch{if(claimed){this.onError('LUMA_IMPORT_NOTIFICATION_UNKNOWN');return {state:'unknown'};}return {state:'blocked'};}
   }
   async deliver(task){

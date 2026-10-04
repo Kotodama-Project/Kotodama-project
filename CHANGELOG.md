@@ -51,6 +51,7 @@ Incomplete Public Preview の source release 候補です。Public Beta の受�
 
 ### Fixed
 
+- 設定を読めない間のDiscord runtimeの`policy_unavailable`を障害開始時の一回に抑え、復旧時に`policy_restored`を記録する。毎秒の再確認と、読めない間の操作者・音声参加者の拒否は維持する。
 - Discordテンプレートの`doctor`を改善: pnpmの固定版とffmpeg、Linux専用の書込みworkerの前提を確認し、不足する項目と次の手順を日本語で表示。道具の確認に待ち時間・出力上限を設け、macOSをLinux用workerの対応OSと表示しない。`--json`は従来の項目を保持する（[#155](https://github.com/Kotodama-Project/Kotodama-project/issues/155)の導入準備）。
 - Luna Task swarm の peer MCP server が POSIX の仮想環境の symlink を辿って環境外の Python を選ぶ不具合を修正。既存の interpreter 選択順を保持し、不正な指定は Codex の起動前に拒否する（[#184](https://github.com/Kotodama-Project/Kotodama-project/issues/184)）。
 - A017・A022 の移植 validator で、manifest・出典表の固定内容と履歴 receipt digest を照合し、重複 JSON 項目・非有限数・通常のエスケープを含む Windows 個人 path を拒否。親を含む symlink・reparse point の拒否と上限付き読取りを統一。A017 の集計は検査済み bytes を使い、上限なしの再読取りを除いた（[#172](https://github.com/Kotodama-Project/Kotodama-project/issues/172)）。公開本文・出典表・過去の受入記録は変更せず、この validator 修正の review は別に行う。
