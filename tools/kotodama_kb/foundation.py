@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 
 import yaml
 from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema.exceptions import SchemaError
 from referencing.exceptions import Unresolvable
 
 
@@ -282,6 +283,7 @@ def _load_yaml(text: str, *, path: Path) -> dict[str, Any]:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
+    """Admit a bounded local schema before constructing its validator."""
     try:
         def pairs(items):
             result = {}
@@ -306,6 +308,10 @@ def _read_json(path: Path) -> dict[str, Any]:
             for child in node:
                 local_refs(child)
     local_refs(value)
+    try:
+        Draft202012Validator.check_schema(value)
+    except SchemaError as exc:
+        raise KnowledgeBaseError("INVALID_SCHEMA") from exc
     return value
 
 

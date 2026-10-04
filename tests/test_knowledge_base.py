@@ -514,6 +514,21 @@ class KnowledgeBaseTests(unittest.TestCase):
             with self.assertRaisesRegex(KB.KnowledgeBaseError, "INPUT_NOT_BOUNDED"):
                 KB.load_bundle(root, as_of=AS_OF)
 
+    def test_invalid_schema_keywords_are_content_free_admission_refusals(self):
+        marker = "synthetic-rejected-schema-value"
+        variants = ({"type": 42}, {"properties": [marker]}, {"required": marker})
+        for name in ("kotodama-okf-profile.schema.json", "kotodama-okf-concept.schema.json"):
+            for schema in variants:
+                with self.subTest(schema=name, keyword=next(iter(schema))), tempfile.TemporaryDirectory() as temporary:
+                    root = self._minimal_copy(Path(temporary))
+                    (root / "schemas" / name).write_text(json.dumps({"title": marker, **schema}), encoding="utf-8")
+                    with self.assertRaisesRegex(KB.KnowledgeBaseError, "^INVALID_SCHEMA$"):
+                        KB.load_bundle(root, as_of=AS_OF)
+                    result = subprocess.run([sys.executable, "-B", str(ROOT / "tools/knowledge_base.py"), "validate", "--root", str(root), "--json"], text=True, capture_output=True, timeout=20)
+                    self.assertEqual(2, result.returncode)
+                    self.assertEqual("", result.stdout)
+                    self.assertEqual("ERROR: INVALID_SCHEMA\n", result.stderr)
+
     def test_local_schema_resolution_failures_are_bounded_cli_refusals(self):
         for name in ("kotodama-okf-profile.schema.json", "kotodama-okf-concept.schema.json"):
             for schema, code in (({"$ref": "#"}, "SCHEMA_RECURSION_LIMIT"),
