@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- OpenMaus / Cloudflare OS の設計契約とread-only検証を追加。必要なagent表示項目・MCP能力境界・知識bundle参照を検査する契約候補で、UI・provider資源・実runtimeの有効化は含まない（元#56）。
+
 - 正本 #48 の公開知識基盤と #61 の互換 verdict/readiness 修正を現行 main へ再配置。9つの公開Concept、出典に束縛した catalog/graph、字句検索と限定context、schema/profile/判断readinessを分ける監査を追加。除外した旧運用文書やCloudflare baseを取り込まず、内容・実agent入力・権限の独立検証を未成立のまま明示する（`docs/KNOWLEDGE-BASE.md`）。
 - Discord runtimeに`integrity`を追加し、信頼済みの直接CLI起動でapplication import前後のsourceとmetadataを検査し、認証済みlocal controlで候補・現在のdiskと照合する。cached/direct API・preload起動とWindowsではsource証明を未成立とし、起動中変更・大きなsource集合を一致にせず制御応答の上限を守る。live切替・rollbackと`PB-G4`は未証明のまま（#157、元#182）。
 

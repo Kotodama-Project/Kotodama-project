@@ -232,6 +232,13 @@ python3 tools/verify_company_pack_review_decision_handoff.py \
 |---|---|---|---|
 | [knowledge-work-package.schema.json](../schemas/knowledge-work-package.schema.json)、[knowledge-work-validation-report.schema.json](../schemas/knowledge-work-validation-report.schema.json) | [`validate_knowledge_work_package.py`](../tools/validate_knowledge_work_package.py)（本体は [`knowledge_work_validator.py`](../tools/knowledge_work_validator.py)）、下書きを作る [`create_knowledge_work_package.py`](../tools/create_knowledge_work_package.py) | [`test_knowledge_work_validation.py`](../tests/test_knowledge_work_validation.py) | 構造の検査だけ。根拠と成果物の bytes と digest の一致、path の逸脱・link・hardlink の拒否、claim と根拠・受入条件と成果物の対応、期限、未解決の blocking な問い、自己 review、感度の引き下げを見る。意味の正しさ、人の承認、reviewer の本人確認、実行の許可、Promotion、Current Truth は作らず、report の `claims` は常にすべて false。 |
 
+## OpenMaus / Cloudflare OS design contracts
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [openmaus-integration.schema.json](../schemas/openmaus-integration.schema.json) | [`validate_openmaus_integration.py`](../tools/validate_openmaus_integration.py) `--root .` | [`test_openmaus_integration.py`](../tests/test_openmaus_integration.py) | [OpenMaus / Cloudflare OS integration](OPENMAUS-CLOUDFLARE-OS-INTEGRATION.md)。知識owner、agent表示項目、MCP能力の境界、実行完了と検証の分離、all-false claimsをread-onlyで検査する。`design_contract_only`であり、UI、実agent接続、provider操作、権限付与、配備は証明しない。 |
+| [cloudflare-os-integration.schema.json](../schemas/cloudflare-os-integration.schema.json) | [`validate_cloudflare_os_integration.py`](../tools/validate_cloudflare_os_integration.py) `--root .` | [`test_cloudflare_os_integration.py`](../tests/test_cloudflare_os_integration.py) | [OpenMaus / Cloudflare OS integration](OPENMAUS-CLOUDFLARE-OS-INTEGRATION.md)。serviceの段階、一つの管理面とWork identity、adapter境界、all-false claimsをread-onlyで検査する。`design_contract_only`であり、native OS、provider認証、実runtime、ACLの実効性、Human GO、配備は証明しない。 |
+
 ## Public starterの同じ実行順
 
 既存exampleを変更せず、必ず新しい作業copyで実行します。
