@@ -2,6 +2,8 @@ import copy
 import importlib.util
 import json
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -113,6 +115,61 @@ class ExecutorRuntimeValidatorTest(unittest.TestCase):
         errors = self.errors_for(raw=b'{"kind": "\xff"}')
         self.assertEqual(1, len(errors))
         self.assertIn("not valid UTF-8", errors[0])
+
+    def test_rejected_schema_values_and_keys_are_not_reflected_by_cli(self) -> None:
+        marker = "private-synthetic-input-marker"
+        candidates = []
+        for field, key in (("upstream", "revision"), ("runtime", "management_plane_access")):
+            candidate = copy.deepcopy(self.candidate)
+            candidate[field][key] = marker
+            candidates.append(candidate)
+        candidate = copy.deepcopy(self.candidate)
+        candidate[marker] = marker
+        candidates.append(candidate)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / f"{marker}.json"
+            for candidate in candidates:
+                with self.subTest(candidate=list(candidate)):
+                    path.write_text(json.dumps(candidate), encoding="utf-8")
+                    result = subprocess.run(
+                        [sys.executable, str(ROOT / "tools/validate_executor_runtime_candidate.py"), str(path)],
+                        capture_output=True, text=True, check=False,
+                    )
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("schema validation failed", result.stdout)
+                    self.assertEqual(result.stderr, "")
+                    self.assertNotIn(marker, result.stdout + result.stderr)
+                    self.assertNotIn(str(path), result.stdout + result.stderr)
+
+    def test_read_parse_and_usage_failures_do_not_reflect_input(self) -> None:
+        marker = "private-synthetic-input-marker"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / f"{marker}.json"
+            for raw in (
+                b'"\xff"', f'{{"{marker}": 1, "{marker}": 2}}'.encode(),
+                b'{"incomplete":', b'[' * 50_000,
+                b'{"owned-number":' + b'1' * 5_000 + b'}',
+            ):
+                with self.subTest(raw_kind=raw[:10]):
+                    path.write_bytes(raw)
+                    result = subprocess.run(
+                        [sys.executable, str(ROOT / "tools/validate_executor_runtime_candidate.py"), str(path)],
+                        capture_output=True, text=True, check=False,
+                    )
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(result.stderr, "")
+                    self.assertNotIn(marker, result.stdout)
+                    self.assertNotIn(str(path), result.stdout)
+            path.unlink()
+            for arguments, expected_status in (([str(path)], 1), (["--unknown", marker], 2)):
+                with self.subTest(status=expected_status):
+                    result = subprocess.run(
+                        [sys.executable, str(ROOT / "tools/validate_executor_runtime_candidate.py"), *arguments],
+                        capture_output=True, text=True, check=False,
+                    )
+                    self.assertEqual(result.returncode, expected_status)
+                    self.assertNotIn(marker, result.stdout + result.stderr)
+                    self.assertNotIn(str(path), result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
