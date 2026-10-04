@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/kotodama/knowledge-work-package.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["version", "package_id", "work_ref", "state", "producer_ref", "sensitivity", "objective", "sources", "claims", "assumptions", "questions", "contradictions", "criteria", "deliverables", "review", "promotion"],
+  "properties": {
+    "version": {"const": 1}, "package_id": {"$ref": "#/$defs/id"},
+    "work_ref": {"anyOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+    "state": {"enum": ["draft", "candidate"]}, "producer_ref": {"$ref": "#/$defs/ref"},
+    "sensitivity": {"$ref": "#/$defs/sensitivity"},
+    "objective": {"$ref": "#/$defs/text"}, "promotion": {"const": "blocked"},
+    "sources": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/source"}},
+    "claims": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/claim"}},
+    "assumptions": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/assumption"}},
+    "questions": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/question"}},
+    "contradictions": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/contradiction"}},
+    "criteria": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/criterion"}},
+    "deliverables": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/deliverable"}},
+    "review": {"type": "object", "additionalProperties": false, "required": ["state", "reviewer_ref", "subject_sha256"], "properties": {
+      "state": {"enum": ["not_run", "performed"]},
+      "reviewer_ref": {"anyOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+      "subject_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+    }}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
+    "ref": {"type": "string", "pattern": "^ref/[A-Za-z0-9][A-Za-z0-9_./-]{0,190}$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "path": {"type": "string", "minLength": 1, "maxLength": 512},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "refs": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "sensitivity": {"enum": ["public", "internal", "restricted"]},
+    "source": {"type": "object", "additionalProperties": false, "required": ["id", "path", "sha256", "kind", "sensitivity", "expires_at"], "properties": {
+      "id": {"$ref": "#/$defs/id"}, "path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha256"},
+      "kind": {"enum": ["synthetic_fixture", "local_snapshot"]}, "sensitivity": {"$ref": "#/$defs/sensitivity"},
+      "expires_at": {"type": ["string", "null"], "format": "date-time", "maxLength": 40}
+    }},
+    "claim": {"type": "object", "additionalProperties": false, "required": ["id", "kind", "statement", "source_refs", "material", "sensitivity"], "properties": {
+      "id": {"$ref": "#/$defs/id"}, "kind": {"enum": ["observation", "inference", "assumption"]}, "statement": {"$ref": "#/$defs/text"},
+      "source_refs": {"$ref": "#/$defs/refs"}, "material": {"type": "boolean"}, "sensitivity": {"$ref": "#/$defs/sensitivity"}
+    }},
+    "assumption": {"type": "object", "additionalProperties": false, "required": ["id", "statement", "claim_refs"], "properties": {
+      "id": {"$ref": "#/$defs/id"}, "statement": {"$ref": "#/$defs/text"}, "claim_refs": {"$ref": "#/$defs/refs"}
+    }},
+    "question": {"type": "object", "additionalProperties": false, "required": ["id", "statement", "blocking", "state"], "properties": {
+      "id": {"$ref": "#/$defs/id"}, "statement": {"$ref": "#/$defs/text"}, "blocking": {"type": "boolean"}, "state": {"enum": ["open", "resolved"]}
+    }},
+    "contradiction": {"type": "object", "additionalProperties": false, "required": ["id", "claim_refs", "severity", "state"], "properties": {
+      "id": {"$ref": "#/$defs/id"}, "claim_refs": {"$ref": "#/$defs/refs"}, "severity": {"type": "integer", "minimum": 1, "maximum": 3}, "state": {"enum": ["open", "resolved"]}
+    }},
+    "criterion": {"type": "object", "additionalProperties": false, "required": ["id", "description", "state", "deliverable_refs"], "properties": {
+      "id": {"$ref": "#/$defs/id"}, "description": {"$ref": "#/$defs/text"}, "state": {"enum": ["pending", "met"]}, "deliverable_refs": {"$ref": "#/$defs/refs"}
+    }},
+    "deliverable": {"type": "object", "additionalProperties": false, "required": ["id", "path", "sha256", "criterion_refs"], "properties": {
+      "id": {"$ref": "#/$defs/id"}, "path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha256"}, "criterion_refs": {"$ref": "#/$defs/refs"}
+    }}
+  }
+}

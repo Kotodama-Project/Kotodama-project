@@ -224,6 +224,14 @@ python3 tools/verify_company_pack_review_decision_handoff.py \
 | なし（固定記録: [security-overlay.json](../runtime/cloudflare-os/security-overlay.json)） | [`validate_cloudflare_os_security_candidate.py`](../tools/validate_cloudflare_os_security_candidate.py) | [`test_cloudflare_os_security_overlay.py`](../tests/test_cloudflare_os_security_overlay.py) | [High-advisory remediation preflight](CLOUDFLARE-OS-ADOPTION.md#high-advisory-remediation-preflight)。記録された overlay spec（`nanoid` 3.3.18 と `@puppeteer/browsers` 3.0.4 の parent-scoped override、生成 lock の byte 束縛、`LOCAL_MATERIALIZATION_VERIFIED_NOT_DEPLOYED`、`independent_review: false`）を検査する。任意で `--core-repo` により pin した core の Git object を、`--generated-workspace` と `--generated-lock` の組で生成物を再検証する（片方だけは FAIL）。出力の `remediation_proven` は常に false で、独立 review、provider/upstream での是正、配備、Public Beta GO は証明しない。 |
 | なし（固定記録: [wrangler-integrity.json](../runtime/cloudflare-edge/wrangler-integrity.json)） | [`verify_wrangler_artifact.py`](../tools/verify_wrangler_artifact.py) `--metadata` `--artifact` | [`test_verify_wrangler_artifact.py`](../tests/test_verify_wrangler_artifact.py) | [Cloudflare edge profile](../runtime/cloudflare-edge/README.md)。preview-upload workflow が取得した Wrangler 4.120.0 の npm tarball について、npm SHA-512 integrity、legacy shasum、SLSA subject digest の一致だけを検査する。tarball が要るため upload job の中でだけ実行し、候補検証の CI では試験だけを走らせる。SLSA attestation の署名検証（出力の `slsa_attestation_signature_verified` は false）、provider での実行、配備は証明しない。 |
 
+## 14. Knowledge Work package
+
+一つの作業成果と、その根拠のファイルを SHA-256 で固定した package です。例は合成の [business-rehearsal](../examples/knowledge-work/business-rehearsal/knowledge-work.json) だけです。
+
+| Schema | Validator / CLI | Regression test | PASSの意味 |
+|---|---|---|---|
+| [knowledge-work-package.schema.json](../schemas/knowledge-work-package.schema.json)、[knowledge-work-validation-report.schema.json](../schemas/knowledge-work-validation-report.schema.json) | [`validate_knowledge_work_package.py`](../tools/validate_knowledge_work_package.py)（本体は [`knowledge_work_validator.py`](../tools/knowledge_work_validator.py)）、下書きを作る [`create_knowledge_work_package.py`](../tools/create_knowledge_work_package.py) | [`test_knowledge_work_validation.py`](../tests/test_knowledge_work_validation.py) | 構造の検査だけ。根拠と成果物の bytes と digest の一致、path の逸脱・link・hardlink の拒否、claim と根拠・受入条件と成果物の対応、期限、未解決の blocking な問い、自己 review、感度の引き下げを見る。意味の正しさ、人の承認、reviewer の本人確認、実行の許可、Promotion、Current Truth は作らず、report の `claims` は常にすべて false。 |
+
 ## Public starterの同じ実行順
 
 既存exampleを変更せず、必ず新しい作業copyで実行します。
@@ -396,6 +404,66 @@ prompt、private content を解決せず、複数candidate間の replay reservat
 `CANDIDATE_ONLY` / `NO_GO_UNPUBLISHED` を維持します。schema-validなsemantic拒否は
 `checks.schema=MATCH`を保ち、構造・parser・validatorの拒否だけを`REFUSED`とするため、
 修正対象を区別できますが、runtimeやauthorityの証明にはなりません。
+
+## Public migration ledger
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [public-migration-ledger.schema.json](../schemas/public-migration-ledger.schema.json) | [`validate_public_migration_ledger.py`](../tools/validate_public_migration_ledger.py) | [`test_public_migration_ledger_contract.py`](../tests/test_public_migration_ledger_contract.py) | [Public Migration Ledger](PUBLIC-MIGRATION-LEDGER.md)。追記専用 JSONL の schema、連番、hash chain、trusted head anchor（`--anchor` 指定時）、終端分類と移送機構の語彙分離、gate 一貫性だけを read-only で検査する。`--anchor` なしの `LEDGER_CONSISTENT_UNVERIFIED` は内部整合性だけで、拒否時の `zero_unclassified` は `null`。移行の実行、private 継続性、公開抽出物の公開、依存切替、rollback 予行、独立検証、Human Decision、Promotion、Current Truth、Public Beta GOではない。 |
+
+PowerShell:
+
+```powershell
+python tools\validate_public_migration_ledger.py `
+  migration\public-migration-ledger.v1.jsonl `
+  --anchor <trusted-previous-head-sha256>
+```
+
+POSIX:
+
+```bash
+python3 tools/validate_public_migration_ledger.py \
+  migration/public-migration-ledger.v1.jsonl \
+  --anchor <trusted-previous-head-sha256>
+```
+
+台帳は `terminal_classification`（`PUBLIC_EXTRACT` / `PRIVATE_RETAIN` / `REGENERATE` /
+`DROP`、blocked 中だけ `null`）と `transfer_mode`（`REAUTHOR` / `GENERATE` / `NO_COPY`）を
+別フィールドとして持ち、片方の語彙をもう片方へ入れることを拒否します。これがないと
+unclassified 0 件を機械検証できません。すべての識別子は `ref/<64桁小文字 digest>` の
+opaque 参照で、private path、provider handle、host、参加者識別子、素材そのものは記録
+しません。各 subject の集計は最新 sequence の record に束縛されます。
+`migration/public-migration-ledger.v1.jsonl` は現時点で未作成であり、空・不在の入力は
+`INPUT_INVALID` で fail-closed します。Draft 2020-12 検証には `requirements-test.txt` の
+`jsonschema` が必要で、未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。
+
+## Public agent lifecycle registry
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [public-agent-lifecycle-registry.schema.json](../schemas/public-agent-lifecycle-registry.schema.json) | [`validate_public_agent_lifecycle_registry.py`](../tools/validate_public_agent_lifecycle_registry.py) | [`test_public_agent_lifecycle_registry_contract.py`](../tests/test_public_agent_lifecycle_registry_contract.py) | [Public Agent Lifecycle Registry](PUBLIC-AGENT-LIFECYCLE-REGISTRY.md)。agent spec / instance / run / lease / event / evidence receipt の追記専用記録を read-only で検査する。fail-closed な outcome contract、親子 edge と zero-capable depth / fan-out budget、失敗終端後だけのretry、lease/event identity、実日時、termination-state対応、bounded input、state machine、hash chainだけを対象にする。`REGISTRY_CONSISTENT_UNVERIFIED` は記録された lifecycle が内部整合しているという意味だけで、agent 起動、dispatch 実行、provider instance の再利用、証跡の独立検証、Human approval、Promotion、Current Truth、Public Beta GOではない。 |
+
+PowerShell:
+
+```powershell
+python tools\validate_public_agent_lifecycle_registry.py `
+  path\to\registry.jsonl
+```
+
+POSIX:
+
+```bash
+python3 tools/validate_public_agent_lifecycle_registry.py \
+  path/to/registry.jsonl
+```
+
+lifecycle state は `prepared -> dispatched -> running -> completed | failed | cancelled | expired` の 7 つだけです。
+`degraded` は state ではなく属性で、成功は保存されず `state == completed` かつ完了理由かつ証跡 1 件以上から導出します。
+継続性は決して verified になりません。再起動をまたいで前提条件がすべて一致しても結果は
+`PRECONDITIONS_MATCH_UNVERIFIED` で、1 つでも食い違えば `WORK_RESUME_ONLY` です。公開レコードは provider が
+同じ認可済み instance を再利用したことを証明できないためで、`claims.continuity_verified` と
+`claims.provider_instance_reused` は常に `false` です。Draft 2020-12 検証には `requirements-test.txt` の
+`jsonschema` が必要で、未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。
 
 ## Related guidance
 

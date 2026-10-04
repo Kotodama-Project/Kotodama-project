@@ -6,19 +6,31 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ## [Unreleased]
 
+## [0.2.0-preview] - 2026-10-04
+
+Incomplete Public Preview の source release 候補です。Public Beta の受付、Discord 招待、公開 Voice Bot、live deployment、Final Human GO は含みません。
+
 ### Added
+
+- Public agent lifecycle の公開契約を #36 の固定 source から再導入。Luna との概念対応と deep JSON の構造化 refusal を追加。実 registry・runtime・continuity は未検証。
+
+- エージェントへの作業依頼用 Issue form を追加。目的、現状、担当、手順、確認コマンド、受入条件、操作範囲・停止条件を必須にし、作業ガイドと委任インデックスへ案内する（#163）。
+- Release 候補に 3 つの依存 lock の CycloneDX 1.6 SBOM を追加。入力 digest、distribution hash、SHA256SUMS、build provenance、draft 添付を結び、未固定依存と成果物の上書きを拒否する。実 release での署名・添付の受入は残件（#166）。
 
 - 作成済みOpenAI Dotを日常の入口とする方針と、Discord / Luma用のlocal plugin候補。指定operator/channelの受付、訂正・削除・取消、重複返答の抑止、Luma作成／更新候補の全文確認、一回の操作claimとDot報告を追加。Dots製品・live Bot・Luma websiteの受入、remote MCP Eventsは別途確認する。
 
+- Discord の実音声受入の手順・記録様式と、既存 SQLite イベントを本文なしで集計する読み取り専用 CLI を追加（[#154](https://github.com/Kotodama-Project/Kotodama-project/issues/154)）。入力・ASR の観測と実聴を区別し、欠測・不正入力・上限超過を明示する。runtime の既定設定や受入結果は変更せず、実音声の受入は未実施。
 - A019 の registry 契約候補（task contract、task decomposition、worker capability catalog、worker result）を、[公開 PR #115](https://github.com/Kotodama-Project/Kotodama-project/pull/115) の固定 head `040a9becf0463e69887f126e30af6d38bdc02988` から再配置。出典表と非公開の元履歴走査 receipt は公開元の歴史的記録として維持し、この候補の独立 review は別 gate で検証する。4 schemas は candidate-only で、runtime や Task owner の統合ではない。追加 review により validator と試験を補強し、manifest・出典表の全階層と著者・履歴件数を固定する（独立 review の許可済み状態のみ別判定）。重複 JSON key、通常・escaped 表記の利用者絶対 path を拒否し、サイズ上限と symlink・reparse point の拒否を読取り前に検査する。
 - BecomeOne の A022 アーキテクチャ候補を再構成: 単一の記録 owner、複数 agent の協調、tool の監督、plan lifecycle の公開契約と、出典表・固定 bytes の validator。公開済み PR #114 の候補を現行 main に合わせ、今回の公開候補への独立 review を履歴証拠と分けて記録（`docs/architecture/README.md`）。
 
+- Knowledge Work の package（一つの作業成果と根拠のファイルを SHA-256 で固定する）と検証 report の schema、読み取り専用の validator、下書きを作る initializer、合成の例と否定の試験を、[#58](https://github.com/Kotodama-Project/Kotodama-project/pull/58)・[#60](https://github.com/Kotodama-Project/Kotodama-project/pull/60) から main に当て直した（[#133](https://github.com/Kotodama-Project/Kotodama-project/issues/133)）。PASS は構造の検査だけで、承認・実行の許可・Promotion は作らない。実行器へ渡す文脈の compiler は含めない（[#137](https://github.com/Kotodama-Project/Kotodama-project/issues/137)）。
 - Luna Task swarm を main に統合（[#100](https://github.com/Kotodama-Project/Kotodama-project/pull/100)。元は [#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67) と修復 [#85](https://github.com/Kotodama-Project/Kotodama-project/pull/85)）: owner に束縛した計画、予算（試行・同時実行・検証枠）、ACK 付きの agent 間通信、独立した検証者。offline fixture はモデルを呼ばずに動き、実 Codex / Luna の live 受入は未実施（`docs/LUNA-TASK-SWARM.md`）。
 - このリポジトリの自動改善ループの運用契約（`docs/IMPROVEMENT-LOOP.md`）: 一周に一件、独立 review と必須 CI を通して merge し、main が赤くなれば revert する。agent がしないことと人が決めることを明記（[#100](https://github.com/Kotodama-Project/Kotodama-project/pull/100)）。
 - 意図を抜き出して、すぐに走る: `discord.agentChannelIds` のテキストチャンネルでは、操作者の発言をBotへのメンションと同じに扱い、明確で実行に足りる依頼をすぐに仕事にする。会話（テキスト・音声）から仕事が走り始めると、依頼者へ即座にDMで件名と仕事のIDを届ける（[#101](https://github.com/Kotodama-Project/Kotodama-project/pull/101)）。
 - 公開の Agent Skills（intent、plan、research、delegate、validate、implement、public review、surface audit、handoff の 9 件）と共通の運用契約 `docs/SKILL-OPERATING-CONTRACT.md`、読み取り専用の監査 `tools/audit_public_skills.py`。既存の `kotodama-luna-swarm` も同じ契約の形式にそろえた（[#17](https://github.com/Kotodama-Project/Kotodama-project/pull/17)）。
 - OpenManus を Proxmox 上の限定 executor として評価するための候補: schema、例、読み取り専用の validator（必須の権限 binding と出力、文字列への秘密の混入、不正 UTF-8、空白だけの値を拒否）と試験。配備や採用は含まない（[#55](https://github.com/Kotodama-Project/Kotodama-project/pull/55)）。
 - agent swarm と route binding の契約候補: schema、読み取り専用の preflight、否定の試験。main の Luna Task swarm との対応表を付けた（[#34](https://github.com/Kotodama-Project/Kotodama-project/pull/34)）。
+- 公開移行台帳の契約（schema、読み取り専用の verifier、否定を含む試験、合成 fixture）を [#35](https://github.com/Kotodama-Project/Kotodama-project/pull/35) から main に合わせて取り込み。移行対象ごとの最終的な分類と移し方を別の項目に分け、hash chain と任意の trusted head anchor で改竄を検知する。台帳ファイルは private receipt の digest が確定するまで作らない。Luna Task swarm の実行記録とは別の記録であることを注記した（`docs/PUBLIC-MIGRATION-LEDGER.md`）。
 - BecomeOne から移植した階層テンプレート（A017: project / phase / requirement / plan / task と session context）。移植元の固定 commit・作者の GitHub handle・ライセンスを載せた出典表（`migration/a017-hierarchy-templates.provenance.json`）と、Issue #25 の owner 判断・非公開の元履歴走査 receipt・独立 review による受入の記録を付けた（[#27](https://github.com/Kotodama-Project/Kotodama-project/pull/27) を main に合わせて取り込み）。
 - GPT-Live の採用方針（`docs/GPT-LIVE-ADOPTION.md`）: [#71](https://github.com/Kotodama-Project/Kotodama-project/pull/71) の方針文書だけを日本語で書き直し、main の Node runtime（`runtime/discord-template`）の現状に合わせて取り込んだ。#71・#69 の別 runtime は取り込まず、Node に無い考え方は #142〜#146 で扱う。candidate-only で、実 VC の受入ではない。
 
@@ -46,6 +58,13 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Task swarm が Windows で失敗していた（ディレクトリ一覧の link 数を信用して既存 payload を拒否、SQLite 接続の閉じ忘れ）。
 - Windows の CI で Chocolatey の配布元が一時的に 406 を返すと、ffmpeg が入らないまま導入の step が成功扱いになり、後の音声の試験が失敗していた。導入を 3 回まで試し、それでも無ければ導入の step で止める。
 - Discord の音声会話で、一度返答した後の続きの質問に答えなくなる経路を直した。Live の命令が 1 件拒否されただけでは会話を閉じず、最後まで再生した返答のたびに停止の指示を Live へ送らず、Live の文字起こしでも会話の続きであることを返答の判断に渡す。原因を絞るため、本文・音声・Discord の ID を含まない診断記録を足した（`runtime/discord-template/docs/OPERATIONS.md`）。実マイクでの連続応答は未確認（[#147](https://github.com/Kotodama-Project/Kotodama-project/issues/147)）。
+
+### Not included
+
+- Voice の実マイク E2E、2 人 30 分の会話、別設定での再現。
+- 実 Codex / Luna の受入、agent lifecycle の実 registry / identity / continuity。
+- OKF 知識基盤と各 adapter の実接続、live Compose / Proxmox / Cloudflare deployment。
+- Public Beta、招待、公開 Voice Bot、Final Human GO。
 
 ## [0.1.0-preview] - 2026-09-14
 
@@ -76,5 +95,6 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - agent swarm、OKF control plane、Slack / Teams / Salesforce adapter（open PR と Issue の候補のみ）。
 - live Compose / Proxmox / Cloudflare deployment、Public Beta、Final Human GO。
 
-[Unreleased]: https://github.com/Kotodama-Project/Kotodama-project/compare/v0.1.0-preview...HEAD
+[Unreleased]: https://github.com/Kotodama-Project/Kotodama-project/compare/v0.2.0-preview...HEAD
+[0.2.0-preview]: https://github.com/Kotodama-Project/Kotodama-project/releases/tag/v0.2.0-preview
 [0.1.0-preview]: https://github.com/Kotodama-Project/Kotodama-project/releases/tag/v0.1.0-preview
