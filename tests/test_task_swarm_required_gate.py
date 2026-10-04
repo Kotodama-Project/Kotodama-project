@@ -17,7 +17,7 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         self.assertEqual(jobs["swarm"]["uses"], "./.github/workflows/task-swarm.yml")
         required = jobs["validate"]
         self.assertEqual(required["name"], "Trusted repository validation")
-        self.assertEqual(set(required["needs"]), {"discord", "swarm"})
+        self.assertEqual(set(required["needs"]), {"repository", "discord", "swarm"})
         self.assertEqual(required["if"], "${{ always() }}")
         gate = next(step for step in required["steps"] if step.get("name") == "Require the complete task swarm test matrix")
         self.assertEqual(gate["env"]["SWARM_RESULT"], "${{ needs.swarm.result }}")

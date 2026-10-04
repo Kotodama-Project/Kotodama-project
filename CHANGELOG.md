@@ -10,6 +10,21 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 - Local review gateway に分類・明示reader/reviewer・期限・取消のcatalog v2を追加。unclassified/secretの内容を返さず、人のreviewはhuman種別だけに保存する。kindとpolicyはoperatorのsnapshotであり、本人認証・Promotionではない（#123、元#44）。
 
+- Dots pluginにcursor一覧とrevision/権限付き全文pageを追加。簡略一覧は合成SDK試験で転送JSONを約97.6%削減し、元の全文一覧を維持する。長文・多言語・複雑な依存の通信benchmarkを必須CIで検査する（#204）。
+
+### Fixed
+
+- 履歴増加時のSQLite context、訂正、累積予算、Task swarm検索を索引化。原文と過去版を保持し、初回backfillと全件exportの制約を明記する（#205）。
+- 遅いHTTP/ASR/通知の実未完了処理を有限化し、停止時は受付を止めて保存の所有権を確認する。不確実な書込みは再送せず、不確実な停止は同じプロセスで再試行する（#206）。
+- 制御サーバーの待受に失敗した起動はSQLiteとhost lockを閉じ、同じ設定で再起動できるようにする。HTTPとDiscordのTask一覧は要求者とTaskのactorを照合し、現在の閲覧権限を確認する（#206）。
+- 設定を読めない間のDiscord runtimeの`policy_unavailable`を障害開始時の一回に抑え、復旧時に`policy_restored`を記録する。毎秒の再確認と、読めない間の操作者・音声参加者の拒否は維持する。
+- exact requirementを持つHTTP依存を同時更新し、生成hashと両lockの整合性を検査する。Dependabotでも同じgroupへまとめる（#207）。
+- Uvicorn 0.54、csv-parse 7.0.3、ws 8.22を生成lockへ反映し、既存の設定と動作を検査する。実験的HTTP/2は有効にしない（#210、#211の更新を#209へ集約）。
+
+### Changed
+
+- Discord CIを一つのLinux/Windows matrixへ統合し、全テスト・Docker probe・必須check名と失敗時の拒否を保持する。製品の理想との照合と、履歴を失わないbranch/parked候補の整理を改善ループに追加する。
+
 ## [0.2.0-preview] - 2026-10-04
 
 Incomplete Public Preview の source release 候補です。Public Beta の受付、Discord 招待、公開 Voice Bot、live deployment、Final Human GO は含みません。
@@ -51,7 +66,6 @@ Incomplete Public Preview の source release 候補です。Public Beta の受�
 
 ### Fixed
 
-- 設定を読めない間のDiscord runtimeの`policy_unavailable`を障害開始時の一回に抑え、復旧時に`policy_restored`を記録する。毎秒の再確認と、読めない間の操作者・音声参加者の拒否は維持する。
 - Discordテンプレートの`doctor`を改善: pnpmの固定版とffmpeg、Linux専用の書込みworkerの前提を確認し、不足する項目と次の手順を日本語で表示。道具の確認に待ち時間・出力上限を設け、macOSをLinux用workerの対応OSと表示しない。`--json`は従来の項目を保持する（[#155](https://github.com/Kotodama-Project/Kotodama-project/issues/155)の導入準備）。
 - Luna Task swarm の peer MCP server が POSIX の仮想環境の symlink を辿って環境外の Python を選ぶ不具合を修正。既存の interpreter 選択順を保持し、不正な指定は Codex の起動前に拒否する（[#184](https://github.com/Kotodama-Project/Kotodama-project/issues/184)）。
 - A017・A022 の移植 validator で、manifest・出典表の固定内容と履歴 receipt digest を照合し、重複 JSON 項目・非有限数・通常のエスケープを含む Windows 個人 path を拒否。親を含む symlink・reparse point の拒否と上限付き読取りを統一。A017 の集計は検査済み bytes を使い、上限なしの再読取りを除いた（[#172](https://github.com/Kotodama-Project/Kotodama-project/issues/172)）。公開本文・出典表・過去の受入記録は変更せず、この validator 修正の review は別に行う。
