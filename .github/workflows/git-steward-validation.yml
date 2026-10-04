@@ -1,0 +1,42 @@
+name: Git Steward validation
+
+on:
+  pull_request:
+    paths:
+      - 'runtime/git-steward/**'
+      - 'tests/test_git_steward_runtime.py'
+      - '.github/workflows/git-steward-validation.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'runtime/git-steward/**'
+      - 'tests/test_git_steward_runtime.py'
+      - '.github/workflows/git-steward-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: git-steward-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Git Steward (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Run the dependency-free coordination suite
+        run: node --test --test-reporter=tap runtime/git-steward/coordinator.test.mjs
