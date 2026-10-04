@@ -8,7 +8,8 @@
 |---|---|---|---|---|---|
 | Repository validation（job: Repository checks → **Trusted repository validation**） | `.github/workflows/repository-validation.yml` | PR、main への push | checks は最大 25 分、集約は全依存の終了後 | **必須**（集約が成功を要求） | Discord・swarm と並列に tracked credential hygiene、README の one-command smoke、runtime candidate validator、actionlint、hash-locked pip install、immutable workflow reference check、`python -m unittest discover -s tests`（docs lint を含む）、`git diff --check` と clean tree。Trusted job は全3経路の成功を確認 |
 | Repository validation（job: **test (ubuntu-latest)**・**test (windows-latest)**） | `.github/workflows/repository-validation.yml` | PR、main への push | 2〜3 分 | **必須**（`Trusted repository validation` も成功を要求） | `runtime/discord-template` の `pnpm test` と `pnpm check`。Linux は固定 digest の Docker image で検証隔離の実 probe を行う |
-| Task swarm validation（job: swarm / validate (ubuntu-latest)・(windows-latest)） | `.github/workflows/task-swarm.yml` | 必須チェックから `workflow_call`、手動 | 2〜5 分 | **必須**（`Trusted repository validation` が成功を要求） | `requirements-task-swarm-ci.txt` の hash 付き install、`pytest -k task_swarm`、offline demo（モデル呼出しなし） |
+| Task swarm validation（job: swarm / validate (ubuntu-latest)・(windows-latest)） | `.github/workflows/task-swarm.yml` | 必須チェックから `workflow_call`、手動 | 2〜5 分 | **必須**（`Trusted repository validation` が成功を要求） | `requirements-task-swarm-ci.txt` の hash 付き install、filenameを限定した全100 pytest cases、offline demo（モデル呼出しなし） |
+| Git Steward validation（job: Git Steward (ubuntu-latest)・(windows-latest)） | `.github/workflows/git-steward-validation.yml` | Git Steward・Python launcher・このworkflowの変更を含むPR、mainへのpush | 最大5分 | 任意 | Node 24で46 synthetic Node testsだけを実行。依存install、全Python suite、provider操作は含まない |
 | Cloudflare candidate validation | `.github/workflows/cloudflare-candidate-validation.yml` | PR、main への push | 1〜2 分 | 任意 | Cloudflare edge / 公式 Cloudflare OS 候補の content-free validator |
 | Cloudflare edge preview candidate | `.github/workflows/cloudflare-edge-preview.yml` | 手動（workflow_dispatch） | 未実行 | 任意 | environment `cloudflare-preview`（required reviewers、self review 禁止）での preview upload 候補。必要な secret が揃っておらず、これまで一度も実行されていません |
 | Dependency review | `.github/workflows/dependency-review.yml` | main への PR | 数秒 | **必須** | 依存追加の脆弱性レビュー |
@@ -74,6 +75,8 @@ python -m pip install --require-hashes -r requirements-ci.txt
 python -B tools/check_workflow_references.py
 python -m unittest discover -s tests -v
 ```
+
+全体の unittest には Git Steward の試験（`tests/test_git_steward_runtime.py`）が入り、Node 22.13 以上と Git を使います。無いときは skip せずに失敗します。Linuxの`Repository checks`はSHA固定済みsetup-nodeでNode 24を用意します。追加の任意workflowは、関連pathだけを対象にWindows/LinuxでNode suiteを実行します（#131の記録済み判断）。必須チェックは増やさず、全Python検査も重複させません。実Windows runnerでの成功はhosted実行が完了するまで未検証です。
 
 `runtime/task_swarm` の変更（Python 3.12）:
 
