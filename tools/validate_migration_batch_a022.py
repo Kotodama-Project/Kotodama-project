@@ -13,6 +13,8 @@ import re
 import stat
 from typing import Any
 
+from validate_public_migration_ledger import reject_excessive_json_nesting
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = Path("migration/a022-public-architecture.manifest.json")
@@ -259,10 +261,25 @@ def _finite_json_float(value: str) -> float:
 
 
 def _parse_json(data: bytes) -> Any:
-    return json.loads(
-        data.decode("utf-8"), object_pairs_hook=_unique_json_object,
+    text = data.decode("utf-8")
+    reject_excessive_json_nesting(text)
+    value = json.loads(
+        text, object_pairs_hook=_unique_json_object,
         parse_constant=_reject_json_constant, parse_float=_finite_json_float,
     )
+    # Escaped lone surrogates can decode but cannot form the UTF-8 metadata
+    # record. Reject them before hashing or scanning, including keys/arrays.
+    pending = [value]
+    while pending:
+        child = pending.pop()
+        if isinstance(child, str):
+            child.encode("utf-8")
+        elif isinstance(child, dict):
+            pending.extend(child)
+            pending.extend(child.values())
+        elif isinstance(child, list):
+            pending.extend(child)
+    return value
 
 
 def _metadata_digest(value: Any, *, normalize_review: bool = False) -> str:
@@ -284,7 +301,7 @@ def _load_json(root: Path, relative: Path, errors: list[str]) -> Any:
         return None
     try:
         return _parse_json(data)
-    except (UnicodeError, ValueError):
+    except (UnicodeError, ValueError, RecursionError):
         errors.append(f"invalid UTF-8 JSON: {relative.as_posix()}")
         return None
 
@@ -312,10 +329,12 @@ def _scan_text(relative: Path, text: str) -> list[str]:
     return findings
 
 
-def _scan_manifest_strings(value: Any, path: tuple[str, ...] = ()) -> list[str]:
+def _scan_manifest_strings(
+    value: Any, path: tuple[str, ...] = (), location: tuple[int, ...] = ()
+) -> list[str]:
     findings: list[str] = []
     if isinstance(value, dict):
-        for key, child in value.items():
+        for index, (key, child) in enumerate(value.items()):
             child_path = (*path, key)
             if (
                 len(child_path) == 3
@@ -324,12 +343,14 @@ def _scan_manifest_strings(value: Any, path: tuple[str, ...] = ()) -> list[str]:
                 and child_path[2] == "source_path"
             ):
                 continue
-            findings.extend(_scan_manifest_strings(child, child_path))
+            findings.extend(_scan_manifest_strings(child, child_path, (*location, index)))
     elif isinstance(value, list):
         for index, child in enumerate(value):
-            findings.extend(_scan_manifest_strings(child, (*path, str(index))))
+            findings.extend(_scan_manifest_strings(child, (*path, str(index)), (*location, index)))
     elif isinstance(value, str):
-        label = ".".join(path) or "manifest"
+        # Numeric structural positions identify findings without publishing
+        # arbitrary field names supplied by an invalid candidate.
+        label = ".".join(map(str, location)) or "root"
         for detector, pattern in {
             **SECRET_DETECTORS,
             **PII_DETECTORS,
@@ -435,9 +456,16 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     ):
         errors.append("invalid source blob SHA")
 
-    source_blob_shas = {entry.get("source_blob_sha") for entry in entries}
-    decisions = Counter(entry.get("decision") for entry in entries)
-    if decisions != Counter({"PUBLIC_REAUTHOR": 6, "PRIVATE_RETAIN": 8, "SUPERSEDED": 2}):
+    source_blob_shas = {
+        entry["source_blob_sha"] for entry in entries
+        if isinstance(entry.get("source_blob_sha"), str)
+    }
+    expected_decisions = Counter({"PUBLIC_REAUTHOR": 6, "PRIVATE_RETAIN": 8, "SUPERSEDED": 2})
+    decisions = Counter(
+        entry["decision"] for entry in entries
+        if isinstance(entry.get("decision"), str) and entry["decision"] in expected_decisions
+    )
+    if sum(decisions.values()) != len(entries) or decisions != expected_decisions:
         errors.append("actual decision counts mismatch")
 
     reauthored = [entry for entry in entries if entry.get("decision") == "PUBLIC_REAUTHOR"]
@@ -447,7 +475,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for entry in reauthored:
         group = entry.get("consolidation_group")
-        if group not in CONSOLIDATIONS:
+        if not isinstance(group, str) or group not in CONSOLIDATIONS:
             errors.append("unknown PUBLIC_REAUTHOR consolidation group")
             continue
         groups[group].append(entry)
@@ -459,7 +487,11 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         if entry.get("body_exported") is not False:
             errors.append(f"source body export flag must be false: {group}")
         coverage = entry.get("semantic_coverage")
-        if not isinstance(coverage, list) or not coverage or len(coverage) != len(set(coverage)):
+        if (
+            not isinstance(coverage, list) or not coverage
+            or any(not isinstance(item, str) for item in coverage)
+            or len(coverage) != len(set(coverage))
+        ):
             errors.append(f"invalid semantic coverage: {group}")
 
     if set(groups) != set(CONSOLIDATIONS):
@@ -468,7 +500,11 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         group_entries = groups.get(group, [])
         if len(group_entries) != expected_count:
             errors.append(f"consolidation source count mismatch: {group}")
-        coverage_sets = [set(entry.get("semantic_coverage", [])) for entry in group_entries]
+        coverage_sets = []
+        for entry in group_entries:
+            coverage = entry.get("semantic_coverage")
+            if isinstance(coverage, list) and all(isinstance(item, str) for item in coverage):
+                coverage_sets.append(set(coverage))
         for index, left in enumerate(coverage_sets):
             for right in coverage_sets[index + 1 :]:
                 if left & right:
@@ -476,7 +512,10 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         if destination not in DESTINATIONS:
             errors.append(f"unrecognized consolidation destination: {group}")
 
-    public_destinations = {entry.get("destination_path") for entry in reauthored}
+    public_destinations = {
+        entry["destination_path"] for entry in reauthored
+        if isinstance(entry.get("destination_path"), str)
+    }
     if public_destinations != set(DESTINATIONS):
         errors.append("PUBLIC_REAUTHOR destination set mismatch")
 
@@ -491,7 +530,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     seen_superseded: set[str] = set()
     for entry in superseded:
         destination = entry.get("destination_path")
-        if destination not in SUPERSEDED_REFS:
+        if not isinstance(destination, str) or destination not in SUPERSEDED_REFS:
             errors.append("SUPERSEDED entry lacks an exact existing public destination")
             continue
         expected_blob, expected_ref = SUPERSEDED_REFS[destination]
@@ -517,7 +556,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
                 item.get("coverage_rule"),
             )
             for item in manifest_consolidations
-            if isinstance(item, dict)
+            if isinstance(item, dict) and isinstance(item.get("group"), str)
         }
         expected = {
             group: (destination, DESTINATIONS[destination], count, "DISTINCT_PER_SOURCE")
@@ -556,7 +595,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     if provenance_data is not None:
         try:
             provenance = _parse_json(provenance_data)
-        except (UnicodeError, ValueError):
+        except (UnicodeError, ValueError, RecursionError):
             provenance = {}
             errors.append("provenance file is not valid UTF-8 JSON")
         if not isinstance(provenance, dict):
@@ -580,14 +619,15 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         digest = provenance.get("private_source_history_receipt_sha256")
         if digest != PRIVATE_RECEIPT_SHA256:
             errors.append("provenance must bind the private source-history receipt digest")
-        if provenance.get("private_source_history_result") not in PRIVATE_RESULTS:
+        history_result = provenance.get("private_source_history_result")
+        if not isinstance(history_result, str) or history_result not in PRIVATE_RESULTS:
             errors.append("private source-history receipt did not pass")
         exported = {
             entry.get("source_path"): (
                 entry.get("source_blob_sha"), entry.get("decision"), entry.get("destination_path")
             )
             for entry in entries
-            if isinstance(entry, dict) and entry.get("decision") == "PUBLIC_REAUTHOR"
+            if entry.get("decision") == "PUBLIC_REAUTHOR" and isinstance(entry.get("source_path"), str)
         }
         rows = provenance.get("entries")
         if not isinstance(rows, list):
