@@ -578,13 +578,55 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         )
 
     def test_ci_dependency_lock_is_hashed_current_and_public_safe(self) -> None:
-        lock = (ROOT / "requirements-ci.txt").read_text(encoding="utf-8")
-        self.assertIn("jsonschema[format-nongpl]==4.26.0", lock)
-        self.assertIn("idna==3.19", lock)
-        self.assertIn("--hash=sha256:", lock)
-        self.assertNotIn("C:\\Users\\", lock)
-        self.assertNotIn("C:/Users/", lock)
-        self.assertNotIn("/home/", lock)
+        from tools.build_release_sbom import python_components
+
+        locks = {}
+        for filename in ("requirements-ci.txt", "requirements-task-swarm-ci.txt"):
+            with self.subTest(lock=filename):
+                lock = (ROOT / filename).read_text(encoding="utf-8")
+                # The release parser requires an exact version and a valid
+                # SHA-256 hash on every entry, including platform branches.
+                components = python_components(lock)
+                self.assertTrue(components)
+                versions = {c["name"]: c["version"] for c in components}
+                self.assertEqual(len(components), len(versions))
+                locks[filename] = versions
+                self.assertNotIn("C:\\Users\\", lock)
+                self.assertNotIn("C:/Users/", lock)
+                self.assertNotIn("/home/", lock)
+
+        # Direct requirements follow their maintained inputs, so a reviewed
+        # transitive update does not require a literal version in this test.
+        for input_name in (
+            "requirements-test.txt",
+            "requirements-task-swarm.txt",
+            "requirements-task-swarm-test.txt",
+        ):
+            targets = tuple(locks) if input_name == "requirements-test.txt" else (
+                "requirements-task-swarm-ci.txt",
+            )
+            for line in (ROOT / input_name).read_text(encoding="utf-8").splitlines():
+                requirement = line.split("#", 1)[0].strip()
+                if not requirement or requirement.startswith("-r "):
+                    continue
+                match = re.fullmatch(
+                    r"([A-Za-z0-9._-]+)(?:\[[A-Za-z0-9,._-]+\])?==([^\s;]+)",
+                    requirement,
+                )
+                self.assertIsNotNone(match, requirement)
+                name, version = match.groups()
+                name = re.sub(r"[-_.]+", "-", name).lower()
+                for target in targets:
+                    with self.subTest(input=input_name, requirement=requirement, lock=target):
+                        self.assertEqual(version, locks[target].get(name))
+
+        common = locks["requirements-ci.txt"]
+        swarm = locks["requirements-task-swarm-ci.txt"]
+        # Swarm includes the common input, including resolved format extras.
+        self.assertLessEqual(common.keys(), swarm.keys())
+        for name in common:
+            with self.subTest(shared_dependency=name):
+                self.assertEqual(common[name], swarm[name])
 
     def test_dependabot_has_a_review_cooldown(self) -> None:
         dependabot = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
