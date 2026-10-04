@@ -227,12 +227,12 @@ test('corrupt journal never silently resets coordination history', () => {
   assert.throws(() => setup(store).add(), SyntaxError);
   assert.equal(db.prepare('SELECT payload FROM git_steward_state').get().payload, '{bad'); db.close();
 });
-function gitFixture(callback) {
+function gitFixture(callback, objectFormat = 'sha1') {
   const dir = mkdtempSync(join(tmpdir(), 'steward-git-')); const repo = join(dir, 'repo'); mkdirSync(repo);
   const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
   const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   try {
-    git(repo, 'init', '-b', 'main'); git(repo, 'config', 'user.name', 'Synthetic Test'); git(repo, 'config', 'user.email', 'synthetic@example.invalid');
+    git(repo, 'init', '--object-format=' + objectFormat, '-b', 'main'); git(repo, 'config', 'user.name', 'Synthetic Test'); git(repo, 'config', 'user.email', 'synthetic@example.invalid');
     mkdirSync(join(repo, 'src')); writeFileSync(join(repo, 'src', 'before.txt'), 'one\n'); git(repo, 'add', '.'); git(repo, 'commit', '-m', 'fixture');
     callback({ dir, repo, git, base: git(repo, 'rev-parse', 'HEAD') });
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -251,6 +251,18 @@ test('real git observer refuses refs, noncommits, unrelated ancestry and empty d
   git(repo, 'checkout', '--orphan', 'unrelated'); git(repo, 'commit', '-m', 'orphan');
   rejects(() => observeDiff(repo, base, git(repo, 'rev-parse', 'HEAD')), 'GIT_OBSERVATION_FAILED');
 }));
+test('SHA-256 repositories refuse resolvable 40-character prefixes before revision reads', () => gitFixture(({ repo, git, base }) => {
+  writeFileSync(join(repo, 'src', 'before.txt'), 'two\n'); git(repo, 'commit', '-am', 'second fixture');
+  const head = git(repo, 'rev-parse', 'HEAD');
+  assert.match(base, /^[0-9a-f]{64}$/); assert.match(head, /^[0-9a-f]{64}$/);
+  assert.equal(git(repo, 'rev-parse', base.slice(0, 40)), base);
+  assert.equal(git(repo, 'rev-parse', head.slice(0, 40)), head);
+  rejects(() => observeDiff(repo, base.slice(0, 40), head.slice(0, 40)), 'OBJECT_FORMAT_UNSUPPORTED');
+  // Invalid objects must get the same format refusal, proving that neither
+  // revision is resolved before checking the repository format.
+  rejects(() => observeDiff(repo, BASE, HEAD), 'OBJECT_FORMAT_UNSUPPORTED');
+  assert.equal(git(repo, 'status', '--porcelain'), '');
+}, 'sha256'));
 test('real partial clone is refused without fetching missing objects or changing packs', () => gitFixture(({ dir, repo, git, base }) => {
   git(repo, 'config', 'uploadpack.allowFilter', 'true');
   writeFileSync(join(repo, 'src', 'before.txt'), 'two\n'); git(repo, 'commit', '-am', 'second fixture');

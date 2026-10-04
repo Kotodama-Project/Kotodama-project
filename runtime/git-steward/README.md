@@ -35,7 +35,7 @@ node --test --test-reporter=tap runtime/git-steward/coordinator.test.mjs
 python -m unittest discover -s tests -p 'test_git_steward_runtime.py' -v
 ```
 
-The core suite has 45 Node tests. The Python entry point is one launcher, not
+The core suite has 46 Node tests. The Python entry point is one launcher, not
 another set of independent cases: it fails rather than silently skipping when
 Node >=22.13 or Git is unavailable, and it requires every reported Node test to
 pass with none skipped, cancelled or left as todo. Full-repository regression
@@ -177,8 +177,9 @@ repositories are refused before object reads (`PARTIAL_REPOSITORY`), including
 markers from effective included/worktree configuration. Lazy fetching is also
 disabled; missing objects remain failures rather than being fetched. It returns the
 head tree, both sides of renamed/deleted paths and a SHA-256 of the generated
-binary/full-index patch. SHA-256-format Git repositories are not supported in
-this slice. Subprocess output/time are bounded; no shell or network is used.
+binary/full-index patch. Non-SHA-1 object storage, including SHA-256-format Git
+repositories, is refused before revision resolution (`OBJECT_FORMAT_UNSUPPORTED`).
+Subprocess output/time are bounded; no shell or network is used.
 
 Only run it against a trusted, disposable local checkout with operator-owned Git
 configuration and object storage. Disabling external diff/text conversion and

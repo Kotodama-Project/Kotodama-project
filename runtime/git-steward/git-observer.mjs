@@ -19,6 +19,7 @@ export function observeDiff(repositoryPath, baseSha, headSha) {
     try { partial = git('config', '--includes', '--get-regexp', '^(extensions\\.partialclone|remote\\..*\\.(promisor|partialclonefilter))$'); }
     catch (error) { if (error.status !== 1 || error.stdout?.length || error.stderr?.length) throw error; }
     if (partial?.length) throw new Refusal('PARTIAL_REPOSITORY');
+    if (git('rev-parse', '--show-object-format').toString().trim() !== 'sha1') throw new Refusal('OBJECT_FORMAT_UNSUPPORTED');
     if (git('rev-parse', '--is-shallow-repository').toString().trim() !== 'false') throw new Refusal('SHALLOW_REPOSITORY');
     for (const revision of [baseSha, headSha]) if (git('cat-file', '-t', revision).toString().trim() !== 'commit') throw new Refusal('NOT_COMMIT');
     git('merge-base', '--is-ancestor', baseSha, headSha);
