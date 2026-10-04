@@ -107,7 +107,8 @@ def validate(root: Path) -> dict[str, Any]:
             codes.append("worker-zone-authority")
         if zone_by_id["verification"]["work_agent_execution_allowed"] is not False:
             codes.append("verification-zone-execution")
-        if not {"execution_settled", "verification_pending"} <= set(config["work_contract"]["result_states"]):
+        if (view.get("execution_completion_is_not_verification") is not True
+                or not {"execution_settled", "verification_pending"} <= set(config["work_contract"]["result_states"])):
             codes.append("execution-verification-collapse")
         if config["claims"] != REPORT_CLAIMS or any(value is not False for value in config["claims"].values()):
             codes.append("authority-claim")

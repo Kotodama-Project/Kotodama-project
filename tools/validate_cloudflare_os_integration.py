@@ -21,6 +21,9 @@ SERVICE_STAGES = {
     "ai_gateway": "deferred",
 }
 REPORT_CLAIMS = {"runtime_verified": False, "deployment_authorized": False}
+EXPECTED_CLAIMS = {"cloudflare_os_integrated", "all_agents_integrated",
+                   "cloudflare_resources_deployed", "proxmox_connected",
+                   "team_acl_verified", "runtime_tests_passed", "human_go"}
 
 
 def _get(value: Any, *keys: str) -> Any:
@@ -51,11 +54,17 @@ def validate(root: Path) -> dict[str, Any]:
     except Exception:
         return _report(["VALIDATOR_UNAVAILABLE"])
     codes: list[str] = []
+    claims = _get(config, "claims")
+    if (not isinstance(claims, dict) or set(claims) != EXPECTED_CLAIMS
+            or any(value is not False for value in claims.values())):
+        codes.append("AUTHORITY_CLAIM")
     try:
         services = config["cloudflare_services"]
         observed = {entry["id"]: entry["stage"] for entry in services}
         if len(services) != len(observed) or observed != SERVICE_STAGES:
             codes.append("SERVICE_STAGE_DRIFT")
+        if any(entry.get("enabled") is not False for entry in services):
+            codes.append("SERVICE_ENABLED")
         if (_get(base, "management_model", "primary_human_surface") != config["composition"]["surface_ref"]
                 or _get(base, "management_model", "no_parallel_authority") is not True
                 or _get(base, "management_model", "principle") != "one_management_plane_multiple_execution_boundaries"):

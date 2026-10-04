@@ -12,6 +12,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from jsonschema import Draft202012Validator
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 spec = importlib.util.spec_from_file_location(
@@ -96,10 +98,90 @@ class CloudflareOSIntegrationTests(unittest.TestCase):
         self.flush()
         self.refused("SCHEMA_INVALID")
 
+    def test_owned_disabled_services_survive_a_relaxed_candidate_schema(self):
+        original = copy.deepcopy(self.config)
+        service_schema = self.schema["properties"]["cloudflare_services"]["items"]
+        service_schema["properties"]["enabled"] = {}
+        service_schema["required"].remove("enabled")
+        self.flush()
+        self.assertEqual("PASS", module.validate(self.root)["status"])
+        cases = [(0, "true", True), (-1, "last-service", True)]
+        cases += [(0, label, value) for label, value in (("zero", 0), ("null", None),
+                   ("string", "synthetic-withheld-value"), ("array", []), ("object", {}), ("missing", None))]
+        for index, label, value in cases:
+            with self.subTest(service=index, value=label):
+                self.config = copy.deepcopy(original)
+                if label == "missing":
+                    del self.config["cloudflare_services"][index]["enabled"]
+                else:
+                    self.config["cloudflare_services"][index]["enabled"] = value
+                self.assertTrue(Draft202012Validator(self.schema).is_valid(self.config))
+                self.assertTrue(all(value is False for value in self.config["claims"].values()))
+                self.flush()
+                self.refused("SERVICE_ENABLED")
+                result = subprocess.run([sys.executable, str(ROOT / "tools/validate_cloudflare_os_integration.py"),
+                                         "--root", str(self.root)], text=True, capture_output=True, timeout=10)
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertEqual("", result.stderr)
+                report = json.loads(result.stdout)
+                self.assertEqual("FAIL", report["status"])
+                self.assertEqual([{"code": "SERVICE_ENABLED"}], report["findings"])
+                self.assertEqual("design_contract_only", report["scope"])
+                self.assertEqual("NO_GO_UNPUBLISHED", report["public_beta"])
+                self.assertTrue(all(value is False for value in report["claims"].values()))
+                self.assertNotIn("synthetic-withheld", result.stdout)
+
     def test_runtime_claims_are_not_accepted_or_echoed(self):
         self.config["claims"]["all_agents_integrated"] = True
         self.flush()
         self.refused("SCHEMA_INVALID")
+
+    def test_owned_claim_values_survive_a_relaxed_candidate_schema(self):
+        original = copy.deepcopy(self.config)
+        self.schema["properties"]["claims"] = {}
+        self.flush()
+        self.assertEqual("PASS", module.validate(self.root)["status"])
+        cases = [(key, True) for key in original["claims"]]
+        cases += [("human_go", value) for value in (0, 1, None, "synthetic-withheld-value", [], {})]
+        for key, value in cases:
+            with self.subTest(claim=key, type=type(value).__name__):
+                self.config = copy.deepcopy(original)
+                self.config["claims"][key] = value
+                self.assertTrue(Draft202012Validator(self.schema).is_valid(self.config))
+                self.flush()
+                self._assert_owned_claim_cli_refusal()
+
+    def test_owned_claim_vocabulary_survives_a_relaxed_candidate_schema(self):
+        original = copy.deepcopy(self.config)
+        self.schema["properties"]["claims"] = {}
+        self.schema["required"].remove("claims")
+        missing = {key: value for key, value in original["claims"].items() if key != "human_go"}
+        unknown = {**original["claims"], "synthetic-withheld-claim": False}
+        for label, claims in (("missing-member", missing), ("unknown-member", unknown),
+                              ("null", None), ("array", []), ("missing-object", None)):
+            with self.subTest(shape=label):
+                self.config = copy.deepcopy(original)
+                if label == "missing-object":
+                    del self.config["claims"]
+                else:
+                    self.config["claims"] = claims
+                self.assertTrue(Draft202012Validator(self.schema).is_valid(self.config))
+                self.flush()
+                self._assert_owned_claim_cli_refusal()
+
+    def _assert_owned_claim_cli_refusal(self):
+        self.refused("AUTHORITY_CLAIM")
+        result = subprocess.run([sys.executable, str(ROOT / "tools/validate_cloudflare_os_integration.py"),
+                                 "--root", str(self.root)], text=True, capture_output=True, timeout=10)
+        self.assertEqual(1, result.returncode, result.stderr)
+        self.assertEqual("", result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual("FAIL", report["status"])
+        self.assertEqual([{"code": "AUTHORITY_CLAIM"}], report["findings"])
+        self.assertEqual("design_contract_only", report["scope"])
+        self.assertEqual("NO_GO_UNPUBLISHED", report["public_beta"])
+        self.assertTrue(all(value is False for value in report["claims"].values()))
+        self.assertNotIn("synthetic-withheld", result.stdout)
 
     def test_one_shared_surface_binding(self):
         self.base["management_model"]["primary_human_surface"] = "second_portal"

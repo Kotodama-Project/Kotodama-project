@@ -95,6 +95,39 @@ class OpenMausIntegrationTest(unittest.TestCase):
         self.flush()
         self.refused("schema-invalid")
 
+    def test_owned_execution_verification_boundary_survives_a_relaxed_schema(self) -> None:
+        original = copy.deepcopy(self.config)
+        key = "execution_completion_is_not_verification"
+        view_schema = self.schema["properties"]["common_agent_view"]
+        view_schema["properties"][key] = {}
+        view_schema["required"].remove(key)
+        self.flush()
+        self.assertEqual("PASS", module.validate(self.root)["status"])
+        self.assertEqual(0, self.cli().returncode)
+        for label, value in (("false", False), ("zero", 0), ("one", 1), ("null", None),
+                             ("string", "synthetic-withheld-value"), ("array", []), ("object", {}),
+                             ("missing", None)):
+            with self.subTest(value=label):
+                self.config = copy.deepcopy(original)
+                if label == "missing":
+                    del self.config["common_agent_view"][key]
+                else:
+                    self.config["common_agent_view"][key] = value
+                self.assertTrue(Draft202012Validator(self.schema).is_valid(self.config))
+                self.assertTrue({"execution_settled", "verification_pending"} <= set(self.config["work_contract"]["result_states"]))
+                self.flush()
+                self.refused("execution-verification-collapse")
+                process = self.cli()
+                self.assertEqual(1, process.returncode, process.stderr)
+                self.assertEqual("", process.stderr)
+                result = json.loads(process.stdout)
+                self.assertEqual("FAIL", result["status"])
+                self.assertEqual([{"code": "execution-verification-collapse", "message": "execution-verification-collapse"}], result["findings"])
+                self.assertEqual("design_contract_only", result["scope"])
+                self.assertEqual("NO_GO_UNPUBLISHED", result["public_beta"])
+                self.assertTrue(all(value is False for value in result["claims"].values()))
+                self.assertNotIn("synthetic-withheld", process.stdout)
+
     def test_upstream_mcp_capabilities_do_not_overlap_gaps(self) -> None:
         original = copy.deepcopy(self.config)
         for capability in original["adapters"]["openmaus_mcp"]["not_exposed_by_upstream_v1_mcp"]:
