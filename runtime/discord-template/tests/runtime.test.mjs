@@ -90,7 +90,9 @@ test('control admits eight commands, rejects excess, and keeps status responsive
   t.after(async()=>{release();await runtime.close();await cleanup();});
   runtime.owner.tasks=async()=>{calls++;await gate;return [];};
   const metadata=JSON.parse(await readFile(path.join(config.dataDir,'runtime.json'),'utf8')),token=await readFile(path.join(config.dataDir,'control.secret'),'utf8');
-  const send=()=>fetch(`http://127.0.0.1:${metadata.port}/v1/command`,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({action:'tasks',actor})});
+  assert(Number.isInteger(metadata.port)&&metadata.port>=1&&metadata.port<=65535);assert.match(token,/^[a-f0-9]{64}$/);
+  // codeql[js/file-access-to-http] This test sends only its newly generated runtime token to its validated owned loopback endpoint.
+  const send=()=>fetch(`http://127.0.0.1:${metadata.port}/v1/command`,{method:'POST',redirect:'error',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({action:'tasks',actor})});
   const active=Array.from({length:8},send);
   for(let tries=0;calls<8&&tries<200;tries++)await new Promise(resolve=>setTimeout(resolve,5));assert.equal(calls,8);
   const busy=await send();assert.equal(busy.status,503);assert.equal((await busy.json()).error,'CONTROL_BUSY');assert.equal(calls,8);
@@ -102,10 +104,13 @@ test('control rejects declared oversize before buffering and drains incomplete u
   const {config,file,cleanup}=await configFixture(t),runtime=await startRuntime(file,{offline:true,log:()=>{}});
   t.after(async()=>{await runtime.close();await cleanup();});
   const metadata=JSON.parse(await readFile(path.join(config.dataDir,'runtime.json'),'utf8')),token=await readFile(path.join(config.dataDir,'control.secret'),'utf8');
+  assert(Number.isInteger(metadata.port)&&metadata.port>=1&&metadata.port<=65535);assert.match(token,/^[a-f0-9]{64}$/);
   const headers={authorization:'Bearer '+token,'content-type':'application/json'};
   const refused=await new Promise((resolve,reject)=>{
+    // codeql[js/file-access-to-http] This test sends only its newly generated runtime token to its validated owned loopback endpoint.
     const req=http.request({hostname:'127.0.0.1',port:metadata.port,path:'/v1/command',method:'POST',headers:{...headers,'content-length':200001}},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});req.on('error',reject);req.flushHeaders();
   });assert.equal(refused,413);
+  // codeql[js/file-access-to-http] This test sends only its newly generated runtime token to its validated owned loopback endpoint.
   const slow=http.request({hostname:'127.0.0.1',port:metadata.port,path:'/v1/command',method:'POST',headers});slow.on('error',()=>{});slow.on('response',res=>res.resume());slow.write('{"action":');
   await new Promise(resolve=>setTimeout(resolve,20));
   const closing=runtime.close();assert.equal(runtime.close(),closing);await closing;slow.destroy();
