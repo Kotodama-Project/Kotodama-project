@@ -1,6 +1,9 @@
 import importlib.util
+import os
 import subprocess
+import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from pathlib import Path
 
@@ -14,6 +17,13 @@ SPEC.loader.exec_module(SCANNER)
 
 
 class TrackedSecretHygieneTests(unittest.TestCase):
+    @staticmethod
+    def execute_owned_setter_fixture(text: str) -> list[tuple[str, str]]:
+        calls: list[tuple[str, str]] = []
+        owned_os = SimpleNamespace(putenv=lambda name, value: calls.append((name, value)))
+        exec(compile(text, "owned-setter-fixture", "exec"), {"os": owned_os})
+        return calls
+
     def test_safe_placeholders_pass(self) -> None:
         text = (
             "OPENAI" + "_API_KEY=${OPENAI_API_KEY}\n"
@@ -1918,6 +1928,22 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
         self.assertNotIn(value, repr(findings))
 
+        # The preceding malformed-source fixture remains useful to the scanner.
+        # CPython forbids a walrus inside a comprehension iterable; this valid
+        # counterpart binds the iterable first and actually reaches the setter.
+        valid_prebound_iterable = (
+            f'name = "{name}"\n'
+            f'items = [(secret := "{value}")]\n'
+            "[os.putenv(name, secret) for item in items]\n"
+        )
+        self.assertEqual(
+            [(name, value)], self.execute_owned_setter_fixture(valid_prebound_iterable)
+        )
+        self.assertEqual(
+            [("config.py", 3, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), valid_prebound_iterable),
+        )
+
         negatives = (
             f'name = "{name}"\nsecret = "{value}"\n'
             "[os.putenv(name, secret) for secret in secrets]\n",
@@ -2627,6 +2653,26 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             with self.subTest(mutation=text.splitlines()[2]):
                 self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
 
+        # A nested class does not capture the enclosing class's local aliases.
+        # Keep the incomplete-source control above, and also exercise a valid
+        # nested class that mutates the same global mapping before a setter.
+        reachable_nested_mutation = (
+            f'mapping = {{"key": "{name}"}}\n'
+            "class Outer:\n"
+            "    alias = mapping\n"
+            "    class Inner:\n"
+            "        nested = mapping\n"
+            '        nested["key"] = "ordinary"\n'
+            'name = mapping["key"]\n'
+            f'secret = "{value}"\n'
+            "os.putenv(name, secret)\n"
+        )
+        self.assertEqual(
+            [("ordinary", value)],
+            self.execute_owned_setter_fixture(reachable_nested_mutation),
+        )
+        self.assertEqual([], SCANNER.scan_text(Path("config.py"), reachable_nested_mutation))
+
         preserved = (
             (
                 'mutated = {"key": "safe"}\n'
@@ -2685,6 +2731,24 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     findings,
                 )
                 self.assertNotIn(value, repr(findings))
+
+        # The original unfinished-source fixture calls count(name) before name
+        # exists. This valid counterpart proves that a nonmutating count leaves
+        # the literal alias intact and that its setter is actually reached.
+        reachable_nonmutating_count = (
+            f'values = ["{name}"]\n'
+            'values.count("ordinary")\n'
+            "name = values[0]\n"
+            f'secret = "{value}"\n'
+            "os.putenv(name, secret)\n"
+        )
+        self.assertEqual(
+            [(name, value)], self.execute_owned_setter_fixture(reachable_nonmutating_count)
+        )
+        self.assertEqual(
+            [("config.py", 5, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), reachable_nonmutating_count),
+        )
 
         target_side_effects = (
             (
@@ -4401,11 +4465,79 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertGreaterEqual(text_files, 4)
         self.assertNotIn(value, repr(findings))
 
-    def test_current_tracked_tree_passes(self) -> None:
-        findings, tracked, text_files = SCANNER.scan_repository(ROOT)
-        self.assertEqual([], findings)
-        self.assertGreater(tracked, 0)
-        self.assertGreater(text_files, 0)
+    def test_cli_scans_owned_git_snapshots_and_redacts_values(self) -> None:
+        name = "CF_API" + "_TOKEN"
+        value = "OwnedCredentialFixture2026"
+        placeholder = "${CF_API_TOKEN}"
+        environment = {
+            key: item for key, item in os.environ.items() if not key.startswith("GIT_")
+        }
+        environment.update({
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "owned-repository"
+            root.mkdir()
+
+            def run_git(*arguments: str) -> None:
+                result = subprocess.run(
+                    ["git", *arguments], cwd=root, env=environment,
+                    capture_output=True, check=False, timeout=10,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
+
+            def scan(target: Path) -> subprocess.CompletedProcess[str]:
+                return subprocess.run(
+                    [sys.executable, "-S", "-B", str(SCANNER_PATH), "--root", str(target)],
+                    cwd=root, env=environment, text=True,
+                    capture_output=True, check=False, timeout=10,
+                )
+
+            run_git("init", "--quiet")
+            run_git("config", "user.name", "Test")
+            run_git("config", "user.email", "test@example.invalid")
+            run_git("config", "commit.gpgsign", "false")
+            run_git("config", "core.autocrlf", "false")
+            for filename in ("head.txt", "index.txt", "working.txt"):
+                (root / filename).write_text(f"{name}={placeholder}\n", encoding="utf-8")
+            run_git("add", ".")
+            run_git("commit", "--quiet", "-m", "safe fixture")
+            safe = scan(root)
+            self.assertEqual(safe.returncode, 0, safe.stdout + safe.stderr)
+            self.assertEqual(safe.stderr, "")
+            self.assertIn("3 tracked paths; 3 decoded text snapshots", safe.stdout)
+
+            (root / "head.txt").write_text(f"{name}={value}\n", encoding="utf-8")
+            run_git("add", "head.txt")
+            run_git("commit", "--quiet", "-m", "owned HEAD fixture")
+            (root / "head.txt").write_text(f"{name}={placeholder}\n", encoding="utf-8")
+            run_git("add", "head.txt")
+            (root / "index.txt").write_text(f"{name}={value}\n", encoding="utf-8")
+            run_git("add", "index.txt")
+            (root / "index.txt").write_text(f"{name}={placeholder}\n", encoding="utf-8")
+            (root / "working.txt").write_text(f"{name}={value}\n", encoding="utf-8")
+            unsafe = scan(root)
+            self.assertEqual(unsafe.returncode, 1)
+            self.assertEqual(unsafe.stdout, "")
+            self.assertIn("Tracked credential hygiene: FAIL", unsafe.stderr)
+            for filename, source in (
+                ("head.txt", "HEAD"), ("index.txt", "index"), ("working.txt", "working tree"),
+            ):
+                self.assertIn(
+                    f"{filename}:1: live-looking value assigned to {name} [{source}]",
+                    unsafe.stderr,
+                )
+            self.assertIn("3 tracked paths (6 decoded text snapshots", unsafe.stderr)
+            self.assertNotIn(value, safe.stdout + safe.stderr + unsafe.stdout + unsafe.stderr)
+
+            nonrepository = Path(directory) / "not-a-repository"
+            nonrepository.mkdir()
+            error = scan(nonrepository)
+            self.assertEqual(error.returncode, 2)
+            self.assertEqual(error.stdout, "")
+            self.assertIn("Tracked credential hygiene: ERROR (CalledProcessError)", error.stderr)
+            self.assertNotIn(value, error.stdout + error.stderr)
 
     def test_repository_wires_gate_before_dependency_installation(self) -> None:
         workflow = (ROOT / ".github/workflows/repository-validation.yml").read_text(

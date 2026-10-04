@@ -82,7 +82,7 @@ python -m unittest discover -s tests -v
 
 ```text
 python -m pip install --require-hashes -r requirements-task-swarm-ci.txt
-python -m pytest -q -p no:cacheprovider tests -k task_swarm
+python -m pytest -q -p no:cacheprovider -o 'python_files=test_task_swarm_*.py' tests
 python tools/task_swarm.py demo --root work/offline-demo --allow-local-fixture
 ```
 
@@ -95,6 +95,24 @@ pnpm check
 ```
 
 ## 失敗したときの直し方
+
+### 件数と検証範囲
+
+全体の unittest と専用 pytest は役割が異なります。共通 lock には pytest / MCP SDK を
+追加せず、pytest 専用の3 modules は必須 Task swarm job へ委譲します。委譲の
+`ModuleSkipped` も unittest の件数に含まれるため、集計件数だけを成功した実ケース数や
+運用品質として扱いません。各結果の実行・skip・対象集合を記録します。
+
+Task swarm の tests は `tests/test_task_swarm_*.py` に置きます。pytest の filename
+設定でその集合だけを collection し、無関係な tests を import してから捨てる処理を省きます。
+変更前後の100 node IDsは一致し、Linux / Windows の全 matrix を引き続き要求します。
+静的文書・schema・合成CLI・bounded runtimeのPASSは、実provider、常時接続や
+モデルの推論品質の証拠ではありません。
+
+テストを軽くするときも、全 mutation と実CLIの入口・終了コード・入力拒否・内容を出さない
+診断を保ちます。同じ production `main(argv)` のfile/parser/validator経路を直接呼ぶ検査と、
+実 child process の境界検査を分け、代表例のpayload/終了コード一致とguard欠落の負例を確認します。
+署名・nonce・snapshotのfixtureは独立性を保ち、実行時間は機械に依存する参考値とします。
 
 - **docs lint が FAIL**: 出力の `errors` にファイルと理由（リンク切れ、未解決アンカー、README の行数超過、入口文書での内部語）が出ます。`tools/lint_docs.py` の docstring に規則があります。
 - **`tests.test_public_status_roadmap_sync` が FAIL**: `STATUS.md` を変えたら `Updated:` の日付を更新します。過去の revision を「current」と書かないでください（履歴は `docs/HISTORY.md`）。
