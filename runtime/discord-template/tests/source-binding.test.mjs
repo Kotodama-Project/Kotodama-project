@@ -205,7 +205,7 @@ test('an actual CLI with cached application modules and newer disk bytes keeps c
   const {root,app,config,start}=await cliFixture(t),preload=path.join(root,'preload.mjs');
   const workerFile=path.join(app,'src/worker.mjs'),original=await readFile(workerFile,'utf8');
   await writeFile(preload,'await import('+JSON.stringify(pathToFileURL(path.join(app,'src/config.mjs')).href)+');\nawait import('+JSON.stringify(pathToFileURL(path.join(app,'src/runtime.mjs')).href)+');\nawait (await import("node:fs/promises")).appendFile('+JSON.stringify(workerFile)+',"\\n// changed after actual module import\\n");\n');
-  await start({nodeArgs:['--import',preload]});const status=await controlCommand(config,{action:'status'});
+  await start({nodeArgs:['--import',pathToFileURL(preload).href]});const status=await controlCommand(config,{action:'status'});
   assert.equal(await readFile(workerFile,'utf8'),original+'\n// changed after actual module import\n');
   assert.deepEqual(status.source,{set:SOURCE_SET,error:'SOURCE_BOOTSTRAP_REQUIRED'});
   assert.equal((await integrityReport({diskRoot:app,candidateRoot:app,readStatus:live(config)})).parity,'unverified');
