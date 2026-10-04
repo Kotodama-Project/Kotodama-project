@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Public agent lifecycle の公開契約を #36 の固定 source から再導入。Luna との概念対応と deep JSON の構造化 refusal を追加。実 registry・runtime・continuity は未検証。
+
 - エージェントへの作業依頼用 Issue form を追加。目的、現状、担当、手順、確認コマンド、受入条件、操作範囲・停止条件を必須にし、作業ガイドと委任インデックスへ案内する（#163）。
 - Release 候補に 3 つの依存 lock の CycloneDX 1.6 SBOM を追加。入力 digest、distribution hash、SHA256SUMS、build provenance、draft 添付を結び、未固定依存と成果物の上書きを拒否する。実 release での署名・添付の受入は残件（#166）。
 
