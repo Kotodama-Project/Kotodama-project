@@ -231,6 +231,99 @@ class KnowledgeBaseTests(unittest.TestCase):
             KB.build(after, check=False)
             self.assertEqual([], KB.build(after, check=True))
 
+    def test_context_selection_cannot_relabel_an_earlier_source_snapshot(self):
+        for change in ("concept", "source", "empty-selection"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = self._minimal_copy(Path(temporary))
+                if change == "empty-selection":
+                    for path in (root / "knowledge").rglob("*.md"):
+                        text = path.read_text(encoding="utf-8")
+                        path.write_text(text.replace("discoverable: true", "discoverable: false"), encoding="utf-8")
+                before = KB.load_bundle(root, as_of=AS_OF)
+                selection = self._context(before)
+                original_ids = set(before.by_id)
+                if change == "empty-selection":
+                    self.assertEqual((), selection.selected)
+                path = root / ("knowledge/project/goal.md" if change == "concept" else "README.md")
+                text = path.read_text(encoding="utf-8")
+                corrected = text.replace("description: Connect", "description: Corrected Connect", 1) if change == "concept" else text + "\nPublic source correction.\n"
+                self.assertNotEqual(text, corrected)
+                path.write_text(corrected, encoding="utf-8")
+                after = KB.load_bundle(root, as_of=AS_OF)
+                self.assertEqual(original_ids, set(after.by_id))
+                self.assertNotEqual(before.source_digest, after.source_digest)
+                current = KB.context_as_dict(self._context(after), bundle=after)
+                self.assertEqual(after.source_digest, current["source_digest"])
+                with self.assertRaisesRegex(KB.KnowledgeBaseError, "CONTEXT_SELECTION_BUNDLE_MISMATCH"):
+                    KB.context_as_dict(selection, bundle=after)
+
+    def test_context_selection_is_bound_to_its_root_and_freshness_instant(self):
+        selection = self._context(self.bundle)
+        reloaded = KB.load_bundle(ROOT, as_of=AS_OF)
+        self.assertEqual(self.bundle.source_digest, KB.context_as_dict(selection, bundle=reloaded)["source_digest"])
+        later = KB.load_bundle(ROOT, as_of=AS_OF + dt.timedelta(days=7))
+        self.assertEqual(self.bundle.source_digest, later.source_digest)
+        with self.assertRaisesRegex(KB.KnowledgeBaseError, "CONTEXT_SELECTION_BUNDLE_MISMATCH"):
+            KB.context_as_dict(selection, bundle=later)
+        with tempfile.TemporaryDirectory() as temporary:
+            copied = KB.load_bundle(self._minimal_copy(Path(temporary)), as_of=AS_OF)
+            self.assertEqual(self.bundle.source_digest, copied.source_digest)
+            with self.assertRaisesRegex(KB.KnowledgeBaseError, "CONTEXT_SELECTION_BUNDLE_MISMATCH"):
+                KB.context_as_dict(selection, bundle=copied)
+
+    def test_deprecated_document_status_is_excluded_from_all_retrieval_routes(self):
+        # With the intent tag these concepts enter directly, as mandatory
+        # governance, and through a one-hop link from the goal, respectively.
+        baseline = KB.select_context(self.bundle, goals=[], kgis=[], initiatives=[], tags=["intent"], max_concepts=12)
+        baseline_ids = {concept.concept_id for concept in baseline.selected}
+        for concept_id in ("project/goal", "governance/authority-boundaries", "project/current-state"):
+            self.assertIn(concept_id, baseline_ids)
+            with self.subTest(concept=concept_id), tempfile.TemporaryDirectory() as temporary:
+                root = self._minimal_copy(Path(temporary))
+                path = root / "knowledge" / (concept_id + ".md")
+                path.write_text(path.read_text(encoding="utf-8").replace("status: draft", "status: deprecated", 1), encoding="utf-8")
+                bundle = KB.load_bundle(root, as_of=AS_OF)
+                self.assertFalse(any(issue.level == "error" for issue in bundle.issues))
+                self.assertIn("LIFECYCLE_MISMATCH", {issue.code for issue in bundle.issues})
+                for include_stale in (False, True):
+                    matches = KB.query_bundle(bundle, str(bundle.by_id[concept_id].metadata["title"]), include_stale=include_stale)
+                    self.assertNotIn(concept_id, {match.concept.concept_id for match in matches})
+                selection = KB.select_context(bundle, goals=[], kgis=[], initiatives=[], tags=["intent"], max_concepts=12)
+                self.assertNotIn(concept_id, {concept.concept_id for concept in selection.selected})
+                self.assertIn(concept_id, selection.unresolved_ids)
+                self.assertEqual("needs_resolution", KB.context_as_dict(selection, bundle=bundle)["state"])
+                report = KB.audit_report(bundle, as_of=AS_OF)
+                self.assertEqual(8, report["metrics"]["structurally_retrievable_count"])
+                ready = KB.decision_readiness_report(bundle, actor="human:reviewer", purpose="review lifecycle", concept_ids=[concept_id])
+                self.assertEqual("NOT_READY", ready["concepts"][0]["content_verdict"])
+                self.assertIn("DOCUMENT_NOT_STABLE", ready["concepts"][0]["blockers"])
+
+    def test_verified_replaced_knowledge_remains_auditable_without_readiness(self):
+        for state in ("confirmed", "deprecated", "revoked"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temporary:
+                root = self._minimal_copy(Path(temporary))
+                goal = root / "knowledge/project/goal.md"
+                text = goal.read_text(encoding="utf-8").replace("status: draft", "status: stable", 1)
+                text = text.replace("knowledge_state: candidate", "knowledge_state: confirmed", 1)
+                text = text.replace("sources:\n", "verified: { by: human:independent-fixture, at: 2026-10-04T14:00:00Z }\nsources:\n", 1)
+                goal.write_text(text, encoding="utf-8")
+                active = KB.load_bundle(root, as_of=AS_OF)
+                report = KB.decision_readiness_report(active, actor="human:reviewer", purpose="review lifecycle", concept_ids=["project/goal"])
+                self.assertEqual("CONTENT_READY", report["concepts"][0]["content_verdict"])
+                self.assertEqual(1, report["content_ready_count"])
+                text = text.replace("status: stable", "status: deprecated", 1).replace("knowledge_state: confirmed", "knowledge_state: " + state, 1)
+                goal.write_text(text, encoding="utf-8")
+                deprecated = KB.load_bundle(root, as_of=AS_OF)
+                self.assertFalse(any(issue.level == "error" for issue in deprecated.issues))
+                self.assertNotIn("project/goal", {match.concept.concept_id for match in KB.query_bundle(deprecated, "Kotodama project goal", include_stale=True)})
+                selection = self._context(deprecated)
+                self.assertNotIn("project/goal", {concept.concept_id for concept in selection.selected})
+                self.assertIn("project/goal", selection.unresolved_ids)
+                report = KB.decision_readiness_report(deprecated, actor="human:reviewer", purpose="review lifecycle", concept_ids=["project/goal"])
+                self.assertEqual(0, report["content_ready_count"])
+                self.assertIn("DOCUMENT_NOT_STABLE", report["concepts"][0]["blockers"])
+                self.assertEqual(8, KB.audit_report(deprecated, as_of=AS_OF)["metrics"]["structurally_retrievable_count"])
+
     def test_change_during_projection_generation_refuses_before_write(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = self._minimal_copy(Path(temporary))
@@ -420,6 +513,54 @@ class KnowledgeBaseTests(unittest.TestCase):
             (root / "knowledge/project/goal.md").write_bytes(b"x" * (KB.MAX_FILE_BYTES + 1))
             with self.assertRaisesRegex(KB.KnowledgeBaseError, "INPUT_NOT_BOUNDED"):
                 KB.load_bundle(root, as_of=AS_OF)
+
+    def test_local_schema_resolution_failures_are_bounded_cli_refusals(self):
+        for name in ("kotodama-okf-profile.schema.json", "kotodama-okf-concept.schema.json"):
+            for schema, code in (({"$ref": "#"}, "SCHEMA_RECURSION_LIMIT"),
+                                 ({"$ref": "#/$defs/missing"}, "SCHEMA_REFERENCE_UNRESOLVABLE")):
+                with self.subTest(schema=name, code=code), tempfile.TemporaryDirectory() as temporary:
+                    root = self._minimal_copy(Path(temporary))
+                    (root / "schemas" / name).write_text(json.dumps(schema), encoding="utf-8")
+                    with self.assertRaisesRegex(KB.KnowledgeBaseError, code):
+                        KB.load_bundle(root, as_of=AS_OF)
+                    result = subprocess.run([sys.executable, "-B", str(ROOT / "tools/knowledge_base.py"), "validate", "--root", str(root), "--json"], text=True, capture_output=True, timeout=20)
+                    self.assertEqual(2, result.returncode)
+                    self.assertEqual("", result.stdout)
+                    self.assertEqual("ERROR: " + code + "\n", result.stderr)
+
+    def test_finite_recursive_local_schema_remains_valid(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = self._minimal_copy(Path(temporary))
+            path = root / "schemas/kotodama-okf-concept.schema.json"
+            schema = json.loads(path.read_text(encoding="utf-8"))
+            schema["$defs"]["owned_tree"] = {"type": "object", "properties": {"child": {"$ref": "#/$defs/owned_tree"}}}
+            schema["properties"]["schema_recursion_fixture"] = {"$ref": "#/$defs/owned_tree"}
+            path.write_text(json.dumps(schema), encoding="utf-8")
+            goal = root / "knowledge/project/goal.md"
+            goal.write_text(goal.read_text(encoding="utf-8").replace("sources:\n", "schema_recursion_fixture: { child: { child: {} } }\nsources:\n", 1), encoding="utf-8")
+            bundle = KB.load_bundle(root, as_of=AS_OF)
+            self.assertFalse(any(issue.level == "error" for issue in bundle.issues))
+            result = subprocess.run([sys.executable, "-B", str(ROOT / "tools/knowledge_base.py"), "validate", "--root", str(root), "--json"], text=True, capture_output=True, timeout=20)
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual("PASS", json.loads(result.stdout)["KOTODAMA_PROFILE_PASS"]["verdict"])
+
+    def test_oversized_numeric_tokens_are_structured_parse_refusals(self):
+        digits = "7" * 5000
+        variants = (("schemas/kotodama-okf-concept.schema.json", '{"owned_number_fixture":' + digits + '}', "INVALID_JSON"),
+                    ("knowledge/profile.yaml", None, "INVALID_YAML"))
+        for relative, text, code in variants:
+            with self.subTest(path=relative), tempfile.TemporaryDirectory() as temporary:
+                root = self._minimal_copy(Path(temporary))
+                path = root / relative
+                if text is None:
+                    text = path.read_text(encoding="utf-8") + "\nowned_number_fixture: " + digits + "\n"
+                path.write_text(text, encoding="utf-8")
+                with self.assertRaisesRegex(KB.KnowledgeBaseError, code):
+                    KB.load_bundle(root, as_of=AS_OF)
+                result = subprocess.run([sys.executable, "-B", str(ROOT / "tools/knowledge_base.py"), "validate", "--root", str(root), "--json"], text=True, capture_output=True, timeout=20)
+                self.assertEqual(2, result.returncode)
+                self.assertEqual("", result.stdout)
+                self.assertEqual("ERROR: " + code + "\n", result.stderr)
 
     def test_cli_default_root_and_invalid_requests_have_no_traceback(self):
         positive = subprocess.run([sys.executable, "-B", str(ROOT / "tools/knowledge_base.py"), "validate", "--json"], cwd=ROOT.parent, text=True, capture_output=True, timeout=20)

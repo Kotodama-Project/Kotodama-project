@@ -27,6 +27,7 @@ def _audit_metrics(bundle: Bundle) -> dict[str, Any]:
     structurally_retrievable = 0 if errors else count(
         lambda concept: bool(concept.source_resources)
         and not concept.is_stale
+        and concept.metadata.get("status") != "deprecated"
         and concept.extension.get("knowledge_state") in {"candidate", "confirmed"}
         and bool(concept.extension.get("agent_use", {}).get("discoverable", False))
     )
@@ -134,6 +135,8 @@ def audit_markdown(report: Mapping[str, Any]) -> str:
 
 def context_as_dict(selection: ContextSelection, *, bundle: Bundle) -> dict[str, Any]:
     _require_valid_bundle(bundle)
+    if (selection.source_digest, selection.source_root, selection.as_of) != (bundle.source_digest, bundle.root, bundle.as_of):
+        raise KnowledgeBaseError("CONTEXT_SELECTION_BUNDLE_MISMATCH")
     concepts = []
     for concept in selection.selected:
         metadata = concept.metadata

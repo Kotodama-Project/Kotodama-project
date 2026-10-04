@@ -26,6 +26,7 @@ from urllib.parse import urlparse
 
 import yaml
 from jsonschema import Draft202012Validator, FormatChecker
+from referencing.exceptions import Unresolvable
 
 
 RESERVED_INDEX = "index.md"
@@ -143,6 +144,9 @@ class ContextSelection:
     omitted_ids: tuple[str, ...]
     unresolved_ids: tuple[str, ...]
     filters: Mapping[str, tuple[str, ...]]
+    source_digest: str
+    source_root: Path
+    as_of: dt.datetime
 
 
 class KnowledgeBaseError(RuntimeError):
@@ -268,7 +272,7 @@ def _normalize_yaml(value: Any) -> Any:
 def _load_yaml(text: str, *, path: Path) -> dict[str, Any]:
     try:
         value = yaml.load(text, Loader=UniqueKeyLoader)
-    except (yaml.YAMLError, DuplicateKeyError, RecursionError) as exc:
+    except (yaml.YAMLError, ValueError, RecursionError) as exc:
         raise KnowledgeBaseError("INVALID_YAML") from exc
     _bounded_tree(value)
     value = _normalize_yaml(value)
@@ -288,7 +292,7 @@ def _read_json(path: Path) -> dict[str, Any]:
             return result
         value = json.loads(_read_text(path), object_pairs_hook=pairs)
         _bounded_tree(value)
-    except (json.JSONDecodeError, RecursionError) as exc:
+    except (ValueError, RecursionError) as exc:
         raise KnowledgeBaseError("INVALID_JSON") from exc
     if not isinstance(value, dict):
         raise KnowledgeBaseError("JSON_ROOT_NOT_OBJECT")
@@ -468,7 +472,15 @@ def _schema_issues(
     *, validator: Draft202012Validator, value: Mapping[str, Any], path: str, code: str
 ) -> list[Issue]:
     issues: list[Issue] = []
-    for error in sorted(validator.iter_errors(value), key=lambda item: tuple(str(part) for part in item.absolute_path)):
+    try:
+        errors = sorted(validator.iter_errors(value), key=lambda item: tuple(str(part) for part in item.absolute_path))
+    except RecursionError as exc:
+        # Local references may recurse without advancing through the instance.
+        # Keep terminating recursive schemas valid and refuse exhausted ones.
+        raise KnowledgeBaseError("SCHEMA_RECURSION_LIMIT") from exc
+    except Unresolvable as exc:
+        raise KnowledgeBaseError("SCHEMA_REFERENCE_UNRESOLVABLE") from exc
+    for error in errors:
         location = ".".join(str(part) for part in error.absolute_path)
         suffix = f" at {location}" if location else ""
         issues.append(Issue("error", code, path, f"invalid {error.validator}{suffix}"))

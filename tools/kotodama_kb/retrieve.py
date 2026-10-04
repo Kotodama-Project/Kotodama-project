@@ -45,7 +45,7 @@ def query_bundle(
         agent_use = extension.get("agent_use", {})
         if not agent_use.get("discoverable", False):
             continue
-        if extension.get("knowledge_state") in {"revoked", "deprecated"}:
+        if concept.metadata.get("status") == "deprecated" or extension.get("knowledge_state") in {"revoked", "deprecated"}:
             continue
         if concept.is_stale and not include_stale:
             continue
@@ -145,7 +145,12 @@ def select_context(
     def eligible(concept: Concept) -> bool:
         extension = concept.extension
         critical = bool(set(concept.metadata.get("tags", [])) & set(bundle.profile["quality"].get("critical_tags", [])))
-        return bool(extension.get("agent_use", {}).get("discoverable", False)) and extension.get("knowledge_state") not in {"revoked", "deprecated", "conflicted", "unknown"} and not (concept.is_stale and critical)
+        return (
+            bool(extension.get("agent_use", {}).get("discoverable", False))
+            and concept.metadata.get("status") != "deprecated"
+            and extension.get("knowledge_state") not in {"revoked", "deprecated", "conflicted", "unknown"}
+            and not (concept.is_stale and critical)
+        )
 
     for concept in bundle.concepts:
         extension = concept.extension
@@ -207,6 +212,9 @@ def select_context(
         omitted_ids=omitted,
         unresolved_ids=tuple(sorted(unresolved)),
         filters=filters,
+        source_digest=bundle.source_digest,
+        source_root=bundle.root,
+        as_of=bundle.as_of,
     )
 
 
