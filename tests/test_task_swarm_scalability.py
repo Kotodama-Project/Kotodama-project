@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import sqlite3
 import unittest
+from contextlib import closing
 
 import test_task_swarm_state as state_fixtures
 import test_task_swarm_transport as transport_fixtures
@@ -110,7 +111,8 @@ class TransportScalabilityTests(unittest.TestCase):
         transport.max_pending = 1
         transport.send(self._request())
         self.assertFalse(any(sql.startswith("SELECT * FROM acknowledgements") for sql in statements))
-        with sqlite3.connect(self.db_path) as connection:
+        # SQLite's context manager commits a transaction but does not close it.
+        with closing(sqlite3.connect(self.db_path)) as connection, connection:
             connection.execute("UPDATE acknowledgements SET actor_ref='foreign' WHERE message_id='acked-39'")
         with self.assertRaisesRegex(SwarmError, "CORRUPT_STORE"):
             transport.send(self._request(message_id="second", idempotency_key="second"))
@@ -155,7 +157,7 @@ class TransportScalabilityTests(unittest.TestCase):
     def test_reopened_store_quota_work_skips_expired_and_prior_owner_history(self):
         transport = self._transport()
         transport.send(self._request())
-        with sqlite3.connect(self.db_path) as connection:
+        with closing(sqlite3.connect(self.db_path)) as connection, connection:
             connection.row_factory = sqlite3.Row
             row = dict(connection.execute("SELECT * FROM messages LIMIT 1").fetchone())
             columns = [key for key in row if key != "row_id"]
