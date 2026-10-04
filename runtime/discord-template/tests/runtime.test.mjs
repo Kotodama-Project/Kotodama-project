@@ -51,6 +51,26 @@ test('runtime never reclaims a host lock whose PID is still alive',async t=>{
   await assert.rejects(startRuntime(file,{offline:true,runtimeDomain:'fixture-runtime',log:()=>{}}),{code:'RUNTIME_ALREADY_OWNED'});const checkStore=new Store(config.dataDir);try{assert.equal(checkStore.lock().owner,'other-live-owner');}finally{checkStore.close();}
 });
 
+test('policy polling continues while only outage and recovery transitions are logged',async t=>{
+  const {config,file,cleanup}=await configFixture(t),logs=[];
+  const runtime=await startRuntime(file,{offline:true,log:value=>logs.push(value)});t.after(async()=>{await runtime.close();await cleanup();});
+  const policyEvents=()=>logs.filter(value=>['policy_unavailable','policy_restored'].includes(value.event)).map(value=>value.event);
+  const waitFor=async condition=>{const deadline=Date.now()+5000;while(!condition()){assert(Date.now()<deadline,'policy monitor did not reach the expected state');await new Promise(resolve=>setTimeout(resolve,10));}};
+  const nextPoll=async()=>{const previous=runtime.pipeline.policy();await waitFor(()=>runtime.pipeline.policy()!==previous);};
+
+  await writeFile(file,'{');await waitFor(()=>policyEvents().length===1);
+  assert.deepEqual(runtime.pipeline.policy().discord.operators,[]);assert.deepEqual(runtime.pipeline.policy().voice.participantIds,[]);
+  await nextPoll();assert.deepEqual(policyEvents(),['policy_unavailable']);
+  await writeFile(file,'{}');await nextPoll();assert.deepEqual(policyEvents(),['policy_unavailable']);
+
+  await atomicJson(file,config);await waitFor(()=>policyEvents().length===2);
+  assert.deepEqual(runtime.pipeline.policy().discord.operators,config.discord.operators);
+  await nextPoll();assert.deepEqual(policyEvents(),['policy_unavailable','policy_restored']);
+  await writeFile(file,'{');await waitFor(()=>policyEvents().length===3);
+  assert.deepEqual(policyEvents(),['policy_unavailable','policy_restored','policy_unavailable']);
+  assert.deepEqual(runtime.pipeline.policy().discord.operators,[]);
+});
+
 test('control admits eight commands, rejects excess, and keeps status responsive',async t=>{
   const {config,file,cleanup}=await configFixture(t),runtime=await startRuntime(file,{offline:true,log:()=>{}});let release;
   const gate=new Promise(resolve=>{release=resolve;});let calls=0;
