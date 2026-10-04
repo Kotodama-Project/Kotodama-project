@@ -98,6 +98,11 @@ test('aggregate source bytes, directory traversal and depth have finite limits',
   const empty=await sourceTree(path.join(top,'empty'));
   for(let first=0;first<10000;first+=50)await Promise.all(Array.from({length:50},(_,offset)=>mkdir(path.join(empty,'src','empty-'+(first+offset)))));
   await assert.rejects(computeSourceBinding(empty),{code:'SOURCE_SET_LIMIT'});
+  // Fewer than 10k entries, five tiny files: this isolates metadata bytes,
+  // rather than the existing file/entry/binding limits.
+  const metadata=await sourceTree(path.join(top,'metadata'));
+  for(let first=0;first<5000;first+=50)await Promise.all(Array.from({length:50},(_,offset)=>mkdir(path.join(metadata,'src',String(first+offset).padStart(4,'0')+'m'.repeat(235)))));
+  await assert.rejects(computeSourceBinding(metadata),{code:'SOURCE_SET_LIMIT'});
   const deep=await sourceTree(path.join(top,'deep'));await mkdir(path.join(deep,'src',...Array(65).fill('d')),{recursive:true});
   await assert.rejects(computeSourceBinding(deep),{code:'SOURCE_SET_LIMIT'});
 });

@@ -70,7 +70,7 @@ GPT-Liveの利用量は `session.usage.updated` の累積秒を前回値と置�
 
 対象は `bin/` と `src/` の下のすべてのファイル、`package.json`、`pnpm-lock.yaml` です。設定、データ領域、`docs/`、`tests/`、`node_modules/` は含みません。`node_modules/` は `pnpm-lock.yaml` のdigestと `pnpm install --frozen-lockfile` を前提に束縛するだけで、その中のファイルは比べません。対象の中のsymlink、hard link、通常でないファイルは読まずに拒否します。探索は10,000 entries・深さ64、通常ファイルは5,000件・各2 MB・合計64 MB、statusに載せる束縛は750 KBまでに制限します。上限超過は `SOURCE_SET_LIMIT` として拒否します。起動時に束縛できなかった場合もruntimeは起動し、照合は `unverified` になります。
 
-直接の`startRuntime` API、既にmoduleを読み込んだcaller、任意の`sourceRoot`やcallerが作った記録からは正の照合を作りません（`SOURCE_BOOTSTRAP_REQUIRED`）。Nodeのpreload/loaderを含む起動optionや`NODE_OPTIONS`がある起動も同様です。Windowsではctimeがcreation timeを表す場合があり、変更して戻した履歴をこのguardで確実に検出できないため`SOURCE_BOOTSTRAP_UNSUPPORTED`として`unverified`にします。runtimeとstatus/tasks/shutdownは引き続き使えます。POSIXの起動中変更は、内容を戻してもmetadataの変化を検出して`SOURCE_CHANGED_DURING_STARTUP`とします。内部metadataは10,000 entriesと1.5 MBまでに制限し、応答には出しません。source検査は起動の二回だけで、各control commandには追加しません。
+直接の`startRuntime` API、既にmoduleを読み込んだcaller、任意の`sourceRoot`やcallerが作った記録からは正の照合を作りません（`SOURCE_BOOTSTRAP_REQUIRED`）。Nodeのpreload/loaderを含む起動optionや`NODE_OPTIONS`がある起動も同様です。Windowsではctimeがcreation timeを表す場合があり、変更して戻した履歴をこのguardで確実に検出できないため`SOURCE_BOOTSTRAP_UNSUPPORTED`として`unverified`にします。runtimeとstatus/tasks/shutdownは引き続き使えます。POSIXのguardは、変更を正確に反映するidentity・mtime・ctimeを返すfilesystemと、改変されないCLI/bootstrapを前提にします。この条件で起動中の内容を戻してもmetadataの変化を検出した場合は`SOURCE_CHANGED_DURING_STARTUP`とします。粗い・古い・改変されたfilesystem metadataの下で実行コードを証明しません。内部metadataは10,000 entriesと1.5 MBまでに制限し、応答には出しません。source検査は起動の二回だけで、各control commandには追加しません。
 
 結果の `parity` は三通りです。
 
