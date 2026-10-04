@@ -413,8 +413,22 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             pack, _human_intent_ref, _retention_policy_ref = self.create_ready_pack(root)
+            manifest_path = pack / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            # A schema-valid extra fact family reaches the emitted review item.
+            unicode_family = "国際運用"
+            manifest["canonical_owners"][unicode_family] = manifest["canonical_owners"][
+                "human_intent"
+            ]
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+            )
             bundle_path = root / "saved-review-bundle.json"
             self.save_bundle(pack, bundle_path)
+            expected = request_builder.build_review_request(bundle_path, pack)
+            expected_bytes = (
+                json.dumps(expected, ensure_ascii=False, sort_keys=True) + "\n"
+            ).encode("utf-8")
             legacy_env = dict(os.environ)
             legacy_env["PYTHONIOENCODING"] = "cp1252"
             first = self.run_builder(bundle_path, pack, env=legacy_env)
@@ -422,6 +436,10 @@ class CompanyPackReviewRequestCliTests(unittest.TestCase):
 
         self.assertEqual(first.returncode, 0, first.stdout.decode("utf-8"))
         self.assertEqual(first.stderr, b"")
+        self.assertIn(unicode_family.encode("utf-8"), first.stdout)
+        self.assertEqual(first.stdout, expected_bytes)
+        schema = json.loads(REQUEST_SCHEMA.read_text(encoding="utf-8"))
+        self.assertEqual([], list(Draft202012Validator(schema).iter_errors(expected)))
         self.assertEqual(first.stdout, second.stdout)
         self.assertEqual(
             json.loads(first.stdout)["review_request"]["state"],

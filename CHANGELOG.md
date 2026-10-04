@@ -23,6 +23,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Changed
 
+- Python検査の全1,193 casesと3委譲表示を個別レビューし、運用手順・リンク・拒否時出力・UTF-8・実Git ignoreのoracleを改善。既存mutationと実CLI境界を保ってlifecycle/ledger/scannerの重複コストとpytest collectionを減らした（[#212](https://github.com/Kotodama-Project/Kotodama-project/issues/212)、[レビュー](docs/PYTHON-TEST-REVIEW.md)）。
 - Discord CIを一つのLinux/Windows matrixへ統合し、全テスト・Docker probe・必須check名と失敗時の拒否を保持する。製品の理想との照合と、履歴を失わないbranch/parked候補の整理を改善ループに追加する。
 
 ## [0.2.0-preview] - 2026-10-04
