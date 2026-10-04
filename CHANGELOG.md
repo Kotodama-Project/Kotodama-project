@@ -6,6 +6,10 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ## [Unreleased]
 
+### Added
+
+- Local review gateway に分類・明示reader/reviewer・期限・取消のcatalog v2を追加。unclassified/secretの内容を返さず、人のreviewはhuman種別だけに保存する。kindとpolicyはoperatorのsnapshotであり、本人認証・Promotionではない（#123、元#44）。
+
 ## [0.2.0-preview] - 2026-10-04
 
 Incomplete Public Preview の source release 候補です。Public Beta の受付、Discord 招待、公開 Voice Bot、live deployment、Final Human GO は含みません。
