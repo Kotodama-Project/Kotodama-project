@@ -1023,18 +1023,22 @@ python3 tools/validate_compose_minimum_skeleton.py runtime/compose-minimum
 
 ## Validation
 
-公開 CLI と validator は Python standard library だけで動きます。full contract suite は R29〜R33 の Draft 2020-12 schema を実 validator に通すため、固定した test-only dependency を先に導入します。
+公開 CLI と validator は Python standard library だけで動きます。full contract suite は R29〜R33 の Draft 2020-12 schema を実 validator に通すため、credential gateを通してから、[貢献の手引き](../CONTRIBUTING.md)と同じhash固定の`requirements-ci.txt`でtest-only dependencyを導入します。
 
 ```powershell
-python -m pip install -r requirements-test.txt
+python -S -B tools/check_tracked_secret_hygiene.py
+python -m pip install --require-hashes -r requirements-ci.txt
+python -B tools/check_workflow_references.py
 python -m unittest discover -s tests -v
 ```
 
-POSIX shellでは、同じtest-only dependencyとfull contract suiteを次で実行
+POSIX shellでは、同じhash固定のtest-only dependencyとfull contract suiteを次で実行
 できます。
 
 ```bash
-python3 -m pip install -r requirements-test.txt
+python3 -S -B tools/check_tracked_secret_hygiene.py
+python3 -m pip install --require-hashes -r requirements-ci.txt
+python3 -B tools/check_workflow_references.py
 python3 -m unittest discover -s tests -v
 ```
 
