@@ -6,6 +6,8 @@ import subprocess
 import unittest
 import yaml
 
+from tools.build_release_sbom import python_components
+
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / "requirements-task-swarm-ci.txt"
 
@@ -34,10 +36,15 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         commands = [step.get("run", "") for step in job["steps"]]
         installs = [command for command in commands if "pip install" in command]
         self.assertEqual(installs, ["python -m pip install --require-hashes -r requirements-task-swarm-ci.txt"])
-        self.assertIn("python -m pytest -q -p no:cacheprovider tests -k task_swarm", commands)
+        self.assertIn("python -m pytest -q -p no:cacheprovider -o 'python_files=test_task_swarm_*.py' tests", commands)
         self.assertTrue(any("tools/task_swarm.py demo" in command for command in commands))
         setup = next(step for step in job["steps"] if str(step.get("uses", "")).startswith("actions/setup-python@"))
-        self.assertEqual(setup["with"]["python-version"], "3.12.10")
+        self.assertRegex(setup["with"]["python-version"], r"^3\.12\.[0-9]+$")
+        repository = yaml.safe_load((ROOT / ".github/workflows/repository-validation.yml").read_text(encoding="utf-8"))
+        repository_setup = next(step for step in repository["jobs"]["repository"]["steps"]
+                                if str(step.get("uses", "")).startswith("actions/setup-python@"))
+        self.assertEqual(setup["with"]["python-version"], repository_setup["with"]["python-version"])
+        self.assertFalse(setup["with"].get("check-latest", False))
 
     def test_swarm_lock_is_universal_pinned_and_hashed(self):
         lock = LOCK.read_text(encoding="utf-8")
@@ -52,19 +59,22 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         self.assertIn("colorama", names)
         for name in ("mcp", "psutil", "pytest", "jsonschema", "pyyaml"):
             self.assertIn(name, names)
-        digests = re.findall(r"--hash=sha256:([0-9a-f]{64})", lock)
-        self.assertEqual(len(digests), len(set(digests)))
-        self.assertGreaterEqual(len(digests), len(requirements))
-        self.assertNotIn("--hash=md5:", lock)
-        self.assertNotIn("--hash=sha1:", lock)
+        # Counted hashes can all belong to one entry while another is unhashed.
+        # The existing release parser checks the hash of every requirement.
+        components = python_components(lock)
+        self.assertEqual(len(components), len(requirements))
+        self.assertTrue(all(component["hashes"] for component in components))
 
     # The gate step runs on the Linux runner; on Windows `bash` may resolve to
     # WSL, which does not inherit this process's environment.
     @unittest.skipUnless(os.name == "posix", "the gate step runs under bash on Linux")
     def test_failure_skip_cancellation_and_missing_results_do_not_pass(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/repository-validation.yml").read_text(encoding="utf-8"))
+        gate = next(step for step in workflow["jobs"]["validate"]["steps"]
+                    if step.get("name") == "Require the complete task swarm test matrix")
         for result in ["success", "failure", "skipped", "cancelled", ""]:
             with self.subTest(result=result):
-                status = subprocess.run(["bash", "-c", 'test "$SWARM_RESULT" = success'],
+                status = subprocess.run(["bash", "-e", "-c", gate["run"]],
                                         env={**os.environ, "SWARM_RESULT": result}, check=False)
                 self.assertEqual(status.returncode == 0, result == "success")
 

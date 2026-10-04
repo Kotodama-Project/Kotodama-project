@@ -1,5 +1,7 @@
 import copy
+from contextlib import redirect_stderr, redirect_stdout
 import importlib.util
+import io
 import json
 import subprocess
 import sys
@@ -86,7 +88,7 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
         records = copy.deepcopy(self.records)
         run = next(r for r in records if r["kind"] == "agent_run" and r["state"] == "completed")
         run["evidence_receipt_refs"] = ["ref/receipt/missing"]
-        code, payload = self.run_validator(self.rechain(records))
+        code, payload = self.run_validator(self.rechain(records), cli=True)
         self.assertEqual(code, 2)
         self.assertIn("RUN_EVIDENCE_UNKNOWN", payload["reason_codes"])
         self.assertEqual(payload["derived_success_count"], 0)
@@ -276,7 +278,7 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
             record["content_hash"] = previous
         return records
 
-    def run_validator(self, records: list[dict]) -> tuple[int, dict]:
+    def run_validator(self, records: list[dict], *, cli: bool = False) -> tuple[int, dict]:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "registry.jsonl"
             path.write_text(
@@ -288,15 +290,16 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
                 encoding="utf-8",
                 newline="\n",
             )
-            completed = subprocess.run(
-                [sys.executable, "-B", str(VALIDATOR), str(path)],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                check=False,
-            )
-        return completed.returncode, json.loads(completed.stdout)
+            if cli:
+                return self.run_validator_path(path)
+            # Field/schema mutations exercise the complete production entrypoint
+            # without repeatedly starting Python and importing jsonschema. Keep
+            # real CLI transport and filesystem seams in run_validator_path.
+            output, errors = io.StringIO(), io.StringIO()
+            with redirect_stdout(output), redirect_stderr(errors):
+                code = validator_module.main([str(VALIDATOR), str(path)])
+            self.assertEqual("", errors.getvalue())
+        return code, json.loads(output.getvalue())
 
     def run_validator_path(self, path: Path) -> tuple[int, dict]:
         completed = subprocess.run(
@@ -306,7 +309,9 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
             encoding="utf-8",
             errors="replace",
             check=False,
+            timeout=30,
         )
+        self.assertEqual("", completed.stderr)
         return completed.returncode, json.loads(completed.stdout)
 
     def assert_refused(self, records: list[dict], reason: str) -> None:
@@ -331,10 +336,21 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
         for record in self.records:
             with self.subTest(sequence=record["sequence"], kind=record["kind"]):
                 self.assertEqual([], list(checker.iter_errors(record)))
-        code, payload = self.run_validator(self.records)
+        code, payload = self.run_validator(self.records, cli=True)
         self.assertEqual(0, code, payload)
         self.assertEqual("REGISTRY_CONSISTENT_UNVERIFIED", payload["result"])
         self.assertEqual(len(self.records), payload["record_count"])
+        for arguments in ([], [str(FIXTURE), "SYNTHETIC-PRIVATE-ARGUMENT"]):
+            with self.subTest(usage=bool(arguments)):
+                completed = subprocess.run(
+                    [sys.executable, "-B", str(VALIDATOR), *arguments],
+                    capture_output=True, text=True, encoding="utf-8",
+                    errors="replace", check=False, timeout=30,
+                )
+                self.assertEqual(2, completed.returncode)
+                self.assertEqual("", completed.stdout)
+                self.assertIn("usage:", completed.stderr)
+                self.assertNotIn("SYNTHETIC-PRIVATE-ARGUMENT", completed.stderr)
 
     def test_result_never_asserts_a_claim_or_moves_the_public_gate(self) -> None:
         _, payload = self.run_validator(self.records)
@@ -677,7 +693,11 @@ class PublicAgentLifecycleRegistryContractTests(unittest.TestCase):
     def test_unknown_property_and_non_opaque_reference_are_rejected(self) -> None:
         records = copy.deepcopy(self.records)
         records[0]["provider_thread_id"] = "thread_abc123"
-        self.assert_refused(self.rechain(records), "SCHEMA_INVALID")
+        code, payload = self.run_validator(self.rechain(records), cli=True)
+        self.assertEqual(2, code)
+        self.assertEqual("REFUSED", payload["result"])
+        self.assertIn("SCHEMA_INVALID", payload["reason_codes"])
+        self.assertNotIn("thread_abc123", json.dumps(payload))
 
         records = copy.deepcopy(self.records)
         records[self.index_of(self.find("agent_instance", "instance_ref", "ref/instance/root"))][
