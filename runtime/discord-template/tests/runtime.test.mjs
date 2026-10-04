@@ -31,6 +31,22 @@ test('real HTTP control and child CLI produce an artifact and verify its bytes',
   const duplicate=await controlCommand(config,{action:'request',actor,operation:'research',text:'合成情報を調べて',requestId:'same-request'});assert.equal(duplicate.id,task.id);assert.equal(r.store.tasks(actor).length,1);
   await assert.rejects(controlCommand(config,{action:'tasks',actor:'100000000000000009'}),/OPERATOR_REQUIRED/);assert(logs.some(v=>v.event==='runtime_ready'));
 });
+test('task listing binds remote Tasks to the requesting actor and current access',async t=>{
+  const {config,file,cleanup}=await configFixture(t),other='100000000000000009',tokenEnv='KOTODAMA_TASK_LIST_TEST',previousToken=process.env[tokenEnv];let runtime;
+  process.env[tokenEnv]='synthetic-owner-fixture';config.owner={kind:'remote',url:'http://127.0.0.1:1',tokenEnv};config.discord.operators.push(other);await atomicJson(file,config);
+  t.after(async()=>{await runtime?.close();if(previousToken===undefined)delete process.env[tokenEnv];else process.env[tokenEnv]=previousToken;await cleanup();});
+  runtime=await startRuntime(file,{offline:true,log:()=>{}});
+  const visible={id:'task-visible',actor,source_key:'source-visible',source_revision:1,state:'needs_review',title:'本人の仕事'};
+  const foreign={...visible,id:'task-foreign',actor:other,source_key:'source-foreign',title:'別の操作者の仕事'},revoked={...visible,id:'task-revoked',source_key:'source-revoked'};
+  let lists=0;const sources=[],readable=new Set(['source-visible','source-foreign']);
+  runtime.owner.tasks=async principal=>{assert.equal(principal,actor);lists++;return [foreign,revoked,visible];};
+  runtime.owner.source=async(key,principal)=>{sources.push([key,principal]);if(!readable.has(key))throw new Refused('SOURCE_ACCESS_DENIED');return {revision:1};};
+  assert.deepEqual(await controlCommand(config,{action:'tasks',actor}),[visible]);
+  assert.deepEqual(sources,[['source-revoked',actor],['source-visible',actor]]);assert.equal(runtime.store.tasks(actor).length,0);
+  readable.delete('source-visible');assert.deepEqual(await controlCommand(config,{action:'tasks',actor}),[]);assert.equal(lists,2);
+  config.discord.operators=[other];await atomicJson(file,config);
+  await assert.rejects(controlCommand(config,{action:'tasks',actor}),{code:'OPERATOR_REQUIRED'});assert.equal(lists,2);
+});
 test('actual CLI analysis returns ToDos without executing them',async t=>{const {config,cleanup}=await configFixture(t);t.after(cleanup);const result=await new CliAnalyzer(config).analyze({text:'資料を作る案です',final:true},[]);assert.equal(result.intents[0].kind,'proposal');assert.equal(result.intents[0].explicit,false);});
 test('completed prose is a worker document but cannot become structured intent',async t=>{const {config,root,cleanup}=await configFixture(t);t.after(cleanup);const cli=path.join(root,'prose.mjs');await writeFile(cli,"console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'調査結果の本文です。'}}));",'utf8');config.worker.args=[cli];config.analyzer.args=[cli];const result=await new CliWorker(config).run({id:'task-prose',actor,revision:1,source_revision:1,action:'research',request:'調べて',acceptance:[]},[]);assert.equal(result.resultFormat,'text_summary');assert.equal(result.state,'needs_review');assert.equal(await readFile(result.artifacts[0].path,'utf8'),'調査結果の本文です。');await assert.rejects(new CliAnalyzer(config).analyze({text:'仕事をして',final:true},[]),/MODEL_JSON_INVALID/);});
 test('failed remote owner initialization does not leave a runtime lock',async t=>{const {config,file,cleanup}=await configFixture(t);t.after(cleanup);config.owner={kind:'remote',url:'http://127.0.0.1:1',tokenEnv:'KOTODAMA_MISSING_TEST_TOKEN'};await atomicJson(file,config);await assert.rejects(startRuntime(file,{offline:true,log:()=>{}}),/OWNER_CREDENTIAL_REQUIRED/);const store=new Store(config.dataDir);try{assert.equal(store.lock(),undefined);}finally{store.close();}});
@@ -91,7 +107,6 @@ test('control admits eight commands, rejects excess, and keeps status responsive
   runtime.owner.tasks=async()=>{calls++;await gate;return [];};
   const metadata=JSON.parse(await readFile(path.join(config.dataDir,'runtime.json'),'utf8')),token=await readFile(path.join(config.dataDir,'control.secret'),'utf8');
   assert(Number.isInteger(metadata.port)&&metadata.port>=1&&metadata.port<=65535);assert.match(token,/^[a-f0-9]{64}$/);
-  // codeql[js/file-access-to-http] This test sends only its newly generated runtime token to its validated owned loopback endpoint.
   const send=()=>fetch(`http://127.0.0.1:${metadata.port}/v1/command`,{method:'POST',redirect:'error',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({action:'tasks',actor})});
   const active=Array.from({length:8},send);
   for(let tries=0;calls<8&&tries<200;tries++)await new Promise(resolve=>setTimeout(resolve,5));assert.equal(calls,8);
@@ -107,10 +122,8 @@ test('control rejects declared oversize before buffering and drains incomplete u
   assert(Number.isInteger(metadata.port)&&metadata.port>=1&&metadata.port<=65535);assert.match(token,/^[a-f0-9]{64}$/);
   const headers={authorization:'Bearer '+token,'content-type':'application/json'};
   const refused=await new Promise((resolve,reject)=>{
-    // codeql[js/file-access-to-http] This test sends only its newly generated runtime token to its validated owned loopback endpoint.
     const req=http.request({hostname:'127.0.0.1',port:metadata.port,path:'/v1/command',method:'POST',headers:{...headers,'content-length':200001}},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});req.on('error',reject);req.flushHeaders();
   });assert.equal(refused,413);
-  // codeql[js/file-access-to-http] This test sends only its newly generated runtime token to its validated owned loopback endpoint.
   const slow=http.request({hostname:'127.0.0.1',port:metadata.port,path:'/v1/command',method:'POST',headers});slow.on('error',()=>{});slow.on('response',res=>res.resume());slow.write('{"action":');
   await new Promise(resolve=>setTimeout(resolve,20));
   const closing=runtime.close();assert.equal(runtime.close(),closing);await closing;slow.destroy();

@@ -85,7 +85,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         const input=JSON.parse(body.toString('utf8'));current=await awaitWithSignal(loadConfig(filename),scope.signal);check(!closing,'RUNTIME_STOPPING');check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
         controlReads.delete(scope);scope.dispose();scope=null;
         let result;
-        if(input.action==='tasks'){result=[];for(const task of await owner.tasks(input.actor))try{await authorize(task,'read_result');result.push(task);}catch{}}
+        if(input.action==='tasks')result=await pipeline.tasks(input.actor);
         else if(input.action==='result')result=await pipeline.result(input.taskId,input.actor);
         else if(input.action==='stop'){await pipeline.stop(input.taskId,input.actor);result={state:'stop_requested'};}
         else if(input.action==='resume')result=await pipeline.resume(input.taskId,input.actor);

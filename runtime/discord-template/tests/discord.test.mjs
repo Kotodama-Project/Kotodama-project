@@ -6,6 +6,7 @@ import path from 'node:path';
 import {Collection} from 'discord.js';
 import {DiscordAdapter,taskStateText,deferredAnalysisText} from '../src/discord.mjs';
 import {exampleConfig} from '../src/config.mjs';
+import {Pipeline} from '../src/pipeline.mjs';
 test('ask returns the answer and rechecks source access before the ephemeral reply',async t=>{
   const config=exampleConfig(),actor=config.discord.operators[0],replies=[];let allowed=true;
   const adapter=new DiscordAdapter({config,store:{source:()=>({revision:1,provider:'discord',channelId:config.discord.resultChannelId})},pipeline:{ingest:async(_s,flags)=>{assert.equal(flags.execute,false);assert.equal(flags.reply,false);return {summary:'相談の要約',answer:'相談への回答',contextSources:[{key:'source',revision:1}]};}}});
@@ -39,9 +40,11 @@ test('deferred analysis and paused Tasks are described in Japanese instead of cl
   assert.match(taskStateText('paused'),/一時停止中/);assert.match(taskStateText('uncertain'),/自動では再実行しません/);assert.equal(taskStateText('future_state'),'future_state');
   for(const reason of ['ANALYSIS_QUEUE_FULL','ANALYSIS_SUPERSEDED','ANALYSIS_BUDGET_EXHAUSTED','ANALYSIS_TOTAL_BUDGET_EXHAUSTED'])assert.match(deferredAnalysisText(reason),/記録済み/);
   const config=exampleConfig(),actor=config.discord.operators[0],replies=[];
-  const adapter=new DiscordAdapter({config,store:{},pipeline:{ingest:async()=>({state:'new',analysis:'deferred',reason:'ANALYSIS_QUEUE_FULL'}),owner:{tasks:async()=>[{id:'task-paused',state:'paused',title:'再起動前の依頼'}]},authorize:async()=>{}}});
+  const pipeline=new Pipeline({config,store:{},owner:{tasks:async()=>[{id:'task-foreign',actor:'100000000000000009',state:'paused',title:'別の操作者の依頼'},{id:'task-paused',actor,state:'paused',title:'再起動前の依頼'}]},authorize:async()=>{}});
+  pipeline.ingest=async()=>({state:'new',analysis:'deferred',reason:'ANALYSIS_QUEUE_FULL'});
+  const adapter=new DiscordAdapter({config,store:{},pipeline});
   t.after(()=>adapter.client.destroy());adapter.verifiedInstallation=true;adapter.member=async()=>({});
   const interaction=sub=>({guildId:config.discord.guildId,channelId:config.discord.resultChannelId,id:'interaction-'+sub,createdTimestamp:1,commandName:'kotodama',user:{id:actor},isButton:()=>false,isChatInputCommand:()=>true,options:{getSubcommand:()=>sub,getString:()=>'どう思う？'},deferReply:async()=>{},editReply:async v=>replies.push(v.content)});
   await adapter.interaction(interaction('ask'));assert.match(replies[0],/後回し/);assert(!replies[0].includes('整理しました'));
-  await adapter.interaction(interaction('tasks'));assert.match(replies[1],/task-paused · 一時停止中/);
+  await adapter.interaction(interaction('tasks'));assert.match(replies[1],/task-paused · 一時停止中/);assert(!replies[1].includes('task-foreign'));assert(!replies[1].includes('別の操作者'));
 });
