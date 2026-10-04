@@ -34,6 +34,19 @@ test('real HTTP control and child CLI produce an artifact and verify its bytes',
 test('actual CLI analysis returns ToDos without executing them',async t=>{const {config,cleanup}=await configFixture(t);t.after(cleanup);const result=await new CliAnalyzer(config).analyze({text:'資料を作る案です',final:true},[]);assert.equal(result.intents[0].kind,'proposal');assert.equal(result.intents[0].explicit,false);});
 test('completed prose is a worker document but cannot become structured intent',async t=>{const {config,root,cleanup}=await configFixture(t);t.after(cleanup);const cli=path.join(root,'prose.mjs');await writeFile(cli,"console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'調査結果の本文です。'}}));",'utf8');config.worker.args=[cli];config.analyzer.args=[cli];const result=await new CliWorker(config).run({id:'task-prose',actor,revision:1,source_revision:1,action:'research',request:'調べて',acceptance:[]},[]);assert.equal(result.resultFormat,'text_summary');assert.equal(result.state,'needs_review');assert.equal(await readFile(result.artifacts[0].path,'utf8'),'調査結果の本文です。');await assert.rejects(new CliAnalyzer(config).analyze({text:'仕事をして',final:true},[]),/MODEL_JSON_INVALID/);});
 test('failed remote owner initialization does not leave a runtime lock',async t=>{const {config,file,cleanup}=await configFixture(t);t.after(cleanup);config.owner={kind:'remote',url:'http://127.0.0.1:1',tokenEnv:'KOTODAMA_MISSING_TEST_TOKEN'};await atomicJson(file,config);await assert.rejects(startRuntime(file,{offline:true,log:()=>{}}),/OWNER_CREDENTIAL_REQUIRED/);const store=new Store(config.dataDir);try{assert.equal(store.lock(),undefined);}finally{store.close();}});
+test('failed control listen releases its store and host lock before the same runtime restarts',async t=>{
+  const {config,file,cleanup}=await configFixture(t),occupied=http.createServer();let runtime,failedStore;
+  t.after(async()=>{t.mock.restoreAll();await runtime?.close();if(failedStore?.db.isOpen)failedStore.close();if(occupied.listening)await new Promise((resolve,reject)=>occupied.close(error=>error?reject(error):resolve()));await cleanup();});
+  await new Promise((resolve,reject)=>{occupied.once('error',reject);occupied.listen(0,'127.0.0.1',resolve);});
+  const port=occupied.address().port,originalListen=http.Server.prototype.listen,originalClaim=Store.prototype.claimHost;
+  t.mock.method(http.Server.prototype,'listen',function(...args){if(args[0]===0&&args[1]==='127.0.0.1')args[0]=port;return originalListen.apply(this,args);});
+  t.mock.method(Store.prototype,'claimHost',function(...args){failedStore=this;return originalClaim.apply(this,args);});
+  await assert.rejects(startRuntime(file,{offline:true,log:()=>{}}),{code:'EADDRINUSE'});
+  assert.equal(failedStore.db.isOpen,false,'failed startup closes its SQLite connection');
+  t.mock.restoreAll();const reopened=new Store(config.dataDir);try{assert.equal(reopened.lock(),undefined);}finally{reopened.close();}
+  runtime=await startRuntime(file,{offline:true,log:()=>{}});assert.equal((await controlCommand(config,{action:'status'})).discord,'offline_fixture');
+  await runtime.close();const stopped=new Store(config.dataDir);try{assert.equal(stopped.lock(),undefined);}finally{stopped.close();}
+});
 test('an empty runtime domain leaves automatic stale-lock recovery disabled',async t=>{
   const {file,cleanup}=await configFixture(t);let runtime;t.after(async()=>{await runtime?.close();await cleanup();});runtime=await startRuntime(file,{offline:true,runtimeDomain:'',log:()=>{}});assert.equal(runtime.store.lock().domain,null);
 });

@@ -36,7 +36,8 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   const controlOperations=new Set(),controlReads=new Set();
   const stopControl=()=>{
     if(!control)return Promise.resolve();
-    controlClosed??=new Promise((resolve,reject)=>control.close(error=>error?reject(error):resolve()));
+    // A failed listen leaves no server to drain; other close errors still retain ownership.
+    controlClosed??=new Promise((resolve,reject)=>control.close(error=>error&&error.code!=='ERR_SERVER_NOT_RUNNING'?reject(error):resolve()));
     for(const scope of controlReads)scope.abort(new Refused('RUNTIME_STOPPING'));
     control.closeIdleConnections();return controlClosed;
   };
