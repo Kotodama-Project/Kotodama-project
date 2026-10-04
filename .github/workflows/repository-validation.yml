@@ -69,10 +69,8 @@ jobs:
       - run: pnpm check
   swarm:
     uses: ./.github/workflows/task-swarm.yml
-  validate:
-    name: Trusted repository validation
-    needs: [discord, swarm]
-    if: ${{ always() }}
+  repository:
+    name: Repository checks
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -83,14 +81,6 @@ jobs:
       ACTIONLINT_VERSION: "1.7.12"
       ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
     steps:
-      - name: Require the complete Discord test matrix
-        env:
-          DISCORD_RESULT: ${{ needs.discord.result }}
-        run: test "$DISCORD_RESULT" = success
-      - name: Require the complete task swarm test matrix
-        env:
-          SWARM_RESULT: ${{ needs.swarm.result }}
-        run: test "$SWARM_RESULT" = success
       - name: Check out without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -147,3 +137,22 @@ jobs:
         run: |
           git diff --check
           test -z "$(git status --porcelain)"
+  validate:
+    name: Trusted repository validation
+    needs: [repository, discord, swarm]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Require the complete repository checks
+        env:
+          REPOSITORY_RESULT: ${{ needs.repository.result }}
+        run: test "$REPOSITORY_RESULT" = success
+      - name: Require the complete Discord test matrix
+        env:
+          DISCORD_RESULT: ${{ needs.discord.result }}
+        run: test "$DISCORD_RESULT" = success
+      - name: Require the complete task swarm test matrix
+        env:
+          SWARM_RESULT: ${{ needs.swarm.result }}
+        run: test "$SWARM_RESULT" = success

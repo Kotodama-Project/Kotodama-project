@@ -6,7 +6,7 @@
 
 | Workflow（表示名） | ファイル | 起動 | 目安の所要 | 必須 | 内容 |
 |---|---|---|---|---|---|
-| Repository validation（job: **Trusted repository validation**） | `.github/workflows/repository-validation.yml` | PR、main への push | 約 10 分 | **必須** | tracked credential hygiene、README の one-command smoke、runtime candidate validator、actionlint、hash-locked pip install、immutable workflow reference check、`python -m unittest discover -s tests`（docs lint を含む）、`git diff --check` と clean tree |
+| Repository validation（job: Repository checks → **Trusted repository validation**） | `.github/workflows/repository-validation.yml` | PR、main への push | checks は最大 25 分、集約は全依存の終了後 | **必須**（集約が成功を要求） | Discord・swarm と並列に tracked credential hygiene、README の one-command smoke、runtime candidate validator、actionlint、hash-locked pip install、immutable workflow reference check、`python -m unittest discover -s tests`（docs lint を含む）、`git diff --check` と clean tree。Trusted job は全3経路の成功を確認 |
 | Repository validation（job: **test (ubuntu-latest)**・**test (windows-latest)**） | `.github/workflows/repository-validation.yml` | PR、main への push | 2〜3 分 | **必須**（`Trusted repository validation` も成功を要求） | `runtime/discord-template` の `pnpm test` と `pnpm check`。Linux は固定 digest の Docker image で検証隔離の実 probe を行う |
 | Task swarm validation（job: swarm / validate (ubuntu-latest)・(windows-latest)） | `.github/workflows/task-swarm.yml` | 必須チェックから `workflow_call`、手動 | 2〜5 分 | **必須**（`Trusted repository validation` が成功を要求） | `requirements-task-swarm-ci.txt` の hash 付き install、`pytest -k task_swarm`、offline demo（モデル呼出しなし） |
 | Cloudflare candidate validation | `.github/workflows/cloudflare-candidate-validation.yml` | PR、main への push | 1〜2 分 | 任意 | Cloudflare edge / 公式 Cloudflare OS 候補の content-free validator |
@@ -15,7 +15,9 @@
 | Release candidate（job: Build, attest, and draft the release） | `.github/workflows/release.yml` | `v*` tag の push | 数分 | 任意 | smoke report と source archive を作り、provenance attestation を付けて draft の prerelease を作る。公開は人が行う |
 | CodeQL（default setup） | GitHub 側の設定 | PR、main、週次 | 1〜2 分 | 任意 | actions / javascript-typescript / python / csharp |
 
-必須チェックは `Trusted repository validation`、`test (ubuntu-latest)`、`test (windows-latest)`、`Dependency review` の 4 件で、`strict: true`（PR branch が main に追いついていること）です。`Trusted repository validation` は同じ workflow の Discord matrix と呼び出した Task swarm matrix に依存し、どちらかが failure / skipped / cancelled / 未実行なら成功しません。Discord は各 OS で 1 回だけ実行します（従来の直接起動と reusable 呼出しによる 4 jobs から 2 jobs へ削減）。必須チェック名と検証内容は維持します。`gh api repos/Kotodama-Project/Kotodama-project/branches/main/protection` で読み戻せます。
+必須チェックは `Trusted repository validation`、`test (ubuntu-latest)`、`test (windows-latest)`、`Dependency review` の 4 件で、`strict: true`（PR branch が main に追いついていること）です。`Trusted repository validation` は並列実行した Repository checks、Discord matrix、呼び出した Task swarm matrix の全3経路に依存し、一つでも failure / skipped / cancelled / 未実行なら成功しません。matrix 待ち後に全Python検査を始める直列依存を除き、3経路を並列に開始できる構成です。実際の全体所要はrunnerの待機時間を含め、短縮幅は更新headのhosted CIで測ります。Discord は各 OS で 1 回だけ実行します（従来の直接起動と reusable 呼出しによる 4 jobs から 2 jobs へ削減）。必須チェック名と検証内容は維持します。`gh api repos/Kotodama-Project/Kotodama-project/branches/main/protection` で読み戻せます。
+
+全Python検査の進行中に15分の上限でcancelした[hosted実行](https://github.com/Kotodama-Project/Kotodama-project/actions/runs/37198502503/job/111425839551)を受け、Repository checksの上限を25分にします。検査を減らさずrunnerの所要差に余裕を持たせ、成功の条件は維持します。軽いTrusted集約jobは15分の上限を保持します。
 
 ## Release の SBOM と provenance を確認する
 
