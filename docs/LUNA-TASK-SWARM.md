@@ -182,6 +182,37 @@ Skill/TOMLの静的検査は、runtimeの自動選択やproject roleがhostへ�
 
 `budget.verifier_reserve`はreview用に保護する試行数です。省略時はreview job数（総予算以下）を予約し、workの再試行はその枠を使えません。code・Skill・roleのハッシュを実行入力へ固定し、途中で変更された場合はそのrunを止めて新しい入力で検証します。
 
+## 通信・長文contextのoffline benchmark
+
+```powershell
+python -B tools/task_swarm_benchmark.py --allow-local-fixture --output work/swarm-benchmark.json
+```
+
+短文、長文・多言語、複雑な依存関係の3種類を、実際の`PeerTools`、owner source照合、
+digest-addressed payload、SQLite mailbox、schedulerで実行します。最大2,048 records・
+64 pagesの合成入力から、地域別の条件付き集計、pageをまたぐ依存関係、訂正後の再計算を
+決定的なreference workerが行い、通信から独立した算術oracleと照合します。日本語・
+英語・アラビア語・フランス語・emojiを含みます。モデルは呼ばず、AIの推論品質・live接続・
+世界規模の同時利用は測りません。結果の上限は`LOCAL_PASS`です。
+
+既存の16 KiB/message制限を保ったままpageを送受信し、全pageの原文とevidence参照、
+ACK後の再起動とidempotent replay、requestへのreplyとACK、近上限のUTF-8 payload、
+超過・backpressure時の拒否、grant取消、source変更、workerと独立reviewerの分離、
+owner受入待ちを検査します。訂正では現行revisionの1 pageだけを再送し、元のpayloadは
+audit用に保持します。このpage分割とcacheはbenchmarkのreference workerのもので、
+runtimeが任意の長文を自動分割したりモデルが常時監視したりする機能ではありません。
+
+1,000 / 10,000 / 50,000件の期限切れ・旧owner履歴を合成して保持し、新規admissionの
+SQLite VM命令数が履歴に比例して増えないこと、snapshotがattempt履歴を1回のSELECTで
+読むことをCIのLinux/Windowsで検査します。elapsed timeは参考値で、機械差の大きい秒数を
+合否条件にしません。indexを失ってfull scanする変更や、原文・参照の欠落でbenchmarkが
+失敗することも回帰テストで確認します。
+
+JSON reportとGitHub job summaryは件数・bytes・VM命令数・検査結果・SQLite version・
+実装digestのみを含み、本文・owner path・lease tokenは含みません。出力先は`work/`内の
+新規fileに限定し、既存reportを上書きしません。`--profile short`などで1種類を選べます。
+実モデルの受入は上記の明示的live demoで別に行い、この結果と混同しません。
+
 ## 配置された role
 
 - `.codex/agents/kotodama_luna_worker.toml` — 一つの work cell、typed report、bounded peer communication

@@ -93,7 +93,8 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         else if(input.action==='voice'){check(voice,'VOICE_NOT_CONFIGURED');result=await voiceCommand(voice,input.mode,{actor:input.actor});}
         else if(input.action==='dots'){
           check(dots&&current.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
-          if(input.operation==='list')result=await dots.list();
+          if(input.operation==='list')result=await dots.list({cursor:input.cursor,includeText:input.includeText,limit:input.limit});
+          else if(input.operation==='read_request')result=await dots.read(input.id,input.revision,{offset:input.offset,limit:input.limit});
           else if(input.operation==='reply')result=await dots.send(input.id,input.revision,input.text);
           else if(input.operation==='draft_event')result=await dots.prepareEvent(input.id,input.revision,input.event,{operation:input.eventOperation,targetUrl:input.targetUrl});
           else if(input.operation==='read_event')result=await dots.readDraft(input.id);

@@ -18,6 +18,21 @@ keep personal Dot memories and unrelated private chats out of Bot replies.
 Ordinary conversation needs no new Task. Use the existing governed Task
 owner for software work or other execution outside conversation/event drafts.
 
+Follow `nextCursor` until it is null so an older unanswered request does not
+hide later ones. A scan has a fixed arrival horizon; start the next scan without
+a cursor for new arrivals or temporary access failures. `unavailable` counts
+failed reads throughout that scan; `complete: false` is not an empty inbox.
+Reading neither acknowledges a request nor schedules continuous monitoring.
+
+Full text is the default. For many long requests, optionally use
+`includeText: false` to discover IDs, revisions and previews cheaply. A preview
+is incomplete: call `discord_read_request` for needed requests, starting at
+offset zero and following `nextOffset` until null. Offsets are UTF-16 code
+units and returned page boundaries preserve surrogate pairs. Keep one revision
+and `textDigest` throughout reconstruction; each page checks current access.
+Do not combine old and corrected pages. Source changes require rediscovery;
+cancellation, expiry or revocation stops reading and replying.
+
 Reply with `discord_reply` and the same ID/revision. The requester receives a
 configured reply. Normal messages can use the dedicated channel; private slash
 requests use DM. `sent` or `already_sent` confirms delivery; `unknown` needs reconciliation
