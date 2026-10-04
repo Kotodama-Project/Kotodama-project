@@ -21,3 +21,47 @@ test('local transcript mode requires an explicit local ASR endpoint',()=>{
   const base={version:1,installation:'fixture',discord:{guildId:'100000000000000001',textChannelIds:['100000000000000003'],resultChannelId:'100000000000000003',operators:['100000000000000002']},voice:{transcriptSource:'local'},worker:{executable:'codex',workspace:'.'}};
   assert.throws(()=>Config.parse(base),/LOCAL_ASR_CONFIG_REQUIRED/);base.voice.localAsr={url:'http://127.0.0.1:9000/v1/audio/transcriptions',model:'tiny'};assert.equal(Config.parse(base).voice.localAsr.language,'ja');
 });
+
+test('local ASR deadline covers a stalled response body and cancels its stream',async()=>{
+  let cancelled=false;
+  const asr=new LocalAsr({url:'http://127.0.0.1:9000/transcribe',model:'fixture',timeoutSeconds:0.03,fetcher:async()=>new Response(new ReadableStream({cancel(){cancelled=true;}}))});
+  await assert.rejects(asr.transcribe(Buffer.alloc(4800)),{code:'LOCAL_ASR_TIMEOUT',message:'LOCAL_ASR_TIMEOUT'});assert.equal(cancelled,true);
+});
+
+test('local ASR bounds connection wait and cancels a response returned after timeout',async()=>{
+  let resolveFetch,signal,cancelled=false;
+  const asr=new LocalAsr({url:'http://127.0.0.1:9000/transcribe',model:'fixture',timeoutSeconds:0.03,fetcher:(_url,options)=>{signal=options.signal;return new Promise(resolve=>{resolveFetch=resolve;});}});
+  await assert.rejects(asr.transcribe(Buffer.alloc(4800)),{code:'LOCAL_ASR_TIMEOUT'});assert.equal(signal.aborted,true);
+  resolveFetch(new Response(new ReadableStream({cancel(){cancelled=true;}})));await new Promise(resolve=>setImmediate(resolve));assert.equal(cancelled,true);
+});
+
+test('local ASR explicit cancellation returns a classified refusal',async()=>{
+  const controller=new AbortController();let cancelled=false;
+  const asr=new LocalAsr({url:'http://127.0.0.1:9000/transcribe',model:'fixture',fetcher:async()=>new Response(new ReadableStream({cancel(){cancelled=true;}}))});
+  const work=asr.transcribe(Buffer.alloc(4800),{signal:controller.signal});await new Promise(resolve=>setImmediate(resolve));controller.abort();
+  await assert.rejects(work,{code:'LOCAL_ASR_CANCELLED'});assert.equal(cancelled,true);
+});
+
+for(const status of [200,500])test(`local ASR cancels unread refused response bodies (${status})`,async()=>{
+  let cancelled=false;
+  const asr=new LocalAsr({url:'http://127.0.0.1:9000/transcribe',model:'fixture',fetcher:async()=>new Response(new ReadableStream({cancel(){cancelled=true;}}),{status,headers:{'content-length':'70000'}})});
+  await assert.rejects(asr.transcribe(Buffer.alloc(4800)),{code:status===200?'LOCAL_ASR_RESULT_LIMIT':'LOCAL_ASR_FAILED'});assert.equal(cancelled,true);
+});
+
+test('ignored transport cancellation retains finite ASR admission until actual completion',async()=>{
+  const pending=[];let calls=0;
+  const asr=new LocalAsr({url:'http://127.0.0.1:9000/transcribe',model:'fixture',timeoutSeconds:0.02,fetcher:()=>{calls++;return new Promise(resolve=>pending.push(resolve));}});
+  for(let i=0;i<2;i++)await assert.rejects(asr.transcribe(Buffer.alloc(4800)),{code:'LOCAL_ASR_TIMEOUT'});
+  for(let i=0;i<5;i++)await assert.rejects(asr.transcribe(Buffer.alloc(4800)),{code:'LOCAL_ASR_BUSY'});
+  assert.equal(calls,2);assert.equal(asr.pendingRequests.size,2);
+  for(const resolve of pending)resolve(new Response('{"text":"late"}'));await new Promise(resolve=>setImmediate(resolve));assert.equal(asr.pendingRequests.size,0);
+  asr.fetcher=async()=>new Response('{"text":"resumed"}');assert.equal(await asr.transcribe(Buffer.alloc(4800)),'resumed');
+});
+
+test('ignored response reader cancellation also keeps the ASR admission slot',async()=>{
+  const reads=[];let calls=0;
+  const asr=new LocalAsr({url:'http://127.0.0.1:9000/transcribe',model:'fixture',timeoutSeconds:0.02,fetcher:async()=>{calls++;return {ok:true,headers:new Headers(),body:{getReader:()=>({read:()=>new Promise(resolve=>reads.push(resolve)),cancel:async()=>{},releaseLock(){}})}};}});
+  for(let i=0;i<2;i++)await assert.rejects(asr.transcribe(Buffer.alloc(4800)),{code:'LOCAL_ASR_TIMEOUT'});
+  await assert.rejects(asr.transcribe(Buffer.alloc(4800)),{code:'LOCAL_ASR_BUSY'});assert.equal(calls,2);
+  for(const resolve of reads)resolve({done:true});await new Promise(resolve=>setImmediate(resolve));assert.equal(asr.pendingRequests.size,0);
+});

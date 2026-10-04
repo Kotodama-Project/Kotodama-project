@@ -181,12 +181,17 @@ export class DiscordAdapter {
       await i.editReply({content:`${managed?'プライバシーの説明・同意確認は人間側が責任を持つ運用です。Botの同意クリックは必須ではありません。\n\n':''}${notice.text}\n\nあなたの状態：${status}`,components:[{type:1,components:buttons}],allowedMentions:{parse:[]}});
     }catch(e){await i.editReply({content:`設定できませんでした：${errorCode(e)}`,components:[],allowedMentions:{parse:[]}});}
   }
-  async notifyLumaImport(receipt,{readConfig=async()=>this.policy()}={}){
+  async notifyLumaImport(receipt,{readConfig=async()=>this.policy(),signal}={}){
+    if(signal?.aborted)return {state:'blocked'};
     if(this.notifications?.quiet()){this.notifications.defer(digest(['luma',receipt.key,receipt.sourceDigest,receipt.actorId]),'luma',receipt);return {state:'deferred'};}
     let claimed=false;
     try{
       const actor=receipt.actorId;
+      // The bridge owns the response deadline. Keep this callback pending until
+      // the actual provider call settles so cancellation cannot free its lane.
+      const wait=async value=>{const result=await value;signal?.throwIfAborted();return result;};
       const readSource=cfg=>{
+        signal?.throwIfAborted();
         check(this.verifiedInstallation&&cfg.discord.guildId===this.config.discord.guildId,'BOT_INSTALLATION_NOT_VERIFIED');
         check(cfg.bridge.enabled&&cfg.bridge.actorId===actor&&cfg.discord.operators.includes(actor),'OPERATOR_REQUIRED');
         check(cfg.integrations.luma?.eventRef===receipt.eventRef,'EVENT_NOT_ALLOWED');
@@ -195,17 +200,17 @@ export class DiscordAdapter {
         check(source.revision===receipt.revision&&source.sourceId===receipt.eventRef+':guest-snapshot'&&source.metadata?.kind==='guest_snapshot'&&source.metadata.imported===true&&source.metadata.eventRef===receipt.eventRef&&source.metadata.sourceDigest===receipt.sourceDigest,'SOURCE_CHANGED');
         return source;
       };
-      const cfg=await readConfig();readSource(cfg);
-      const member=await this.member(actor);check(member.id===actor&&member.guild.id===cfg.discord.guildId,'GUILD_MEMBER_REQUIRED');
-      const user=await this.client.users.fetch(actor,{force:true});check(user.id===actor,'NOTIFICATION_RECIPIENT_MISMATCH');
-      const channel=await this.client.channels.fetch(cfg.discord.resultChannelId,{force:true});check(channel?.guildId===cfg.discord.guildId&&await this.canRead(channel,actor),'SOURCE_ACCESS_DENIED');
-      const latest=await readConfig();check(latest.discord.resultChannelId===channel.id,'SOURCE_ACCESS_DENIED');const source=readSource(latest);
+      const cfg=await wait(readConfig());readSource(cfg);
+      const member=await wait(this.member(actor));check(member.id===actor&&member.guild.id===cfg.discord.guildId,'GUILD_MEMBER_REQUIRED');
+      const user=await wait(this.client.users.fetch(actor,{force:true}));check(user.id===actor,'NOTIFICATION_RECIPIENT_MISMATCH');
+      const channel=await wait(this.client.channels.fetch(cfg.discord.resultChannelId,{force:true}));check(channel?.guildId===cfg.discord.guildId&&await wait(this.canRead(channel,actor)),'SOURCE_ACCESS_DENIED');
+      const latest=await wait(readConfig());check(latest.discord.resultChannelId===channel.id,'SOURCE_ACCESS_DENIED');const source=readSource(latest);
       const records=source.metadata.records;check(Array.isArray(records)&&records.length<=10000&&records.every(row=>row&&[row.personKey,row.ticketKey].every(key=>key===null||typeof key==='string'&&/^[a-f0-9]{64}$/.test(key))),'LUMA_SUMMARY_INVALID');
       const people=new Set(records.map(row=>row.personKey).filter(Boolean)).size,tickets=new Set(records.map(row=>row.ticketKey).filter(Boolean)).size;
       const text=`Lumaの取込が完了しました。\n取込行数: ${records.length}\n識別できた参加者: ${people}\n識別できたチケット: ${tickets}\nCSV取得後の変更は含みません。`;
       const key=digest(['luma-import',source.guildId,receipt.eventRef,receipt.sourceDigest,actor]);
       claimed=this.store.claimDelivery(key,text);if(!claimed)return {state:this.store.deliveryState(key)==='sent'?'already_sent':'unknown'};
-      const message=await user.send({content:text,allowedMentions:{parse:[]}});check(message?.id,'NOTIFICATION_SEND_UNCONFIRMED');this.store.delivered(key,message.id);return {state:'sent'};
+      signal?.throwIfAborted();const message=await wait(user.send({content:text,allowedMentions:{parse:[]}}));check(message?.id,'NOTIFICATION_SEND_UNCONFIRMED');this.store.delivered(key,message.id);return {state:'sent'};
     }catch{if(claimed){this.onError('LUMA_IMPORT_NOTIFICATION_UNKNOWN');return {state:'unknown'};}return {state:'blocked'};}
   }
   async deliver(task){

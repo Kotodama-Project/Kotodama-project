@@ -22,6 +22,14 @@
 
 ローカルASR構成では `voice status` に「ローカル聞き役」または現在のLive会話数を表示します。`LOCAL_ASR_FAILED`、`LOCAL_ASR_BUSY`、`VOICE_UTTERANCE_LIMIT` が続く場合は、新しいLive会話を増やさず、ASR endpointのhealth、処理時間、queueを確認します。ASR失敗時にクラウド文字起こしへ自動で切り替えません。
 
+`LOCAL_ASR_TIMEOUT` は接続開始から応答本文までの期限超過です。ASR adapter は実際に未完了の通信を最大2件に制限し、取消に応じない通信も終了するまで枠を保持します。`LOCAL_ASR_BUSY` が続く場合は endpoint と残った通信を調べます。
+
+ローカル制御とLuma取込は最大8件、remote Task ownerは最大8件を受け付けます。制御本文は200KB、取込本文は2.2MB、ownerの要求・応答は各4MBまでです。制御本文の待機は10秒、取込とownerの応答待機は15秒が上限です。`CONTROL_BUSY` / `BRIDGE_BUSY` / `OWNER_BUSY` は混雑による拒否で、受付数を無制限に増やしません。Lumaの書込みは一つのlaneで処理し、通知待ちは別に最大4件まで保持します。CSVは読取り中に10,000行の上限を検査します。
+
+`OWNER_RESULT_UNCERTAIN` / `BRIDGE_IMPORT_UNCERTAIN` は、送信済みの処理が完了したか確認できない状態です。同じ書込みを自動で再送せず、既存Task ownerと出典のrevisionを読戻して判断します。`OWNER_WRITE_PENDING` は同じ未完了要求の重複送信を防ぐ拒否です。停止時の `BRIDGE_DRAIN_UNCERTAIN` / `OWNER_DRAIN_UNCERTAIN` / `NOTIFICATION_DRAIN_UNCERTAIN` は、15秒で実処理の終了を確認できなかったことを示します。この場合はプロセス、SQLiteとhost lockを保持し、workerには停止を要求します。新しいHTTP受付は停止済みなので、残った通信を確認・終了させ、同じプロセスに再度Ctrl+CまたはSIGTERMを送って停止を再試行します。lockを削除して別writerを同時起動しません。
+
+DB索引の初回更新では現在のSourceとTaskを一度読み、元の本文・版・監査履歴を保持します。更新前にインストール先のbackupを用意し、一つのwriterで停止・更新・起動します。旧版に戻して更新した場合は、再更新時に索引を再構築します。通知の `quietHours.timeZone` には有効なIANA名を指定でき、既定は `Asia/Tokyo` です。日次利用上限の区切りは従来どおりUTCです。
+
 一度返答した後に音声の会話が続かないときの調査用に、データ領域の `kotodama.sqlite` の `events` 表へ、会話の本文・音声・Discord の ID を含まない記録を残します。
 
 - `voice.local_turn`：ローカルASRの一区切りごとに、呼びかけを検出したか、Live 会話の ID（`liveSession`）、その区切りを会話の続きとして扱ったか（`conversationActive`）、文字数。

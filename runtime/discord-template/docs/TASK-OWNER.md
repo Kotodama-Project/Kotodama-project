@@ -15,3 +15,7 @@ sourceはprovider/guild/channel/source ID、actor、readers、revision、本文�
 成果ファイルはworker hostが所有します。remote構成では、そのhostの認可済みartifact readerを接続する必要があり、別ホストのファイルパスをローカルの実ファイルとして扱いません。
 
 Taskは `intentIds` と全構成操作の `requiredActions` を保持します。複合依頼の代表actionだけで認可せず、実行前・実行中に全操作を現行grantへ照合してください。直接コマンドの操作・title・受入条件もSource fingerprintに束縛し、同じ配送IDの別payloadは拒否します。
+
+remote接続は同時8件、要求・応答それぞれ4,000,000 bytes、要求開始から応答本文の読取完了まで15秒に制限します。満杯では送信前に `OWNER_BUSY`、大きすぎる要求は `OWNER_REQUEST_LIMIT`、応答は `OWNER_RESPONSE_LIMIT` で拒否します。読取の期限超過は `OWNER_TIMEOUT` です。
+
+送信済みの書込が期限超過・停止・通信切断で中断された場合や、成功結果を検証できない場合は `OWNER_RESULT_UNCERTAIN` です。接続先での取消や未実行を証明するものではなく、自動再送・local ownerへのfallbackはしません。同じTask ID・source revisionと接続先の永続状態で結果を確認します。取消に応じない要求は実際に完了するまで枠を保持し、その間の同一書込payloadを `OWNER_WRITE_PENDING` で拒否します。停止は新規要求を拒否し、取消と最大15秒のdrainを行います。`OWNER_DRAIN_UNCERTAIN` の場合は既存のTask ownerとデータ領域の所有を保持し、未確定の処理を照合してください。

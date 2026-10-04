@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import {mkdtemp,rm,writeFile,readFile,mkdir,link,symlink,lstat} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import http from 'node:http';
 import {fileURLToPath} from 'node:url';
 import {exampleConfig} from '../src/config.mjs';
-import {atomicJson,inside} from '../src/common.mjs';
+import {atomicJson,inside,Refused} from '../src/common.mjs';
 import {startRuntime,controlCommand} from '../src/runtime.mjs';
 import {CliAnalyzer} from '../src/llm.mjs';
 import {CliWorker} from '../src/worker.mjs';
@@ -48,6 +49,47 @@ test('runtime never reclaims a stale PID recorded by another runtime domain',asy
 test('runtime never reclaims a host lock whose PID is still alive',async t=>{
   const {config,file,cleanup}=await configFixture(t);t.after(cleanup);const live=new Store(config.dataDir);live.claimHost('other-live-owner',process.pid,'2000-01-01T00:00:00.000Z','fixture-runtime');live.close();
   await assert.rejects(startRuntime(file,{offline:true,runtimeDomain:'fixture-runtime',log:()=>{}}),{code:'RUNTIME_ALREADY_OWNED'});const checkStore=new Store(config.dataDir);try{assert.equal(checkStore.lock().owner,'other-live-owner');}finally{checkStore.close();}
+});
+
+test('control admits eight commands, rejects excess, and keeps status responsive',async t=>{
+  const {config,file,cleanup}=await configFixture(t),runtime=await startRuntime(file,{offline:true,log:()=>{}});let release;
+  const gate=new Promise(resolve=>{release=resolve;});let calls=0;
+  t.after(async()=>{release();await runtime.close();await cleanup();});
+  runtime.owner.tasks=async()=>{calls++;await gate;return [];};
+  const metadata=JSON.parse(await readFile(path.join(config.dataDir,'runtime.json'),'utf8')),token=await readFile(path.join(config.dataDir,'control.secret'),'utf8');
+  const send=()=>fetch(`http://127.0.0.1:${metadata.port}/v1/command`,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({action:'tasks',actor})});
+  const active=Array.from({length:8},send);
+  for(let tries=0;calls<8&&tries<200;tries++)await new Promise(resolve=>setTimeout(resolve,5));assert.equal(calls,8);
+  const busy=await send();assert.equal(busy.status,503);assert.equal((await busy.json()).error,'CONTROL_BUSY');assert.equal(calls,8);
+  assert.equal((await controlCommand(config,{action:'status'})).discord,'offline_fixture');release();
+  for(const response of await Promise.all(active)){assert.equal(response.status,200);assert.deepEqual((await response.json()).result,[]);}
+});
+
+test('control rejects declared oversize before buffering and drains incomplete uploads on shutdown',async t=>{
+  const {config,file,cleanup}=await configFixture(t),runtime=await startRuntime(file,{offline:true,log:()=>{}});
+  t.after(async()=>{await runtime.close();await cleanup();});
+  const metadata=JSON.parse(await readFile(path.join(config.dataDir,'runtime.json'),'utf8')),token=await readFile(path.join(config.dataDir,'control.secret'),'utf8');
+  const headers={authorization:'Bearer '+token,'content-type':'application/json'};
+  const refused=await new Promise((resolve,reject)=>{
+    const req=http.request({hostname:'127.0.0.1',port:metadata.port,path:'/v1/command',method:'POST',headers:{...headers,'content-length':200001}},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});req.on('error',reject);req.flushHeaders();
+  });assert.equal(refused,413);
+  const slow=http.request({hostname:'127.0.0.1',port:metadata.port,path:'/v1/command',method:'POST',headers});slow.on('error',()=>{});slow.on('response',res=>res.resume());slow.write('{"action":');
+  await new Promise(resolve=>setTimeout(resolve,20));
+  const closing=runtime.close();assert.equal(runtime.close(),closing);await closing;slow.destroy();
+  const reopened=new Store(config.dataDir);try{assert.equal(reopened.lock(),undefined);assert.equal(reopened.tasks(actor).length,0);}finally{reopened.close();}
+});
+
+test('uncertain owner drain retains SQLite ownership and a later close retries safely',async t=>{
+  const {config,file,cleanup}=await configFixture(t);process.env.KOTODAMA_RUNTIME_DRAIN_TEST='fixture';
+  config.owner={kind:'remote',url:'http://127.0.0.1:1',tokenEnv:'KOTODAMA_RUNTIME_DRAIN_TEST'};await atomicJson(file,config);
+  const runtime=await startRuntime(file,{offline:true,log:()=>{}});let calls=0;
+  const controller=new AbortController();runtime.pipeline.active.set('shutdown-fixture',{controller});
+  const pipelineClose=runtime.pipeline.close.bind(runtime.pipeline);runtime.pipeline.close=async()=>{assert.equal(controller.signal.aborted,true,'workers stop before later drains');runtime.pipeline.active.delete('shutdown-fixture');await pipelineClose();};
+  const originalClose=runtime.owner.close.bind(runtime.owner);
+  runtime.owner.close=async()=>{if(++calls===1)throw new Refused('OWNER_DRAIN_UNCERTAIN');await originalClose();};
+  t.after(async()=>{await runtime.close();delete process.env.KOTODAMA_RUNTIME_DRAIN_TEST;await cleanup();});
+  await assert.rejects(runtime.close(),{code:'OWNER_DRAIN_UNCERTAIN'});assert.equal(runtime.store.lock().pid,process.pid);assert.equal(runtime.store.db.prepare('SELECT count(*) AS n FROM sources').get().n,0);
+  await runtime.close();assert.equal(calls,2);const reopened=new Store(config.dataDir);try{assert.equal(reopened.lock(),undefined);}finally{reopened.close();}
 });
 test('runtime replaces an existing linked control token without writing through it',async t=>{
   const {config,file,root,cleanup}=await configFixture(t);await mkdir(config.dataDir,{recursive:true});

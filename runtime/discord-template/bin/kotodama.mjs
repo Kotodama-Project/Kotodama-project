@@ -6,6 +6,7 @@ import {exampleConfig,loadConfig} from '../src/config.mjs';
 import {check,atomicJson,errorCode,redact,uid,digest} from '../src/common.mjs';
 import {Store} from '../src/store.mjs';
 import {startRuntime,controlCommand} from '../src/runtime.mjs';
+import {registerShutdownSignals} from '../src/shutdown.mjs';
 import {DiscordAdapter} from '../src/discord.mjs';
 import {exportDocument,readExport} from '../src/documents.mjs';
 import {parseLumaCsv,lumaSource,parseIcs} from '../src/integrations.mjs';
@@ -30,7 +31,7 @@ try{
   if(command==='doctor'){
     const result=await diagnose(config);output(options.json?result:formatDoctor(result));
   }else if(command==='start'){
-    const runtime=await startRuntime(filename,{offline:options.offline,debug:debugRequested({verbose:options.verbose})});const stop=()=>runtime.close().then(()=>process.exit(0)).catch(()=>process.exit(1));process.once('SIGINT',stop);process.once('SIGTERM',stop);
+    const runtime=await startRuntime(filename,{offline:options.offline,debug:debugRequested({verbose:options.verbose})});registerShutdownSignals(runtime);
   }else if(['status','shutdown','tasks','result','stop','resume','voice','request'].includes(command)){
     if(command!=='status')check(options.actor&&config.discord.operators.includes(options.actor),'OPERATOR_REQUIRED');
     output(await controlCommand(config,{action:command,actor:options.actor,taskId:options.task,mode:options.mode,operation:options.action,text:options.text,requestId:uid('cli')}));

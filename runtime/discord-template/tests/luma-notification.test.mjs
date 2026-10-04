@@ -10,7 +10,7 @@ import {DiscordAdapter} from '../src/discord.mjs';
 import {startBridge} from '../src/bridge.mjs';
 import {parseLumaCsv,lumaSource} from '../src/integrations.mjs';
 
-async function fixture(t,{onImported}={}){
+async function fixture(t,{onImported,limits}={}){
   const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-luma-notify-')),store=new Store(root),config=exampleConfig(),actor=config.discord.operators[0],other='100000000000000009';
   config.discord.operators.push(other);config.bridge={enabled:true,host:'127.0.0.1',port:0,actorId:actor,tokenEnv:'KOTODAMA_TEST_NOTIFICATION_TOKEN'};config.integrations.luma={eventRef:'event-fixture',eventUrl:'https://example.invalid/event'};process.env.KOTODAMA_TEST_NOTIFICATION_TOKEN='synthetic-notification-bridge-only';
   const state={member:true,canRead:true,failSend:false,sends:[],errors:[],flags:[],workers:0,afterAccess:null};
@@ -23,12 +23,12 @@ async function fixture(t,{onImported}={}){
   const canRead=adapter.canRead.bind(adapter);adapter.canRead=async(...args)=>{const allowed=await canRead(...args),after=state.afterAccess;state.afterAccess=null;after?.();return allowed;};
   const stoppedKey=store.ingest({provider:'discord',guildId:guild.id,channelId:channel.id,sourceId:'stopped-work',actorId:actor,readers:[actor],revision:1,final:true,text:'合成の停止済み依頼'}).key;
   const task=store.createTask(store.source(stoppedKey,actor),{title:'停止済み',request:'合成',action:'research'});store.cancel(task.id,actor);
-  const server=await startBridge({config,store,pipeline:{ingest:(source,flags)=>{state.flags.push(flags);return pipeline.ingest(source,flags);}},readConfig:async()=>config,onImported:onImported??(receipt=>adapter.notifyLumaImport(receipt,{readConfig:async()=>config}))});
+  const server=await startBridge({config,store,limits,pipeline:{ingest:(source,flags)=>{state.flags.push(flags);return pipeline.ingest(source,flags);}},readConfig:async()=>config,onImported:onImported??((receipt,{signal})=>adapter.notifyLumaImport(receipt,{readConfig:async()=>config,signal}))});
   t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await pipeline.close();await adapter.client.destroy();store.close();delete process.env.KOTODAMA_TEST_NOTIFICATION_TOKEN;assert(path.basename(root).startsWith('ktdm-luma-notify-'));await rm(root,{recursive:true,force:true});});
   const body={eventRef:'event-fixture',csv:'Name,Email,Ticket ID,Approval Status\nSample,sample@example.invalid,t1,approved\nSample,sample@example.invalid,t2,private_status\n',revision:1};
   const send=async(payload=body)=>{const response=await fetch('http://127.0.0.1:'+server.address().port+'/v1/luma/import',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+process.env.KOTODAMA_TEST_NOTIFICATION_TOKEN},body:JSON.stringify(payload)});return {status:response.status,body:await response.json()};};
   const source=()=>store.sources(actor).find(item=>item.provider==='luma');
-  return {root,store,config,actor,other,state,pipeline,adapter,task,body,send,source};
+  return {root,store,config,actor,other,state,pipeline,adapter,server,task,body,send,source};
 }
 
 test('new import and duplicate produce one owner DM with verified aggregates while voice and work remain stopped',async t=>{
@@ -68,4 +68,28 @@ for(const reason of ['operator','actor','member','channel_acl','source_acl','wit
 
 test('notification callback failure cannot rewrite import success or expose its private error',async t=>{
   const f=await fixture(t,{onImported:async()=>{throw new Error('synthetic private contact sample@example.invalid');}});const result=await f.send();assert.equal(result.status,200);assert.equal(result.body.state,'analyzed');assert.deepEqual(result.body.notification,{state:'unknown'});assert(f.source());assert(!JSON.stringify(result.body).includes('sample@example.invalid'));
+});
+
+test('a timed-out attempted Luma DM remains unknown and cannot record a late send',async t=>{
+  const f=await fixture(t,{limits:{notificationTimeoutMs:40,drainTimeoutMs:30}});let finish,sends=0,recorded=0;
+  const pending=new Promise(resolve=>finish=resolve),delivered=f.store.delivered.bind(f.store);f.store.delivered=(...args)=>{recorded++;return delivered(...args);};
+  f.adapter.client.users.fetch=async()=>({id:f.actor,send:()=>{sends++;return pending;}});
+  const first=await f.send();assert.equal(first.status,200);assert.equal(first.body.notification.state,'unknown');assert.equal(sends,1);assert.equal(recorded,0);
+  const second=await f.send();assert.equal(second.body.notification.state,'unknown');assert.equal(sends,1);
+  await assert.rejects(f.server.drain(),{code:'BRIDGE_DRAIN_UNCERTAIN'});finish({id:'100000000000000077'});await f.server.drain();assert.equal(recorded,0);assert.equal(f.store.db.prepare('SELECT state FROM deliveries').get().state,'unknown');
+});
+
+test('a cancelled pre-send lookup cannot resume notification after bridge shutdown',async t=>{
+  const f=await fixture(t,{limits:{notificationTimeoutMs:40,drainTimeoutMs:30}});let finish,sends=0;
+  const pending=new Promise(resolve=>finish=resolve);f.adapter.client.users.fetch=()=>pending;
+  const result=await f.send();assert.equal(result.body.notification.state,'unknown');await assert.rejects(f.server.drain(),{code:'BRIDGE_DRAIN_UNCERTAIN'});
+  finish({id:f.actor,send:async()=>{sends++;return {id:'100000000000000077'};}});await f.server.drain();assert.equal(sends,0);assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM deliveries').get().n,0);
+});
+
+test('notification admission retains lanes for raw SDK calls that ignore cancellation',async t=>{
+  const f=await fixture(t,{limits:{maxNotifications:2,notificationTimeoutMs:20,drainTimeoutMs:30}});let finish,lookups=0,sends=0;
+  const pending=new Promise(resolve=>finish=resolve);f.adapter.client.users.fetch=()=>{lookups++;return pending;};
+  const results=[];for(let revision=1;revision<=4;revision++)results.push(await f.send({...f.body,revision,csv:f.body.csv.replace('t1',`t${revision+10}`)}));
+  assert(results.every(result=>result.status===200));assert.deepEqual(results.map(result=>result.body.notification.state),['unknown','unknown','unavailable','unavailable']);assert.equal(lookups,2);assert.equal(f.state.flags.length,4);
+  await assert.rejects(f.server.drain(),{code:'BRIDGE_DRAIN_UNCERTAIN'});finish({id:f.actor,send:async()=>{sends++;return {id:'100000000000000077'};}});await f.server.drain();assert.equal(sends,0);
 });

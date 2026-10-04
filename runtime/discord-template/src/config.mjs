@@ -3,6 +3,7 @@ import {z} from 'zod';
 import {readJson, check, inside} from './common.mjs';
 import {immutableImage} from './verification.mjs';
 import {DEFAULT_ANALYSIS_LIMITS} from './analysis-admission.mjs';
+import {isTimeZone} from './time-zone.mjs';
 
 const id = z.string().regex(/^\d{5,24}$/);
 const envName=z.string().regex(/^[A-Z_][A-Z0-9_]*$/);
@@ -28,7 +29,7 @@ export const Config = z.object({
     operators:z.array(id).min(1), agentChannelIds:z.array(id).default([]), consentingUsers:z.array(id).default([]),unattributedUsers:z.array(id).default([]),botTokenEnv:z.string().regex(/^[A-Z_][A-Z0-9_]*$/).default('DISCORD_BOT_TOKEN')}).strict(),
   voice,
   archive:z.object({enabled:z.boolean(),archiveRoot:z.string(),journalPath:z.string(),retentionPolicyRef:z.string(),sourceRef:z.string(),actorId:id,readers:z.array(id).min(1),ffmpeg:z.string().default('ffmpeg'),whisperEndpoint:z.string().url(),batchMs:z.number().int().min(20).max(250).default(250),rotationMs:z.number().int().min(1000).max(60000).default(55000),maxPendingSessions:z.number().int().min(1).max(128).default(16),maxJournalPcmBytes:z.number().int().min(1000000).max(1073741824).default(536870912),maxPcmBytes:z.number().int().min(1000000).max(134217728).default(134217728),vocabulary:z.array(z.string().max(100)).max(100).default([])}).strict().optional(),
-  notifications:z.object({quietHours:z.object({enabled:z.boolean().default(false),startHour:z.number().int().min(0).max(23).default(22),endHour:z.number().int().min(0).max(23).default(9),timeZone:z.literal('Asia/Tokyo').default('Asia/Tokyo')}).prefault({})}).prefault({}),
+  notifications:z.object({quietHours:z.object({enabled:z.boolean().default(false),startHour:z.number().int().min(0).max(23).default(22),endHour:z.number().int().min(0).max(23).default(9),timeZone:z.string().min(1).max(100).refine(isTimeZone,{message:'TIME_ZONE_INVALID'}).default('Asia/Tokyo')}).strict().prefault({})}).strict().prefault({}),
   analyzer:analyzerConfig.prefault({kind:'codex_cli',executable:'codex',args:[],model:'gpt-5.6-luna',timeoutSeconds:120}),
   worker:command.extend({workspace:z.string(),actions:z.array(z.enum(['research','summarize','write_file','develop'])).default(['research','summarize']),
     verification:z.object({kind:z.literal('docker'),image:z.string().regex(immutableImage),executable:z.string().min(1).default('docker'),memoryMb:z.number().int().min(128).max(8192).default(512),cpus:z.number().min(0.1).max(8).default(1),pidsLimit:z.number().int().min(16).max(512).default(64)}).strict().optional(),
