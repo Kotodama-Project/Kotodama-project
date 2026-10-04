@@ -7,7 +7,7 @@
 | Workflow（表示名） | ファイル | 起動 | 目安の所要 | 必須 | 内容 |
 |---|---|---|---|---|---|
 | Repository validation（job: **Trusted repository validation**） | `.github/workflows/repository-validation.yml` | PR、main への push | 約 10 分 | **必須** | tracked credential hygiene、README の one-command smoke、runtime candidate validator、actionlint、hash-locked pip install、immutable workflow reference check、`python -m unittest discover -s tests`（docs lint を含む）、`git diff --check` と clean tree |
-| Discord runtime candidate（job: test (ubuntu-latest)・(windows-latest)、呼出し時は discord / test …） | `.github/workflows/discord-runtime.yml` | 必須チェックから `workflow_call`、PR、main への push | 2〜3 分 | **必須**（PR で直接走る `test (ubuntu-latest)`・`test (windows-latest)` が必須チェック。`Trusted repository validation` も成功を要求） | `runtime/discord-template` の `pnpm test` と `pnpm check`。Linux は固定 digest の Docker image で検証隔離の実 probe を行う |
+| Repository validation（job: **test (ubuntu-latest)**・**test (windows-latest)**） | `.github/workflows/repository-validation.yml` | PR、main への push | 2〜3 分 | **必須**（`Trusted repository validation` も成功を要求） | `runtime/discord-template` の `pnpm test` と `pnpm check`。Linux は固定 digest の Docker image で検証隔離の実 probe を行う |
 | Task swarm validation（job: swarm / validate (ubuntu-latest)・(windows-latest)） | `.github/workflows/task-swarm.yml` | 必須チェックから `workflow_call`、手動 | 2〜5 分 | **必須**（`Trusted repository validation` が成功を要求） | `requirements-task-swarm-ci.txt` の hash 付き install、`pytest -k task_swarm`、offline demo（モデル呼出しなし） |
 | Cloudflare candidate validation | `.github/workflows/cloudflare-candidate-validation.yml` | PR、main への push | 1〜2 分 | 任意 | Cloudflare edge / 公式 Cloudflare OS 候補の content-free validator |
 | Cloudflare edge preview candidate | `.github/workflows/cloudflare-edge-preview.yml` | 手動（workflow_dispatch） | 未実行 | 任意 | environment `cloudflare-preview`（required reviewers、self review 禁止）での preview upload 候補。必要な secret が揃っておらず、これまで一度も実行されていません |
@@ -15,7 +15,7 @@
 | Release candidate（job: Build, attest, and draft the release） | `.github/workflows/release.yml` | `v*` tag の push | 数分 | 任意 | smoke report と source archive を作り、provenance attestation を付けて draft の prerelease を作る。公開は人が行う |
 | CodeQL（default setup） | GitHub 側の設定 | PR、main、週次 | 1〜2 分 | 任意 | actions / javascript-typescript / python / csharp |
 
-必須チェックは `Trusted repository validation`、`test (ubuntu-latest)`、`test (windows-latest)`、`Dependency review` の 4 件で、`strict: true`（PR branch が main に追いついていること）です。`Trusted repository validation` は Discord と Task swarm の matrix を呼び出し、どちらかが failure / skipped / cancelled / 未実行なら成功しません。`gh api repos/Kotodama-Project/Kotodama-project/branches/main/protection` で読み戻せます。
+必須チェックは `Trusted repository validation`、`test (ubuntu-latest)`、`test (windows-latest)`、`Dependency review` の 4 件で、`strict: true`（PR branch が main に追いついていること）です。`Trusted repository validation` は同じ workflow の Discord matrix と呼び出した Task swarm matrix に依存し、どちらかが failure / skipped / cancelled / 未実行なら成功しません。Discord は各 OS で 1 回だけ実行します（従来の直接起動と reusable 呼出しによる 4 jobs から 2 jobs へ削減）。必須チェック名と検証内容は維持します。`gh api repos/Kotodama-Project/Kotodama-project/branches/main/protection` で読み戻せます。
 
 ## Release の SBOM と provenance を確認する
 
