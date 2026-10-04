@@ -51,7 +51,9 @@ class OpenMausIntegrationTest(unittest.TestCase):
         self.assertEqual("FAIL", result["status"])
         self.assertIn(code, {item["code"] for item in result["findings"]})
         self.assertTrue(all(value is False for value in result["claims"].values()))
+        self.assertEqual("design_contract_only", result["scope"])
         self.assertEqual("NO_GO_UNPUBLISHED", result["public_beta"])
+        self.assertNotIn("synthetic-withheld", json.dumps(result))
         return result
 
     def cli(self, format: str = "json") -> subprocess.CompletedProcess:
@@ -103,7 +105,15 @@ class OpenMausIntegrationTest(unittest.TestCase):
         view_schema["required"].remove(key)
         self.flush()
         self.assertEqual("PASS", module.validate(self.root)["status"])
-        self.assertEqual(0, self.cli().returncode)
+        positive = self.cli()
+        self.assertEqual(0, positive.returncode, positive.stderr)
+        self.assertEqual("", positive.stderr)
+        ready = json.loads(positive.stdout)
+        self.assertEqual("PASS", ready["status"])
+        self.assertEqual([], ready["findings"])
+        self.assertEqual("design_contract_only", ready["scope"])
+        self.assertEqual("NO_GO_UNPUBLISHED", ready["public_beta"])
+        self.assertTrue(all(value is False for value in ready["claims"].values()))
         for label, value in (("false", False), ("zero", 0), ("one", 1), ("null", None),
                              ("string", "synthetic-withheld-value"), ("array", []), ("object", {}),
                              ("missing", None)):
@@ -117,16 +127,19 @@ class OpenMausIntegrationTest(unittest.TestCase):
                 self.assertTrue({"execution_settled", "verification_pending"} <= set(self.config["work_contract"]["result_states"]))
                 self.flush()
                 self.refused("execution-verification-collapse")
-                process = self.cli()
-                self.assertEqual(1, process.returncode, process.stderr)
-                self.assertEqual("", process.stderr)
-                result = json.loads(process.stdout)
-                self.assertEqual("FAIL", result["status"])
-                self.assertEqual([{"code": "execution-verification-collapse", "message": "execution-verification-collapse"}], result["findings"])
-                self.assertEqual("design_contract_only", result["scope"])
-                self.assertEqual("NO_GO_UNPUBLISHED", result["public_beta"])
-                self.assertTrue(all(value is False for value in result["claims"].values()))
-                self.assertNotIn("synthetic-withheld", process.stdout)
+        self.config = copy.deepcopy(original)
+        self.config["common_agent_view"][key] = False
+        self.flush()
+        process = self.cli()
+        self.assertEqual(1, process.returncode, process.stderr)
+        self.assertEqual("", process.stderr)
+        result = json.loads(process.stdout)
+        self.assertEqual("FAIL", result["status"])
+        self.assertEqual([{"code": "execution-verification-collapse", "message": "execution-verification-collapse"}], result["findings"])
+        self.assertEqual("design_contract_only", result["scope"])
+        self.assertEqual("NO_GO_UNPUBLISHED", result["public_beta"])
+        self.assertTrue(all(value is False for value in result["claims"].values()))
+        self.assertNotIn("synthetic-withheld", process.stdout)
 
     def test_upstream_mcp_capabilities_do_not_overlap_gaps(self) -> None:
         original = copy.deepcopy(self.config)

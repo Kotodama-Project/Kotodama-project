@@ -62,6 +62,9 @@ class CloudflareOSIntegrationTests(unittest.TestCase):
         self.assertEqual("FAIL", report["status"])
         self.assertIn({"code": code}, report["findings"])
         self.assertTrue(all(value is False for value in report["claims"].values()))
+        self.assertEqual("design_contract_only", report["scope"])
+        self.assertEqual("NO_GO_UNPUBLISHED", report["public_beta"])
+        self.assertNotIn("synthetic-withheld", json.dumps(report))
 
     def test_candidate_design_passes(self):
         report = module.validate(self.root)
@@ -105,6 +108,7 @@ class CloudflareOSIntegrationTests(unittest.TestCase):
         service_schema["required"].remove("enabled")
         self.flush()
         self.assertEqual("PASS", module.validate(self.root)["status"])
+        self._assert_cli_report()
         cases = [(0, "true", True), (-1, "last-service", True)]
         cases += [(0, label, value) for label, value in (("zero", 0), ("null", None),
                    ("string", "synthetic-withheld-value"), ("array", []), ("object", {}), ("missing", None))]
@@ -119,17 +123,10 @@ class CloudflareOSIntegrationTests(unittest.TestCase):
                 self.assertTrue(all(value is False for value in self.config["claims"].values()))
                 self.flush()
                 self.refused("SERVICE_ENABLED")
-                result = subprocess.run([sys.executable, str(ROOT / "tools/validate_cloudflare_os_integration.py"),
-                                         "--root", str(self.root)], text=True, capture_output=True, timeout=10)
-                self.assertEqual(1, result.returncode, result.stderr)
-                self.assertEqual("", result.stderr)
-                report = json.loads(result.stdout)
-                self.assertEqual("FAIL", report["status"])
-                self.assertEqual([{"code": "SERVICE_ENABLED"}], report["findings"])
-                self.assertEqual("design_contract_only", report["scope"])
-                self.assertEqual("NO_GO_UNPUBLISHED", report["public_beta"])
-                self.assertTrue(all(value is False for value in report["claims"].values()))
-                self.assertNotIn("synthetic-withheld", result.stdout)
+        self.config = copy.deepcopy(original)
+        self.config["cloudflare_services"][-1]["enabled"] = True
+        self.flush()
+        self._assert_cli_report("SERVICE_ENABLED")
 
     def test_runtime_claims_are_not_accepted_or_echoed(self):
         self.config["claims"]["all_agents_integrated"] = True
@@ -141,6 +138,7 @@ class CloudflareOSIntegrationTests(unittest.TestCase):
         self.schema["properties"]["claims"] = {}
         self.flush()
         self.assertEqual("PASS", module.validate(self.root)["status"])
+        self._assert_cli_report()
         cases = [(key, True) for key in original["claims"]]
         cases += [("human_go", value) for value in (0, 1, None, "synthetic-withheld-value", [], {})]
         for key, value in cases:
@@ -149,7 +147,11 @@ class CloudflareOSIntegrationTests(unittest.TestCase):
                 self.config["claims"][key] = value
                 self.assertTrue(Draft202012Validator(self.schema).is_valid(self.config))
                 self.flush()
-                self._assert_owned_claim_cli_refusal()
+                self.refused("AUTHORITY_CLAIM")
+        self.config = copy.deepcopy(original)
+        self.config["claims"]["human_go"] = True
+        self.flush()
+        self._assert_cli_report("AUTHORITY_CLAIM")
 
     def test_owned_claim_vocabulary_survives_a_relaxed_candidate_schema(self):
         original = copy.deepcopy(self.config)
@@ -167,17 +169,20 @@ class CloudflareOSIntegrationTests(unittest.TestCase):
                     self.config["claims"] = claims
                 self.assertTrue(Draft202012Validator(self.schema).is_valid(self.config))
                 self.flush()
-                self._assert_owned_claim_cli_refusal()
+                self.refused("AUTHORITY_CLAIM")
+        self.config = copy.deepcopy(original)
+        self.config["claims"] = unknown
+        self.flush()
+        self._assert_cli_report("AUTHORITY_CLAIM")
 
-    def _assert_owned_claim_cli_refusal(self):
-        self.refused("AUTHORITY_CLAIM")
+    def _assert_cli_report(self, code=None):
         result = subprocess.run([sys.executable, str(ROOT / "tools/validate_cloudflare_os_integration.py"),
                                  "--root", str(self.root)], text=True, capture_output=True, timeout=10)
-        self.assertEqual(1, result.returncode, result.stderr)
+        self.assertEqual(1 if code else 0, result.returncode, result.stderr)
         self.assertEqual("", result.stderr)
         report = json.loads(result.stdout)
-        self.assertEqual("FAIL", report["status"])
-        self.assertEqual([{"code": "AUTHORITY_CLAIM"}], report["findings"])
+        self.assertEqual("FAIL" if code else "PASS", report["status"])
+        self.assertEqual([{"code": code}] if code else [], report["findings"])
         self.assertEqual("design_contract_only", report["scope"])
         self.assertEqual("NO_GO_UNPUBLISHED", report["public_beta"])
         self.assertTrue(all(value is False for value in report["claims"].values()))
