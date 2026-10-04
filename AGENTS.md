@@ -44,6 +44,7 @@ and public access have different owners; do not create another status ledger her
   verified and adopted.
 - Keep private absolute paths, host identifiers, credentials, conversations,
   audio, and deployment details out of public files and PRs.
+- For information sharing, follow [the access policy](docs/INFORMATION-ACCESS.md).
 - Run checks appropriate to the changed surface and the contribution policy.
   Report what was actually tested; local tests do not prove live operation.
 - End with the changed files, verification result, remaining boundary, and next
