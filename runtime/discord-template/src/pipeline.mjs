@@ -10,9 +10,13 @@ export class Pipeline {
   context(source,principal){
     const config=this.config.analyzer,maxSources=config.maxContextSources??12;let remaining=config.maxContextChars??24000;
     const result=[],time=s=>Date.parse(s.metadata?.createdAt??'')||0;
-    const room=this.store.sources(principal).filter(s=>s.guildId===source.guildId&&s.channelId===source.channelId&&s.key!==source.key);
-    const archived=new Set(room.filter(s=>s.metadata?.kind==='archived_voice').map(s=>s.metadata.sessionId));
-    const candidates=room.filter(s=>{const refs=s.metadata?.archiveSessionRefs;return !refs?.length||!refs.every(id=>archived.has(id));}).sort((a,b)=>time(a)-time(b)||a.revision-b.revision||a.key.localeCompare(b.key)).slice(-maxSources).reverse();
+    let candidates;
+    if(typeof this.store.contextSources==='function')candidates=this.store.contextSources(principal,{guildId:source.guildId,channelId:source.channelId,excludeKey:source.key??null,limit:maxSources});
+    else {
+      const room=this.store.sources(principal).filter(s=>s.guildId===source.guildId&&s.channelId===source.channelId&&s.key!==source.key);
+      const archived=new Set(room.filter(s=>s.metadata?.kind==='archived_voice').map(s=>s.metadata.sessionId));
+      candidates=room.filter(s=>{const refs=s.metadata?.archiveSessionRefs;return !refs?.length||!refs.every(id=>archived.has(id));}).sort((a,b)=>time(a)-time(b)||a.revision-b.revision||a.key.localeCompare(b.key)).slice(-maxSources).reverse();
+    }
     for(const s of candidates){if(remaining<=0)break;const text=s.text.slice(0,Math.min(12000,remaining));remaining-=text.length;result.unshift({key:s.key,revision:s.revision,text,actorId:s.actorId});}return result;
   }
   async ingest(source,{execute=false,reply=false,analyze=true}={}){
@@ -40,7 +44,9 @@ export class Pipeline {
   async #analyze(source,principal,{execute,reply},analysisKey){
     const controller=this.analysisControllers.get(analysisKey);check(!controller.signal.aborted&&!this.closing,'CANCELLED');
     const latest=this.store.source(source.key,principal);check(latest.revision===source.revision,'SOURCE_CHANGED');await this.authorizeAnalysis(latest,principal);
-    const analyzerConfig=this.config.analyzer;let taskChars=analyzerConfig.maxTaskContextChars??12000;const tasksContext=[];for(const task of (await this.owner.tasks(principal)).filter(t=>t.room===`${source.provider}:${source.guildId}:${source.channelId}`).slice(0,analyzerConfig.maxTaskContextItems??5)){if(taskChars<=0)break;const request=task.request.slice(0,taskChars);taskChars-=request.length;tasksContext.push({...task,request});}
+    const analyzerConfig=this.config.analyzer,taskRoom=`${source.provider}:${source.guildId}:${source.channelId}`,taskLimit=analyzerConfig.maxTaskContextItems??5;
+    const recentTasks=typeof this.owner.recentTasks==='function'?await this.owner.recentTasks(principal,{room:taskRoom,limit:taskLimit}):(await this.owner.tasks(principal)).filter(t=>t.room===taskRoom).slice(0,taskLimit);
+    let taskChars=analyzerConfig.maxTaskContextChars??12000;const tasksContext=[];for(const task of recentTasks){if(taskChars<=0)break;const request=task.request.slice(0,taskChars);taskChars-=request.length;tasksContext.push({...task,request});}
     const context=this.context(source,principal);const bindings=[source,...context].map(s=>({key:s.key,revision:s.revision}));this.analysisBindings.set(analysisKey,bindings);
     const checkInputs=()=>{check(!controller.signal.aborted&&!this.closing,'CANCELLED');for(const b of bindings){const s=this.store.source(b.key,principal);check(s.revision===b.revision,'CONTEXT_CHANGED');}};
     for(const b of bindings)await this.authorizeAnalysis(this.store.source(b.key,principal),principal);
@@ -79,11 +85,14 @@ export class Pipeline {
   enqueue(id,actor,revision){const key=id+':'+revision;if(this.queued.has(key))return;this.queued.add(key);this.tail=this.tail.then(()=>this.#execute(id,actor,revision)).catch(e=>this.onError(errorCode(e))).finally(()=>this.queued.delete(key));}
   async #execute(id,actor,revision){
     const task=await this.owner.task(id,actor);if(task.state!=='queued'||task.revision!==revision||this.closing||this.draining)return;
-    await this.authorize(task);await this.owner.claim(id,task.revision);
+    await this.authorize(task);if(this.closing||this.draining)return;await this.owner.claim(id,task.revision);
     const controller=new AbortController();const active={revision:task.revision,sourceKey:task.source_key,sourceKeys:new Set([task.source_key]),controller};this.active.set(id,active);
+    if(this.closing||this.draining)controller.abort();
     const authorize=async()=>{check(!controller.signal.aborted,'CANCELLED');const latest=await this.owner.task(id,actor);check(latest.revision===task.revision&&latest.state==='running','TASK_CHANGED');const source=this.store.source(task.source_key,actor);check(source.revision===task.source_revision,'SOURCE_CHANGED');await this.owner.assertContext(id,actor);await this.authorize(latest);};
     try{
+      check(!controller.signal.aborted,'CANCELLED');
       const source=this.store.source(task.source_key,actor);const context=[source,...this.context(source,actor)];const bindings=context.map(s=>({key:s.key,revision:s.revision}));await this.owner.bindContext(id,task.revision,bindings);active.sourceKeys=new Set(bindings.map(s=>s.key));
+      check(!controller.signal.aborted,'CANCELLED');
       const result=await this.worker.run({...task,contextSources:bindings},context,{signal:controller.signal,authorize,onStart:p=>this.store.event('worker.started',p,id)});
       await authorize();await this.owner.finish(id,task.revision,result);await this.onTask(await this.owner.task(id,actor));
     }catch(e){
