@@ -161,13 +161,13 @@ class CompanyPackDecisionRecordCandidateContractTests(unittest.TestCase):
             .splitlines()
             if line.strip() and not line.lstrip().startswith("#")
         }
-        self.assertEqual(
-            requirements,
-            {
-                "jsonschema[format-nongpl]==4.26.0",
-                "PyYAML==6.0.3",
-            },
-        )
+        self.assertTrue({"jsonschema[format-nongpl]", "PyYAML"}.issubset(
+            {requirement.split("==", 1)[0] for requirement in requirements}
+        ))
+        # The dependency checker owns current versions and matching lock hashes;
+        # this feature needs the actual validator and non-GPL format extras.
+        for requirement in requirements:
+            self.assertRegex(requirement, r"^[A-Za-z0-9._\[\]-]+==[^\s;]+$")
         readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
         self.assertIn("python -m pip install --require-hashes -r requirements-ci.txt", readme)
 
