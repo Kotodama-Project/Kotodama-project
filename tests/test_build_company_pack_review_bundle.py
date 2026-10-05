@@ -7,6 +7,8 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+from copy import deepcopy
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
@@ -265,15 +267,30 @@ class CompanyPackReviewBundleCliTests(unittest.TestCase):
         self.assertIsNone(response["bundle_digest"])
 
     def test_review_bundle_schema_matches_success_and_refusal_shapes(self) -> None:
-        schema = json.loads(
-            (ROOT / "schemas" / "company-pack-review-bundle.schema.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        self.assertEqual(schema["properties"]["public_beta"]["const"], "NO_GO_UNPUBLISHED")
-        self.assertEqual(schema["properties"]["claims"]["additionalProperties"], False)
-        self.assertIn("CANDIDATE_FOR_GOVERNED_REVIEW", schema["properties"]["status"]["enum"])
-        self.assertIn("BUNDLE_REFUSED", schema["properties"]["status"]["enum"])
+        schema = json.loads((ROOT / "schemas/company-pack-review-bundle.schema.json").read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        with tempfile.TemporaryDirectory() as temporary:
+            pack, _ = self.create_pack(Path(temporary))
+            ready_result = self.run_builder(pack)
+            refused_result = self.run_builder(ROOT / "examples/company-starter")
+        self.assertEqual(ready_result.returncode, 0)
+        self.assertEqual(refused_result.returncode, 1)
+        self.assertEqual(ready_result.stderr + refused_result.stderr, "")
+        ready, refused = json.loads(ready_result.stdout), json.loads(refused_result.stdout)
+        for report in (ready, refused):
+            validator.validate(report)
+        for report, field, value in (
+            (ready, "binding_count", 0), (ready, "bundle_digest", None),
+            (refused, "bindings", ready["bindings"]),
+            (refused, "bundle_digest", ready["bundle_digest"]),
+        ):
+            with self.subTest(status=report["status"], field=field):
+                mutation = deepcopy(report)
+                mutation[field] = value
+                self.assertTrue(list(validator.iter_errors(mutation)))
+        overclaim = deepcopy(ready)
+        overclaim["claims"]["human_approval_verified"] = True
+        self.assertTrue(list(validator.iter_errors(overclaim)))
 
 
 if __name__ == "__main__":

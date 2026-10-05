@@ -290,16 +290,22 @@ class PublicPreviewCheckTests(unittest.TestCase):
             self.assertEqual(target.read_text(encoding="utf-8"), "{}")
 
     def test_usage_error_does_not_echo_untrusted_argument(self) -> None:
-        secret_like = "sk-abcdefghijklmnopqrstuvwxyz123456"
-        result = subprocess.run(
-            [sys.executable, str(TOOL), secret_like],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 1)
-        self.assertNotIn(secret_like, result.stdout + result.stderr)
+        # A missing pack path is a content-free refusal; an extra positional
+        # argument is a genuinely malformed invocation with a distinct exit.
+        opaque = "opaque-missing-pack-that-must-not-be-reflected"
+        with tempfile.TemporaryDirectory() as temporary:
+            missing = Path(temporary) / opaque
+            result = self.run_tool(missing)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stderr, "")
+            report = json.loads(result.stdout)
+            self.assertEqual(report["refusal_reason"], "INPUT_NOT_DIRECTORY")
+            malformed = self.run_tool(missing, opaque)
+            self.assertEqual(malformed.returncode, 2)
+            self.assertEqual(malformed.stdout, "")
+            self.assertIn("usage:", malformed.stderr)
+            self.assertNotIn(opaque, result.stdout + result.stderr + malformed.stdout + malformed.stderr)
+            self.assertFalse(missing.exists())
 
     def test_unknown_output_format_is_usage_error_without_echo(self) -> None:
         secret_like = "sk-unknown-format-secret"

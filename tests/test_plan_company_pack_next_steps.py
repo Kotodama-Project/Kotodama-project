@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from copy import deepcopy
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 PLANNER = ROOT / "tools" / "plan_company_pack_next_steps.py"
@@ -277,31 +279,26 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
         self.assertEqual(caches, [])
 
     def test_json_output_matches_closed_public_schema_shape_and_is_deterministic(self) -> None:
-        first = self.run_planner(STARTER)
-        second = self.run_planner(STARTER)
+        first, second = self.run_planner(STARTER), self.run_planner(STARTER)
         self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(first.stderr + second.stderr, "")
         self.assertEqual(first.stdout, second.stdout)
         plan = json.loads(first.stdout)
-        schema = json.loads(
-            (
-                ROOT / "schemas" / "company-pack-next-steps.schema.json"
-            ).read_text(encoding="utf-8")
-        )
-
-        self.assertFalse(schema["additionalProperties"])
-        self.assertEqual(set(schema["required"]), set(plan))
-        self.assertEqual(
-            set(schema["properties"]["current_state"]["required"]),
-            set(plan["current_state"]),
-        )
-        self.assertEqual(
-            set(schema["properties"]["recommended_next"]["required"]),
-            set(plan["recommended_next"]),
-        )
-        self.assertEqual(
-            schema["properties"]["public_beta"]["const"],
-            "NO_GO_UNPUBLISHED",
-        )
+        validator = Draft202012Validator(json.loads((ROOT / "schemas/company-pack-next-steps.schema.json").read_text(encoding="utf-8")))
+        validator.validate(plan)
+        for path, value in (
+            (("current_state", "replacement_required"), "42"),
+            (("recommended_next", "unknown"), False),
+            (("claims", "human_approval_verified"), True),
+        ):
+            with self.subTest(path=path):
+                mutation = deepcopy(plan)
+                target = mutation
+                for field in path[:-1]:
+                    target = target[field]
+                target[path[-1]] = value
+                self.assertTrue(list(validator.iter_errors(mutation)))
 
     def test_usage_error_returns_two(self) -> None:
         result = subprocess.run(

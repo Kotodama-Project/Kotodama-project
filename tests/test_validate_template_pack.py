@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from copy import deepcopy
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "tools" / "validate_template_pack.py"
@@ -954,21 +956,19 @@ class TemplatePackCliTests(unittest.TestCase):
         )
 
     def test_manifest_path_schema_rejects_unsafe_relative_paths(self) -> None:
-        schema = json.loads(
-            (ROOT / "schemas" / "company-manifest.schema.json").read_text(
-                encoding="utf-8"
-            )
-        )
+        schema = json.loads((ROOT / "schemas/company-manifest.schema.json").read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        manifest = json.loads((ROOT / "examples/company-starter/manifest.json").read_text(encoding="utf-8"))
+        validator.validate(manifest)
         for collection in ("blocks", "mocs", "records"):
-            pattern = re.compile(schema["properties"][collection]["items"]["pattern"])
-            self.assertIsNotNone(pattern.fullmatch(f"{collection}/item.json"))
-            for unsafe in (
-                "../outside.json",
-                "/absolute.json",
-                f"{collection}/../outside.json",
-                f"{collection}//item.json",
-            ):
-                self.assertIsNone(pattern.fullmatch(unsafe), (collection, unsafe))
+            safe = deepcopy(manifest)
+            safe[collection] = [f"{collection}/item.json"]
+            validator.validate(safe)
+            for unsafe in ("../outside.json", "/absolute.json", f"{collection}/../outside.json", f"{collection}//item.json"):
+                with self.subTest(collection=collection, path=unsafe):
+                    mutation = deepcopy(manifest)
+                    mutation[collection] = [unsafe]
+                    self.assertTrue(list(validator.iter_errors(mutation)))
 
 
 if __name__ == "__main__":

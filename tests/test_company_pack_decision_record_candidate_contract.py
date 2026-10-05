@@ -224,13 +224,26 @@ class CompanyPackDecisionRecordCandidateContractTests(unittest.TestCase):
 
     def test_state_conditions_never_create_a_verified_decision(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
-        encoded = json.dumps(schema, ensure_ascii=False)
-        self.assertIn("HUMAN_DECISION_REQUIRED", encoded)
-        self.assertIn("UNVERIFIED_HUMAN_ENTRY", encoded)
-        self.assertIn("EVIDENCE_REQUIRED", encoded)
-        self.assertNotIn('"const": true', encoded)
-        self.assertNotIn("DECISION_VERIFIED", encoded)
-        self.assertNotIn("APPROVED", encoded)
+        validator = Draft202012Validator(schema, format_checker=FormatChecker())
+        pending, entered = candidate_instances(schema)
+        for candidate in (pending, entered):
+            validator.validate(candidate)
+            for claim in candidate["claims"]:
+                with self.subTest(state=candidate["decision_state"], claim=claim):
+                    mutation = copy.deepcopy(candidate)
+                    mutation["claims"][claim] = True
+                    self.assertTrue(list(validator.iter_errors(mutation)))
+            for field, value in (("status", "DECISION_VERIFIED"), ("effective_at", "2026-08-03T00:00:00Z"), ("decision_state", "APPROVED")):
+                with self.subTest(state=candidate["decision_state"], field=field):
+                    mutation = copy.deepcopy(candidate)
+                    mutation[field] = value
+                    self.assertTrue(list(validator.iter_errors(mutation)))
+        crossed = copy.deepcopy(pending)
+        crossed["human_outcome"] = entered["human_outcome"]
+        self.assertTrue(list(validator.iter_errors(crossed)))
+        crossed = copy.deepcopy(entered)
+        crossed["human_outcome"] = None
+        self.assertTrue(list(validator.iter_errors(crossed)))
 
     def test_runbook_is_schema_only_and_blocks_a_future_builder(self) -> None:
         text = RUNBOOK.read_text(encoding="utf-8")

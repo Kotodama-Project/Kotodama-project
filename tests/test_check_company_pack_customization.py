@@ -6,6 +6,8 @@ import sys
 import unittest
 from pathlib import Path
 
+from copy import deepcopy
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "tools" / "check_company_pack_customization.py"
@@ -149,26 +151,29 @@ class CompanyPackCustomizationCliTests(unittest.TestCase):
 
     def test_customization_report_schema_matches_the_public_output(self) -> None:
         result = self.run_checker(STARTER)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
         report = json.loads(result.stdout)
-        schema = json.loads(
-            (
-                ROOT / "schemas" / "customization-report.schema.json"
-            ).read_text(encoding="utf-8")
-        )
-
-        self.assertEqual(set(schema["required"]), set(report))
-        self.assertEqual(
-            set(schema["properties"]["counts"]["required"]),
-            set(report["counts"]),
-        )
-        self.assertEqual(
-            set(schema["properties"]["claims"]["required"]),
-            set(report["claims"]),
-        )
-        self.assertEqual(
-            schema["properties"]["public_beta"]["const"],
-            "NO_GO_UNPUBLISHED",
-        )
+        validator = Draft202012Validator(json.loads((ROOT / "schemas/customization-report.schema.json").read_text(encoding="utf-8")))
+        validator.validate(report)
+        with tempfile.TemporaryDirectory() as temporary:
+            missing = self.run_checker(Path(temporary) / "missing")
+        self.assertEqual(missing.returncode, 1)
+        self.assertEqual(missing.stderr, "")
+        validator.validate(json.loads(missing.stdout))
+        for path, value in (
+            (("counts", "replacement_required"), "42"),
+            (("items", 0, "category"), "unsupported"),
+            (("items", 0, "unknown"), False),
+            (("claims", "human_approval_verified"), True),
+        ):
+            with self.subTest(path=path):
+                mutation = deepcopy(report)
+                target = mutation
+                for field in path[:-1]:
+                    target = target[field]
+                target[path[-1]] = value
+                self.assertTrue(list(validator.iter_errors(mutation)))
 
     def test_structurally_invalid_pack_stops_before_customization_review(self) -> None:
         private_locator = "human-intent:private-sensitive-client"
