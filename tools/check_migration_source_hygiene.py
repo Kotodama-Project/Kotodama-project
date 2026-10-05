@@ -10,10 +10,10 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 
-from knowledge_work_validator import read_bound
 from validate_resolved_compose_candidate import load_strict_json_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +31,58 @@ A017_REFERENCES = {
     "tools/validate_migration_batch_a017.py": 2,
     "tests/test_migration_batch_a017.py": 2,
 }
+
+
+def tracked_path(root, relative):
+    """Do not traverse links inside the operator-selected checkout."""
+    parts = relative.split("/")
+    if any(p in {"", ".", "..", ".git"} for p in parts) or any(c in relative for c in "\\:\0"):
+        raise ValueError("invalid tracked path")
+    path = root
+    for part in parts[:-1]:
+        path /= part
+        details = path.lstat()
+        if not stat.S_ISDIR(details.st_mode) or getattr(details, "st_file_attributes", 0) & 0x400:
+            raise ValueError("linked parent")
+    return path / parts[-1]
+
+
+def read_bound(root, relative, limit, *, allow_symlink=False):
+    """Read regular bytes or a link's stored text, never its target bytes."""
+    path = tracked_path(root, relative)
+    before = path.lstat()
+    identity = lambda s: (s.st_dev, s.st_ino, s.st_mode, s.st_nlink, s.st_size, s.st_mtime_ns)
+    if stat.S_ISLNK(before.st_mode) and allow_symlink:
+        data = os.fsencode(os.readlink(path))
+        if len(data) > limit:
+            raise ValueError("oversized link")
+        after = path.lstat()
+    else:
+        if (not stat.S_ISREG(before.st_mode) or before.st_size > limit or before.st_nlink != 1
+                or getattr(before, "st_file_attributes", 0) & 0x400):
+            raise ValueError("not a bounded regular file")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        fd = os.open(path, flags)
+        try:
+            if identity(before) != identity(os.fstat(fd)):
+                raise ValueError("changed file")
+            chunks, size = [], 0
+            while size <= limit:
+                chunk = os.read(fd, min(65536, limit + 1 - size))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                size += len(chunk)
+            after = os.fstat(fd)
+        finally:
+            os.close(fd)
+        if size > limit:
+            raise ValueError("oversized file")
+        data = b"".join(chunks)
+    final = tracked_path(root, relative).lstat()
+    if identity(before) != identity(after) or identity(after) != identity(final):
+        raise ValueError("changed file")
+    return data
 
 
 def mapping_digest(rows):
@@ -118,6 +170,7 @@ def scan(root: Path, manifests=None):
         findings.append({"path": label, "line": line, "snapshot": snapshot, "code": code})
 
     try:
+        root = root.resolve(strict=True)
         for manifest, expected in manifests.items():
             value = load_strict_json_bytes(read_bound(root, manifest, 128 * 1024))
             rows = value["entries"]
@@ -134,6 +187,8 @@ def scan(root: Path, manifests=None):
         def inspect(name, snapshot, data=None, oid=None):
             nonlocal checked
             checked += 1
+            if any(p in name for p in restricted_paths):
+                finding(name, snapshot, "SOURCE_PATH_IN_FILENAME")
             if oid is None:
                 oid = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
             if oid in source_blobs:
@@ -180,7 +235,7 @@ def scan(root: Path, manifests=None):
                 inspect(name, snapshot, data=data, oid=oid)
         for name in sorted(set(head) | set(index)):
             try:
-                data = read_bound(root, name, MAX_BYTES)
+                data = read_bound(root, name, MAX_BYTES, allow_symlink=True)
             except FileNotFoundError:
                 continue  # Deleted working file still has HEAD/index coverage.
             except (OSError, ValueError):

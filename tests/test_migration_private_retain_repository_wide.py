@@ -60,7 +60,7 @@ class MigrationRepositoryHygieneTests(unittest.TestCase):
         return {f["code"] for f in report["findings"]}
 
     def test_current_repository_and_real_cli(self):
-        result = subprocess.run([sys.executable, "-B", str(ROOT / "tools/check_migration_source_hygiene.py")],
+        result = subprocess.run([sys.executable, "-S", "-B", str(ROOT / "tools/check_migration_source_hygiene.py")],
                                 cwd=self.root, capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         report = json.loads(result.stdout)
@@ -120,6 +120,38 @@ class MigrationRepositoryHygieneTests(unittest.TestCase):
         self.write("CHANGELOG.md", b"2026-10-06: fixture@example.invalid; public documentation update\n")
         self.git("add", ".")
         self.assertEqual(self.scan()["findings"], [])
+
+    def test_private_path_as_filename_is_detected_even_for_reauthored_bytes(self):
+        path = self.write(self.source_path, b"newly authored public-looking bytes")
+        self.git("add", ".")
+        report = self.scan()
+        self.assertIn("SOURCE_PATH_IN_FILENAME", self.codes(report))
+        self.assertNotIn(self.source_path, json.dumps(report))
+        path.unlink()
+        self.assertIn("SOURCE_PATH_IN_FILENAME", self.codes(self.scan()))
+
+    def test_tracked_symlink_payload_is_scanned_without_following_the_target(self):
+        oid = self.git("hash-object", "-w", "--stdin", input=b"missing-target").strip().decode()
+        self.git("update-index", "--add", "--cacheinfo", f"120000,{oid},link.txt")
+        link = self.root / "link.txt"
+        try:
+            link.symlink_to("missing-target")
+        except OSError:
+            # Git's Windows core.symlinks=false checkout represents link text
+            # as a regular file; index still exercises actual mode 120000.
+            link.write_bytes(b"missing-target")
+        self.assertEqual(self.scan()["status"], "PASS")
+        symlink_supported = link.is_symlink()
+        link.unlink()
+        if symlink_supported:
+            link.symlink_to(self.source_path)
+        else:
+            link.write_bytes(self.source_path.encode())
+        report = self.scan()
+        self.assertIn("SOURCE_PATH_COPIED", self.codes(report))
+        self.assertNotIn(self.source_path, json.dumps(report))
+        link.unlink()
+        self.assertEqual(self.scan()["status"], "PASS")
 
     def test_manifest_cannot_remove_or_reclassify_the_source_inventory(self):
         path = self.root / self.manifest

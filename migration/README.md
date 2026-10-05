@@ -11,7 +11,7 @@
   [`validate_migration_batch_a022.py`](../tools/validate_migration_batch_a022.py) が検査します。
   これらは台帳の record ではなく、台帳の verifier の検査対象でもありません。
 
-batch外への誤コピーは `python -B tools/check_migration_source_hygiene.py` で
+batch外への誤コピーは `python -S -B tools/check_migration_source_hygiene.py` で
 検査します。A017・A019・A022の固定source metadataを使い、HEAD・index・追跡中の
 working treeについて元blobの完全一致と、PRIVATE_RETAIN / SUPERSEDEDの元pathの
 混入を拒否します。既存manifestとA017の出典・検査に必要な参照だけを回数付きで許容し、
@@ -55,3 +55,5 @@ sequence が最大の record が現在の disposition として集計されま�
 `zero_unclassified` は `null` です。Public Beta は `NO_GO_UNPUBLISHED` のままです。
 
 この一行はPOSIX shellとPowerShellの両方で使えます。`TRUSTED_PREVIOUS_HEAD_SHA256` は独立に保持した64桁のhead digestへ置き換えます。
+
+追跡先の名前自体に非公開元pathが含まれる場合も拒否します。Git symlinkはlink先へ移動せずlinkの文字列を検査し、通常ファイルとして展開されるWindows checkoutも同じbytesを照合します。CLIは依存install前の標準ライブラリ環境で使えます。
