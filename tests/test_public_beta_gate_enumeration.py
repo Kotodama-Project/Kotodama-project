@@ -12,6 +12,9 @@ ROADMAP = ROOT / "ROADMAP.md"
 GATE_SECTION = "### Public Beta 完成としてまだ証明されていないもの"
 GATE_LINE = re.compile(r"^- `(PB-G\d+)` \[(unproven|completed)\] (.+)$")
 GATE_TOKEN = re.compile(r"`(PB-G\d+)`")
+# OVERVIEW owns this stable full registry: completed gates retain their IDs/rows.
+# A registry change needs an explicit contract update, not an observed-list length.
+EXPECTED_GATE_IDS = tuple(f"PB-G{number}" for number in range(1, 11))
 DECLARED_COUNT = re.compile(r"未証明の gate はちょうど \*\*(\d+) 件\*\* です")
 UNCHECKED_ROADMAP_ITEM = re.compile(r"^- \[ \] (.+)$", re.MULTILINE)
 
@@ -38,7 +41,10 @@ class PublicBetaGateEnumerationTests(unittest.TestCase):
         self.assertTrue(gates)
         identifiers = [identifier for identifier, _, _ in gates]
         self.assertEqual(len(identifiers), len(set(identifiers)))
-        self.assertEqual([int(identifier.removeprefix("PB-G")) for identifier in identifiers], list(range(1, len(gates) + 1)))
+        self.assertEqual(
+            tuple(identifiers), EXPECTED_GATE_IDS,
+            "the stable PB-G1..PB-G10 full registry must retain every gate",
+        )
         for identifier, status, description in gates:
             with self.subTest(identifier=identifier):
                 self.assertIn(status, {"unproven", "completed"})
