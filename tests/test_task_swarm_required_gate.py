@@ -99,7 +99,9 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
                 if not marker or active_marker(ast.parse(marker.strip(), mode="eval"), environment):
                     active.add(name)
             with self.subTest(platform=platform):
-                self.assertEqual({"pywin32", "colorama"} <= active, platform == "win32")
+                for name in ("pywin32", "colorama"):
+                    with self.subTest(dependency=name):
+                        self.assertEqual(name in active, platform == "win32")
                 self.assertNotIn("httpx2-jsfetch", active)
                 self.assertTrue({"mcp", "psutil", "pytest", "jsonschema", "pyyaml"} <= active)
 
