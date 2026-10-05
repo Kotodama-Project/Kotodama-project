@@ -45,6 +45,7 @@
     "payload_digest": { "$ref": "#/$defs/digest" },
     "expires_at": { "$ref": "#/$defs/timestamp" },
     "stored_at": { "type": "number", "minimum": 0 },
+    "payload_state": { "enum": ["pending", "ready"] },
     "state": {
       "enum": ["stored", "acked", "replied", "reply_acked", "expired", "stale"]
     },

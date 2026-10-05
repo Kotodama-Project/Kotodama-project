@@ -26,6 +26,7 @@ class SwarmStateTests(unittest.TestCase):
         temporary_root = Path(__file__).resolve().parents[1] / "work"
         temporary_root.mkdir(exist_ok=True)
         self.temp = tempfile.TemporaryDirectory(dir=temporary_root)
+        self.addCleanup(self.temp.cleanup)
         self.clock = FakeClock()
         self.binding = {
             "task_id": "task-demo",
@@ -201,14 +202,22 @@ class SwarmStateTests(unittest.TestCase):
 
     def test_deadline_uses_host_clock_and_finite_values(self) -> None:
         state = self.state()
-        # The display date is next day in JST, but the explicit offset is still
-        # a future host-clock instant.
+        # 1970-01-01 09:31 JST is 00:31 UTC on the same date: 1,860
+        # seconds after the Unix epoch. Display offsets do not change expiry.
         plan = self.plan(deadline="1970-01-01T09:31:00+09:00")
         self.clock.value = 0
         self.binding["expires_at"] = 3_600
         plan["binding_digest"] = digest(validate_binding(self.binding, now=self.clock()))
         state.create_run(plan)
-        self.clock.value = 1_860  # 1970-01-01T09:31:00+09:00 is 1800 seconds
+        before_deadline = copy.deepcopy(plan)
+        before_deadline["run_id"] = "before-deadline"
+        state.create_run(before_deadline)
+        self.clock.value = 1_859
+        claim = state.claim("before-deadline", "worker-before")
+        self.assertIsNotNone(claim)
+        assert claim is not None
+        self.assertEqual(claim["job_id"], "work")
+        self.clock.value = 1_860
         self.assertIsNone(state.claim("run-demo", "worker"))
 
         with self.assertRaises(SwarmError):
