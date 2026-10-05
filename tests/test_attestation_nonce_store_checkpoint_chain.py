@@ -20,18 +20,27 @@ BUNDLE_SCHEMA = ROOT / "schemas" / "attestation-nonce-store-checkpoint-chain-bun
 CREATION_SCHEMA = ROOT / "schemas" / "attestation-nonce-store-checkpoint-chain-bundle-creation.schema.json"
 VERIFICATION_SCHEMA = ROOT / "schemas" / "attestation-nonce-store-checkpoint-chain-verification.schema.json"
 sys.path.insert(0, str(ROOT / "tests"))
+import attestation_schema_helpers as contracts  # noqa: E402
 import test_attestation_nonce_store_checkpoint as r19_helpers  # noqa: E402
 sys.path.insert(0, str(ROOT / "tools"))
 import verify_protected_compose_evidence_attestation as protected_helpers  # noqa: E402
 import create_attestation_nonce_store_checkpoint_chain_bundle as chain_tool  # noqa: E402
+import verify_attestation_nonce_store_checkpoint_chain as chain_verifier  # noqa: E402
 
 
 class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.ssh_keygen = shutil.which("ssh-keygen")
-        if cls.ssh_keygen is None:
-            raise unittest.SkipTest("ssh-keygen is unavailable")
+
+    def setUp(self) -> None:
+        executable_independent = {
+            'test_aggregate_chain_byte_budget_is_enforced_before_json_parsing',
+            'test_file_and_store_limits_apply_before_open_or_sqlite_query',
+            'test_r20_schemas_are_closed_bounded_and_keep_authority_claims_false',
+        }
+        if self.ssh_keygen is None and self._testMethodName not in executable_independent:
+            self.skipTest("ssh-keygen is unavailable")
 
     def make_chain(self, temporary: Path, length: int = 3) -> dict[str, object]:
         helper = r19_helpers.AttestationNonceStoreCheckpointCliTests(
@@ -99,6 +108,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
 
     def verify_bundle(
@@ -133,6 +143,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             capture_output=True,
             check=False,
             env=environment,
+            timeout=30,
         )
 
     def test_three_checkpoint_chain_and_supplied_store_are_logically_equivalent(self) -> None:
@@ -377,6 +388,7 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=30,
             )
 
         self.assertEqual(first_result.returncode, 0)
@@ -642,7 +654,6 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
         )
 
         self.assertFalse(creation["additionalProperties"])
-        self.assertEqual(len(creation["allOf"]), 1)
         for name in (
             "checkpoint_signatures_verified",
             "external_anchor_authority_verified",
@@ -660,7 +671,6 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             )
 
         self.assertFalse(verification["additionalProperties"])
-        self.assertEqual(len(verification["allOf"]), 1)
         for name in (
             "external_anchor_authority_verified",
             "trusted_clock_source_verified",
@@ -686,6 +696,35 @@ class AttestationNonceStoreCheckpointChainCliTests(unittest.TestCase):
             verification["properties"]["public_beta"]["const"],
             "NO_GO_UNPUBLISHED",
         )
+
+        candidate = contracts.chain_bundle(r19_helpers.checkpoint_tool, chain_tool)
+        contracts.assert_contract(self, BUNDLE_SCHEMA, [("single-checkpoint", candidate)], [
+            ("duplicate-entry", {**candidate, "entries": candidate["entries"] * 2}),
+            ("authority", contracts.changed(candidate, "claims.public_beta_go", True)),
+            ("over-count", contracts.changed(candidate, "checkpoint_count", 1025)),
+        ])
+        created = chain_tool.creation_report("CHAIN_BUNDLE_CREATED", [],
+            bundle_bytes=b"synthetic", checkpoint_count=1)
+        refused = chain_tool.creation_report("INVALID", ["synthetic refusal"])
+        contracts.assert_contract(self, CREATION_SCHEMA,
+            [("created", created), ("invalid", refused)], [
+                ("success-without-digest", contracts.changed(created, "bundle_file_sha256", None)),
+                ("invalid-with-creation", contracts.changed(refused,
+                    "claims.private_bundle_candidate_created", True)),
+            ])
+        success = chain_verifier.report("SIGNED_RECURSIVE_CHAIN_AND_STORE_EQUIVALENCE", [],
+            bindings=contracts.bindings("allowed_signers_file_sha256 bundle_file_sha256 "
+                "identity_file_sha256 store_id_sha256 genesis_checkpoint_sha256 "
+                "current_checkpoint_sha256 ssh_keygen_executable_sha256"), checkpoints=1)
+        invalid = chain_verifier.report("INVALID", ["synthetic refusal"])
+        contracts.assert_contract(self, VERIFICATION_SCHEMA,
+            [("success", success), ("invalid", invalid)], [
+                ("success-without-bindings", {**success, "input_bindings": {}}),
+                ("invalid-with-count", contracts.changed(invalid,
+                    "counts.checkpoints_verified", 1)),
+                ("invalid-with-proof", contracts.changed(invalid,
+                    "claims.all_checkpoint_signatures_verified", True)),
+            ])
 
 
 if __name__ == "__main__":

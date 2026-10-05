@@ -7,7 +7,6 @@ import subprocess
 import sys
 import tempfile
 import threading
-import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -20,6 +19,7 @@ CHECKPOINT_SCHEMA = ROOT / "schemas" / "attestation-nonce-store-checkpoint.schem
 CREATION_SCHEMA = ROOT / "schemas" / "attestation-nonce-store-checkpoint-creation.schema.json"
 VERIFICATION_SCHEMA = ROOT / "schemas" / "attestation-nonce-store-checkpoint-verification.schema.json"
 sys.path.insert(0, str(ROOT / "tests"))
+import attestation_schema_helpers as contracts  # noqa: E402
 import test_evaluate_compose_attestation_once as r18_helpers  # noqa: E402
 sys.path.insert(0, str(ROOT / "tools"))
 import create_attestation_nonce_store_checkpoint as checkpoint_tool  # noqa: E402
@@ -30,8 +30,13 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.ssh_keygen = shutil.which("ssh-keygen")
-        if cls.ssh_keygen is None:
-            raise unittest.SkipTest("ssh-keygen is unavailable")
+
+    def setUp(self) -> None:
+        executable_independent = {
+            'test_r19_schemas_are_closed_bounded_and_keep_terminal_claims_false',
+        }
+        if self.ssh_keygen is None and self._testMethodName not in executable_independent:
+            self.skipTest("ssh-keygen is unavailable")
 
     def make_r18_inputs(self, temporary: Path) -> dict[str, object]:
         helper = r18_helpers.ComposeAttestationOneUseEvaluationCliTests(
@@ -64,6 +69,7 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
 
     def sign_checkpoint(self, checkpoint: Path, key: Path) -> Path:
@@ -83,6 +89,7 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(signed.returncode, 0, signed.stdout + signed.stderr)
         return signature
@@ -126,6 +133,7 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
 
     def add_reservation(self, inputs: dict[str, object], marker: bytes) -> None:
@@ -152,6 +160,7 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(signed.returncode, 0, signed.stdout + signed.stderr)
         evaluated = r18_helpers.ComposeAttestationOneUseEvaluationCliTests(
@@ -646,37 +655,55 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             inputs = self.make_r18_inputs(Path(directory))
             store = Path(inputs["store"])
-            writer_started = threading.Event()
+            commit_busy = threading.Event()
+            retry_commit = threading.Event()
             writer_finished = threading.Event()
             writer_errors: list[str] = []
 
             def writer() -> None:
-                connection = sqlite3.connect(str(store), timeout=5)
+                connection = sqlite3.connect(str(store), timeout=0)
                 try:
                     connection.execute("BEGIN IMMEDIATE")
                     connection.execute(
                         "UPDATE store_metadata SET store_id_sha256=store_id_sha256 WHERE singleton=1"
                     )
-                    writer_started.set()
-                    connection.commit()
-                except sqlite3.Error as error:
-                    writer_errors.append(str(error))
+                    try:
+                        connection.commit()
+                    except sqlite3.OperationalError as error:
+                        # An observed SQLITE_BUSY proves commit reached the real
+                        # SQLite lock, independently of thread scheduling.
+                        if error.sqlite_errorcode != sqlite3.SQLITE_BUSY:
+                            raise
+                        commit_busy.set()
+                        if not retry_commit.wait(timeout=5):
+                            raise TimeoutError("commit retry was not released")
+                        connection.execute("PRAGMA busy_timeout=2000")
+                        connection.commit()
+                    else:
+                        writer_errors.append("commit unexpectedly succeeded inside lease")
+                except (sqlite3.Error, TimeoutError) as error:
+                    writer_errors.append(type(error).__name__)
                 finally:
                     connection.close()
                     writer_finished.set()
 
-            with checkpoint_tool.hold_store_snapshot(store) as (snapshot, errors):
-                self.assertEqual(errors, [])
-                self.assertIsNotNone(snapshot)
-                thread = threading.Thread(target=writer)
-                thread.start()
-                self.assertTrue(writer_started.wait(timeout=2))
-                time.sleep(0.2)
-                self.assertFalse(writer_finished.is_set())
-            thread.join(timeout=5)
-
-        self.assertTrue(writer_finished.is_set())
-        self.assertEqual(writer_errors, [])
+            thread = threading.Thread(target=writer)
+            try:
+                with checkpoint_tool.hold_store_snapshot(store) as (snapshot, errors):
+                    self.assertEqual(errors, [])
+                    self.assertIsNotNone(snapshot)
+                    thread.start()
+                    self.assertTrue(commit_busy.wait(timeout=5))
+                    self.assertFalse(writer_finished.is_set())
+                retry_commit.set()
+                thread.join(timeout=5)
+                self.assertTrue(writer_finished.is_set())
+                self.assertEqual(writer_errors, [])
+            finally:
+                retry_commit.set()
+                if thread.ident is not None:
+                    thread.join(timeout=5)
+                self.assertFalse(thread.is_alive())
 
     def test_generator_refuses_overwrite_and_usage_without_leaking_private_bytes(self) -> None:
         private_marker = "private-existing-checkpoint-must-not-leak"
@@ -693,6 +720,7 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=30,
             )
 
         self.assertEqual(refused.returncode, 1)
@@ -727,7 +755,6 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
         )
 
         self.assertFalse(creation["additionalProperties"])
-        self.assertEqual(len(creation["allOf"]), 1)
         for name in (
             "checkpoint_signature_verified",
             "external_anchor_authority_verified",
@@ -741,7 +768,6 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
             )
 
         self.assertFalse(verification["additionalProperties"])
-        self.assertEqual(len(verification["allOf"]), 3)
         for name in (
             "external_anchor_authority_verified",
             "trusted_clock_source_verified",
@@ -762,6 +788,43 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
             verification["properties"]["public_beta"]["const"],
             "NO_GO_UNPUBLISHED",
         )
+
+        genesis = contracts.checkpoint(checkpoint_tool)
+        successor = contracts.checkpoint(checkpoint_tool, successor=True)
+        contracts.assert_contract(self, CHECKPOINT_SCHEMA,
+            [("genesis", genesis), ("successor", successor)], [
+                ("genesis-with-parent", contracts.changed(genesis,
+                    "parent_binding.parent_checkpoint_file_sha256", contracts.DIGEST)),
+                ("successor-with-null-parent", contracts.changed(successor,
+                    "parent_binding.parent_checkpoint_chain_sha256", None)),
+                ("authority", contracts.changed(genesis, "claims.public_beta_go", True)),
+                ("duplicate-reservation", contracts.changed(genesis,
+                    "store_binding.reservation_sha256s", [contracts.DIGEST] * 2)),
+            ])
+        created = checkpoint_tool.creation_report("CHECKPOINT_CREATED", [], b"synthetic")
+        refused = checkpoint_tool.creation_report("INVALID", ["synthetic refusal"])
+        contracts.assert_contract(self, CREATION_SCHEMA,
+            [("created", created), ("refused", refused)], [
+                ("success-without-digest", contracts.changed(created,
+                    "checkpoint_file_sha256", None)),
+                ("refusal-with-creation-claim", contracts.changed(refused,
+                    "claims.private_checkpoint_candidate_created", True)),
+            ])
+        binding = contracts.bindings("allowed_signers_file_sha256 checkpoint_file_sha256 "
+            "identity_file_sha256 signature_file_sha256 store_id_sha256")
+        first = checkpoint_verifier.report("SIGNED_GENESIS_CHECKPOINT_STORE_MATCH", [], binding)
+        next_report = checkpoint_verifier.report("SIGNED_SUCCESSOR_CHECKPOINT_STORE_MATCH", [], {
+            **binding, **contracts.bindings("parent_checkpoint_file_sha256 parent_signature_file_sha256"),
+        })
+        invalid = checkpoint_verifier.report("INVALID", ["synthetic refusal"])
+        contracts.assert_contract(self, VERIFICATION_SCHEMA,
+            [("genesis", first), ("successor", next_report), ("invalid", invalid)], [
+                ("genesis-with-successor-claim", contracts.changed(first,
+                    "claims.immediate_parent_signature_verified", True)),
+                ("successor-without-parent", {**next_report, "input_bindings": binding}),
+                ("invalid-with-proof", contracts.changed(invalid,
+                    "claims.current_checkpoint_signature_verified", True)),
+            ])
 
 
 if __name__ == "__main__":

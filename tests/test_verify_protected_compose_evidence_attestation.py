@@ -13,6 +13,7 @@ VERIFY = ROOT / "tools" / "verify_protected_compose_evidence_attestation.py"
 SCHEMA = ROOT / "schemas" / "protected-compose-evidence-attestation.schema.json"
 LEDGER_SCHEMA = ROOT / "schemas" / "nonce-use-snapshot.schema.json"
 sys.path.insert(0, str(ROOT / "tests"))
+import attestation_schema_helpers as contracts  # noqa: E402
 import test_verify_compose_clean_install_migration_evidence_candidate as evidence_helpers  # noqa: E402
 
 
@@ -43,8 +44,14 @@ class ProtectedComposeEvidenceAttestationCliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.ssh_keygen = shutil.which("ssh-keygen")
-        if cls.ssh_keygen is None:
-            raise unittest.SkipTest("ssh-keygen is unavailable")
+
+    def setUp(self) -> None:
+        executable_independent = {
+            'test_schema_is_closed_and_live_claims_are_const_false',
+            'test_usage_error_returns_two_without_json',
+        }
+        if self.ssh_keygen is None and self._testMethodName not in executable_independent:
+            self.skipTest("ssh-keygen is unavailable")
 
     def make_inputs(self, temporary: Path) -> dict[str, Path | str | dict[str, object]]:
         temporary.mkdir(parents=True, exist_ok=True)
@@ -65,6 +72,7 @@ class ProtectedComposeEvidenceAttestationCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
         allowed_signers = temporary / "allowed-signers"
@@ -97,6 +105,7 @@ class ProtectedComposeEvidenceAttestationCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(signed.returncode, 0, signed.stdout + signed.stderr)
         ledger = {
@@ -141,6 +150,7 @@ class ProtectedComposeEvidenceAttestationCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
 
     def resign(self, inputs: dict[str, object], temporary: Path) -> None:
@@ -151,6 +161,7 @@ class ProtectedComposeEvidenceAttestationCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -236,6 +247,7 @@ class ProtectedComposeEvidenceAttestationCliTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=30,
             )
             self.assertEqual(generated.returncode, 0, generated.stdout + generated.stderr)
             Path(inputs["allowed_signers"]).write_text(
@@ -337,9 +349,30 @@ class ProtectedComposeEvidenceAttestationCliTests(unittest.TestCase):
         self.assertFalse(ledger_schema["additionalProperties"])
         self.assertTrue(ledger_schema["properties"]["used_nonce_sha256s"]["uniqueItems"])
 
+        candidate = {
+            "kind": "protected_compose_evidence_attestation", "version": "1.0",
+            "status": "PROTECTED_ATTESTATION_CANDIDATE", "namespace": "kotodama-compose-evidence",
+            **contracts.bindings("signer_identity_sha256 nonce_sha256 evidence_file_sha256"),
+            "signer_role": "independent_reviewer", "issued_at": "2026-08-03T01:00:00Z",
+            "expires_at": "2026-08-03T01:10:00Z", "claims": {name: False for name in CLAIMS},
+            "public_beta": "NO_GO_UNPUBLISHED",
+        }
+        contracts.assert_contract(self, SCHEMA, [("candidate", candidate)], [
+            ("wrong-role", {**candidate, "signer_role": "runner"}),
+            ("authority", contracts.changed(candidate, "claims.public_beta_go", True)),
+            ("live-execution", contracts.changed(candidate, "claims.execution_authenticity_verified", True)),
+        ])
+        ledger = {"kind": "nonce_use_snapshot", "version": "1.0",
+            "snapshot_at": "2026-08-03T01:00:00Z", "used_nonce_sha256s": [contracts.DIGEST]}
+        contracts.assert_contract(self, LEDGER_SCHEMA, [("one-nonce", ledger)], [
+            ("duplicate-nonce", {**ledger, "used_nonce_sha256s": [contracts.DIGEST] * 2}),
+            ("malformed-nonce", {**ledger, "used_nonce_sha256s": ["invalid"]}),
+        ])
+
     def test_usage_error_returns_two_without_json(self) -> None:
         result = subprocess.run(
-            [sys.executable, str(VERIFY)], cwd=ROOT, text=True, capture_output=True, check=False
+            [sys.executable, str(VERIFY)], cwd=ROOT, text=True, capture_output=True, check=False,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")

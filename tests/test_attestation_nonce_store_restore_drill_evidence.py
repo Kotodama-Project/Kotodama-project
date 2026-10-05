@@ -20,7 +20,10 @@ VERIFICATION_SCHEMA = (
     / "attestation-nonce-store-restore-drill-evidence-verification.schema.json"
 )
 sys.path.insert(0, str(ROOT / "tests"))
+import attestation_schema_helpers as contracts  # noqa: E402
 import test_attestation_nonce_store_checkpoint_head_anchor as anchor_helpers  # noqa: E402
+sys.path.insert(0, str(ROOT / "tools"))
+import verify_attestation_nonce_store_restore_drill_evidence as restore_tool  # noqa: E402
 
 
 RESTORE_FALSE_CLAIMS = {
@@ -58,8 +61,15 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.ssh_keygen = shutil.which("ssh-keygen")
-        if cls.ssh_keygen is None:
-            raise unittest.SkipTest("ssh-keygen is unavailable")
+
+    def setUp(self) -> None:
+        executable_independent = {
+            'test_deep_json_is_a_structured_refusal_without_traceback',
+            'test_restore_drill_schemas_are_closed_and_keep_execution_claims_false',
+            'test_usage_error_is_not_a_verification_report',
+        }
+        if self.ssh_keygen is None and self._testMethodName not in executable_independent:
+            self.skipTest("ssh-keygen is unavailable")
 
     @staticmethod
     def digest(path: Path) -> str:
@@ -258,6 +268,7 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         material["evidence"] = evidence
@@ -269,6 +280,7 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
         *,
         expected_evidence_sha256: str | None = None,
         evaluated_at: str = "2026-08-03T00:09:00Z",
+        expected_ssh_keygen_sha256: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         case = material["case"]
         assert isinstance(case, dict)
@@ -289,13 +301,15 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
                 str(material["restore_receipt"]),
                 str(inputs["allowed_signers"]),
                 str(inputs["identity_file"]),
-                hashlib.sha256(Path(self.ssh_keygen).read_bytes()).hexdigest(),
+                expected_ssh_keygen_sha256
+                or hashlib.sha256(Path(self.ssh_keygen).read_bytes()).hexdigest(),
                 evaluated_at,
             ],
             cwd=ROOT,
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
 
     def test_signed_evidence_binds_distinct_matching_reports_and_receipts(self) -> None:
@@ -346,6 +360,29 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
             verification["properties"]["public_beta"]["const"],
             "NO_GO_UNPUBLISHED",
         )
+
+        candidate = contracts.restore_evidence(RESTORE_FALSE_CLAIMS, REPORTED_CHECKS)
+        contracts.assert_contract(self, EVIDENCE_SCHEMA, [("candidate", candidate)], [
+            ("execution-claim", contracts.changed(candidate, "claims.restore_execution_verified", True)),
+            ("false-reported-check", contracts.changed(candidate,
+                "reported_checks.restore_command_completed_reported", False)),
+            ("same-person-claim", contracts.changed(candidate, "identities_distinct", False)),
+        ])
+        success = restore_tool.make_report("SIGNED_RESTORE_DRILL_REPORT_BINDING", [],
+            evaluated_at=contracts.WHEN, checkpoints=1, reported_checks=7,
+            bindings=contracts.bindings("allowed_signers_file_sha256 anchor_report_file_sha256 "
+                "backup_artifact_sha256 backup_receipt_file_sha256 bundle_file_sha256 "
+                "current_checkpoint_sha256 drill_id_sha256 evidence_file_sha256 "
+                "evidence_signature_file_sha256 identity_file_sha256 restore_receipt_file_sha256 "
+                "restored_report_file_sha256 runner_identity_sha256 source_report_file_sha256 "
+                "ssh_keygen_executable_sha256 store_id_sha256"))
+        invalid = restore_tool.make_report("INVALID", ["synthetic refusal"])
+        contracts.assert_contract(self, VERIFICATION_SCHEMA,
+            [("success", success), ("invalid", invalid)], [
+                ("execution-proof", contracts.changed(success, "claims.restore_execution_verified", True)),
+                ("success-without-bindings", {**success, "input_bindings": {}}),
+                ("invalid-with-count", contracts.changed(invalid, "counts.reported_checks_bound", 7)),
+            ])
 
     def test_signed_hostile_evidence_cannot_assert_execution_or_person_separation(self) -> None:
         private_marker = "private-drill-id-must-not-leak"
@@ -458,6 +495,7 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
@@ -504,12 +542,22 @@ class AttestationNonceStoreRestoreDrillEvidenceCliTests(unittest.TestCase):
     # 550,001 bytes: below 1 MiB; 5,000 levels parse on Linux CPython 3.12.14.
     def test_deep_json_is_a_structured_refusal_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            material = self.make_case(Path(directory))
-            evidence = Path(material["evidence"])
+            temporary = Path(directory)
+            companions = contracts.readable_parse_companions(temporary)
+            evidence = temporary / "evidence.json"
             evidence.write_bytes(
                 (b'{"nested":' * 50_000) + b"0" + (b"}" * 50_000)
             )
-            result = self.verify(material)
+            material = {
+                "case": {"inputs": {"allowed_signers": companions["allowed"],
+                    "identity_file": companions["identity"]}},
+                "evidence": evidence, "evidence_signature": companions["signature"],
+                "anchor_report": companions["json"], "source_report": companions["json"],
+                "restored_report": companions["json"], "backup_receipt": companions["receipt"],
+                "restore_receipt": companions["receipt"],
+            }
+            result = self.verify(material, expected_ssh_keygen_sha256=contracts.DIGEST)
+
 
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stderr, "")

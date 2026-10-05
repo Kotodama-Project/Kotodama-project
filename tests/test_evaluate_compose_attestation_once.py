@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,8 +18,12 @@ POLICY_SCHEMA = ROOT / "schemas" / "compose-attestation-one-use-policy.schema.js
 EVALUATION_SCHEMA = ROOT / "schemas" / "compose-attestation-one-use-evaluation.schema.json"
 INITIALIZATION_SCHEMA = ROOT / "schemas" / "attestation-nonce-store-initialization.schema.json"
 sys.path.insert(0, str(ROOT / "tests"))
+import attestation_schema_helpers as contracts  # noqa: E402
 import test_verify_compose_clean_install_migration_evidence_candidate as evidence_helpers  # noqa: E402
 import test_verify_protected_compose_evidence_attestation as attestation_helpers  # noqa: E402
+sys.path.insert(0, str(ROOT / "tools"))
+import evaluate_compose_attestation_once as evaluator  # noqa: E402
+import initialize_attestation_nonce_store as initializer  # noqa: E402
 
 
 POLICY_CLAIMS = (
@@ -55,8 +60,124 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.ssh_keygen = shutil.which("ssh-keygen")
-        if cls.ssh_keygen is None:
-            raise unittest.SkipTest("ssh-keygen is unavailable")
+
+    def setUp(self) -> None:
+        executable_independent = {
+            'test_concurrent_initializers_create_exactly_one_new_store',
+            'test_concurrent_children_are_reaped_after_wait_and_decode_failures',
+            'test_evaluator_usage_error_returns_two_without_json',
+            'test_r18_schemas_are_closed_and_terminal_claims_remain_false',
+        }
+        if self.ssh_keygen is None and self._testMethodName not in executable_independent:
+            self.skipTest("ssh-keygen is unavailable")
+
+    def run_concurrent(self, command: list[str]) -> list[tuple[int, dict[str, object], str]]:
+        processes: list[subprocess.Popen[str]] = []
+        try:
+            for _ in range(2):
+                processes.append(subprocess.Popen(
+                    command, cwd=ROOT, text=True, encoding="utf-8", errors="strict",
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                ))
+            results = []
+            for process in processes:
+                stdout, stderr = process.communicate(timeout=30)
+                results.append((process.returncode, json.loads(stdout), stderr))
+            return results
+        finally:
+            cleanup_errors = []
+            for process in processes:
+                try:
+                    if process.poll() is None:
+                        process.kill()
+                    process.communicate(timeout=5)
+                except (OSError, subprocess.SubprocessError, UnicodeError) as error:
+                    # Finish every ownership callback even if one child fails
+                    # cleanup; never let the first error abandon another child.
+                    cleanup_errors.append(error)
+                finally:
+                    try:
+                        process.wait(timeout=5)
+                    except (OSError, subprocess.SubprocessError, UnicodeError) as error:
+                        cleanup_errors.append(error)
+                    for stream in (process.stdout, process.stderr):
+                        if stream is not None:
+                            try:
+                                stream.close()
+                            except (OSError, UnicodeError, ValueError) as error:
+                                cleanup_errors.append(error)
+            if cleanup_errors:
+                raise cleanup_errors[0]
+
+    def test_concurrent_children_are_reaped_after_wait_and_decode_failures(self) -> None:
+        real_popen = subprocess.Popen
+        real_communicate = subprocess.Popen.communicate
+        for failure in ("wait", "decode", "text_decode", "close"):
+            with self.subTest(failure=failure):
+                owned = []
+                communicated = {}
+                waited = False
+
+                def spawn(*args, **kwargs):
+                    process = real_popen(*args, **kwargs)
+                    if failure == "close" and not owned:
+                        stream = process.stdout
+                        real_close = stream.close
+                        close_calls = 0
+
+                        def close():
+                            nonlocal close_calls
+                            close_calls += 1
+                            if close_calls == 2:
+                                raise OSError("synthetic pipe close failure")
+                            return real_close()
+
+                        stream.close = close
+                    owned.append(process)
+                    return process
+
+                def communicate(process, *args, **kwargs):
+                    nonlocal waited
+                    communicated[process] = communicated.get(process, 0) + 1
+                    if failure == "wait" and not waited:
+                        waited = True
+                        raise subprocess.TimeoutExpired(process.args, kwargs["timeout"])
+                    return real_communicate(process, *args, **kwargs)
+
+                child_source = {
+                    "wait": "import time; time.sleep(60)",
+                    "decode": "print('not-json')",
+                    "text_decode": "import sys; sys.stdout.buffer.write(bytes([255]))",
+                    "close": "print('{}')",
+                }[failure]
+                expected_error = {
+                    "wait": subprocess.TimeoutExpired, "decode": json.JSONDecodeError,
+                    "text_decode": UnicodeDecodeError, "close": OSError,
+                }[failure]
+                command = [sys.executable, "-c", child_source]
+                try:
+                    with mock.patch.object(subprocess, "Popen", side_effect=spawn), mock.patch.object(
+                        real_popen, "communicate", communicate,
+                    ):
+                        with self.assertRaises(expected_error):
+                            self.run_concurrent(command)
+                    self.assertEqual(len(owned), 2)
+                    self.assertTrue(all(process.poll() is not None for process in owned))
+                    self.assertTrue(all(process.stdout.closed and process.stderr.closed for process in owned))
+                    if failure == "close":
+                        # Both normal communication and the finally callback
+                        # must run even if the first pipe's close raises.
+                        self.assertEqual([communicated[process] for process in owned], [2, 2])
+                finally:
+                    # Keep the test itself bounded if a cleanup regression is
+                    # introduced; assertions above still detect missing reaping.
+                    for process in owned:
+                        if process.poll() is None:
+                            process.kill()
+                        process.wait(timeout=5)
+                        for stream in (process.stdout, process.stderr):
+                            if stream is not None and not stream.closed:
+                                stream.close()
 
     def make_inputs(self, temporary: Path) -> dict[str, object]:
         temporary.mkdir(parents=True, exist_ok=True)
@@ -89,6 +210,7 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(signed.returncode, 0, signed.stdout + signed.stderr)
 
@@ -100,6 +222,7 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(initialized.returncode, 0, initialized.stdout + initialized.stderr)
         self.assertEqual(json.loads(initialized.stdout)["status"], "INITIALIZED")
@@ -143,6 +266,7 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
 
     def evaluate_command(self, inputs: dict[str, object]) -> list[str]:
@@ -201,24 +325,17 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
         self.assertTrue(second_report["claims"]["replay_detected_in_bound_store"])
         self.assertFalse(second_report["claims"]["atomic_nonce_reservation_verified"])
         self.assertNotIn(str(inputs["identity"]), first.stdout + second.stdout)
+        contracts.assert_contract(self, EVALUATION_SCHEMA,
+            [("actual-first", first_report), ("actual-replay", second_report)], [])
 
     def test_two_concurrent_evaluations_commit_exactly_one_reservation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             inputs = self.make_inputs(Path(directory))
-            processes = [
-                subprocess.Popen(
-                    self.evaluate_command(inputs),
-                    cwd=ROOT,
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-                for _ in range(2)
-            ]
-            results = []
-            for process in processes:
-                stdout, stderr = process.communicate(timeout=30)
-                results.append((process.returncode, json.loads(stdout), stderr))
+            results = self.run_concurrent(self.evaluate_command(inputs))
+            with sqlite3.connect(str(inputs["store"])) as connection:
+                self.assertEqual(connection.execute(
+                    "SELECT COUNT(*) FROM nonce_reservations"
+                ).fetchone()[0], 1)
 
         self.assertEqual(sorted(result[0] for result in results), [0, 1])
         self.assertEqual(
@@ -226,6 +343,8 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
             ["ONE_USE_SIGNATURE_AND_POLICY_MATCH", "REPLAY_REFUSED"],
         )
         self.assertTrue(all(result[2] == "" for result in results))
+        contracts.assert_contract(self, EVALUATION_SCHEMA,
+            [("actual-concurrent-" + str(index), result[1]) for index, result in enumerate(results)], [])
 
     def test_invalid_signature_does_not_consume_the_nonce(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -306,24 +425,17 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
             target = Path(directory) / "new-store.sqlite3"
             store_id = hashlib.sha256(b"concurrent-store").hexdigest()
             command = [sys.executable, str(INITIALIZE), str(target), store_id]
-            processes = [
-                subprocess.Popen(
-                    command,
-                    cwd=ROOT,
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-                for _ in range(2)
-            ]
-            results = []
-            for process in processes:
-                stdout, stderr = process.communicate(timeout=30)
-                results.append((process.returncode, json.loads(stdout), stderr))
+            results = self.run_concurrent(command)
+            with sqlite3.connect(str(target)) as connection:
+                self.assertEqual(connection.execute(
+                    "SELECT store_id_sha256 FROM store_metadata WHERE singleton=1"
+                ).fetchone()[0], store_id)
 
         self.assertEqual(sorted(result[0] for result in results), [0, 1])
         self.assertEqual(sum(result[1]["status"] == "INITIALIZED" for result in results), 1)
         self.assertTrue(all(result[2] == "" for result in results))
+        contracts.assert_contract(self, INITIALIZATION_SCHEMA,
+            [("actual-initializer-" + str(index), result[1]) for index, result in enumerate(results)], [])
 
     def test_store_schema_drift_and_missing_store_fail_without_creating_a_store(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -390,6 +502,7 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=30,
             )
             invalid_target = root / "invalid.sqlite3"
             invalid = subprocess.run(
@@ -398,6 +511,7 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=30,
             )
             usage = subprocess.run(
                 [sys.executable, str(INITIALIZE)],
@@ -405,6 +519,7 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=30,
             )
             existing_after = existing.read_text(encoding="utf-8")
             invalid_exists = invalid_target.exists()
@@ -469,7 +584,6 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
         for definition in policy_schema["properties"]["claims"]["properties"].values():
             self.assertIs(definition["const"], False)
         self.assertFalse(evaluation_schema["additionalProperties"])
-        self.assertEqual(len(evaluation_schema["allOf"]), 3)
         self.assertEqual(
             evaluation_schema["properties"]["claims"]["properties"]["trusted_clock_source_verified"]["const"],
             False,
@@ -478,6 +592,41 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
         self.assertFalse(initialization_schema["additionalProperties"])
         self.assertEqual(initialization_schema["properties"]["public_beta"]["const"], "NO_GO_UNPUBLISHED")
 
+        policy = {
+            "kind": "compose_attestation_one_use_policy", "version": "1.0", "status": "POLICY_CANDIDATE",
+            "policy_id": "synthetic-policy", **contracts.bindings("allowed_signers_file_sha256 nonce_store_id_sha256"),
+            "required_namespace": "kotodama-compose-evidence", "required_signer_role": "independent_reviewer",
+            "max_signed_window_seconds": 900, "max_report_to_signature_seconds": 300,
+            "not_before": "2026-08-03T01:00:00Z", "expires_at": "2026-08-03T01:10:00Z",
+            "clock_source": "local_system_utc_untrusted", "claims": {name: False for name in POLICY_CLAIMS},
+            "public_beta": "NO_GO_UNPUBLISHED",
+        }
+        contracts.assert_contract(self, POLICY_SCHEMA, [("policy", policy)], [
+            ("trusted-clock", {**policy, "clock_source": "trusted"}),
+            ("authority", contracts.changed(policy, "claims.public_beta_go", True)),
+        ])
+        binding = contracts.bindings("allowed_signers_file_sha256 attestation_file_sha256 "
+            "evidence_file_sha256 identity_file_sha256 nonce_store_id_sha256 "
+            "policy_file_sha256 signature_file_sha256 reservation_sha256")
+        success = evaluator.evaluation_report("ONE_USE_SIGNATURE_AND_POLICY_MATCH", [], binding, contracts.WHEN)
+        replay = evaluator.evaluation_report("REPLAY_REFUSED", ["replay"], binding, contracts.WHEN)
+        invalid = evaluator.evaluation_report("INVALID", ["synthetic refusal"])
+        contracts.assert_contract(self, EVALUATION_SCHEMA,
+            [("success", success), ("replay", replay), ("invalid", invalid)], [
+                ("success-with-replay", contracts.changed(success, "claims.replay_detected_in_bound_store", True)),
+                ("replay-with-reservation", contracts.changed(replay, "claims.atomic_nonce_reservation_verified", True)),
+                ("success-without-bindings", {**success, "input_bindings": {}}),
+                ("invalid-with-proof", contracts.changed(invalid, "claims.atomic_nonce_reservation_verified", True)),
+            ])
+        initialized = initializer.report("INITIALIZED", [], contracts.DIGEST)
+        refused = initializer.report("REFUSED", ["existing file"])
+        invalid_init = initializer.report("INVALID", ["synthetic refusal"])
+        contracts.assert_contract(self, INITIALIZATION_SCHEMA,
+            [("initialized", initialized), ("refused", refused), ("invalid", invalid_init)], [
+                ("success-without-id", {**initialized, "store_id_sha256": None}),
+                ("refused-with-creation", contracts.changed(refused, "claims.new_file_created", True)),
+            ])
+
     def test_evaluator_usage_error_returns_two_without_json(self) -> None:
         result = subprocess.run(
             [sys.executable, str(EVALUATE)],
@@ -485,6 +634,7 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
