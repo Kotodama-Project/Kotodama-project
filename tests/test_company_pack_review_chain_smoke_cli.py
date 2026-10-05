@@ -14,7 +14,7 @@ from jsonschema import Draft202012Validator
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import smoke_company_pack_review_chain as smoke_builder
-from tests.document_contract_helpers import section, assert_links, shell_commands
+from tests.document_contract_helpers import section, assert_links, shell_commands, owned_smoke_receipt
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOL = ROOT / "tools" / "smoke_company_pack_review_chain.py"
@@ -52,18 +52,21 @@ class CompanyPackReviewChainSmokeCliTests(unittest.TestCase):
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         Draft202012Validator.check_schema(schema)
 
+        # Share the first real foreign-cwd/cleanup result with the tour. Decode
+        # its immutable stdout afresh; the second CLI still proves repetition
+        # and absence of caller writes in a separately observed directory.
+        result = owned_smoke_receipt()
+        before, after = result.before_entries, result.after_entries
         with tempfile.TemporaryDirectory() as temporary:
             caller = Path(temporary)
-            before = tuple(caller.iterdir())
-            result = self.run_smoke(cwd=caller)
-            after = tuple(caller.iterdir())
+            before_repeated = tuple(caller.iterdir())
             repeated = self.run_smoke(cwd=caller)
             after_repeated = tuple(caller.iterdir())
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")
         self.assertEqual(before, after)
-        self.assertEqual(before, after_repeated)
+        self.assertEqual(before_repeated, after_repeated)
         self.assertEqual(repeated.returncode, 0, repeated.stderr)
         self.assertEqual(repeated.stderr, "")
         self.assertEqual(repeated.stdout, result.stdout)
