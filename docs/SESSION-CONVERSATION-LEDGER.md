@@ -141,6 +141,8 @@ not claim that an archive backend was contacted):
 
 `replay_of_event_ref`, causal refs, artifact parents, lifecycle targets, and
 `session_binding.target_event_refs` must all point to strictly earlier events.
+Only a `session_binding` in state `OBSERVED` is effective and may be named by
+`binding_event_ref`; other binding states remain representable but are inactive.
 Replay also requires session parity: bound events replay only within the same
 bound Session, and `UNASSIGNED_INBOX` events replay only other unassigned
 events; a mismatch is `REPLAY_SESSION_INVALID`.
