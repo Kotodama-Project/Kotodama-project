@@ -1,4 +1,6 @@
 import copy
+from contextlib import redirect_stderr, redirect_stdout
+import io
 import hashlib
 import json
 import os
@@ -8,11 +10,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from jsonschema import Draft202012Validator, ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import validate_resolved_compose_candidate as candidate_validator
+import resolve_compose_candidate as resolver
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -212,10 +216,30 @@ class ResolvedComposeCandidateCliTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
         self.assertEqual(first.stdout, second.stdout)
 
+    def run_guard_without_compose(
+        self, *, image: str = IMAGE,
+        company_secret: str | None = COMPANY_SECRET,
+        evidence_secret: str | None = EVIDENCE_SECRET,
+    ) -> subprocess.CompletedProcess[str]:
+        environment = {
+            "KOTODAMA_POSTGRES_IMAGE": image,
+            "KOTODAMA_COMPANY_DB_PASSWORD": company_secret,
+            "KOTODAMA_EVIDENCE_DB_PASSWORD": evidence_secret,
+        }
+        environment = {key: value for key, value in environment.items() if value is not None}
+        output, diagnostic = io.StringIO(), io.StringIO()
+        with patch.dict(os.environ, environment, clear=True), patch.object(
+            resolver.shutil, "which", return_value=None
+        ) as locate, patch.object(resolver.subprocess, "run", side_effect=AssertionError("Compose reached")) as invoke:
+            with redirect_stdout(output), redirect_stderr(diagnostic):
+                status = resolver.main([str(RESOLVER), "kotodama-r13"])
+            locate.assert_not_called()
+            invoke.assert_not_called()
+        return subprocess.CompletedProcess([], status, output.getvalue(), diagnostic.getvalue())
+
     def test_equal_passwords_fail_closed_without_echoing_the_value(self) -> None:
-        self.require_compose()
         secret = "synthetic-shared-secret-that-must-not-leak"
-        result = self.run_resolver(company_secret=secret, evidence_secret=secret)
+        result = self.run_guard_without_compose(company_secret=secret, evidence_secret=secret)
 
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stderr, "")
@@ -227,9 +251,8 @@ class ResolvedComposeCandidateCliTests(unittest.TestCase):
         self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
 
     def test_missing_password_and_mutable_image_fail_without_compose_stderr(self) -> None:
-        self.require_compose()
-        missing = self.run_resolver(company_secret=None)
-        mutable = self.run_resolver(image="postgres:latest")
+        missing = self.run_guard_without_compose(company_secret=None)
+        mutable = self.run_guard_without_compose(image="postgres:latest")
 
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(missing.stderr, "")
@@ -264,14 +287,24 @@ class ResolvedComposeCandidateCliTests(unittest.TestCase):
         self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
 
     def test_saved_candidate_validator_rejects_tamper_unknown_and_live_claims(self) -> None:
-        self.require_compose()
-        bundle = json.loads(self.run_resolver().stdout)
+        bundle = synthetic_candidate()
+        self.assertEqual(candidate_validator.validate_candidate(bundle), [])
         tampered = copy.deepcopy(bundle)
         tampered["resolved"]["services"][0]["network"] = "evidence-data"
         unknown = copy.deepcopy(bundle)
         unknown["unexpected"] = True
         live_claim = copy.deepcopy(bundle)
         live_claim["claims"]["services_started"] = True
+        # Retain the historical self-digest failure and also isolate the semantic
+        # service guard using an otherwise correctly rehashed candidate.
+        rehashed = copy.deepcopy(tampered)
+        rehashed["resolved"]["resolved_contract_sha256"] = candidate_validator.canonical_sha256(
+            candidate_validator.safe_contract_projection(rehashed)
+        )
+        semantic_result = self.run_validator(rehashed)
+        self.assertEqual(semantic_result.returncode, 1)
+        self.assertNotIn("resolved contract digest mismatch", json.loads(semantic_result.stdout)["errors"])
+        self.assertIn("resolved.services[0].network is not role bound", json.loads(semantic_result.stdout)["errors"])
 
         tampered_result = self.run_validator(tampered)
         unknown_result = self.run_validator(unknown)
@@ -285,8 +318,8 @@ class ResolvedComposeCandidateCliTests(unittest.TestCase):
         self.assertIn("claim services_started must remain false", json.loads(live_result.stdout)["errors"])
 
     def test_saved_candidate_requires_one_shared_resolved_image_digest(self) -> None:
-        self.require_compose()
-        bundle = json.loads(self.run_resolver().stdout)
+        bundle = synthetic_candidate()
+        self.assertEqual(candidate_validator.validate_candidate(bundle), [])
         bundle["resolved"]["services"][1]["image_digest"] = "sha256:" + "2" * 64
         projection = {
             "project_name": bundle["project_name"],

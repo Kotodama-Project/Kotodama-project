@@ -88,6 +88,11 @@ class ComposeCandidateRunbookDocumentationTests(unittest.TestCase):
                 self.assertIn(marker, document)
 
     def test_runbooks_do_not_publish_real_private_values(self) -> None:
+        """Historical case ID: regression for two synthetic fixture leaks only.
+
+        General credential hygiene belongs to check_tracked_secret_hygiene.py;
+        absence of these two markers does not prove exhaustive privacy.
+        """
         resolved = RESOLVED.read_text(encoding="utf-8")
         self.assertIn("<private-distinct-value>", resolved)
         for path in (RESOLVED, IMAGE_PREFLIGHT):

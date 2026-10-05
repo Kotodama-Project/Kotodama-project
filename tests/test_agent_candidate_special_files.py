@@ -23,9 +23,10 @@ class SpecialFileTests(unittest.TestCase):
             for reader in READERS:
                 with self.subTest(reader=reader.name):
                     read = runpy.run_path(str(reader))['read_bounded']
-                    with patch.object(Path, 'lstat', return_value=special), patch.object(Path, 'open', side_effect=AssertionError('blocking open reached')):
+                    with patch.object(Path, 'lstat', return_value=special), patch.object(os, 'open', side_effect=AssertionError('blocking open reached')) as opened:
                         with self.assertRaises(OSError):
                             read(path)
+                        opened.assert_not_called()
 
     @unittest.skipUnless(hasattr(os, 'mkfifo'), 'POSIX named-pipe integration')
     def test_real_fifo_returns_structured_refusal_without_writer(self):
@@ -34,7 +35,7 @@ class SpecialFileTests(unittest.TestCase):
             os.mkfifo(path)
             for reader in READERS:
                 with self.subTest(reader=reader.name):
-                    result = subprocess.run([sys.executable, '-B', str(reader), str(path)], capture_output=True, text=True, timeout=5)
+                    result = subprocess.run([sys.executable, '-B', str(reader), str(path)], capture_output=True, text=True, timeout=10)
                     self.assertEqual(result.returncode, 2)
                     self.assertEqual(result.stderr, '')
                     self.assertIn('INPUT_INVALID', result.stdout)

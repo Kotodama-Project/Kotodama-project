@@ -375,7 +375,7 @@ class ProtectedExecutionRequestHandoffCandidateContractTests(unittest.TestCase):
 
         valid = run(request_candidate())
         self.assertEqual(valid.returncode, 0, valid.stderr)
-        self.assertIn('"result": "PRECONDITIONS_MATCH_UNVERIFIED"', valid.stdout)
+        self.assertEqual(json.loads(valid.stdout)["result"], "PRECONDITIONS_MATCH_UNVERIFIED")
         self.assertNotIn("20:30", valid.stdout)
 
         reversed_window = request_candidate()
@@ -385,20 +385,20 @@ class ProtectedExecutionRequestHandoffCandidateContractTests(unittest.TestCase):
         )
         refused = run(reversed_window)
         self.assertEqual(refused.returncode, 2)
-        self.assertIn('"result": "REFUSED"', refused.stdout)
-        self.assertIn("WINDOW_ORDER_INVALID", refused.stdout)
+        self.assertEqual(json.loads(refused.stdout)["result"], "REFUSED")
+        self.assertIn("WINDOW_ORDER_INVALID", json.loads(refused.stdout)["reason_codes"])
 
         wrong_duration = request_candidate()
         wrong_duration["evaluation_window"]["requested_duration_seconds"] = 7200
         refused = run(wrong_duration)
         self.assertEqual(refused.returncode, 2)
-        self.assertIn("WINDOW_DURATION_MISMATCH", refused.stdout)
+        self.assertIn("WINDOW_DURATION_MISMATCH", json.loads(refused.stdout)["reason_codes"])
 
         parent_expired = request_candidate()
         parent_expired["expires_at"] = "2026-08-03T20:45:00+09:00"
         refused = run(parent_expired)
         self.assertEqual(refused.returncode, 2)
-        self.assertIn("WINDOW_EXCEEDS_PARENT_EXPIRY", refused.stdout)
+        self.assertIn("WINDOW_EXCEEDS_PARENT_EXPIRY", json.loads(refused.stdout)["reason_codes"])
 
     def test_bounded_reader_refuses_metadata_without_opening_the_input(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

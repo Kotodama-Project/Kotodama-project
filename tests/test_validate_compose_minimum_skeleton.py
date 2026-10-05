@@ -20,23 +20,31 @@ SCHEMA = ROOT / "schemas" / "compose-minimum-skeleton.schema.json"
 
 class ComposeMinimumSkeletonValidatorCliTests(unittest.TestCase):
     def test_exact_byte_bound_runtime_files_are_forced_to_lf_on_checkout(self) -> None:
-        rules = {
-            line.strip()
-            for line in GIT_ATTRIBUTES.read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.lstrip().startswith("#")
-        }
-        self.assertEqual(
-            rules,
-            {
-                "* text=auto eol=lf",
-                "runtime/compose-minimum/README.md text eol=lf",
-                "runtime/compose-minimum/compose.yaml text eol=lf",
-                "runtime/compose-minimum/company-db/001-company-core.sql text eol=lf",
-                "runtime/compose-minimum/evidence-store/001-evidence-core.sql text eol=lf",
-                "LICENSE text eol=lf",
-                "tools/cfos_pnpm_runtime_windows_shim.cs text eol=lf",
-            },
+        required = (
+            "runtime/compose-minimum/README.md",
+            "runtime/compose-minimum/compose.yaml",
+            "runtime/compose-minimum/company-db/001-company-core.sql",
+            "runtime/compose-minimum/evidence-store/001-evidence-core.sql",
+            "LICENSE", "tools/cfos_pnpm_runtime_windows_shim.cs",
         )
+        # Query effective rules in a hermetic Git repository so local attributes
+        # cannot hide a tracked regression. Unrelated new rules remain allowed.
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            environment = {**os.environ, "GIT_ATTR_NOSYSTEM": "1",
+                           "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+                           "GIT_CONFIG_SYSTEM": os.devnull}
+            subprocess.run(["git", "init", "-q", str(temporary)], env=environment, check=True)
+            (temporary / ".gitattributes").write_bytes(GIT_ATTRIBUTES.read_bytes())
+            observed = subprocess.run(
+                ["git", "-C", str(temporary), "check-attr", "-z", "text", "eol", "--", *required],
+                env=environment, capture_output=True, check=True,
+            ).stdout.decode("utf-8").split("\0")
+        actual = {(observed[index], observed[index + 1]): observed[index + 2]
+                  for index in range(0, len(observed) - 1, 3)}
+        expected = {(path, attribute): value for path in required
+                    for attribute, value in (("text", "set"), ("eol", "lf"))}
+        self.assertEqual(actual, expected)
 
     def run_validator(self, directory: Path) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
