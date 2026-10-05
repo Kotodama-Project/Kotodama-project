@@ -21,7 +21,7 @@ scopeはcontract 288、CLI 404、runtime 285、static 216、collection 3です�
 runtimeには実際に動かしたlocalなscanner・state/storage関数も含み、
 本番接続や常時稼働を意味しません。改善案の件数も失敗したテスト数ではありません。
 
-## 今回優先した修正
+## 初回レビューで優先した修正
 
 - 次の操作手順をcredential gate、hash付きlock、workflow参照、suiteの順に統一する。
 - 名前だけでリンクの存在を検査したことにせず、実ファイルとanchorを調べる。
@@ -49,7 +49,7 @@ scannerの重複した全repository検査は、実GitのHEAD/index/working tree�
 検査内容・case集合とguardの実効性を合否に使い、時間短縮率をruntime性能や
 別runnerのCI所要の保証として使いません。
 
-## 個別監査からの次の修正
+## 5項目の後続修正（#219）
 
 [#219](https://github.com/Kotodama-Project/Kotodama-project/issues/219)では、
 元の改善候補から次の5点を選び、現行の入力・処理・判定を補強しました。
@@ -64,12 +64,58 @@ scannerの重複した全repository検査は、実GitのHEAD/index/working tree�
 代表するguardを外した負例も使い、実fileとproduction entrypointを通す検査と
 実CLIの境界検査を保持します。profile IDの修正はそのreport fieldの範囲であり、
 任意のunknown field名などを含む全診断の非開示を証明するものではありません。
-上の942・202・52は元の固定点での判断です。今回の修正で全改善候補を
-再分類・実装済みとはせず、既存caseの削除やskipで件数を減らしません。
+上の942・202・52は元の固定点での判断です。#219は5項目の後続修正であり、
+全202件の完了は下の#221と個別対応表で区別します。
 
-## 継続して見る点
+## 全202件の対応（#221）
 
-個別監査には、逐語的な文書assert、署名失敗が意味論的拒否を隠すfixture、
-時刻・独立job・候補の状態軸の不足など、今回の小変更に含めない改善案もあります。
-優先度・実仕様・負例を確認して狭いPRへ分けます。件数を減らすだけのskipや弱体化はしません。
-実Dot、live provider、モデル推論品質、世界規模の同時利用は別の測定が必要です。
+[#221](https://github.com/Kotodama-Project/Kotodama-project/issues/221)では、
+固定点の改善候補202件すべてについて、元の目的・指摘・改善案を現在の実装に照合しました。
+154件を追加実装し、48件は先行PRの実装と具体的な検証が既に成立していると
+独立レビューで確認しました。保留・未対応は0件です。
+
+| 領域 | 対応候補 | 追加実装 | 既存実装を確認 |
+|---|---:|---:|---:|
+| 署名・schema・SQLite lease・child cleanup | 21 | 17 | 4 |
+| 移行台帳・Session/conversation ledger | 36 | 7 | 29 |
+| Company契約・CLI・業務文書 | 36 | 34 | 2 |
+| Cloudflare preview・Voice候補 | 29 | 29 | 0 |
+| Repository運用・文書・secret scanner | 50 | 45 | 5 |
+| 候補IO・agent swarm・通信計測 | 30 | 22 | 8 |
+| 合計 | 202 | 154 | 48 |
+
+[個別対応表](PYTHON-TEST-IMPROVEMENTS.json)に、全case ID、元の指摘と改善案、
+実装、検証、guard欠落などの負の対照、独立レビュー、残る測定境界を保存します。
+対象sourceのrevision・method位置・SHA-256を束縛し、共通する検証内容はcatalogから
+参照します。これは有限の監査記録であり、Task状態や稼働環境の正本ではありません。
+元のTSVのSHA-256も固定し、942件の維持判断と52件の共通化候補を再分類しません。
+
+202件の元のcase IDはすべて保持しています。元の公開集計1,196 entriesには、
+この202件とは別の#213の共通化でscannerの1methodを目的の明確な名前へ変更した
+履歴があります。旧`test_current_tracked_tree_passes`は
+`test_cli_scans_owned_git_snapshots_and_redacts_values`へ置き換えられています。
+CIの依存導入前の全tracked tree gateと、実GitのHEAD/index/working treeを通すCLIを
+保持しており、全1,196 IDが逐語的に同じとは説明しません。
+
+### 補強した実効性と軽量化
+
+- 有効なschema入力から一つの状態・reference・署名済み内容を変え、目的の理由コードを確認する。
+- childの不正UTF-8出力やclose例外でも、起動済みの全childを回収することを検査する。
+- リンク先・anchor・実コマンド・stepの順序を検査し、リンクされていない見出しの表現変更を許す。
+- CLI境界を実childで残し、同じproduction entrypointへ通す意味論の変異とimmutable fixtureを再利用する。
+- Session ledgerのshapeを一回の検証内で再利用し、不正なenum/roleのJSON型を例外終了から構造化した拒否へ変える。
+- 候補IOの上限・通常file・aggregate budget・cleanupを、入力内容の別の失敗で隠さず検査する。
+- SQLiteのSELECTはprojection/aliasも計測し、履歴読取り上限とN+1の負の対照を確認する。
+- peer通信の実receiptに必要な`payload_state`を閉じたschemaへ追加し、未知field・未知stateを拒否する。
+
+各領域を実装者とは別のagentが読み、レビュー指摘を処理しました。
+統合したローカルPython検査は1,306件、skip 0件で成功しました。
+必須CIではPythonの3委譲表示をTask swarm SDKのLinux/Windows試験と照合します。
+所要時間は測定した環境の参考値として扱い、別runnerの保証に使いません。
+
+## 継続して測定する点
+
+短文・長文・複雑な依存の通信benchmarkは、合成fixtureで入力と処理結果を照合し、
+実モデルを呼ばないことも確認します。モデル推論品質、実Dot、live provider、
+世界規模の同時利用・長時間稼働の受入には、それぞれ実環境での測定が必要です。
+この監査の完了はPublic Beta、配備、Final Human GOを意味しません。
