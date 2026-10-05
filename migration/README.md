@@ -11,6 +11,14 @@
   [`validate_migration_batch_a022.py`](../tools/validate_migration_batch_a022.py) が検査します。
   これらは台帳の record ではなく、台帳の verifier の検査対象でもありません。
 
+batch外への誤コピーは `python -B tools/check_migration_source_hygiene.py` で
+検査します。A017・A019・A022の固定source metadataを使い、HEAD・index・追跡中の
+working treeについて元blobの完全一致と、PRIVATE_RETAIN / SUPERSEDEDの元pathの
+混入を拒否します。既存manifestとA017の出典・検査に必要な参照だけを回数付きで許容し、
+診断は公開側path・行・snapshot・理由コードだけです。private sourceを取得しません。
+通常の全Python検査にも含まれます。対象は現在の追跡snapshotで、Git履歴全体、
+改変された元本文、圧縮・暗号化された写しの検出や、移行完了の証明ではありません。
+
 **台帳ファイルは現時点で not yet populated です。** 契約（schema、verifier、
 tests、fixture）だけが先に入っています。
 

@@ -472,6 +472,17 @@ lifecycle state は `prepared -> dispatched -> running -> completed | failed | c
 `claims.provider_instance_reused` は常に `false` です。Draft 2020-12 検証には `requirements-test.txt` の
 `jsonschema` が必要で、未導入時は `VALIDATOR_UNAVAILABLE` に fail-closed します。
 
+## Repository-wide migration source hygiene
+
+| Input | Validator / CLI | Regression test | PASSの意味 |
+|---|---|---|---|
+| A017・A019・A022の公開manifest | [`check_migration_source_hygiene.py`](../tools/check_migration_source_hygiene.py) | [`test_migration_private_retain_repository_wide.py`](../tests/test_migration_private_retain_repository_wide.py) | 現在のHEAD・index・追跡中のworking treeについて、元blobの完全一致と非公開・廃止元pathの文字列混入を検査する。元ファイルの取得、過去履歴の走査、改変・圧縮された写しの検出、移行完了の証明ではない。 |
+
+実行は `python -B tools/check_migration_source_hygiene.py`。既存のbatch validatorと併用します。
+固定した元データの対応表を縮小した場合、入力が読めない場合、8 MiBを超える追跡ファイルは失敗します。
+診断は追跡先path・行・snapshot・理由codeだけを出し、元pathを含む追跡先名も伏せます。
+詳細は[migration README](../migration/README.md)を参照してください。
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
