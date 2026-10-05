@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Cloudflare OSの任意の管理構成について、知識・会話・Task・agentの正本、読取adapter、訂正先、revision・grant境界と未接続部分を既存の設計契約へ明記。Dots-firstと単一Task ownerを保ち、native画面やprovider接続の完成とは区別する（#139）。
+
 - OpenMaus / Cloudflare OS の設計契約とread-only検証を追加。必要なagent表示項目・MCP能力境界・知識bundle参照を検査する契約候補で、UI・provider資源・実runtimeの有効化は含まない（元#56）。
 
 - 正本 #48 の公開知識基盤と #61 の互換 verdict/readiness 修正を現行 main へ再配置。9つの公開Concept、出典に束縛した catalog/graph、字句検索と限定context、schema/profile/判断readinessを分ける監査を追加。除外した旧運用文書やCloudflare baseを取り込まず、内容・実agent入力・権限の独立検証を未成立のまま明示する（`docs/KNOWLEDGE-BASE.md`）。

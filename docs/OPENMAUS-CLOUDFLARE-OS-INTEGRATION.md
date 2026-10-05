@@ -22,6 +22,22 @@ OpenMaus の `primary_human_surface` は、この任意の管理構成内の論�
 
 `canonical_owners` は [Owner Intent](OWNER-INTENT-COMPANY-AGI.md)、[#48 の知識 bundle の入口](../knowledge/index.md)、[Agent Lifecycle](PUBLIC-AGENT-LIFECYCLE-REGISTRY.md)、[Improvement Loop](IMPROVEMENT-LOOP.md) を参照します。知識の vocabulary は同 bundle の Goal / success model に合わせ、[Information Access](INFORMATION-ACCESS.md) は ACL の governing contract として扱います。ファイルの存在だけでは、実 registry や実行権限は成立しません。#48 の canonical IDs、選択済みの Task owner、route、承認の正本は、それぞれの owner に戻します。この候補は #48 の bundle 再配置を前提とします。
 
+### 正本とadapterの対応
+
+この表は #139 の接続設計です。実装済みのローカル入口と、Cloudflare OS向けの未接続部分を区別します。
+日常入口のDotsと任意の専用画面は同じownerへ戻します。画面ごとの台帳や暗黙のgrantは作りません。
+
+| 対象 | 正本の管理主体 | 読取adapter | 訂正・操作を返す先 | revision・Capability Grantの境界 | 未実装・未受入 |
+|---|---|---|---|---|---|
+| 知識 | [knowledge/index.md](../knowledge/index.md)を入口とする公開Concept。一次情報の権利・決定は元owner | [Knowledge CLI](KNOWLEDGE-BASE.md)のquery/contextと再生成catalog/graph | 既存Conceptへの変更と出典訂正をreview経路へ返す。Goal採否はOwner Intentのowner | source/Conceptのbytes・source_digest・as_ofを照合。構造適合は実actor/purposeの閲覧・実行grantにならない | native OS読取、実actor/purpose resolver、実入力への接続（#130・#137） |
+| 会話 | インストールで選択したSource owner。Discordのlocal ownerはSQLite、remoteは接続先一つ | [Task owner](../runtime/discord-template/docs/TASK-OWNER.md)のsource読取。OSのreview候補には[sanitized Gateway](../runtime/local-review-gateway/README.md)を使う設計 | sourceの訂正は元ownerのingest/revision経路。Gateway reviewはreview projectionだけを更新する | source revision・現在readers・同意を照合。Gatewayのacceptは元会話の訂正、Task実行やHuman GOを作らない | OS native接続（#124〜#126）、ledger export（#153）、実同意・保持の受入 |
+| Task | [選択済みTask owner](../runtime/discord-template/docs/TASK-OWNER.md)。local/remoteを二重に書かない | 同ownerのtasks/taskと現在actorを照合するPipeline。Dotsの読取はこの経路を使う | 同じTask IDのreviseTask/cancel/resume/finishをownerへ返す | 現在Task revision・Source/context版・全requiredActionsを照合。表示やnative approvalはworker.actionsのgrantを増やさない | OS native adapter、組織remote ownerと実executorの受入（#152・#160） |
+| agent | lifecycleの語彙は[公開契約](PUBLIC-AGENT-LIFECYCLE-REGISTRY.md)。実identity/grantは接続先owner。統合registryの実ownerは未解決 | read-only契約validator。Lunaは自分のlocal run記録を読む。全provider共通observerは未接続 | 実操作は認可済みprovider/executor adapterへ返す設計。Taskの結果は同じTask ownerへ返す | spec/instance/run/lease、epoch、policy/routeと現在grantを分離。表示principal、停止要求、ACKは本人認証や停止完了の証拠にならない | 実registry、native observer/dispatch、停止fence、provider instance継続性 |
+
+#131で受理したのは契約の範囲です。#124〜#126のnative addon統合は実接続へ進む前提として残し、
+この静的な表の存在をinstalled extensionや動作する画面の証拠にはしません。
+Proxmoxの実行境界は[既存executor候補](OPENMANUS-PROXMOX-EXECUTOR-CANDIDATE.md)を参照します。
+
 共有ビューは identity、authority、現在の仕事、観測時刻、verification 等の16項目と、`unknown` を含む8接続状態を必須にします。順序の変更は許容し、欠落・重複・未知の要素は拒否します。実行が止まったことと成果が検証されたことを分けます。
 
 OpenMaus MCP の対象能力と、公開資料で未提供とされた能力は重ねません。未提供の承認、永続的な許可、データ削除、資格情報変更、VM lifecycle を成功として表示しません。Proxmox の管理面は管理 adapter に限定します。work agent の直接アクセスは契約が拒否します。
