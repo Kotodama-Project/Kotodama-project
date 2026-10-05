@@ -1,3 +1,4 @@
+import copy
 import json
 import hashlib
 import os
@@ -7,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft202012Validator, ValidationError
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RESOLVER = ROOT / "tools" / "resolve_compose_candidate.py"
@@ -15,6 +18,8 @@ VERIFY = ROOT / "tools" / "verify_compose_image_availability_preflight.py"
 FIXTURE = ROOT / "tests" / "fixtures" / "fake_docker_cli.py"
 SCHEMA = ROOT / "schemas" / "compose-image-availability-preflight.schema.json"
 MANIFEST_DIGEST = "sha256:" + "0" * 64
+sys.path.insert(0, str(ROOT / "tools"))
+import validate_resolved_compose_candidate as candidate_validator
 
 
 class ComposeImageAvailabilityPreflightCliTests(unittest.TestCase):
@@ -236,6 +241,36 @@ class ComposeImageAvailabilityPreflightCliTests(unittest.TestCase):
         )
         self.assertFalse(schema["properties"]["claims"]["properties"]["public_beta_go"]["const"])
 
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            environment = self.fake_environment(temporary)
+            candidate = self.make_candidate(temporary, environment)
+            captured = subprocess.run(
+                [sys.executable, str(PREFLIGHT), str(candidate)], cwd=ROOT,
+                env=environment, text=True, capture_output=True, check=False,
+            )
+        self.assertEqual(captured.returncode, 0, captured.stdout + captured.stderr)
+        snapshot = json.loads(captured.stdout)
+        validator = Draft202012Validator(schema)
+        validator.validate(snapshot)
+        changes = [
+            ((), "unknown", "synthetic-value"),
+            (("host_binding",), "private_locator", "synthetic-value"),
+            (("host_binding",), "raw_identity_emitted", True),
+            (("claims",), "public_beta_go", True),
+            *[ (("effects",), field, not definition["const"])
+               for field, definition in schema["properties"]["effects"]["properties"].items()],
+        ]
+        for parents, field, value in changes:
+            with self.subTest(parents=parents, field=field):
+                rejected = copy.deepcopy(snapshot)
+                target = rejected
+                for parent in parents:
+                    target = target[parent]
+                target[field] = value
+                with self.assertRaises(ValidationError):
+                    validator.validate(rejected)
+
     def test_unreachable_daemon_refuses_without_forwarding_private_stderr(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
@@ -441,6 +476,20 @@ class ComposeImageAvailabilityPreflightCliTests(unittest.TestCase):
             changed_candidate_path = temporary / "changed-candidate.json"
             changed_candidate_path.write_text(json.dumps(changed_candidate), encoding="utf-8")
 
+            valid_changed_candidate = copy.deepcopy(changed_candidate)
+            valid_changed_candidate["resolved"]["resolved_contract_sha256"] = candidate_validator.canonical_sha256(
+                candidate_validator.safe_contract_projection(valid_changed_candidate)
+            )
+            self.assertEqual(candidate_validator.validate_candidate(valid_changed_candidate), [])
+            valid_changed_path = temporary / "valid-changed-candidate.json"
+            valid_changed_path.write_text(json.dumps(valid_changed_candidate), encoding="utf-8")
+            original_path = temporary / "original-preflight.json"
+            original_path.write_text(preflight.stdout, encoding="utf-8")
+            mismatch_result = subprocess.run(
+                [sys.executable, str(VERIFY), str(original_path), str(valid_changed_path)],
+                cwd=ROOT, text=True, capture_output=True, check=False,
+            )
+
             unknown_result = subprocess.run(
                 [sys.executable, str(VERIFY), str(unknown), str(candidate)],
                 cwd=ROOT,
@@ -476,6 +525,12 @@ class ComposeImageAvailabilityPreflightCliTests(unittest.TestCase):
             ["resolved candidate is invalid"],
         )
         self.assertNotIn("must-not-be-accepted", unknown_result.stdout)
+        self.assertEqual(mismatch_result.returncode, 1)
+        mismatch = json.loads(mismatch_result.stdout)
+        self.assertNotIn("resolved candidate is invalid", mismatch["errors"])
+        self.assertIn("candidate project binding mismatch", mismatch["errors"])
+        self.assertIn("candidate file digest mismatch", mismatch["errors"])
+        self.assertTrue(all(value is False for value in mismatch["claims"].values()))
 
 
 if __name__ == "__main__":

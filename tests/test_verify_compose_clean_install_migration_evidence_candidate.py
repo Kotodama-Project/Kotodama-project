@@ -527,6 +527,40 @@ class ComposeCleanInstallMigrationEvidenceCandidateVerifierCliTests(unittest.Tes
         self.assertEqual(result.stdout, "")
         self.assertIn("usage:", result.stderr)
 
+    def test_each_input_deep_and_malformed_json_are_content_free_refusals(self) -> None:
+        marker = "owned-deep-input-must-not-be-reflected"
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            candidate_path, preflight_path, candidate, preflight = self.make_inputs(temporary)
+            evidence = self.make_evidence(candidate_path, preflight_path, candidate, preflight)
+            evidence_path = temporary / "valid-evidence.json"
+            evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+            valid_paths = (evidence_path, candidate_path, preflight_path)
+            self.assertEqual(self.run_main(valid_paths).returncode, 0)
+            damaged = temporary / (marker + ".json")
+            payloads = (
+                b"[" * 5_000 + json.dumps(marker).encode("utf-8") + b"]" * 5_000,
+                b'{"number":' + b"1" * 5_000 + b"}",
+                ('{"' + marker + '":').encode("utf-8"),
+            )
+            for index in range(3):
+                for payload in payloads:
+                    with self.subTest(input_index=index, payload_bytes=len(payload)):
+                        damaged.write_bytes(payload)
+                        paths = list(valid_paths)
+                        paths[index] = damaged
+                        result = self.run_main(paths)
+                        self.assert_input_refusal(result)
+                        self.assertNotIn(marker, result.stdout + result.stderr)
+                        self.assertNotIn(str(damaged), result.stdout + result.stderr)
+            damaged.write_bytes(payloads[0])
+            result = subprocess.run(
+                [sys.executable, str(VERIFY), str(damaged), str(candidate_path), str(preflight_path)],
+                cwd=ROOT, text=True, capture_output=True, check=False, timeout=10,
+            )
+            self.assert_input_refusal(result)
+            self.assertNotIn(marker, result.stdout + result.stderr)
+
     def test_each_input_accepts_exact_byte_limit_and_refuses_limit_plus_one(self) -> None:
         self.assertEqual(VERIFIER.MAX_INPUT_BYTES, 1_048_576)
         with tempfile.TemporaryDirectory() as directory:

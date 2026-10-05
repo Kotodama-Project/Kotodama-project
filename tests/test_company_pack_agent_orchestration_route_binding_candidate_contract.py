@@ -1,5 +1,6 @@
 import copy
 import json
+import re
 import runpy
 import subprocess
 import sys
@@ -324,9 +325,10 @@ class AgentOrchestrationRouteBindingCandidateContractTests(unittest.TestCase):
             path.write_bytes(b"{" + b"a" * (1_048_576 + 1) + b"}")
             module = runpy.run_path(str(VALIDATOR))
             output = StringIO()
-            with patch.object(Path, "read_bytes", side_effect=AssertionError("full read forbidden")):
+            with patch.object(module["os"], "open", side_effect=AssertionError("oversized input opened")) as opened:
                 with redirect_stdout(output):
                     code = module["main"]([str(VALIDATOR), str(path)])
+                opened.assert_not_called()
 
         self.assertEqual(code, 2)
         self.assertIn("INPUT_TOO_LARGE", json.loads(output.getvalue())["reason_codes"])
@@ -361,34 +363,29 @@ class AgentOrchestrationRouteBindingCandidateContractTests(unittest.TestCase):
 
     def test_public_navigation_exposes_candidate_without_runtime_claim(self) -> None:
         self.assertTrue(DOC.is_file())
-        doc = DOC.read_text(encoding="utf-8")
-        for marker in (
-            "source_task",
-            "target_task",
-            "workspace / revision",
-            "PRECONDITIONS_MATCH_UNVERIFIED",
-            "NO_GO_UNPUBLISHED",
-            "Codex transport",
-            "subagent",
-            "Promotion",
-            "Current Truth",
-            "CANDIDATE_MARKED_REFUSED",
-            "VALIDATOR_UNAVAILABLE",
-            "requirements-test.txt",
-        ):
-            self.assertIn(marker, doc)
-
+        # Navigation is a relation between owned artifacts, not global words.
         matrix = MATRIX.read_text(encoding="utf-8")
-        for marker in (
-            "Agent orchestration route-binding candidate",
-            "company-pack-agent-orchestration-route-binding-candidate.schema.json",
-            "validate_company_pack_agent_orchestration_route_binding_candidate.py",
-            "test_company_pack_agent_orchestration_route_binding_candidate_contract.py",
-            "read-only",
-            "candidate-only",
-            "NO_GO_UNPUBLISHED",
-        ):
-            self.assertIn(marker, matrix)
+        rows = [row for row in matrix.splitlines() if row.startswith("| ")
+                and "../schemas/" + SCHEMA.name in row]
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        targets = re.findall(r"\]\(([^)]+)\)", row)
+        self.assertEqual(targets, [
+            "../schemas/" + SCHEMA.name,
+            "../tools/" + VALIDATOR.name,
+            "../tests/" + Path(__file__).name,
+            DOC.name,
+        ])
+        for target in targets:
+            self.assertTrue((MATRIX.parent / target).resolve().is_file(), target)
+        self.assertIn("read-only", row)
+        self.assertIn("PRECONDITIONS_MATCH_UNVERIFIED", row)
+        # Assert the explicit machine result; prose safety is reviewed separately.
+        code, report = self.run_cli(candidate())
+        self.assertEqual(code, 0)
+        self.assertEqual(report["status"], "CANDIDATE_ONLY")
+        self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+        self.assertTrue(all(value is False for value in report["claims"].values()))
 
 
 if __name__ == "__main__":
