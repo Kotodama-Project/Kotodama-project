@@ -38,5 +38,5 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Run the dependency-free coordination suite
-        run: node --test --test-reporter=tap runtime/git-steward/coordinator.test.mjs
+      - name: Run the coordination suite and synthetic business rehearsal
+        run: node --test --test-reporter=tap runtime/git-steward/coordinator.test.mjs runtime/git-steward/business-simulation.test.mjs

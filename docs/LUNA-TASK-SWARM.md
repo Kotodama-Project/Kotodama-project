@@ -213,6 +213,34 @@ JSON reportとGitHub job summaryは件数・bytes・VM命令数・検査結果�
 新規fileに限定し、既存reportを上書きしません。`--profile short`などで1種類を選べます。
 実モデルの受入は上記の明示的live demoで別に行い、この結果と混同しません。
 
+### 過去のlive受入記録（#159）
+
+2026-09-27の[範囲付き許可](https://github.com/Kotodama-Project/Kotodama-project/issues/159#issuecomment-5852478871)と
+[実施者の結果記録](https://github.com/Kotodama-Project/Kotodama-project/issues/159#issuecomment-5852532538)を、
+未統合だった公開文書候補`2d1e09933919b350eb27fa24ef9aa132087aafec`と照合しました。
+以下は当時のsynthetic fixtureでの`LOCAL_PASS`です。今回private receiptを再取得したり、
+実モデルを再実行したりした記録ではありません。
+
+| 項目 | 記録された結果 |
+|---|---|
+| revision | main `7df1aea`。実行入力のcode・Skill・role等14ファイルのhashと同じrevisionの一致を実施者が確認 |
+| 経路 | macOS、Python 3.12.14、hash固定のTask swarm依存、ログイン済みCodex CLI |
+| model calls | 3 workersと独立verifier 1。要求・観測ともに`gpt-5.6-luna` / `max` / `read-only` / approval `never`、4つの異なるthreadでcompleted |
+| 通信 | messages 7・ACK 7、question/reply 2組、worker報告3、payload digest一致 |
+| 状態 | accepted 4・failed 0・blocked 0・pending 0、試行4/6、約2分22秒、期限内 |
+| summary SHA-256 | `b152f116ea0d5322cf78f0961ad1179d5743a100d4a24b053d4549c33a4258ad` |
+| protocol verification SHA-256 | `295ad01d65184191e794a8c705657634ef3de9aa987581a4a79be4009c107c15` |
+
+結果記録は、toolの`audit_protocol`とowner受入直前のcandidate・receipt・stdout・runtime
+読戻し、その後の4件のreceipt照合を根拠としています。前提のofflineは81 tests PASS、
+demoはmessages/ACKとも7、accepted 4、model calls 0でした。
+初回はpeer MCP起動前に終了してmodel calls 0となり、許可された基盤障害の再試行1回を
+使っています。当時のvenv回避策を現在の手順へ戻さず、現行interpreter選択は上の説明に従います。
+
+この1回の許可は実施済みです。code・Skill・roleが変わった現在版のlive受入、
+native host route、世界規模の負荷、長時間稼働、本番swarm、Public Betaの証明には流用しません。
+本文、token、thread ID、hostやprivate pathは公開記録へ追加しません。
+
 ## 配置された role
 
 - `.codex/agents/kotodama_luna_worker.toml` — 一つの work cell、typed report、bounded peer communication
