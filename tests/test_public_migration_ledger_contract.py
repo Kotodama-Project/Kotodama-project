@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -430,8 +431,17 @@ class PublicMigrationLedgerContractTests(unittest.TestCase):
     def test_oversized_input_is_rejected_before_full_read(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "oversized-ledger.jsonl"
-            path.write_bytes(b"x" * (validator_module.MAX_INPUT_BYTES + 1))
+            # A sparse oversized file exercises the real byte boundary without
+            # allocating the entire limit merely to set up the test.
+            with path.open("wb") as stream:
+                stream.truncate(validator_module.MAX_INPUT_BYTES + 1)
             code, payload = self.run_validator_path(path)
+            with mock.patch.object(
+                validator_module.os, "read", side_effect=AssertionError("oversized input was read")
+            ) as read:
+                with self.assertRaises(validator_module.InputTooLargeError):
+                    validator_module.read_bounded(path)
+                read.assert_not_called()
         self.assertEqual(2, code, payload)
         self.assertIn("INPUT_TOO_LARGE", payload["reason_codes"])
         self.assertIsNone(payload["zero_unclassified"])
