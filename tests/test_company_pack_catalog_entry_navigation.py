@@ -1,56 +1,38 @@
+import re
 from pathlib import Path
 import unittest
 
+from tests.document_contract_helpers import section, assert_links, link_targets
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class CompanyPackCatalogEntryNavigationTests(unittest.TestCase):
     def test_catalog_exposes_ideal_current_smoke_first_stop(self) -> None:
-        text = (ROOT / "docs" / "COMPANY-PACK-CATALOG.md").read_text(encoding="utf-8")
-        flat = " ".join(text.split())
-
-        for marker in (
-            "## Read next: ideal -> current -> smoke",
-            "**Ideal:**",
-            "../templates/company/README.md",
-            "../templates/blocks/README.md",
-            "../templates/records/README.md",
-            "../templates/mocs/README.md",
-            "**Current:**",
-            "../examples/company-starter/README.md",
-            "[Company Pack Guided Next Steps](COMPANY-PACK-NEXT-STEPS.md)",
-            "**Smoke:**",
-            "SCHEMA-VALIDATOR-MATRIX.md",
-            "STARTER-WALKTHROUGH.md",
-            "../tests/test_company_pack_catalog_entry_navigation.py",
-            "python -m unittest tests.test_company_pack_catalog_entry_navigation -v",
-            "python3 -m unittest tests.test_company_pack_catalog_entry_navigation -v",
-            "read-only/candidate-only",
-            "NO_GO_UNPUBLISHED",
-        ):
-            with self.subTest(marker=marker):
-                self.assertIn(marker, flat)
-
-        self.assertLess(
-            text.index("## Read next: ideal -> current -> smoke"),
-            text.index("## Runbook smoke"),
+        source = ROOT / "docs/COMPANY-PACK-CATALOG.md"
+        text = source.read_text(encoding="utf-8")
+        entry = section(text, "read-next-ideal---current---smoke")
+        targets = (
+            "../templates/company/README.md", "../templates/blocks/README.md",
+            "../templates/records/README.md", "../templates/mocs/README.md",
+            "../examples/company-starter/README.md", "COMPANY-PACK-NEXT-STEPS.md",
+            "SCHEMA-VALIDATOR-MATRIX.md", "STARTER-WALKTHROUGH.md",
         )
-        self.assertNotIn(
-            "python -m pytest tests/test_company_pack_catalog_entry_navigation.py -q",
-            text,
-        )
-        self.assertNotIn(
-            "python3 -m pytest tests/test_company_pack_catalog_entry_navigation.py -q",
-            text,
-        )
+        assert_links(self, source, entry, targets)
+        positions = [link_targets(entry).index(target) for target in targets]
+        self.assertEqual(positions, sorted(positions))
+        self.assertLess(text.index(entry), text.index(section(text, "runbook-smoke")))
+        commands = re.findall(r"`([^`]+)`", entry)
+        for prefix in ("python", "python3"):
+            self.assertIn(f"{prefix} -m unittest tests.test_company_pack_catalog_entry_navigation -v", commands)
+        self.assertNotRegex(entry, r"python3? -m pytest")
+        self.assertIn("read-only/candidate-only", entry)
+        self.assertIn("NO_GO_UNPUBLISHED", entry)
 
     def test_catalog_links_the_review_chain_artifact_map(self) -> None:
-        text = (ROOT / "docs" / "COMPANY-PACK-CATALOG.md").read_text(encoding="utf-8")
-        marker = "[Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)"
-        self.assertIn(marker, text)
-        self.assertIn("before or after the smoke", text)
-        self.assertTrue((ROOT / "docs" / "STARTER-WALKTHROUGH.md").is_file())
+        source = ROOT / "docs/COMPANY-PACK-CATALOG.md"
+        text = source.read_text(encoding="utf-8")
+        assert_links(self, source, text, ("STARTER-WALKTHROUGH.md#review-chain-artifact-map",))
 
     def test_catalog_quick_start_separates_baseline_and_generated_candidate_chain(self) -> None:
         text = (ROOT / "docs" / "COMPANY-PACK-CATALOG.md").read_text(encoding="utf-8")

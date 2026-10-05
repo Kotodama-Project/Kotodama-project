@@ -6,6 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import importlib
+from unittest import mock
+import io
+from contextlib import chdir, redirect_stdout, redirect_stderr
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 ROOT = Path(__file__).resolve().parents[1]
 BOUNDARY = "Boundary: read-only/candidate-only; Public Beta remains NO_GO_UNPUBLISHED."
@@ -39,23 +44,38 @@ GROUPS = (
 
 class CompanyPackCliReferenceTests(unittest.TestCase):
     def test_every_entrypoint_has_side_effect_free_boundary_help(self) -> None:
-        for tool in TOOLS:
-            for flag in ("-h", "--help"):
-                with self.subTest(tool=tool, flag=flag), tempfile.TemporaryDirectory() as tmp:
-                    workdir = Path(tmp)
-                    before = tuple(workdir.iterdir())
-                    result = subprocess.run(
-                        [sys.executable, str(ROOT / "tools" / tool), flag],
-                        cwd=workdir,
-                        text=True,
-                        encoding="utf-8",
-                        capture_output=True,
-                        check=False,
-                    )
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(result.stderr, "")
-                    self.assertIn(BOUNDARY, result.stdout)
-                    self.assertEqual(tuple(workdir.iterdir()), before)
+        with tempfile.TemporaryDirectory() as temporary:
+            workdir = Path(temporary)
+            before = tuple(workdir.iterdir())
+            for tool in TOOLS:
+                module = importlib.import_module(tool.removesuffix(".py"))
+                help_outputs = []
+                for flag in ("-h", "--help"):
+                    with self.subTest(tool=tool, flag=flag):
+                        stdout, stderr = io.StringIO(), io.StringIO()
+                        with chdir(workdir), redirect_stdout(stdout), redirect_stderr(stderr), mock.patch.object(sys, "argv", [tool, flag]):
+                            try:
+                                code = module.main([tool, flag])
+                            except SystemExit as exited:
+                                code = exited.code
+                        self.assertEqual(code, 0)
+                        self.assertEqual(stderr.getvalue(), "")
+                        self.assertIn(BOUNDARY, stdout.getvalue())
+                        self.assertEqual(tuple(workdir.iterdir()), before)
+                        help_outputs.append(stdout.getvalue())
+                self.assertEqual(help_outputs[0], help_outputs[1])
+                cold = subprocess.run([sys.executable, str(ROOT / "tools" / tool), "--help"], cwd=workdir, text=True, encoding="utf-8", capture_output=True, check=False)
+                self.assertEqual(cold.returncode, 0, cold.stderr)
+                self.assertEqual(cold.stderr, "")
+                self.assertEqual(cold.stdout, help_outputs[1])
+                self.assertEqual(tuple(workdir.iterdir()), before)
+            short = subprocess.run([sys.executable, str(ROOT / "tools" / TOOLS[0]), "-h"], cwd=workdir, text=True, encoding="utf-8", capture_output=True, check=False)
+            long = subprocess.run([sys.executable, str(ROOT / "tools" / TOOLS[0]), "--help"], cwd=workdir, text=True, encoding="utf-8", capture_output=True, check=False)
+            self.assertEqual(short.returncode, 0)
+            self.assertEqual(long.returncode, 0)
+            self.assertEqual(short.stderr + long.stderr, "")
+            self.assertEqual(short.stdout, long.stdout)
+            self.assertEqual(tuple(workdir.iterdir()), before)
 
     def test_reference_indexes_exactly_the_public_entrypoints(self) -> None:
         reference = (ROOT / "docs" / "COMPANY-PACK-CLI-REFERENCE.md").read_text(

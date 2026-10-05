@@ -12,6 +12,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+from copy import deepcopy
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
@@ -496,6 +497,8 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             request_path, _request, _request_bytes = self.create_saved_request(root)
+            baseline_response = self.completed_response(request_path)
+            baseline_bytes = json.dumps(baseline_response, sort_keys=True)
             response_path = root / "saved-review-response.json"
 
             pending = json.loads(self.run_builder(request_path).stdout)
@@ -507,7 +510,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 "INCOMPLETE_ITEM_RESPONSES",
             )
 
-            missing_note = self.completed_response(request_path)
+            missing_note = deepcopy(baseline_response)
             missing_note["review_response"]["items"][0]["outcome"] = "reject"
             self.save_json(response_path, missing_note)
             missing_note_result = self.run_verifier(request_path, response_path)
@@ -519,32 +522,32 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
 
             sentinel = "PRIVATE_SENTINEL_DO_NOT_ECHO"
             binding_cases: list[tuple[str, dict]] = []
-            tampered_id = self.completed_response(request_path)
+            tampered_id = deepcopy(baseline_response)
             tampered_id["review_response"]["items"][0]["id"] = sentinel
             binding_cases.append(("tampered item", tampered_id))
 
-            reordered = self.completed_response(request_path)
+            reordered = deepcopy(baseline_response)
             reordered["review_response"]["items"][0:2] = list(
                 reversed(reordered["review_response"]["items"][0:2])
             )
             binding_cases.append(("reordered items", reordered))
 
-            missing_item = self.completed_response(request_path)
+            missing_item = deepcopy(baseline_response)
             missing_item["review_response"]["items"].pop()
             binding_cases.append(("missing item", missing_item))
 
-            duplicate_response_item = self.completed_response(request_path)
+            duplicate_response_item = deepcopy(baseline_response)
             duplicate_response_item["review_response"]["items"][1] = dict(
                 duplicate_response_item["review_response"]["items"][0]
             )
             binding_cases.append(("duplicate item", duplicate_response_item))
 
             for field in ("category", "path", "reason"):
-                tampered_field = self.completed_response(request_path)
+                tampered_field = deepcopy(baseline_response)
                 tampered_field["review_response"]["items"][0][field] = sentinel
                 binding_cases.append((f"tampered {field}", tampered_field))
 
-            changed_evidence = self.completed_response(request_path)
+            changed_evidence = deepcopy(baseline_response)
             changed_evidence["unresolved_evidence"]["items"] = []
             changed_evidence["unresolved_evidence"]["item_count"] = 0
             binding_cases.append(("changed evidence", changed_evidence))
@@ -564,32 +567,35 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                     self.assertTrue(
                         all(value is False for value in report["claims"].values())
                     )
+            self.assertEqual(json.dumps(baseline_response, sort_keys=True), baseline_bytes)
 
     def test_verifier_rejects_malformed_response_and_private_note_values(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             request_path, _request, _request_bytes = self.create_saved_request(root)
+            baseline_response = self.completed_response(request_path)
+            baseline_bytes = json.dumps(baseline_response, sort_keys=True)
             response_path = root / "private-response-name.json"
             sentinel = "PRIVATE_SENTINEL_DO_NOT_ECHO"
             cases: list[tuple[str, bytes]] = []
 
-            unknown = self.completed_response(request_path)
+            unknown = deepcopy(baseline_response)
             unknown["unknown"] = sentinel
             cases.append(("unknown field", json.dumps(unknown).encode("utf-8")))
 
-            nested_unknown = self.completed_response(request_path)
+            nested_unknown = deepcopy(baseline_response)
             nested_unknown["review_response"]["unknown"] = sentinel
             cases.append(
                 ("nested unknown field", json.dumps(nested_unknown).encode("utf-8"))
             )
 
-            numeric_false_claim = self.completed_response(request_path)
+            numeric_false_claim = deepcopy(baseline_response)
             numeric_false_claim["claims"]["human_approval_verified"] = 0
             cases.append(
                 ("numeric false claim", json.dumps(numeric_false_claim).encode("utf-8"))
             )
 
-            float_request_binding = self.completed_response(request_path)
+            float_request_binding = deepcopy(baseline_response)
             float_request_binding["request_binding"]["bytes"] = float(
                 float_request_binding["request_binding"]["bytes"]
             )
@@ -600,7 +606,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 )
             )
 
-            float_candidate_binding = self.completed_response(request_path)
+            float_candidate_binding = deepcopy(baseline_response)
             float_candidate_binding["candidate_binding"]["binding_count"] = 22.0
             cases.append(
                 (
@@ -609,19 +615,19 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 )
             )
 
-            secret_note = self.completed_response(request_path)
+            secret_note = deepcopy(baseline_response)
             secret_note["review_response"]["items"][0]["reviewer_note"] = (
                 "sk-abcdefghijklmnopqrstuvwxyz123456"
             )
             cases.append(("secret note", json.dumps(secret_note).encode("utf-8")))
 
-            local_path_note = self.completed_response(request_path)
+            local_path_note = deepcopy(baseline_response)
             local_path_note["review_response"]["items"][0]["reviewer_note"] = (
                 "C:\\Users\\private\\review.txt"
             )
             cases.append(("local path note", json.dumps(local_path_note).encode("utf-8")))
 
-            forward_slash_local_path_note = self.completed_response(request_path)
+            forward_slash_local_path_note = deepcopy(baseline_response)
             forward_slash_local_path_note["review_response"]["items"][0][
                 "reviewer_note"
             ] = "C:/Users/private/review.txt"
@@ -632,7 +638,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 )
             )
 
-            unc_local_path_note = self.completed_response(request_path)
+            unc_local_path_note = deepcopy(baseline_response)
             unc_local_path_note["review_response"]["items"][0]["reviewer_note"] = (
                 "\\\\private-host\\review-share\\review.txt"
             )
@@ -640,7 +646,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 ("UNC local path note", json.dumps(unc_local_path_note).encode("utf-8"))
             )
 
-            prefixed_drive_path_note = self.completed_response(request_path)
+            prefixed_drive_path_note = deepcopy(baseline_response)
             prefixed_drive_path_note["review_response"]["items"][0][
                 "reviewer_note"
             ] = "memoC:\\Users\\private\\review.txt"
@@ -652,7 +658,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             )
 
             for scheme in ("file", "smb"):
-                private_locator_note = self.completed_response(request_path)
+                private_locator_note = deepcopy(baseline_response)
                 private_locator_note["review_response"]["items"][0][
                     "reviewer_note"
                 ] = f"{scheme}://private-host/review-share/review.txt"
@@ -663,7 +669,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                     )
                 )
 
-            embedded_locator_note = self.completed_response(request_path)
+            embedded_locator_note = deepcopy(baseline_response)
             embedded_locator_note["review_response"]["items"][0][
                 "reviewer_note"
             ] = (
@@ -677,7 +683,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 )
             )
 
-            encoded_locator_note = self.completed_response(request_path)
+            encoded_locator_note = deepcopy(baseline_response)
             encoded_locator_note["review_response"]["items"][0][
                 "reviewer_note"
             ] = "https://example.com/evidence?next=file%3A%2F%2Fprivate-host%2Freview"
@@ -688,7 +694,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                 )
             )
 
-            userinfo_locator_note = self.completed_response(request_path)
+            userinfo_locator_note = deepcopy(baseline_response)
             userinfo_locator_note["review_response"]["items"][0][
                 "reviewer_note"
             ] = "https://example.com@private-host/review-share/review.txt"
@@ -709,7 +715,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             deep = (b'{"nested":' + b"[" * 80 + b"0" + b"]" * 80 + b"}")
             cases.append(("deep input", deep))
 
-            oversized = json.dumps(self.completed_response(request_path)).encode(
+            oversized = json.dumps(deepcopy(baseline_response)).encode(
                 "utf-8"
             ) + b" " * (1024 * 1024)
             cases.append(("oversized input", oversized))
@@ -726,6 +732,7 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                     self.assertEqual(report["status"], "RESPONSE_MISMATCH")
                     self.assertEqual(report["reason"], "RESPONSE_INVALID")
                     self.assertIsNone(report["pack_id"])
+            self.assertEqual(json.dumps(baseline_response, sort_keys=True), baseline_bytes)
 
     def test_verifier_final_reread_refuses_late_request_or_response_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -777,72 +784,62 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
                     self.assertIsNone(report["response_binding"])
 
     def test_response_schemas_are_closed_and_keep_authority_claims_false(self) -> None:
-        response_schema = json.loads(
-            (ROOT / "schemas" / "company-pack-review-response.schema.json").read_text(
-                encoding="utf-8"
-            )
-        )
-        verification_schema = json.loads(
-            (
-                ROOT
-                / "schemas"
-                / "company-pack-review-response-verification.schema.json"
-            ).read_text(encoding="utf-8")
-        )
-
-        for schema in (response_schema, verification_schema):
-            self.assertEqual(schema["additionalProperties"], False)
-            self.assertEqual(
-                schema["properties"]["public_beta"]["const"],
-                "NO_GO_UNPUBLISHED",
-            )
-            claims = schema["$defs"]["claims"]
-            self.assertEqual(claims["additionalProperties"], False)
-            self.assertTrue(
-                all(
-                    definition["const"] is False
-                    for definition in claims["properties"].values()
-                )
-            )
-
-        response_review = response_schema["properties"]["review_response"]
-        self.assertEqual(response_review["additionalProperties"], False)
-        self.assertEqual(
-            response_review["properties"]["selected_outcome"]["type"], "null"
-        )
-        item = response_schema["$defs"]["response_item"]
-        self.assertEqual(item["additionalProperties"], False)
-        self.assertEqual(
-            item["properties"]["outcome"]["oneOf"][1]["enum"],
-            ["accept", "request_changes", "reject"],
-        )
-        response_binding_count = response_schema["$defs"]["candidate_binding"][
-            "properties"
-        ]["binding_count"]
-        verification_binding_count = verification_schema["$defs"]["candidate_binding"][
-            "properties"
-        ]["binding_count"]
-        self.assertEqual(response_binding_count, {"type": "integer", "minimum": 1})
-        self.assertEqual(
-            verification_binding_count, {"type": "integer", "minimum": 1}
-        )
-        self.assertNotIn(
-            "const",
-            response_schema["allOf"][0]["then"]["properties"]["review_response"][
-                "properties"
-            ]["item_count"],
-        )
-        self.assertNotIn(
-            "const",
-            verification_schema["allOf"][0]["then"]["properties"]["review_summary"][
-                "properties"
-            ]["expected_items"],
-        )
-
-        summary = verification_schema["properties"]["review_summary"]
-        self.assertEqual(summary["additionalProperties"], False)
-        self.assertEqual(summary["properties"]["selected_outcome"]["type"], "null")
-        self.assertNotIn("items", summary["properties"])
+        response_schema = json.loads((ROOT / "schemas/company-pack-review-response.schema.json").read_text(encoding="utf-8"))
+        verification_schema = json.loads((ROOT / "schemas/company-pack-review-response-verification.schema.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request_path, _, _ = self.create_saved_request(root)
+            pending_result = self.run_builder(request_path)
+            self.assertEqual(pending_result.returncode, 0)
+            self.assertEqual(pending_result.stderr, b"")
+            response = json.loads(pending_result.stdout)
+            response_path = root / "response.json"
+            response_verifications = []
+            for outcome in ("accept", "request_changes", "reject"):
+                completed = deepcopy(response)
+                for item in completed["review_response"]["items"]:
+                    item["outcome"] = outcome
+                    item["reviewer_note"] = None if outcome == "accept" else "synthetic-note-ref"
+                self.save_json(response_path, completed)
+                verified = self.run_verifier(request_path, response_path)
+                self.assertEqual(verified.returncode, 0)
+                self.assertEqual(verified.stderr, b"")
+                response_verifications.append((completed, json.loads(verified.stdout)))
+            self.save_json(response_path, response)
+            incomplete = self.run_verifier(request_path, response_path)
+            self.assertEqual(incomplete.returncode, 1)
+            self.assertEqual(incomplete.stderr, b"")
+        Draft202012Validator(response_schema).validate(response)
+        reports = [(response_schema, item[0]) for item in response_verifications]
+        reports += [(verification_schema, item[1]) for item in response_verifications]
+        reports.append((verification_schema, json.loads(incomplete.stdout)))
+        for schema, report in reports:
+            validator = Draft202012Validator(schema)
+            validator.validate(report)
+            self.assertEqual(set(report["claims"]), set(schema["$defs"]["claims"]["required"]))
+            for claim in report["claims"]:
+                with self.subTest(kind=report["kind"], status=report["status"], claim=claim):
+                    mutation = deepcopy(report)
+                    mutation["claims"][claim] = True
+                    self.assertTrue(list(validator.iter_errors(mutation)))
+            summary_key = "review_response" if "review_response" in report else "review_summary"
+            for path, value in (((summary_key, "selected_outcome"), "accept"), (("candidate_binding", "binding_count"), 0)):
+                with self.subTest(kind=report["kind"], path=path):
+                    if report["candidate_binding"] is None and path[0] == "candidate_binding":
+                        continue
+                    mutation = deepcopy(report)
+                    mutation[path[0]][path[1]] = value
+                    self.assertTrue(list(validator.iter_errors(mutation)))
+        invalid_outcome = deepcopy(response_verifications[0][0])
+        invalid_outcome["review_response"]["items"][0]["outcome"] = "approved"
+        self.assertTrue(list(Draft202012Validator(response_schema).iter_errors(invalid_outcome)))
+        # Dynamic recordless quantities remain accepted without depending on
+        # oneOf/allOf list positions or today's starter's fixed item count.
+        with tempfile.TemporaryDirectory() as temporary:
+            request_path, _, _ = self.create_saved_recordless_request(Path(temporary))
+            recordless = json.loads(self.run_builder(request_path).stdout)
+        Draft202012Validator(response_schema).validate(recordless)
+        self.assertNotEqual(recordless["candidate_binding"]["binding_count"], response["candidate_binding"]["binding_count"])
 
     def test_output_is_deterministic_utf8_and_usage_never_reflects_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

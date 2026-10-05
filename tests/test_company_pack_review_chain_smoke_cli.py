@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import shutil
 import sys
@@ -11,6 +12,9 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+import smoke_company_pack_review_chain as smoke_builder
+from tests.document_contract_helpers import section, assert_links, shell_commands
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOL = ROOT / "tools" / "smoke_company_pack_review_chain.py"
@@ -108,9 +112,8 @@ class CompanyPackReviewChainSmokeCliTests(unittest.TestCase):
     def test_schema_rejects_reordered_overclaiming_or_incoherent_reports(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         validator = Draft202012Validator(schema)
-        with tempfile.TemporaryDirectory() as temporary:
-            result = self.run_smoke(cwd=Path(temporary))
-        report = json.loads(result.stdout)
+        report = smoke_builder.report("PASS", tuple(STEP_IDS))
+        validator.validate(report)
 
         mutations = []
         reordered = deepcopy(report)
@@ -134,43 +137,33 @@ class CompanyPackReviewChainSmokeCliTests(unittest.TestCase):
                 self.assertTrue(list(validator.iter_errors(mutation)))
 
     def test_public_docs_expose_the_one_command_smoke_and_boundaries(self) -> None:
-        surfaces = {
-            "README.md": (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8"),
-            "docs/STARTER-WALKTHROUGH.md": (
-                ROOT / "docs" / "STARTER-WALKTHROUGH.md"
-            ).read_text(encoding="utf-8"),
-            "docs/SCHEMA-VALIDATOR-MATRIX.md": (
-                ROOT / "docs" / "SCHEMA-VALIDATOR-MATRIX.md"
-            ).read_text(encoding="utf-8"),
-        }
-        commands = (
-            "python -S -B tools/smoke_company_pack_review_chain.py",
-            "python3 -S -B tools/smoke_company_pack_review_chain.py",
+        surfaces = (
+            (ROOT / "docs/OVERVIEW.md", "実行確認-runbook-smoke"),
+            (ROOT / "docs/STARTER-WALKTHROUGH.md", "実行確認-runbook-smoke"),
+            (ROOT / "docs/SCHEMA-VALIDATOR-MATRIX.md", "full-review-chain-smoke"),
         )
-        for path, document in surfaces.items():
-            with self.subTest(path=path):
-                for command in commands:
-                    self.assertIn(command, document)
-                for marker in (
-                    "13",
-                    "temporary",
-                    "NO_GO_UNPUBLISHED",
-                    "Human approval",
-                    "runtime",
-                    "Promotion",
-                    "Current Truth",
-                    "Public Beta GO",
-                ):
-                    self.assertIn(marker, document)
-
-        matrix = surfaces["docs/SCHEMA-VALIDATOR-MATRIX.md"]
-        for relative in (
+        for path, anchor in surfaces:
+            with self.subTest(path=path.relative_to(ROOT)):
+                document = path.read_text(encoding="utf-8")
+                smoke = section(document, anchor)
+                commands = shell_commands(smoke)
+                for prefix in ("python", "python3"):
+                    command = f"{prefix} -S -B tools/smoke_company_pack_review_chain.py"
+                    self.assertIn(command, commands)
+                    self.assertTrue((ROOT / command.split()[-1]).is_file())
+                assert_links(self, path, smoke)
+                self.assertIn("candidate-only", smoke)
+                self.assertIn("NO_GO_UNPUBLISHED", smoke)
+                paragraphs = [" ".join(part.split()) for part in smoke.split("\n\n")]
+                for claim in ("Human approval", "runtime", "Promotion", "Current Truth", "Public Beta GO"):
+                    self.assertTrue(any(claim in paragraph and re.search(r"does not create|creates no|作らない|ではない|作りません", paragraph) for paragraph in paragraphs), claim)
+        matrix = surfaces[-1][0]
+        smoke = section(matrix.read_text(encoding="utf-8"), "full-review-chain-smoke")
+        assert_links(self, matrix, smoke, (
             "../tools/smoke_company_pack_review_chain.py",
             "../schemas/company-pack-review-chain-smoke.schema.json",
             "../tests/test_company_pack_review_chain_smoke_cli.py",
-        ):
-            self.assertIn(relative, matrix)
-            self.assertTrue((ROOT / "docs" / relative).resolve().is_file())
+        ))
 
     def test_missing_child_is_a_closed_refusal_after_temporary_cleanup(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
