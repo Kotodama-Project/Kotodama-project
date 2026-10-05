@@ -14,6 +14,8 @@ from datetime import date
 from pathlib import Path
 
 
+from tests.document_contract_helpers import section, assert_links, shell_commands, assert_command_order, table_rows, assert_preview_boundary, headings, link_targets
+
 ROOT = Path(__file__).resolve().parents[1]
 STATUS = ROOT / "STATUS.md"
 ROADMAP = ROOT / "ROADMAP.md"
@@ -52,13 +54,19 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         match = re.search(r"^Updated: (\d{4}-\d{2}-\d{2})$", self.status, re.MULTILINE)
         self.assertIsNotNone(match, "STATUS.md needs a dated 'Updated: YYYY-MM-DD' line")
         updated = date.fromisoformat(match.group(1))
+        self.assertLessEqual(updated, date.today(), "STATUS.md must not claim a future update")
         last_change = last_commit_date(STATUS)
-        if last_change is not None:
-            self.assertLessEqual(
-                (last_change - updated).days,
-                30,
-                "STATUS.md changed without refreshing its Updated line",
-            )
+        # Source archives have no Git history: the current-date check still applies,
+        # while freshness against a commit is explicitly unavailable, not verified.
+        evidence = "unavailable" if last_change is None else "verified_against_last_change"
+        if evidence == "verified_against_last_change":
+            self.assertLessEqual(updated, last_change,
+                                 "STATUS.md Updated must not exceed its last known change")
+            self.assertLessEqual((last_change - updated).days, 30,
+                                 "STATUS.md changed without refreshing its Updated line")
+        else:
+            self.assertIsNone(last_change)
+            self.assertEqual(evidence, "unavailable")
 
     def test_status_and_roadmap_do_not_narrate_a_historical_revision_as_current(self) -> None:
         for name, text in (("STATUS.md", self.status), ("ROADMAP.md", self.roadmap)):
@@ -76,21 +84,24 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("docs/HISTORY.md", self.roadmap)
 
     def test_status_surface_table_covers_main_components(self) -> None:
-        table = self.status.split("## Latest Cloudflare candidate result", 1)[0]
-        for marker in (
-            "runtime/discord-template",
-            "docs/DISCORD-RUNTIME.md",
-            "docs/COMPANY-PACK-TASK-EXECUTION.md",
-            "runtime/local-review-gateway/README.md",
-            "docs/SESSION-CONVERSATION-LEDGER.md",
-            "docs/CLOUDFLARE-OS-ADOPTION.md",
-            "docs/OWNER-INTENT-COMPANY-AGI.md",
-            "| Public Beta access | Not open |",
-            "| Public Voice Bot | Inactive |",
-            "| Final Human GO | Not completed |",
-        ):
-            with self.subTest(marker=marker):
-                self.assertIn(marker, table)
+        boundary = next((offset for _, anchor, offset in headings(self.status)
+                         if anchor == "latest-cloudflare-candidate-result"), None)
+        self.assertIsNotNone(boundary, "STATUS's surface table must end at its owning boundary")
+        table = self.status[:boundary]
+        rows = table_rows(table)
+        self.assertEqual(rows[0], ["Surface", "Status"])
+        self.assertTrue(rows[1:])
+        for row in rows[1:]:
+            self.assertEqual(len(row), 2)
+            self.assertTrue(row[1])
+        by_name = {row[0]: row[1] for row in rows[1:]}
+        for name, expected in (("Public Beta access", "Not open"), ("Public Voice Bot", "Inactive"),
+                               ("Final Human GO", "Not completed")):
+            self.assertEqual(by_name.get(name), expected)
+        assert_links(self, STATUS, table, ("docs/DISCORD-RUNTIME.md", "docs/COMPANY-PACK-TASK-EXECUTION.md",
+                     "runtime/local-review-gateway/README.md", "docs/SESSION-CONVERSATION-LEDGER.md",
+                     "docs/CLOUDFLARE-OS-ADOPTION.md", "docs/OWNER-INTENT-COMPANY-AGI.md"))
+        self.assertIn("runtime/discord-template", (ROOT / "docs/DISCORD-RUNTIME.md").read_text(encoding="utf-8"))
 
     def test_public_status_surface_exposes_pack_entry_links(self) -> None:
         status_table = self.status.split("## Latest runtime result", 1)[0]

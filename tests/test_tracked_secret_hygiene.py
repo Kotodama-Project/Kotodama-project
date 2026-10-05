@@ -8,6 +8,10 @@ import unittest
 from pathlib import Path
 
 
+import yaml
+from tests.test_local_secret_ignore_policy import _ignored_paths
+from tests.document_contract_helpers import assert_links, fenced_blocks, section
+
 ROOT = Path(__file__).resolve().parents[1]
 SCANNER_PATH = ROOT / "tools/check_tracked_secret_hygiene.py"
 SPEC = importlib.util.spec_from_file_location("tracked_secret_hygiene", SCANNER_PATH)
@@ -322,6 +326,8 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 self.assertNotIn(value, repr(findings))
 
     def test_multiline_safe_reference_and_null_sibling_pass(self) -> None:
+        'Legacy case ID; labelled positive detections and safe/unsupported controls.'
+        scenarios = []
         name = "OPENAI_" + "API_KEY"
         safe_reference = name + ":\n  ${{ secrets." + name + " }}\n"
         safe_reference_after_comment = (
@@ -336,17 +342,14 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + name
             + "\"\n  : null,\n  \"OTHER_SETTING\": true\n}\n"
         )
-
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), safe_reference)
-        )
-        self.assertEqual(
+        scenarios.append((
+            'safe_reference', 'settings.yaml', safe_reference,
             [],
-            SCANNER.scan_text(
-                Path("settings.yaml"), safe_reference_after_comment
-            ),
-        )
-
+        ))
+        scenarios.append((
+            'safe_reference_after_comment', 'settings.yaml', safe_reference_after_comment,
+            [],
+        ))
         value = "SyntheticSecretValue2026"
         after_embedded_indicator = (
             "description: ordinary-'text\n"
@@ -356,33 +359,28 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "}\n"
         )
-        self.assertEqual(
-            [
-                (
-                    "after-indicator.yaml",
-                    2,
-                    f"live-looking value assigned to {name}",
-                )
-            ],
-            SCANNER.scan_text(
-                Path("after-indicator.yaml"), after_embedded_indicator
-            ),
-        )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), null_with_sibling)
-        )
-        self.assertEqual([], SCANNER.scan_text(Path("settings.json"), split_null))
-
+        scenarios.append((
+            'after_embedded_indicator', 'after-indicator.yaml', after_embedded_indicator,
+            [('after-indicator.yaml', 2, f'live-looking value assigned to {name}')],
+        ))
+        scenarios.append((
+            'null_with_sibling', 'settings.yaml', null_with_sibling,
+            [],
+        ))
+        scenarios.append((
+            'split_null', 'settings.json', split_null,
+            [],
+        ))
         safe_block = name + ": >-\n  ${{ secrets." + name + " }}\n"
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), safe_block)
-        )
-
+        scenarios.append((
+            'safe_block', 'settings.yaml', safe_block,
+            [],
+        ))
         empty_block = name + ": >-\nOTHER_SETTING: ordinary\n"
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), empty_block)
-        )
-
+        scenarios.append((
+            'empty_block', 'settings.yaml', empty_block,
+            [],
+        ))
         next_item = (
             "- name: "
             + name
@@ -390,10 +388,10 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), next_item)
-        )
-
+        scenarios.append((
+            'next_item', 'settings.yaml', next_item,
+            [],
+        ))
         unrelated_mapping = (
             "entry:\n  name: "
             + name
@@ -401,29 +399,27 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), unrelated_mapping)
-        )
-
+        scenarios.append((
+            'unrelated_mapping', 'settings.yaml', unrelated_mapping,
+            [],
+        ))
         unsafe_block = name + ": |2-\n    " + value + "\n"
-        findings = SCANNER.scan_text(Path("settings.yaml"), unsafe_block)
-        self.assertEqual(
-            [("settings.yaml", 1, f"live-looking value assigned to {name}")],
-            findings,
-        )
-        self.assertNotIn(value, repr(findings))
-
+        scenarios.append((
+            'unsafe_block', 'settings.yaml', unsafe_block,
+            [('settings.yaml', 1, f'live-looking value assigned to {name}')],
+        ))
         block_hash_literal = (
             name + ": >-\n  ${" + name + "} # " + value + "\n"
         )
-        hash_findings = SCANNER.scan_text(
-            Path("settings.yaml"), block_hash_literal
-        )
-        self.assertEqual(
-            [("settings.yaml", 1, f"live-looking value assigned to {name}")],
-            hash_findings,
-        )
-        self.assertNotIn(value, repr(hash_findings))
+        scenarios.append((
+            'block_hash_literal', 'settings.yaml', block_hash_literal,
+            [('settings.yaml', 1, f'live-looking value assigned to {name}')],
+        ))
+        for (index, (label, filename, text, expected)) in enumerate(scenarios):
+            with self.subTest(scenario=f'{label}:{index}', filename=filename):
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(expected, findings)
+                self.assertNotIn(value, repr(findings))
 
     def test_multiline_scheme_relative_url_is_not_treated_as_a_comment(self) -> None:
         name = "DATABASE" + "_URL"
@@ -440,6 +436,8 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertNotIn(value, repr(findings))
 
     def test_structured_environment_entries_are_detected(self) -> None:
+        'Legacy case ID; labelled positive detections and safe/unsupported controls.'
+        scenarios = []
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
         cases = {
@@ -523,15 +521,11 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 '{"name":"' + name + '","value":"' + value + '"}\n'
             ),
         }
-        for filename, text in cases.items():
-            with self.subTest(filename=filename):
-                findings = SCANNER.scan_text(Path(filename), text)
-                self.assertEqual(
-                    [(filename, 1, f"live-looking value assigned to {name}")],
-                    findings,
-                )
-                self.assertNotIn(value, repr(findings))
-
+        for (filename, text) in cases.items():
+            scenarios.append((
+                'text', filename, text,
+                [(filename, 1, f'live-looking value assigned to {name}')],
+            ))
         after_plain_apostrophe = (
             "description: it's ordinary\n"
             + "- {name: "
@@ -540,19 +534,10 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "}\n"
         )
-        self.assertEqual(
-            [
-                (
-                    "after-apostrophe.yaml",
-                    2,
-                    f"live-looking value assigned to {name}",
-                )
-            ],
-            SCANNER.scan_text(
-                Path("after-apostrophe.yaml"), after_plain_apostrophe
-            ),
-        )
-
+        scenarios.append((
+            'after_plain_apostrophe', 'after-apostrophe.yaml', after_plain_apostrophe,
+            [('after-apostrophe.yaml', 2, f'live-looking value assigned to {name}')],
+        ))
         escaped_block_fields = (
             '- "na\\u006de": '
             + name
@@ -560,74 +545,47 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "\n"
         )
-        self.assertEqual(
-            [
-                (
-                    "escaped-block.yaml",
-                    1,
-                    f"live-looking value assigned to {name}",
-                )
-            ],
-            SCANNER.scan_text(Path("escaped-block.yaml"), escaped_block_fields),
-        )
-
-        for scalar_property in ("&s", "!!str"):
-            with self.subTest(scalar_property=scalar_property):
-                block_property = (
-                    "- name: "
-                    + scalar_property
-                    + " "
-                    + name
-                    + "\n  value: "
-                    + value
-                    + "\n"
-                )
-                flow_property = (
-                    "- {name: "
-                    + scalar_property
-                    + " "
-                    + name
-                    + ", value: "
-                    + value
-                    + "}\n"
-                )
-                for filename, text in (
-                    ("property-block.yaml", block_property),
-                    ("property-flow.yaml", flow_property),
-                ):
-                    self.assertEqual(
-                        [
-                            (
-                                filename,
-                                1,
-                                f"live-looking value assigned to {name}",
-                            )
-                        ],
-                        SCANNER.scan_text(Path(filename), text),
-                    )
-
-                multiline_property = (
-                    "- name: "
-                    + scalar_property
-                    + "\n    "
-                    + name
-                    + "\n  value: "
-                    + value
-                    + "\n"
-                )
-                self.assertEqual(
-                    [
-                        (
-                            "property-multiline.yaml",
-                            1,
-                            f"live-looking value assigned to {name}",
-                        )
-                    ],
-                    SCANNER.scan_text(
-                        Path("property-multiline.yaml"), multiline_property
-                    ),
-                )
-
+        scenarios.append((
+            'escaped_block_fields', 'escaped-block.yaml', escaped_block_fields,
+            [('escaped-block.yaml', 1, f'live-looking value assigned to {name}')],
+        ))
+        for scalar_property in ('&s', '!!str'):
+            block_property = (
+                "- name: "
+                + scalar_property
+                + " "
+                + name
+                + "\n  value: "
+                + value
+                + "\n"
+            )
+            flow_property = (
+                "- {name: "
+                + scalar_property
+                + " "
+                + name
+                + ", value: "
+                + value
+                + "}\n"
+            )
+            for (filename, text) in (('property-block.yaml', block_property), ('property-flow.yaml', flow_property)):
+                scenarios.append((
+                    'text', filename, text,
+                    [(filename, 1, f'live-looking value assigned to {name}')],
+                ))
+            multiline_property = (
+                "- name: "
+                + scalar_property
+                + "\n    "
+                + name
+                + "\n  value: "
+                + value
+                + "\n"
+            )
+            scenarios.append((
+                'multiline_property', 'property-multiline.yaml', multiline_property,
+                [('property-multiline.yaml', 1, f'live-looking value assigned to {name}')],
+            ))
         merge_value = (
             "common: &common {value: "
             + value
@@ -642,20 +600,12 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "}\n"
         )
-        for label, text in (("merge-value", merge_value), ("merge-name", merge_name)):
+        for (label, text) in (('merge-value', merge_value), ('merge-name', merge_name)):
             filename = label + ".yaml"
-            with self.subTest(merge=label):
-                self.assertEqual(
-                    [
-                        (
-                            filename,
-                            2,
-                            f"live-looking value assigned to {name}",
-                        )
-                    ],
-                    SCANNER.scan_text(Path(filename), text),
-                )
-
+            scenarios.append((
+                'text', filename, text,
+                [(filename, 2, f'live-looking value assigned to {name}')],
+            ))
         block_merge_value = (
             "common: &common\n  value: "
             + value
@@ -670,23 +620,12 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "\n"
         )
-        for label, text in (
-            ("block-merge-value", block_merge_value),
-            ("block-merge-name", block_merge_name),
-        ):
+        for (label, text) in (('block-merge-value', block_merge_value), ('block-merge-name', block_merge_name)):
             filename = label + ".yaml"
-            with self.subTest(block_merge=label):
-                self.assertEqual(
-                    [
-                        (
-                            filename,
-                            4,
-                            f"live-looking value assigned to {name}",
-                        )
-                    ],
-                    SCANNER.scan_text(Path(filename), text),
-                )
-
+            scenarios.append((
+                'text', filename, text,
+                [(filename, 4, f'live-looking value assigned to {name}')],
+            ))
         scalar_alias_block = (
             "secret_name: &secret_name "
             + name
@@ -701,21 +640,11 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "}\n"
         )
-        for filename, text in (
-            ("alias-block.yaml", scalar_alias_block),
-            ("alias-flow.yaml", scalar_alias_flow),
-        ):
-            self.assertEqual(
-                [
-                    (
-                        filename,
-                        2,
-                        f"live-looking value assigned to {name}",
-                    )
-                ],
-                SCANNER.scan_text(Path(filename), text),
-            )
-
+        for (filename, text) in (('alias-block.yaml', scalar_alias_block), ('alias-flow.yaml', scalar_alias_flow)):
+            scenarios.append((
+                'text', filename, text,
+                [(filename, 2, f'live-looking value assigned to {name}')],
+            ))
         flow_collection_alias = (
             "names: [&secret_name "
             + name
@@ -723,46 +652,33 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "\n"
         )
-        self.assertEqual(
-            [
-                (
-                    "flow-alias.yaml",
-                    2,
-                    f"live-looking value assigned to {name}",
-                )
-            ],
-            SCANNER.scan_text(Path("flow-alias.yaml"), flow_collection_alias),
-        )
-
+        scenarios.append((
+            'flow_collection_alias', 'flow-alias.yaml', flow_collection_alias,
+            [('flow-alias.yaml', 2, f'live-looking value assigned to {name}')],
+        ))
         reverse_block = "- value: " + value + "\n  name: " + name + "\n"
-        self.assertEqual(
-            [
-                (
-                    "reverse-block.yaml",
-                    2,
-                    f"live-looking value assigned to {name}",
-                )
-            ],
-            SCANNER.scan_text(Path("reverse-block.yaml"), reverse_block),
-        )
-
+        scenarios.append((
+            'reverse_block', 'reverse-block.yaml', reverse_block,
+            [('reverse-block.yaml', 2, f'live-looking value assigned to {name}')],
+        ))
         value_from = (
             "- name: "
             + name
             + "\n  valueFrom:\n    secretKeyRef:\n      name: private\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), value_from)
-        )
+        scenarios.append((
+            'value_from', 'settings.yaml', value_from,
+            [],
+        ))
         reverse_value_from = (
             "- valueFrom:\n    secretKeyRef:\n      name: private\n  name: "
             + name
             + "\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), reverse_value_from)
-        )
-
+        scenarios.append((
+            'reverse_value_from', 'settings.yaml', reverse_value_from,
+            [],
+        ))
         canonical_sequence_scalar = (
             "documentation:\n  - |-\n    {name: "
             + name
@@ -770,11 +686,10 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "}\n"
         )
-        self.assertEqual(
+        scenarios.append((
+            'canonical_sequence_scalar', 'settings.yaml', canonical_sequence_scalar,
             [],
-            SCANNER.scan_text(Path("settings.yaml"), canonical_sequence_scalar),
-        )
-
+        ))
         escaped_name = "OPENAI_API_" + "\\u004b" + "EY"
         escaped = (
             '- name: "'
@@ -783,11 +698,10 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + '"\n'
         )
-        self.assertEqual(
-            [("settings.yaml", 1, f"live-looking value assigned to {name}")],
-            SCANNER.scan_text(Path("settings.yaml"), escaped),
-        )
-
+        scenarios.append((
+            'escaped', 'settings.yaml', escaped,
+            [('settings.yaml', 1, f'live-looking value assigned to {name}')],
+        ))
         safe_block = (
             "- name: "
             + name
@@ -795,20 +709,19 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + name
             + " }}\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), safe_block)
-        )
-
+        scenarios.append((
+            'safe_block', 'settings.yaml', safe_block,
+            [],
+        ))
         empty_structured_block = (
             "- name: "
             + name
             + "\n  value: >-\n- name: OTHER_SETTING\n  value: ordinary\n"
         )
-        self.assertEqual(
+        scenarios.append((
+            'empty_structured_block', 'settings.yaml', empty_structured_block,
             [],
-            SCANNER.scan_text(Path("settings.yaml"), empty_structured_block),
-        )
-
+        ))
         safe_flow = (
             "- {name: "
             + name
@@ -816,24 +729,24 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + name
             + " }}}\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), safe_flow)
-        )
-
+        scenarios.append((
+            'safe_flow', 'settings.yaml', safe_flow,
+            [],
+        ))
         separate_flow_records = (
             "- {name: " + name + "}\n- {value: " + value + "}\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), separate_flow_records)
-        )
-
+        scenarios.append((
+            'separate_flow_records', 'settings.yaml', separate_flow_records,
+            [],
+        ))
         commented_flow_record = (
             "# {name: " + name + ", value: " + value + "}\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), commented_flow_record)
-        )
-
+        scenarios.append((
+            'commented_flow_record', 'settings.yaml', commented_flow_record,
+            [],
+        ))
         single_quoted_escape_key = (
             "- {'na\\u006de': "
             + name
@@ -841,11 +754,10 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "}\n"
         )
-        self.assertEqual(
+        scenarios.append((
+            'single_quoted_escape_key', 'settings.yaml', single_quoted_escape_key,
             [],
-            SCANNER.scan_text(Path("settings.yaml"), single_quoted_escape_key),
-        )
-
+        ))
         flow_example_block = (
             "documentation: |-\n  {name: "
             + name
@@ -853,10 +765,10 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "}\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), flow_example_block)
-        )
-
+        scenarios.append((
+            'flow_example_block', 'settings.yaml', flow_example_block,
+            [],
+        ))
         flow_example_sequence = (
             "documentation:\n  - |-\n      {name: "
             + name
@@ -864,11 +776,10 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "}\n"
         )
-        self.assertEqual(
+        scenarios.append((
+            'flow_example_sequence', 'settings.yaml', flow_example_sequence,
             [],
-            SCANNER.scan_text(Path("settings.yaml"), flow_example_sequence),
-        )
-
+        ))
         nested_unrelated_value = (
             "- {name: "
             + name
@@ -876,19 +787,19 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + value
             + "}}\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), nested_unrelated_value)
-        )
-
+        scenarios.append((
+            'nested_unrelated_value', 'settings.yaml', nested_unrelated_value,
+            [],
+        ))
         flow_value_from = (
             "- {metadata: {enabled: true}, name: "
             + name
             + ", valueFrom: {secretKeyRef: {name: private, key: token}}}\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), flow_value_from)
-        )
-
+        scenarios.append((
+            'flow_value_from', 'settings.yaml', flow_value_from,
+            [],
+        ))
         merge_override = (
             "common: &common\n  value: "
             + value
@@ -898,9 +809,15 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             + name
             + " }}\n"
         )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("settings.yaml"), merge_override)
-        )
+        scenarios.append((
+            'merge_override', 'settings.yaml', merge_override,
+            [],
+        ))
+        for (index, (label, filename, text, expected)) in enumerate(scenarios):
+            with self.subTest(scenario=f'{label}:{index}', filename=filename):
+                findings = SCANNER.scan_text(Path(filename), text)
+                self.assertEqual(expected, findings)
+                self.assertNotIn(value, repr(findings))
 
     def test_commented_multiline_assignment_start_is_ignored(self) -> None:
         name = "OPENAI_" + "API_KEY"
@@ -1382,6 +1299,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 self.assertNotIn(value, repr(findings))
 
     def test_csharp_named_environment_setter_arguments_are_bounded(self) -> None:
+        """Literal guards plus API-invalid/nonliteral/unresolved-target controls; no safety claim."""
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
         target = "EnvironmentVariableTarget.Process"
@@ -1408,19 +1326,20 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 )
                 self.assertNotIn(value, repr(findings))
 
-        negatives = (
-            f'Environment.SetEnvironmentVariable(variable: "{name}", value: secretValue);\n',
-            f'Environment.SetEnvironmentVariable(name: "{name}", value: "{value}");\n',
-            f'Environment.SetEnvironmentVariable(variable: "{name}", variable: "OTHER", value: "{value}");\n',
-            f'Environment.SetEnvironmentVariable(Variable: "{name}", Value: "{value}");\n',
-            f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", target: target);\n',
-            f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", target: "Process");\n',
-        )
-        for text in negatives:
-            with self.subTest(negative=text[:32]):
+        negatives = {
+            'valid_nonliteral_value': f'Environment.SetEnvironmentVariable(variable: "{name}", value: secretValue);\n',
+            'invalid_unknown_parameter': f'Environment.SetEnvironmentVariable(name: "{name}", value: "{value}");\n',
+            'invalid_duplicate_parameter': f'Environment.SetEnvironmentVariable(variable: "{name}", variable: "OTHER", value: "{value}");\n',
+            'invalid_parameter_case': f'Environment.SetEnvironmentVariable(Variable: "{name}", Value: "{value}");\n',
+            'valid_unresolved_target': f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", target: target);\n',
+            'invalid_target_type': f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", target: "Process");\n',
+        }
+        for label, text in negatives.items():
+            with self.subTest(resolution=label):
                 self.assertEqual([], SCANNER.scan_text(Path("config.cs"), text))
 
     def test_csharp_mixed_positional_named_setter_arguments_are_bounded(self) -> None:
+        """Literal guards plus API-invalid/nonliteral/unresolved-target controls; no safety claim."""
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
         target = "EnvironmentVariableTarget.Process"
@@ -1439,18 +1358,19 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 )
                 self.assertNotIn(value, repr(findings))
 
-        negatives = (
-            f'Environment.SetEnvironmentVariable(value: "{value}", "{name}");\n',
-            f'Environment.SetEnvironmentVariable("{name}", value: dynamicValue);\n',
-            f'Environment.SetEnvironmentVariable("{name}", value: "{value}", target: dynamicTarget);\n',
-            f'Environment.SetEnvironmentVariable("{name}", value: "{value}", value: "OTHER");\n',
-            f'Environment.SetEnvironmentVariable("{name}", variable: "OTHER", value: "{value}");\n',
-        )
-        for text in negatives:
-            with self.subTest(negative=text[:36]):
+        negatives = {
+            'invalid_positional_after_reordered_named': f'Environment.SetEnvironmentVariable(value: "{value}", "{name}");\n',
+            'valid_nonliteral_value': f'Environment.SetEnvironmentVariable("{name}", value: dynamicValue);\n',
+            'valid_unresolved_target': f'Environment.SetEnvironmentVariable("{name}", value: "{value}", target: dynamicTarget);\n',
+            'invalid_duplicate_value': f'Environment.SetEnvironmentVariable("{name}", value: "{value}", value: "OTHER");\n',
+            'invalid_duplicate_variable': f'Environment.SetEnvironmentVariable("{name}", variable: "OTHER", value: "{value}");\n',
+        }
+        for label, text in negatives.items():
+            with self.subTest(resolution=label):
                 self.assertEqual([], SCANNER.scan_text(Path("config.cs"), text))
 
     def test_csharp_named_prefixes_allow_only_correct_parameter_position(self) -> None:
+        """Literal guards plus API-invalid/nonliteral/unresolved-target controls; no safety claim."""
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
         target = "EnvironmentVariableTarget.Process"
@@ -1469,14 +1389,14 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 )
                 self.assertNotIn(value, repr(findings))
 
-        negatives = (
-            f'Environment.SetEnvironmentVariable(value: "{value}", "{name}");\n',
-            f'Environment.SetEnvironmentVariable(variable: "{name}", dynamicValue);\n',
-            f'Environment.SetEnvironmentVariable(variable: "{name}", "{value}", target: dynamicTarget);\n',
-            f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", "{target}");\n',
-        )
-        for text in negatives:
-            with self.subTest(negative=text[:40]):
+        negatives = {
+            'invalid_named_parameter_position': f'Environment.SetEnvironmentVariable(value: "{value}", "{name}");\n',
+            'valid_nonliteral_value': f'Environment.SetEnvironmentVariable(variable: "{name}", dynamicValue);\n',
+            'valid_unresolved_target': f'Environment.SetEnvironmentVariable(variable: "{name}", "{value}", target: dynamicTarget);\n',
+            'invalid_target_type': f'Environment.SetEnvironmentVariable(variable: "{name}", value: "{value}", "{target}");\n',
+        }
+        for label, text in negatives.items():
+            with self.subTest(resolution=label):
                 self.assertEqual([], SCANNER.scan_text(Path("config.cs"), text))
 
     def test_environment_setter_values_resolve_prior_local_literal_aliases(self) -> None:
@@ -1871,6 +1791,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertEqual([], SCANNER.scan_text(Path("config.py"), dynamic))
 
     def test_python_comprehension_walrus_scopes_are_bounded(self) -> None:
+        'Static body detection is separate from compilation and actual generator iteration.'
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
         positives = (
@@ -1921,12 +1842,25 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             f'name = "{name}"\n'
             f'[os.putenv(name, secret) for item in [(secret := "{value}")]]\n'
         )
+        with self.assertRaises(SyntaxError):
+            compile(walrus_in_iterable, "invalid-comprehension-iterable", "exec")
+        # Conservative source detection of invalid syntax is not an execution proof.
         findings = SCANNER.scan_text(Path("config.py"), walrus_in_iterable)
         self.assertEqual(
             [("config.py", 2, f"live-looking value assigned to {name}")],
             findings,
         )
         self.assertNotIn(value, repr(findings))
+
+        iterated_generator = (
+            f'name = "{name}"\n'
+            f'list(os.putenv(name, secret) for secret in ("{value}",))\n'
+        )
+        self.assertEqual([(name, value)], self.execute_owned_setter_fixture(iterated_generator))
+        self.assertEqual(
+            [("config.py", 2, f"live-looking value assigned to {name}")],
+            SCANNER.scan_text(Path("config.py"), iterated_generator),
+        )
 
         # The preceding malformed-source fixture remains useful to the scanner.
         # CPython forbids a walrus inside a comprehension iterable; this valid
@@ -2015,6 +1949,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
 
     def test_python_compound_literals_and_comparisons_fail_closed(self) -> None:
+        'Legacy fail_closed ID: bounded constant resolution, short circuits and side effects; unknown is not safe.'
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
         starred = (
@@ -2471,6 +2406,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         )
 
     def test_python_container_mutations_invalidate_all_static_views(self) -> None:
+        'Each alias/side-effect oracle records its real line; incomplete source does not prove execution.'
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
         controls = (
@@ -2649,8 +2585,9 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 "os.putenv(name, secret)\n"
             ),
         )
-        for text in controls:
-            with self.subTest(mutation=text.splitlines()[2]):
+        for index, text in enumerate(controls):
+            source_class = "incomplete_nested_scope" if "nested = alias" in text else "bounded_static_mutation"
+            with self.subTest(mutation=index, source_class=source_class):
                 self.assertEqual([], SCANNER.scan_text(Path("config.py"), text))
 
         # A nested class does not capture the enclosing class's local aliases.
@@ -2675,62 +2612,87 @@ class TrackedSecretHygieneTests(unittest.TestCase):
 
         preserved = (
             (
-                'mutated = {"key": "safe"}\n'
-                "alias = mutated\n"
-                f'protected = {{"key": "{name}"}}\n'
-                "alias.clear()\n"
-                'name = protected["key"]\n'
-                f'secret = "{value}"\n'
-                "os.putenv(name, secret)\n"
+                'independent_container',
+                (
+                    'mutated = {"key": "safe"}\n'
+                    "alias = mutated\n"
+                    f'protected = {{"key": "{name}"}}\n'
+                    "alias.clear()\n"
+                    'name = protected["key"]\n'
+                    f'secret = "{value}"\n'
+                    "os.putenv(name, secret)\n"
+                ),
+                7,
             ),
             (
-                f'mapping = {{"key": "{name}"}}\n'
-                "alias = mapping\n"
-                'alias = {"key": "safe"}\n'
-                "alias.clear()\n"
-                'name = mapping["key"]\n'
-                f'secret = "{value}"\n'
-                "os.putenv(name, secret)\n"
+                'rebound_alias',
+                (
+                    f'mapping = {{"key": "{name}"}}\n'
+                    "alias = mapping\n"
+                    'alias = {"key": "safe"}\n'
+                    "alias.clear()\n"
+                    'name = mapping["key"]\n'
+                    f'secret = "{value}"\n'
+                    "os.putenv(name, secret)\n"
+                ),
+                7,
             ),
             (
-                f'mapping = {{"key": "{name}"}}\n'
-                'mapping["key"].lower()\n'
-                'name = mapping["key"]\n'
-                f'secret = "{value}"\n\n\n'
-                "os.putenv(name, secret)\n"
+                'nonmutating_lower',
+                (
+                    f'mapping = {{"key": "{name}"}}\n'
+                    'mapping["key"].lower()\n'
+                    'name = mapping["key"]\n'
+                    f'secret = "{value}"\n'
+                    "os.putenv(name, secret)\n"
+                ),
+                5,
             ),
             (
-                f'mapping = {{"key": "{name}"}}\n'
-                "class Preserve:\n"
-                '    alias = {"key": "safe"}\n'
-                "    alias.clear()\n"
-                'name = mapping["key"]\n'
-                f'secret = "{value}"\n'
-                "os.putenv(name, secret)\n"
+                'independent_class_alias',
+                (
+                    f'mapping = {{"key": "{name}"}}\n'
+                    "class Preserve:\n"
+                    '    alias = {"key": "safe"}\n'
+                    "    alias.clear()\n"
+                    'name = mapping["key"]\n'
+                    f'secret = "{value}"\n'
+                    "os.putenv(name, secret)\n"
+                ),
+                7,
             ),
             (
-                f'mapping = {{"key": "{name}"}}\n'
-                'mapping.get("key")\n'
-                'name = mapping["key"]\n'
-                f'secret = "{value}"\n\n\n'
-                "os.putenv(name, secret)\n"
+                'nonmutating_get',
+                (
+                    f'mapping = {{"key": "{name}"}}\n'
+                    'mapping.get("key")\n'
+                    'name = mapping["key"]\n'
+                    f'secret = "{value}"\n'
+                    "os.putenv(name, secret)\n"
+                ),
+                5,
             ),
             (
-                f'values = ["{name}"]\n'
-                "values.count(name)\n"
-                "name = values[0]\n"
-                f'secret = "{value}"\n\n\n'
-                "os.putenv(name, secret)\n"
+                'nonmutating_count',
+                (
+                    f'values = ["{name}"]\n'
+                    "values.count('ordinary')\n"
+                    "name = values[0]\n"
+                    f'secret = "{value}"\n'
+                    "os.putenv(name, secret)\n"
+                ),
+                5,
             ),
         )
-        for text in preserved:
-            with self.subTest(preserved=text.splitlines()[0]):
+        for label, text, expected_line in preserved:
+            with self.subTest(preserved=label):
                 findings = SCANNER.scan_text(Path("config.py"), text)
                 self.assertEqual(
-                    [("config.py", 7, f"live-looking value assigned to {name}")],
+                    [("config.py", expected_line, f"live-looking value assigned to {name}")],
                     findings,
                 )
                 self.assertNotIn(value, repr(findings))
+                self.assertEqual([(name, value)], self.execute_owned_setter_fixture(text))
 
         # The original unfinished-source fixture calls count(name) before name
         # exists. This valid counterpart proves that a nonmutating count leaves
@@ -2989,35 +2951,22 @@ class TrackedSecretHygieneTests(unittest.TestCase):
     def test_csharp_primary_constructor_headers_are_anchored_before_bases(self) -> None:
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
-        primary = (
-            "class Holder(string secret) : Base<(string Left, string Right)> {\n"
-            f'    Environment.SetEnvironmentVariable("{name}", secret);\n'
-            "}\n"
-        )
-        self.assertEqual([], SCANNER.scan_text(Path("config.cs"), primary))
-
-        generic_primary = (
-            "class Holder<T>(string secret) : Base<(string Left, string Right)> {\n"
-            f'    Environment.SetEnvironmentVariable("{name}", secret);\n'
-            "}\n"
-        )
-        self.assertEqual(
-            [], SCANNER.scan_text(Path("config.cs"), generic_primary)
-        )
-
+        for class_header in ("class Holder(string secret)", "class Holder<T>(string secret)"):
+            # A setter statement belongs in a member body, not directly in a class.
+            primary = (class_header + " : Base<(string Left, string Right)> {\n"
+                       "    void Use() {\n"
+                       f'        Environment.SetEnvironmentVariable("{name}", secret);\n'
+                       "    }\n}\n")
+            with self.subTest(primary_header=class_header):
+                self.assertEqual([], SCANNER.scan_text(Path("config.cs"), primary))
         base_tuple_only = (
             "class Holder : Base<(string Left, string secret)> {\n"
             f'    private const string secret = "{value}";\n'
             "    void Use() {\n"
             f'        Environment.SetEnvironmentVariable("{name}", secret);\n'
-            "    }\n"
-            "}\n"
-        )
+            "    }\n}\n")
         findings = SCANNER.scan_text(Path("config.cs"), base_tuple_only)
-        self.assertEqual(
-            [("config.cs", 4, f"live-looking value assigned to {name}")],
-            findings,
-        )
+        self.assertEqual([("config.cs", 4, f"live-looking value assigned to {name}")], findings)
         self.assertNotIn(value, repr(findings))
 
     def test_c_family_setter_calls_normalize_translation_phase_splices(self) -> None:
@@ -3055,25 +3004,22 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 self.assertEqual([], SCANNER.scan_text(Path(filename), text))
 
     def test_unsupported_setter_literal_delimiters_fail_closed(self) -> None:
+        """Legacy fail_closed ID: no finding means unresolved, not a credential refusal."""
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
         cases = (
-            (
-                "config.cs",
-                f'Environment.SetEnvironmentVariable(""""{name}"""", """"{value}"""");\n',
-            ),
-            (
-                "config.cs",
-                f'Environment.SetEnvironmentVariable($$"""{name}""", $$"""{value}""");\n',
-            ),
-            (
-                "config.rs",
-                f'std::env::set_var(br#"{name}"#, br#"{value}"#);\n',
-            ),
+            ("valid_csharp_four_quote_raw_unresolved", "config.cs",
+             f'Environment.SetEnvironmentVariable(""""{name}"""", """"{value}"""");\n'),
+            ("valid_csharp_interpolated_raw_unresolved", "config.cs",
+             f'Environment.SetEnvironmentVariable($$"""{name}""", $$"""{value}""");\n'),
+            ("invalid_rust_byte_arguments", "config.rs",
+             f'std::env::set_var(br#"{name}"#, br#"{value}"#);\n'),
         )
-        for filename, text in cases:
-            with self.subTest(filename=filename, literal=text.split("(", 1)[1][:10]):
+        for resolution, filename, text in cases:
+            with self.subTest(resolution=resolution):
                 self.assertEqual([], SCANNER.scan_text(Path(filename), text))
+        # Valid unsupported C# forms carry known sensitive literals. Expanding that
+        # grammar requires a separately reviewed detector policy, never a safety claim.
 
     def test_supported_environment_setter_call_equivalents_detect_literals(
         self,
@@ -3316,6 +3262,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                 self.assertNotIn(value, repr(findings))
 
     def test_dynamic_javascript_environment_keys_and_references_remain_safe(self) -> None:
+        'Unresolved dynamic keys and nonliteral references are coverage limits, not credential safety.'
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
         dynamic = (
@@ -3342,6 +3289,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         self.assertEqual([], SCANNER.scan_text(Path("config.js"), comments))
 
     def test_successor_computed_keys_cover_join_and_multiline_const(self) -> None:
+        'Supported computed-key joins and multiline constants; invalid-source detection is labelled separately.'
         name = "OPENAI_" + "API_KEY"
         value = "SyntheticSecretValue2026"
         joined = (
@@ -3357,7 +3305,6 @@ class TrackedSecretHygieneTests(unittest.TestCase):
         method_wrappers = (
             'process.env[("OPENAI_" + "API_KEY")] = "' + value + '"\n',
             'process.env[(("OPENAI_" + "API_KEY"))] = "' + value + '"\n',
-            'process.env[String.raw("OPENAI_API_KEY")] = "' + value + '"\n',
             'process.env[String.raw`OPENAI_API_KEY`] = "' + value + '"\n',
             'process.env[("OPENAI_API_KEY").toString()] = "' + value + '"\n',
             'process.env["OPENAI_".concat("API_KEY")] = "' + value + '"\n',
@@ -3378,6 +3325,12 @@ class TrackedSecretHygieneTests(unittest.TestCase):
                     findings,
                 )
                 self.assertNotIn(value, repr(findings))
+        invalid_raw_call = 'process.env[String.raw("OPENAI_API_KEY")] = "' + value + '"\n'
+        with self.subTest(source_class="invalid_String_raw_template_object"):
+            findings = SCANNER.scan_text(Path("config.js"), invalid_raw_call)
+            self.assertEqual([("config.js", 1, f"live-looking value assigned to {name}")], findings)
+            self.assertNotIn(value, repr(findings))
+        # String.raw`...` in method_wrappers is the valid tagged counterpart.
         for text in method_wrappers:
             with self.subTest(wrapper=text.split("process.env[", 1)[1][:12]):
                 findings = SCANNER.scan_text(Path("config.js"), text)
@@ -4439,6 +4392,7 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             (root / "head.txt").write_text(
                 f"{name}={placeholder}\n", encoding="utf-8"
             )
+            run_git("add", "head.txt")  # Retain the leak only in HEAD.
             (root / "index.txt").write_text(f"{name}={value}\n", encoding="utf-8")
             run_git("add", "index.txt")
             (root / "index.txt").write_text(
@@ -4449,6 +4403,36 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             )
 
             findings, tracked, text_files = SCANNER.scan_repository(root)
+            by_path = {path: detector for path, _line, detector in findings if "CF_API_TOKEN" in detector}
+            for filename, source in (("head.txt", "HEAD"), ("index.txt", "index"),
+                                     ("working.txt", "working tree"), ("utf16.txt", "HEAD/index/working tree")):
+                self.assertEqual(by_path[filename], f"live-looking value assigned to {name} [{source}]")
+
+            # A deleted working file must not erase the still committed leak.
+            (root / "head.txt").unlink()
+            deleted_findings, _, _ = SCANNER.scan_repository(root)
+            self.assertIn(("head.txt", 1, f"live-looking value assigned to {name} [HEAD]"), deleted_findings)
+            self.assertFalse(any(path == "head.txt" and "working tree" in detector for path, _, detector in deleted_findings))
+
+            (root / "oversized.txt").write_bytes(b"x" * (SCANNER.MAX_TEXT_BYTES + 1))
+            (root / "invalid-bom.txt").write_bytes(b"\xff\xfe\x00")
+            run_git("add", "oversized.txt", "invalid-bom.txt")
+            run_git("commit", "--quiet", "-m", "owned bounded snapshot fixtures")
+            boundary_findings, _, _ = SCANNER.scan_repository(root)
+            self.assertEqual({detector for path, _, detector in boundary_findings if path == "oversized.txt"},
+                             {f"tracked file exceeds scan size limit [{source}]" for source in ("HEAD", "index", "working tree")})
+            self.assertIn(("invalid-bom.txt", 0, "tracked text BOM has invalid encoded content [HEAD/index/working tree]"), boundary_findings)
+            self.assertNotIn(value, repr(boundary_findings))
+
+            # Real nonzero-stage index entries must refuse instead of silently
+            # choosing one side of an unresolved merge.
+            oid = subprocess.run(["git", "rev-parse", "HEAD:utf16.txt"], cwd=root,
+                                 capture_output=True, text=True, check=True, timeout=10).stdout.strip()
+            stages = "".join(f"100644 {oid} {stage}\tconflict.txt\n" for stage in (1, 2, 3))
+            subprocess.run(["git", "update-index", "--index-info"], cwd=root, input=stages,
+                           capture_output=True, text=True, check=True, timeout=10)
+            with self.assertRaisesRegex(ValueError, "unmerged index entry"):
+                SCANNER.scan_repository(root)
 
         paths = {path for path, _line, detector in findings if "CF_API_TOKEN" in detector}
         self.assertEqual(
@@ -4540,31 +4524,58 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             self.assertNotIn(value, error.stdout + error.stderr)
 
     def test_repository_wires_gate_before_dependency_installation(self) -> None:
-        workflow = (ROOT / ".github/workflows/repository-validation.yml").read_text(
-            encoding="utf-8"
-        )
-        command = "python -S -B tools/check_tracked_secret_hygiene.py"
-        install = "python -m pip install --require-hashes -r requirements-ci.txt"
-        self.assertIn(command, workflow)
-        self.assertLess(workflow.index(command), workflow.index(install))
+        # Follow the repository's executable install paths, including the reusable
+        # Task swarm. A gate in the Discord job cannot satisfy the Python job.
+        for relative, job_id in (("repository-validation.yml", "repository"),
+                                 ("repository-validation.yml", "discord"),
+                                 ("task-swarm.yml", "validate"),
+                                 ("cloudflare-candidate-validation.yml", "validate"),
+                                 ("release.yml", "release")):
+            with self.subTest(workflow=relative, job=job_id):
+                workflow = yaml.safe_load((ROOT / ".github/workflows" / relative).read_text(encoding="utf-8"))
+                job = workflow["jobs"][job_id]
+                default = job.get("defaults", {}).get("run", {}).get("working-directory", ".")
+                gate_positions = []
+                installs = []
+                for step_index, step in enumerate(job.get("steps", [])):
+                    cwd = step.get("working-directory", default)
+                    for line_index, command in enumerate(step.get("run", "").splitlines()):
+                        command = command.strip()
+                        if not command or command.startswith("#"):
+                            continue
+                        position = (step_index, line_index)
+                        if command == "python -S -B tools/check_tracked_secret_hygiene.py":
+                            self.assertEqual(cwd, ".")
+                            self.assertNotIn("if", step)
+                            self.assertFalse(step.get("continue-on-error", False))
+                            gate_positions.append(position)
+                        if command.startswith(("python -m pip install", "pnpm install", "npm install")):
+                            installs.append(position)
+                self.assertTrue(installs, "the install path must be observed, not vacuously accepted")
+                self.assertTrue(gate_positions, "the owning job has no executable tracked gate")
+                self.assertLess(min(gate_positions), min(installs))
 
     def test_ignore_and_policy_contracts_are_documented(self) -> None:
-        gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
-        for pattern in (
-            ".env", ".env.*", "!.env.example", "!.env.sample", "!.env.template",
-            "*.pem", "*.key", "*.p12", "*.pfx", "credentials.json",
-            "service-account*.json", "service_account*.json", "id_rsa", "id_ed25519",
-        ):
-            with self.subTest(pattern=pattern):
-                self.assertIn(pattern, gitignore)
-
+        secrets = {".env", ".env.production", "private.pem", "private.key", "private.p12", "private.pfx",
+                   "credentials.json", "service-account-owned.json", "service_account_owned.json", "id_rsa", "id_ed25519"}
+        examples = {".env.example", ".env.sample", ".env.template", ".env.production.example"}
+        secrets |= {"component/" + name for name in secrets}
+        examples |= {"component/" + name for name in examples}
+        self.assertEqual(_ignored_paths(secrets | examples), secrets)
         command = "python -S -B tools/check_tracked_secret_hygiene.py"
-        contributing = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
-        security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
-        self.assertIn(command, contributing)
-        self.assertIn(command, security)
-        self.assertIn("current tracked tree", security)
-        self.assertIn("does not scan history older than HEAD", security)
+        for relative in ("CONTRIBUTING.md", "SECURITY.md"):
+            path = ROOT / relative
+            text = path.read_text(encoding="utf-8")
+            # 'text' fences are also executable contributor instructions in these docs.
+            self.assertIn(command, [line.strip() for block in fenced_blocks(text)
+                                    for line in block.splitlines()])
+            assert_links(self, path, text)
+        security = section((ROOT / "SECURITY.md").read_text(encoding="utf-8"), "credential-hygiene")
+        normalized = " ".join(security.split())
+        self.assertRegex(normalized, r"HEAD, the index, and tracked working-tree snapshots")
+        self.assertRegex(normalized, r"(?:does not|doesn't) scan history older than HEAD")
+        self.assertRegex(normalized, r"never prints a detected value")
+        self.assertIn("untracked files", normalized)
 
 
 if __name__ == "__main__":

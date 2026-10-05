@@ -1,11 +1,47 @@
 """The existing required status must include the complete Discord matrix."""
 import os
+import posixpath
+import shlex
+import re
 from pathlib import Path
 import subprocess
 import unittest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def discord_matrix_invocations(case, workflows, path, visited=()):
+    """Follow only local reusable jobs and use each run step's effective cwd."""
+    case.assertNotIn(path, visited, "reusable workflow cycle")
+    case.assertIn(path, workflows, "local reusable workflow is missing")
+    workflow = workflows[path]
+    count = 0
+    for job in workflow["jobs"].values():
+        reference = job.get("uses", "")
+        if reference.startswith("./"):
+            case.assertRegex(reference, r"^\./\.github/workflows/[^/]+\.ya?ml$", "invalid local reusable workflow path")
+            count += discord_matrix_invocations(case, workflows, reference[2:], (*visited, path))
+        default = job.get("defaults", {}).get("run", {}).get("working-directory",
+                  workflow.get("defaults", {}).get("run", {}).get("working-directory", "."))
+        for step in job.get("steps", []):
+            directory = step.get("working-directory", default)
+            for line in re.split(r"\n|&&|;", step.get("run", "")):
+                if not re.match(r"^\s*(?:pnpm|corepack\s+pnpm|cd|Set-Location)\b", line):
+                    continue
+                tokens = shlex.split(line, comments=True)
+                if not tokens:
+                    continue
+                if tokens[0] in ("cd", "Set-Location") and len(tokens) == 2:
+                    directory = posixpath.normpath(posixpath.join(directory, tokens[1]))
+                    continue
+                command = tokens[1:] if tokens[0] == "corepack" else tokens
+                if (directory == "runtime/discord-template" and len(command) >= 2
+                        and command[0] == "pnpm" and
+                        (command[1] == "test" or command[1:3] == ["run", "test"])):
+                    case.assertEqual(set(job["strategy"]["matrix"]["os"]), {"ubuntu-latest", "windows-latest"})
+                    count += 1
+    return count
 
 
 class DiscordRequiredGateTests(unittest.TestCase):
@@ -59,35 +95,29 @@ class DiscordRequiredGateTests(unittest.TestCase):
             self.assertIn('ffmpeg', encoder['run'])
 
     def test_one_automatic_discord_matrix_per_event_including_reusable_calls(self):
-        workflows = {}
-        for path in (ROOT / '.github/workflows').glob('*.y*ml'):
-            workflows[path.relative_to(ROOT).as_posix()] = yaml.safe_load(
-                path.read_text(encoding='utf-8'))
-
-        def discord_matrices(path, visited=()):
-            self.assertNotIn(path, visited, 'reusable workflow cycle')
-            jobs = workflows[path]['jobs']
-            count = 0
-            for job in jobs.values():
-                reference = job.get('uses', '')
-                if reference.startswith('./.github/workflows/'):
-                    count += discord_matrices(reference[2:], (*visited, path))
-                commands = [step.get('run', '') for step in job.get('steps', [])]
-                directory = job.get('defaults', {}).get('run', {}).get('working-directory')
-                if directory == 'runtime/discord-template' and 'pnpm test' in commands:
-                    self.assertEqual(set(job['strategy']['matrix']['os']),
-                                     {'ubuntu-latest', 'windows-latest'})
-                    count += 1
-            return count
-
-        for event in ['pull_request', 'push']:
+        workflows = {path.relative_to(ROOT).as_posix(): yaml.safe_load(path.read_text(encoding="utf-8"))
+                     for path in (ROOT / ".github/workflows").glob("*.y*ml")}
+        for event in ("pull_request", "push"):
             with self.subTest(event=event):
-                count = 0
-                for path, workflow in workflows.items():
-                    triggers = workflow.get('on', workflow.get(True))
-                    if event in triggers:
-                        count += discord_matrices(path)
-                self.assertEqual(count, 1, 'the full Discord suite must run once per OS')
+                automatic = [path for path, workflow in workflows.items()
+                             if event in (workflow.get("on", workflow.get(True)) or {})]
+                self.assertEqual(sum(discord_matrix_invocations(self, workflows, path) for path in automatic), 1,
+                                 "the full Discord suite must run exactly once per OS")
+        # These detector controls model equivalent executable forms, step overrides,
+        # local reusable callers and comment/prose decoys without changing live CI.
+        matrix = {"os": ["ubuntu-latest", "windows-latest"]}
+        for label, job, expected in (
+                ("job-default", {"defaults": {"run": {"working-directory": "runtime/discord-template"}}, "steps": [{"run": "pnpm test"}]}, 1),
+                ("step-override", {"steps": [{"working-directory": "runtime/discord-template", "run": "pnpm run test"}]}, 1),
+                ("cd-then-run", {"steps": [{"run": "cd runtime/discord-template && corepack pnpm run test"}]}, 1),
+                ("effective-root", {"defaults": {"run": {"working-directory": "runtime/discord-template"}}, "steps": [{"working-directory": ".", "run": "pnpm test"}]}, 0),
+                ("decoy-comment", {"steps": [{"working-directory": "runtime/discord-template", "run": "# pnpm test\necho pnpm test"}]}, 0)):
+            with self.subTest(detector=label):
+                job["strategy"] = {"matrix": matrix}
+                owned = {".github/workflows/owned.yml": {"jobs": {"test": job}}}
+                self.assertEqual(discord_matrix_invocations(self, owned, ".github/workflows/owned.yml"), expected)
+                owned[".github/workflows/caller.yml"] = {"jobs": {"reuse": {"uses": "./.github/workflows/owned.yml"}}}
+                self.assertEqual(discord_matrix_invocations(self, owned, ".github/workflows/caller.yml"), expected)
 
     def test_dependency_review_keeps_its_required_context(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/dependency-review.yml').read_text(encoding='utf-8'))

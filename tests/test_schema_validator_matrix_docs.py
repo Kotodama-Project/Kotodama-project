@@ -3,6 +3,8 @@ import re
 import unittest
 
 
+from tests.document_contract_helpers import section, assert_links, shell_commands, assert_command_order, table_rows, assert_preview_boundary, headings, link_targets
+
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "docs" / "SCHEMA-VALIDATOR-MATRIX.md"
 
@@ -53,106 +55,48 @@ class SchemaValidatorMatrixDocumentationTests(unittest.TestCase):
                 self.assertTrue((MATRIX.parent / relative).is_file())
 
     def test_matrix_links_review_chain_artifact_map(self) -> None:
-        matrix = MATRIX.read_text(encoding="utf-8")
-        start = matrix.index("## Read next: ideal -> current -> smoke")
-        end = matrix.index("## 使い方", start)
-        section = matrix[start:end]
-
-        for marker in (
-            "[Review-chain artifact map](STARTER-WALKTHROUGH.md#review-chain-artifact-map)",
-            "Review Bundle, Review Request, Review Response, and Decision Handoff",
-            "before or after the external-free smoke",
-            "read-only/candidate-only",
-            "NO_GO_UNPUBLISHED",
-            "Human Decision",
-            "Promotion",
-            "Current Truth",
-            "Public Beta GO",
-        ):
-            with self.subTest(marker=marker):
-                self.assertIn(marker, section)
-
-        self.assertTrue((ROOT / "docs" / "STARTER-WALKTHROUGH.md").is_file())
+        surface = section(MATRIX.read_text(encoding="utf-8"), "read-next-ideal---current---smoke")
+        assert_links(self, MATRIX, surface, ("STARTER-WALKTHROUGH.md#review-chain-artifact-map",))
+        assert_preview_boundary(self, surface, ("Human Decision", "Promotion", "Current Truth", "Public Beta GO"))
 
     def test_matrix_exposes_ordered_contract_tool_test_runbook_path(self) -> None:
-        self.assertTrue(MATRIX.is_file())
-        matrix = MATRIX.read_text(encoding="utf-8")
-        required = (
-            "# Schema / Validator / Test Matrix",
-            "Company Template",
-            "Blocks",
-            "Governed Records",
-            "MOCs",
-            "Company Pack Catalog",
-            "Customization",
-            "Public Preview Self-check",
-            "Company Pack Next Steps",
-            "Review Bundle",
-            "PowerShell",
-            "POSIX",
-            "read-only",
-            "candidate-only",
-            "NO_GO_UNPUBLISHED",
-            "Public Beta GO",
+        text = MATRIX.read_text(encoding="utf-8")
+        # Stable schema/CLI/test/runbook associations are checked in each actual row.
+        inventory = (
+            ("1-company-template", "company-manifest.schema.json", "validate_template_pack.py", "test_validate_template_pack.py", "../templates/company/README.md"),
+            ("2-blocks", "block.schema.json", "validate_template_pack.py", "test_validate_template_pack.py", "../templates/blocks/README.md"),
+            ("3-governed-records", "record.schema.json", "validate_template_pack.py", "test_validate_template_pack.py", "../templates/records/README.md"),
+            ("4-mocs", "moc.schema.json", "validate_template_pack.py", "test_validate_template_pack.py", "../templates/mocs/README.md"),
+            ("5-company-pack-catalog", "company-pack-catalog.schema.json", "catalog_company_pack.py", "test_catalog_company_pack.py", "COMPANY-PACK-CATALOG.md"),
+            ("6-customization", "customization-report.schema.json", "check_company_pack_customization.py", "test_check_company_pack_customization.py", "CUSTOMIZATION-CHECKLIST.md"),
+            ("7-public-preview-self-check", "company-pack-public-preview-check.schema.json", "check_company_pack_public_preview.py", "test_company_pack_public_preview_check.py", "PUBLIC-PREVIEW-SELF-CHECK.md"),
+            ("8-company-pack-next-steps", "company-pack-next-steps.schema.json", "plan_company_pack_next_steps.py", "test_plan_company_pack_next_steps.py", "COMPANY-PACK-NEXT-STEPS.md"),
+            ("9-review-bundle", "company-pack-review-bundle.schema.json", "build_company_pack_review_bundle.py", "test_build_company_pack_review_bundle.py", "REVIEW-BUNDLE.md"),
         )
-        for marker in required:
-            with self.subTest(marker=marker):
-                self.assertIn(marker, matrix)
-
-        for marker in (
-            "Human approval",
-            "runtime",
-            "provider",
-            "Voice / Discord",
-            "Promotion",
-            "Current Truth",
-        ):
-            with self.subTest(boundary=marker):
-                self.assertIn(marker, matrix)
-
-        command_pairs = (
-            ("python tools\\create_company_pack.py", "python3 tools/create_company_pack.py"),
-            ("python tools\\validate_template_pack.py", "python3 tools/validate_template_pack.py"),
-            ("python tools\\catalog_company_pack.py", "python3 tools/catalog_company_pack.py"),
-            (
-                "python tools\\check_company_pack_customization.py",
-                "python3 tools/check_company_pack_customization.py",
-            ),
-            (
-                "python tools\\check_company_pack_public_preview.py",
-                "python3 tools/check_company_pack_public_preview.py",
-            ),
-            (
-                "python tools\\plan_company_pack_next_steps.py",
-                "python3 tools/plan_company_pack_next_steps.py",
-            ),
-            (
-                "python tools\\build_company_pack_review_bundle.py",
-                "python3 tools/build_company_pack_review_bundle.py",
-            ),
-            (
-                "python tools\\verify_company_pack_review_bundle.py",
-                "python3 tools/verify_company_pack_review_bundle.py",
-            ),
-        )
-        for powershell, posix in command_pairs:
-            with self.subTest(powershell=powershell, posix=posix):
-                self.assertIn(powershell, matrix)
-                self.assertIn(posix, matrix)
-
-        ordered = (
-            "## 1. Company Template",
-            "## 2. Blocks",
-            "## 3. Governed Records",
-            "## 4. MOCs",
-            "## 5. Company Pack Catalog",
-            "## 6. Customization",
-            "## 7. Public Preview Self-check",
-            "## 8. Company Pack Next Steps",
-            "## 9. Review Bundle",
-        )
-        positions = [matrix.index(marker) for marker in ordered]
+        positions = []
+        for anchor, schema, tool, test, runbook in inventory:
+            with self.subTest(stage=anchor):
+                surface = section(text, anchor)
+                positions.append(text.index(surface))
+                rows = table_rows(surface)
+                self.assertEqual(rows[0], ["Schema", "Validator / CLI", "Regression test", "Runbook / PASSの意味"])
+                self.assertEqual(len(rows), 2)
+                row = rows[1]
+                self.assertIn("../schemas/" + schema, link_targets(row[0]))
+                self.assertIn("../tools/" + tool, link_targets(row[1]))
+                self.assertIn("../tests/" + test, link_targets(row[2]))
+                self.assertIn(runbook, link_targets(row[3]))
+                assert_links(self, MATRIX, surface)
         self.assertEqual(positions, sorted(positions))
+        assert_preview_boundary(self, text, ("Human approval", "runtime", "provider", "Voice / Discord", "Promotion", "Current Truth", "Public Beta GO"))
+        # The matrix links to commands in its owned runbooks; verify both-shell coverage
+        # for all first-nine-stage tools without duplicating their editorial headings.
+        for language, prefix in (("powershell", "python"), ("bash", "python3")):
+            commands = shell_commands(text, language)
+            for tool in ("create_company_pack.py", "validate_template_pack.py", "catalog_company_pack.py",
+                         "check_company_pack_customization.py", "check_company_pack_public_preview.py",
+                         "plan_company_pack_next_steps.py", "build_company_pack_review_bundle.py", "verify_company_pack_review_bundle.py"):
+                self.assertTrue(any(re.search(r"(?:^|=\s*)" + re.escape(f"{prefix} tools/{tool}") + r"(?:\s|$)", command) for command in commands), (language, tool))
 
     def test_matrix_runbook_smoke_links_back_to_catalog_entry(self) -> None:
         matrix = MATRIX.read_text(encoding="utf-8")
@@ -216,59 +160,38 @@ class SchemaValidatorMatrixDocumentationTests(unittest.TestCase):
         )
 
     def test_matrix_exposes_the_complete_review_chain_contracts(self) -> None:
-        matrix = MATRIX.read_text(encoding="utf-8")
-        required = (
-            "## 10. Review Request",
-            "## 11. Review Response",
-            "## 12. Review Decision Handoff",
-            "company-pack-review-request.schema.json",
-            "company-pack-review-response.schema.json",
-            "company-pack-review-response-verification.schema.json",
-            "company-pack-review-decision-handoff.schema.json",
-            "company-pack-review-decision-handoff-verification.schema.json",
-            "build_company_pack_review_request.py",
-            "build_company_pack_review_response.py",
-            "verify_company_pack_review_response.py",
-            "build_company_pack_review_decision_handoff.py",
-            "verify_company_pack_review_decision_handoff.py",
-            "test_build_company_pack_review_request.py",
-            "test_company_pack_review_response.py",
-            "test_company_pack_review_decision_handoff.py",
-            "REVIEW-REQUEST.md",
-            "REVIEW-RESPONSE.md",
-            "REVIEW-DECISION-HANDOFF.md",
-            "PENDING_AUTHORIZED_REVIEW",
-            "ITEM_RESPONSES_MATCH_REQUEST",
-            "DECISION_HANDOFF_MATCH",
-            "decision: null",
-            "selected_outcome: null",
-            "candidate-only",
-            "NO_GO_UNPUBLISHED",
-        )
-        for marker in required:
-            with self.subTest(marker=marker):
-                self.assertIn(marker, matrix)
-
-        ordered = (
-            "## 9. Review Bundle",
-            "## 10. Review Request",
-            "## 11. Review Response",
-            "## 12. Review Decision Handoff",
-        )
-        positions = [matrix.index(marker) for marker in ordered]
+        text = MATRIX.read_text(encoding="utf-8")
+        # The public CLI reference owns the shipped entrypoint inventory.
+        reference = ROOT / "docs/COMPANY-PACK-CLI-REFERENCE.md"
+        public_tools = {Path(target).name for target in link_targets(reference.read_text(encoding="utf-8")) if target.startswith("../tools/")}
+        positions = [text.index(section(text, "9-review-bundle"))]
+        for anchor, schemas, tools, test, runbook, state in (
+                ("10-review-request", ("company-pack-review-request.schema.json",), ("build_company_pack_review_request.py",), "test_build_company_pack_review_request.py", "REVIEW-REQUEST.md", "PENDING_AUTHORIZED_REVIEW"),
+                ("11-review-response", ("company-pack-review-response.schema.json", "company-pack-review-response-verification.schema.json"), ("build_company_pack_review_response.py", "verify_company_pack_review_response.py"), "test_company_pack_review_response.py", "REVIEW-RESPONSE.md", "ITEM_RESPONSES_MATCH_REQUEST"),
+                ("12-review-decision-handoff", ("company-pack-review-decision-handoff.schema.json", "company-pack-review-decision-handoff-verification.schema.json"), ("build_company_pack_review_decision_handoff.py", "verify_company_pack_review_decision_handoff.py"), "test_company_pack_review_decision_handoff.py", "REVIEW-DECISION-HANDOFF.md", "DECISION_HANDOFF_MATCH")):
+            with self.subTest(stage=anchor):
+                surface = section(text, anchor)
+                positions.append(text.index(surface))
+                rows = table_rows(surface)
+                self.assertEqual(len(rows), 2)
+                self.assertEqual(len(rows[1]), 4)
+                row = rows[1]
+                self.assertEqual(set(link_targets(row[0])), {"../schemas/" + schema for schema in schemas})
+                self.assertEqual(set(link_targets(row[1])), {"../tools/" + tool for tool in tools})
+                self.assertEqual(link_targets(row[2]), ["../tests/" + test])
+                self.assertIn(runbook, link_targets(row[3]))
+                self.assertIn(state, row[3])
+                assert_links(self, MATRIX, surface)
+                for language, prefix in (("powershell", "python"), ("bash", "python3")):
+                    actual = shell_commands(surface, language)
+                    for tool in tools:
+                        self.assertIn(tool, public_tools)
+                        self.assertTrue(any(command.startswith(f"{prefix} tools/{tool}") for command in actual), (language, tool))
         self.assertEqual(positions, sorted(positions))
-
-        command_pairs = (
-            ("python tools\\build_company_pack_review_request.py", "python3 tools/build_company_pack_review_request.py"),
-            ("python tools\\build_company_pack_review_response.py", "python3 tools/build_company_pack_review_response.py"),
-            ("python tools\\verify_company_pack_review_response.py", "python3 tools/verify_company_pack_review_response.py"),
-            ("python tools\\build_company_pack_review_decision_handoff.py", "python3 tools/build_company_pack_review_decision_handoff.py"),
-            ("python tools\\verify_company_pack_review_decision_handoff.py", "python3 tools/verify_company_pack_review_decision_handoff.py"),
-        )
-        for powershell, posix in command_pairs:
-            with self.subTest(powershell=powershell, posix=posix):
-                self.assertIn(powershell, matrix)
-                self.assertIn(posix, matrix)
+        handoff = section(text, "12-review-decision-handoff")
+        self.assertIn("decision: null", handoff)
+        self.assertIn("selected_outcome: null", handoff)
+        assert_preview_boundary(self, text)
 
     def test_matrix_links_are_present_and_entry_surfaces_link_back(self) -> None:
         matrix = MATRIX.read_text(encoding="utf-8")

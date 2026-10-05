@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 
@@ -39,7 +40,7 @@ class StarterWalkthroughRunbookDocumentationTests(unittest.TestCase):
                 ("MATCH", "PENDING_AUTHORIZED_REVIEW", "ITEM_RESPONSES_MATCH_REQUEST", "DECISION_HANDOFF_MATCH")):
             with self.subTest(artifact=row[0]):
                 self.assertEqual(len(row), 5)
-                actual_tools = __import__("re").findall(r"`([a-z_]+\.py)`", row[2])
+                actual_tools = re.findall(r"`([a-z_]+\.py)`", row[2])
                 self.assertEqual(actual_tools, list(tools))
                 for tool in actual_tools:
                     self.assertTrue((ROOT / "tools" / tool).is_file())

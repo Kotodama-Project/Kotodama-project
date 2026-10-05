@@ -76,7 +76,16 @@ class CoreCompanyPackCliHelpTests(unittest.TestCase):
     def test_readme_quick_start_exposes_cross_shell_help_first(self) -> None:
         """Legacy case ID: the tested onboarding surface is docs/OVERVIEW.md."""
         path = ROOT / "docs/OVERVIEW.md"
-        quick_start = section(path.read_text(encoding="utf-8"), "quick-start--company-starter-を試す")
+        text = path.read_text(encoding="utf-8")
+        help_tools = ("validate_template_pack.py", "check_company_pack_customization.py",
+                      "check_company_pack_public_preview.py")
+        required = {f"python3 tools/{tool} --help" for tool in help_tools}
+        required.add("python3 tools/create_company_pack.py my-company work/my-company")
+        boundaries = [offset for rank, _anchor, offset in headings(text) if rank == 2]
+        regions = [text[start:end] for start, end in zip(boundaries, boundaries[1:] + [len(text)])]
+        candidates = [region for region in regions if required.issubset(shell_commands(region, "bash"))]
+        self.assertEqual(len(candidates), 1, "help and initializer need one heading-bounded onboarding region")
+        quick_start = candidates[0]
         for prefix, language in (("python", "powershell"), ("python3", "bash")):
             commands = [f"{prefix} {command}" for command in (
                 "tools/validate_template_pack.py --help",

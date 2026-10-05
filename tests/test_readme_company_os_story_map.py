@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 
@@ -38,6 +39,10 @@ class ReadmeCompanyOsStoryMapTests(unittest.TestCase):
                 self.assertTrue(link_targets(row[0]))
         self.assertIn("Incomplete Public Preview", surface)
         assert_preview_boundary(self, surface, ("public Voice Bot", "Public Beta access", "Final Human GO"))
+        for claim, state in (("public Voice Bot", "未提供"), ("Public Beta access", "未提供"),
+                             ("Final Human GO", "未完了")):
+            with self.subTest(claim=claim):
+                self.assertRegex(surface, re.escape(claim) + r"\s*は\s*" + state)
 
     def test_story_map_links_existing_details_instead_of_replacing_them(self) -> None:
         """Verify real overview heading anchors rather than literal link spelling."""
