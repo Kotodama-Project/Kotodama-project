@@ -21,7 +21,10 @@ VERIFICATION_SCHEMA = (
     / "attestation-nonce-store-checkpoint-head-anchor-verification.schema.json"
 )
 sys.path.insert(0, str(ROOT / "tests"))
+import attestation_schema_helpers as contracts  # noqa: E402
 import test_attestation_nonce_store_checkpoint_chain as r20_helpers  # noqa: E402
+sys.path.insert(0, str(ROOT / "tools"))
+import verify_attestation_nonce_store_checkpoint_head_anchor as anchor_tool  # noqa: E402
 
 
 ANCHOR_FALSE_CLAIMS = {
@@ -46,8 +49,14 @@ class AttestationNonceStoreCheckpointHeadAnchorCliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.ssh_keygen = shutil.which("ssh-keygen")
-        if cls.ssh_keygen is None:
-            raise unittest.SkipTest("ssh-keygen is unavailable")
+
+    def setUp(self) -> None:
+        executable_independent = {
+            'test_head_anchor_schemas_are_closed_and_keep_terminal_claims_false',
+            'test_usage_error_is_not_a_verification_report',
+        }
+        if self.ssh_keygen is None and self._testMethodName not in executable_independent:
+            self.skipTest("ssh-keygen is unavailable")
 
     def make_r20_case(self, temporary: Path) -> dict[str, object]:
         helper = r20_helpers.AttestationNonceStoreCheckpointChainCliTests(
@@ -120,6 +129,7 @@ class AttestationNonceStoreCheckpointHeadAnchorCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return Path(str(document) + ".sig")
@@ -150,6 +160,7 @@ class AttestationNonceStoreCheckpointHeadAnchorCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
 
     def test_signed_anchor_binds_the_exact_r20_bundle_head_and_store(self) -> None:
@@ -217,7 +228,6 @@ class AttestationNonceStoreCheckpointHeadAnchorCliTests(unittest.TestCase):
             )
 
         self.assertFalse(verification["additionalProperties"])
-        self.assertEqual(len(verification["allOf"]), 1)
         for name in ANCHOR_FALSE_CLAIMS:
             self.assertIs(
                 verification["properties"]["claims"]["properties"][name][
@@ -233,6 +243,27 @@ class AttestationNonceStoreCheckpointHeadAnchorCliTests(unittest.TestCase):
             verification["properties"]["public_beta"]["const"],
             "NO_GO_UNPUBLISHED",
         )
+
+        candidate = contracts.anchor(ANCHOR_FALSE_CLAIMS)
+        contracts.assert_contract(self, ANCHOR_SCHEMA, [("candidate", candidate)], [
+            ("authority", contracts.changed(candidate, "claims.public_beta_go", True)),
+            ("wrong-role", contracts.changed(candidate,
+                "signature_policy_binding.signer_role", "runner")),
+            ("oversized-count", contracts.changed(candidate, "bundle_binding.checkpoint_count", 1025)),
+        ])
+        success = anchor_tool.report("SIGNED_CHECKPOINT_HEAD_ANCHOR_MATCH", [],
+            evaluated_at=contracts.WHEN, checkpoints=1,
+            bindings=contracts.bindings("allowed_signers_file_sha256 anchor_file_sha256 "
+                "anchor_id_sha256 anchor_signature_file_sha256 bundle_file_sha256 "
+                "current_checkpoint_sha256 identity_file_sha256 ssh_keygen_executable_sha256 "
+                "store_id_sha256"))
+        invalid = anchor_tool.report("INVALID", ["synthetic refusal"])
+        contracts.assert_contract(self, VERIFICATION_SCHEMA,
+            [("success", success), ("invalid", invalid)], [
+                ("success-without-bindings", {**success, "input_bindings": {}}),
+                ("invalid-with-count", contracts.changed(invalid, "counts.checkpoints_bound", 1)),
+                ("authority", contracts.changed(success, "claims.public_beta_go", True)),
+            ])
 
     def test_invalid_anchor_id_is_not_copied_into_the_refusal_report(self) -> None:
         private_marker = "private-anchor-id-must-not-leak"
@@ -303,6 +334,7 @@ class AttestationNonceStoreCheckpointHeadAnchorCliTests(unittest.TestCase):
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")

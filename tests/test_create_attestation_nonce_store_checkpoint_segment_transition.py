@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,9 +91,10 @@ class CreateAttestationNonceStoreCheckpointSegmentTransitionCliTests(
             reuse_prior_key_with_reformatted_policy=(
                 reuse_prior_key_with_reformatted_policy
             ),
+            build_transition=False,
         )
-        Path(material["transition_signature"]).unlink()
-        Path(material["transition"]).unlink()
+        self.assertFalse(Path(material["transition"]).exists())
+        self.assertFalse(Path(material["transition_signature"]).exists())
         return helper, material
 
     def create_transition(
@@ -141,6 +143,7 @@ class CreateAttestationNonceStoreCheckpointSegmentTransitionCliTests(
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
 
     def test_key_rotation_candidate_round_trips_through_r22_verifier(self) -> None:
@@ -216,7 +219,11 @@ class CreateAttestationNonceStoreCheckpointSegmentTransitionCliTests(
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
-            _, material = self.make_unsigned_case(temporary)
+            with mock.patch.object(
+                r22_helpers.AttestationNonceStoreCheckpointSegmentTransitionCliTests,
+                "sign", side_effect=AssertionError("creator fixture must not pre-sign a transition"),
+            ):
+                _, material = self.make_unsigned_case(temporary)
             first = temporary / "first-transition.json"
             second = temporary / "second-transition.json"
 
@@ -279,6 +286,7 @@ class CreateAttestationNonceStoreCheckpointSegmentTransitionCliTests(
             text=True,
             capture_output=True,
             check=False,
+            timeout=30,
         )
 
         self.assertEqual(result.returncode, 2)
