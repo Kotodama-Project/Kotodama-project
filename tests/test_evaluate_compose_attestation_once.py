@@ -76,7 +76,7 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
         try:
             for _ in range(2):
                 processes.append(subprocess.Popen(
-                    command, cwd=ROOT, text=True,
+                    command, cwd=ROOT, text=True, encoding="utf-8", errors="strict",
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 ))
             results = []
@@ -91,52 +91,83 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
                     if process.poll() is None:
                         process.kill()
                     process.communicate(timeout=5)
-                except (OSError, subprocess.SubprocessError) as error:
+                except (OSError, subprocess.SubprocessError, UnicodeError) as error:
                     # Finish every ownership callback even if one child fails
                     # cleanup; never let the first error abandon another child.
                     cleanup_errors.append(error)
                 finally:
                     try:
                         process.wait(timeout=5)
-                    except (OSError, subprocess.SubprocessError) as error:
+                    except (OSError, subprocess.SubprocessError, UnicodeError) as error:
                         cleanup_errors.append(error)
                     for stream in (process.stdout, process.stderr):
                         if stream is not None:
-                            stream.close()
+                            try:
+                                stream.close()
+                            except (OSError, UnicodeError, ValueError) as error:
+                                cleanup_errors.append(error)
             if cleanup_errors:
                 raise cleanup_errors[0]
 
     def test_concurrent_children_are_reaped_after_wait_and_decode_failures(self) -> None:
         real_popen = subprocess.Popen
         real_communicate = subprocess.Popen.communicate
-        for failure in ("wait", "decode"):
+        for failure in ("wait", "decode", "text_decode", "close"):
             with self.subTest(failure=failure):
                 owned = []
+                communicated = {}
                 waited = False
 
                 def spawn(*args, **kwargs):
                     process = real_popen(*args, **kwargs)
+                    if failure == "close" and not owned:
+                        stream = process.stdout
+                        real_close = stream.close
+                        close_calls = 0
+
+                        def close():
+                            nonlocal close_calls
+                            close_calls += 1
+                            if close_calls == 2:
+                                raise OSError("synthetic pipe close failure")
+                            return real_close()
+
+                        stream.close = close
                     owned.append(process)
                     return process
 
                 def communicate(process, *args, **kwargs):
                     nonlocal waited
+                    communicated[process] = communicated.get(process, 0) + 1
                     if failure == "wait" and not waited:
                         waited = True
                         raise subprocess.TimeoutExpired(process.args, kwargs["timeout"])
                     return real_communicate(process, *args, **kwargs)
 
-                command = [sys.executable, "-c", "import time; time.sleep(60)"
-                    if failure == "wait" else "print('not-json')"]
+                child_source = {
+                    "wait": "import time; time.sleep(60)",
+                    "decode": "print('not-json')",
+                    "text_decode": "import sys; sys.stdout.buffer.write(bytes([255]))",
+                    "close": "print('{}')",
+                }[failure]
+                expected_error = {
+                    "wait": subprocess.TimeoutExpired, "decode": json.JSONDecodeError,
+                    "text_decode": UnicodeDecodeError, "close": OSError,
+                }[failure]
+                command = [sys.executable, "-c", child_source]
                 try:
                     with mock.patch.object(subprocess, "Popen", side_effect=spawn), mock.patch.object(
                         real_popen, "communicate", communicate,
                     ):
-                        with self.assertRaises(subprocess.TimeoutExpired if failure == "wait" else json.JSONDecodeError):
+                        with self.assertRaises(expected_error):
                             self.run_concurrent(command)
                     self.assertEqual(len(owned), 2)
                     self.assertTrue(all(process.poll() is not None for process in owned))
                     self.assertTrue(all(process.stdout.closed and process.stderr.closed for process in owned))
+                    if failure == "close":
+                        # Both normal communication and the finally callback
+                        # must run even if the first pipe's close raises.
+                        self.assertEqual([communicated[process] for process in owned], [2, 2])
                 finally:
                     # Keep the test itself bounded if a cleanup regression is
                     # introduced; assertions above still detect missing reaping.
