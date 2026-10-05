@@ -20,6 +20,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- Session/conversation ledgerの不正なenum・role型で例外終了せず、既存の理由コードと順序を保持した構造化拒否を返す。レコードshapeを1回の検証内で再利用し、明示bindingはOBSERVEDに限定する。peer message schemaは実send/receiveの`payload_state`を閉じたenumで受理する（[#221](https://github.com/Kotodama-Project/Kotodama-project/issues/221)）。
 - Python個別監査の後続として、保存済みCompose候補の有限な通常file読取りと不正profile IDのreport抑制を追加。checkpoint署名、NONE decisionの個別ref、依存失敗後の独立pending jobのoracleを補強する（[#219](https://github.com/Kotodama-Project/Kotodama-project/issues/219)）。
 - 公開候補validatorで深いJSON・不正な型・非有限数・上限超過を定型の拒否結果に統一。A022、protected handoff、executorの診断へ入力本文を反映せず、handoffは有限の通常ファイル読取りと確実なクローズを検査する。
 - 履歴増加時のSQLite context、訂正、累積予算、Task swarm検索を索引化。原文と過去版を保持し、初回backfillと全件exportの制約を明記する（#205）。
@@ -31,6 +32,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Changed
 
+- 固定したPython監査の202改善候補を全件対応。154件の追加実装と48件の既存実装確認を独立レビューし、元の指摘・検証・負の対照・source hashを[個別対応表](docs/PYTHON-TEST-IMPROVEMENTS.json)へ束縛する。文書・CLI・schema・候補IO・通信計測のoracleを補強し、Task swarm依存導入前のtracked credential gateを追加（[#221](https://github.com/Kotodama-Project/Kotodama-project/issues/221)、[レビュー](docs/PYTHON-TEST-REVIEW.md)）。
 - Python検査の全1,193 casesと3委譲表示を個別レビューし、運用手順・リンク・拒否時出力・UTF-8・実Git ignoreのoracleを改善。既存mutationと実CLI境界を保ってlifecycle/ledger/scannerの重複コストとpytest collectionを減らした（[#212](https://github.com/Kotodama-Project/Kotodama-project/issues/212)、[レビュー](docs/PYTHON-TEST-REVIEW.md)）。
 - Discord CIを一つのLinux/Windows matrixへ統合し、全テスト・Docker probe・必須check名と失敗時の拒否を保持する。製品の理想との照合と、履歴を失わないbranch/parked候補の整理を改善ループに追加する。
 
