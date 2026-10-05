@@ -11,7 +11,10 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 # node:sqlite is available without a flag from Node 22.13.
 MINIMUM_NODE = (22, 13)
-NODE_SUITES = ("runtime/git-steward/coordinator.test.mjs",)
+NODE_SUITES = (
+    "runtime/git-steward/coordinator.test.mjs",
+    "runtime/git-steward/business-simulation.test.mjs",
+)
 
 
 def node_version(node):

@@ -9,6 +9,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - Luna Task swarmの過去版`7df1aea`で実施済みのlive fixture受入記録（4 model calls、7 messages/ACK、4 accepted）を文書へ反映。#159の公開実施記録に基づくLOCAL_PASSで、現在版のlive受入へ流用しない。未統合の文書候補`2d1e099`を現行説明へ再配置し、再実行はしない（#159）。
+- Git Stewardの業務演習を追加。69合成シナリオ、13回帰試験と実Git/SQLite/子プロセスによる訂正・再開を既存launcherと両OSのpath限定CIで検査する。現行の調整コアは維持し、実providerや新しいTask台帳は作らない（#132、元#58）。
 
 - OpenMaus / Cloudflare OS の設計契約とread-only検証を追加。必要なagent表示項目・MCP能力境界・知識bundle参照を検査する契約候補で、UI・provider資源・実runtimeの有効化は含まない（元#56）。
 
@@ -21,6 +22,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Dots pluginにcursor一覧とrevision/権限付き全文pageを追加。簡略一覧は合成SDK試験で転送JSONを約97.6%削減し、元の全文一覧を維持する。長文・多言語・複雑な依存の通信benchmarkを必須CIで検査する（#204）。
 
 ### Fixed
+
+- 移行元の誤コピー検査をbatch外の追跡ファイルへ広げ、HEAD・index・working treeに残る元blobと非公開元pathを内容を出さずに検出する（#161）。
 
 - Session/conversation ledgerの不正なenum・role型で例外終了せず、既存の理由コードと順序を保持した構造化拒否を返す。レコードshapeを1回の検証内で再利用し、明示bindingはOBSERVEDに限定する。peer message schemaは実send/receiveの`payload_state`を閉じたenumで受理する（[#221](https://github.com/Kotodama-Project/Kotodama-project/issues/221)）。
 - Python個別監査の後続として、保存済みCompose候補の有限な通常file読取りと不正profile IDのreport抑制を追加。checkpoint署名、NONE decisionの個別ref、依存失敗後の独立pending jobのoracleを補強する（[#219](https://github.com/Kotodama-Project/Kotodama-project/issues/219)）。
