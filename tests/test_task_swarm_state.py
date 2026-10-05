@@ -142,6 +142,7 @@ class SwarmStateTests(unittest.TestCase):
             self.job("root"),
             self.job("dependent", deps=["root"]),
             self.job("independent"),
+            self.job("z-independent"),
         ]
         state = self.state()
         state.create_run(self.plan(jobs))
@@ -156,6 +157,18 @@ class SwarmStateTests(unittest.TestCase):
         snapshot = state.snapshot("run-demo")
         self.assertEqual(snapshot["jobs"]["dependent"]["state"], "blocked")
         self.assertEqual(snapshot["jobs"]["independent"]["state"], "failed")
+        self.assertEqual(snapshot["jobs"]["root"]["state"], "failed")
+        self.assertEqual(snapshot["jobs"]["z-independent"]["state"], "pending")
+        third = state.claim("run-demo", "worker-3")
+        self.assertIsNotNone(third)
+        assert third is not None
+        self.assertEqual(third["job_id"], "z-independent")
+        state.report(third["token"], "independent-result", "c" * 64, "candidate", "independent-receipt")
+        state.accept("run-demo", "z-independent", "c" * 64, "verification", "owner")
+        completed = state.snapshot("run-demo")
+        self.assertEqual(completed["jobs"]["z-independent"]["state"], "accepted")
+        self.assertEqual(completed["jobs"]["dependent"]["state"], "blocked")
+        self.assertIsNone(state.claim("run-demo", "worker-4"))
 
     def test_dead_peer_recovery_fences_old_token_and_increments_epoch(self) -> None:
         state = self.state()

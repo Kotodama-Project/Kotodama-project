@@ -3003,7 +3003,12 @@ class SessionConversationLedgerTests(unittest.TestCase):
         )
 
     def test_none_decision_status_keeps_all_decision_refs_null(self) -> None:
-        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_valid_records())["result"])
+        ordinary = [_event("ordinary-none")]
+        positive = ledger.validate_ledger(ordinary)
+        self.assertEqual("LEDGER_VALID", positive["result"], positive)
+        self.assertEqual([], positive["reason_codes"])
+        decision_refs = ("candidate_ref", "human_evidence_ref", "human_decision_ref", "human_actor_ref")
+        self.assertTrue(all(ordinary[0]["decision"][field] is None for field in decision_refs))
         for field, value in (
             ("candidate_ref", _ref("candidate", "none")),
             ("human_evidence_ref", _ref("evidence", "none")),
@@ -3011,20 +3016,18 @@ class SessionConversationLedgerTests(unittest.TestCase):
             ("human_actor_ref", _ref("person", "alice")),
         ):
             with self.subTest(field=field):
-                records = _valid_records()
-                records[2]["decision"]["status"] = "NONE"
-                records[2]["decision"][field] = value
+                records = copy.deepcopy(ordinary)
+                records[0]["decision"][field] = value
                 report = ledger.validate_ledger(_rechain(records))
                 self.assertEqual("REFUSED", report["result"], report)
                 self.assertEqual(
-                    ["LLM_CANDIDATE_EXTRACTION_INVALID", "NONE_DECISION_FIELDS_INVALID"],
+                    ["NONE_DECISION_FIELDS_INVALID"],
                     report["reason_codes"],
                 )
 
-        combined = _valid_records()
-        combined[2]["decision"].update(
+        combined = copy.deepcopy(ordinary)
+        combined[0]["decision"].update(
             {
-                "status": "NONE",
                 "candidate_ref": _ref("candidate", "none-combined"),
                 "human_evidence_ref": _ref("evidence", "none-combined"),
                 "human_decision_ref": _ref("decision", "none-combined"),
@@ -3034,7 +3037,7 @@ class SessionConversationLedgerTests(unittest.TestCase):
         combined_report = ledger.validate_ledger(_rechain(combined))
         self.assertEqual("REFUSED", combined_report["result"], combined_report)
         self.assertEqual(
-            ["LLM_CANDIDATE_EXTRACTION_INVALID", "NONE_DECISION_FIELDS_INVALID"],
+            ["NONE_DECISION_FIELDS_INVALID"],
             combined_report["reason_codes"],
         )
 
