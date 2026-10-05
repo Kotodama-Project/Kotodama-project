@@ -87,8 +87,15 @@ class AdversarialTransportTests(unittest.TestCase):
     def test_schema_and_runtime_agree_revision_starts_at_one(self):
         import jsonschema
         path = Path(__file__).resolve().parents[1]/"schemas/task-swarm-message.schema.json"
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        validator = jsonschema.Draft202012Validator(schema)
+        validator.validate(self._request(revision=1))
         with self.assertRaises(jsonschema.ValidationError):
-            jsonschema.validate(self._request(revision=0), json.loads(path.read_text(encoding="utf-8")))
+            validator.validate(self._request(revision=0))
+        transport = self._transport()
+        with self.assertRaisesRegex(SwarmError, "INVALID_LIMIT"):
+            transport.send(self._request(revision=0))
+        self.assertEqual(transport.send(self._request(revision=1))["revision"], 1)
 
     def test_status_refuses_foreign_scope_reply(self):
         transport = self._transport()

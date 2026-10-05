@@ -29,10 +29,26 @@ class TaskSwarmBenchmarkTests(unittest.TestCase):
         self.assertLess(result["correction_utf8_bytes"], result["source_utf8_bytes"])
         self.assertGreater(result["boundary_payload_bytes"], result["payload_limit_bytes"] - 256)
         self.assertEqual(result["scheduler"]["snapshot_history_selects"], 1)
+        self.assertLessEqual(result["scheduler"]["snapshot_attempt_selects"], 3)
         self.assertEqual(result["scheduler"]["attempts"], result["scheduler"]["jobs"])
         raw = json.dumps(report)
         for forbidden in (str(ROOT), "text\":", "invocation_ref", "capability_ref", benchmark.NOTES[1]):
             self.assertNotIn(forbidden, raw)
+
+    def test_benchmark_counter_observes_history_projection_and_repeated_queries(self):
+        from test_task_swarm_state import SwarmStateTests
+        fixture = SwarmStateTests()
+        fixture.setUp()
+        self.addCleanup(fixture.tearDown)
+        state = fixture.state()
+        state.create_run(fixture.plan())
+        with benchmark.work_counter(state) as counter, closing(state._connect()) as connection:
+            connection.execute('select a.token from "attempts" as a where a.run_id=?', ("run-demo",)).fetchall()
+            connection.execute('SELECT token FROM main.attempts WHERE run_id=?', ("run-demo",)).fetchall()
+            connection.execute('SELECT COUNT(*) FROM attempts WHERE run_id=?', ("run-demo",)).fetchone()
+        self.assertEqual(counter["history_selects"], 2)
+        self.assertEqual(counter["attempt_selects"], 3)
+        self.assertGreater(counter["vm_steps"], 0)
 
     def test_truncated_source_and_missing_evidence_make_benchmark_fail(self):
         original = benchmark.PeerTools._validated_message

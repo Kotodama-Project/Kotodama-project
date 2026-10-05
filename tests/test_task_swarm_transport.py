@@ -4,6 +4,8 @@ import sys
 import tempfile
 import threading
 import unittest
+
+from jsonschema import Draft202012Validator, ValidationError
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "runtime"))
@@ -21,6 +23,7 @@ class TransportTests(unittest.TestCase):
         temporary_root = Path(__file__).resolve().parents[1] / "work"
         temporary_root.mkdir(exist_ok=True)
         self._temp = tempfile.TemporaryDirectory(dir=temporary_root)
+        self.addCleanup(self._temp.cleanup)
         self.db_path = Path(self._temp.name) / "swarm.db"
 
     def tearDown(self):
@@ -235,7 +238,21 @@ class TransportTests(unittest.TestCase):
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         self.assertTrue(schema["additionalProperties"] is False)
         self.assertIn("parent_message_id", schema["required"])
-        self.assertEqual(schema["properties"]["state"]["enum"][-1], "stale")
+        self.assertEqual(set(schema["properties"]["state"]["enum"]),
+                         {"stored", "acked", "replied", "reply_acked", "expired", "stale"})
+        validator = Draft202012Validator(schema)
+        validator.validate(self._request())
+        transport = self._transport()
+        envelope = transport.send(self._request())
+        validator.validate(envelope)
+        validator.validate({**envelope, "payload_state": "pending"})
+        validator.validate(transport.receive("task-1", "receiver")[0])
+        for invalid_state in ("unknown", True, None):
+            with self.subTest(payload_state=invalid_state), self.assertRaises(ValidationError):
+                validator.validate({**envelope, "payload_state": invalid_state})
+        for extra in ("unknown", "private_locator"):
+            with self.subTest(extra=extra), self.assertRaises(ValidationError):
+                validator.validate({**self._request(), extra: "synthetic-rejected-value"})
 
 
 if __name__ == "__main__":

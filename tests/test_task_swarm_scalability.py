@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import copy
 import sqlite3
+import re
 import unittest
 from contextlib import closing
 
 import test_task_swarm_state as state_fixtures
 import test_task_swarm_transport as transport_fixtures
 from task_swarm.protocol import SwarmError
+from task_swarm.sqlite_work import attempt_history_select, global_job_select, normalized_select, selected_tables
 
 
 class SchedulerScalabilityTests(unittest.TestCase):
@@ -41,8 +43,11 @@ class SchedulerScalabilityTests(unittest.TestCase):
         statements = self.trace(state)
 
         snapshot = state.snapshot("run-demo")
-        attempt_queries = [sql for sql in statements if sql.startswith("SELECT * FROM attempts")]
+        attempt_queries = [sql for sql in statements if attempt_history_select(sql)]
         self.assertEqual(len(attempt_queries), 1, "snapshot must not issue one history query per job")
+        # Also count aggregate reads: per-job COUNT queries must not evade the
+        # history class by returning the same eventual snapshot.
+        self.assertLessEqual(sum("attempts" in selected_tables(sql) for sql in statements), 3)
         self.assertEqual(len(snapshot["jobs"]), 100)
         job = snapshot["jobs"]["job-000"]
         self.assertEqual([attempt["attempt"] for attempt in job["attempts"]], [1, 2])
@@ -62,9 +67,29 @@ class SchedulerScalabilityTests(unittest.TestCase):
         statements = self.trace(state)
 
         self.assertIsNone(state.claim("second-run", "worker"))
-        lease_queries = [sql for sql in statements if sql.startswith("SELECT exclusive_keys_json FROM jobs")]
+        lease_queries = [sql for sql in statements if global_job_select(sql)]
         self.assertEqual(len(lease_queries), 1)
         self.assertEqual(state.snapshot("second-run")["budget"]["attempts_used"], 0)
+
+    def test_query_accounting_observes_projection_alias_and_repeated_reads(self):
+        state = self.state()
+        state.create_run(self.plan())
+        statements = self.trace(state)
+        with closing(state._connect()) as connection:
+            for query in (
+                'select a.token from "attempts" as a where a.run_id=?',
+                'SELECT token FROM main.attempts WHERE run_id=?',
+                'SELECT COUNT(*) FROM attempts WHERE run_id=?',
+                "SELECT j.state FROM jobs AS j WHERE j.state='leased'",
+                "select exclusive_keys_json from jobs where state='leased'",
+                "SELECT j.run_id FROM jobs j WHERE j.state='leased'",
+                "SELECT j.state FROM jobs j WHERE j.run_id IS NOT NULL",
+                "SELECT j.exclusive_keys_json FROM jobs j WHERE j.run_id=?",
+            ):
+                connection.execute(query, () if "?" not in query else ("run-demo",)).fetchall()
+        self.assertEqual(sum(attempt_history_select(sql) for sql in statements), 2)
+        self.assertEqual(sum(global_job_select(sql) for sql in statements), 4)
+        self.assertEqual(sum("attempts" in selected_tables(sql) for sql in statements), 3)
 
     def test_retained_jobs_do_not_require_a_full_scan_for_global_leases(self):
         state = self.state()
@@ -110,7 +135,8 @@ class TransportScalabilityTests(unittest.TestCase):
         transport._connect = connect
         transport.max_pending = 1
         transport.send(self._request())
-        self.assertFalse(any(sql.startswith("SELECT * FROM acknowledgements") for sql in statements))
+        ack_queries = [sql for sql in statements if "acknowledgements" in selected_tables(sql)]
+        self.assertEqual(len(ack_queries), 1, "ACK admission must issue one batched join, not zero observed reads or N+1")
         # SQLite's context manager commits a transaction but does not close it.
         with closing(sqlite3.connect(self.db_path)) as connection, connection:
             connection.execute("UPDATE acknowledgements SET actor_ref='foreign' WHERE message_id='acked-39'")
@@ -128,14 +154,29 @@ class TransportScalabilityTests(unittest.TestCase):
             def __init__(self, cursor):
                 self.cursor = cursor
 
+            @staticmethod
+            def label(row):
+                return row["message_id"] if "message_id" in row.keys() else "<message projection>"
+
             def __iter__(self):
                 for row in self.cursor:
-                    materialized.append(row["message_id"])
+                    materialized.append(self.label(row))
                     yield row
+
+            def fetchone(self):
+                row = self.cursor.fetchone()
+                if row is not None:
+                    materialized.append(self.label(row))
+                return row
+
+            def fetchmany(self, *args):
+                rows = self.cursor.fetchmany(*args)
+                materialized.extend(self.label(row) for row in rows)
+                return rows
 
             def fetchall(self):
                 rows = self.cursor.fetchall()
-                materialized.extend(row["message_id"] for row in rows)
+                materialized.extend(self.label(row) for row in rows)
                 return rows
 
         class TrackingConnection:
@@ -144,7 +185,8 @@ class TransportScalabilityTests(unittest.TestCase):
 
             def execute(self, sql, parameters=()):
                 cursor = self.connection.execute(sql, parameters)
-                return TrackingCursor(cursor) if sql.lstrip().startswith("SELECT m.* FROM messages AS m") else cursor
+                aggregate = re.search(r"\b(?:count|max|min|sum|avg|total|group_concat)\s*\(", normalized_select(sql))
+                return TrackingCursor(cursor) if "messages" in selected_tables(sql) and not aggregate else cursor
 
             def close(self):
                 self.connection.close()
@@ -152,6 +194,7 @@ class TransportScalabilityTests(unittest.TestCase):
         transport._connect = lambda: TrackingConnection(original())
         received = transport.receive("task-1", "receiver", limit=1)
         self.assertEqual([row["message_id"] for row in received], ["message-0"])
+        self.assertEqual(len(materialized), 1)
         self.assertEqual(materialized, ["message-0"])
 
     def test_reopened_store_quota_work_skips_expired_and_prior_owner_history(self):

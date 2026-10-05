@@ -20,6 +20,7 @@ from task_swarm.owner_file import OwnerFile
 from task_swarm.payloads import MAX_PAYLOAD_BYTES, PayloadStore
 from task_swarm.protocol import SwarmError, canonical, digest, validate_binding
 from task_swarm.state import SwarmState
+from task_swarm.sqlite_work import attempt_history_select, selected_tables
 
 
 @dataclass(frozen=True)
@@ -157,7 +158,7 @@ class Fixture:
 def work_counter(component):
     """Count SQLite VM instructions, rather than impose a noisy latency gate."""
     original = component._connect
-    counts = {"vm_steps": 0, "history_selects": 0}
+    counts = {"vm_steps": 0, "history_selects": 0, "attempt_selects": 0}
 
     def connect():
         connection = original()
@@ -165,7 +166,9 @@ def work_counter(component):
             counts["vm_steps"] += 1
             return 0
         def trace(sql):
-            if sql.startswith("SELECT * FROM attempts"):
+            if "attempts" in selected_tables(sql):
+                counts["attempt_selects"] += 1
+            if attempt_history_select(sql):
                 counts["history_selects"] += 1
         connection.set_progress_handler(step, 1)
         connection.set_trace_callback(trace)
@@ -234,13 +237,15 @@ def scheduler(fixture: Fixture, profile: Profile, result: dict) -> dict:
     with work_counter(reopened) as counter:
         snapshot = reopened.snapshot("benchmark")
     check(counter["history_selects"] == 1, "snapshot must batch histories across all jobs")
+    check(counter["attempt_selects"] <= 3, "snapshot must not issue per-job aggregate reads")
     check(snapshot["run_state"] == "waiting_owner" and snapshot["accepted"] == 0,
           "all reported candidates must wait for owner acceptance")
     for job_id in [*candidates, review["job_id"]]:
         reopened.accept("benchmark", job_id, digest(result), "ref/verification/synthetic", "ref/owner/synthetic")
     check(reopened.snapshot("benchmark")["accepted"] == len(jobs), "owner acceptance must survive reopen")
     return {"jobs": len(jobs), "attempts": snapshot["budget"]["attempts_used"],
-            "snapshot_history_selects": counter["history_selects"], "waiting_owner_verified": True,
+            "snapshot_history_selects": counter["history_selects"],
+            "snapshot_attempt_selects": counter["attempt_selects"], "waiting_owner_verified": True,
             "independent_reviewer_verified": True}
 
 

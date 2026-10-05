@@ -1,5 +1,6 @@
 """The required status must include the complete, hash-locked task swarm matrix."""
 from pathlib import Path
+import ast
 import os
 import re
 import subprocess
@@ -64,6 +65,45 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         components = python_components(lock)
         self.assertEqual(len(components), len(requirements))
         self.assertTrue(all(component["hashes"] for component in components))
+
+        # The shared lock parser verifies every pin/hash and marker grammar.
+        # Evaluate the current lock's equality/boolean marker subset for each
+        # supported CPython platform without adding a unittest dependency.
+        def active_marker(node, environment):
+            if isinstance(node, ast.Expression):
+                return active_marker(node.body, environment)
+            if isinstance(node, ast.BoolOp):
+                values = [active_marker(value, environment) for value in node.values]
+                if isinstance(node.op, ast.And):
+                    return all(values)
+                if isinstance(node.op, ast.Or):
+                    return any(values)
+            if isinstance(node, ast.Compare) and len(node.ops) == len(node.comparators) == 1:
+                self.assertIsInstance(node.left, ast.Name)
+                right = ast.literal_eval(node.comparators[0])
+                self.assertIsInstance(right, str)
+                left = environment[node.left.id]
+                if isinstance(node.ops[0], ast.Eq):
+                    return left == right
+                if isinstance(node.ops[0], ast.NotEq):
+                    return left != right
+            self.fail("extend platform marker evaluation when the lock adds another operator")
+
+        for platform in ("linux", "win32"):
+            environment = {"sys_platform": platform, "implementation_name": "cpython",
+                           "platform_python_implementation": "CPython"}
+            active = set()
+            for line in requirements:
+                requirement, _, marker = line.rstrip(" \\ ").partition(";")
+                name = requirement.split("==")[0].split("[")[0]
+                if not marker or active_marker(ast.parse(marker.strip(), mode="eval"), environment):
+                    active.add(name)
+            with self.subTest(platform=platform):
+                for name in ("pywin32", "colorama"):
+                    with self.subTest(dependency=name):
+                        self.assertEqual(name in active, platform == "win32")
+                self.assertNotIn("httpx2-jsfetch", active)
+                self.assertTrue({"mcp", "psutil", "pytest", "jsonschema", "pyyaml"} <= active)
 
     # The gate step runs on the Linux runner; on Windows `bash` may resolve to
     # WSL, which does not inherit this process's environment.
