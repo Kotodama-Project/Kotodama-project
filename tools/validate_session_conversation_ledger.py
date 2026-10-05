@@ -16,7 +16,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Container
 
 
 GENESIS_HASH = "0" * 64
@@ -248,7 +248,7 @@ def _integrity_marker(record: Any) -> str | None:
     if not isinstance(record, dict) or not isinstance(record.get("integrity"), dict):
         return None
     marker = record["integrity"].get("marker")
-    return marker if isinstance(marker, str) else None
+    return marker if isinstance(marker, str) and marker in {"NONE", "GAP", "CORRUPT", "RECOVERY"} else None
 
 
 def _match(value: Any, pattern: str) -> bool:
@@ -312,9 +312,14 @@ def _typed_identity_suffix(value: Any, prefixes: tuple[str, ...]) -> str | None:
     return None
 
 
+def _enum_member(value: Any, choices: Container[str]) -> bool:
+    """Check public string enums before hashing any untrusted JSON value."""
+    return isinstance(value, str) and value in choices
+
+
 def _actor_authority_is_consistent(actor_ref: Any, role: Any) -> bool:
     kind = _actor_kind(actor_ref)
-    return kind is not None and role in ACTOR_AUTHORITY_ROLES.get(kind, set())
+    return kind is not None and _enum_member(role, ACTOR_AUTHORITY_ROLES.get(kind, set()))
 
 
 def _sha(value: Any, reasons: list[str]) -> bool:
@@ -371,14 +376,14 @@ def _validate_event_shape(record: Any) -> list[str]:
     session = record["session"]
     if _keys(session, SESSION_KEYS, SESSION_KEYS, "session", reasons):
         state = session.get("state")
-        if state not in {"BOUND", "UNASSIGNED_INBOX"}:
+        if not _enum_member(state, {"BOUND", "UNASSIGNED_INBOX"}):
             reasons.append("SCHEMA_INVALID")
         _ref(session.get("session_ref"), reasons, pattern=r"^ref/session/[a-z0-9][a-z0-9/_-]{1,244}$", nullable=True)
         _ref(session.get("revision_ref"), reasons, pattern=r"^ref/session-revision/[1-9][0-9]*$", nullable=True)
         _ref(session.get("binding_event_ref"), reasons, pattern=r"^ref/event/[a-z0-9][a-z0-9/_-]{1,500}$", nullable=True)
         governance = session.get("governance")
         if _keys(governance, GOVERNANCE_KEYS, GOVERNANCE_KEYS, "session_governance", reasons):
-            if governance.get("creation_mode") not in {"UNASSIGNED_INBOX", "AUTO_CREATED", "EXPLICIT"}:
+            if not _enum_member(governance.get("creation_mode"), {"UNASSIGNED_INBOX", "AUTO_CREATED", "EXPLICIT"}):
                 reasons.append("SCHEMA_INVALID")
             for key in ("task_ssot_ref", "plan_ref", "invocation_ref", "model_ref", "delegation_ref", "parallel_status_ref"):
                 _ref(governance.get(key), reasons, nullable=True)
@@ -392,7 +397,7 @@ def _validate_event_shape(record: Any) -> list[str]:
             elif state == "BOUND":
                 required_refs = ("task_ssot_ref", "plan_ref", "invocation_ref", "model_ref", "delegation_ref", "parallel_status_ref")
                 required_lists = ("requirement_refs", "capability_grant_refs", "knowledge_grant_refs", "mcp_tool_grant_refs", "evidence_refs")
-                if governance.get("creation_mode") not in {"AUTO_CREATED", "EXPLICIT"} or any(governance.get(key) is None for key in required_refs) or any(not governance.get(key) for key in required_lists):
+                if not _enum_member(governance.get("creation_mode"), {"AUTO_CREATED", "EXPLICIT"}) or any(governance.get(key) is None for key in required_refs) or any(not governance.get(key) for key in required_lists):
                     reasons.append("SESSION_GOVERNANCE_INCOMPLETE")
         if state == "UNASSIGNED_INBOX" and any(session.get(key) is not None for key in ("session_ref", "revision_ref", "binding_event_ref")):
             reasons.append("UNASSIGNED_SESSION_HAS_BINDING")
@@ -401,7 +406,7 @@ def _validate_event_shape(record: Any) -> list[str]:
 
     source = record["source"]
     if _keys(source, SOURCE_KEYS, SOURCE_KEYS, "source", reasons):
-        if source.get("type") not in SOURCE_TYPES:
+        if not _enum_member(source.get("type"), SOURCE_TYPES):
             reasons.append("SCHEMA_INVALID")
         _timestamp(source.get("occurred_at"), reasons)
         _timestamp(source.get("ingested_at"), reasons)
@@ -412,7 +417,7 @@ def _validate_event_shape(record: Any) -> list[str]:
             reasons.append("ACTOR_AUTHORITY_CONFUSION")
         authority = source.get("authority")
         if _keys(authority, AUTHORITY_KEYS, AUTHORITY_KEYS, "authority", reasons):
-            if authority.get("role") not in {"HUMAN", "OWNER", "AGENT", "CONNECTOR", "SYSTEM"}:
+            if not _enum_member(authority.get("role"), {"HUMAN", "OWNER", "AGENT", "CONNECTOR", "SYSTEM"}):
                 reasons.append("SCHEMA_INVALID")
             _ref(authority.get("authority_ref"), reasons, pattern=r"^ref/authority/[a-z0-9][a-z0-9/_-]{1,240}$")
             if actor == authority.get("authority_ref") or (isinstance(actor, str) and actor.startswith("ref/authority/")):
@@ -421,7 +426,7 @@ def _validate_event_shape(record: Any) -> list[str]:
                 reasons.append("ACTOR_AUTHORITY_ROLE_MISMATCH")
         expected_identity_state = (
             "UNVERIFIED_PUBLIC_CLAIM"
-            if _actor_kind(actor) in {"actor", "speaker"}
+            if _enum_member(_actor_kind(actor), {"actor", "speaker"})
             else "NOT_APPLICABLE"
         )
         if source.get("identity_verification") != expected_identity_state:
@@ -444,7 +449,7 @@ def _validate_event_shape(record: Any) -> list[str]:
         _ref(content.get("span_ref"), reasons, nullable=True)
         if content.get("storage") != "PROTECTED_PAYLOAD_VAULT" or content.get("raw_content_embedded") is not False:
             reasons.append("RAW_PRIVATE_CONTENT")
-        if content.get("artifact_stage") not in ARTIFACT_STAGE_PARENTS:
+        if not _enum_member(content.get("artifact_stage"), ARTIFACT_STAGE_PARENTS):
             reasons.append("SCHEMA_INVALID")
         _ref_list(content.get("derived_from_event_refs"), reasons, events=True)
 
@@ -471,12 +476,12 @@ def _validate_event_shape(record: Any) -> list[str]:
     detail = record["event"]
     detail_kind = detail.get("kind") if isinstance(detail, dict) else None
     if _keys(detail, EVENT_KEYS, EVENT_KEYS, "event_detail", reasons):
-        if detail.get("kind") not in EVENT_KINDS or detail.get("state") not in EVENT_STATES:
+        if not _enum_member(detail.get("kind"), EVENT_KINDS) or not _enum_member(detail.get("state"), EVENT_STATES):
             reasons.append("SCHEMA_INVALID")
         _ref(detail.get("summary_ref"), reasons)
         for key in ("correction_of_event_ref", "withdrawal_of_event_ref", "confirmation_of_event_ref"):
             _ref(detail.get(key), reasons, pattern=r"^ref/event/[a-z0-9][a-z0-9/_-]{1,500}$", nullable=True)
-        if detail.get("invalidation_kind") not in INVALIDATION_KINDS and detail.get("invalidation_kind") is not None:
+        if not _enum_member(detail.get("invalidation_kind"), INVALIDATION_KINDS) and detail.get("invalidation_kind") is not None:
             reasons.append("SCHEMA_INVALID")
         _ref_list(detail.get("invalidation_refs"), reasons)
         binding = detail.get("binding")
@@ -501,14 +506,14 @@ def _validate_event_shape(record: Any) -> list[str]:
                 reasons.append("VOICE_REPLY_EGRESS_INVALID")
     elif egress is not None:
         reasons.append("VOICE_REPLY_EGRESS_INVALID")
-    if detail_kind in {"voice_segment", "voice_reply"} and (
+    if _enum_member(detail_kind, {"voice_segment", "voice_reply"}) and (
         not isinstance(source, dict) or source.get("type") != "discord_voice"
     ):
         reasons.append("VOICE_SOURCE_TYPE_INVALID")
 
     decision = record["decision"]
     if _keys(decision, DECISION_KEYS, DECISION_KEYS, "decision", reasons):
-        if decision.get("status") not in DECISION_STATES:
+        if not _enum_member(decision.get("status"), DECISION_STATES):
             reasons.append("SCHEMA_INVALID")
         _ref(decision.get("candidate_ref"), reasons, pattern=r"^ref/candidate/[a-z0-9][a-z0-9/_-]{1,240}$", nullable=True)
         _ref(decision.get("human_evidence_ref"), reasons, nullable=True)
@@ -519,7 +524,7 @@ def _validate_event_shape(record: Any) -> list[str]:
 
     deviation = record["policy_deviation"]
     if _keys(deviation, DEVIATION_KEYS, DEVIATION_KEYS, "policy_deviation", reasons):
-        if deviation.get("status") not in DEVIATION_STATES:
+        if not _enum_member(deviation.get("status"), DEVIATION_STATES):
             reasons.append("SCHEMA_INVALID")
         for key in ("rule_ref", "reason_ref", "approver_ref", "remediation_ref"):
             _ref(deviation.get(key), reasons, nullable=True)
@@ -538,13 +543,13 @@ def _validate_event_shape(record: Any) -> list[str]:
     if _keys(retention, RETENTION_KEYS, RETENTION_KEYS, "retention", reasons):
         _ref(retention.get("policy_ref"), reasons)
         _ref(retention.get("policy_revision_ref"), reasons)
-        if retention.get("storage_class") not in {"PROTECTED_HOT", "ENCRYPTED_COLD_ARCHIVE", "DERIVED_SEARCH_INDEX"}:
+        if not _enum_member(retention.get("storage_class"), {"PROTECTED_HOT", "ENCRYPTED_COLD_ARCHIVE", "DERIVED_SEARCH_INDEX"}):
             reasons.append("SCHEMA_INVALID")
         _ref(retention.get("encryption_ref"), reasons)
-        if retention.get("encryption_status") not in {"DECLARED_UNVERIFIED", "NOT_APPLICABLE"}:
+        if not _enum_member(retention.get("encryption_status"), {"DECLARED_UNVERIFIED", "NOT_APPLICABLE"}):
             reasons.append("SCHEMA_INVALID")
         _timestamp(retention.get("retain_until"), reasons)
-        if retention.get("archive_target_kind") not in {"NONE", "SESSION_ARCHIVE_VAULT", "ARCHIVE_TARGET"}:
+        if not _enum_member(retention.get("archive_target_kind"), {"NONE", "SESSION_ARCHIVE_VAULT", "ARCHIVE_TARGET"}):
             reasons.append("SCHEMA_INVALID")
         for key in ("archive_target_ref", "archive_target_uri_ref", "snapshot_receipt_ref"):
             _ref(retention.get(key), reasons, nullable=True)
@@ -560,13 +565,13 @@ def _validate_event_shape(record: Any) -> list[str]:
             reasons.append("COLD_ARCHIVE_TARGET_REQUIRED")
         if retention.get("archive_target_kind") != "NONE" and any(retention.get(key) is None for key in ("archive_target_ref", "archive_target_uri_ref", "archive_package_digest")):
             reasons.append("ARCHIVE_TARGET_INCOMPLETE")
-        if retention.get("archive_status") not in {"NOT_REQUESTED", "DECLARED", "RESTORE_PENDING", "RESTORED", "DELETED", "FAILED"}:
+        if not _enum_member(retention.get("archive_status"), {"NOT_REQUESTED", "DECLARED", "RESTORE_PENDING", "RESTORED", "DELETED", "FAILED"}):
             reasons.append("SCHEMA_INVALID")
         _ref(retention.get("archive_receipt_ref"), reasons, nullable=True)
-        if retention.get("restore_status") not in {"NOT_REQUESTED", "PENDING", "RESTORED", "FAILED"}:
+        if not _enum_member(retention.get("restore_status"), {"NOT_REQUESTED", "PENDING", "RESTORED", "FAILED"}):
             reasons.append("SCHEMA_INVALID")
         _ref(retention.get("restore_receipt_ref"), reasons, nullable=True)
-        if retention.get("archive_status") in {"DECLARED", "RESTORED", "DELETED"} and retention.get("archive_receipt_ref") is None:
+        if _enum_member(retention.get("archive_status"), {"DECLARED", "RESTORED", "DELETED"}) and retention.get("archive_receipt_ref") is None:
             reasons.append("ARCHIVE_RECEIPT_INVALID")
         if retention.get("archive_target_kind") != "NONE" and retention.get("archive_status") == "NOT_REQUESTED":
             reasons.append("ARCHIVE_STATUS_INCOMPLETE")
@@ -576,7 +581,7 @@ def _validate_event_shape(record: Any) -> list[str]:
             reasons.append("ARCHIVE_RESTORE_STATE_INVALID")
         if retention.get("archive_status") == "RESTORED" and retention.get("restore_status") != "RESTORED":
             reasons.append("ARCHIVE_RESTORE_STATE_INVALID")
-        if retention.get("restore_status") == "RESTORED" and retention.get("archive_status") not in {"RESTORED", "DELETED"}:
+        if retention.get("restore_status") == "RESTORED" and not _enum_member(retention.get("archive_status"), {"RESTORED", "DELETED"}):
             reasons.append("ARCHIVE_RESTORE_STATE_INVALID")
         if retention.get("restore_status") == "RESTORED" and retention.get("restore_receipt_ref") is None:
             reasons.append("RESTORE_RECEIPT_INVALID")
@@ -585,7 +590,7 @@ def _validate_event_shape(record: Any) -> list[str]:
         if retention.get("archive_status") == "DELETED":
             if retention.get("deletion_state") != "CONFIRMED" or retention.get("deletion_readback") != "CONFIRMED" or retention.get("deletion_receipt_ref") is None:
                 reasons.append("ARCHIVE_DELETION_STATE_INVALID")
-            if retention.get("restore_status") not in {"NOT_REQUESTED", "RESTORED"}:
+            if not _enum_member(retention.get("restore_status"), {"NOT_REQUESTED", "RESTORED"}):
                 reasons.append("ARCHIVE_RESTORE_STATE_INVALID")
         if retention.get("archive_target_kind") != "NONE" and (
             retention.get("deletion_state") == "CONFIRMED"
@@ -595,9 +600,9 @@ def _validate_event_shape(record: Any) -> list[str]:
             reasons.append("ARCHIVE_DELETION_STATE_INVALID")
         if retention.get("storage_class") == "ENCRYPTED_COLD_ARCHIVE" and retention.get("encryption_status") == "NOT_APPLICABLE":
             reasons.append("COLD_ARCHIVE_ENCRYPTION_REQUIRED")
-        if retention.get("deletion_trigger") not in {"expiry", "withdrawal", "source_delete", "expiry_or_withdrawal"}:
+        if not _enum_member(retention.get("deletion_trigger"), {"expiry", "withdrawal", "source_delete", "expiry_or_withdrawal"}):
             reasons.append("SCHEMA_INVALID")
-        if retention.get("deletion_state") not in {"NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"} or retention.get("deletion_readback") not in {"NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"}:
+        if not _enum_member(retention.get("deletion_state"), {"NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"}) or not _enum_member(retention.get("deletion_readback"), {"NOT_REQUESTED", "PENDING", "CONFIRMED", "FAILED"}):
             reasons.append("SCHEMA_INVALID")
         _ref(retention.get("deletion_receipt_ref"), reasons, pattern=r"^ref/deletion-receipt/[a-z0-9][a-z0-9/_-]{1,240}$", nullable=True)
         if (
@@ -611,26 +616,26 @@ def _validate_event_shape(record: Any) -> list[str]:
         if retention.get("deletion_state") == "CONFIRMED" and (retention.get("deletion_readback") != "CONFIRMED" or retention.get("deletion_receipt_ref") is None):
             reasons.append("DELETION_STATE_RECEIPT_INVALID")
         content_value = record.get("content")
-        if isinstance(content_value, dict) and content_value.get("artifact_stage") in {
+        if isinstance(content_value, dict) and _enum_member(content_value.get("artifact_stage"), {
             "RAW_AUDIO",
             "RAW_SOURCE_JSON",
             "RAW_ASR",
             "ALIGNED_TRANSCRIPT",
             "SPEAKER_ATTRIBUTED_TRANSCRIPT",
             "SOURCE_EVIDENCE",
-        } and retention.get("storage_class") == "DERIVED_SEARCH_INDEX":
+        }) and retention.get("storage_class") == "DERIVED_SEARCH_INDEX":
             reasons.append("RAW_EVIDENCE_STORAGE_CLASS_INVALID")
 
     provenance = record["provenance"]
     if _keys(provenance, PROVENANCE_KEYS, PROVENANCE_KEYS, "provenance", reasons):
         _ref(provenance.get("adapter_contract_ref"), reasons)
         _ref(provenance.get("ingested_by_ref"), reasons)
-        if provenance.get("ingest_mode") not in {"ONLINE", "OFFLINE_RECOVERY"}:
+        if not _enum_member(provenance.get("ingest_mode"), {"ONLINE", "OFFLINE_RECOVERY"}):
             reasons.append("SCHEMA_INVALID")
         _ref(provenance.get("connector_ref"), reasons)
         extraction = provenance.get("extraction")
         if _keys(extraction, EXTRACTION_KEYS, EXTRACTION_KEYS, "extraction", reasons):
-            if extraction.get("kind") not in {"NONE", "LLM_CANDIDATE"} or extraction.get("confirmation_required") is not True:
+            if not _enum_member(extraction.get("kind"), {"NONE", "LLM_CANDIDATE"}) or extraction.get("confirmation_required") is not True:
                 reasons.append("SCHEMA_INVALID")
             _ref(extraction.get("model_ref"), reasons, nullable=True)
             expected_binding = "DECISION_CANDIDATE" if extraction.get("kind") == "LLM_CANDIDATE" else "NOT_APPLICABLE"
@@ -640,7 +645,7 @@ def _validate_event_shape(record: Any) -> list[str]:
                 reasons.append("LLM_MODEL_PROVENANCE_MISSING")
         recovery = provenance.get("recovery")
         if _keys(recovery, RECOVERY_KEYS, RECOVERY_KEYS, "recovery", reasons):
-            if recovery.get("status") not in {"NOT_APPLICABLE", "PENDING", "RECOVERED", "FAILED"}:
+            if not _enum_member(recovery.get("status"), {"NOT_APPLICABLE", "PENDING", "RECOVERED", "FAILED"}):
                 reasons.append("SCHEMA_INVALID")
             _ref(recovery.get("cursor_ref"), reasons, nullable=True)
             _ref(recovery.get("receipt_ref"), reasons, nullable=True)
@@ -659,7 +664,7 @@ def _validate_event_shape(record: Any) -> list[str]:
             reasons.append("RAW_PRIVATE_CONTENT")
         _ref(safety.get("protected_payload_ref"), reasons, pattern=r"^ref/vault/[a-z0-9][a-z0-9/_-]{1,240}$")
         _ref(safety.get("knowledge_scope_ref"), reasons)
-        if safety.get("acl_state") not in {"AVAILABLE", "UNKNOWN", "LOST", "REVOKED"}:
+        if not _enum_member(safety.get("acl_state"), {"AVAILABLE", "UNKNOWN", "LOST", "REVOKED"}):
             reasons.append("SCHEMA_INVALID")
     if isinstance(context, dict) and isinstance(safety, dict) and (
         context.get("knowledge_scope_ref") != safety.get("knowledge_scope_ref")
@@ -669,7 +674,7 @@ def _validate_event_shape(record: Any) -> list[str]:
     integrity = record["integrity"]
     if _keys(integrity, INTEGRITY_KEYS, INTEGRITY_KEYS, "integrity", reasons):
         marker = integrity.get("marker")
-        if not isinstance(marker, str) or marker not in {"NONE", "GAP", "CORRUPT", "RECOVERY"}:
+        if not isinstance(marker, str) or not _enum_member(marker, {"NONE", "GAP", "CORRUPT", "RECOVERY"}):
             reasons.append("SCHEMA_INVALID")
         _ref(integrity.get("marker_ref"), reasons, nullable=True)
         if integrity.get("marker") != "NONE" and integrity.get("marker_ref") is None:

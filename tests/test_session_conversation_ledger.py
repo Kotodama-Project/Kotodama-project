@@ -3764,6 +3764,112 @@ class SessionConversationLedgerTests(unittest.TestCase):
             self.assertEqual(before_bytes, path.read_bytes())
             self.assertEqual(before_entries, sorted(item.name for item in Path(directory).iterdir()))
 
+    def test_enum_fields_reject_json_types_with_schema_diagnostics(self) -> None:
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        marker = "synthetic-private-enum-must-not-echo"
+
+        def resolve(definition):
+            if "$ref" not in definition:
+                return definition
+            target = schema
+            for part in definition["$ref"].removeprefix("#/").split("/"):
+                target = target[part]
+            return resolve(target)
+
+        def enum_fields(definition, path=()):
+            definition = resolve(definition)
+            if "enum" in definition:
+                yield path, definition, definition["enum"]
+            elif "oneOf" in definition:
+                branches = [resolve(branch) for branch in definition["oneOf"]]
+                choices = [value for branch in branches for value in branch.get("enum", [])]
+                if choices:
+                    if any(branch.get("type") == "null" for branch in branches):
+                        choices.append(None)
+                    yield path, definition, choices
+            for key, nested in definition.get("properties", {}).items():
+                yield from enum_fields(nested, (*path, key))
+
+        fields = list(enum_fields(schema))
+        self.assertTrue({("session", "state"), ("source", "authority", "role"),
+                         ("event", "kind"), ("event", "state"),
+                         ("event", "invalidation_kind"), ("integrity", "marker")} <=
+                        {path for path, _, _ in fields})
+        self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_valid_records())["result"])
+
+        def report_for(path, value):
+            records = _valid_records()
+            target = records[0]
+            for parent in path[:-1]:
+                target = target[parent]
+            target[path[-1]] = copy.deepcopy(value)
+            return ledger.validate_ledger(_rechain(records))
+
+        for path, definition, choices in fields:
+            validator = Draft202012Validator(definition)
+            for value in choices:
+                with self.subTest(path=path, declared_enum=value):
+                    validator.validate(value)
+                    # A declared enum may require other coherent state fields;
+                    # it must retain its existing structured runtime meaning.
+                    self.assertIn(report_for(path, value)["result"], {"LEDGER_VALID", "REFUSED"})
+            expected = report_for(path, marker)
+            self.assertEqual("REFUSED", expected["result"])
+            for value in (None, False, True, 0, 1, 0.5, [], [marker], {}, {"private": marker}, marker):
+                if value is None and None in choices:
+                    self.assertEqual("LEDGER_VALID", report_for(path, value)["result"])
+                    continue
+                with self.subTest(path=path, rejected_type=type(value).__name__):
+                    self.assertTrue(list(validator.iter_errors(value)))
+                    report = report_for(path, value)
+                    self.assertEqual("REFUSED", report["result"], report)
+                    self.assertEqual(expected["reason_codes"], report["reason_codes"])
+                    self.assertNotIn(marker, json.dumps(report))
+                    self.assertIs(report["promotion_eligible"], False)
+
+    def test_cli_enum_type_refusals_are_structured_and_content_free(self) -> None:
+        marker = "synthetic-private-cli-enum-must-not-echo"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ledger.jsonl"
+
+            def run(records):
+                path.write_text("\n".join(json.dumps(record) for record in _rechain(records)) + "\n",
+                                encoding="utf-8", newline="\n")
+                before = path.read_bytes()
+                completed = subprocess.run(
+                    [sys.executable, "-B", str(VALIDATOR), "validate", str(path)],
+                    cwd=ROOT, capture_output=True, text=True, encoding="utf-8", check=False,
+                )
+                self.assertEqual(before, path.read_bytes())
+                return completed
+
+            positive = run(_valid_records())
+            self.assertEqual(0, positive.returncode, positive.stderr)
+            self.assertEqual("LEDGER_VALID", json.loads(positive.stdout)["result"])
+            for parents, field, value in (
+                (("session",), "state", [marker]),
+                (("source",), "type", {"private": marker}),
+                (("source", "authority"), "role", {"private": marker}),
+                (("event",), "kind", [marker]),
+                (("event",), "state", [marker]),
+                (("content",), "artifact_stage", {"private": marker}),
+                (("integrity",), "marker", marker),
+            ):
+                with self.subTest(parents=parents, field=field):
+                    records = _valid_records()
+                    target = records[0]
+                    for parent in parents:
+                        target = target[parent]
+                    target[field] = value
+                    completed = run(records)
+                    self.assertEqual(2, completed.returncode, completed.stderr)
+                    self.assertEqual("", completed.stderr)
+                    report = json.loads(completed.stdout)
+                    self.assertEqual("REFUSED", report["result"])
+                    self.assertIn("SCHEMA_INVALID", report["reason_codes"])
+                    self.assertIs(report["promotion_eligible"], False)
+                    self.assertNotIn(marker, completed.stdout + completed.stderr)
+
     def test_adversarial_review_regressions_fail_closed(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
 
