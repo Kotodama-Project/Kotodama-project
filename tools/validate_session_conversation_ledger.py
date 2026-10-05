@@ -707,8 +707,12 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     bound_governance_for_target: dict[str, dict[str, Any]] = {}
     bound_sequence_for_target: dict[str, int] = {}
     effective_sessions: dict[str, tuple[str, str, str | None]] = {}
-    for candidate_record in records:
-        if _validate_event_shape(candidate_record):
+    # The three semantic passes only read event metadata. Reuse each pure
+    # shape result within this invocation; later calls validate their current
+    # input again. Diagnostic ordering remains the final record-order pass.
+    record_shape_reasons = [_validate_event_shape(record) for record in records]
+    for candidate_record, shape_reasons in zip(records, record_shape_reasons):
+        if shape_reasons:
             continue
         candidate_session = candidate_record["session"]
         candidate_detail = candidate_record["event"]
@@ -748,8 +752,8 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
     effective_session_revision_by_event: dict[str, tuple[str, str] | None] = {}
     effective_governance_by_event: dict[str, dict[str, Any] | None] = {}
     candidate_scopes: dict[str, set[str | None]] = {}
-    for candidate_record in records:
-        if _validate_event_shape(candidate_record):
+    for candidate_record, shape_reasons in zip(records, record_shape_reasons):
+        if shape_reasons:
             continue
         candidate_session = candidate_record["session"]
         if candidate_session["state"] == "BOUND":
@@ -775,8 +779,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
             reasons.append("CANDIDATE_SESSION_OWNERSHIP_INVALID")
     knowledge_scope_by_session_revision: dict[tuple[str, str], str] = {}
     session_governance_by_revision: dict[tuple[str, str], dict[str, Any]] = {}
-    for record in records:
-        shape_reasons = _validate_event_shape(record)
+    for record, shape_reasons in zip(records, record_shape_reasons):
         reasons.extend(shape_reasons)
         if shape_reasons:
             continue
@@ -851,7 +854,7 @@ def _semantic_reasons(records: list[dict[str, Any]]) -> list[str]:
                 or not isinstance(binding_detail, dict)
                 or not isinstance(binding_payload, dict)
                 or binding_detail.get("kind") != "session_binding"
-                or binding_detail.get("state") == "INVALIDATED"
+                or binding_detail.get("state") != SESSION_BINDING_ACTIVE_STATE
                 or binding_session.get("state") != "BOUND"
                 or binding_payload.get("destination_session_ref") != session.get("session_ref")
                 or binding_payload.get("destination_revision_ref") != session.get("revision_ref")
@@ -1215,12 +1218,12 @@ def _projection_exceeds_bounds(projection: dict[str, Any]) -> bool:
     for field in ("confirmed_intent", "decisions"):
         value = projection.get(field)
         if isinstance(value, list) and any(
-            isinstance(item, dict) and isinstance(item.get("source_event_refs"), list) and len(item["source_event_refs"]) > 4096
+            isinstance(item, dict) and isinstance(item.get("source_event_refs"), list) and len(item["source_event_refs"]) > PROJECTION_ARRAY_LIMITS["source_event_refs"]
             for item in value
         ):
             return True
     integrity = projection.get("integrity")
-    if isinstance(integrity, dict) and isinstance(integrity.get("invalidation_refs"), list) and len(integrity["invalidation_refs"]) > 4096:
+    if isinstance(integrity, dict) and isinstance(integrity.get("invalidation_refs"), list) and len(integrity["invalidation_refs"]) > PROJECTION_ARRAY_LIMITS["invalidation_refs"]:
         return True
     return False
 

@@ -925,6 +925,24 @@ class SessionConversationLedgerTests(unittest.TestCase):
         valid[-1]["session"]["binding_event_ref"] = valid[1]["event_id"]
         self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain(valid))["result"])
 
+        # Metadata for inactive binding states remains representable, but only
+        # the OBSERVED binding can be named as an effective explicit binding.
+        for state in sorted(ledger.EVENT_STATES):
+            with self.subTest(explicit_binding_state=state):
+                records = copy.deepcopy(valid)
+                records[1]["event"]["state"] = state
+                without_reference = copy.deepcopy(records)
+                without_reference[-1]["session"]["binding_event_ref"] = None
+                baseline = ledger.validate_ledger(_rechain(without_reference))
+                self.assertEqual("LEDGER_VALID", baseline["result"], baseline)
+                report = ledger.validate_ledger(_rechain(records))
+                self.assertEqual(
+                    "LEDGER_VALID" if state == "OBSERVED" else "REFUSED", report["result"], report
+                )
+                self.assertEqual(
+                    [] if state == "OBSERVED" else ["BINDING_EVENT_REF_INVALID"], report["reason_codes"]
+                )
+
         wrong_kind = copy.deepcopy(valid)
         wrong_kind[-1]["session"]["binding_event_ref"] = wrong_kind[0]["event_id"]
         wrong_kind_report = ledger.validate_ledger(_rechain(wrong_kind))
@@ -1274,13 +1292,23 @@ class SessionConversationLedgerTests(unittest.TestCase):
 
     def test_ref_length_boundaries_match_schema_and_validator(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema, format_checker=FormatChecker())
+        for length in (7, 8, 511, 512):
+            with self.subTest(accepted_length=length):
+                records = _valid_records()
+                records[0]["context"]["background_ref"] = "ref/a/" + "b" * (length - 6)
+                records = _rechain(records)
+                self.assertEqual([], list(validator.iter_errors(records[0])))
+                report = ledger.validate_ledger(records)
+                self.assertEqual("LEDGER_VALID", report["result"], report)
+                self.assertEqual([], report["reason_codes"])
         for value in ("ref/a", "ref/" + "a" * 509):
             with self.subTest(value_length=len(value)):
                 records = _valid_records()
                 records[0]["context"]["background_ref"] = value
                 records = _rechain(records)
                 report = ledger.validate_ledger(records)
-                schema_errors = list(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(records[0]))
+                schema_errors = list(validator.iter_errors(records[0]))
                 self.assertTrue(schema_errors)
                 self.assertIn("SCHEMA_INVALID", report["reason_codes"])
 
@@ -1628,6 +1656,10 @@ class SessionConversationLedgerTests(unittest.TestCase):
         self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain(retained_history))["result"])
 
     def test_deletion_receipt_requires_confirmed_state_and_readback(self) -> None:
+        """Preserve the historical case ID; declared pending/failed receipts are
+        valid metadata. Confirmed deletion additionally requires readback and
+        a receipt, as checked separately below and by schema-parity cases.
+        """
         for deletion_state, deletion_readback in (
             ("NOT_REQUESTED", "NOT_REQUESTED"),
         ):
@@ -1655,6 +1687,16 @@ class SessionConversationLedgerTests(unittest.TestCase):
             }
         )
         self.assertEqual("LEDGER_VALID", ledger.validate_ledger(_rechain(confirmed))["result"])
+        for field, value, reason in (
+            ("deletion_readback", "PENDING", "DELETION_STATE_RECEIPT_INVALID"),
+            ("deletion_receipt_ref", None, "DELETION_STATE_RECEIPT_INVALID"),
+        ):
+            with self.subTest(confirmed_field=field):
+                missing = copy.deepcopy(confirmed)
+                missing[-1]["retention"][field] = value
+                report = ledger.validate_ledger(_rechain(missing))
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertIn(reason, report["reason_codes"])
 
         for deletion_state, deletion_readback in (
             ("PENDING", "PENDING"),
@@ -2581,11 +2623,35 @@ class SessionConversationLedgerTests(unittest.TestCase):
     def test_validate_projection_rejects_overbound_integrity_refs(self) -> None:
         records = _valid_records()
         projection = ledger.project_session(records, _ref("session", "demo"))
-        projection["integrity"]["invalidation_refs"] = [_ref("projection", f"overflow-{index}") for index in range(4097)]
-        with self.assertRaises(ledger.LedgerValidationError) as raised:
-            ledger.validate_projection(projection, records, _ref("session", "demo"))
-        self.assertIn("PROJECTION_LIMIT_EXCEEDED", raised.exception.reason_codes)
+        limits = dict(ledger.PROJECTION_ARRAY_LIMITS)
+        limits["invalidation_refs"] = 3
+        limits["source_event_refs"] = 3
+        limits["source_timeline"] = 3
+        with mock.patch.object(ledger, "PROJECTION_ARRAY_LIMITS", limits):
+            for field in ("integrity", "confirmed_intent", "decisions"):
+                for size in (3, 4):
+                    with self.subTest(saved_field=field, count=size):
+                        saved = copy.deepcopy(projection)
+                        references = [_ref("projection", f"overflow-{index}") for index in range(size)]
+                        if field == "integrity":
+                            saved[field]["invalidation_refs"] = references
+                        else:
+                            saved[field] = [{"source_event_refs": references}]
+                        if size == 3:
+                            self.assertFalse(ledger._projection_exceeds_bounds(saved))
+                        else:
+                            with self.assertRaises(ledger.LedgerValidationError) as raised:
+                                ledger.validate_projection(saved, records, _ref("session", "demo"))
+                            self.assertEqual(["PROJECTION_LIMIT_EXCEEDED"], raised.exception.reason_codes)
+            self.assertEqual(
+                "PROJECTION_VALID",
+                ledger.validate_projection(projection, records, _ref("session", "demo"))["result"],
+            )
+        self.assertEqual(4096, ledger.PROJECTION_ARRAY_LIMITS["invalidation_refs"])
 
+        # One real default-limit seam covers 4096 accepted and 4097 refused
+        # source events. Each helper already seals its event against the prior
+        # hash; resealing the whole large fixture would repeat the same work.
         records = _valid_records()
         previous = records[-1]["event_hash"]
         for sequence in range(4, 4098):
@@ -2605,10 +2671,12 @@ class SessionConversationLedgerTests(unittest.TestCase):
             )
             records.append(event)
             previous = event["event_hash"]
-        records = _rechain(records)
+        accepted = ledger.project_session(records[:-1], _ref("session", "demo"))
+        self.assertEqual(4096, len(accepted["source_event_refs"]))
+        self.assertEqual(4096, len(accepted["source_timeline"]))
         with self.assertRaises(ledger.LedgerValidationError) as raised:
             ledger.project_session(records, _ref("session", "demo"))
-        self.assertIn("PROJECTION_LIMIT_EXCEEDED", raised.exception.reason_codes)
+        self.assertEqual(["PROJECTION_LIMIT_EXCEEDED"], raised.exception.reason_codes)
 
     def test_malformed_roots_and_cli_arity_fail_closed(self) -> None:
         for malformed in ([None], [[]], ["not-an-object"], [True]):
@@ -2715,6 +2783,26 @@ class SessionConversationLedgerTests(unittest.TestCase):
                 else ("CORRECTED" if event_kind == "correction" else "WITHDRAWN")
             )
             with self.subTest(event_kind=event_kind):
+                records = _lifecycle_records(event_kind, decision_status, event_state)
+                positive = ledger.validate_ledger(records)
+                self.assertEqual("LEDGER_VALID", positive["result"], positive)
+                future = copy.deepcopy(records)
+                lifecycle, target = future[-1], future[-2]
+                future[-2:] = [lifecycle, target]
+                # Isolate lifecycle ordering from the separate causation and
+                # ingestion-order rules. The later LLM candidate also forms a
+                # forbidden reopen, whose distinct diagnostic remains visible.
+                lifecycle["causation"]["caused_by_event_refs"] = []
+                for sequence, record in enumerate(future, start=1):
+                    record["sequence"] = sequence
+                    record["source"]["ingested_at"] = f"2026-08-26T00:01:{sequence:02d}Z"
+                report = ledger.validate_ledger(_rechain(future))
+                self.assertEqual("REFUSED", report["result"], report)
+                self.assertEqual(
+                    ["LIFECYCLE_TARGET_ORDER_INVALID", "CANDIDATE_LIFECYCLE_REGRESSION"],
+                    report["reason_codes"],
+                )
+
                 records = _lifecycle_records(event_kind, decision_status, event_state)
                 records[-1]["event"][target_field] = None
                 report = ledger.validate_ledger(_rechain(records))
@@ -3661,6 +3749,8 @@ class SessionConversationLedgerTests(unittest.TestCase):
                 encoding="utf-8",
                 newline="\n",
             )
+            before_bytes = path.read_bytes()
+            before_entries = sorted(item.name for item in Path(directory).iterdir())
             completed = subprocess.run(
                 [sys.executable, "-B", str(VALIDATOR), "validate", str(path)],
                 cwd=ROOT,
@@ -3669,8 +3759,10 @@ class SessionConversationLedgerTests(unittest.TestCase):
                 encoding="utf-8",
                 check=False,
             )
-        self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual("LEDGER_VALID", json.loads(completed.stdout)["result"])
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertEqual("LEDGER_VALID", json.loads(completed.stdout)["result"])
+            self.assertEqual(before_bytes, path.read_bytes())
+            self.assertEqual(before_entries, sorted(item.name for item in Path(directory).iterdir()))
 
     def test_adversarial_review_regressions_fail_closed(self) -> None:
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
