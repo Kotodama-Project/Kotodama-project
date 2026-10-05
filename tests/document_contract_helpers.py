@@ -91,6 +91,19 @@ def shell_commands(text: str, language: str | None = None) -> list[str]:
     return commands
 
 
+def command_section(text: str, expected, language: str = "bash", level: int = 2) -> str:
+    """Select one actual heading-bounded region by executable command intent."""
+    required = {canonical_command(command) for command in expected}
+    if not required:
+        raise AssertionError("command section requires an observable inventory")
+    boundaries = [offset for rank, _anchor, offset in headings(text) if rank == level]
+    regions = [text[start:end] for start, end in zip(boundaries, boundaries[1:] + [len(text)])]
+    candidates = [region for region in regions if required.issubset(shell_commands(region, language))]
+    if len(candidates) != 1:
+        raise AssertionError("expected one heading-bounded executable command region")
+    return candidates[0]
+
+
 def assert_command_order(case, text: str, expected, language: str | None = None) -> None:
     commands = shell_commands(text, language)
     positions = []

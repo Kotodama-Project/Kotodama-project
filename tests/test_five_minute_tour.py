@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 
-from tests.document_contract_helpers import section, assert_links, shell_commands, assert_command_order, table_rows, assert_preview_boundary, headings, link_targets
+from tests.document_contract_helpers import command_section, section, assert_links, shell_commands, assert_command_order, table_rows, assert_preview_boundary, headings, link_targets
 
 from tests.document_contract_helpers import owned_smoke_receipt, fenced_blocks
 from jsonschema import Draft202012Validator
@@ -32,16 +32,24 @@ class FiveMinuteTourTests(unittest.TestCase):
         self.assertFalse(any("docker compose up" in command for command in shell_commands(text)))
 
     def test_readme_exposes_tour_before_the_longer_quick_start(self) -> None:
-        for relative, target, boundary in (("README.md", "docs/FIVE-MINUTE-TOUR.md", "使い方を選ぶ"),
-                                           ("docs/OVERVIEW.md", "FIVE-MINUTE-TOUR.md", "quick-start--company-starter-を試す")):
+        for relative, target in (("README.md", "docs/FIVE-MINUTE-TOUR.md"),
+                                 ("docs/OVERVIEW.md", "FIVE-MINUTE-TOUR.md")):
             with self.subTest(surface=relative):
                 path = ROOT / relative
                 text = path.read_text(encoding="utf-8")
                 assert_links(self, path, text, (target,))
-                # One working tour link before the bounded next-choice/long runbook is enough.
-                boundary_offset = next(offset for _, anchor, offset in headings(text) if anchor == boundary)
-                near_top = text[:boundary_offset]
-                self.assertIn(target, link_targets(near_top))
+                if relative == "README.md":
+                    first_smoke = command_section(text, ("python3 -S -B tools/smoke_company_pack_review_chain.py",))
+                    first_visit_end = text.index(first_smoke) + len(first_smoke)
+                    self.assertIn(target, link_targets(text[:first_visit_end]))
+                else:
+                    required = {"python3 tools/create_company_pack.py my-company work/my-company"}
+                    required.update(f"python3 tools/{tool} --help" for tool in (
+                        "validate_template_pack.py", "check_company_pack_customization.py",
+                        "check_company_pack_public_preview.py"))
+                    long_runbook = command_section(text, required)
+                    self.assertIn(target, link_targets(text[:text.index(long_runbook)]))
+                # One working near-top tour link is sufficient on each surface.
                 self.assertLess(text.index(target), len(text) // 3)
 
     def test_documented_success_contract_matches_the_real_smoke_report(self) -> None:

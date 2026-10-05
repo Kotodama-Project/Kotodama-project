@@ -158,6 +158,7 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         self.assertEqual(validate["name"], "Trusted repository validation")
         self.assertEqual(set(validate["needs"]), {"repository", "discord", "swarm"})
         self.assertEqual(repository.get("permissions", workflow["permissions"]), {"contents": "read"})
+        self.assertEqual(validate.get("permissions", workflow["permissions"]), {"contents": "read"})
         steps = repository["steps"]
         executable = []
         for step in steps:

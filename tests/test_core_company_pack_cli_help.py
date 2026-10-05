@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 
-from tests.document_contract_helpers import section, assert_links, shell_commands, assert_command_order, table_rows, assert_preview_boundary, headings, link_targets
+from tests.document_contract_helpers import command_section, section, assert_links, shell_commands, assert_command_order, table_rows, assert_preview_boundary, headings, link_targets
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -81,11 +81,7 @@ class CoreCompanyPackCliHelpTests(unittest.TestCase):
                       "check_company_pack_public_preview.py")
         required = {f"python3 tools/{tool} --help" for tool in help_tools}
         required.add("python3 tools/create_company_pack.py my-company work/my-company")
-        boundaries = [offset for rank, _anchor, offset in headings(text) if rank == 2]
-        regions = [text[start:end] for start, end in zip(boundaries, boundaries[1:] + [len(text)])]
-        candidates = [region for region in regions if required.issubset(shell_commands(region, "bash"))]
-        self.assertEqual(len(candidates), 1, "help and initializer need one heading-bounded onboarding region")
-        quick_start = candidates[0]
+        quick_start = command_section(text, required)
         for prefix, language in (("python", "powershell"), ("python3", "bash")):
             commands = [f"{prefix} {command}" for command in (
                 "tools/validate_template_pack.py --help",
