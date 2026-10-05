@@ -288,7 +288,7 @@ class CompanyPackNextStepsCliTests(unittest.TestCase):
         validator = Draft202012Validator(json.loads((ROOT / "schemas/company-pack-next-steps.schema.json").read_text(encoding="utf-8")))
         validator.validate(plan)
         for path, value in (
-            (("current_state", "replacement_required"), "42"),
+            (("current_state", "counts", "replacement_required"), "42"),
             (("recommended_next", "unknown"), False),
             (("claims", "human_approval_verified"), True),
         ):
