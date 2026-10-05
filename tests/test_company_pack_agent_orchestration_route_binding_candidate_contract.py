@@ -325,10 +325,18 @@ class AgentOrchestrationRouteBindingCandidateContractTests(unittest.TestCase):
             path.write_bytes(b"{" + b"a" * (1_048_576 + 1) + b"}")
             module = runpy.run_path(str(VALIDATOR))
             output = StringIO()
-            with patch.object(module["os"], "open", side_effect=AssertionError("oversized input opened")) as opened:
+            with (
+                patch.object(module["os"], "open", side_effect=AssertionError("oversized input opened")) as opened,
+                patch.object(Path, "open", side_effect=AssertionError("oversized path opened")) as path_opened,
+                patch("io.open", side_effect=AssertionError("oversized stream opened")) as stream_opened,
+                patch("builtins.open", side_effect=AssertionError("oversized file opened")) as file_opened,
+            ):
                 with redirect_stdout(output):
                     code = module["main"]([str(VALIDATOR), str(path)])
                 opened.assert_not_called()
+                path_opened.assert_not_called()
+                stream_opened.assert_not_called()
+                file_opened.assert_not_called()
 
         self.assertEqual(code, 2)
         self.assertIn("INPUT_TOO_LARGE", json.loads(output.getvalue())["reason_codes"])
@@ -362,7 +370,16 @@ class AgentOrchestrationRouteBindingCandidateContractTests(unittest.TestCase):
         self.assertEqual(report["checks"]["schema"], "MATCH")
 
     def test_public_navigation_exposes_candidate_without_runtime_claim(self) -> None:
-        self.assertTrue(DOC.is_file())
+        paragraphs = [" ".join(part.split()) for part in DOC.read_text(encoding="utf-8").split("\n\n")]
+        boundary = [part for part in paragraphs if "Codex session" in part and "subagent" in part]
+        self.assertEqual(len(boundary), 1)
+        self.assertRegex(boundary[0], r"Codex session[^。]*subagent[^。]*行いません。")
+        for marker in ("PRECONDITIONS_MATCH_UNVERIFIED", "CANDIDATE_ONLY", "NO_GO_UNPUBLISHED"):
+            self.assertIn(marker, boundary[0])
+        authority = [part for part in paragraphs if "Human gate" in part and "dispatch" in part]
+        self.assertEqual(len(authority), 1)
+        self.assertIn("別の Work Order", authority[0])
+        self.assertRegex(authority[0], r"束ねない限り dispatch\s*へ進めません")
         # Navigation is a relation between owned artifacts, not global words.
         matrix = MATRIX.read_text(encoding="utf-8")
         rows = [row for row in matrix.splitlines() if row.startswith("| ")
@@ -380,7 +397,7 @@ class AgentOrchestrationRouteBindingCandidateContractTests(unittest.TestCase):
             self.assertTrue((MATRIX.parent / target).resolve().is_file(), target)
         self.assertIn("read-only", row)
         self.assertIn("PRECONDITIONS_MATCH_UNVERIFIED", row)
-        # Assert the explicit machine result; prose safety is reviewed separately.
+        # The machine result independently corroborates the authored boundary.
         code, report = self.run_cli(candidate())
         self.assertEqual(code, 0)
         self.assertEqual(report["status"], "CANDIDATE_ONLY")
