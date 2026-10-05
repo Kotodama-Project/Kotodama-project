@@ -74,6 +74,7 @@ class CompanyPackReviewChainCliHelpTests(unittest.TestCase):
                         stdout, stderr = io.StringIO(), io.StringIO()
                         with chdir(work), redirect_stdout(stdout), redirect_stderr(stderr):
                             code = module.main([tool, flag])
+                        direct_outputs.append(stdout.getvalue())
                         self.assertEqual(code, 0)
                         self.assertEqual(stderr.getvalue(), "")
                         self.assertIn(usage, stdout.getvalue())
@@ -81,7 +82,6 @@ class CompanyPackReviewChainCliHelpTests(unittest.TestCase):
                         self.assertIn("read-only/candidate-only", stdout.getvalue())
                         self.assertIn("NO_GO_UNPUBLISHED", stdout.getvalue())
                         self.assertEqual(before, tuple(work.iterdir()))
-                        direct_outputs.append(stdout.getvalue())
                 self.assertEqual(direct_outputs[0], direct_outputs[1])
                 cold = self.run_tool(tool, "--help", cwd=work)
                 self.assertEqual(cold.returncode, 0)

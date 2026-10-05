@@ -58,11 +58,11 @@ class CompanyPackCliReferenceTests(unittest.TestCase):
                                 code = module.main([tool, flag])
                             except SystemExit as exited:
                                 code = exited.code
+                        help_outputs.append(stdout.getvalue())
                         self.assertEqual(code, 0)
                         self.assertEqual(stderr.getvalue(), "")
                         self.assertIn(BOUNDARY, stdout.getvalue())
                         self.assertEqual(tuple(workdir.iterdir()), before)
-                        help_outputs.append(stdout.getvalue())
                 self.assertEqual(help_outputs[0], help_outputs[1])
                 cold = subprocess.run([sys.executable, str(ROOT / "tools" / tool), "--help"], cwd=workdir, text=True, encoding="utf-8", capture_output=True, check=False)
                 self.assertEqual(cold.returncode, 0, cold.stderr)
