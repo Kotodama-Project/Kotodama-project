@@ -591,62 +591,50 @@ class CompanyPackSourceRecordInstanceContractTests(unittest.TestCase):
             format_checker=FormatChecker(),
         )
 
+        # This remains a test-only projection contract, not a runtime adapter.
+        # Loss mutations start from a schema-valid, actually projectable source
+        # so a different loss guard cannot mask the intended refusal.
+        def lossless_instance(state: str) -> dict:
+            instance = source_record_instance(state)
+            for item in instance["access_or_consent"]["use_declarations"].values():
+                if item["declaration_status"] == "DECLARED_PERMITTED_UNVERIFIED":
+                    item["purpose_scope_ref"] = "ref/use-purpose/common"
+                    item["subject_scope_ref"] = "ref/use-subject/common"
+            self.assert_valid(instance)
+            return instance
+
         for state, expected_parents in (
             ("CONTENT_BINDING_RECORDED_UNVERIFIED", []),
-            (
-                "DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED",
-                ["ref/source-record/parent"],
-            ),
+            ("DERIVED_CONTENT_BINDING_RECORDED_UNVERIFIED", ["ref/source-record/parent"]),
         ):
-            instance = source_record_instance(state)
-            permitted = [
-                item
-                for item in instance["access_or_consent"]["use_declarations"].values()
-                if item["declaration_status"] == "DECLARED_PERMITTED_UNVERIFIED"
-            ]
-            for item in permitted:
-                item["purpose_scope_ref"] = "ref/use-purpose/common"
-                item["subject_scope_ref"] = "ref/use-subject/common"
-            projected = self.project_r30_source_binding_for_contract_test(
-                instance,
-                instance["source_record_id"],
-            )
+            instance = lossless_instance(state)
+            projected = self.project_r30_source_binding_for_contract_test(instance, instance["source_record_id"])
             r30_validator.validate(projected)
             self.assertEqual(projected["derived_from_refs"], expected_parents)
 
+        baseline = lossless_instance("CONTENT_BINDING_RECORDED_UNVERIFIED")
+        r30_validator.validate(self.project_r30_source_binding_for_contract_test(baseline, baseline["source_record_id"]))
         reference = source_record_instance("REFERENCE_DECLARED_UNVERIFIED")
-        withdrawal = source_record_instance("WITHDRAWAL_RECORDED_UNVERIFIED")
-        mismatched_purpose = source_record_instance(
-            "CONTENT_BINDING_RECORDED_UNVERIFIED"
-        )
-        for item in mismatched_purpose["access_or_consent"]["use_declarations"].values():
-            if item["declaration_status"] == "DECLARED_PERMITTED_UNVERIFIED":
-                item["subject_scope_ref"] = "ref/use-subject/common"
-        mismatched_revision = source_record_instance(
-            "CONTENT_BINDING_RECORDED_UNVERIFIED"
-        )
-        mismatched_revision["content_observation"]["declared_source_revision"] = (
-            "ref/source-revision/other"
-        )
-        incomplete_retention = source_record_instance(
-            "CONTENT_BINDING_RECORDED_UNVERIFIED"
-        )
-        incomplete_retention["retention"]["covered_artifacts"] = [
-            "source_record_serialized_bytes"
-        ]
-        for instance, key in (
-            (reference, reference["source_record_id"]),
-            (withdrawal, withdrawal["source_record_id"]),
-            (mismatched_purpose, mismatched_purpose["source_record_id"]),
-            (mismatched_revision, mismatched_revision["source_record_id"]),
-            (incomplete_retention, incomplete_retention["source_record_id"]),
-            (
-                source_record_instance("CONTENT_BINDING_RECORDED_UNVERIFIED"),
-                "wrong-source-key",
-            ),
+        withdrawal = lossless_instance("WITHDRAWAL_RECORDED_UNVERIFIED")
+        mismatched_purpose = copy.deepcopy(baseline)
+        permitted = [item for item in mismatched_purpose["access_or_consent"]["use_declarations"].values() if item["declaration_status"] == "DECLARED_PERMITTED_UNVERIFIED"]
+        permitted[0]["purpose_scope_ref"] = "ref/use-purpose/different"
+        mismatched_revision = copy.deepcopy(baseline)
+        mismatched_revision["content_observation"]["declared_source_revision"] = "ref/source-revision/other"
+        incomplete_retention = copy.deepcopy(baseline)
+        incomplete_retention["retention"]["covered_artifacts"] = ["source_record_serialized_bytes"]
+        for instance, key, reason in (
+            (reference, reference["source_record_id"], "content binding not recorded"),
+            (withdrawal, withdrawal["source_record_id"], "per-use withdrawal is not representable in R30"),
+            (mismatched_purpose, mismatched_purpose["source_record_id"], "non-lossless access projection: purpose_scope_ref"),
+            (mismatched_revision, mismatched_revision["source_record_id"], "record/content revision mismatch"),
+            (incomplete_retention, incomplete_retention["source_record_id"], "retention coverage cannot be represented in R30"),
+            (copy.deepcopy(baseline), "wrong-source-key", "source_bindings key mismatch"),
         ):
-            with self.assertRaises(ValueError):
-                self.project_r30_source_binding_for_contract_test(instance, key)
+            with self.subTest(reason=reason):
+                with self.assertRaises(ValueError) as caught:
+                    self.project_r30_source_binding_for_contract_test(instance, key)
+                self.assertEqual(str(caught.exception), reason)
 
         runbook = RUNBOOK_PATH.read_text(encoding="utf-8")
         mapping = runbook.split("## R30 mapping", 1)[1].split(
