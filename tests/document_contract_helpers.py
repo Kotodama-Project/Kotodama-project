@@ -6,6 +6,11 @@ selected documents, not the complete tracked tree, and do not execute runbooks.
 from __future__ import annotations
 
 import importlib.util
+from functools import lru_cache
+import subprocess
+import sys
+import tempfile
+from typing import NamedTuple
 from pathlib import Path
 import re
 
@@ -113,7 +118,7 @@ def assert_preview_boundary(case, text: str, denied=()) -> None:
     case.assertIn("NO_GO_UNPUBLISHED", text)
     case.assertRegex(text, r"read-only\s*/\s*candidate-only|read-only.*candidate-only")
     paragraphs = [" ".join(part.split()) for part in text.split("\n\n")]
-    denial = re.compile(r"作られません|作りません|意味しません|証明しません|証明ではありません|"
+    denial = re.compile(r"作られません|作らない|作らず|作り\s*ません|意味しません|証明しません|証明ではありません|"
                         r"未提供|未完了|not\s+(?:prove|establish|create)|"
                         r"does\s+not\s+(?:prove|establish|create)|"
                         r"do\s+not\s+(?:prove|establish|create)", re.IGNORECASE)
@@ -121,3 +126,26 @@ def assert_preview_boundary(case, text: str, denied=()) -> None:
         case.assertTrue(any(claim in paragraph and denial.search(paragraph) for paragraph in paragraphs),
                         f"missing explicit non-authorizing statement: {claim}")
     case.assertNotRegex(text, r"Public Beta GO\s*:\s*true|Human approval\s+is\s+verified")
+
+
+class SmokeReceipt(NamedTuple):
+    returncode: int
+    stdout: str
+    stderr: str
+    before_entries: tuple[str, ...]
+    after_entries: tuple[str, ...]
+
+
+@lru_cache(maxsize=1)
+def owned_smoke_receipt() -> SmokeReceipt:
+    """Reuse one real foreign-cwd integration; cache no mutable report objects."""
+    with tempfile.TemporaryDirectory() as temporary:
+        caller = Path(temporary)
+        before = tuple(sorted(path.name for path in caller.iterdir()))
+        result = subprocess.run(
+            [sys.executable, "-S", "-B", str(ROOT / "tools/smoke_company_pack_review_chain.py")],
+            cwd=caller, capture_output=True, text=True, encoding="utf-8", errors="strict",
+            timeout=90, check=False,
+        )
+        after = tuple(sorted(path.name for path in caller.iterdir()))
+    return SmokeReceipt(result.returncode, result.stdout, result.stderr, before, after)
