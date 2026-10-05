@@ -16,7 +16,7 @@ The 2026-09-30 [OpenAI alignment direction](docs/OPENAI-ALIGNMENT.md) makes Dots
 You choose how to use it:
 
 - **Run work**: Company Packs and the review chain trace a request through Work Order, Verification Receipt, and Promotion.
-- **Say "OK" and let agents proceed**: within a permission granted once, an agent swarm researches, implements, and verifies on its own and returns to a human only when judgment or authority is missing. This is the design direction; `main` contains bounded Task execution and the [Luna Task swarm](docs/LUNA-TASK-SWARM.md), exercised with an offline fixture (no live model acceptance yet).
+- **Say "OK" and let agents proceed**: within a permission granted once, an agent swarm researches, implements, and verifies on its own and returns to a human only when judgment or authority is missing. This is the design direction; `main` contains bounded Task execution and the [Luna Task swarm](docs/LUNA-TASK-SWARM.md), exercised with an offline fixture (a prior revision has a recorded live fixture pass; current-revision live acceptance remains unverified).
 - **Spend time in a voice channel**: choose a mode such as relaxing, thinking together, or working only when needed. Small talk is never turned into work or extra permission by itself.
 
 ## Try it in five minutes
