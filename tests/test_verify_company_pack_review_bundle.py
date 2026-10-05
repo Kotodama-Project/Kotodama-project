@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from copy import deepcopy
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 CREATOR = ROOT / "tools" / "create_company_pack.py"
@@ -265,19 +267,28 @@ class CompanyPackReviewBundleVerifierCliTests(unittest.TestCase):
         self.assertEqual(first.stdout, second.stdout)
 
     def test_verification_schema_has_closed_false_claims(self) -> None:
-        schema = json.loads(
-            (
-                ROOT
-                / "schemas"
-                / "company-pack-review-bundle-verification.schema.json"
-            ).read_text(encoding="utf-8")
-        )
-        self.assertEqual(schema["properties"]["public_beta"]["const"], "NO_GO_UNPUBLISHED")
-        self.assertFalse(schema["properties"]["claims"]["additionalProperties"])
-        self.assertEqual(
-            set(schema["properties"]["status"]["enum"]),
-            {"MATCH", "MISMATCH"},
-        )
+        validator = Draft202012Validator(json.loads((ROOT / "schemas/company-pack-review-bundle-verification.schema.json").read_text(encoding="utf-8")))
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            pack, _ = self.create_ready_pack(parent)
+            bundle_path = parent / "bundle.json"
+            self.build_saved_bundle(pack, bundle_path)
+            match_result = self.run_verifier(bundle_path, pack)
+            mismatch_result = self.run_verifier(parent / "missing.json", pack)
+        self.assertEqual(match_result.returncode, 0)
+        self.assertEqual(mismatch_result.returncode, 1)
+        self.assertEqual(match_result.stderr + mismatch_result.stderr, "")
+        match, mismatch = json.loads(match_result.stdout), json.loads(mismatch_result.stdout)
+        for report in (match, mismatch):
+            validator.validate(report)
+        for field, value in (("actual_bundle_digest", None), ("matched_bindings", 0), ("mismatched_paths", ["manifest.json"]), ("reason", "SOURCE_DRIFT_DETECTED")):
+            with self.subTest(field=field):
+                mutation = deepcopy(match)
+                mutation[field] = value
+                self.assertTrue(list(validator.iter_errors(mutation)))
+        overclaim = deepcopy(match)
+        overclaim["claims"]["human_approval_verified"] = True
+        self.assertTrue(list(validator.iter_errors(overclaim)))
 
     def test_usage_error_returns_two_without_json_report(self) -> None:
         result = subprocess.run(

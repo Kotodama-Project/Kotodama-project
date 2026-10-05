@@ -5,7 +5,7 @@ import shutil
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -99,6 +99,13 @@ class KnowledgeWorkTests(unittest.TestCase):
         source["expires_at"] = "2026-09-08T00:00:00Z"
         self.save()
         self.assertIn("SOURCE_EXPIRED", self.errors())
+        source["expires_at"] = NOW.isoformat()
+        self.save()
+        at_expiry = validator.validate_package(self.root, NOW)[0]
+        self.assertIn("SOURCE_EXPIRED", at_expiry["errors"])
+        just_before = validator.validate_package(self.root, NOW - timedelta(microseconds=1))[0]
+        self.assertEqual(just_before["status"], "PASS", just_before["errors"])
+        self.assertNotIn("SOURCE_EXPIRED", just_before["errors"])
 
     def test_blocking_question_and_critical_contradiction_prevent_candidate(self):
         self.package["questions"][0]["blocking"] = True
@@ -195,10 +202,22 @@ class KnowledgeWorkTests(unittest.TestCase):
             self.assertIn("SOURCE_DRIFT", self.errors())
 
     def test_validation_report_schema_and_no_source_body(self):
+        schema = json.loads((ROOT / "schemas/knowledge-work-validation-report.schema.json").read_text(encoding="utf-8"))
+        report_validator = Draft202012Validator(schema, format_checker=FormatChecker())
         report, _ = validator.validate_package(self.root, NOW)
-        schema = json.loads((ROOT / "schemas" / "knowledge-work-validation-report.schema.json").read_text(encoding="utf-8"))
-        Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)
-        self.assertNotIn("Synthetic scenario, not a real conversation", json.dumps(report))
+        self.assertEqual(report["status"], "PASS")
+        reports = [report]
+        with mock.patch.object(validator, "MAX_TOTAL_BYTES", 1):
+            reports.append(validator.validate_package(self.root, NOW)[0])
+        (self.root / validator.MANIFEST).write_bytes(b'{"opaque-source-body":')
+        reports.append(validator.validate_package(self.root, NOW)[0])
+        self.assertEqual([r["status"] for r in reports], ["PASS", "FAIL", "FAIL"])
+        for report in reports:
+            report_validator.validate(report)
+            encoded = json.dumps(report)
+            self.assertNotIn("Synthetic scenario, not a real conversation", encoded)
+            self.assertNotIn("opaque-source-body", encoded)
+            self.assertNotIn(str(self.root), encoded)
 
     def test_initializer_preserves_existing_data_and_creates_unbound_draft(self):
         target = Path(self.temp.name) / "new"

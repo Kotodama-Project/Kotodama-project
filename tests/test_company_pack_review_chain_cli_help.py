@@ -4,6 +4,11 @@ import sys
 import tempfile
 import unittest
 
+import importlib
+from unittest import mock
+import io
+from contextlib import chdir, redirect_stdout, redirect_stderr
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / "docs" / "REVIEW-WORKFLOW.md"
@@ -59,20 +64,40 @@ class CompanyPackReviewChainCliHelpTests(unittest.TestCase):
         )
 
     def test_short_and_long_help_are_external_free_successes(self) -> None:
-        for tool, usage, purpose in REVIEW_CHAIN_COMMANDS:
-            for flag in ("-h", "--help"):
-                with self.subTest(tool=tool, flag=flag), tempfile.TemporaryDirectory() as tmp:
-                    work = Path(tmp)
-                    before = tuple(work.iterdir())
-                    result = self.run_tool(tool, flag, cwd=work)
-
-                    self.assertEqual(result.returncode, 0, result)
-                    self.assertEqual(result.stderr, "")
-                    self.assertIn(usage, result.stdout)
-                    self.assertIn(purpose, result.stdout)
-                    self.assertIn("read-only/candidate-only", result.stdout)
-                    self.assertIn("NO_GO_UNPUBLISHED", result.stdout)
-                    self.assertEqual(before, tuple(work.iterdir()))
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            before = tuple(work.iterdir())
+            for tool, usage, purpose in REVIEW_CHAIN_COMMANDS:
+                module = importlib.import_module(tool.removesuffix(".py"))
+                direct_outputs = []
+                for flag in ("-h", "--help"):
+                    with self.subTest(tool=tool, flag=flag):
+                        stdout, stderr = io.StringIO(), io.StringIO()
+                        with (
+                            chdir(work), redirect_stdout(stdout), redirect_stderr(stderr),
+                            mock.patch.object(sys, "argv", [tool, flag]),
+                            mock.patch.object(subprocess, "run", side_effect=AssertionError("help must not start child work")),
+                            mock.patch.object(subprocess, "Popen", side_effect=AssertionError("help must not start child work")),
+                            mock.patch("socket.socket", side_effect=AssertionError("help must not open a socket")),
+                            mock.patch("socket.create_connection", side_effect=AssertionError("help must not connect externally")),
+                            mock.patch("socket.getaddrinfo", side_effect=AssertionError("help must not resolve external hosts")),
+                        ):
+                            code = module.main([tool, flag])
+                        direct_outputs.append(stdout.getvalue())
+                        self.assertEqual(code, 0)
+                        self.assertEqual(stderr.getvalue(), "")
+                        self.assertIn(usage, stdout.getvalue())
+                        self.assertIn(purpose, stdout.getvalue())
+                        self.assertIn("read-only/candidate-only", stdout.getvalue())
+                        self.assertIn("NO_GO_UNPUBLISHED", stdout.getvalue())
+                        self.assertEqual(before, tuple(work.iterdir()))
+                self.assertEqual(len(direct_outputs), 2, "both help aliases must complete")
+                self.assertEqual(direct_outputs[0], direct_outputs[1])
+                cold = self.run_tool(tool, "--help", cwd=work)
+                self.assertEqual(cold.returncode, 0)
+                self.assertEqual(cold.stderr, "")
+                self.assertEqual(cold.stdout, direct_outputs[1])
+                self.assertEqual(before, tuple(work.iterdir()))
 
     def test_malformed_invocation_stays_usage_only_and_non_reflective(self) -> None:
         opaque = "opaque-review-input-that-must-not-be-reflected"

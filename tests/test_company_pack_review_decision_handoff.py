@@ -73,7 +73,41 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
         path.write_bytes(data)
         return data
 
+    @classmethod
+    def setUpClass(cls) -> None:
+        # Cache only immutable producer bytes; every consumer receives its own
+        # new paths and dictionaries, including a distinct recordless fixture.
+        cls._prerequisite_fixtures = {}
+
     def create_complete_chain(self, root: Path, *, recordless: bool = False) -> dict:
+        fixtures = type(self)._prerequisite_fixtures
+        if recordless not in fixtures:
+            with tempfile.TemporaryDirectory() as temporary:
+                baseline_root = Path(temporary)
+                self._build_complete_chain(baseline_root, recordless=recordless)
+                fixtures[recordless] = tuple(
+                    (path.relative_to(baseline_root).as_posix(), path.read_bytes())
+                    for path in sorted(baseline_root.rglob("*")) if path.is_file()
+                )
+        for relative, data in fixtures[recordless]:
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(data)
+        pack_id = "recordless-decision-handoff-pack" if recordless else "decision-handoff-pack"
+        paths = {
+            "bundle": root / "saved-review-bundle.json",
+            "bundle_verification": root / "saved-bundle-verification.json",
+            "request": root / "saved-review-request.json",
+            "response": root / "saved-review-response.json",
+            "response_verification": root / "saved-response-verification.json",
+        }
+        return {
+            "pack": root / pack_id, "paths": paths,
+            "request": json.loads(paths["request"].read_bytes()),
+            "response_verification": json.loads(paths["response_verification"].read_bytes()),
+        }
+
+    def _build_complete_chain(self, root: Path, *, recordless: bool = False) -> dict:
         pack_id = "recordless-decision-handoff-pack" if recordless else "decision-handoff-pack"
         pack = root / pack_id
         creation_args = [sys.executable, str(CREATOR), pack_id, str(pack)]
@@ -197,6 +231,20 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
             artifact_bytes = {
                 name: path.read_bytes() for name, path in chain["paths"].items()
             }
+            immutable_fixture = type(self)._prerequisite_fixtures[False]
+            with tempfile.TemporaryDirectory() as copied_directory:
+                copied = self.create_complete_chain(Path(copied_directory))
+                self.assertNotEqual(copied["pack"], chain["pack"])
+                for name in chain["paths"]:
+                    self.assertNotEqual(copied["paths"][name], chain["paths"][name])
+                    self.assertEqual(copied["paths"][name].read_bytes(), artifact_bytes[name])
+                copied["paths"]["bundle"].write_bytes(b"deliberate fixture mutation")
+                copied["request"]["pack_id"] = "changed-copy-only"
+            self.assertEqual(type(self)._prerequisite_fixtures[False], immutable_fixture)
+            self.assertNotEqual(chain["request"]["pack_id"], "changed-copy-only")
+            with tempfile.TemporaryDirectory() as restored_directory:
+                restored = self.create_complete_chain(Path(restored_directory))
+                self.assertEqual(restored["paths"]["bundle"].read_bytes(), artifact_bytes["bundle"])
 
         self.assertEqual(result.returncode, 0, result.stdout.decode("utf-8"))
         self.assertEqual(result.stderr, b"")
@@ -636,7 +684,12 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
     def test_saved_handoff_strict_json_boundary_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            chain = self.create_complete_chain(root)
+            chain = {
+                "pack": root / "missing-pack",
+                "paths": {name: root / ("missing-" + name + ".json") for name in (
+                    "bundle", "bundle_verification", "request", "response", "response_verification"
+                )},
+            }
             handoff_path = root / "saved-decision-handoff.json"
             deep: object = None
             for _ in range(70):
@@ -656,6 +709,14 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
                         handoff_path.unlink(missing_ok=True)
                     else:
                         handoff_path.write_bytes(data)
+                    with mock.patch.object(handoff_verifier, "build_decision_handoff", side_effect=AssertionError("saved-input parsing must precede chain rebuilding")) as rebuild:
+                        paths = chain["paths"]
+                        direct = handoff_verifier.verify_decision_handoff(
+                            paths["bundle"], chain["pack"], paths["bundle_verification"],
+                            paths["request"], paths["response"], paths["response_verification"], handoff_path,
+                        )
+                    rebuild.assert_not_called()
+                    self.assertEqual(direct["reason"], "HANDOFF_INVALID")
                     result = self.run_handoff_verifier(chain, handoff_path)
                     self.assertEqual(result.returncode, 1)
                     self.assertEqual(result.stderr, b"")
@@ -733,7 +794,7 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
             with mock.patch.object(
                 handoff_builder,
                 "read_limited_bytes",
-                side_effect=[*initial_reads, initial_reads[0] + b" "],
+                side_effect=[*initial_reads, initial_reads[0] + b" ", *initial_reads[1:]],
             ):
                 report = handoff_builder.build_decision_handoff(
                     paths["bundle"],

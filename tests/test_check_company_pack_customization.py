@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 import shutil
 import tempfile
 import subprocess
@@ -6,6 +7,8 @@ import sys
 import unittest
 from pathlib import Path
 
+from copy import deepcopy
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "tools" / "check_company_pack_customization.py"
@@ -149,26 +152,46 @@ class CompanyPackCustomizationCliTests(unittest.TestCase):
 
     def test_customization_report_schema_matches_the_public_output(self) -> None:
         result = self.run_checker(STARTER)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, "")
         report = json.loads(result.stdout)
-        schema = json.loads(
-            (
-                ROOT / "schemas" / "customization-report.schema.json"
-            ).read_text(encoding="utf-8")
-        )
-
-        self.assertEqual(set(schema["required"]), set(report))
-        self.assertEqual(
-            set(schema["properties"]["counts"]["required"]),
-            set(report["counts"]),
-        )
-        self.assertEqual(
-            set(schema["properties"]["claims"]["required"]),
-            set(report["claims"]),
-        )
-        self.assertEqual(
-            schema["properties"]["public_beta"]["const"],
-            "NO_GO_UNPUBLISHED",
-        )
+        validator = Draft202012Validator(json.loads((ROOT / "schemas/customization-report.schema.json").read_text(encoding="utf-8")))
+        validator.validate(report)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            missing = self.run_checker(root / "missing")
+            ready_pack = root / "schema-ready-pack"
+            expires = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+            created = subprocess.run([
+                sys.executable, str(CREATOR), "schema-ready-pack", str(ready_pack),
+                "--human-intent-ref", "human-intent:synthetic-schema-ready",
+                "--authority-expires-at", expires,
+                "--retention-policy-ref", "retention-policy:synthetic-schema-ready",
+            ], cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(created.returncode, 0, created.stdout)
+            self.assertEqual(created.stderr, "")
+            ready = self.run_checker(ready_pack)
+        self.assertEqual(missing.returncode, 1)
+        self.assertEqual(missing.stderr, "")
+        self.assertEqual(ready.returncode, 0, ready.stdout)
+        self.assertEqual(ready.stderr, "")
+        ready_report = json.loads(ready.stdout)
+        self.assertEqual(ready_report["status"], "READY_FOR_GOVERNED_REVIEW")
+        for actual in (report, json.loads(missing.stdout), ready_report):
+            self.assertEqual([], list(validator.iter_errors(actual)))
+        for path, value in (
+            (("counts", "replacement_required"), "42"),
+            (("items", 0, "category"), "unsupported"),
+            (("items", 0, "unknown"), False),
+            (("claims", "human_approval_verified"), True),
+        ):
+            with self.subTest(path=path):
+                mutation = deepcopy(report)
+                target = mutation
+                for field in path[:-1]:
+                    target = target[field]
+                target[path[-1]] = value
+                self.assertTrue(list(validator.iter_errors(mutation)))
 
     def test_structurally_invalid_pack_stops_before_customization_review(self) -> None:
         private_locator = "human-intent:private-sensitive-client"

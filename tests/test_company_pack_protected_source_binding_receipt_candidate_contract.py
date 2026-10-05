@@ -413,6 +413,7 @@ class ProtectedSourceBindingReceiptCandidateContractTests(unittest.TestCase):
                 for match in re.finditer(r"(?m)^(\d+)\. ", section)
             ]
             with self.subTest(path=path.relative_to(ROOT)):
+                self.assertTrue(numbers, "workflow must declare at least one numbered step")
                 self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
 
     def test_runbook_states_ideal_current_and_unverified_boundaries(self) -> None:

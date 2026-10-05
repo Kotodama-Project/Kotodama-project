@@ -1,4 +1,5 @@
 import copy
+import hashlib
 from datetime import datetime, timedelta, timezone
 import json
 import os
@@ -117,9 +118,18 @@ class CompanyPackTaskTests(unittest.TestCase):
         self.assertEqual(receipt["output"]["validated_files"], 22)
         self.assertFalse(receipt["task_state_changed"])
         self.assertTrue(all(value is False for value in receipt["claims"].values()))
-        self.assertEqual(receipt["request_sha256"], executor.digest(self.request))
+        request_bytes = (json.dumps(self.request, ensure_ascii=True, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+        self.assertEqual(receipt["request_sha256"], hashlib.sha256(request_bytes).hexdigest())
         self.assertEqual(executor.read_json(self.operation / "receipt.json"), receipt)
-        self.assertEqual(receipt["output"]["files"], executor.byte_manifest(executor.tree_bytes(self.pack)))
+        observed_files = {
+            path.relative_to(self.pack).as_posix(): path.read_bytes()
+            for path in self.pack.rglob("*") if path.is_file()
+        }
+        expected_manifest = {
+            name: {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+            for name, data in sorted(observed_files.items())
+        }
+        self.assertEqual(receipt["output"]["files"], expected_manifest)
         self.assertEqual(task.read_bytes(), b'{"status":"completed","counter":7}\n')
         self.assertEqual(executor.tree_bytes(self.records_root), records_before)
         self.assertEqual(receipt["record_binding"]["task_revision"], self.binding["records"]["task"]["sha256"])
@@ -427,6 +437,20 @@ operation.execute(operation.read_json(pathlib.Path(sys.argv[2])), pathlib.Path(s
 
     def test_validator_pass_report_must_match_the_observed_pack(self):
         real_run = subprocess.run
+        validated_reports = []
+        def capture_real_validator(args, **kwargs):
+            result = real_run(args, **kwargs)
+            if "-I" in args:
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(result.stderr, b"")
+                validated_reports.append(result.stdout)
+            return result
+        with patch.object(executor.subprocess, "run", side_effect=capture_real_validator):
+            self.execute()
+        self.assertEqual(len(validated_reports), 1)
+        valid_report_bytes = validated_reports[0]
+        baseline_pack = {p.relative_to(self.pack).as_posix(): p.read_bytes() for p in self.pack.rglob("*") if p.is_file()}
+        (self.operation / "receipt.json").unlink()
         for replacement in (
             {"validated_files": "x"}, {"validated_files": True},
             {"validated_files": 0}, {"validated_files": 1_000_000},
@@ -434,16 +458,21 @@ operation.execute(operation.read_json(pathlib.Path(sys.argv[2])), pathlib.Path(s
             {"unexpected": "field"},
         ):
             with self.subTest(replacement=replacement):
+                report = json.loads(valid_report_bytes)
+                report.update(replacement)
+                report_bytes = json.dumps(report).encode("utf-8")
+                self.assertLess(len(report_bytes), 1024)
+                validator_calls = []
                 def substituted_validator(args, **kwargs):
-                    result = real_run(args, **kwargs)
                     if "-I" in args:
-                        report = json.loads(result.stdout)
-                        report.update(replacement)
-                        return subprocess.CompletedProcess(args, 0, json.dumps(report).encode("utf-8"), b"")
-                    return result
-                with patch.object(executor.subprocess, "run", side_effect=substituted_validator):
+                        validator_calls.append(tuple(args))
+                        return subprocess.CompletedProcess(args, 0, report_bytes, b"")
+                    return real_run(args, **kwargs)
+                with patch.object(executor.subprocess, "run", side_effect=substituted_validator), patch.object(executor, "create_company_pack", side_effect=AssertionError("existing validated output must not be regenerated")):
                     self.assert_refused(code="VALIDATOR_RESPONSE_INVALID")
+                self.assertEqual(len(validator_calls), 1)
                 self.assertFalse((self.operation / "receipt.json").exists())
+                self.assertEqual(baseline_pack, {p.relative_to(self.pack).as_posix(): p.read_bytes() for p in self.pack.rglob("*") if p.is_file()})
 
     def test_os_lock_excludes_second_process(self):
         self.execute()
