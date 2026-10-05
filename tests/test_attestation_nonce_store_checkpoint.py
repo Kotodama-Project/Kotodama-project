@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import shutil
 import sqlite3
@@ -8,6 +9,7 @@ import tempfile
 import threading
 import time
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 
@@ -21,6 +23,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import test_evaluate_compose_attestation_once as r18_helpers  # noqa: E402
 sys.path.insert(0, str(ROOT / "tools"))
 import create_attestation_nonce_store_checkpoint as checkpoint_tool  # noqa: E402
+import verify_attestation_nonce_store_checkpoint as checkpoint_verifier  # noqa: E402
 
 
 class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
@@ -94,22 +97,31 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
         expected_parent_sha256: str = "GENESIS",
         expected_current_sha256: str | None = None,
         store: Path | None = None,
+        in_process: bool = False,
     ) -> subprocess.CompletedProcess[str]:
+        command = [
+            sys.executable,
+            str(VERIFY),
+            str(checkpoint),
+            str(signature),
+            str(store or inputs["store"]),
+            str(inputs["allowed_signers"]),
+            str(inputs["identity_file"]),
+            expected_current_sha256
+            or hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+            str(parent),
+            str(parent_signature),
+            expected_parent_sha256,
+        ]
+        if in_process:
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                returncode = checkpoint_verifier.main(command[1:])
+            return subprocess.CompletedProcess(
+                command, returncode, stdout.getvalue(), stderr.getvalue()
+            )
         return subprocess.run(
-            [
-                sys.executable,
-                str(VERIFY),
-                str(checkpoint),
-                str(signature),
-                str(store or inputs["store"]),
-                str(inputs["allowed_signers"]),
-                str(inputs["identity_file"]),
-                expected_current_sha256
-                or hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
-                str(parent),
-                str(parent_signature),
-                expected_parent_sha256,
-            ],
+            command,
             cwd=ROOT,
             text=True,
             capture_output=True,
@@ -421,7 +433,7 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
 
     def test_checkpoint_shape_chain_and_private_input_tampering_are_safe_refusals(self) -> None:
         private_marker = "private-checkpoint-marker-must-not-leak"
-        results: list[subprocess.CompletedProcess[str]] = []
+        results: list[tuple[subprocess.CompletedProcess[str], str]] = []
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             inputs = self.make_r18_inputs(root / "base")
@@ -429,38 +441,87 @@ class AttestationNonceStoreCheckpointCliTests(unittest.TestCase):
             self.assertEqual(self.create_checkpoint(inputs, checkpoint).returncode, 0)
             signature = self.sign_checkpoint(checkpoint, root / "base" / "reviewer-key")
             original = self.checkpoint_value(checkpoint)
+            baseline = self.verify_checkpoint(inputs, checkpoint, signature)
+            self.assertEqual(baseline.returncode, 0, baseline.stdout + baseline.stderr)
+            self.assertEqual(baseline.stderr, "")
+            self.assertEqual(
+                json.loads(baseline.stdout)["status"],
+                "SIGNED_GENESIS_CHECKPOINT_STORE_MATCH",
+            )
 
-            unknown = root / "unknown.json"
+            def write_signed_checkpoint(
+                name: str, value: dict[str, object], *, refresh_chain: bool = True
+            ) -> tuple[Path, Path]:
+                # Rebind the outer digest and signature so semantic refusals cannot
+                # pass merely because unrelated integrity checks already failed.
+                if refresh_chain:
+                    projection = {
+                        key: item for key, item in value.items()
+                        if key != "checkpoint_chain_sha256"
+                    }
+                    value["checkpoint_chain_sha256"] = hashlib.sha256(
+                        json.dumps(
+                            projection, ensure_ascii=False, sort_keys=True,
+                            separators=(",", ":"), allow_nan=False,
+                        ).encode("utf-8")
+                    ).hexdigest()
+                path = root / name
+                path.write_text(json.dumps(value), encoding="utf-8")
+                return path, self.sign_checkpoint(path, root / "base" / "reviewer-key")
+
             unknown_value = dict(original)
             unknown_value[private_marker] = private_marker
-            unknown.write_text(json.dumps(unknown_value), encoding="utf-8")
-            results.append(self.verify_checkpoint(inputs, unknown, signature))
+            unknown, unknown_signature = write_signed_checkpoint("unknown.json", unknown_value)
+            results.append((
+                self.verify_checkpoint(inputs, unknown, unknown_signature, in_process=True),
+                "checkpoint contains unknown fields",
+            ))
 
             duplicate = root / "duplicate.json"
             raw = checkpoint.read_text(encoding="utf-8")
             duplicate.write_text('{"kind":"shadow",' + raw.lstrip()[1:], encoding="utf-8")
-            results.append(self.verify_checkpoint(inputs, duplicate, signature))
+            results.append((
+                self.verify_checkpoint(inputs, duplicate, signature), "input is invalid"
+            ))
 
             nonfinite = root / "nonfinite.json"
             nonfinite.write_text('{"kind":NaN}', encoding="utf-8")
-            results.append(self.verify_checkpoint(inputs, nonfinite, signature))
+            results.append((
+                self.verify_checkpoint(inputs, nonfinite, signature), "input is invalid"
+            ))
 
-            overclaim = root / "overclaim.json"
             overclaim_value = json.loads(json.dumps(original))
             overclaim_value["claims"]["store_continuity_verified"] = True
-            overclaim.write_text(json.dumps(overclaim_value), encoding="utf-8")
-            results.append(self.verify_checkpoint(inputs, overclaim, signature))
+            overclaim, overclaim_signature = write_signed_checkpoint(
+                "overclaim.json", overclaim_value
+            )
+            # Retain a real CLI semantic refusal as well as the CLI baseline and
+            # malformed inputs; the other variants use the same production main.
+            results.append((
+                self.verify_checkpoint(inputs, overclaim, overclaim_signature),
+                "claim store_continuity_verified must remain false",
+            ))
 
-            bad_chain = root / "bad-chain.json"
             bad_chain_value = dict(original)
             bad_chain_value["created_at"] = "2026-08-03T00:00:00Z"
-            bad_chain.write_text(json.dumps(bad_chain_value), encoding="utf-8")
-            results.append(self.verify_checkpoint(inputs, bad_chain, signature))
+            bad_chain, bad_chain_signature = write_signed_checkpoint(
+                "bad-chain.json", bad_chain_value, refresh_chain=False
+            )
+            results.append((
+                self.verify_checkpoint(inputs, bad_chain, bad_chain_signature, in_process=True),
+                "checkpoint chain self-digest mismatch",
+            ))
 
-        for result in results:
-            self.assertEqual(result.returncode, 1)
-            self.assertEqual(json.loads(result.stdout)["status"], "INVALID")
-            self.assertNotIn(private_marker, result.stdout + result.stderr)
+            for result, expected in results:
+                with self.subTest(expected=expected):
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertEqual(result.stderr, "")
+                    report = json.loads(result.stdout)
+                    self.assertEqual(report["status"], "INVALID")
+                    self.assertEqual(report["errors"], [expected])
+                    self.assertTrue(all(not value for value in report["claims"].values()))
+                    self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+                    self.assertNotIn(private_marker, result.stdout + result.stderr)
 
     # 550,001 bytes: below 1 MiB; 5,000 levels parse on Linux CPython 3.12.14.
     def test_deep_checkpoint_and_parent_json_are_structured_refusals(self) -> None:
