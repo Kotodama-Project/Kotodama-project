@@ -2,6 +2,8 @@ from pathlib import Path
 import unittest
 
 
+from tests.document_contract_helpers import section, assert_links, shell_commands, assert_command_order, table_rows, assert_preview_boundary, headings, link_targets
+
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "docs" / "OVERVIEW.md"
 
@@ -31,18 +33,6 @@ class ReadmeRunbookSmokeEntryTests(unittest.TestCase):
         self.assertTrue((ROOT / "tests" / "test_public_starter_runbook_smoke.py").is_file())
 
     def test_readme_smoke_entry_keeps_preview_boundary_explicit(self) -> None:
-        document = README.read_text(encoding="utf-8")
-        start = document.index("### 実行確認: Runbook smoke")
-        end = document.index("## Quick Start — Company starter を試す", start)
-        section = document[start:end]
-        for marker in (
-            "read-only/candidate-only",
-            "Human approval",
-            "runtime",
-            "Promotion",
-            "Current Truth",
-            "Public Beta",
-        ):
-            with self.subTest(marker=marker):
-                self.assertIn(marker, section)
-        self.assertNotIn("Public Beta GO: true", section)
+        surface = section(README.read_text(encoding="utf-8"), "実行確認-runbook-smoke")
+        assert_preview_boundary(self, surface, ("Human approval", "runtime", "Promotion", "Current Truth", "Public Beta GO"))
+        assert_links(self, README, surface, ("STARTER-WALKTHROUGH.md", "../tests/test_public_starter_runbook_smoke.py"))
