@@ -49,6 +49,24 @@ scannerの重複した全repository検査は、実GitのHEAD/index/working tree�
 検査内容・case集合とguardの実効性を合否に使い、時間短縮率をruntime性能や
 別runnerのCI所要の保証として使いません。
 
+## 個別監査からの次の修正
+
+[#219](https://github.com/Kotodama-Project/Kotodama-project/issues/219)では、
+元の改善候補から次の5点を選び、現行の入力・処理・判定を補強しました。
+
+- 保存済みCompose evidenceの3入力を通常ファイルに限定し、読取り量と読取り中の変化を検査する。
+- lifecycleの不正なprofile IDはreportへ返さず、有効な公開IDは他の条件で拒否された場合も保持する。
+- checkpointの意味論変異はself-digestを計算し直して変異後の文書に署名し、狙った拒否理由を確認する。署名・digest自体の拒否も別に維持する。
+- NONE decisionは受理される通常eventから始め、4つのreferenceをそれぞれ独立に変えて確認する。
+- dependency失敗後も、無関係なpending jobをclaimして完了・owner受入へ進められることを確認する。
+
+署名失敗や別referenceの拒否だけで意味論の検査が通ったことにしません。
+代表するguardを外した負例も使い、実fileとproduction entrypointを通す検査と
+実CLIの境界検査を保持します。profile IDの修正はそのreport fieldの範囲であり、
+任意のunknown field名などを含む全診断の非開示を証明するものではありません。
+上の942・202・52は元の固定点での判断です。今回の修正で全改善候補を
+再分類・実装済みとはせず、既存caseの削除やskipで件数を減らしません。
+
 ## 継続して見る点
 
 個別監査には、逐語的な文書assert、署名失敗が意味論的拒否を隠すfixture、

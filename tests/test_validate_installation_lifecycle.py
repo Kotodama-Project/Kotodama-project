@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -6,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
+from tools import validate_installation_lifecycle as lifecycle_validator
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +51,7 @@ class InstallationLifecycleValidatorCliTests(unittest.TestCase):
             self.assertEqual(report["version"], "1.0")
             self.assertEqual(report["status"], "PASS")
             self.assertEqual(report["profile"], expected_profile)
+            self.assertEqual(report["profile_id"], self.load_example(filename)["id"])
             self.assertEqual(report["phase_count"], 6)
             self.assertEqual(report["errors"], [])
             self.assertTrue(all(not value for value in report["claims"].values()))
@@ -180,6 +184,45 @@ class InstallationLifecycleValidatorCliTests(unittest.TestCase):
         self.assertIn("profile contains unknown field: runtime_bindings", errors)
         self.assertIn("secret-bearing key is forbidden: $.runtime_bindings.api_token", errors)
         self.assertIn("private infrastructure key is forbidden: $.runtime_bindings.host_ip", errors)
+
+        marker = "AUDIT_PRIVATE_PROFILE_ID_219"
+        invalid = self.load_example("compose-minimum.json")
+        invalid["id"] = marker
+        refused = self.run_document(invalid)
+        self.assertEqual(refused.returncode, 1)
+        self.assertEqual(refused.stderr, "")
+        self.assertNotIn(marker, refused.stdout)
+        report = json.loads(refused.stdout)
+        self.assertIsNone(report["profile_id"])
+        self.assertEqual(report["errors"], ["id must use lowercase kebab-case"])
+
+        for identifier, valid in (
+            ("ab", True), ("a" * 63, True), ("a" * 64, False),
+            ("a", False), ("", False), ("ab\n", False),
+            (None, False), (0, False), (True, False), ([marker], False),
+            ({"value": marker}, False),
+        ):
+            with self.subTest(identifier=identifier):
+                document = self.load_example("compose-minimum.json")
+                document["id"] = identifier
+                with tempfile.TemporaryDirectory() as temporary:
+                    path = Path(temporary) / "profile.json"
+                    path.write_text(json.dumps(document), encoding="utf-8")
+                    output, diagnostic = io.StringIO(), io.StringIO()
+                    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(diagnostic):
+                        status = lifecycle_validator.main([str(VALIDATOR), str(path)])
+                    report = json.loads(output.getvalue())
+                self.assertEqual(status, 0 if valid else 1)
+                self.assertEqual(diagnostic.getvalue(), "")
+                self.assertEqual(report["profile_id"], identifier if valid else None)
+                self.assertEqual(report["errors"], [] if valid else ["id must use lowercase kebab-case"])
+                self.assertNotIn(marker, output.getvalue())
+
+        # A valid public identifier remains useful when another rule fails.
+        self.assertEqual(
+            json.loads(result.stdout)["profile_id"],
+            self.load_example("proxmox-segmented.json")["id"],
+        )
 
     def test_unknown_nested_fields_fail_closed(self) -> None:
         document = self.load_example("compose-minimum.json")

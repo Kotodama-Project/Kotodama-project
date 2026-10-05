@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -120,6 +122,74 @@ OUTPUT_TRUE_FIELDS = {
     "role_separation_structure_verified",
 }
 SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
+MAX_INPUT_BYTES = 1_048_576
+MAX_TOTAL_INPUT_BYTES = 2_097_152
+
+
+def _plain_metadata(path: Path):
+    for component in (path, *path.parents):
+        metadata = component.lstat()
+        if (
+            stat.S_ISLNK(metadata.st_mode)
+            or getattr(metadata, "st_file_attributes", 0) & 0x400
+            or getattr(metadata, "st_reparse_tag", 0)
+            or (component != path and not stat.S_ISDIR(metadata.st_mode))
+        ):
+            raise ValueError("input file is invalid")
+    metadata = path.lstat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+        raise ValueError("input file is invalid")
+    return metadata
+
+
+def _file_snapshot(metadata):
+    # Windows pathname ctime can mean creation time. Compare ctime only between
+    # snapshots of the same descriptor, not between lstat and fstat.
+    return (
+        metadata.st_dev, metadata.st_ino, metadata.st_mode, metadata.st_nlink,
+        metadata.st_size, metadata.st_mtime_ns,
+        getattr(metadata, "st_file_attributes", 0),
+        getattr(metadata, "st_reparse_tag", 0),
+    )
+
+
+def read_bounded(path: Path, limit: int) -> bytes:
+    """Read a stable selected regular file, at most its remaining byte budget.
+
+    Three local snapshots do not constitute an atomic multi-file observation or
+    a hostile-writer sandbox. No execution/freshness claim follows from reading.
+    """
+    path = path.absolute()
+    before = _plain_metadata(path)
+    if before.st_size > limit:
+        raise ValueError("input file is too large")
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0)
+             | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    descriptor = os.open(path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if _file_snapshot(before) != _file_snapshot(opened):
+            raise ValueError("input file changed")
+        chunks, size = [], 0
+        while size <= limit:
+            chunk = os.read(descriptor, min(65_536, limit + 1 - size))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            size += len(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    final = _plain_metadata(path)
+    if (
+        size > limit
+        or size != opened.st_size
+        or opened.st_ctime_ns != after.st_ctime_ns
+        or _file_snapshot(opened) != _file_snapshot(after)
+        or _file_snapshot(after) != _file_snapshot(final)
+    ):
+        raise ValueError("input file changed")
+    return b"".join(chunks)
 
 
 def require_exact_fields(
@@ -318,9 +388,13 @@ def main(argv: list[str]) -> int:
         )
         return 2
     try:
-        evidence_bytes = Path(argv[1]).read_bytes()
-        candidate_bytes = Path(argv[2]).read_bytes()
-        preflight_bytes = Path(argv[3]).read_bytes()
+        inputs = []
+        remaining = MAX_TOTAL_INPUT_BYTES
+        for argument in argv[1:]:
+            raw = read_bounded(Path(argument), min(MAX_INPUT_BYTES, remaining))
+            inputs.append(raw)
+            remaining -= len(raw)
+        evidence_bytes, candidate_bytes, preflight_bytes = inputs
         evidence = load_strict_json_bytes(evidence_bytes)
         candidate = load_strict_json_bytes(candidate_bytes)
         preflight = load_strict_json_bytes(preflight_bytes)

@@ -419,7 +419,11 @@ def report_for(document: dict[str, Any] | None, errors: list[str]) -> dict[str, 
         "kind": "installation_lifecycle_validation",
         "version": "1.0",
         "status": "FAIL" if errors else "PASS",
-        "profile_id": identifier if isinstance(identifier, str) else None,
+        "profile_id": (
+            identifier
+            if isinstance(identifier, str) and ID_PATTERN.fullmatch(identifier) is not None
+            else None
+        ),
         "profile": profile if profile in PROFILE_EVIDENCE else None,
         "phase_count": len(phases) if isinstance(phases, list) else 0,
         "errors": errors,

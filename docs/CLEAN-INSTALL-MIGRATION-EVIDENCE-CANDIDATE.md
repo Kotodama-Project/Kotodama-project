@@ -10,6 +10,13 @@ saved verifierは次の3 fileを同時に読みます。
 2. [Resolved Compose Candidate](RESOLVED-COMPOSE-CANDIDATE.md)
 3. [Compose Image Availability Preflight](IMAGE-AVAILABILITY-PREFLIGHT.md)の成功snapshot
 
+各入力は1MiB以下、3入力の合計は2MiB以下の通常fileに限定します。
+観測したsymlink・reparse pointを含むpathと複数hardlinkのfileは拒否し、
+読取り前後のfile identity・size・更新metadataを照合します。
+上限超過・非通常file・読取り中の変化は、入力本文やpathを含まない
+`INVALID` reportへ返します。この検査はoperatorが選んだlocal filesystem上の
+限定読取りであり、敵対的なwriterとの完全な隔離や3fileの原子的snapshotを証明しません。
+
 evidence candidateについて、closed JSON structure、自己digest、candidate/preflightのfile SHA-256、project・resolved contract・image・daemon・local image binding、Work Order・target locator・before-stateのhash、executor/reviewerの異なるidentity hash、2 serviceのmigration path/hash、別々のevidence hash、positive/negative checkのreported completenessを検査します。
 
 ## 2 serviceで必要なreported checks
