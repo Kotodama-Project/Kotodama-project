@@ -36,7 +36,7 @@
 - [x] [Owner-confirmed Company AGI direction](docs/OWNER-INTENT-COMPANY-AGI.md) with README/STATUS/ROADMAP projections
 - [x] Tag `v0.1.0-preview` and a tag-triggered release workflow that drafts a pre-release with the smoke report, source archive, and provenance attestation (#97)
 - [x] Discord runtime review hardening merged via #99 on 2026-09-23: bounded analysis concurrency and limits, Linux Docker-isolated verification for write Tasks, restart states that never re-run work automatically, and fixes for #91, #92, and #93
-- [x] [Luna Task swarm](docs/LUNA-TASK-SWARM.md) merged via #100 on 2026-09-23: owner-bound plans, budgets, acknowledged peer messages, and an independent verifier, exercised offline on Linux and Windows; live Codex/Luna acceptance remains open
+- [x] [Luna Task swarm](docs/LUNA-TASK-SWARM.md) merged via #100 on 2026-09-23: owner-bound plans, budgets, acknowledged peer messages, and an independent verifier, exercised offline on Linux and Windows; a live synthetic fixture pass at `7df1aea` is recorded in #159; current-revision live acceptance remains open
 - [x] Discord agent channels and an immediate start notice merged via #101 on 2026-09-23
 
 ## Current Cloudflare candidate
