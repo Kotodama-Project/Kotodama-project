@@ -22,7 +22,10 @@ Truth remain with Kotodama's existing governed owners. BecomeOne is the migratio
 donor and later a consumer pinned to the public Kotodama version and content digest.
 This is a product direction, not an implemented frontend-to-owner transaction
 path. Native versus embedded UI, connector details, provider deployment and
-live acceptance remain separate design and evidence gates.
+live acceptance remain separate design and evidence gates. The
+[owner and adapter mapping](OPENMAUS-CLOUDFLARE-OS-INTEGRATION.md#正本とadapterの対応)
+records each owner, read adapter, correction route, revision/grant boundary,
+and missing integration for knowledge, conversation, Tasks, and agents.
 
 ## Selected upstream baseline
 
