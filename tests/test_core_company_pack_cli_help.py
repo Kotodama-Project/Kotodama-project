@@ -5,6 +5,8 @@ import tempfile
 import unittest
 
 
+from tests.document_contract_helpers import command_section, section, assert_links, shell_commands, assert_command_order, table_rows, assert_preview_boundary, headings, link_targets
+
 ROOT = Path(__file__).resolve().parents[1]
 
 CORE_COMMANDS = (
@@ -72,30 +74,27 @@ class CoreCompanyPackCliHelpTests(unittest.TestCase):
                 self.assertNotIn(secret_like, combined)
 
     def test_readme_quick_start_exposes_cross_shell_help_first(self) -> None:
-        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
-        start = readme.index("## Quick Start — Company starter を試す")
-        end = readme.index("## Runtime candidate を検査する", start)
-        section = readme[start:end]
-        help_heading = section.index("### 先にCLIの境界を確認する")
-        create_heading = section.index("### 作業copyを作って確認する")
-        self.assertLess(help_heading, create_heading)
-
-        for prefix in ("python", "python3"):
-            for command in (
+        """Legacy case ID: the tested onboarding surface is docs/OVERVIEW.md."""
+        path = ROOT / "docs/OVERVIEW.md"
+        text = path.read_text(encoding="utf-8")
+        help_tools = ("validate_template_pack.py", "check_company_pack_customization.py",
+                      "check_company_pack_public_preview.py")
+        required = {f"python3 tools/{tool} --help" for tool in help_tools}
+        required.add("python3 tools/create_company_pack.py my-company work/my-company")
+        quick_start = command_section(text, required)
+        for prefix, language in (("python", "powershell"), ("python3", "bash")):
+            commands = [f"{prefix} {command}" for command in (
                 "tools/validate_template_pack.py --help",
                 "tools/check_company_pack_customization.py --help",
                 "tools/check_company_pack_public_preview.py --help",
-            ):
-                with self.subTest(prefix=prefix, command=command):
-                    self.assertIn(f"{prefix} {command}", section)
-
-        for marker in (
-            "read-only/candidate-only",
-            "NO_GO_UNPUBLISHED",
-            "Packを読み書きしません",
-        ):
-            with self.subTest(marker=marker):
-                self.assertIn(marker, section)
+                "tools/create_company_pack.py my-company work/my-company",
+            )]
+            with self.subTest(shell=language):
+                actual = shell_commands(quick_start, language)
+                for help_command in commands[:3]:
+                    self.assertIn(help_command, actual)
+                    self.assertLess(actual.index(help_command), actual.index(commands[-1]))
+        assert_preview_boundary(self, quick_start)
 
 
 if __name__ == "__main__":

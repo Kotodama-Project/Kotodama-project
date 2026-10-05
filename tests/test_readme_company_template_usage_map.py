@@ -2,114 +2,47 @@ from pathlib import Path
 import unittest
 
 
+from tests.document_contract_helpers import section, assert_links, shell_commands, assert_command_order, table_rows, assert_preview_boundary, headings, link_targets
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReadmeCompanyTemplateUsageMapTests(unittest.TestCase):
     def _section(self) -> str:
-        readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
-        start = readme.index("## Company Template・Blocks・MOCsの使い方")
-        end = readme.index("## Context Platform — 会社の共有記憶", start)
-        return readme[start:end]
+        return section((ROOT / "docs/OVERVIEW.md").read_text(encoding="utf-8"), "company-templateblocksmocsの使い方")
 
     def test_usage_map_explains_ideal_and_current_order(self) -> None:
-        section = self._section()
-        required = (
-            "理想の会社づくり",
-            "現在の Public Preview",
-            "Company Template",
-            "Blocks",
-            "MOCs",
-            "Governed Records",
-            "validator",
-            "Review Bundle",
-            "read-only/candidate-only",
-            "NO_GO_UNPUBLISHED",
-        )
-        for marker in required:
-            with self.subTest(marker=marker):
-                self.assertIn(marker, section)
-
-        order = [
-            section.index("Company Template"),
-            section.index("Blocks"),
-            section.index("MOCs"),
-            section.index("Governed Records"),
-            section.index("validator"),
-            section.index("Review Bundle"),
-        ]
-        self.assertEqual(order, sorted(order))
+        surface = self._section()
+        ideal = section(surface, "理想の会社づくり")
+        current = section(surface, "現在の-public-previewで実際に行う順番")
+        self.assertLess(surface.index(ideal), surface.index(current))
+        # Navigation, rather than arbitrary mentions, binds each governed layer to its owner.
+        targets = link_targets(ideal)
+        ordered = ("../templates/company/README.md", "../templates/blocks/README.md",
+                   "../templates/mocs/README.md", "../templates/records/README.md")
+        positions = [targets.index(target) for target in ordered]
+        self.assertEqual(positions, sorted(positions))
+        assert_preview_boundary(self, current, ("Human approval", "execution authority", "runtime activation", "Promotion", "Current Truth"))
 
     def test_usage_map_links_each_shipped_entrypoint(self) -> None:
-        section = self._section()
-        links = (
-            "[Company Template](../templates/company/README.md)",
-            "[Blocks](../templates/blocks/README.md)",
-            "[Governed Records](../templates/records/README.md)",
-            "[MOCs](../templates/mocs/README.md)",
-            "[Company Pack Catalog](COMPANY-PACK-CATALOG.md)",
-            "[Starter Walkthrough](STARTER-WALKTHROUGH.md)",
-            "[Validation Guide](VALIDATION.md)",
-        )
-        for link in links:
-            with self.subTest(link=link):
-                self.assertIn(link, section)
-                relative_path = link.split("](", 1)[1][:-1]
-                self.assertTrue((ROOT / "docs" / relative_path).is_file())
+        assert_links(self, ROOT / "docs/OVERVIEW.md", self._section(), (
+            "../templates/company/README.md", "../templates/blocks/README.md", "../templates/records/README.md",
+            "../templates/mocs/README.md", "COMPANY-PACK-CATALOG.md", "STARTER-WALKTHROUGH.md", "VALIDATION.md"))
 
     def test_usage_map_keeps_example_immutable_and_commands_on_candidate(self) -> None:
-        section = self._section()
-        required = (
-            "examples/company-starter",
-            "work/my-company",
-            "python tools/create_company_pack.py my-company work/my-company",
-            "python tools/check_company_pack_customization.py work/my-company",
-            "python tools/catalog_company_pack.py work/my-company --format markdown",
-            "python tools/validate_template_pack.py work/my-company",
-            "python tools/build_company_pack_review_bundle.py work/my-company",
-            "python3 tools/create_company_pack.py my-company work/my-company",
-            "python3 tools/check_company_pack_customization.py work/my-company",
-            "python3 tools/catalog_company_pack.py work/my-company --format markdown",
-            "python3 tools/validate_template_pack.py work/my-company",
-            "python3 tools/build_company_pack_review_bundle.py work/my-company",
-            "公開exampleは変更しない",
-        )
-        for marker in required:
-            with self.subTest(marker=marker):
-                self.assertIn(marker, section)
-
-        for command in (
-            "create_company_pack.py examples/company-starter",
-            "catalog_company_pack.py examples/company-starter",
-            "validate_template_pack.py examples/company-starter",
-        ):
-            with self.subTest(command=command):
-                self.assertNotIn(command, section)
-
-        for prefix in ("python", "python3"):
-            with self.subTest(prefix=prefix):
-                create = section.index(
-                    f"{prefix} tools/create_company_pack.py my-company work/my-company"
-                )
-                customize = section.index(
-                    f"{prefix} tools/check_company_pack_customization.py work/my-company"
-                )
-                catalog = section.index(
-                    f"{prefix} tools/catalog_company_pack.py work/my-company --format markdown"
-                )
-                validate = section.index(
-                    f"{prefix} tools/validate_template_pack.py work/my-company"
-                )
-                bundle = section.index(
-                    f"{prefix} tools/build_company_pack_review_bundle.py work/my-company"
-                )
-                self.assertLess(create, customize)
-                self.assertLess(customize, catalog)
-                self.assertLess(catalog, validate)
-                self.assertLess(validate, bundle)
-
-        self.assertIn("CUSTOMIZATION_REQUIRED", section)
-        self.assertIn("これは失敗ではなく", section)
+        surface = self._section()
+        for prefix, language in (("python", "powershell"), ("python3", "bash")):
+            expected = [f"{prefix} tools/{command}" for command in (
+                "create_company_pack.py my-company work/my-company", "check_company_pack_customization.py work/my-company",
+                "catalog_company_pack.py work/my-company --format markdown", "validate_template_pack.py work/my-company",
+                "build_company_pack_review_bundle.py work/my-company")]
+            with self.subTest(shell=language):
+                assert_command_order(self, surface, expected, language)
+                for command in shell_commands(surface, language):
+                    self.assertNotIn("examples/company-starter", command, "editable commands must target the working candidate")
+        self.assertIn("examples/company-starter", surface)
+        self.assertIn("CUSTOMIZATION_REQUIRED", surface)
+        assert_preview_boundary(self, surface, ("Human approval", "Promotion", "Current Truth"))
 
 
 if __name__ == "__main__":

@@ -7,6 +7,9 @@ import unittest
 from pathlib import Path
 
 
+import yaml
+from tests.document_contract_helpers import shell_commands
+
 ROOT = Path(__file__).resolve().parents[1]
 NEW_REPOSITORY = "https://github.com/Kotodama-Project/Kotodama-project"
 OLD_REPOSITORY = "https://github.com/" + "dj-thank/" + "Kotodama-project"
@@ -145,50 +148,47 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         self.assertIn("private Voice runtime cutover attempt", status)
 
     def test_repository_validation_workflow_is_bounded_and_pinned(self) -> None:
-        workflow = (ROOT / ".github/workflows/repository-validation.yml").read_text(
-            encoding="utf-8"
+        workflow = yaml.safe_load((ROOT / ".github/workflows/repository-validation.yml").read_text(encoding="utf-8"))
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        repository = workflow["jobs"]["repository"]
+        validate = workflow["jobs"]["validate"]
+        self.assertEqual(repository["name"], "Repository checks")
+        self.assertEqual(repository["timeout-minutes"], 25)
+        self.assertEqual(validate["timeout-minutes"], 15)
+        self.assertEqual(validate["name"], "Trusted repository validation")
+        self.assertEqual(set(validate["needs"]), {"repository", "discord", "swarm"})
+        self.assertEqual(repository.get("permissions", workflow["permissions"]), {"contents": "read"})
+        self.assertEqual(validate.get("permissions", workflow["permissions"]), {"contents": "read"})
+        steps = repository["steps"]
+        executable = []
+        for step in steps:
+            self.assertNotIn("if", step, "repository checks must remain unconditional")
+            self.assertFalse(step.get("continue-on-error", False))
+            cwd = step.get("working-directory", repository.get("defaults", {}).get("run", {}).get("working-directory", "."))
+            self.assertIn(cwd, (".", ""), "repository tool checks must run from their owning root")
+            executable.extend(line.strip() for line in step.get("run", "").splitlines() if line.strip() and not line.lstrip().startswith("#"))
+        install = "python -m pip install --require-hashes -r requirements-ci.txt"
+        ordered = (
+            "python -S -B tools/check_tracked_secret_hygiene.py",
+            "python -S -B tools/smoke_company_pack_review_chain.py",
+            "python -S -B tools/validate_installation_lifecycle.py examples/installation-lifecycle/compose-minimum.json",
+            "python -S -B tools/validate_installation_lifecycle.py examples/installation-lifecycle/proxmox-segmented.json",
+            "python -S -B tools/validate_compose_minimum_skeleton.py runtime/compose-minimum",
+            install, "python -B tools/check_workflow_references.py", "python -m unittest discover -s tests -v",
         )
-        smoke_command = "python -S -B tools/smoke_company_pack_review_chain.py"
-        runtime_commands = (
-            "python -S -B tools/validate_installation_lifecycle.py "
-            "examples/installation-lifecycle/compose-minimum.json",
-            "python -S -B tools/validate_installation_lifecycle.py "
-            "examples/installation-lifecycle/proxmox-segmented.json",
-            "python -S -B tools/validate_compose_minimum_skeleton.py "
-            "runtime/compose-minimum",
-        )
-        install_command = (
-            "python -m pip install --require-hashes -r requirements-ci.txt"
-        )
-        workflow_reference_command = (
-            "python -B tools/check_workflow_references.py"
-        )
-        self.assertIn("permissions:\n  contents: read", workflow)
-        self.assertIn("persist-credentials: false", workflow)
-        self.assertIn(smoke_command, workflow)
-        for runtime_command in runtime_commands:
-            with self.subTest(runtime_command=runtime_command):
-                self.assertIn(runtime_command, workflow)
-                self.assertLess(workflow.index(runtime_command), workflow.index(install_command))
-        self.assertIn(install_command, workflow)
-        self.assertLess(workflow.index(smoke_command), workflow.index(install_command))
-        self.assertIn(workflow_reference_command, workflow)
-        self.assertLess(
-            workflow.index(install_command), workflow.index(workflow_reference_command)
-        )
-        self.assertLess(
-            workflow.index(workflow_reference_command),
-            workflow.index("python -m unittest discover -s tests -v"),
-        )
-        self.assertIn("python -m unittest discover -s tests -v", workflow)
-        # Assert the reviewed action, immutable pin, and version comment rather
-        # than one literal SHA, so a reviewed Dependabot bump does not fail CI.
+        positions = []
+        for command in ordered:
+            self.assertEqual(executable.count(command), 1, "command must belong to the repository job: " + command)
+            positions.append(executable.index(command))
+        self.assertEqual(positions, sorted(positions))
         for action in ("actions/checkout", "actions/setup-python"):
-            with self.subTest(action=action):
-                self.assertRegex(
-                    workflow,
-                    re.escape(action) + r"@[0-9a-f]{40}\s+#\s*v\d",
-                )
+            selected = [step for step in steps if step.get("uses", "").split("@", 1)[0] == action]
+            self.assertEqual(len(selected), 1)
+            self.assertRegex(selected[0]["uses"], re.escape(action) + r"@[0-9a-f]{40}$")
+            if action == "actions/checkout":
+                self.assertIs(selected[0].get("with", {}).get("persist-credentials"), False)
+        self.assertNotIn("needs", repository)
+        self.assertFalse(repository.get("continue-on-error", False))
 
     def test_actionlint_is_checksum_verified_outside_the_worktree(self) -> None:
         workflow = (ROOT / ".github/workflows/repository-validation.yml").read_text(
@@ -629,8 +629,15 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
                 self.assertEqual(common[name], swarm[name])
 
     def test_dependabot_has_a_review_cooldown(self) -> None:
-        dependabot = (ROOT / ".github/dependabot.yml").read_text(encoding="utf-8")
-        self.assertEqual(dependabot.count("default-days: 7"), dependabot.count("package-ecosystem:"))
+        config = yaml.safe_load((ROOT / ".github/dependabot.yml").read_text(encoding="utf-8"))
+        updates = config.get("updates")
+        self.assertIsInstance(updates, list)
+        self.assertTrue(updates, "an empty update inventory cannot satisfy review cooldown")
+        for index, update in enumerate(updates):
+            with self.subTest(update=index, ecosystem=update.get("package-ecosystem")):
+                self.assertIsInstance(update, dict)
+                self.assertTrue(update.get("package-ecosystem"))
+                self.assertEqual(update.get("cooldown", {}).get("default-days"), 7)
 
     def test_dependency_review_is_pinned_and_bounded(self) -> None:
         dependency_review = (
@@ -646,7 +653,16 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         self.assertIn("fail-on-severity: moderate", dependency_review)
 
     def test_codeql_advanced_workflow_does_not_conflict_with_default_setup(self) -> None:
-        self.assertFalse((ROOT / ".github/workflows/codeql.yml").exists())
+        for path in sorted((ROOT / ".github/workflows").glob("*.y*ml")):
+            workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+            for job_id, job in workflow.get("jobs", {}).items():
+                for index, step in enumerate(job.get("steps", [])):
+                    with self.subTest(workflow=path.name, job=job_id, step=index):
+                        action = step.get("uses", "").split("@", 1)[0].lower()
+                        self.assertNotIn(action, {"github/codeql-action/init", "github/codeql-action/analyze"},
+                                         "Advanced setup must not coexist with repository Default Setup")
+        ci = (ROOT / "docs/CI.md").read_text(encoding="utf-8")
+        self.assertRegex(ci, r"(?i)CodeQL.*default setup")
 
 
 if __name__ == "__main__":

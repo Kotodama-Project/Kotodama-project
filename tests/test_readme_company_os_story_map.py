@@ -1,6 +1,9 @@
 from pathlib import Path
+import re
 import unittest
 
+
+from tests.document_contract_helpers import section, assert_links, shell_commands, assert_command_order, table_rows, assert_preview_boundary, headings, link_targets
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -10,73 +13,44 @@ class ReadmeCompanyOsStoryMapTests(unittest.TestCase):
         self.readme = (ROOT / "docs" / "OVERVIEW.md").read_text(encoding="utf-8")
 
     def test_reader_map_is_near_top_and_preserves_narrative_order(self) -> None:
-        start = self.readme.index("## この README の読み方")
-        north_star = self.readme.index("## North Star")
-        self.assertLess(start, north_star)
-        section = self.readme[start:north_star]
-
-        markers = (
-            "Vision",
-            "Experience",
-            "Architecture",
-            "Current Reality",
-            "Try it",
-        )
-        positions = [section.index(marker) for marker in markers]
-        self.assertEqual(positions, sorted(positions))
-
-        for target in (
-            "#north-star",
-            "#理想のユーザー体験",
-            "#local-first-architecture",
-            "#現在地--夢と実証範囲を分ける",
-            "#最初に選ぶ",
-        ):
+        """Legacy README case ID; verify the overview's actual reader table."""
+        reader = section(self.readme, "この-readme-の読み方")
+        self.assertLess(self.readme.index(reader), next(offset for _, anchor, offset in headings(self.readme) if anchor == "north-star"))
+        rows = table_rows(reader)[1:]
+        self.assertEqual(len(rows), 5)
+        self.assertEqual([row[0].strip("*") for row in rows],
+                         ["Vision", "Experience", "Architecture", "Current Reality", "Try it"])
+        for row, target in zip(rows, ("#north-star", "#理想のユーザー体験", "#local-first-architecture",
+                                     "#現在地--夢と実証範囲を分ける", "#最初に選ぶ")):
             with self.subTest(target=target):
-                self.assertIn(target, section)
+                assert_links(self, ROOT / "docs/OVERVIEW.md", row[2], (target,))
 
     def test_company_os_map_connects_all_layers_without_broadening_claims(self) -> None:
-        start = self.readme.index("## Company OS system map")
-        end = self.readme.index("## North Star", start)
-        section = self.readme[start:end]
-
-        for marker in (
-            "Office / Input",
-            "Voice Adapter",
-            "Intent / GrillU",
-            "Governance / Evidence",
-            "Company Pack",
-            "Context Platform",
-            "Workforce / Runtime",
-            "Business / Learning",
-            "理想の役割",
-            "現在の公開境界",
-            "Incomplete Public Preview",
-            "NO_GO_UNPUBLISHED",
-            "public Voice Bot は未提供",
-            "Public Beta access は未提供",
-            "Final Human GO は未完了",
-        ):
-            with self.subTest(marker=marker):
-                self.assertIn(marker, section)
+        """The overview maps eight layers; the table is not an execution receipt."""
+        surface = section(self.readme, "company-os-system-map")
+        rows = table_rows(surface)
+        self.assertEqual(len(rows[0]), 3)
+        self.assertEqual(len(rows[1:]), 8)
+        for row in rows[1:]:
+            with self.subTest(layer=row[0]):
+                self.assertEqual(len(row), 3)
+                self.assertTrue(row[1])
+                self.assertTrue(row[2])
+                self.assertTrue(link_targets(row[0]))
+        self.assertIn("Incomplete Public Preview", surface)
+        assert_preview_boundary(self, surface, ("public Voice Bot", "Public Beta access", "Final Human GO"))
+        for claim, state in (("public Voice Bot", "未提供"), ("Public Beta access", "未提供"),
+                             ("Final Human GO", "未完了")):
+            with self.subTest(claim=claim):
+                self.assertRegex(surface, re.escape(claim) + r"\s*は\s*" + state)
 
     def test_story_map_links_existing_details_instead_of_replacing_them(self) -> None:
-        start = self.readme.index("## Company OS system map")
-        end = self.readme.index("## North Star", start)
-        section = self.readme[start:end]
-
-        for target in (
-            "#discord-の中に会社を作る",
-            "#voice--最初に価値を体感する入口",
-            "#grillu-adaptive-requirements",
-            "#evidence-chain--会話から-current-truth-まで",
-            "#company-template--会社を再現できる部品",
-            "#context-platform--会社の共有記憶",
-            "#agent-foundry-と-ai-workforce",
-            "#ai-business-loop",
-        ):
-            with self.subTest(target=target):
-                self.assertIn(target, section)
+        """Verify real overview heading anchors rather than literal link spelling."""
+        surface = section(self.readme, "company-os-system-map")
+        assert_links(self, ROOT / "docs/OVERVIEW.md", surface, (
+            "#discord-の中に会社を作る", "#voice--最初に価値を体感する入口", "#grillu-adaptive-requirements",
+            "#evidence-chain--会話から-current-truth-まで", "#company-template--会社を再現できる部品",
+            "#context-platform--会社の共有記憶", "#agent-foundry-と-ai-workforce", "#ai-business-loop"))
 
 
 if __name__ == "__main__":

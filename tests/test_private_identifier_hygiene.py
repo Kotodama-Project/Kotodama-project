@@ -11,6 +11,10 @@ import unittest
 from pathlib import Path
 
 
+import os
+import tempfile
+from tests.test_repository_publication_hygiene import SECRET_SCANNER
+
 ROOT = Path(__file__).resolve().parents[1]
 # Python's `\b` counts Japanese characters as word characters, so an identifier
 # written directly next to Japanese text has no word boundary. Explicit ASCII
@@ -32,35 +36,71 @@ EXCLUDED = {
 BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".tgz", ".zip", ".ico"}
 
 
-def tracked_text_files():
-    completed = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True, timeout=60
-    )
-    for raw in completed.stdout.split(b"\0"):
-        name = raw.decode("utf-8", errors="replace")
-        if not name or name in EXCLUDED:
+def tracked_text_files(root: Path = ROOT):
+    """Yield decoded tracked HEAD/index/worktree snapshots with source labels."""
+    index = SECRET_SCANNER.index_blobs(root)
+    head = SECRET_SCANNER.head_blobs(root)
+    oids = set(index.values()) | set(head.values())
+    sizes = SECRET_SCANNER.blob_sizes(root, oids)
+    contents = SECRET_SCANNER.read_blobs(root, {oid for oid in oids if sizes[oid] <= SECRET_SCANNER.MAX_TEXT_BYTES})
+    for relative in sorted(set(index) | set(head)):
+        name = relative.as_posix()
+        if name in EXCLUDED:
             continue
-        path = ROOT / name
-        if not path.is_file() or path.suffix.lower() in BINARY_SUFFIXES:
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        yield name, text
+        snapshots = {}
+        for source, oid in (("HEAD", head.get(relative)), ("index", index.get(relative))):
+            if oid is not None and oid in contents:
+                snapshots.setdefault(contents[oid], set()).add(source)
+        path = root / relative
+        if path.is_symlink():
+            snapshots.setdefault(path.readlink().as_posix().encode(), set()).add("working tree")
+        elif path.is_file() and path.stat().st_size <= SECRET_SCANNER.MAX_TEXT_BYTES:
+            snapshots.setdefault(path.read_bytes(), set()).add("working tree")
+        for data, sources in snapshots.items():
+            text, _decode_error = SECRET_SCANNER.decode_text_snapshot(relative, data)
+            if text is not None:
+                yield name, SECRET_SCANNER.source_label(sources), text
 
 
 class PrivateIdentifierHygieneTests(unittest.TestCase):
     def test_tracked_text_omits_private_infrastructure_identifiers(self) -> None:
-        offenders = []
-        for name, text in tracked_text_files():
-            for marker in TOLERATED:
-                text = text.replace(marker, "")
-            for label, pattern in PRIVATE_PATTERNS:
-                for match in pattern.finditer(text):
-                    line = text.count("\n", 0, match.start()) + 1
-                    offenders.append(f"{name}:{line}: {label} {match.group(0)!r}")
-        self.assertEqual(offenders, [], "\n".join(offenders))
+        def find_identifiers(snapshots):
+            offenders = []
+            for name, source, text in snapshots:
+                for marker in TOLERATED:
+                    text = text.replace(marker, "")
+                for label, pattern in PRIVATE_PATTERNS:
+                    for match in pattern.finditer(text):
+                        line = text.count("\n", 0, match.start()) + 1
+                        # Only path, line, detector and source; never reflect the match.
+                        offenders.append(f"{name}:{line}: {label} [{source}]")
+            return offenders
+
+        self.assertEqual(find_identifiers(tracked_text_files()), [])
+        # Real owned Git snapshots and BOMs exercise the same decoding boundary.
+        value = "CT" + "123"
+        environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+        environment.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull)
+        with tempfile.TemporaryDirectory() as temporary:
+            owned = Path(temporary)
+            def git(*arguments):
+                subprocess.run(["git", *arguments], cwd=owned, env=environment,
+                               capture_output=True, check=True, timeout=10)
+            git("init", "--quiet", "--template=")
+            git("config", "user.name", "Test")
+            git("config", "user.email", "test@example.invalid")
+            git("config", "commit.gpgsign", "false")
+            path = owned / "identifier.txt"
+            path.write_text(value, encoding="utf-16")
+            git("add", ".")
+            git("commit", "--quiet", "-m", "owned HEAD fixture")
+            path.write_text(value + " index", encoding="utf-32")
+            git("add", ".")
+            path.write_text(value + " working", encoding="utf-8")
+            offenders = find_identifiers(tracked_text_files(owned))
+        self.assertEqual(set(offenders), {f"identifier.txt:1: container or VM identifier [{source}]"
+                                         for source in ("HEAD", "index", "working tree")})
+        self.assertNotIn(value, "\n".join(offenders))
 
     def test_patterns_detect_the_identifier_shapes_they_guard(self) -> None:
         # Synthetic values only; each has the shape the pattern guards.
