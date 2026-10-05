@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import errno
+import datetime
+import io
 import importlib.util
 import json
 import os
@@ -11,6 +13,8 @@ import tempfile
 import textwrap
 import unittest
 from unittest import mock
+
+import yaml
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -31,6 +35,20 @@ REQUIRED_PREVIEW_RUNTIME_BINDINGS = [
 
 
 class CloudflareEdgeCandidateTests(unittest.TestCase):
+    def _copy_candidate(self, candidate: pathlib.Path) -> None:
+        # The validator owns seven inputs. Never inherit installed dependencies,
+        # other runtime components, or sibling workflows from the developer tree.
+        paths = (*MODULE.candidate_paths(ROOT)[1:], MODULE.PROFILE / "README.md")
+        for source in paths:
+            destination = candidate / source.relative_to(ROOT)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+        self.assertEqual(
+            {source.relative_to(ROOT) for source in paths},
+            {path.relative_to(candidate) for path in candidate.rglob("*") if path.is_file()},
+        )
+        self.assertEqual([], MODULE.validate(candidate))
+
     def test_candidate_is_fail_closed_and_non_production(self) -> None:
         self.assertEqual([], MODULE.validate())
 
@@ -70,10 +88,17 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         )
 
     def test_upload_refuses_whitespace_only_preview_runtime_binding(self) -> None:
-        workflow = MODULE.WORKFLOW.read_text(encoding="utf-8")
-        script = workflow.split("          python - <<'PY'\n", 1)[1].split(
-            "\n          PY", 1
-        )[0]
+        # Execute the owned upload preparation fragment only. Provider
+        # credentials, deployment and provider acceptance stay unverified.
+        workflow = yaml.load(MODULE.WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+        upload = workflow["jobs"]["upload-preview-version"]
+        preparation = next(step for step in upload["steps"]
+                           if step["name"] == "Upload preview version without production promotion")
+        self.assertEqual("cloudflare-preview", upload["environment"])
+        self.assertEqual("candidate/runtime/cloudflare-edge", preparation["working-directory"])
+        for binding in REQUIRED_PREVIEW_RUNTIME_BINDINGS:
+            self.assertEqual("${{ secrets." + binding + " }}", preparation["env"][binding])
+        script = preparation["run"].split("python - <<'PY'\n", 1)[1].split("\nPY", 1)[0]
         environment = {
             binding: "bounded-test-value"
             for binding in REQUIRED_PREVIEW_RUNTIME_BINDINGS
@@ -82,18 +107,24 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             secrets_file = pathlib.Path(temporary) / "preview-secrets.json"
             environment["KOTODAMA_PREVIEW_SECRETS_FILE"] = str(secrets_file)
+            output = io.StringIO()
+            errors = io.StringIO()
             with (
                 mock.patch.dict(os.environ, environment, clear=True),
-                self.assertRaisesRegex(SystemExit, "ACCESS_AUD"),
+                mock.patch("sys.stdout", output),
+                mock.patch("sys.stderr", errors),
+                self.assertRaises(SystemExit) as refusal,
             ):
                 exec(compile(textwrap.dedent(script), "<preview-secrets-writer>", "exec"))
+            self.assertEqual("missing required preview runtime bindings: ACCESS_AUD", str(refusal.exception))
+            self.assertEqual("", output.getvalue())
+            self.assertEqual("", errors.getvalue())
             self.assertFalse(secrets_file.exists())
 
     def test_validator_refuses_incomplete_preview_runtime_binding_declaration(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             config_path = candidate / "runtime" / "cloudflare-edge" / "wrangler.jsonc"
             config = MODULE.load_jsonc(config_path)
             config["env"]["preview"]["secrets"] = {
@@ -216,8 +247,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         for filename in ("wrangler.json", "wrangler.toml"):
             with self.subTest(filename=filename), tempfile.TemporaryDirectory() as temporary:
                 candidate = pathlib.Path(temporary)
-                shutil.copytree(ROOT / "runtime", candidate / "runtime")
-                shutil.copytree(ROOT / ".github", candidate / ".github")
+                self._copy_candidate(candidate)
                 alternate = candidate / "runtime" / "cloudflare-edge" / filename
                 alternate.write_text("{}\n", encoding="utf-8")
 
@@ -230,8 +260,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_rejects_symlinked_alternate_wrangler_config(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             alternate = candidate / "runtime" / "cloudflare-edge" / "wrangler.json"
             target = alternate.with_name("wrangler.jsonc")
             try:
@@ -259,8 +288,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_rejects_ancestor_alternate_wrangler_config(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             alternate = candidate / "runtime" / "wrangler.toml"
             alternate.write_text("name = 'untrusted'\n", encoding="utf-8")
 
@@ -272,8 +300,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_rejects_deploy_redirect_and_present_target(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             profile = candidate / "runtime" / "cloudflare-edge"
             deploy_config = profile / ".wrangler" / "deploy" / "config.json"
             deploy_config.parent.mkdir(parents=True)
@@ -303,8 +330,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         ):
             with self.subTest(path=relative_path), tempfile.TemporaryDirectory() as temporary:
                 candidate = pathlib.Path(temporary)
-                shutil.copytree(ROOT / "runtime", candidate / "runtime")
-                shutil.copytree(ROOT / ".github", candidate / ".github")
+                self._copy_candidate(candidate)
                 path = candidate / relative_path
                 path.unlink()
                 path.mkdir()
@@ -323,8 +349,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         ):
             with self.subTest(path=relative_path), tempfile.TemporaryDirectory() as temporary:
                 candidate = pathlib.Path(temporary)
-                shutil.copytree(ROOT / "runtime", candidate / "runtime")
-                shutil.copytree(ROOT / ".github", candidate / ".github")
+                self._copy_candidate(candidate)
                 path = candidate / relative_path
                 target = path.with_name(path.name + ".target")
                 path.replace(target)
@@ -357,8 +382,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_refuses_runner_manifest_or_lock_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             manifest_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package.json"
             lock_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package-lock.json"
             for path, marker in (
@@ -366,14 +390,16 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
                 (lock_path, "Wrangler runner lockfile digest does not match the reviewed artifact"),
             ):
                 with self.subTest(path=path.name):
-                    path.write_bytes(path.read_bytes() + b"\n")
+                    approved = path.read_bytes()
+                    path.write_bytes(approved + b"\n")
                     self.assertIn(marker, MODULE.validate(candidate))
+                    path.write_bytes(approved)
+                    self.assertEqual([], MODULE.validate(candidate))
 
     def test_validator_refuses_runner_lock_closure_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             lock_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package-lock.json"
             lock = json.loads(lock_path.read_text(encoding="utf-8"))
             lock["packages"]["node_modules/wrangler"]["integrity"] = "sha512-mismatch"
@@ -395,8 +421,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         ):
             with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
                 candidate = pathlib.Path(temporary)
-                shutil.copytree(ROOT / "runtime", candidate / "runtime")
-                shutil.copytree(ROOT / ".github", candidate / ".github")
+                self._copy_candidate(candidate)
                 lock_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package-lock.json"
                 lock = json.loads(lock_path.read_text(encoding="utf-8"))
                 del lock["packages"]["node_modules/esbuild"][field]
@@ -406,8 +431,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_rejects_non_registry_transitive_resolution(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             lock_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package-lock.json"
             lock = json.loads(lock_path.read_text(encoding="utf-8"))
             lock["packages"]["node_modules/esbuild"]["resolved"] = (
@@ -422,13 +446,16 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_allows_link_exception_without_registry_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             lock_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-runner-package-lock.json"
             lock = json.loads(lock_path.read_text(encoding="utf-8"))
             lock["packages"]["node_modules/local-link"] = {"link": True}
             lock_path.write_text(json.dumps(lock), encoding="utf-8")
             errors = MODULE.validate(candidate)
+            self.assertEqual(
+                ["Wrangler runner lockfile digest does not match the reviewed artifact"],
+                errors,
+            )
             self.assertNotIn(
                 "Wrangler runner lock package node_modules/local-link is missing resolved",
                 errors,
@@ -451,8 +478,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
         ):
             with self.subTest(replacement=replacement), tempfile.TemporaryDirectory() as temporary:
                 candidate = pathlib.Path(temporary)
-                shutil.copytree(ROOT / "runtime", candidate / "runtime")
-                shutil.copytree(ROOT / ".github", candidate / ".github")
+                self._copy_candidate(candidate)
                 workflow_path = candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
                 workflow = workflow_path.read_text(encoding="utf-8")
                 workflow_path.write_text(
@@ -471,8 +497,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
                 tempfile.TemporaryDirectory() as temporary,
             ):
                 candidate = pathlib.Path(temporary)
-                shutil.copytree(ROOT / "runtime", candidate / "runtime")
-                shutil.copytree(ROOT / ".github", candidate / ".github")
+                self._copy_candidate(candidate)
                 workflow_path = (
                     candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
                 )
@@ -492,6 +517,21 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
                 )
 
     def test_voice_review_is_access_verified_and_context_gateway_only(self) -> None:
+        # Static reviewed-artifact surface only. Runtime assurance is owned by
+        # the independent Node request/JWT suite in the automatic CI job below.
+        workflow = yaml.load(
+            (ROOT / ".github/workflows/cloudflare-candidate-validation.yml").read_text(encoding="utf-8"),
+            Loader=yaml.BaseLoader,
+        )
+        job = workflow["jobs"]["validate"]
+        self.assertNotIn("if", job)
+        self.assertNotIn("continue-on-error", job)
+        runtime_step = next(step for step in job["steps"]
+                            if step["name"] == "Run Worker and local Gateway review contracts")
+        self.assertNotIn("if", runtime_step)
+        self.assertNotIn("continue-on-error", runtime_step)
+        self.assertIn("tests/node/test_cloudflare_voice_review.mjs", runtime_step["run"].split())
+        self.assertEqual(["node", "--test"], runtime_step["run"].split()[:2])
         worker = MODULE.WORKER.read_text(encoding="utf-8")
         for marker in (
             '"/voice/review"',
@@ -546,8 +586,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_refuses_ancestor_only_branch_guard(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             workflow_path = candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
             workflow = workflow_path.read_text(encoding="utf-8")
             exact_tip_guard = (
@@ -584,8 +623,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_refuses_the_stale_candidate_branch_reference(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             workflow_path = candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
             workflow = workflow_path.read_text(encoding="utf-8")
             workflow_path.write_text(
@@ -611,8 +649,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_refuses_a_main_ref_fetched_from_another_branch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             workflow_path = candidate / ".github" / "workflows" / "cloudflare-edge-preview.yml"
             workflow = workflow_path.read_text(encoding="utf-8")
             workflow_path.write_text(
@@ -630,24 +667,26 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
             )
 
     def test_validator_refuses_future_compatibility_date(self) -> None:
+        # Retain the original case ID. The invariant is a reviewed date pin,
+        # not a comparison with the current wall clock or a future-date policy.
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             config_path = candidate / "runtime" / "cloudflare-edge" / "wrangler.jsonc"
             config = MODULE.load_jsonc(config_path)
-            config["compatibility_date"] = "2026-08-08"
+            reviewed = datetime.date.fromisoformat(MODULE.VERIFIED_COMPATIBILITY_DATE)
+            config["compatibility_date"] = (reviewed + datetime.timedelta(days=1)).isoformat()
+            self.assertNotEqual(MODULE.VERIFIED_COMPATIBILITY_DATE, config["compatibility_date"])
             config_path.write_text(json.dumps(config), encoding="utf-8")
             self.assertIn(
-                "compatibility_date must equal the verified UTC-safe date 2026-08-07",
+                "compatibility_date must equal the verified UTC-safe date " + MODULE.VERIFIED_COMPATIBILITY_DATE,
                 MODULE.validate(candidate),
             )
 
     def test_validator_refuses_wrangler_integrity_drift(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             integrity_path = candidate / "runtime" / "cloudflare-edge" / "wrangler-integrity.json"
             integrity = json.loads(integrity_path.read_text(encoding="utf-8"))
             integrity["version"] = "4.119.0"
@@ -660,8 +699,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_refuses_unreviewed_worker_code(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             worker_path = candidate / "runtime" / "cloudflare-edge" / "src" / "index.js"
             worker_path.write_text(
                 worker_path.read_text(encoding="utf-8")
@@ -677,8 +715,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_refuses_preview_environment_provider_binding(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             config_path = candidate / "runtime" / "cloudflare-edge" / "wrangler.jsonc"
             config = MODULE.load_jsonc(config_path)
             config["env"]["preview"]["r2_buckets"] = [
@@ -693,8 +730,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_refuses_preview_environment_observability_override(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             config_path = candidate / "runtime" / "cloudflare-edge" / "wrangler.jsonc"
             config = MODULE.load_jsonc(config_path)
             config["env"]["preview"]["observability"] = {
@@ -715,8 +751,7 @@ class CloudflareEdgeCandidateTests(unittest.TestCase):
     def test_validator_refuses_candidate_controlled_wrangler_build(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             candidate = pathlib.Path(temporary)
-            shutil.copytree(ROOT / "runtime", candidate / "runtime")
-            shutil.copytree(ROOT / ".github", candidate / ".github")
+            self._copy_candidate(candidate)
             config_path = candidate / "runtime" / "cloudflare-edge" / "wrangler.jsonc"
             config = MODULE.load_jsonc(config_path)
             config["build"] = {"command": "printenv"}

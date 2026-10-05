@@ -243,12 +243,24 @@ class CloudflareOsSecurityOverlayTests(unittest.TestCase):
     def test_validator_reads_materialization_in_bounded_chunks(self) -> None:
         spec = fixture_spec()
         workspace_out, _report = apply_workspace_overlay(WORKSPACE_FIXTURE, LOCK_FIXTURE, spec)
-        read_sizes: list[int] = []
+        padding = b"# bounded synthetic materialization padding\n"
+        padding *= (2 * candidate_validator.READ_CHUNK_BYTES // len(padding)) + 1
+        workspace_out += padding
+        lock_out = GENERATED_LOCK_FIXTURE + padding
+        workspace_binding = spec["remediation"]["expected_workspace_output"]
+        workspace_binding["canonical_bytes"] = len(workspace_out)
+        workspace_binding["canonical_sha256"] = hashlib.sha256(workspace_out).hexdigest()
+        lock_binding = spec["remediation"]["observed_generated_lock"]
+        lock_binding["canonical_bytes"] = len(lock_out)
+        lock_binding["canonical_sha256"] = hashlib.sha256(lock_out).hexdigest()
+        lock_binding["canonical_lines"] = lock_out.count(b"\n")
+        reads: dict[str, list[tuple[int, bytes]]] = {}
         real_open = pathlib.Path.open
 
         class TrackingStream:
-            def __init__(self, stream) -> None:
+            def __init__(self, path, stream) -> None:
                 self._stream = stream
+                self._reads = reads.setdefault(path.name, [])
 
             def __enter__(self):
                 self._stream.__enter__()
@@ -258,35 +270,48 @@ class CloudflareOsSecurityOverlayTests(unittest.TestCase):
                 return self._stream.__exit__(*args)
 
             def read(self, size: int = -1):
-                read_sizes.append(size)
-                return self._stream.read(size)
+                value = self._stream.read(size)
+                self._reads.append((size, value))
+                return value
 
         def open_tracking(path, mode="r", buffering=-1, encoding=None, errors=None, newline=None):
-            return TrackingStream(real_open(path, mode, buffering, encoding, errors, newline))
+            return TrackingStream(path, real_open(path, mode, buffering, encoding, errors, newline))
 
         with tempfile.TemporaryDirectory() as directory:
             workspace_path = pathlib.Path(directory) / "workspace.yaml"
             lock_path = pathlib.Path(directory) / "lock.yaml"
             workspace_path.write_bytes(workspace_out)
-            lock_path.write_bytes(GENERATED_LOCK_FIXTURE)
+            lock_path.write_bytes(lock_out)
             output = io.StringIO()
             with mock.patch.object(candidate_validator, "load_spec", return_value=spec):
+                # Rebind only the synthetic size/hash contract; the real
+                # materialization verifier still checks every byte and marker.
                 with mock.patch.object(candidate_validator, "validate_spec"):
                     with mock.patch.object(pathlib.Path, "open", autospec=True, side_effect=open_tracking):
                         with redirect_stdout(output):
                             status = candidate_validator.main(
-                                [
-                                    "--generated-workspace",
-                                    str(workspace_path),
-                                    "--generated-lock",
-                                    str(lock_path),
-                                ]
+                                ["--generated-workspace", str(workspace_path),
+                                 "--generated-lock", str(lock_path)]
                             )
         self.assertEqual(status, 0)
-        self.assertEqual(json.loads(output.getvalue())["status"], "PASS")
-        self.assertTrue(read_sizes)
-        self.assertNotIn(-1, read_sizes)
-        self.assertTrue(all(size > 0 for size in read_sizes))
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["status"], "PASS")
+        self.assertFalse(report["remediation_proven"])
+        self.assertFalse(report["materialization_verification"]["package_manager_provenance_verified_by_bytes"])
+        self.assertEqual(report["public_beta"], "NO_GO_UNPUBLISHED")
+        self.assertEqual(set(reads), {"workspace.yaml", "lock.yaml"})
+        for name, expected in (("workspace.yaml", workspace_out), ("lock.yaml", lock_out)):
+            with self.subTest(file=name):
+                self.assertGreater(len(expected), 2 * candidate_validator.READ_CHUNK_BYTES)
+                requests, chunks = zip(*reads[name])
+                remainder = len(expected) - 2 * candidate_validator.READ_CHUNK_BYTES
+                self.assertEqual(requests, (candidate_validator.READ_CHUNK_BYTES,
+                                            candidate_validator.READ_CHUNK_BYTES, remainder, 1))
+                self.assertTrue(all(0 < size <= candidate_validator.READ_CHUNK_BYTES for size in requests))
+                self.assertEqual(tuple(map(len, chunks)), (*requests[:-1], 0))
+                self.assertEqual(b"".join(chunks), expected)
+                self.assertEqual(sum(map(len, chunks)), len(expected))
+                self.assertEqual(chunks[-1], b"")
 
     def test_cli_rejects_sparse_input_without_private_echo_or_traceback(self) -> None:
         spec = load_spec()
@@ -353,6 +378,13 @@ class CloudflareOsSecurityOverlayTests(unittest.TestCase):
     def test_workspace_overlay_preserves_all_unrelated_workspace_bytes(self) -> None:
         spec = fixture_spec()
         workspace_out, _report = apply_workspace_overlay(WORKSPACE_FIXTURE, LOCK_FIXTURE, spec)
+        inserted = (
+            b"  'postcss@8.5.25>nanoid': 3.3.18\n"
+            b"  '@cloudflare/puppeteer@1.2.0>@puppeteer/browsers': 3.0.4\n"
+        )
+        self.assertEqual(workspace_out, WORKSPACE_FIXTURE.replace(b"overrides:\n", b"overrides:\n" + inserted, 1))
+        self.assertEqual(workspace_out.count(inserted), 1)
+        self.assertEqual(workspace_out.replace(inserted, b"", 1), WORKSPACE_FIXTURE)
         self.assertIn(b"minimumReleaseAge: 1440", workspace_out)
         self.assertEqual(workspace_out.count(b"postcss@8.5.25>nanoid"), 1)
 
