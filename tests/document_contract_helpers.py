@@ -127,7 +127,7 @@ def assert_preview_boundary(case, text: str, denied=()) -> None:
     denial = re.compile(r"作られません|作らない|作らず|作り\s*ません|意味しません|証明しません|証明ではありません|"
                         r"未提供|未完了|not\s+(?:prove|establish|create)|"
                         r"does\s+not\s+(?:prove|establish|create)|"
-                        r"do\s+not\s+(?:prove|establish|create)", re.IGNORECASE)
+                        r"do\s+not\s+(?:prove|establish|create)|not\s+created", re.IGNORECASE)
     for claim in denied:
         case.assertTrue(any(claim in paragraph and denial.search(paragraph) for paragraph in paragraphs),
                         f"missing explicit non-authorizing statement: {claim}")
