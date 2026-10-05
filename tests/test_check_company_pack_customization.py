@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 import shutil
 import tempfile
 import subprocess
@@ -157,10 +158,27 @@ class CompanyPackCustomizationCliTests(unittest.TestCase):
         validator = Draft202012Validator(json.loads((ROOT / "schemas/customization-report.schema.json").read_text(encoding="utf-8")))
         validator.validate(report)
         with tempfile.TemporaryDirectory() as temporary:
-            missing = self.run_checker(Path(temporary) / "missing")
+            root = Path(temporary)
+            missing = self.run_checker(root / "missing")
+            ready_pack = root / "schema-ready-pack"
+            expires = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+            created = subprocess.run([
+                sys.executable, str(CREATOR), "schema-ready-pack", str(ready_pack),
+                "--human-intent-ref", "human-intent:synthetic-schema-ready",
+                "--authority-expires-at", expires,
+                "--retention-policy-ref", "retention-policy:synthetic-schema-ready",
+            ], cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(created.returncode, 0, created.stdout)
+            self.assertEqual(created.stderr, "")
+            ready = self.run_checker(ready_pack)
         self.assertEqual(missing.returncode, 1)
         self.assertEqual(missing.stderr, "")
-        validator.validate(json.loads(missing.stdout))
+        self.assertEqual(ready.returncode, 0, ready.stdout)
+        self.assertEqual(ready.stderr, "")
+        ready_report = json.loads(ready.stdout)
+        self.assertEqual(ready_report["status"], "READY_FOR_GOVERNED_REVIEW")
+        for actual in (report, json.loads(missing.stdout), ready_report):
+            self.assertEqual([], list(validator.iter_errors(actual)))
         for path, value in (
             (("counts", "replacement_required"), "42"),
             (("items", 0, "category"), "unsupported"),

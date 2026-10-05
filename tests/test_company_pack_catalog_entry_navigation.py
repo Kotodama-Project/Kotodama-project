@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 import unittest
 
-from tests.document_contract_helpers import section, assert_links, link_targets
+from tests.document_contract_helpers import section, assert_links, link_targets, headings, shell_commands
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -11,17 +11,22 @@ class CompanyPackCatalogEntryNavigationTests(unittest.TestCase):
     def test_catalog_exposes_ideal_current_smoke_first_stop(self) -> None:
         source = ROOT / "docs/COMPANY-PACK-CATALOG.md"
         text = source.read_text(encoding="utf-8")
-        entry = section(text, "read-next-ideal---current---smoke")
         targets = (
             "../templates/company/README.md", "../templates/blocks/README.md",
             "../templates/records/README.md", "../templates/mocs/README.md",
             "../examples/company-starter/README.md", "COMPANY-PACK-NEXT-STEPS.md",
             "SCHEMA-VALIDATOR-MATRIX.md", "STARTER-WALKTHROUGH.md",
         )
+        actual_sections = [section(text, anchor) for rank, anchor, _ in headings(text) if rank == 2]
+        entry_candidates = [part for part in actual_sections if set(targets) <= set(link_targets(part))]
+        self.assertEqual(len(entry_candidates), 1, "one navigation section must expose the reader route")
+        entry = entry_candidates[0]
         assert_links(self, source, entry, targets)
         positions = [link_targets(entry).index(target) for target in targets]
         self.assertEqual(positions, sorted(positions))
-        self.assertLess(text.index(entry), text.index(section(text, "runbook-smoke")))
+        smoke_candidates = [part for part in actual_sections if "python -m unittest tests.test_public_starter_runbook_smoke -v" in shell_commands(part)]
+        self.assertEqual(len(smoke_candidates), 1, "one executable smoke section must follow the reader route")
+        self.assertLess(text.index(entry), text.index(smoke_candidates[0]))
         commands = re.findall(r"`([^`]+)`", entry)
         for prefix in ("python", "python3"):
             self.assertIn(f"{prefix} -m unittest tests.test_company_pack_catalog_entry_navigation -v", commands)

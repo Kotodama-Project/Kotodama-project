@@ -53,7 +53,15 @@ class CompanyPackCliReferenceTests(unittest.TestCase):
                 for flag in ("-h", "--help"):
                     with self.subTest(tool=tool, flag=flag):
                         stdout, stderr = io.StringIO(), io.StringIO()
-                        with chdir(workdir), redirect_stdout(stdout), redirect_stderr(stderr), mock.patch.object(sys, "argv", [tool, flag]):
+                        with (
+                            chdir(workdir), redirect_stdout(stdout), redirect_stderr(stderr),
+                            mock.patch.object(sys, "argv", [tool, flag]),
+                            mock.patch.object(subprocess, "run", side_effect=AssertionError("help must not start child work")),
+                            mock.patch.object(subprocess, "Popen", side_effect=AssertionError("help must not start child work")),
+                            mock.patch("socket.socket", side_effect=AssertionError("help must not open a socket")),
+                            mock.patch("socket.create_connection", side_effect=AssertionError("help must not connect externally")),
+                            mock.patch("socket.getaddrinfo", side_effect=AssertionError("help must not resolve external hosts")),
+                        ):
                             try:
                                 code = module.main([tool, flag])
                             except SystemExit as exited:
@@ -63,6 +71,7 @@ class CompanyPackCliReferenceTests(unittest.TestCase):
                         self.assertEqual(stderr.getvalue(), "")
                         self.assertIn(BOUNDARY, stdout.getvalue())
                         self.assertEqual(tuple(workdir.iterdir()), before)
+                self.assertEqual(len(help_outputs), 2, "both help aliases must complete")
                 self.assertEqual(help_outputs[0], help_outputs[1])
                 cold = subprocess.run([sys.executable, str(ROOT / "tools" / tool), "--help"], cwd=workdir, text=True, encoding="utf-8", capture_output=True, check=False)
                 self.assertEqual(cold.returncode, 0, cold.stderr)

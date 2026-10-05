@@ -500,6 +500,11 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             baseline_response = self.completed_response(request_path)
             baseline_bytes = json.dumps(baseline_response, sort_keys=True)
             response_path = root / "saved-review-response.json"
+            self.save_json(response_path, baseline_response)
+            baseline_verified = self.run_verifier(request_path, response_path)
+            self.assertEqual(baseline_verified.returncode, 0, baseline_verified.stdout.decode("utf-8"))
+            self.assertEqual(baseline_verified.stderr, b"")
+            self.assertEqual(json.loads(baseline_verified.stdout)["status"], "ITEM_RESPONSES_MATCH_REQUEST")
 
             pending = json.loads(self.run_builder(request_path).stdout)
             self.save_json(response_path, pending)
@@ -576,6 +581,11 @@ class CompanyPackReviewResponseCliTests(unittest.TestCase):
             baseline_response = self.completed_response(request_path)
             baseline_bytes = json.dumps(baseline_response, sort_keys=True)
             response_path = root / "private-response-name.json"
+            self.save_json(response_path, baseline_response)
+            baseline_verified = self.run_verifier(request_path, response_path)
+            self.assertEqual(baseline_verified.returncode, 0, baseline_verified.stdout.decode("utf-8"))
+            self.assertEqual(baseline_verified.stderr, b"")
+            self.assertEqual(json.loads(baseline_verified.stdout)["status"], "ITEM_RESPONSES_MATCH_REQUEST")
             sentinel = "PRIVATE_SENTINEL_DO_NOT_ECHO"
             cases: list[tuple[str, bytes]] = []
 
