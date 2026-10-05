@@ -10,9 +10,9 @@ This is the internal coordination kernel for the Cloudflare OS Git role, not a
 running LLM, public API, deployed Gadget, GitHub App, or second Task authority.
 The role is not entered in an agent registry in this revision
 ([#134](https://github.com/Kotodama-Project/Kotodama-project/issues/134) tracks
-that) and has no runtime receipt. The system design document and the business
-rehearsal follow in later changes under
-[#132](https://github.com/Kotodama-Project/Kotodama-project/issues/132). The
+that) and has no runtime receipt. The [system design](../../docs/GIT-STEWARD-AND-WORK-CELLS.md)
+and [business rehearsal](../../docs/BUSINESS-REHEARSAL.md) cover local synthetic
+acceptance; live admission, executors and provider integration remain unverified. The
 daily-entry direction is [Dots first](../../docs/OPENAI-ALIGNMENT.md);
 [Cloudflare OS](../../docs/CLOUDFLARE-OS-ADOPTION.md) remains a dedicated-interface
 candidate. This provider-neutral core does not choose or add a frontend.
@@ -25,17 +25,20 @@ candidate. This provider-neutral core does not choose or add a frontend.
 | `sqlite-store.mjs` | Atomic journal adapter for SQLite-backed Cloudflare Durable Object storage |
 | `git-observer.mjs` | Node-only, read-only comparison of immutable Git commits |
 | `coordinator.test.mjs` | Negative/positive tests, Work corrections, legacy-journal refusal, disk restart, simultaneous SQLite writers, real Git worktrees |
+| `business-rehearsal.mjs` / `business-simulation.test.mjs` | Synthetic correction/restart rehearsal and regression cases; real temporary Git, SQLite and Node processes |
 | `../../tests/test_git_steward_runtime.py` | Entry point discovered by the existing Python regression workflow |
 
 No package installation is needed for this slice. Use Node >=22.13, Git and
 Python >=3.10. Node's built-in SQLite may emit an experimental warning.
 
 ```sh
-node --test --test-reporter=tap runtime/git-steward/coordinator.test.mjs
+node --test --test-reporter=tap runtime/git-steward/coordinator.test.mjs runtime/git-steward/business-simulation.test.mjs
 python -m unittest discover -s tests -p 'test_git_steward_runtime.py' -v
 ```
 
-The core suite has 46 Node tests. The Python entry point is one launcher, not
+The core suite has 46 Node tests and the rehearsal adds 13 tests. Its 69
+synthetic scenarios are counted separately; see [the rehearsal guide](../../docs/BUSINESS-REHEARSAL.md).
+The Python entry point is one launcher, not
 another set of independent cases: it fails rather than silently skipping when
 Node >=22.13 or Git is unavailable, and it requires every reported Node test to
 pass with none skipped, cancelled or left as todo. Full-repository regression
@@ -203,7 +206,8 @@ This candidate uses journal v2. A v1 journal is refused with
 Migration requires stopped/fenced old executors, preserved records, authoritative
 current Work rebinding and a non-regressing epoch/anti-rollback plan. Neither an
 empty replacement database nor a code revert proves that migration. The
-business rehearsal and a staged production proposal follow in a later change.
+[work-cell design](../../docs/GIT-STEWARD-AND-WORK-CELLS.md) and business
+rehearsal describe the remaining admission, executor and provider boundaries.
 
 Disable new admissions, retain the journal, request stop, verify/fence active
 workers, reconcile external writes and preserve receipts before reverting the
