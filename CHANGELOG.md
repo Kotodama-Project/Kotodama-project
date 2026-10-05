@@ -22,6 +22,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- 移行元の誤コピー検査をbatch外の追跡ファイルへ広げ、HEAD・index・working treeに残る元blobと非公開元pathを内容を出さずに検出する（#161）。
+
 - Session/conversation ledgerの不正なenum・role型で例外終了せず、既存の理由コードと順序を保持した構造化拒否を返す。レコードshapeを1回の検証内で再利用し、明示bindingはOBSERVEDに限定する。peer message schemaは実send/receiveの`payload_state`を閉じたenumで受理する（[#221](https://github.com/Kotodama-Project/Kotodama-project/issues/221)）。
 - Python個別監査の後続として、保存済みCompose候補の有限な通常file読取りと不正profile IDのreport抑制を追加。checkpoint署名、NONE decisionの個別ref、依存失敗後の独立pending jobのoracleを補強する（[#219](https://github.com/Kotodama-Project/Kotodama-project/issues/219)）。
 - 公開候補validatorで深いJSON・不正な型・非有限数・上限超過を定型の拒否結果に統一。A022、protected handoff、executorの診断へ入力本文を反映せず、handoffは有限の通常ファイル読取りと確実なクローズを検査する。
