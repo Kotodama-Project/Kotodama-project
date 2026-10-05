@@ -26,8 +26,14 @@ SHELLS = {"bash", "sh", "shell", "powershell", "pwsh"}
 def headings(text: str) -> list[tuple[int, str, int]]:
     """Return (level, GitHub anchor, offset), excluding fenced examples."""
     body = LINT.FENCE.sub(lambda match: " " * len(match.group()), text)
-    return [(len(match.group(1)), LINT.github_anchor(match.group(2)), match.start())
-            for match in LINT.HEADING.finditer(body)]
+    result = []
+    seen: dict[str, int] = {}
+    for match in LINT.HEADING.finditer(body):
+        base = LINT.github_anchor(match.group(2))
+        count = seen.get(base, 0)
+        result.append((len(match.group(1)), base if count == 0 else f"{base}-{count}", match.start()))
+        seen[base] = count + 1
+    return result
 
 
 def section(text: str, anchor: str) -> str:
