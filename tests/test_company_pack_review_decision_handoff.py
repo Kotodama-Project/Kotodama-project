@@ -794,7 +794,7 @@ class CompanyPackReviewDecisionHandoffCliTests(unittest.TestCase):
             with mock.patch.object(
                 handoff_builder,
                 "read_limited_bytes",
-                side_effect=[*initial_reads, initial_reads[0] + b" "],
+                side_effect=[*initial_reads, initial_reads[0] + b" ", *initial_reads[1:]],
             ):
                 report = handoff_builder.build_decision_handoff(
                     paths["bundle"],
