@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 必須文脈・訂正・復旧・出典・権限など10の補助KPI候補と旧指標の対応を追加。製品KGIで代用せず、windowや数値targetの採用・実測値の報告は行わない（#52補助指標）。
+
 - KGI-INTENTの候補計算と外部receiptのattesterを追加。版・scope・検証・受入・学習が結ばれた宣言入力だけを数え、重複や無記録取消、境界違反、KPIだけの改善を区別する（#52計算）。
 
 - OUT/KGI/8つのINITを個別の知識Conceptへ束縛し、既定profileで未定義参照を拒否。型付きgraphとMarkdownを接続し、リンクされた重要定義を任意の文脈より優先する（#52定義統合）。
