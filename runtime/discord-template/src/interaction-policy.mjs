@@ -1,10 +1,12 @@
 // One intent's route, not an authorization or semantic interpretation of speech.
 // The admission gate still checks every action in the complete batch.
+export const identifiedOperator=(source,policy)=>source.provider==='discord'&&Boolean(source.actorId)&&
+  source.metadata?.attribution!=='unknown_speaker'&&policy.discord.operators.includes(source.actorId);
+
 export function decideInteraction({source,intent,policy,execute=false,reply=false,draining=false,
   clarification=null,intentIndex=0,pending=false,answered=false,allowClarification=false}) {
   if(intent.kind!=='request')return 'ignore';
-  const identified=source.provider==='discord'&&Boolean(source.actorId)&&
-    source.metadata?.attribution!=='unknown_speaker'&&policy.discord.operators.includes(source.actorId);
+  const identified=identifiedOperator(source,policy);
   if(!identified||!execute||draining||!intent.explicit||intent.action==='none')return 'candidate';
   if(intent.complete)return 'execute';
   const voice=source.metadata?.kind==='voice';
