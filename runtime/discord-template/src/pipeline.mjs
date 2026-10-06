@@ -31,9 +31,10 @@ export class Pipeline {
     for(const s of candidates){if(remaining<=0||result.length>=maxSources-(original?1:0))break;const text=s.text.slice(0,Math.min(12000,remaining));remaining-=text.length;result.unshift({key:s.key,revision:s.revision,text,actorId:s.actorId});}
     return original?[original,...result]:result;
   }
-  async ingest(source,{execute=false,reply=false,analyze=true}={}){
+  async ingest(source,{execute=false,reply=false,analyze=true,onSourceCommitted=()=>{}}={}){
     check(!this.closing,'RUNTIME_STOPPING');if(this.owner.kind==='remote')await this.owner.ingest(source);
     const received=this.store.ingest(source);
+    onSourceCommitted(received);
     if(received.state==='corrected')for(const [id,run] of this.active)if(run.sourceKey===received.key||run.sourceKeys?.has(received.key))run.controller.abort();
     if(received.state==='corrected')for(const [id,bindings]of this.analysisBindings)if(bindings.some(b=>b.key===received.key))this.analysisControllers.get(id)?.abort();
     if(['duplicate','stale'].includes(received.state)||!source.final||source.withdrawn)return received;

@@ -12,6 +12,8 @@ import {Pipeline} from './pipeline.mjs';
 import {createAnalysisAuthorizer} from './analysis-policy.mjs';
 import {DiscordAdapter} from './discord.mjs';
 import {VoiceRoom} from './voice.mjs';
+import {VoiceRotation} from './voice-rotation.mjs';
+import {deliverRotation} from './rotation-delivery.mjs';
 import {voiceCommand} from './voice-control.mjs';
 import {RemoteOwner} from './remote-owner.mjs';
 import {startBridge} from './bridge.mjs';
@@ -37,7 +39,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   const stopDebug=()=>{if(debug)disableDebugLog();};
   let owner,claimed=false;
   try{owner=config.owner.kind==='remote'?new RemoteOwner(config.owner):store;const stale=store.lock();if(stale){check(Boolean(runtimeDomain)&&stale.domain===runtimeDomain,'RUNTIME_RECOVERY_DOMAIN_MISMATCH');check(!pidRunning(stale.pid),'RUNTIME_ALREADY_OWNED');store.replaceStaleHost(stale,ownerId,process.pid,startedAt,runtimeDomain);}else store.claimHost(ownerId,process.pid,startedAt,runtimeDomain??null);claimed=true;store.reconcileInterrupted();}catch(e){if(claimed)store.releaseHost(ownerId);store.close();stopDebug();throw e;}
-  let discord,voice,archive,archiveTimer,bridge,control,policyTimer,policyWork,dots,closing=false,closePromise,controlClosed,shutdownKeepAlive;
+  let discord,voice,rotation,archive,archiveTimer,bridge,control,policyTimer,policyWork,dots,closing=false,closePromise,controlClosed,shutdownKeepAlive;
   const controlOperations=new Set(),controlReads=new Set();
   const accessMonitor=new AccessMonitor();
   const stopControl=()=>{
@@ -77,6 +79,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
       archive=new ArchiveRuntime({config:archivePolicy(),policy:archivePolicy,store,analyzer:selectedAnalyzer,authorize:b=>b.readers.every(id=>current.discord.operators.includes(id))&&b.speakerIds.every(id=>voice.allowed(id)),onUsage:usage=>store.event('archive.model_usage',usage),onError:code=>{if(code==='ARCHIVE_SCOPE_REVOKED'&&voice.connectionReady())return;failures++;retryAt=Date.now()+60000;log({event:'archive',code,failures});}});
       voice.archive=archive;archiveTimer=setInterval(()=>{void archive.processPending().catch(()=>{if(voice.connectionReady())return;failures++;retryAt=Date.now()+60000;log({event:'archive',code:'ARCHIVE_PROCESSING_FAILED',failures});});},10000);archiveTimer.unref();
     }
+    if(voice){rotation=new VoiceRotation({store,config,policy:()=>current,deliver:batch=>deliverRotation(discord,batch,{voice,isActive:()=>!closing&&!rotation.stopped,readConfig:async()=>{check(!closing,'RUNTIME_STOPPING');current=await loadConfig(filename);return current;}}),onError:code=>log({event:'voice_rotation',code})});voice.rotation=rotation;rotation.start();}
     voice?.control.start();
     const secret=randomBytes(32).toString('hex');const secretFile=path.join(config.dataDir,'control.secret');await atomicText(secretFile,secret);
     const handleControl=async(req,res)=>{
@@ -161,7 +164,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     const stopped=stopControl();
     closePromise=(async()=>{
       // Keep the store and host lock if a dispatched import has an uncertain drain.
-      await bridge?.drain();await discord?.close();await archive?.close();await pipeline.close();
+      await bridge?.drain();await rotation?.close();await discord?.close();await archive?.close();await pipeline.close();
       await Promise.allSettled([...controlOperations]);await stopped;await accessMonitor.drain({pending:policyWork?[policyWork]:[]});if(owner.kind==='remote')await owner.close();
       store.releaseHost(ownerId);store.close();clearInterval(shutdownKeepAlive);log({event:'runtime_stopped',ownerId});stopDebug();
     })().catch(error=>{closePromise=null;if(errorCode(error).endsWith('_DRAIN_UNCERTAIN'))shutdownKeepAlive??=setInterval(()=>{},1000);throw error;});

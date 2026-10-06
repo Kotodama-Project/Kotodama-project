@@ -7,10 +7,10 @@ import {VoiceProvider,pcm48StereoTo24Mono,pcm24MonoTo48Stereo,pcm48StereoToMono}
 import {LocalAsr} from './local-asr.mjs';
 import {TranscriptTurns} from './transcripts.mjs';
 import {voiceNotice} from './consent.mjs';
-import {check,uid,errorCode} from './common.mjs';
+import {check,uid,errorCode,sourceIdentity} from './common.mjs';
 import {VoiceControl} from './voice-control.mjs';
 
-const voiceBinding=config=>JSON.stringify({installation:config.installation,agentBinding:config.agentBinding,applicationId:config.discord.applicationId,workspace:config.worker.workspace,owner:config.owner,storeAudio:config.voice.storeAudio,archive:config.archive,naturalConversation:config.voice.naturalConversation,conversationStart:config.voice.conversationStart,transcriptSource:config.voice.transcriptSource,assistModel:config.voice.assistModel,minutesModel:config.voice.minutesModel,localAsr:config.voice.transcriptSource==='local'?config.voice.localAsr:null});
+const voiceBinding=config=>JSON.stringify({installation:config.installation,agentBinding:config.agentBinding,applicationId:config.discord.applicationId,workspace:config.worker.workspace,owner:config.owner,storeAudio:config.voice.storeAudio,rotation:config.voice.rotation,archive:config.archive,naturalConversation:config.voice.naturalConversation,conversationStart:config.voice.conversationStart,transcriptSource:config.voice.transcriptSource,assistModel:config.voice.assistModel,minutesModel:config.voice.minutesModel,localAsr:config.voice.transcriptSource==='local'?config.voice.localAsr:null});
 function audible(pcm){for(let i=0;i<pcm.length;i+=2)if(Math.abs(pcm.readInt16LE(i))>96)return true;return false;}
 // A single rejected Live command leaves the session usable. Only consecutive
 // rejections without any answer audio in between close the conversation.
@@ -187,20 +187,23 @@ export class VoiceRoom {
       if(called&&session)session.conversationActive=true;const active=Boolean(session&&this.current(session)&&session.conversationActive&&identified);
       this.store.event('voice.local_turn',{voiceSession:state.id,liveSession:session?.id??null,wakeDetected:called,eligible:eligible(),liveActive:Boolean(session?.provider.active),conversationActive:active,textChars:turn.text.length});
       const source={provider:'discord',guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceId:turn.id,actorId:identified?state.actor:null,revision:++state.revision,text:turn.text,final:true,readers,metadata:{kind:'voice',sessionId:session?.id??state.id,startMs:turn.startMs,endMs:turn.endMs,createdAt:new Date().toISOString(),mode:this.mode,voiceEpoch:state.epoch,privacyBasis:state.privacyBasis==='owner_managed'?'owner_managed_scope':'participant_opt_in_record',privacyNoticeId:state.privacyNoticeId,attribution:identified?'discord_input_track':'unknown_speaker',inputAccountId:state.actor,finality:'local_asr_completed',transcriptOrigin:'local_asr',nativeConversation:Boolean(cfg.voice.naturalConversation),archiveSessionRefs:turn.archiveSessionRefs??[],conversationActive:active,transcriptCorrection}};
-      const result=await this.pipeline.ingest(source,{execute:active&&eligible()&&cfg.discord.operators.includes(state.actor),reply:active&&eligible()&&this.mode==='assist'&&!cfg.voice.naturalConversation,analyze:this.mode==='minutes'||active&&eligible()});
+      const recordRotation=()=>{if(turn.rotationToken){const key=sourceIdentity(source),saved=this.store.sourceInternal(key);this.rotation?.complete(turn.rotationToken,saved?.revision===source.revision?{key,revision:source.revision}:null);}};
+      let result;
+      try{result=await this.pipeline.ingest(source,{execute:active&&eligible()&&cfg.discord.operators.includes(state.actor),reply:active&&eligible()&&this.mode==='assist'&&!cfg.voice.naturalConversation,analyze:this.mode==='minutes'||active&&eligible(),...(turn.rotationToken?{onSourceCommitted:recordRotation}:{})});}
+      finally{recordRotation();}
       if(startError&&!startError.voiceProviderReported)this.onError(errorCode(startError));
       return result;
     }).catch(e=>{if(!e.voiceProviderReported)this.onError(errorCode(e));});return state.chain;
   }
   async captureLocal(actor){
     if(this.localCaptures.has(actor))return;const connection=this.connection,state=this.localState(actor);let live=this.sessions.get(actor);const admission=new SpeechAdmission();let starting=false;if(live&&(!this.current(live)||live.mode!=='assist'))return;
-    const decoder=new OpusScript(48000,2,OpusScript.Application.AUDIO),stream=connection.receiver.subscribe(actor,{end:{behavior:EndBehaviorType.AfterSilence,duration:this.config.voice.vadSilenceMs}});const chunks=[],archiveRefs=new Set();let bytes=0,finished=false,rejected=false,dropReason=null,startMs=state.ms;const reject=reason=>{rejected=true;dropReason??=reason;};const capture={stream,stop:({seal=false}={})=>{rejected=!seal;if(!seal)dropReason??='stopped';stream.destroy();if(seal)finish();}},limit=this.policy().voice.localAsr.maxUtteranceSeconds*48000;this.localCaptures.set(actor,capture);
+    const decoder=new OpusScript(48000,2,OpusScript.Application.AUDIO),stream=connection.receiver.subscribe(actor,{end:{behavior:EndBehaviorType.AfterSilence,duration:this.config.voice.vadSilenceMs}});const chunks=[],archiveRefs=new Set();let bytes=0,finished=false,rejected=false,dropReason=null,startMs=state.ms;const reject=reason=>{rejected=true;dropReason??=reason;};const capture={stream,stop:({seal=false}={})=>{rejected=!seal;if(!seal)dropReason??='stopped';stream.destroy();if(seal)finish();}},limit=this.policy().voice.localAsr.maxUtteranceSeconds*48000;this.localCaptures.set(actor,capture);const rotationToken=this.rotation?.begin(actor);
     const finish=()=>{
       if(finished)return;finished=true;if(this.localCaptures.get(actor)===capture)this.localCaptures.delete(actor);decoder.delete();
-      const audioMs=Math.round(bytes/48);
-      if(rejected||bytes<4800){if(rejected||bytes>0)this.diagnose('voice.local_capture_dropped',{voiceSession:state.id,reason:rejected?dropReason:'too_short',audioMs});return;}
-      const pcm=Buffer.concat(chunks,bytes),turn={id:uid('utterance'),startMs,endMs:state.ms,archiveSessionRefs:[...archiveRefs]};
-      const work=this.transcribeLocal(pcm).then(text=>this.queueLocalTurn(state,{...turn,text})).catch(e=>{const code=errorCode(e);this.diagnose('voice.local_capture_dropped',{voiceSession:state.id,reason:code==='LOCAL_ASR_BUSY'?'asr_busy':'asr_failed',code,audioMs});this.onError(code);});this.draining.add(work);work.finally(()=>this.draining.delete(work));
+      this.rotation?.end(rotationToken);const audioMs=Math.round(bytes/48);
+      if(rejected||bytes<4800){this.rotation?.complete(rotationToken,null);if(rejected||bytes>0)this.diagnose('voice.local_capture_dropped',{voiceSession:state.id,reason:rejected?dropReason:'too_short',audioMs});return;}
+      const pcm=Buffer.concat(chunks,bytes),turn={id:uid('utterance'),startMs,endMs:state.ms,archiveSessionRefs:[...archiveRefs],rotationToken};
+      const work=this.transcribeLocal(pcm).then(text=>this.queueLocalTurn(state,{...turn,text})).catch(e=>{const code=errorCode(e);this.diagnose('voice.local_capture_dropped',{voiceSession:state.id,reason:code==='LOCAL_ASR_BUSY'?'asr_busy':'asr_failed',code,audioMs});this.onError(code);});this.draining.add(work);void work.finally(()=>{this.rotation?.complete(rotationToken,null);this.draining.delete(work);}).catch(e=>this.onError(errorCode(e)));
     };
     stream.on('data',packet=>{
       try{if(this.connection!==connection||this.paused||!this.allowed(actor)){reject('not_current');stream.destroy();return;}const decoded=Buffer.from(decoder.decode(packet));if(this.archive&&!this.archiveFailure){try{const receipt=this.archive.append(actor,pcm48StereoToMono(decoded),Date.now());if(receipt?.sessionId)archiveRefs.add(receipt.sessionId);}catch{this.archiveFailure=true;this.onError('ARCHIVE_CAPTURE_FAILED');}}const pcm=pcm48StereoTo24Mono(decoded);if(bytes+pcm.length>limit){reject('utterance_limit');this.onError('VOICE_UTTERANCE_LIMIT');stream.destroy();return;}chunks.push(pcm);bytes+=pcm.length;state.ms+=pcm.length/48;
