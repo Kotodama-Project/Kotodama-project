@@ -73,7 +73,7 @@ class CloudflareCandidateCIContractTests(unittest.TestCase):
             gate: "python -S -B tools/check_tracked_secret_hygiene.py",
             install: "python -m pip install --require-hashes -r requirements-ci.txt",
             "Run focused candidate tests": "python -m unittest tests.test_cloudflare_candidate_ci tests.test_cloudflare_edge_candidate tests.test_cloudflare_os_candidate tests.test_cloudflare_os_local_runtime_evaluation tests.test_cloudflare_os_security_overlay tests.test_verify_wrangler_artifact -v",
-            "Run Worker and local Gateway review contracts": "node --test tests/node/test_cloudflare_voice_review.mjs tests/node/test_local_review_gateway.mjs tests/node/test_information_access.mjs tests/node/test_codex_brief_bridge.mjs",
+            "Run Worker and local Gateway review contracts": "node --test tests/node/test_cloudflare_voice_review.mjs tests/node/test_local_review_gateway.mjs tests/node/test_information_access.mjs tests/node/test_codex_brief_bridge.mjs tests/node/test_local_model_proxy.mjs tests/node/test_document_block_contract.mjs",
         }
         for name, expected in expected_commands.items():
             self.assertEqual(shlex.split(by_name[name]["run"]), shlex.split(expected))
