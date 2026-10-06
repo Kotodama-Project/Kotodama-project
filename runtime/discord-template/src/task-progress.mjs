@@ -1,6 +1,6 @@
 import {check,digest,errorCode} from './common.mjs';
 
-export const progressTargetKey=task=>digest(['quiet-task-progress-target',task.id,task.revision]);
+export const progressTargetKey=task=>digest(['quiet-task-progress-target',task.id,task.actor]);
 const states=new Set(['queued','running','needs_review','failed','paused','stopping','cancelled','uncertain']);
 
 /** A delivery projection over existing local Task events, never another Task owner. */
@@ -13,7 +13,15 @@ export class QuietTaskProgress {
   remember(task,messageId){
     if(!this.enabled())return;
     check(/^\d{5,24}$/.test(messageId),'PROGRESS_MESSAGE_ID_INVALID');
-    const key=progressTargetKey(task);if(this.store.claimDelivery(key,{id:task.id,revision:task.revision,actor:task.actor}))this.store.delivered(key,messageId);
+    this.store.transaction(()=>{
+      const key=progressTargetKey(task);
+      if(this.store.claimDelivery(key,{id:task.id,actor:task.actor})){
+        this.store.delivered(key,messageId);
+        // The worker may have advanced while sending the start DM. The next
+        // bounded poll reads its current state, including stop/resume revisions.
+        this.store.event('task.progress_target_ready',{revision:task.revision},task.id);
+      }
+    });
   }
   claim(task){
     if(!this.enabled())return false;

@@ -10,7 +10,7 @@ import {DiscordAdapter} from '../src/discord.mjs';
 import {QuietTaskProgress} from '../src/task-progress.mjs';
 import {Pipeline} from '../src/pipeline.mjs';
 
-async function fixture(t,{enabled=true,otherReader=false}={}){
+async function fixture(t,{enabled=true,otherReader=false,acknowledge=true}={}){
   const root=await mkdtemp(path.join(os.tmpdir(),'quiet-progress-')),config=exampleConfig({workspace:root});config.dataDir=root;config.discord.voiceChannelId=config.discord.resultChannelId;config.notifications.taskProgress.enabled=enabled;
   const store=new Store(root),actor=config.discord.operators[0],other='100000000000000099';if(otherReader)config.voice.participantIds.push(other);
   const source={provider:'discord',guildId:config.discord.guildId,channelId:config.discord.voiceChannelId,sourceId:'synthetic-source',actorId:actor,readers:otherReader?[actor,other]:[actor],revision:1,final:true,text:'SYNTHETIC_PRIVATE_REQUEST',metadata:{kind:'voice',voiceEpoch:7}};
@@ -23,7 +23,7 @@ async function fixture(t,{enabled=true,otherReader=false}={}){
   const user={send:async payload=>{sent.push(payload);return {id:'200000000000000001'};},createDM:async()=>dm};
   adapter.member=async()=>({});adapter.canRead=async()=>true;adapter.client.channels.fetch=async id=>({id});adapter.client.users.fetch=async()=>user;adapter.progress.clock=()=>now;
   t.after(async()=>{await adapter.close();store.close();assert(inside(os.tmpdir(),root)&&path.basename(root).startsWith('quiet-progress-'));await rm(root,{recursive:true,force:true});});
-  await adapter.acknowledgeTask(task);sent.length=0;
+  if(acknowledge)await adapter.acknowledgeTask(task);sent.length=0;
   return {root,config,store,actor,source:s,task,adapter,pipeline,edits,sent,errors,dm,user,advance:n=>{now+=n;},depart:()=>{active=false;members=[];},setMembers:value=>{members=value;},start:()=>store.claim(task.id,task.revision),tick:()=>adapter.progress.tick()};
 }
 
@@ -38,6 +38,20 @@ test('only the existing start DM is edited, once per current state; no request t
   const f=await fixture(t);f.start();await f.tick();assert.equal(f.edits.length,1);assert.equal(f.edits[0].id,'200000000000000001');assert.match(f.edits[0].content,/確認時点/);assert(!f.edits[0].content.includes('SYNTHETIC_PRIVATE_REQUEST'));assert.equal(f.sent.length,0);
   f.advance(30000);f.store.event('task.started',{},f.task.id);await f.tick();assert.equal(f.edits.length,1);
   f.store.finish(f.task.id,1,{state:'needs_review',summary:'SYNTHETIC_RESULT',artifacts:[]});await f.tick();assert.equal(f.edits.length,2);assert.match(f.edits[1].content,/確認待ち/);assert(!f.edits[1].content.includes('SYNTHETIC_RESULT'));assert.equal(f.store.taskInternal(f.task.id).state,'needs_review');
+});
+
+test('a delayed start DM triggers a fresh current-state check after earlier events were consumed',async t=>{
+  const f=await fixture(t,{acknowledge:false});let release,entered;const sending=new Promise(r=>{entered=r;});
+  f.user.send=async()=>{entered();return new Promise(r=>{release=()=>r({id:'200000000000000001'});});};
+  const ack=f.adapter.acknowledgeTask(f.task);await sending;f.start();await f.tick();assert.equal(f.edits.length,0);
+  release();await ack;await f.tick();assert.equal(f.edits.length,1);assert.match(f.edits[0].content,/実行中/);
+});
+
+test('stop, confirmed cancellation and resume keep the existing DM across Task revisions',async t=>{
+  const f=await fixture(t);f.start();await f.tick();f.advance(30000);f.store.cancel(f.task.id,f.actor);await f.tick();assert.equal(f.edits.length,2);assert.match(f.edits[1].content,/停止処理中/);
+  f.advance(30000);f.store.confirmStop(f.task.id,f.actor,true);await f.tick();assert.equal(f.edits.length,3);assert.match(f.edits[2].content,/停止済み/);
+  f.advance(30000);const resumed=f.store.resume(f.task.id,f.actor);f.store.claim(resumed.id,resumed.revision);await f.tick();assert.equal(f.edits.length,4);assert.match(f.edits[3].content,/実行中/);assert.match(f.edits[3].content,/版: 3/);
+  assert(f.edits.every(item=>item.id==='200000000000000001'));assert.equal(f.sent.length,0);
 });
 
 test('spacing, task-wide cap and deduplication survive a restarted progress reader',async t=>{
