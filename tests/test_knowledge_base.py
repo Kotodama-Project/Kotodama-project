@@ -73,6 +73,16 @@ class KnowledgeBaseTests(unittest.TestCase):
             edge_keys,
         )
 
+    def test_source_bindings_use_portable_case_sensitive_path_order(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            paths = [root / "a.md", root / "B.md"]
+            for path in paths:
+                path.write_text("synthetic bound input\n", encoding="utf-8")
+            bindings = KB._capture_inputs(root, paths)
+            self.assertEqual([name for name, _ in bindings], ["B.md", "a.md"])
+            self.assertEqual(bindings, KB._capture_inputs(root, reversed(paths)))
+
     def test_query_is_transparent_and_source_backed(self) -> None:
         results = KB.query_bundle(self.bundle, "KGI", limit=3)
         self.assertTrue(results)
