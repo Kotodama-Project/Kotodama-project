@@ -1,5 +1,11 @@
 # Kotodama knowledge update log
 
+## 2026-10-06
+
+* **Bounded source pins**: Optional local source digests are checked against the same captured bytes returned by the bundle; changed, missing or unavailable pins refuse retrieval under the producer profile.
+* **Context**: Stale concepts cannot re-enter through links. Required critical/governance context precedes optional content, and an insufficient budget remains unresolved.
+* **Catch-up**: Added a source-backed procedure pointing to current project documents. The obsolete dated GitHub observations from #59 are not reintroduced as current state; delivered-input integration remains a separate step in #130.
+
 ## 2026-10-04
 
 * **Re-land**: Reused the public #48 foundation and compatible #61 verdict/readiness repair on current main, without the old Cloudflare base, excluded policy snapshots or dated architecture proposal.

@@ -11,6 +11,7 @@ This bundle is a **public-safe, rebuildable knowledge projection** for humans an
 * [Project goal](project/goal.md) - The source-backed outcome this project is trying to advance.
 * [Current state](project/current-state.md) - What this branch establishes and what remains unproved.
 * [Success model](project/success-model.md) - Goal, KGI, KPI and candidate knowledge-quality measurements without treating proxies as outcomes.
+* [現在の候補と残る作業を確認する](project/catchup.md) - 出典の版・未統合・未確認を保持する再開手順。
 
 ## Governance
 
