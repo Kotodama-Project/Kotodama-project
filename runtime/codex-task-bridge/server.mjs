@@ -14,8 +14,9 @@ const closed = (value, keys) => value && typeof value === "object" && !Array.isA
   && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 const INPUT_BINDING_KEYS = ["input_sha256", "stdin_sha256", "stdin_bytes", "schema_sha256"];
 function validateInputBinding(value) {
-  if (!closed(value, INPUT_BINDING_KEYS) || !hex.test(value.input_sha256) || !hex.test(value.stdin_sha256)
-    || !hex.test(value.schema_sha256) || !Number.isSafeInteger(value.stdin_bytes)
+  if (!closed(value, INPUT_BINDING_KEYS)
+    || ["input_sha256", "stdin_sha256", "schema_sha256"].some(key => typeof value[key] !== "string" || !hex.test(value[key]))
+    || !Number.isSafeInteger(value.stdin_bytes)
     || value.stdin_bytes < 1 || value.stdin_bytes > 131072) throw new Error("job_input_binding_denied");
   return Object.fromEntries(INPUT_BINDING_KEYS.map((key) => [key, value[key]]));
 }

@@ -107,11 +107,12 @@ test("malformed or mismatched saved input binding refuses restart without rewrit
     await call(bridge, config, "/v1/briefs", { body: { request_id: randomUUID(), source_revision: 1, binding_sha256: grantDigest(config.grant) } });
     await new Promise(setImmediate); await bridge.close(); bridge = null;
     const path = join(config.stateRoot, "invocations.json"), original = JSON.parse(readFileSync(path));
-    for (const mode of ["missing", "extra", "invalid-size", "result-mismatch"]) {
+    for (const mode of ["missing", "extra", "invalid-size", "array-digest", "result-mismatch"]) {
       const value = structuredClone(original), binding = value.jobs[0].session.input_binding;
       if (mode === "missing") delete binding.schema_sha256;
       if (mode === "extra") binding.unknown = true;
       if (mode === "invalid-size") binding.stdin_bytes = 1.5;
+      if (mode === "array-digest") { binding.stdin_sha256 = [binding.stdin_sha256]; value.jobs[0].state = "failed"; value.jobs[0].result = null; }
       if (mode === "result-mismatch") value.jobs[0].result.stdin_sha256 = "c".repeat(64);
       const bytes = Buffer.from(JSON.stringify(value)); writeFileSync(path, bytes);
       await assert.rejects(startBriefBridge({ ...config, seeds: undefined }), /job_input_binding_denied/);
