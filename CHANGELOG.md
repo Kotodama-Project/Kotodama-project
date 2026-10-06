@@ -34,6 +34,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 - Discordの複合依頼を現行grantで全件検査し、全Taskの再認可が完了するまで実行・受付通知を始めない。失敗したqueued revisionを比較付きで取消し、不明な後始末は新しい受付を止める（#146前半）。
 
+- 要件Gadgetの再確認・変更要求より古い応答が新しい状態を上書きする問題を修正。未確定の候補を表示せず、短い画面でも長文を折り返す。Chromiumの304バリエーションと12職務のlocalhost journeyを、hash固定の専用環境で検査する（#127、元#66）。
 - Windowsでintegration contractの正規Pathを誤拒否する不具合と、OSごとのPath並び順により知識のsource digestが変わる不具合を修正。文字列の危険な区切りは引き続き拒否する。検証fixtureのSQLite接続を明示的に閉じ、Git index入力のLFと子プロセスのUTF-8 decodeをOS共通にして既存の拒否・終了確認を保持する。
 - Remote ownerのtimeout回帰試験を実HTTPの受信観測へ同期させ、遅いrunnerで受信前に80msが経過する誤失敗を修正。実timerによる期限と、書込結果不明・再送禁止・未終了処理の枠保持の確認は維持する。
 
