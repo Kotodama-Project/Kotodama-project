@@ -21,6 +21,8 @@
     "@discordjs/voice": "0.19.2",
     "@modelcontextprotocol/sdk": "1.31.0",
     "@snazzah/davey": "0.1.12",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "csv-parse": "7.0.3",
     "discord.js": "14.27.0",
     "openai": "7.23.0",
