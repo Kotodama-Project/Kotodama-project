@@ -20,7 +20,12 @@
 
 `input_sha256`はcallerの文字列、`stdin_sha256`は固定指示とwrapperを含めて`stdin.end()`へ渡すbytes。準備観測は「準備済み」で、providerが全bytesを消費した証明ではない。sessionは開始、CLI完了は当該応答の完了であり、会社の仕事の完了ではない。
 
-既存Voice bridgeは成功結果の追加bindingを保存できるが、新callbackの失敗時receiptやKB admissionをHTTP経路へ接続したわけではない。必要なcallerは既存のoperation/evidence sinkへ同期保存し、第二のTask台帳を作らない。
+既存brief bridgeは開始callbackのbindingをjournal v3の`session.input_binding`へ同期保存する。
+失敗・中断・再起動の後も同じ認可付きsession endpointで読み戻せる。成功結果のbindingが
+開始時と違えば拒否する。v1/v2は元bytesを版別のexclusive backupへ保全して移行し、
+過去に観測していないbindingは`null`のままにする。これはKB admissionをHTTP経路へ
+接続したものではない。開始前の失敗にはsessionを捏造せず、必要なcallerがprepare callbackを
+既存のoperation/evidence sinkへ保存する。第二のTask台帳は作らない。
 
 expected digestを入力自身から受け取るだけでは真正性を得られない。現在のKB/Work ownerがsourceを照合し、取消・変化・期限を推論直前と結果利用前にも確認する必要がある。helperはファイルやACLを開かず、渡された現在pinと比較するだけである。
 
