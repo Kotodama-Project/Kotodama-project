@@ -12,6 +12,7 @@ import { syntheticCatalog } from "./synthetic-fixture.mjs";
 import { canAccess, canHumanReview, validateAccessPolicy, validatePrincipals } from "./access-policy.mjs";
 
 const MAX_STORE_BYTES = 4_194_304;
+const MAX_PINNED_FILE_BYTES = 268_435_456;
 const MAX_RECORDS = 64;
 const MAX_REVIEW_BYTES = 16_384;
 const STORE_SCHEMA = "kotodama/local-voice-review-candidates/v2";
@@ -113,7 +114,7 @@ function checkedRoot(value) {
 }
 
 export function readPinnedFile(path, denied, maxBytes = MAX_STORE_BYTES) {
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_STORE_BYTES) throw new Error(denied);
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_PINNED_FILE_BYTES) throw new Error(denied);
   // Reject existing links before opening, including platforms without O_NOFOLLOW.
   try {
     readlinkSync(path);
@@ -128,7 +129,7 @@ export function readPinnedFile(path, denied, maxBytes = MAX_STORE_BYTES) {
     const named = lstatSync(path);
     if (!opened.isFile() || opened.nlink !== 1 || opened.size > maxBytes
       || !named.isFile() || named.isSymbolicLink() || named.dev !== opened.dev || named.ino !== opened.ino) throw new Error(denied);
-    const buffer = Buffer.alloc(maxBytes + 1);
+    const buffer = Buffer.alloc(Math.min(maxBytes, opened.size) + 1);
     let length = 0;
     while (length < buffer.length) {
       const count = readSync(file, buffer, length, buffer.length - length, null);
