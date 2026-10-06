@@ -1,5 +1,5 @@
 import path from 'node:path';
-import {lstat,opendir} from 'node:fs/promises';
+import {lstat,opendir,realpath} from 'node:fs/promises';
 import {DatabaseSync} from 'node:sqlite';
 import {check,digest,inside} from './common.mjs';
 import {readArtifact} from './worker.mjs';
@@ -24,7 +24,11 @@ export async function retentionLocalPath(value,{directory=false}={}){
     if(i<parts.length-1||directory)check(info.isDirectory(),'RETENTION_DIRECTORY_REQUIRED');
     else check(info.isFile()&&info.nlink===1,'RETENTION_REGULAR_FILE_REQUIRED');
   }
-  return {path:absolute,identity:identity(info)};
+  // The archive sink stores realpath (including Windows 8.3/case expansion).
+  // Canonicalize only after ancestor checks, then pin the same file identity.
+  const resolved=await realpath(absolute),canonical=await lstat(resolved);
+  check(same(identity(info),identity(canonical))&&!canonical.isSymbolicLink(),'RETENTION_PATH_CHANGED');
+  return {path:resolved,identity:identity(canonical)};
 }
 
 export async function readRetentionInput(filename,maxBytes=256*1024){

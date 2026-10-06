@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,rm,unlink,writeFile,readFile,link,symlink} from 'node:fs/promises';
+import {mkdtemp,mkdir,rm,unlink,writeFile,readFile,link,symlink,realpath} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {ArchiveAdapter} from '../src/archive-adapter.mjs';
@@ -14,9 +14,9 @@ import {runCommand} from '../src/command.mjs';
 import {fileURLToPath} from 'node:url';
 
 async function fixture(t){
-  const root=await mkdtemp(path.join(os.tmpdir(),'retention-readback-')),dataDir=path.join(root,'data'),archiveRoot=path.join(root,'recordings');
+  const root=await realpath(await mkdtemp(path.join(os.tmpdir(),'retention-readback-'))),tempRoot=await realpath(os.tmpdir()),dataDir=path.join(root,'data'),archiveRoot=path.join(root,'recordings');
   await mkdir(archiveRoot);const store=new Store(dataDir);let adapter;
-  t.after(async()=>{adapter?.close();store.close();assert(inside(os.tmpdir(),root)&&path.basename(root).startsWith('retention-readback-'));await rm(root,{recursive:true,force:true});});
+  t.after(async()=>{adapter?.close();store.close();assert(inside(tempRoot,root)&&path.basename(root).startsWith('retention-readback-'));await rm(root,{recursive:true,force:true});});
   const config=exampleConfig({workspace:root}),actor=config.discord.operators[0];config.dataDir=dataDir;config.discord.voiceChannelId=config.discord.resultChannelId;config.agentBinding={agentId:'synthetic-agent',vmId:'synthetic-vm'};
   config.archive={enabled:false,archiveRoot,journalPath:path.join(dataDir,'archive.sqlite'),retentionPolicyRef:'ref/policy/synthetic',sourceRef:'ref/source/synthetic',actorId:actor,readers:[actor],whisperEndpoint:'http://127.0.0.1:1/transcribe'};
   const started=Date.parse('2026-06-01T00:00:00Z'),endFrame=48049;
@@ -90,6 +90,11 @@ test('hardlinks, subdirectories and network paths are refused',async t=>{
 
 test('symbolic ancestor and input file are refused',{skip:process.platform==='win32'?'Requires Windows symlink privilege; Linux CI covers it.':false},async t=>{
   const f=await fixture(t);const alias=path.join(f.root,'linked');await symlink(f.dir,alias);await assert.rejects(readRetentionInput(path.join(alias,'metadata.json')),/RETENTION_LINK_REFUSED/);
+});
+
+test('Windows case aliases bind the same checked canonical archive directory',{skip:process.platform!=='win32'},async t=>{
+  const f=await fixture(t);await f.deleteFixtureAudio();f.config.archive.archiveRoot=f.config.archive.archiveRoot.toUpperCase();f.current=structuredClone(f.config);
+  assert.equal((await f.verify()).evidence,'LOCAL_READBACK_ONLY');
 });
 
 test('same receipt ref with changed receipt content conflicts after a fresh successful readback',async t=>{
