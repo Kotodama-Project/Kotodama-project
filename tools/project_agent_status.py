@@ -20,8 +20,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = "governance/agent-registry.json"
 CONTRACT = "governance/openmaus-integration.json"
-# The public skill is added in the next diagnostic integration slice.
-BUNDLE = ("tools/project_agent_status.py", CONTRACT)
+SKILL = ".agents/skills/kotodama-agent-status/SKILL.md"
+BUNDLE = ("tools/project_agent_status.py", CONTRACT, SKILL)
 MAX_BYTES = 1_048_576
 MAX_ITEMS = 1000
 MAX_NODES = 50_000
