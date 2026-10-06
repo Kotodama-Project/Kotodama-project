@@ -59,6 +59,13 @@ Still separate and not claimed here: a second person's clean installation,
 billing, configured production Docker daemon/image, and Human GO. Existing live
 receipts apply only to their own revisions and unchanged behaviors.
 
+## 不足情報の確認（#145）
+
+Interaction Policyとclarify_onceを実装し、合成のStore/Pipeline/Discord送信先で、同じ
+話者・部屋の最大一回、並行予約、再起動、期限、誤った話者・権限取消・出典撤回を検査します。
+質問の案内は元チャンネルへの回答を明示し、受信できないDM返信を誘導しません。
+実Discord・実VC・実APIでの質問の品質とPB-G10は未受入です。
+
 ## 履歴増加時の保存・検索
 
 `tests/store-scale.test.mjs` は100チャンネル・12,000出典・2,400 Taskの合成履歴で、

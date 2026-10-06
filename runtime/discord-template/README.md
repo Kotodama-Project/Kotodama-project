@@ -102,6 +102,14 @@ BotはDiscord側でも対象サーバーへ導入してください。Message Co
 
 成果通知は依頼者へのDM、コマンド結果は依頼者だけに見える返信です。配送できなかった場合は重ねて自動送信せず、`result`から確認できます。成果は確認待ちとして返し、利用者の採用を代行しません。
 
+明示した依頼に対象・範囲・条件が足りないときは、一つだけ確認します。
+テキストの確認は本人へのDMに届き、答える場所は元のチャンネルです。案内どおりBotへ
+メンションして返してください。DMへの返信は受信しません。音声ではassistの既存の返答経路を使い、
+minutesや自然会話への割込み、声からDMへの切替は行いません。
+`interaction.clarification`は既定`once`、無効化は`off`です。確認の窓は既定600秒
+（`clarificationWindowSeconds`: 60〜3600）で、まだ曖昧なら候補に残し、重ねて尋ねません。
+回答後も新しい権限や承認は作りません。詳細は[Interaction Policy](docs/INTERACTION-POLICY.md)にあります。
+
 音声会話はOpenAIの **GPT-Live 1（`gpt-live-1`）／Live API** をDiscordの音声接続につなぎます。「Discord Live API」という別のモデルAPIではありません。
 
 以下の確定テキスト待ち・commentary返却は `naturalConversation: false` の方式です。`true` ではLive内のResponses委譲で会話し、ローカルASRの完了を待ちません。

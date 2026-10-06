@@ -222,11 +222,13 @@ export class DiscordAdapter {
     if(!this.store.claimDelivery(key,text))return;
     try{const user=await this.client.users.fetch(task.actor);const message=await user.send({content:shortText(text),files,allowedMentions:{parse:[]}});this.store.delivered(key,message.id);}catch{this.onError('RESULT_DELIVERY_UNKNOWN');}
   }
-  async reply({source,text,contextSources=[]}){
+  async reply({source,text,contextSources=[],clarification=false}){
+    const assertClarification=()=>{if(!clarification)return;const policy=this.policy();check(policy.discord.operators.includes(source.actorId)&&policy.interaction.clarification==='once','CLARIFICATION_SCOPE_CHANGED');for(const b of contextSources){const latest=this.store.source(b.key,source.actorId);check(latest.revision===b.revision,'CONTEXT_CHANGED');}};
+    assertClarification();
     for(const b of contextSources){const s=this.store.source(b.key,source.actorId);check(s.revision===b.revision,'CONTEXT_CHANGED');}if(source.metadata?.kind==='voice'){
-      await this.voice?.speak(text,{epoch:source.metadata.voiceEpoch,actorId:source.actorId,bindings:contextSources,authorizeAudience:async actors=>{for(const actor of actors){const channels=new Set();for(const b of contextSources){const s=this.store.source(b.key,actor);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord')channels.add(s.channelId);}for(const channelId of channels){const channel=await this.client.channels.fetch(channelId);check(await this.canRead(channel,actor),'SOURCE_ACCESS_DENIED');}}return actors;}});return;}
+      await this.voice?.speak(text,{epoch:source.metadata.voiceEpoch,actorId:source.actorId,bindings:contextSources,authorizeAudience:async actors=>{assertClarification();for(const actor of actors){const channels=new Set();for(const b of contextSources){const s=this.store.source(b.key,actor);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord')channels.add(s.channelId);}for(const channelId of channels){const channel=await this.client.channels.fetch(channelId);check(await this.canRead(channel,actor),'SOURCE_ACCESS_DENIED');}}return actors;}});return;}
     await this.member(source.actorId);
-    const channel=await this.client.channels.fetch(source.channelId);check(await this.canRead(channel,source.actorId),'SOURCE_ACCESS_DENIED');const user=await this.client.users.fetch(source.actorId);await user.send({content:shortText(text),allowedMentions:{parse:[]}});
+    const channel=await this.client.channels.fetch(source.channelId);check(await this.canRead(channel,source.actorId),'SOURCE_ACCESS_DENIED');const user=await this.client.users.fetch(source.actorId);assertClarification();if(clarification)text+=`\n回答は元の <#${source.channelId}> で <@${this.client.user.id}> にメンションして送ってください。このDMへの返信は受信しません。`;await user.send({content:shortText(text),allowedMentions:{parse:[]}});
   }
   async voiceAction({source,action}){await this.voice?.applyModelAction(action,source);}
   async backfill(actor,{limit=10000,signal}={}){
