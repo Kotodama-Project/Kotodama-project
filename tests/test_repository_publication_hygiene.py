@@ -130,7 +130,17 @@ class RepositoryPublicationHygieneTests(unittest.TestCase):
         self.assertIn("docs/LICENSE-SCOPE.md", readme)
         scope = (ROOT / "docs/LICENSE-SCOPE.md").read_text(encoding="utf-8")
         self.assertIn("Third-party conditions remain in force", scope)
-        self.assertIn("Issue #25 remains open", scope)
+        self.assertIn("issues/25#issuecomment-5818551006", scope)
+        self.assertIn("accountable rightsholder", scope)
+        self.assertIn("Material whose licensing authority is unresolved must not be newly exported", scope)
+        self.assertIn("retain any required", scope)
+        self.assertIn("third-party notice with the distributed artifact", scope)
+        for batch in ("a017-hierarchy-templates", "a019-registry-contracts", "a022-public-architecture"):
+            relative = f"migration/{batch}.provenance.json"
+            self.assertIn(f"](../{relative})", scope)
+            self.assertTrue((ROOT / relative).is_file())
+        self.assertIn("](../LICENSES/MIT.txt)", scope)
+        self.assertIn("SBOMs do not assert component licenses", scope)
 
     def test_license_bytes_are_pinned_to_lf_on_every_checkout(self) -> None:
         attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
