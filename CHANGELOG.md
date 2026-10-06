@@ -12,6 +12,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 - agentの状態をオフラインで投影するCLIを再配置。現在の責任索引に対応し、JSON・Markdownとも既定で名前・目的・Work/runを伏せる。未認証の観測、停止要求、実行終了を認可や独立検証へ格上げしない（#136前半）。
 
+- 知識contextを同じ16欄のv2 envelopeへ統一し、KB producerとNode consumerを更新。内部digest、falseの権限claims、Work受入・成果物欄を定義し、旧版を自動変換せず拒否する。compilerは#137の後続。
 - control-plane監査のfindingを現行Conceptと論理roleに束縛した修正候補へ変換するplanner、運用文書、関係pathだけを検査する任意CIを追加。Issue作成・Task実行・agent起動を行わない（#134）。
 - Discordの会話候補を処理するInteraction Policyを共通関数へ抽出。現在のadmissionを維持し、不明話者・非明示依頼・雑談を実行権限にしない。確認の送信と記録は後続（#145前半）。
 

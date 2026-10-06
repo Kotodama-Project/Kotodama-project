@@ -202,7 +202,7 @@ def _execute(args: argparse.Namespace, bundle: Bundle, as_of: dt.datetime) -> in
         )
         context = context_as_dict(selection, bundle=bundle)
         if args.json:
-            print(json.dumps(context, ensure_ascii=False, indent=2))
+            print(context_json(context))
         else:
             print(context_markdown(context), end="")
         return 0 if context["state"] == "ready_candidate" else 3

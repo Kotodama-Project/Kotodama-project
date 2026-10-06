@@ -12,7 +12,7 @@
 
 ## APIと境界
 
-`runtime/codex-task-bridge/knowledge-input.mjs`の`prepareKnowledgeBriefInput({request, contextJson, expectedContextSha256, expectedSourceDigest, now})`は、既存KBの`kotodama.generated-knowledge-context / v1`だけを受け付ける。現行の`as_of`、4つのselector配列、16フィールドのConceptを閉じた形で検査し、未来の評価時刻、存在しない暦日、欠落・空source、撤回/廃止/矛盾状態や選択と省略の重複を拒否する。別のKnowledge Work Packageや任意会話を暗黙変換しない。
+`runtime/codex-task-bridge/knowledge-input.mjs`の`prepareKnowledgeBriefInput({request, contextJson, expectedContextSha256, expectedSourceDigest, sensitivityCeiling, now})`は、[統一context](KNOWLEDGE-CONTEXT.md)の`kotodama.generated-knowledge-context / v2`だけを受け付ける。KBのConcept、または同じenvelopeのWork欄を閉じた形で検査する。Workの感度上限は呼出側の`sensitivityCeiling`（既定public）で、入力の自己申告だけでは広げない。未来の評価時刻、存在しない暦日、欠落・空source、撤回/廃止/矛盾状態や選択と省略の重複を拒否する。旧v1、別family、未コンパイルのKnowledge Work Packageや任意会話を暗黙変換しない。
 
 依頼は最大4 KiB、contextは最大16 KiB、組み合わせたrunner入力も最大16 KiB。無言の切捨てはしない。`now`はtrusted adapterの時計を使い、過去時刻のfixture評価を現在の受入にしない。
 
