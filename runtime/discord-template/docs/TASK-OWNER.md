@@ -2,11 +2,26 @@
 
 既定は`owner.kind=local`です。インストール先のSQLiteを一つのTask ownerとして使います。JSON/CLIの`task.id`は不変で、訂正と再開は同じIDの新しいrevisionになります。
 
+[capability lane](ARCHITECTURE.md#capability-lanes)は4つの既存actionの固定写像です。
+`worker.actions`以外のgrantを作らず、音声とテキストで権限を分けません。
+
 `owner.kind=remote`を選ぶ場合、接続先は次のprivateサービス契約を実装してください。ローカルTaskへのfallbackや二重書込はしません。既存の組織版ownerにこの契約を接続するadapterが必要です。
 
 `POST /v1/owner`、Bearer認証、入力`{version:1,method,args}`、成功`{version:1,ok:true,result}`。
 
-扱うメソッドは `ingest`、`source`、`createTask`、`reviseTask`、`task`、`taskInternal`、`tasks`、`claim`、`bindContext`、`assertContext`、`finish`、`cancel`、`confirmStop`、`resume`。これは信頼済みサービス間の契約であり、一般利用者へそのまま公開するAPIではありません。
+扱うメソッドは `ingest`、`source`、`createTask`、`reviseTask`、`task`、`taskInternal`、`tasks`、`claim`、`bindContext`、`assertContext`、`finish`、`cancel`、`cancelQueued`、`confirmStop`、`resume`。これは信頼済みサービス間の契約であり、一般利用者へそのまま公開するAPIではありません。
+
+受付は現在の設定snapshotで全actionを照合し、全Taskの作成と再認可が完了してから
+実行キューと受付通知へ進みます。途中で失敗した既知のqueued Taskは
+`cancelQueued(id, actor, expectedRevision)`で、そのrevisionとqueued状態が一致する場合だけ
+取消します。返値は取消後のTask（revisionは一つ進む）です。新しいrevisionや実行中のTaskを
+取消しません。remote ownerもこの比較付き操作を実装する必要があります。
+取消の確認やremote作成の成否が不明な場合は`ADMISSION_CLEANUP_UNCERTAIN`を記録して
+新しい受付を止めます。Taskが消えた、未実行である、取消済みとは推測しません。
+
+受付後は各Taskの現在の認可で実行を継続します。一件が実行済みになった後のgrant取消は
+他のTaskの成果を巻き戻すtransactionではありません。実行前に拒否されたqueued revisionは
+比較付き取消を試み、実行中は既存のcheckpointと監視で停止します。
 
 sourceはprovider/guild/channel/source ID、actor、readers、revision、本文、finalityを保持します。Taskには依頼元と実行に使用したすべてのcontext sourceを束縛します。ownerは現在の本人・権限・出典を検査し、CAS・重複抑止・取消を永続化します。
 
