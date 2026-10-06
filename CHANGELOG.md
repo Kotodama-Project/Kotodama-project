@@ -15,6 +15,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - control-plane監査のfindingを現行Conceptと論理roleに束縛した修正候補へ変換するplanner、運用文書、関係pathだけを検査する任意CIを追加。Issue作成・Task実行・agent起動を行わない（#134）。
 
 - 公開ファイル分類と7役割の責任索引を既存知識へ接続した。98%分類gateを維持し、旧OKFの別定義と稼働宣言を持ち込まず、元のreview日付に基づく鮮度警告を保持する（#134）。
+- Discordの既存4actionを固定のcapability laneへ対応付け、設定・analyzer・コマンドの語彙を一つにした。既定grantを維持し、編集の確認待ち・実際の読取境界・外部操作を表現しない条件を文書化（#146後半）。
 
 - control-planeの監査道具と3 schemasを現行知識基盤へ向け直した。競合OKFを除去し、98%分類・未知Concept・有限読取り・責任索引からの稼働宣言拒否を検証する。台帳の接続は後続（#134）。
 - 知識のlocal source pinを実際のcaptured bytesへ束縛し、古い非critical Conceptもcontextへ戻さないようにした。重要な文脈を先に確保し、現在の出典へ戻る再開手順を追加。古いGitHub観測のsnapshotは持ち込まない（#130の知識部分、元#59）。
@@ -40,6 +41,10 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Dots pluginにcursor一覧とrevision/権限付き全文pageを追加。簡略一覧は合成SDK試験で転送JSONを約97.6%削減し、元の全文一覧を維持する。長文・多言語・複雑な依存の通信benchmarkを必須CIで検査する（#204）。
 
 ### Fixed
+
+- mainのpushで検証runが作られなかった場合に、同じRepository validationを手動起動できる入口を追加。必須チェック・全検査・read-only権限を維持し、対象head SHAと結果の読戻しを文書化。
+
+- Discordの複合依頼を現行grantで全件検査し、全Taskの再認可が完了するまで実行・受付通知を始めない。失敗したqueued revisionを比較付きで取消し、不明な後始末は新しい受付を止める（#146前半）。
 
 - 要件Gadgetの再確認・変更要求より古い応答が新しい状態を上書きする問題を修正。未確定の候補を表示せず、短い画面でも長文を折り返す。Chromiumの304バリエーションと12職務のlocalhost journeyを、hash固定の専用環境で検査する（#127、元#66）。
 - Windowsでintegration contractの正規Pathを誤拒否する不具合と、OSごとのPath並び順により知識のsource digestが変わる不具合を修正。文字列の危険な区切りは引き続き拒否する。検証fixtureのSQLite接続を明示的に閉じ、Git index入力のLFと子プロセスのUTF-8 decodeをOS共通にして既存の拒否・終了確認を保持する。

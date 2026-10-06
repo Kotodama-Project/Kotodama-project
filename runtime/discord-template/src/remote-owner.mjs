@@ -1,7 +1,7 @@
 import {check,digest,Refused} from './common.mjs';
 import {awaitWithSignal,deadlineScope} from './http-limits.mjs';
 
-const methods=['ingest','source','createTask','reviseTask','task','taskInternal','tasks','claim','finish','cancel','resume','confirmStop','bindContext','assertContext'];
+const methods=['ingest','source','createTask','reviseTask','task','taskInternal','tasks','claim','finish','cancel','cancelQueued','resume','confirmStop','bindContext','assertContext'];
 const reads=new Set(['source','task','taskInternal','tasks','assertContext']);
 const defaults={maxConcurrent:8,maxRequestBytes:4000000,maxResponseBytes:4000000,timeoutMs:15000,drainTimeoutMs:15000};
 

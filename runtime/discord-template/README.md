@@ -131,6 +131,9 @@ BotはDiscord側でも対象サーバーへ導入してください。Message Co
 
 ## CLI・資料・連携
 
+実行できる操作と既定は[capability laneの表](docs/ARCHITECTURE.md#capability-lanes)を参照してください。
+調査・要約は既定のgrant、編集は明示grantが必要です。公開・deploy・credential変更のactionはありません。
+
 ```sh
 node bin/kotodama.mjs request --actor YOUR_USER_ID --action research --text "この資料の未決事項を整理して"
 node bin/kotodama.mjs tasks --actor YOUR_USER_ID
