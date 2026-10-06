@@ -59,7 +59,7 @@ Discord の固定の 1 VC（discord.voiceChannelId）
 | `RoomHub`（部屋ごとの作業場と worker の結び付け） | 無い。作業場（`worker.workspace`）はインストールごとに一つ | [#143](https://github.com/Kotodama-Project/Kotodama-project/issues/143) |
 | `BotLeases`（複数の VC の同時運用と Bot pool） | 無い。1 インストール = 1 Bot = 固定の 1 VC | [#142](https://github.com/Kotodama-Project/Kotodama-project/issues/142) |
 | GrillU を一般化した Interaction Policy | 呼びかけ中心。analyzer が意図を整理し、足りない依頼は候補に残す | [#145](https://github.com/Kotodama-Project/Kotodama-project/issues/145) |
-| `code.inspect`・`code.edit`・`code.test` を所有者の許可の範囲で自動実行 | `worker.actions`（`research`・`summarize`・`write_file`・`develop`）の設定と、Linux の固定 Docker image での検証 | 声で始まった仕事に自動で許す操作の種類は [#146](https://github.com/Kotodama-Project/Kotodama-project/issues/146) |
+| `code.inspect`・`code.edit`・`code.test` を所有者の許可の範囲で自動実行 | `worker.actions`（`research`・`summarize`・`write_file`・`develop`）の設定と、Linux の固定 Docker image での検証 | [固定のcapability lane](../runtime/discord-template/docs/ARCHITECTURE.md#capability-lanes)を使う。読取範囲はcwdだけで強制せず、実音声での拒否・停止は#154の受入対象 |
 | SQLite の重複実行の防止と、結果の分からない操作の保留 | 再起動時は待ち（queued）を一時停止（paused）、実行中（running）を状態確認中（uncertain）として保持し、自動で再実行しない | Node の仕組みを正とする |
 | Slack・Teams | 無い | [#70](https://github.com/Kotodama-Project/Kotodama-project/issues/70) |
 | 移行の受入 gate（下の節） | 未受入 | 実音声の受入手順は [#154](https://github.com/Kotodama-Project/Kotodama-project/issues/154) |

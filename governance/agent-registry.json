@@ -1,0 +1,373 @@
+{
+  "version": 2,
+  "status": "candidate_only",
+  "reviewed_at": "2026-09-07",
+  "activation_policy": {
+    "default": "not_active",
+    "required_before_active": [
+      "registry_entry",
+      "eval_gate_pass",
+      "capability_grant",
+      "runtime_evidence",
+      "rollback_path"
+    ],
+    "unregistered_agent": "forbidden",
+    "candidate_only_note": "Responsibility index only. Agent execution records belong to the existing lifecycle owner; this index never grants or proves runtime activation."
+  },
+  "agents": [
+    {
+      "id": "knowledge-curator",
+      "name": "Knowledge Curator",
+      "purpose": "repository / connected source の知識を fact family として棚卸しし、stale・重複・矛盾・missing provenance を検出して修正候補を作る",
+      "activation_state": "planned",
+      "authority": "proposal_only",
+      "reads_fact_families": [
+        "knowledge_operations",
+        "current_public_state",
+        "documentation_and_runbooks",
+        "governance_contracts_and_templates",
+        "examples_and_fixtures"
+      ],
+      "outputs": [
+        "candidate_knowledge_patch",
+        "contradiction_finding",
+        "freshness_finding",
+        "candidate_context_index_update"
+      ],
+      "capabilities": [
+        "repository_read",
+        "semantic_comparison",
+        "candidate_patch_generation"
+      ],
+      "prohibited_actions": [
+        "delete_canonical_source",
+        "promote_current_truth",
+        "grant_capability",
+        "deploy_runtime"
+      ],
+      "eval_gate": {
+        "required_before_activation": true,
+        "suite": "evals/knowledge-curator",
+        "minimum_pass_rate": 0.95,
+        "critical_failures_allowed": 0
+      },
+      "rollback": {
+        "method": "revert candidate patch and restore prior registry revision",
+        "owner_role": "AI-LIBRARIAN"
+      },
+      "implementation": {
+        "kind": "unbound",
+        "path": null
+      },
+      "runtime_evidence": null,
+      "canonical_role": "AI-LIBRARIAN",
+      "knowledge_refs": [
+        "project/success-model",
+        "governance/agent-responsibilities",
+        "governance/authority-boundaries"
+      ]
+    },
+    {
+      "id": "agent-auditor",
+      "name": "Agent Auditor",
+      "purpose": "Agent portfolio を横断監査し、性能劣化、capability overlap、権限過多、unused agent、eval gap を検出して merge/retire/change 候補を作る",
+      "activation_state": "planned",
+      "authority": "proposal_only",
+      "reads_fact_families": [
+        "agent_portfolio",
+        "audit_policy",
+        "verification_suite",
+        "current_public_state"
+      ],
+      "outputs": [
+        "candidate_agent_change",
+        "candidate_agent_merge",
+        "candidate_agent_retirement",
+        "agent_risk_finding"
+      ],
+      "capabilities": [
+        "registry_read",
+        "eval_analysis",
+        "cost_quality_comparison",
+        "candidate_patch_generation"
+      ],
+      "prohibited_actions": [
+        "activate_agent",
+        "grant_capability",
+        "deploy_runtime",
+        "promote_current_truth"
+      ],
+      "eval_gate": {
+        "required_before_activation": true,
+        "suite": "evals/agent-auditor",
+        "minimum_pass_rate": 0.97,
+        "critical_failures_allowed": 0
+      },
+      "rollback": {
+        "method": "discard proposal and retain prior active agent set",
+        "owner_role": "AI-CHIEF"
+      },
+      "implementation": {
+        "kind": "unbound",
+        "path": null
+      },
+      "runtime_evidence": null,
+      "canonical_role": "AI-AUDITOR",
+      "knowledge_refs": [
+        "project/success-model",
+        "governance/agent-responsibilities",
+        "governance/authority-boundaries"
+      ]
+    },
+    {
+      "id": "context-compiler",
+      "name": "Context Compiler",
+      "purpose": "task に必要な canonical knowledge、provenance、constraints、capability boundary だけを組み立て、競合候補を明示する",
+      "activation_state": "planned",
+      "authority": "read_only",
+      "reads_fact_families": [
+        "project_goal_and_kgi",
+        "current_public_state",
+        "knowledge_operations",
+        "agent_portfolio",
+        "documentation_and_runbooks"
+      ],
+      "outputs": [
+        "bounded_context_bundle"
+      ],
+      "capabilities": [
+        "registry_read",
+        "context_selection",
+        "provenance_binding"
+      ],
+      "prohibited_actions": [
+        "write_canonical_knowledge",
+        "promote_current_truth",
+        "grant_capability",
+        "deploy_runtime"
+      ],
+      "eval_gate": {
+        "required_before_activation": true,
+        "suite": "evals/context-compiler",
+        "minimum_pass_rate": 0.97,
+        "critical_failures_allowed": 0
+      },
+      "rollback": {
+        "method": "fall back to explicit canonical source list",
+        "owner_role": "AI-LIBRARIAN"
+      },
+      "implementation": {
+        "kind": "unbound",
+        "path": null
+      },
+      "runtime_evidence": null,
+      "canonical_role": "AI-LIBRARIAN",
+      "knowledge_refs": [
+        "project/success-model",
+        "governance/agent-responsibilities",
+        "governance/authority-boundaries"
+      ]
+    },
+    {
+      "id": "work-orchestrator",
+      "name": "Work Orchestrator",
+      "purpose": "verified intent と capability constraints から Work Order candidate を作り、適切な agent/human lane を選ぶ",
+      "activation_state": "planned",
+      "authority": "proposal_only",
+      "reads_fact_families": [
+        "project_goal_and_kgi",
+        "agent_portfolio",
+        "knowledge_operations",
+        "audit_policy"
+      ],
+      "outputs": [
+        "candidate_work_order",
+        "candidate_agent_assignment"
+      ],
+      "capabilities": [
+        "task_decomposition",
+        "agent_selection",
+        "candidate_work_generation"
+      ],
+      "prohibited_actions": [
+        "grant_capability",
+        "execute_irreversible_change",
+        "promote_current_truth",
+        "public_beta_go"
+      ],
+      "eval_gate": {
+        "required_before_activation": true,
+        "suite": "evals/work-orchestrator",
+        "minimum_pass_rate": 0.95,
+        "critical_failures_allowed": 0
+      },
+      "rollback": {
+        "method": "cancel candidate assignment and return to human/explicit planner",
+        "owner_role": "AI-CHIEF"
+      },
+      "implementation": {
+        "kind": "unbound",
+        "path": null
+      },
+      "runtime_evidence": null,
+      "canonical_role": "AI-CHIEF",
+      "knowledge_refs": [
+        "project/success-model",
+        "governance/agent-responsibilities",
+        "governance/authority-boundaries"
+      ]
+    },
+    {
+      "id": "evidence-auditor",
+      "name": "Evidence Auditor",
+      "purpose": "claim と verification receipt / test / runtime evidence の binding を検証し、evidence を超えた claim を止める",
+      "activation_state": "planned",
+      "authority": "read_only",
+      "reads_fact_families": [
+        "current_public_state",
+        "audit_policy",
+        "verification_suite",
+        "runtime_candidates",
+        "governance_contracts_and_templates"
+      ],
+      "outputs": [
+        "evidence_finding",
+        "promotion_block_recommendation"
+      ],
+      "capabilities": [
+        "evidence_binding_check",
+        "claim_boundary_check",
+        "regression_analysis"
+      ],
+      "prohibited_actions": [
+        "promote_current_truth",
+        "grant_capability",
+        "deploy_runtime",
+        "rewrite_source_evidence"
+      ],
+      "eval_gate": {
+        "required_before_activation": true,
+        "suite": "evals/evidence-auditor",
+        "minimum_pass_rate": 0.99,
+        "critical_failures_allowed": 0
+      },
+      "rollback": {
+        "method": "fall back to deterministic validators and human review",
+        "owner_role": "AI-CHIEF"
+      },
+      "implementation": {
+        "kind": "unbound",
+        "path": null
+      },
+      "runtime_evidence": null,
+      "canonical_role": "AI-AUDITOR",
+      "knowledge_refs": [
+        "project/success-model",
+        "governance/agent-responsibilities",
+        "governance/authority-boundaries"
+      ]
+    },
+    {
+      "id": "quality-red-team",
+      "name": "Quality Red Team",
+      "purpose": "Agent output、context、knowledge change、workflow を adversarial / regression 観点で評価し、false confidence と境界逸脱を発見する",
+      "activation_state": "planned",
+      "authority": "read_only",
+      "reads_fact_families": [
+        "agent_portfolio",
+        "knowledge_operations",
+        "verification_suite",
+        "audit_policy"
+      ],
+      "outputs": [
+        "eval_finding",
+        "regression_case",
+        "promotion_block_recommendation"
+      ],
+      "capabilities": [
+        "adversarial_evaluation",
+        "regression_case_generation",
+        "cross_agent_comparison"
+      ],
+      "prohibited_actions": [
+        "activate_agent",
+        "promote_current_truth",
+        "grant_capability",
+        "deploy_runtime"
+      ],
+      "eval_gate": {
+        "required_before_activation": true,
+        "suite": "evals/quality-red-team",
+        "minimum_pass_rate": 0.95,
+        "critical_failures_allowed": 0
+      },
+      "rollback": {
+        "method": "discard generated eval candidate and retain prior suite",
+        "owner_role": "AI-AUDITOR"
+      },
+      "implementation": {
+        "kind": "unbound",
+        "path": null
+      },
+      "runtime_evidence": null,
+      "canonical_role": "AI-ANALYST",
+      "knowledge_refs": [
+        "project/success-model",
+        "governance/agent-responsibilities",
+        "governance/authority-boundaries"
+      ]
+    },
+    {
+      "id": "git-steward",
+      "name": "Git Steward",
+      "purpose": "共通Workに結び付くGit作業セルを調整し、担当範囲・依存・lease・差分・独立検証の整合を検査する。GitHub権限やTask正本は所有しない",
+      "activation_state": "candidate",
+      "authority": "proposal_only",
+      "reads_fact_families": [
+        "agent_portfolio",
+        "governance_contracts_and_templates",
+        "verification_suite",
+        "current_public_state"
+      ],
+      "outputs": [
+        "candidate_git_assignment",
+        "candidate_integration_assessment",
+        "git_coordination_finding"
+      ],
+      "capabilities": [
+        "repository_observation",
+        "bounded_workcell_coordination",
+        "candidate_evidence_binding"
+      ],
+      "prohibited_actions": [
+        "grant_capability",
+        "force_push",
+        "merge_without_independent_review",
+        "deploy_runtime",
+        "promote_current_truth",
+        "public_beta_go"
+      ],
+      "eval_gate": {
+        "required_before_activation": true,
+        "suite": "runtime/git-steward/coordinator.test.mjs",
+        "minimum_pass_rate": 1.0,
+        "critical_failures_allowed": 0
+      },
+      "rollback": {
+        "method": "stop new admissions, reconcile fenced workers, retain the journal and revert this candidate",
+        "owner_role": "AI-AUDITOR"
+      },
+      "implementation": {
+        "kind": "script",
+        "path": "runtime/git-steward/coordinator.mjs"
+      },
+      "runtime_evidence": null,
+      "canonical_role": "AI-BUILDER",
+      "knowledge_refs": [
+        "project/success-model",
+        "governance/agent-responsibilities",
+        "governance/authority-boundaries"
+      ]
+    }
+  ]
+}
