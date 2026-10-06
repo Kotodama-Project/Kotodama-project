@@ -30,6 +30,7 @@ class ControlPlanePlannerTest(unittest.TestCase):
         self.assertTrue(all(ref in ids for refs in planner.ROLE_LINKS.values() for ref in refs))
         self.assertNotIn("okf-steward",planner.ROLE_LINKS)
         self.assertEqual("AI-AUDITOR",planner.assign_role("autonomy-boundary-gap"))
+        self.assertEqual("AI-AUDITOR",planner.assign_role("forbidden-cadence-output"))
         self.assertIn("Promotion stop",planner.next_action({"code":"autonomy-boundary-gap"},"AI-AUDITOR"))
 
     def test_changed_evidence_cannot_reuse_proposal_identity(self):

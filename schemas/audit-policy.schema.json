@@ -70,8 +70,7 @@
           "authority": {
             "enum": [
               "read_only",
-              "proposal_only",
-              "bounded_execute"
+              "proposal_only"
             ]
           },
           "outputs": {

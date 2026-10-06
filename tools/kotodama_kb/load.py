@@ -63,6 +63,7 @@ def load_bundle(repository_root: Path, *, as_of: dt.datetime | None = None) -> B
     document_by_resolved_path = {document.path.resolve(): document for document in documents}
     concept_id_to_path: dict[str, str] = {}
     concepts: list[Concept] = []
+    source_pins: list[tuple[str, Path, str]] = []
     allowed_classifications = set(profile.get("allowed_classifications", []))
 
     for document in documents:
@@ -162,6 +163,14 @@ def load_bundle(repository_root: Path, *, as_of: dt.datetime | None = None) -> B
                 issues.append(Issue(level, "MISSING_SOURCE", relative_repo_path, f"source does not exist: {resource}"))
             elif resolved_source is not None:
                 input_paths.add(resolved_source)
+            if "sha256" in source:
+                expected = source["sha256"]
+                if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
+                    issues.append(Issue("error", "SOURCE_DIGEST_INVALID", relative_repo_path, "source sha256 must be 64 lowercase hex characters"))
+                elif resolved_source is None or not resolved_source.is_relative_to(root) or not resolved_source.is_file():
+                    issues.append(Issue("error", "SOURCE_DIGEST_UNAVAILABLE", relative_repo_path, "source sha256 requires a repository-local file"))
+                else:
+                    source_pins.append((relative_repo_path, resolved_source, expected))
 
         used_footnotes = set(FOOTNOTE_RE.findall(_without_code_fences(document.body)))
         defined_footnotes = set(
@@ -252,6 +261,14 @@ def load_bundle(repository_root: Path, *, as_of: dt.datetime | None = None) -> B
 
     if _capture_inputs(root, (root / relative for relative, _ in initial_bindings)) != initial_bindings:
         raise KnowledgeBaseError("INPUT_CHANGED_DURING_LOAD")
+    bindings = _capture_inputs(root, input_paths)
+    captured = dict(bindings)
+    for concept_path, source_path, expected in source_pins:
+        # Compare the same finite snapshot that the returned bundle binds. A
+        # separate early read could accept one version and later bind another.
+        if captured.get(source_path.relative_to(root).as_posix()) != expected:
+            issues.append(Issue("error", "SOURCE_DIGEST_MISMATCH", concept_path,
+                                "pinned source changed; review the concept before rebinding"))
     bundle = Bundle(
         root=root,
         bundle_root=bundle_root,
@@ -260,7 +277,7 @@ def load_bundle(repository_root: Path, *, as_of: dt.datetime | None = None) -> B
         issues=tuple(sorted(set(issues))),
         index_links=tuple(index_targets),
         as_of=as_of,
-        input_bindings=_capture_inputs(root, input_paths),
+        input_bindings=bindings,
     )
     _assert_current(bundle)
     return bundle

@@ -13,6 +13,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - 公開ファイル分類と7役割の責任索引を既存知識へ接続した。98%分類gateを維持し、旧OKFの別定義と稼働宣言を持ち込まず、元のreview日付に基づく鮮度警告を保持する（#134）。
 
 - control-planeの監査道具と3 schemasを現行知識基盤へ向け直した。競合OKFを除去し、98%分類・未知Concept・有限読取り・責任索引からの稼働宣言拒否を検証する。台帳の接続は後続（#134）。
+- 知識のlocal source pinを実際のcaptured bytesへ束縛し、古い非critical Conceptもcontextへ戻さないようにした。重要な文脈を先に確保し、現在の出典へ戻る再開手順を追加。古いGitHub観測のsnapshotは持ち込まない（#130の知識部分、元#59）。
 - Codex brief bridgeの既存invocation journalへ、観測したsession開始を保存する。失敗・中断・再起動後も同じgrantで読み戻し、再送で二度目の実行を始めない。v1の元bytesをbackupに保持し、Task接続や再開可能なsessionとは区別する（#126、元#47）。
 
 - 元#46のlocal model proxy、native Proxmox template、固定公式OSへの2patchをコード・契約だけ再配置。モデル予算・receipt保全、seal、archive integrityを検査し、旧snapshotや運用方針は再導入しない（#125）。
@@ -36,6 +37,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- 要件Gadgetの再確認・変更要求より古い応答が新しい状態を上書きする問題を修正。未確定の候補を表示せず、短い画面でも長文を折り返す。Chromiumの304バリエーションと12職務のlocalhost journeyを、hash固定の専用環境で検査する（#127、元#66）。
 - Windowsでintegration contractの正規Pathを誤拒否する不具合と、OSごとのPath並び順により知識のsource digestが変わる不具合を修正。文字列の危険な区切りは引き続き拒否する。検証fixtureのSQLite接続を明示的に閉じ、Git index入力のLFと子プロセスのUTF-8 decodeをOS共通にして既存の拒否・終了確認を保持する。
 - Remote ownerのtimeout回帰試験を実HTTPの受信観測へ同期させ、遅いrunnerで受信前に80msが経過する誤失敗を修正。実timerによる期限と、書込結果不明・再送禁止・未終了処理の枠保持の確認は維持する。
 

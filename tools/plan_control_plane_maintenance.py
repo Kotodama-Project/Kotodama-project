@@ -20,7 +20,7 @@ from knowledge_work_validator import QuietParser
 ROLE_RULES = (
     (("stale-", "inventory-", "missing-canonical", "competing-canonical", "duplicate-fact", "freshness-", "unknown-concept", "knowledge-"), "AI-LIBRARIAN"),
     (("duplicate-agent", "preactive-execute", "agent-", "index-cannot", "unknown-fact-family"), "AI-AUDITOR"),
-    (("autonomy-", "unsafe-agentic", "promotion-", "critical-contradiction"), "AI-AUDITOR"),
+    (("autonomy-", "unsafe-agentic", "promotion-", "critical-contradiction", "forbidden-cadence"), "AI-AUDITOR"),
 )
 
 ROLE_LINKS = {
@@ -53,7 +53,7 @@ def next_action(finding: dict[str, Any], role: str) -> str:
         return "Classify uncovered repository files into an existing fact family or propose a new fact family with one canonical owner."
     if code in {"missing-canonical-source", "competing-canonical-owner"}:
         return "Restore or resolve canonical ownership without deleting source evidence; require authorized resolution for competing truth."
-    if code.startswith(("autonomy-", "unsafe-agentic", "promotion-", "critical-contradiction")):
+    if code.startswith(("autonomy-", "unsafe-agentic", "promotion-", "critical-contradiction", "forbidden-cadence")):
         return "Bind the claim to evidence and recommend a Promotion stop until the governance boundary is restored."
     if role == "AI-AUDITOR":
         return "Compare the responsibility index against its knowledge, authority and lifecycle boundaries; prepare a bounded correction proposal."
