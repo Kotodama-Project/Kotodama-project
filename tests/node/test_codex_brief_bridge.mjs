@@ -69,7 +69,7 @@ test("journal replacement, growth and disappearance during reads refuse without 
         assert.equal(changed, true);
         if (mutation === "remove") assert.equal(fs.existsSync(path), false);
         if (mutation !== "grow") assert.deepEqual(readFileSync(join(root, "preserved.json")), original);
-        else assert.deepEqual(readFileSync(path), Buffer.concat([original, Buffer.from(" ")]));
+        else assert.deepEqual(readFileSync(mutationFd), Buffer.concat([original, Buffer.from(" ")]));
         assert.equal(fs.existsSync(join(config.stateRoot, ".brief-writer.lock")), false);
       } finally {
         read?.mock.restore(); syncBuiltinESMExports();
