@@ -4,6 +4,11 @@ Kotodama のナレッジベースは、リポジトリ内外の正本を置き�
 
 入口は [`knowledge/index.md`](../knowledge/index.md) です。形式は Open Knowledge Format（OKF）v0.2 の Markdown＋YAML frontmatter を採用し、その上に Kotodama 固有の安全・運用プロファイルを追加しています。
 
+公式仕様は[GoogleCloudPlatform Knowledge CatalogのOKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/82a483de8a381f1ed25b9dfe1dc5622622afff55/okf/SPEC.md)です。
+参照revisionは`82a483de8a381f1ed25b9dfe1dc5622622afff55`。§5のtimestampは明示offset付きISO 8601日時、
+§11の必須conformanceはfrontmatter・非空type・reserved構造です。#128判断4に従い、既存Conceptの
+日時をdate-onlyへ変換せず、意味的な履歴を維持します。
+
 ## Goal
 
 人とエージェントが、同じ正しい情報を必要な範囲で参照し、元の意図・現在位置・担当・制約・根拠・未解決・次の行動を失わずに仕事を進められる状態をつくります。
@@ -150,9 +155,13 @@ python tools/knowledge_base.py validate --root .
 
 - `OKF_CONFORMANT`：OKF v0.2の最小conformance（parse可能なfrontmatter、非空`type`、reserved file構造）
 - `KOTODAMA_PROFILE_PASS`：出典、公開分類、owner/reviewer分離、link/source等を含むKotodama producer policy
-- `DECISION_READY`：`validate`では常に`NOT_EVALUATED`。actorとpurposeを明示した別auditが必要
+- `DECISION_READY`：`validate`では常に`NOT_EVALUATED`。actor・purpose・評価時刻・既存Task参照を明示した別auditが必要
 
 OKF v0.2では`type`だけが常時必須で、optional field、未知type、broken cross-link、missing indexだけを理由に非準拠とはしません。Kotodamaのより厳しい拒否はprofile判定にだけ反映します。
+
+optionalな`stale_after`、`generated.at`、`verified.at`、`sources[].last_modified`、共通とsource別の
+`usage_window.from/to`の日時は`OKF_CONFORMANT.guidance`に分けて診断します。date-onlyやoffset欠落は
+`OKF_TIMESTAMP_GUIDANCE`であり、§11のconformance失敗にはしません。Kotodama profileでは従来通り日時形式を要求します。
 
 ```bash
 python tools/knowledge_base.py validate --root . --json
@@ -160,11 +169,26 @@ python tools/knowledge_base.py readiness \
   --root . \
   --actor human:reviewer \
   --purpose "review project direction" \
+  --task task:review-fixture \
+  --as-of 2026-10-05T23:00:00Z \
   --concept project/goal \
+  --required-concept project/goal \
   --format markdown
 ```
 
-`readiness`は文書のstable/confirmed/verification/source/freshnessの宣言を検査します。verification actorの表記は本人認証や検証receiptの署名ではなく、accessやdecision authorityを付与できません。現行public candidateにはauthoritativeなactor/purpose access resolverがないため、解決されるまでは`NEEDS_RESOLUTION`を返します。
+`readiness`は文書のstable/confirmed/verification/source/freshnessの宣言を検査します。verification actorの
+表記は本人認証や検証receiptの署名ではなく、accessやdecision authorityを付与できません。
+評価時刻またはTask参照がなければ`NOT_EVALUATED`、すべて指定しても実ownerの認証・access resolverが
+未接続のため`NEEDS_RESOLUTION`です。Task参照からTaskを作成・認可しません。
+
+readiness JSONは`schema_revision: v2`で、各Conceptの`checks`がsource解決、現在のlocal bytesへの束縛、
+検証の申告、鮮度、矛盾、access、attestation、必須context、最終readinessを別々に出します。
+外部sourceは取得せず`UNRESOLVED`、verificationの記載は本人性未確認、attestationは`NOT_EVALUATED`です。
+local snapshot一致を外部sourceのimmutable revisionや自然言語の正しさの証明にはしません。
+
+`--required-concept`は繰返し指定できます。未宣言なら`NOT_EVALUATED`、選択から漏れた必須Conceptが
+あれば`MISSING`とIDを出し、含めれば`INCLUDED`です。これは呼出側が宣言した集合との照合で、ownerの
+目的別policyを検証した意味ではありません。上の固定時刻は再現例なので、運用では明示した現在時刻と現行Taskへ束縛します。
 
 監査JSONはこの指標名変更に伴い`schema_revision: v2`です。旧`retrieval_readiness_ratio`は意味が強すぎるため互換aliasを残さず、`structural_retrieval_eligibility_ratio`へ置き換えています。
 

@@ -149,7 +149,7 @@ class KnowledgeBaseTests(unittest.TestCase):
         self.assertEqual("NOT_EVALUATED", verdicts["DECISION_READY"]["verdict"])
 
         report = KB.decision_readiness_report(
-            self.bundle,
+            self.bundle, task="task:review-fixture", evaluated_at=AS_OF,
             actor="human:reviewer",
             purpose="review project direction",
             concept_ids=["project/goal"],
@@ -416,7 +416,7 @@ class KnowledgeBaseTests(unittest.TestCase):
                            lambda: KB.build(bundle, check=False)):
                 with self.assertRaisesRegex(KB.KnowledgeBaseError, "INVALID_BUNDLE"):
                     action()
-            report = KB.decision_readiness_report(bundle, actor="human:reviewer", purpose="review", concept_ids=["project/goal"])
+            report = KB.decision_readiness_report(bundle, actor="human:reviewer", purpose="review", concept_ids=["project/goal"], task="task:review-fixture", evaluated_at=AS_OF)
             self.assertEqual("NEEDS_RESOLUTION", report["DECISION_READY"])
             self.assertEqual(0, report["content_ready_count"])
             self.assertIn("INVALID_BUNDLE", report["global_blockers"])
@@ -425,7 +425,7 @@ class KnowledgeBaseTests(unittest.TestCase):
             checked_audit = KB.audit_report(checked, as_of=AS_OF)
             self.assertEqual(1, checked_audit["metrics"]["independently_verified_count"])
             self.assertEqual(1, checked_audit["metrics"]["human_reviewed_count"])
-            self.assertEqual("NEEDS_RESOLUTION", KB.decision_readiness_report(checked, actor="human:reviewer", purpose="review current sources")["DECISION_READY"])
+            self.assertEqual("NEEDS_RESOLUTION", KB.decision_readiness_report(checked, actor="human:reviewer", purpose="review current sources", task="task:review-fixture", evaluated_at=AS_OF)["DECISION_READY"])
 
     def test_linked_stale_critical_concept_is_not_reintroduced(self):
         with tempfile.TemporaryDirectory() as temporary:

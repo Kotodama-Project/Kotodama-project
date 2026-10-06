@@ -73,6 +73,9 @@ def _parser() -> argparse.ArgumentParser:
     readiness_parser.add_argument("--actor", required=True)
     readiness_parser.add_argument("--purpose", required=True)
     readiness_parser.add_argument("--concept", action="append", default=[])
+    readiness_parser.add_argument("--task", help="Existing Task reference; does not create or authorize a Task")
+    readiness_parser.add_argument("--required-concept", action="append", default=None,
+                                  help="Concept that this declared scope must include (repeatable)")
     readiness_parser.add_argument("--format", choices=("json", "markdown"), default="json")
     return parser
 
@@ -210,6 +213,9 @@ def _execute(args: argparse.Namespace, bundle: Bundle, as_of: dt.datetime) -> in
             actor=args.actor,
             purpose=args.purpose,
             concept_ids=args.concept,
+            task=args.task,
+            evaluated_at=as_of if args.as_of is not None else None,
+            mandatory_concept_ids=args.required_concept,
         )
         if args.format == "markdown":
             print(readiness_markdown(report), end="")
