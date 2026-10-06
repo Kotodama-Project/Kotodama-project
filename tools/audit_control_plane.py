@@ -20,7 +20,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 from integration_contract_inputs import load_contract, local_schema_references_only
-from knowledge_work_validator import read_bound
+from knowledge_work_validator import read_bound, selected_root
 from knowledge_base import load_bundle, KnowledgeBaseError
 from kotodama_kb.foundation import _assert_current
 
@@ -219,6 +219,7 @@ def check_audit_policy(policy: dict[str, Any], findings: list[dict[str, Any]]) -
 
 
 def build_report(root: Path, as_of: date) -> dict[str, Any]:
+    root = selected_root(root)
     findings: list[dict[str, Any]] = []
     registries: dict[str, dict[str, Any]] = {}
     for name, rel in REGISTRIES.items():
@@ -324,7 +325,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--as-of", default=date.today().isoformat(), help="YYYY-MM-DD; deterministic audits may pin this")
     parser.add_argument("--fail-on", choices=("warning", "error", "critical", "never"), default="error")
     args = parser.parse_args(argv)
-    root = args.root.resolve()
+    root = args.root
     try:
         as_of = parse_day(args.as_of)
         report = build_report(root, as_of)

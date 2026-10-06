@@ -1,0 +1,54 @@
+name: Control plane audit
+on:
+  pull_request:
+    paths:
+      - 'governance/*registry.json'
+      - 'governance/audit-policy.json'
+      - 'schemas/*registry.schema.json'
+      - 'schemas/audit-policy.schema.json'
+      - 'knowledge/**'
+      - 'tools/kotodama_kb/**'
+      - 'tools/audit_control_plane.py'
+      - 'tools/plan_control_plane_maintenance.py'
+      - 'tests/test_control_plane*.py'
+      - '.github/workflows/control-plane-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'governance/*registry.json'
+      - 'governance/audit-policy.json'
+      - 'schemas/*registry.schema.json'
+      - 'schemas/audit-policy.schema.json'
+      - 'knowledge/**'
+      - 'tools/kotodama_kb/**'
+      - 'tools/audit_control_plane.py'
+      - 'tools/plan_control_plane_maintenance.py'
+      - 'tests/test_control_plane*.py'
+      - '.github/workflows/control-plane-audit.yml'
+permissions:
+  contents: read
+concurrency:
+  group: control-plane-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+      - name: Check tracked credentials before dependencies
+        run: python -S -B tools/check_tracked_secret_hygiene.py
+      - name: Install hash-locked validation dependencies
+        run: python -m pip install --require-hashes -r requirements-ci.txt
+      - name: Focused audit and planner regression
+        run: python -m unittest tests.test_control_plane tests.test_control_plane_registry tests.test_control_plane_planner -v
+      - name: Read-only audit and proposal
+        run: |
+          python -B tools/audit_control_plane.py --fail-on error
+          python -B tools/plan_control_plane_maintenance.py --format markdown
+          git diff --exit-code
