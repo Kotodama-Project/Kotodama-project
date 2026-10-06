@@ -106,8 +106,9 @@ remains unimplemented and Public Beta remains `NO_GO_UNPUBLISHED`. The public
 bytes preserve the user's working direction as a redacted owner-directed
 candidate, not a signed or independently verifiable governance approval,
 rightsholder proof, canonical adoption, launch decision, or Final Human GO; no receipt is fabricated. The root license is MIT (merged via #18 on
-2026-09-12; see [License scope](docs/LICENSE-SCOPE.md)); Issue #25 remains open
-for the accountable rightsholder, contributor, provenance, and NOTICE record.
+2026-09-12). [License scope](docs/LICENSE-SCOPE.md) records the owner decision,
+the three admitted migration batches, their retained notices and historical SBOM
+receipt. Later exports and release artifacts require their own provenance and notice checks.
 
 ## Latest runtime result
 

@@ -83,8 +83,10 @@ work. The runtime remains unimplemented and Public Beta remains
 `NO_GO_UNPUBLISHED`. The public bytes are a redacted owner-directed direction
 candidate, not signed or independently verifiable governance approval,
 rightsholder proof, canonical adoption, launch decision, or Final Human GO, and
-no receipt is fabricated. The root license is MIT (merged via #18 on 2026-09-12); Issue #25 remains open
-for the accountable rightsholder, contributor, provenance, and NOTICE record.
+no receipt is fabricated. The root license is MIT (merged via #18 on 2026-09-12).
+[License scope](docs/LICENSE-SCOPE.md) records the accountable owner, admitted
+batch provenance, retained notices and historical SBOM receipt. Future exports
+and release artifacts still require individual provenance and notice checks.
 
 ## Documentation revision history
 
