@@ -9,6 +9,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - 不足情報の確認を話者・部屋ごとに一度へ制限するInteraction Policyを接続。既存eventsへの本文を含まない記録、再起動・並行配送の抑止、元チャンネルへの回答案内、送信直前の権限/出典再検査を追加（#145後半）。
+- Knowledge Work compilerを統一context v2へ接続。必須の主張・受入条件・成果物を落とさず、上限や分類・出典変更の拒否でWork情報を除去する。分離していたcompilerの回帰assertionと、実入力へ訂正を流す合成経路を復元（#137後半）。
 - agentの状態をオフラインで投影するCLIを再配置。現在の責任索引に対応し、JSON・Markdownとも既定で名前・目的・Work/runを伏せる。未認証の観測、停止要求、実行終了を認可や独立検証へ格上げしない（#136前半）。
 
 - 知識contextを同じ16欄のv2 envelopeへ統一し、KB producerとNode consumerを更新。内部digest、falseの権限claims、Work受入・成果物欄を定義し、旧版を自動変換せず拒否する。compilerは#137の後続。

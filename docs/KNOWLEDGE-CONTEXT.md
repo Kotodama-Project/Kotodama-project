@@ -13,7 +13,20 @@ KBの文脈は`work: null`です。Workの文脈はConceptsとselectorを空に�
 package/subjectのdigest、既存Work参照、目的、選択した主張、出典のdigest/期限/感度、
 仮定・質問・矛盾、受入条件、成果物のdigestとcriterion参照を入れます。
 受入状態はproducerの`reported_state`で、独立検証ではありません。
-Workのcompilerと既存assertionの復元は#137の後続sliceで、この形式へ接続します。
+`tools/compile_knowledge_context.py`は検証済みKnowledge Workをこの形式へ変換します。
+重要な主張、仮定・矛盾から参照される主張、受入条件・成果物の束縛を保持します。
+必要部分がclaim数・UTF-8 byte予算に収まらなければ、readyとして切り捨てず拒否します。
+
+```sh
+python -B tools/compile_knowledge_context.py examples/knowledge-work/business-rehearsal --as-of 2026-09-11T00:00:00Z
+```
+
+`--source-root`は既存validatorと同じ明示的なevidence rootで、暗黙の親探索や複製をしません。
+compilerの既定感度はpublic、既定予算は8 claim・16KiBです。byte上限も実行器と同じ16KiBで、
+より大きな`--max-bytes`は指定できません。出力はWindowsでもUTF-8と一つのLFで予算を数えます。
+構造検証後と返却前に
+元のpackage・依存bytesを照合し、CLIはserialize後にも照合します。
+raw source本文やfilesystem locatorは文脈に複製せず、digestと既存Workの参照を使います。
 
 digestは`context_sha256`をnullにした全体を、キー順・compact JSON・UTF-8で符号化して
 SHA-256を取ります。整数の別表記は正規化し、非整数の数値はこの形式では扱いません。
