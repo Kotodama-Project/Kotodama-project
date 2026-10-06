@@ -9,6 +9,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - 不足情報の確認を話者・部屋ごとに一度へ制限するInteraction Policyを接続。既存eventsへの本文を含まない記録、再起動・並行配送の抑止、元チャンネルへの回答案内、送信直前の権限/出典再検査を追加（#145後半）。
+- agentの状態をオフラインで投影するCLIを再配置。現在の責任索引に対応し、JSON・Markdownとも既定で名前・目的・Work/runを伏せる。未認証の観測、停止要求、実行終了を認可や独立検証へ格上げしない（#136前半）。
 
 - 知識contextを同じ16欄のv2 envelopeへ統一し、KB producerとNode consumerを更新。内部digest、falseの権限claims、Work受入・成果物欄を定義し、旧版を自動変換せず拒否する。compilerは#137の後続。
 - control-plane監査のfindingを現行Conceptと論理roleに束縛した修正候補へ変換するplanner、運用文書、関係pathだけを検査する任意CIを追加。Issue作成・Task実行・agent起動を行わない（#134）。
