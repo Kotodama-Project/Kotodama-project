@@ -1,0 +1,44 @@
+{
+  "kind": "kotodama.retention-deletion-receipt",
+  "schema_revision": "v1",
+  "receipt_ref": "ref/deletion-receipt/synthetic-one",
+  "session_ref": "ref/session/synthetic-one",
+  "archive_binding_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "policy_ref": "ref/policy/synthetic-retention",
+  "policy_revision_ref": "ref/policy-revision/synthetic-one",
+  "trigger": "expiry",
+  "deadline": {
+    "retain_until": "2026-09-01T00:00:00Z",
+    "delete_by": "2026-09-02T00:00:00Z"
+  },
+  "deleted_at": "2026-09-01T01:00:00Z",
+  "artifacts": [
+    {
+      "kind": "RAW_AUDIO_PCM",
+      "count": 2,
+      "pre_delete_sha256": [
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      ],
+      "manifest_entry_sha256": [
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      ]
+    }
+  ],
+  "retained_by_policy": [
+    "RAW_ASR",
+    "CORRECTED_TRANSCRIPT",
+    "SOURCE_EVIDENCE"
+  ],
+  "readback": {
+    "status": "CONFIRMED",
+    "residual_count": 0,
+    "checked_at": "2026-09-01T01:00:01Z"
+  },
+  "authority_granted": false,
+  "gate_closed": false,
+  "public_beta_go": false,
+  "contains_content": false,
+  "receipt_authenticity": "UNVERIFIED"
+}
