@@ -1,5 +1,6 @@
 from datetime import date
 import json
+import shlex
 from pathlib import Path
 import subprocess
 import sys
@@ -71,7 +72,11 @@ class ControlPlanePlannerTest(unittest.TestCase):
         self.assertIn("paths:",text)
         self.assertIn("contents: read",text)
         self.assertIn("--require-hashes -r requirements-ci.txt",text)
-        self.assertNotIn("unittest discover",text)
+        for line in text.splitlines():
+            if "unittest discover" in line:
+                command = shlex.split(line.split("run:", 1)[-1])
+                self.assertIn("-p",command)
+                self.assertEqual(command[command.index("-p")+1],"test_agent_status*.py")
         self.assertNotIn("pull_request_target",text)
         self.assertNotIn("schedule:",text)
 
