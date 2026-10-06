@@ -9,6 +9,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - ローカルASRの15分rotationと非公開テキスト投稿を既定無効で追加。発話を分割せず、全閲覧者と出典を照合し、再起動・不明な配送から再送しない。実音声のPB-G2受入は別途（#148）。
+- 不足情報の確認を話者・部屋ごとに一度へ制限するInteraction Policyを接続。既存eventsへの本文を含まない記録、再起動・並行配送の抑止、元チャンネルへの回答案内、送信直前の権限/出典再検査を追加（#145後半）。
 - 既存ledgerが参照する削除receiptの公開契約とread-only validatorを追加。同じ内容の別artifactをmanifest digestで区別し、件数・期限・readback申告の矛盾を拒否する。現物確認は後続（#149前半）。
 - persona意図監査を統一contextとoffline状態投影へ接続。12職務×18場面のうち192件を合成入力で検査し、実会話・実業務の24件はBLOCKEDとして保持する。任意CIはhash付き依存と限定試験のみ（#138）。
 - offline agent診断のhardening試験、Linux/Windowsの限定CI、公開skillを追加。skill・実装・統合契約を同じcontent digestに束縛し、各検査のfailure・skipを隠さず報告する（#136後半）。

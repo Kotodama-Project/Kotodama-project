@@ -2,13 +2,15 @@ import {Analysis,modelExecution} from './llm.mjs';
 import {check,digest,errorCode} from './common.mjs';
 import {verifyArtifacts} from './worker.mjs';
 import {AnalysisAdmission} from './analysis-admission.mjs';
-import {decideInteraction} from './interaction-policy.mjs';
+import {decideInteraction,identifiedOperator} from './interaction-policy.mjs';
+import {InteractionState} from './interaction-state.mjs';
 
 export class Pipeline {
   constructor({store,owner=store,config,policy=()=>config,readPolicy=async()=>policy(),analyzer,worker,authorize=async()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onTaskQueued=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
+    this.interactions=new InteractionState(store);
     Object.assign(this,{store,owner,config,policy,readPolicy,analyzer,worker,authorize,authorizeAnalysis,onTask,onTaskQueued,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.tail=Promise.resolve();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);
   }
-  context(source,principal){
+  context(source,principal,pending=null){
     const config=this.config.analyzer,maxSources=config.maxContextSources??12;let remaining=config.maxContextChars??24000;
     const result=[],time=s=>Date.parse(s.metadata?.createdAt??'')||0;
     let candidates;
@@ -18,7 +20,16 @@ export class Pipeline {
       const archived=new Set(room.filter(s=>s.metadata?.kind==='archived_voice').map(s=>s.metadata.sessionId));
       candidates=room.filter(s=>{const refs=s.metadata?.archiveSessionRefs;return !refs?.length||!refs.every(id=>archived.has(id));}).sort((a,b)=>time(a)-time(b)||a.revision-b.revision||a.key.localeCompare(b.key)).slice(-maxSources).reverse();
     }
-    for(const s of candidates){if(remaining<=0)break;const text=s.text.slice(0,Math.min(12000,remaining));remaining-=text.length;result.unshift({key:s.key,revision:s.revision,text,actorId:s.actorId});}return result;
+    let original=null;
+    if(pending){
+      const value=this.store.source(pending.context.sourceKey,principal);check(value.revision===pending.context.sourceRevision,'CONTEXT_CHANGED');
+      check(value.text.length<=remaining,'CLARIFICATION_CONTEXT_BUDGET');remaining-=value.text.length;
+      original={key:value.key,revision:value.revision,text:value.text,actorId:value.actorId};
+      const preferred=pending.bindings.filter(binding=>binding.key!==value.key).map(binding=>this.store.source(binding.key,principal));
+      candidates=[...new Map([...preferred,...candidates].filter(item=>item.key!==value.key).map(item=>[item.key,item])).values()];
+    }
+    for(const s of candidates){if(remaining<=0||result.length>=maxSources-(original?1:0))break;const text=s.text.slice(0,Math.min(12000,remaining));remaining-=text.length;result.unshift({key:s.key,revision:s.revision,text,actorId:s.actorId});}
+    return original?[original,...result]:result;
   }
   async ingest(source,{execute=false,reply=false,analyze=true,onSourceCommitted=()=>{}}={}){
     check(!this.closing,'RUNTIME_STOPPING');if(this.owner.kind==='remote')await this.owner.ingest(source);
@@ -36,6 +47,7 @@ export class Pipeline {
     try{pending=this.analysisAdmission.submit({room:`${source.provider}:${source.guildId}:${source.channelId}`,actor:principal,priority:received.state==='corrected'?2:execute||reply?1:0,signal:controller.signal},()=>this.#analyze({...source,key:received.key},principal,{execute,reply},key));}
     catch(error){pending=Promise.reject(error);}
     const job=pending.catch(error=>{
+      this.interactions.reopen({...source,key:received.key});
       const reason=errorCode(error);
       if(!['ANALYSIS_QUEUE_FULL','ANALYSIS_SUPERSEDED','ANALYSIS_BUDGET_EXHAUSTED','ANALYSIS_TOTAL_BUDGET_EXHAUSTED'].includes(reason))throw error;
       this.store.event('analysis.deferred',{source_key:received.key,revision:source.revision,reason});
@@ -49,16 +61,25 @@ export class Pipeline {
     const analyzerConfig=this.config.analyzer,taskRoom=`${source.provider}:${source.guildId}:${source.channelId}`,taskLimit=analyzerConfig.maxTaskContextItems??5;
     const recentTasks=typeof this.owner.recentTasks==='function'?await this.owner.recentTasks(principal,{room:taskRoom,limit:taskLimit}):(await this.owner.tasks(principal)).filter(t=>t.room===taskRoom).slice(0,taskLimit);
     let taskChars=analyzerConfig.maxTaskContextChars??12000;const tasksContext=[];for(const task of recentTasks){if(taskChars<=0)break;const request=task.request.slice(0,taskChars);taskChars-=request.length;tasksContext.push({...task,request});}
-    const context=this.context(source,principal);const bindings=[source,...context].map(s=>({key:s.key,revision:s.revision}));this.analysisBindings.set(analysisKey,bindings);
+    const windowSeconds=this.policy().interaction?.clarificationWindowSeconds??600;
+    const voice=source.metadata?.kind==='voice',policy=this.policy();
+    const acceptedReply=execute&&reply&&source.actorId===principal&&identifiedOperator(source,policy)&&
+      (!voice||(policy.voice.mode==='assist'&&!policy.voice.naturalConversation&&!source.metadata?.nativeConversation));
+    const pending=acceptedReply?this.interactions.pending(source,windowSeconds):null;
+    const context=this.context(source,principal,pending);const bindings=[source,...context].map(s=>({key:s.key,revision:s.revision}));
+    for(const binding of pending?.bindings??[])if(!bindings.some(b=>b.key===binding.key&&b.revision===binding.revision))bindings.push(binding);
+    this.analysisBindings.set(analysisKey,bindings);
     const checkInputs=()=>{check(!controller.signal.aborted&&!this.closing,'CANCELLED');for(const b of bindings){const s=this.store.source(b.key,principal);check(s.revision===b.revision,'CONTEXT_CHANGED');}};
     for(const b of bindings)await this.authorizeAnalysis(this.store.source(b.key,principal),principal);
     checkInputs();const reservation=this.store.reserveAnalysis(this.analysisAdmission.limits());
     this.store.event('analysis.reserved',{source_key:source.key,revision:source.revision,...reservation});
-    const analyzed=await this.analyzer.analyze(source,context,{signal:controller.signal,tasks:tasksContext});const result=Analysis.parse(analyzed);checkInputs();
+    const pendingClarification=pending?.context??null;
+    const analyzed=await this.analyzer.analyze(source,context,{signal:controller.signal,tasks:tasksContext,pendingClarification});const result=Analysis.parse(analyzed);checkInputs();
     for(const b of bindings)await this.authorizeAnalysis(this.store.source(b.key,principal),principal);
     checkInputs();if(modelExecution(analyzed))this.store.event('analysis.model_used',{source_key:source.key,revision:source.revision,...modelExecution(analyzed)});
     const current=this.store.source(source.key,principal);check(current.revision===source.revision,'SOURCE_CHANGED');
-    const ids=this.store.saveIntents(source,result.intents.map(i=>({...i,contextSources:bindings})),principal);const tasks=[];
+    const ids=this.store.saveIntents(source,result.intents.map((i,index)=>({...i,contextSources:bindings,clarification_question:result.clarification?.intentIndex===index?result.clarification.question:null})),principal);const tasks=[];
+    if(pending)check(this.interactions.consume(source,pending.sequence,windowSeconds),'CLARIFICATION_CHANGED');
     const admissionPolicy=execute&&!this.draining?await this.readPolicy():this.policy();checkInputs();
     let requests=result.intents.map((intent,index)=>({intent,index})).filter(({intent})=>decideInteraction({source,intent,policy:admissionPolicy,execute,draining:this.draining})==='execute');
     const requiredActions=[...new Set(requests.map(({intent})=>intent.action))];
@@ -85,8 +106,22 @@ export class Pipeline {
       // Tell the requester at once; a failed notice never undoes the queued work.
       void (async()=>{try{await this.onTaskQueued(task,{revised});}catch(e){this.onError(errorCode(e));}})();
     }
+    if(tasks.length)this.interactions.close(source,'task_created');
+    const interactionPolicy=execute&&reply&&!tasks.length?await this.readPolicy():this.policy();checkInputs();
+    const asked=this.interactions.snapshot(source,interactionPolicy.interaction?.clarificationWindowSeconds??600);
+    const routes=result.intents.map((intent,index)=>decideInteraction({source,intent,intentIndex:index,policy:interactionPolicy,execute,reply,draining:this.draining,
+      clarification:result.clarification,pending:Boolean(asked),answered:Boolean(pendingClarification),allowClarification:tasks.length===0&&result.voiceAction==='none'}));
+    for(let index=0;index<routes.length;index++)this.interactions.decision(source,ids[index],routes[index]);
+    const clarifyIndex=routes.indexOf('clarify_once');
+    const incompleteRequest=result.intents.some(intent=>intent.kind==='request'&&intent.explicit&&!intent.complete);
     if(source.metadata?.kind==='voice'&&!source.metadata.nativeConversation&&result.voiceAction!=='none'){checkInputs();await this.onVoiceAction({source,action:result.voiceAction,contextSources:bindings});}
-    else if(reply&&result.replyRequested){checkInputs();await this.onReply({source,text:result.reply,contextSources:bindings});}
+    else if(clarifyIndex>=0){
+      for(const binding of bindings)await this.authorizeAnalysis(this.store.source(binding.key,principal),principal);
+      checkInputs();const finalPolicy=await this.readPolicy();
+      const route=decideInteraction({source,intent:result.intents[clarifyIndex],intentIndex:clarifyIndex,policy:finalPolicy,execute,reply,draining:this.draining,clarification:result.clarification,allowClarification:true,pending:Boolean(this.interactions.snapshot(source,finalPolicy.interaction?.clarificationWindowSeconds??600))});
+      checkInputs();if(route==='clarify_once'&&this.interactions.claim(source,ids[clarifyIndex],finalPolicy.interaction.clarificationWindowSeconds))await this.onReply({source,text:result.clarification.question,contextSources:bindings,clarification:true});
+    }
+    else if(reply&&result.replyRequested&&!incompleteRequest){checkInputs();await this.onReply({source,text:result.reply,contextSources:bindings});}
     return {key:source.key,state:'analyzed',intents:ids,tasks,summary:result.summary,answer:result.replyRequested?result.reply:null,contextSources:bindings};
   }
   async request(source,{title,request,action,acceptance=[]}){
@@ -96,8 +131,9 @@ export class Pipeline {
     if(this.owner.kind==='remote')await this.owner.ingest({...source,final:true});const received=this.store.ingest({...source,final:true});const s=this.store.source(received.key,source.actorId);
     const intentIds=this.store.saveIntents(s,[{kind:'request',title,request,action,acceptance,explicit:true,complete:true,origin:'explicit_command',contextSources:[{key:s.key,revision:s.revision}]}],source.actorId);let task;
     try{task=await this.owner.createTask(s,{title,request,action,acceptance,key:'explicit-command',intentIds,requiredActions:[action]});await this.authorize(task);await this.#checkAdmission(source,[action]);}catch(error){await this.#discardAdmission(task?[{task}]:[],error);throw error;}
-    this.enqueue(task.id,source.actorId,task.revision);return task;
+    this.interactions.close(s,'task_created');this.enqueue(task.id,source.actorId,task.revision);return task;
   }
+  endInteraction(source){this.interactions.close(source,'voice_end');}
   async #checkAdmission(source,actions,policy=null){
     const current=policy??await this.readPolicy();
     check(!this.closing&&!this.draining,'RUNTIME_STOPPING');

@@ -66,6 +66,13 @@ receipts apply only to their own revisions and unchanged behaviors.
 実音声の受入、到着時刻・話者・途切れ・再参加の実測は未実施で、PB-G2は未完了です。
 [確認手順](VOICE-ROTATION.md)に従い、人の受入結果を#148へ記録します。
 
+## 不足情報の確認（#145）
+
+Interaction Policyとclarify_onceを実装し、合成のStore/Pipeline/Discord送信先で、同じ
+話者・部屋の最大一回、並行予約、再起動、期限、誤った話者・権限取消・出典撤回を検査します。
+質問の案内は元チャンネルへの回答を明示し、受信できないDM返信を誘導しません。
+実Discord・実VC・実APIでの質問の品質とPB-G10は未受入です。
+
 ## 履歴増加時の保存・検索
 
 `tests/store-scale.test.mjs` は100チャンネル・12,000出典・2,400 Taskの合成履歴で、
