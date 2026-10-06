@@ -107,6 +107,8 @@
         "goal_refs": {"$ref": "#/$defs/refs"},
         "kgi_refs": {"$ref": "#/$defs/refs"},
         "initiative_refs": {"$ref": "#/$defs/refs"},
+        "factor_refs": {"$ref": "#/$defs/refs"},
+        "strategy": {"$ref": "#/$defs/strategy"},
         "agent_use": {
           "type": "object",
           "additionalProperties": false,
@@ -130,6 +132,39 @@
   },
   "additionalProperties": true,
   "$defs": {
+    "strategy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "adoption_status", "relationships"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$", "maxLength": 96},
+        "adoption_status": {"const": "candidate"},
+        "measurement_role": {"enum": ["product_outcome", "control_slo", "supporting_kpi"]},
+        "baseline": {"const": "unknown"},
+        "target": {"const": "not_adopted"},
+        "deadline": {"const": "not_adopted"},
+        "measurement_window": {"const": "not_adopted"},
+        "exclusion_policy": {"const": "not_adopted"},
+        "hypothesis": {
+          "type": "object", "additionalProperties": false,
+          "required": ["intervention", "expected_effect", "falsifier"],
+          "properties": {
+            "intervention": {"type": "string", "minLength": 1, "maxLength": 1000},
+            "expected_effect": {"type": "string", "minLength": 1, "maxLength": 1000},
+            "falsifier": {"type": "string", "minLength": 1, "maxLength": 1000}
+          }
+        },
+        "relationships": {
+          "type": "array", "maxItems": 32, "uniqueItems": true,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["type", "target"],
+            "properties": {
+              "type": {"enum": ["measured_by", "computed_by", "enabled_by", "observed_by", "advanced_by", "tested_by", "produces", "governed_by", "adopts", "revises", "pauses", "rejects", "mitigates"]},
+              "target": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$", "maxLength": 96}
+            }
+          }
+        }
+      }
+    },
     "actor": {
       "type": "string",
       "minLength": 3,
