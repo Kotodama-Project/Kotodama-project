@@ -15,6 +15,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
 from validate_resolved_compose_candidate import load_strict_json_bytes
+from knowledge_context import FALSE_CLAIMS
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = "knowledge-work.json"
@@ -22,9 +23,6 @@ MAX_PACKAGE_BYTES = 256 * 1024
 MAX_ARTIFACT_BYTES = 1024 * 1024
 MAX_TOTAL_BYTES = 8 * 1024 * 1024
 SENSITIVITY = {"public": 0, "internal": 1, "restricted": 2}
-FALSE_CLAIMS = {"human_approval_verified": False, "reviewer_identity_verified": False,
-                "semantic_entailment_verified": False, "execution_authorized": False,
-                "promotion_created": False, "current_truth_changed": False}
 
 
 class Refusal(ValueError):

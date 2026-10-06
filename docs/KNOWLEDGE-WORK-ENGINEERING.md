@@ -11,6 +11,7 @@ Python 3.12とhash付き`requirements-ci.txt`の依存を使います。
 ```sh
 python -B tools/audit_knowledge_workspaces.py --format markdown --fail-on error --require-package
 python -B tools/validate_knowledge_work_package.py examples/knowledge-work/business-rehearsal
+python -B tools/compile_knowledge_context.py examples/knowledge-work/business-rehearsal --as-of 2026-09-11T00:00:00Z
 python -B -m unittest tests.test_knowledge_work_validation tests.test_knowledge_work_source_roots -v
 ```
 
@@ -63,10 +64,13 @@ read/export権限の付与ではありません。許容した範囲のreportに
 
 package/validatorは#198、監査とsource-root試験は#133のR3bです。公開#60の
 `2ed4aa268e04e62ade868c6900637873eaea37b9`を元に、現在の有限reader・拒否理由・出力抑制を保持します。
-compilerは未統合です。元のcompiler専用assertionと混在methodのcompiler部分は
+compilerは[統一context v2](KNOWLEDGE-CONTEXT.md)を生成します。
 [#137の対応表](https://github.com/Kotodama-Project/Kotodama-project/issues/137#issuecomment-5849351363)
-に保存しています。両試験moduleはcompilerなしで実行し、R3bで元の監査試験を復元します。
+に保存したcompiler専用・混在assertionを二つの試験moduleへ戻しました。期限、感度拒否時の
+出力抑制、重要な主張・byte予算、関連主張、schema/digest、draft拒否、明示source-rootとCLIを
+検査します。新しい試験は受入条件の変更によるdigestの変化と、実Node子processのstdinへ
+変更が届くことも確認します。子processはfixtureであり、外部modelの呼出しではありません。
 
-後続#137は選択済みの一つのgenerated-knowledge-context形式へ束縛します。
-現packageのsource kindにはConcept参照がなく、その接続、context予算、executorへ渡す最終payloadの
-検証も後続です。監査PASSから実Task完了やlive接続は主張しません。
+現packageのsource kindにはConcept参照を追加していません。既存の`local_snapshot`で
+exact fileを固定でき、ConceptRevisionへの型付き参照は#53のrevision契約に合わせる範囲です。
+compilerのPASSから実Task完了やlive接続は主張しません。
