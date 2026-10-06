@@ -8,6 +8,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 公開ファイル分類と7役割の責任索引を既存知識へ接続した。98%分類gateを維持し、旧OKFの別定義と稼働宣言を持ち込まず、元のreview日付に基づく鮮度警告を保持する（#134）。
 - Discordの既存4actionを固定のcapability laneへ対応付け、設定・analyzer・コマンドの語彙を一つにした。既定grantを維持し、編集の確認待ち・実際の読取境界・外部操作を表現しない条件を文書化（#146後半）。
 
 - control-planeの監査道具と3 schemasを現行知識基盤へ向け直した。競合OKFを除去し、98%分類・未知Concept・有限読取り・責任索引からの稼働宣言拒否を検証する。台帳の接続は後続（#134）。
