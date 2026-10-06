@@ -284,6 +284,9 @@ python tools/knowledge_base.py build --root . --check
 
 ## 出典pinと再開時の確認
 
+実行器へ渡すcontextは[統一context v2](KNOWLEDGE-CONTEXT.md)です。KBとWorkの文脈は
+同じenvelopeを使い、旧版を使うconsumerは明示的な更新と元資料からの再生成が必要です。
+
 `sources[].sha256`はKotodama producerが任意に付けるlocal source bytesのpinです。
 64桁の小文字hexを、返却bundleが実際に保持する有限snapshotのSHA-256と照合します。
 不一致は`SOURCE_DIGEST_MISMATCH`、local fileへ解決できないpinは
