@@ -1,0 +1,69 @@
+name: Native Intent Browser
+on:
+  pull_request:
+    paths:
+      - 'runtime/cloudflare-os-kotodama/**'
+      - 'tools/test_native_intent_browser.py'
+      - 'tests/node/test_company_persona_journeys.mjs'
+      - 'tests/node/test_local_review_gateway.mjs'
+      - 'tests/node/test_information_access.mjs'
+      - 'runtime/local-review-gateway/**'
+      - 'requirements-native-browser*.txt'
+      - '.github/workflows/native-intent-browser.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+      - name: Check tracked credential hygiene before dependencies
+        run: python -S -B tools/check_tracked_secret_hygiene.py
+      - name: Install pinned browser test harness
+        run: |
+          python -m pip install --require-hashes -r requirements-native-browser-ci.txt
+          python -m playwright install --with-deps chromium
+      - name: Exercise shipped client with isolated synthetic RPC
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/kotodama-browser-evidence"
+          python tools/test_native_intent_browser.py --evidence-dir "$RUNNER_TEMP/kotodama-browser-evidence" > "$RUNNER_TEMP/kotodama-browser-evidence/results.json"
+      - name: Preserve component evidence without claiming full OS E2E
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-intent-browser-${{ github.run_id }}
+          path: ${{ runner.temp }}/kotodama-browser-evidence/
+          if-no-files-found: error
+          retention-days: 7
+  local-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - name: Exercise real local HTTP and persistence with synthetic identities
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/kotodama-persona-http"
+          git rev-parse HEAD > "$RUNNER_TEMP/kotodama-persona-http/checkout-sha.txt"
+          node --test tests/node/test_local_review_gateway.mjs tests/node/test_information_access.mjs tests/node/test_company_persona_journeys.mjs 2>&1 | tee "$RUNNER_TEMP/kotodama-persona-http/results.log"
+      - name: Preserve local HTTP evidence without claiming live company E2E
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: company-persona-http-${{ github.run_id }}
+          path: ${{ runner.temp }}/kotodama-persona-http/
+          if-no-files-found: error
+          retention-days: 7
