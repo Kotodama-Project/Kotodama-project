@@ -73,10 +73,12 @@ Interaction Policyとclarify_onceを実装し、合成のStore/Pipeline/Discord�
 質問の案内は元チャンネルへの回答を明示し、受信できないDM返信を誘導しません。
 実Discord・実VC・実APIでの質問の品質とPB-G10は未受入です。
 
-## 履歴増加時の保存・検索
+## 静かな仕事の進捗（#144）
 
 静かな仕事の進捗（#144）は[既存DMの更新](QUIET-TASK-PROGRESS.md)として既定無効で実装しています。
 権限・版・上限・退出後の仕事継続は合成試験で検証し、実Discord・実VCと通知の使いやすさは未受入です。
+
+## 履歴増加時の保存・検索
 
 `tests/store-scale.test.mjs` は100チャンネル・12,000出典・2,400 Taskの合成履歴で、
 会話contextのJSON読取りが設定した12出典に収まり、出典・Taskの検索と訂正の
