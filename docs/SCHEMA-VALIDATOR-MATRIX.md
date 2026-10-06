@@ -232,6 +232,8 @@ python3 tools/verify_company_pack_review_decision_handoff.py \
 |---|---|---|---|
 | [knowledge-work-package.schema.json](../schemas/knowledge-work-package.schema.json)、[knowledge-work-validation-report.schema.json](../schemas/knowledge-work-validation-report.schema.json) | [`validate_knowledge_work_package.py`](../tools/validate_knowledge_work_package.py)（本体は [`knowledge_work_validator.py`](../tools/knowledge_work_validator.py)）、下書きを作る [`create_knowledge_work_package.py`](../tools/create_knowledge_work_package.py) | [`test_knowledge_work_validation.py`](../tests/test_knowledge_work_validation.py) | 構造の検査だけ。根拠と成果物の bytes と digest の一致、path の逸脱・link・hardlink の拒否、claim と根拠・受入条件と成果物の対応、期限、未解決の blocking な問い、自己 review、感度の引き下げを見る。意味の正しさ、人の承認、reviewer の本人確認、実行の許可、Promotion、Current Truth は作らず、report の `claims` は常にすべて false。 |
 
+[`audit_knowledge_workspaces.py`](../tools/audit_knowledge_workspaces.py)は最大64package・4096entryの探索と各validatorを組み合わせます。明示workspace/source-root、ゼロ件・重複・分類上限・感度引下げの拒否を[`test_knowledge_work_source_roots.py`](../tests/test_knowledge_work_source_roots.py)で検査します。運用は[Knowledge Work](KNOWLEDGE-WORK-ENGINEERING.md)を参照し、件数だけを検証の代わりにしません。
+
 ## OpenMaus / Cloudflare OS design contracts
 
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
