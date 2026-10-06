@@ -2,7 +2,7 @@ import {Analysis,modelExecution} from './llm.mjs';
 import {check,digest,errorCode} from './common.mjs';
 import {verifyArtifacts} from './worker.mjs';
 import {AnalysisAdmission} from './analysis-admission.mjs';
-import {decideInteraction} from './interaction-policy.mjs';
+import {decideInteraction,identifiedOperator} from './interaction-policy.mjs';
 import {InteractionState} from './interaction-state.mjs';
 
 export class Pipeline {
@@ -62,7 +62,7 @@ export class Pipeline {
     let taskChars=analyzerConfig.maxTaskContextChars??12000;const tasksContext=[];for(const task of recentTasks){if(taskChars<=0)break;const request=task.request.slice(0,taskChars);taskChars-=request.length;tasksContext.push({...task,request});}
     const windowSeconds=this.policy().interaction?.clarificationWindowSeconds??600;
     const voice=source.metadata?.kind==='voice',policy=this.policy();
-    const acceptedReply=execute&&reply&&source.provider==='discord'&&source.actorId===principal&&policy.discord.operators.includes(principal)&&
+    const acceptedReply=execute&&reply&&source.actorId===principal&&identifiedOperator(source,policy)&&
       (!voice||(policy.voice.mode==='assist'&&!policy.voice.naturalConversation&&!source.metadata?.nativeConversation));
     const pending=acceptedReply?this.interactions.pending(source,windowSeconds):null;
     const context=this.context(source,principal,pending);const bindings=[source,...context].map(s=>({key:s.key,revision:s.revision}));

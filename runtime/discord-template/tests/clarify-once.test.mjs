@@ -233,3 +233,12 @@ test('an original request is refused rather than truncated when it cannot fit co
   f.config.analyzer.maxContextChars=2000;await ingest(f,source('retry'));
   assert.equal(f.calls.at(-1).context[0].text,text);
 });
+
+test('unknown attribution cannot consume a pending question even with a nonnull actor',async t=>{
+  const f=await fixture(t);await ingest(f,source('first'));
+  await ingest(f,source('unknown',{metadata:{kind:'voice',attribution:'unknown_speaker'}}));
+  assert.equal(f.calls[1].options.pendingClarification,null);
+  assert.equal(f.pipeline.interactions.snapshot(source('known')).phase,'pending');
+  await ingest(f,source('known'));
+  assert.equal(f.calls.at(-1).options.pendingClarification.sourceKey,f.calls[0].source.key);
+});
