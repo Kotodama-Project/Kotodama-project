@@ -123,7 +123,14 @@ export async function startLocalModelProxy(config) {
       if (body.max_tokens === undefined && body.max_completion_tokens === undefined) body.max_tokens = 4096;
       const forwarded = Buffer.from(JSON.stringify(body));
       const item = { inputSha256: hash(bytes), inputBytes: bytes.length, startedAt: new Date().toISOString(), state: "running", outputBytes: 0 };
-      receipt.invocations++; receipt.active = true; receipt.requests.push(item); save();
+      receipt.invocations++; receipt.active = true; receipt.requests.push(item);
+      try { save(); }
+      catch (error) {
+        persistenceFailure = error; closing = true;
+        json(res, 503, { error: "model_receipt_unavailable" });
+        void close().catch(() => {});
+        return;
+      }
       const client = upstream.protocol === "https:" ? httpsRequest : httpRequest;
       const url = new URL("chat/completions", upstream.href.replace(/\/?$/, "/"));
       activeUpstream = client(url, { method: "POST", headers: { "content-type": "application/json", "content-length": forwarded.length }, timeout: 180000 }, reply => {
@@ -169,9 +176,16 @@ export async function startLocalModelProxy(config) {
   server.maxConnections = 8;
   server.requestTimeout = 200000;
   server.headersTimeout = 10000;
-  try { save(); } catch (error) { rmdirSync(lock); throw error; }
   try { await new Promise((accept, reject) => { server.once("error", reject); server.listen(config.port, "127.0.0.1", accept); }); }
   catch (error) { rmdirSync(lock); throw error; }
+  try { save(); }
+  catch (error) {
+    // No request has been dispatched. Stop the owned listener, and preserve the
+    // lock if persistence is uncertain rather than serving an unusable proxy.
+    closing = true;
+    await new Promise(accept => { server.close(accept); server.closeAllConnections(); });
+    throw error;
+  }
   let closePromise;
   let expiryTimer;
   let finishClosed;

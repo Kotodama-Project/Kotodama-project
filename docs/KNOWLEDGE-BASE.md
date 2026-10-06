@@ -297,7 +297,7 @@ deprecated、revoked、conflicted、unknownを配送候補へ入れず、リン�
 
 [再開手順](../knowledge/project/catchup.md)は現在の地図・STATUS・この契約を出典にします。
 過去の日付付きGitHub観測を現在地として再配置しません。
-`runtime/cloudflare-os/codex-bridge/knowledge-input.mjs`はこのcontextの構造、版、期限、
+`runtime/codex-task-bridge/knowledge-input.mjs`はこのcontextの構造、版、期限、
 source/context pinと16KiB上限を確認し、`runCodexBrief`は実行器へ渡す最終UTF-8 stdinと
 schemaのdigestを開始・完了に束縛します。訂正前のpinは再利用できません。
 実プロセスとの境界は合成executorで検証し、実modelやproviderの受入とは区別します。
