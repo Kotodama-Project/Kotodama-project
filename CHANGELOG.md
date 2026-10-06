@@ -9,6 +9,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - ローカルASRの15分rotationと非公開テキスト投稿を既定無効で追加。発話を分割せず、全閲覧者と出典を照合し、再起動・不明な配送から再送しない。実音声のPB-G2受入は別途（#148）。
+- offline agent診断のhardening試験、Linux/Windowsの限定CI、公開skillを追加。skill・実装・統合契約を同じcontent digestに束縛し、各検査のfailure・skipを隠さず報告する（#136後半）。
 
 - Knowledge Work compilerを統一context v2へ接続。必須の主張・受入条件・成果物を落とさず、上限や分類・出典変更の拒否でWork情報を除去する。分離していたcompilerの回帰assertionと、実入力へ訂正を流す合成経路を復元（#137後半）。
 - agentの状態をオフラインで投影するCLIを再配置。現在の責任索引に対応し、JSON・Markdownとも既定で名前・目的・Work/runを伏せる。未認証の観測、停止要求、実行終了を認可や独立検証へ格上げしない（#136前半）。
