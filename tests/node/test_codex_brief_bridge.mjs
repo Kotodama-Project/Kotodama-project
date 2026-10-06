@@ -15,6 +15,111 @@ import { syntheticSeed, syntheticCatalog } from "../../runtime/local-review-gate
 import { validateAdmission, validateSource, validateQueued, validateResult, validateRevoked, validateSessionResult, validateBridgeOrigin } from "../../runtime/cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/protocol.mjs";
 
 const brief = { objective: "要件を整理する", deliverable: "要件案", constraints: ["公開しない"], acceptance_criteria: ["同じ画面で読み戻せる"], open_questions: [] };
+const fixtureInputBinding = input => ({ input_sha256: createHash("sha256").update(input).digest("hex"),
+  stdin_sha256: createHash("sha256").update("synthetic stdin:" + input).digest("hex"),
+  stdin_bytes: Buffer.byteLength("synthetic stdin:" + input), schema_sha256: "b".repeat(64) });
+
+test("failed session retains the exact runner input binding after restart", async () => {
+  const { root, config } = fixture(); let bridge; let binding; const thread_id = randomUUID(); let calls = 0;
+  try {
+    bridge = await startBriefBridge(config, { invoke: async ({ input, onSessionStarted }) => {
+      calls++; binding = fixtureInputBinding(input); onSessionStarted({ thread_id, ...binding });
+      throw Error("synthetic failure after start");
+    } });
+    const request_id = randomUUID(), body = { request_id, source_revision: 1, binding_sha256: grantDigest(config.grant) };
+    await call(bridge, config, "/v1/briefs", { body }); await new Promise(setImmediate);
+    const path = join(config.stateRoot, "invocations.json");
+    assert.deepEqual(JSON.parse(readFileSync(path)).jobs[0].session.input_binding, binding);
+    await bridge.close(); bridge = await startBriefBridge({ ...config, seeds: undefined }, { invoke: () => { throw Error("must not rerun"); } });
+    const result = await (await call(bridge, config, `/v1/briefs/${request_id}/session`)).json();
+    assert.equal(result.state, "failed"); assert.deepEqual(result.session.input_binding, binding);
+    await call(bridge, config, "/v1/briefs", { body }); assert.equal(calls, 1);
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("completion cannot replace the binding saved with the observed session", async () => {
+  const { root, config } = fixture(); let bridge;
+  try {
+    bridge = await startBriefBridge(config, { invoke: async ({ input, onSessionStarted }) => {
+      const binding = fixtureInputBinding(input), thread_id = randomUUID();
+      onSessionStarted({ thread_id, ...binding });
+      return { brief, thread_id, ...binding, stdin_sha256: "c".repeat(64) };
+    } });
+    const request_id = randomUUID();
+    await call(bridge, config, "/v1/briefs", { body: { request_id, source_revision: 1, binding_sha256: grantDigest(config.grant) } });
+    await new Promise(setImmediate);
+    assert.equal((await (await call(bridge, config, `/v1/briefs/${request_id}`)).json()).state, "failed");
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("the production runner callback persists the bytes actually written to stdin", async () => {
+  const { root, config } = fixture(); let bridge; const received = []; const thread_id = randomUUID();
+  config.runner = { executable: process.execPath, expectedExecutableSha256: createHash("sha256").update(readFileSync(process.execPath)).digest("hex"), cwd: root, model: "synthetic-model" };
+  const spawnImpl = () => {
+    const child = new EventEmitter(); child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+    let closed = false; child.kill = () => { if (!closed) { closed = true; setImmediate(() => child.emit("close", 1)); } return true; };
+    child.stdin.on("data", bytes => received.push(Buffer.from(bytes)));
+    child.stdin.on("finish", () => setImmediate(() => {
+      child.stdout.write(JSON.stringify({ type: "thread.started", thread_id }) + "\n");
+      child.stdout.write(JSON.stringify({ type: "turn.failed" }) + "\n");
+    }));
+    return child;
+  };
+  try {
+    bridge = await startBriefBridge(config, { invoke: options => runCodexBrief(options, { spawnImpl }) });
+    const request_id = randomUUID();
+    await call(bridge, config, "/v1/briefs", { body: { request_id, source_revision: 1, binding_sha256: grantDigest(config.grant) } });
+    let result;
+    for (let n = 0; n < 30; n++) {
+      result = await (await call(bridge, config, `/v1/briefs/${request_id}/session`)).json();
+      if (result.state === "failed") break;
+      await new Promise(setImmediate);
+    }
+    assert.equal(result.state, "failed"); assert.equal(result.session.thread_id, thread_id);
+    assert.equal(result.session.input_binding.stdin_sha256, createHash("sha256").update(Buffer.concat(received)).digest("hex"));
+    assert.equal(result.session.input_binding.stdin_bytes, Buffer.concat(received).length);
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("v2 session journals keep raw backups and do not invent input bindings", async () => {
+  const { root, config } = fixture(); let bridge; const thread_id = randomUUID();
+  try {
+    bridge = await startBriefBridge(config, { invoke: async ({ onSessionStarted }) => { onSessionStarted({ thread_id }); throw Error("synthetic failure"); } });
+    const request_id = randomUUID();
+    await call(bridge, config, "/v1/briefs", { body: { request_id, source_revision: 1, binding_sha256: grantDigest(config.grant) } });
+    await new Promise(setImmediate); await bridge.close(); bridge = null;
+    const path = join(config.stateRoot, "invocations.json"), old = JSON.parse(readFileSync(path));
+    old.schema = "kotodama/brief-invocations/v2"; delete old.jobs[0].session.input_binding;
+    const raw = Buffer.from(JSON.stringify(old, null, 2)); writeFileSync(path, raw);
+    bridge = await startBriefBridge({ ...config, seeds: undefined });
+    assert.deepEqual(readFileSync(join(config.stateRoot, "invocations.v2.backup.json")), raw);
+    const saved = JSON.parse(readFileSync(path)); assert.equal(saved.schema, "kotodama/brief-invocations/v3");
+    assert.equal(saved.jobs[0].session.input_binding, null); assert.equal(saved.jobs[0].session.thread_id, thread_id);
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("malformed or mismatched saved input binding refuses restart without rewriting evidence", async () => {
+  const { root, config } = fixture(); let bridge;
+  try {
+    bridge = await startBriefBridge(config, { invoke: async ({ input, onSessionStarted }) => {
+      const binding = fixtureInputBinding(input), thread_id = randomUUID(); onSessionStarted({ thread_id, ...binding }); return { brief, thread_id, ...binding };
+    } });
+    await call(bridge, config, "/v1/briefs", { body: { request_id: randomUUID(), source_revision: 1, binding_sha256: grantDigest(config.grant) } });
+    await new Promise(setImmediate); await bridge.close(); bridge = null;
+    const path = join(config.stateRoot, "invocations.json"), original = JSON.parse(readFileSync(path));
+    for (const mode of ["missing", "extra", "invalid-size", "array-digest", "result-mismatch"]) {
+      const value = structuredClone(original), binding = value.jobs[0].session.input_binding;
+      if (mode === "missing") delete binding.schema_sha256;
+      if (mode === "extra") binding.unknown = true;
+      if (mode === "invalid-size") binding.stdin_bytes = 1.5;
+      if (mode === "array-digest") { binding.stdin_sha256 = [binding.stdin_sha256]; value.jobs[0].state = "failed"; value.jobs[0].result = null; }
+      if (mode === "result-mismatch") value.jobs[0].result.stdin_sha256 = "c".repeat(64);
+      const bytes = Buffer.from(JSON.stringify(value)); writeFileSync(path, bytes);
+      await assert.rejects(startBriefBridge({ ...config, seeds: undefined }), /job_input_binding_denied/);
+      assert.deepEqual(readFileSync(path), bytes);
+    }
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
 test("session provenance retains the model passed to invoke when caller configuration changes", async () => {
   const { root, config } = fixture();
   config.runner.model = "gpt-6-astra";
@@ -105,7 +210,7 @@ test('the runner observes a valid start before a later failure and refuses dupli
 test('legacy invocation journals are backed up and migrated without inventing session evidence',async()=>{
  const {root,config}=fixture();let bridge;
  const path=join(config.stateRoot,'invocations.json'),legacy=JSON.stringify({schema:'kotodama/brief-invocations/v1',jobs:[]});writeFileSync(path,legacy);
- try {bridge=await startBriefBridge(config,{invoke:async()=>({brief})});assert.equal(readFileSync(join(config.stateRoot,'invocations.v1.backup.json'),'utf8'),legacy);assert.equal(JSON.parse(readFileSync(path)).schema,'kotodama/brief-invocations/v2');assert.deepEqual(JSON.parse(readFileSync(path)).jobs,[]);}
+ try {bridge=await startBriefBridge(config,{invoke:async()=>({brief})});assert.equal(readFileSync(join(config.stateRoot,'invocations.v1.backup.json'),'utf8'),legacy);assert.equal(JSON.parse(readFileSync(path)).schema,'kotodama/brief-invocations/v3');assert.deepEqual(JSON.parse(readFileSync(path)).jobs,[]);}
  finally{if(bridge)await bridge.close();rmSync(root,{recursive:true,force:true});}
 });
 test('a session cannot be reassigned or attached after the invocation has ended',async()=>{

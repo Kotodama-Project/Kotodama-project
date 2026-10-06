@@ -12,6 +12,15 @@ const hex = /^[0-9a-f]{64}$/;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const closed = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
   && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+const INPUT_BINDING_KEYS = ["input_sha256", "stdin_sha256", "stdin_bytes", "schema_sha256"];
+function validateInputBinding(value) {
+  if (!closed(value, INPUT_BINDING_KEYS)
+    || ["input_sha256", "stdin_sha256", "schema_sha256"].some(key => typeof value[key] !== "string" || !hex.test(value[key]))
+    || !Number.isSafeInteger(value.stdin_bytes)
+    || value.stdin_bytes < 1 || value.stdin_bytes > 131072) throw new Error("job_input_binding_denied");
+  return Object.fromEntries(INPUT_BINDING_KEYS.map((key) => [key, value[key]]));
+}
+const bindingMatches = (result, binding) => result && INPUT_BINDING_KEYS.every((key) => result[key] === binding[key]);
 const GRANT_KEYS = ["work_order_ref", "requester_ref", "worker_ref", "handoff_id", "source_revision", "source_sha256", "policy_revision", "expires_at", "max_invocations", "operation"];
 export const grantDigest = (grant) => hash(JSON.stringify(GRANT_KEYS.map((key) => [key, grant[key]])));
 export function projectionDigest(value) {
@@ -40,7 +49,7 @@ function checkedDirectory(value) {
 }
 
 function saveJobs(root, jobs) {
-  const body = Buffer.from(JSON.stringify({ schema: "kotodama/brief-invocations/v2", jobs }));
+  const body = Buffer.from(JSON.stringify({ schema: "kotodama/brief-invocations/v3", jobs }));
   if (body.length > 2_097_152) throw new Error("job_store_limit");
   const temporary = join(root, `.${randomUUID()}.tmp`);
   const fd = openSync(temporary, "wx", 0o600);
@@ -56,13 +65,13 @@ function loadJobs(root) {
   try {
     const raw = readPinnedFile(path, "job_store_denied", 2_097_152);
     const store = strictJson(raw);
-    const legacy = store?.schema === "kotodama/brief-invocations/v1";
-    if (!closed(store, ["schema", "jobs"]) || !["kotodama/brief-invocations/v1", "kotodama/brief-invocations/v2"].includes(store.schema)
+    const legacyVersion = /^kotodama\/brief-invocations\/v([12])$/.exec(store?.schema)?.[1];
+    if (!closed(store, ["schema", "jobs"]) || !["kotodama/brief-invocations/v1", "kotodama/brief-invocations/v2", "kotodama/brief-invocations/v3"].includes(store.schema)
       || !Array.isArray(store.jobs) || store.jobs.length > 32) throw new Error("job_store_denied");
     const ids = new Set();
     for (const job of store.jobs) {
       const keys = ["request_id", "fingerprint", "requester_ref", "handoff_id", "source_revision", "policy_revision", "binding_sha256", "state", "result"];
-      if (!legacy) keys.push("session");
+      if (legacyVersion !== "1") keys.push("session");
       if (!closed(job, keys)
         || !uuid.test(job.request_id) || ids.has(job.request_id) || !hex.test(job.fingerprint)
         || !principal.test(job.requester_ref) || typeof job.handoff_id !== "string" || !/^[a-z0-9][a-z0-9-]{0,127}$/.test(job.handoff_id)
@@ -70,17 +79,22 @@ function loadJobs(root) {
         || !Number.isSafeInteger(job.policy_revision) || job.policy_revision < 1 || !hex.test(job.binding_sha256)
         || !["running", "ready", "failed", "interrupted"].includes(job.state)) throw new Error("job_store_denied");
       ids.add(job.request_id);
-      if (legacy) job.session = null;
-      if (job.session !== null && (!closed(job.session, ["thread_id", "kind", "started_at", "model_requested"])
+      if (legacyVersion === "1") job.session = null;
+      const sessionKeys = ["thread_id", "kind", "started_at", "model_requested"];
+      if (!legacyVersion) sessionKeys.push("input_binding");
+      if (job.session !== null && (!closed(job.session, sessionKeys)
         || !isCodexThreadId(job.session.thread_id) || job.session.kind !== "ephemeral_codex"
         || !Number.isFinite(Date.parse(job.session.started_at)) || new Date(job.session.started_at).toISOString() !== job.session.started_at
         || (job.session.model_requested !== null && (typeof job.session.model_requested !== "string" || !/^[a-z0-9][a-z0-9.-]{0,79}$/.test(job.session.model_requested))))) throw new Error("job_session_denied");
+      if (job.session && legacyVersion) job.session.input_binding = null;
+      if (job.session?.input_binding !== undefined && job.session.input_binding !== null) validateInputBinding(job.session.input_binding);
       if (job.state === "ready") validateBrief(job.result?.brief);
       else if (job.result !== null) throw new Error("job_store_denied");
       if (job.state === "ready" && job.session && job.result.thread_id !== job.session.thread_id) throw new Error("job_session_result_mismatch");
+      if (job.state === "ready" && job.session?.input_binding && !bindingMatches(job.result, job.session.input_binding)) throw new Error("job_input_binding_denied");
     }
-    if (legacy) {
-      const backup = join(root, "invocations.v1.backup.json");
+    if (legacyVersion) {
+      const backup = join(root, `invocations.v${legacyVersion}.backup.json`);
       try { writeFileSync(backup, raw, { flag: "wx", mode: 0o600 }); }
       catch (error) {
         if (error.code !== "EEXIST") throw error;
@@ -91,7 +105,7 @@ function loadJobs(root) {
     }
     return store.jobs;
   } catch (error) {
-    if (["job_session_denied", "job_session_result_mismatch", "legacy_job_backup_conflict"].includes(error.message)) throw error;
+    if (["job_session_denied", "job_session_result_mismatch", "job_input_binding_denied", "legacy_job_backup_conflict"].includes(error.message)) throw error;
     throw new Error("job_store_denied");
   }
 }
@@ -171,19 +185,23 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
       const input = prepareInput(p);
       const invocationRunner = Object.freeze({ ...runner });
       result = await invoke({ ...invocationRunner, input, signal: controller.signal,
-        onSessionStarted({ thread_id }) {
+        onSessionStarted({ thread_id, ...observedBinding }) {
           admitted(job.requester_ref);
           if (controller.signal.aborted || sealedAfterShutdown || active?.request_id !== job.request_id
             || jobs.find((item) => item.request_id === job.request_id)?.state !== "running"
             || job.session || !isCodexThreadId(thread_id)
             || (invocationRunner.model !== undefined && (typeof invocationRunner.model !== "string" || !/^[a-z0-9][a-z0-9.-]{0,79}$/.test(invocationRunner.model)))) throw new Error("session_start_denied");
-          const session = { thread_id, kind: "ephemeral_codex", started_at: new Date().toISOString(), model_requested: invocationRunner.model ?? null };
+          const inputBinding = Object.keys(observedBinding).length ? validateInputBinding(observedBinding) : null;
+          if (inputBinding && inputBinding.input_sha256 !== hash(input)) throw new Error("job_input_binding_denied");
+          const session = { thread_id, kind: "ephemeral_codex", started_at: new Date().toISOString(),
+            model_requested: invocationRunner.model ?? null, input_binding: inputBinding };
           const next = jobs.map((item) => item.request_id === job.request_id ? { ...item, session } : item);
           saveJobs(root, next); jobs = next; job.session = session;
         },
       });
       admitted(job.requester_ref);
       if (job.session && result.thread_id !== job.session.thread_id) throw new Error("session_result_mismatch");
+      if (job.session?.input_binding && !bindingMatches(result, job.session.input_binding)) throw new Error("job_input_binding_denied");
       validateBrief(result.brief);
       // Source questions are unresolved evidence. A model cannot silently remove them.
       result = { ...result, brief: { ...result.brief,
