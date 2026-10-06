@@ -1,0 +1,97 @@
+{
+  "kind": "kotodama.intent-outcome-snapshot",
+  "schema_revision": "v1",
+  "snapshot_ref": "ref/snapshot/synthetic",
+  "snapshot_revision_ref": "ref/snapshot-revision/synthetic",
+  "parameters": {
+    "metric_id": "KGI-INTENT",
+    "window_start": "2026-09-01T00:00:00Z",
+    "window_end": "2026-10-01T00:00:00Z",
+    "exclusion_mode": "receipted_withdrawal_or_cancel"
+  },
+  "coverage": {
+    "status": "synthetic_full",
+    "owner_ref": "ref/actor/synthetic-owner",
+    "receipt_ref": "ref/coverage/synthetic"
+  },
+  "cases": [
+    {
+      "case_ref": "ref/case/synthetic-a",
+      "history_ref": "ref/history/synthetic-a",
+      "owner_ref": "ref/actor/synthetic-owner",
+      "goal_ref": "OUT-INTENT",
+      "intent_ref": "ref/intent/synthetic-a",
+      "intent_revision_ref": "ref/intent-revision/synthetic-a",
+      "request_sha256": "d5117fb81e0c8fff66a83c990c91012be3dd68e64cf92b44136169d823739d7f",
+      "due_at": "2026-09-15T00:00:00Z",
+      "admitted": true,
+      "admitted_at": "2026-09-02T00:00:00Z",
+      "state": "completed",
+      "source": {
+        "ref": "ref/source/synthetic-a",
+        "revision_ref": "ref/source-revision/synthetic-a",
+        "sha256": "ce065c8cde8caa6e51ec405febe6e3d1c39dfcff2602d147670db662f9cbd80d"
+      },
+      "intent_review": {
+        "receipt_ref": "ref/intent-review/synthetic-a",
+        "reviewer_ref": "ref/actor/synthetic-owner",
+        "intent_ref": "ref/intent/synthetic-a",
+        "intent_revision_ref": "ref/intent-revision/synthetic-a",
+        "source_ref": "ref/source/synthetic-a",
+        "source_revision_ref": "ref/source-revision/synthetic-a",
+        "source_sha256": "ce065c8cde8caa6e51ec405febe6e3d1c39dfcff2602d147670db662f9cbd80d",
+        "request_sha256": "d5117fb81e0c8fff66a83c990c91012be3dd68e64cf92b44136169d823739d7f",
+        "reviewed_at": "2026-09-03T00:00:00Z"
+      },
+      "work": {
+        "receipt_ref": "ref/execution/synthetic-a",
+        "work_order_ref": "ref/order/synthetic-a",
+        "grant_ref": "ref/grant/synthetic-a",
+        "executor_ref": "ref/actor/synthetic-executor",
+        "intent_revision_ref": "ref/intent-revision/synthetic-a",
+        "request_sha256": "d5117fb81e0c8fff66a83c990c91012be3dd68e64cf92b44136169d823739d7f",
+        "started_at": "2026-09-04T00:00:00Z",
+        "grant_issued_at": "2026-09-03T00:00:00Z",
+        "grant_expires_at": "2026-09-05T00:00:00Z",
+        "scope_matched": true
+      },
+      "outcome": {
+        "ref": "ref/outcome/synthetic-a",
+        "sha256": "b6345a358afa92e7d5b2a4b8bca4ef34f193e295ccbf969ebb705def946f8de1",
+        "request_sha256": "d5117fb81e0c8fff66a83c990c91012be3dd68e64cf92b44136169d823739d7f"
+      },
+      "verification": {
+        "receipt_ref": "ref/verification/synthetic-a",
+        "reviewer_ref": "ref/actor/synthetic-independent",
+        "outcome_sha256": "b6345a358afa92e7d5b2a4b8bca4ef34f193e295ccbf969ebb705def946f8de1",
+        "intent_revision_ref": "ref/intent-revision/synthetic-a",
+        "verdict": "pass",
+        "verified_at": "2026-09-05T00:00:00Z"
+      },
+      "acceptance": {
+        "receipt_ref": "ref/acceptance/synthetic-a",
+        "owner_ref": "ref/actor/synthetic-owner",
+        "outcome_sha256": "b6345a358afa92e7d5b2a4b8bca4ef34f193e295ccbf969ebb705def946f8de1",
+        "request_sha256": "d5117fb81e0c8fff66a83c990c91012be3dd68e64cf92b44136169d823739d7f",
+        "verdict": "accepted",
+        "requested_outcome_met": true,
+        "accepted_at": "2026-09-06T00:00:00Z",
+        "mode": "owner",
+        "policy_ref": null,
+        "policy_revision_ref": null,
+        "policy_adoption_receipt_ref": null
+      },
+      "learning": {
+        "receipt_ref": "ref/learning/synthetic-a",
+        "intent_revision_ref": "ref/intent-revision/synthetic-a",
+        "disposition": "retained",
+        "recorded_at": "2026-09-07T00:00:00Z"
+      },
+      "exclusion": null,
+      "violations": [],
+      "kpi_change": "unknown",
+      "outcome_change": "unknown"
+    }
+  ],
+  "contains_content": false
+}

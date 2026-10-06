@@ -36,7 +36,8 @@ kotodama:
     deadline: not_adopted
     measurement_window: not_adopted
     exclusion_policy: not_adopted
-    relationships: []
+    relationships:
+      - { type: computed_by, target: COMP-INTENT }
   agent_use:
     discoverable: true
     answer_mode: source_required
@@ -98,3 +99,7 @@ The following are **measurement candidates**, not adopted policy or numerical ta
 Each candidate needs an owner, denominator, evidence source, baseline, target, deadline and anti-gaming guard before adoption. See [retrieval quality](../operations/retrieval-quality.md) and [agent context assembly](../operations/agent-context.md).
 
 [^owner-direction]: Current owner-recorded direction; projection definitions and measurements remain candidates.
+
+# 候補の計算と照合
+
+[COMP-INTENT](../computations/intent-outcome.md)は、既存のKGI-INTENTを置き換えず、閉じたsnapshot入力・deterministic computation・外部receipt・attesterへ結びます。数値の採用や実業務の達成を主張するものではありません。

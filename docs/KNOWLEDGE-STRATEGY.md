@@ -3,7 +3,8 @@
 #52の実装は、Conceptの契約、既存IDの定義、計算とattestationを分けて統合します。
 既存のOUT-INTENT/OUT-LOCAL、KGI-INTENTと8つのINIT IDを個別Conceptへ束縛し、
 load_bundleの既定profile検査と生成graphへ接続しています。未定義の参照を持つbundleは
-context生成前に拒否します。計算のreceipt、補助型の全定義、採用した測定値は後続です。
+context生成前に拒否します。[KGI-INTENTの候補計算](INTENT-OUTCOME-METRIC.md)は外部receiptと
+deterministic attesterへ接続しています。補助型の全定義と採用した測定値は後続です。
 
 ## 一つのConceptが一つの定義を持つ
 
@@ -55,4 +56,4 @@ produces、governed_by、Decisionのadopts/revises/pauses/rejects、Riskのmitig
 
 標準の根拠は[固定したOKF v0.2仕様の§10](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/82a483de8a381f1ed25b9dfe1dc5622622afff55/okf/SPEC.md#10-attested-computations-concept)です。
 Attested Computationは別Conceptにし、runtime/typed parameters、executor/receipt、deterministic
-attesterを持たせる後続部分へ接続します。receiptは実行証拠のownerに置き、KBのCompany truthにしません。
+attesterを持たせます。receiptは実行証拠のownerに置き、KBのCompany truthにしません。
