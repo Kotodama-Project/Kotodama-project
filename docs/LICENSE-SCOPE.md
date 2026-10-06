@@ -11,6 +11,13 @@ assets, or separately marked files. Keep their original copyright and license
 notices, including existing MIT notices on migrated material. Their source pins
 and license declarations must not be mechanically changed to MIT.
 
+The [official OS evaluation patchset](../runtime/cloudflare-os-kotodama/patches/README.md)
+modifies the fixed Cloudflare OS source `c0b6f3e52ff0ab8d44d290647e256936e88e6b57`.
+Its original Apache-2.0 notice is retained in
+[UPSTREAM-LICENSE.txt](../runtime/cloudflare-os-kotodama/patches/UPSTREAM-LICENSE.txt),
+and the manifest records the before/after and patch digests. The root MIT license
+does not replace those upstream terms. No upstream source tree is bundled here.
+
 The [2026-09-24 owner decision](https://github.com/Kotodama-Project/Kotodama-project/issues/25#issuecomment-5818551006)
 records `@dj-thank` as the accountable rightsholder for the public project and
 retains MIT for the admitted BecomeOne extracts. The decision accepts a
