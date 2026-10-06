@@ -88,6 +88,7 @@ def regular_bytes(path: Path) -> bytes:
     This is not an atomic filesystem snapshot or an authorization boundary against
     a hostile process swapping ancestors. Use trusted, access-controlled inputs.
     """
+    require(not str(path).replace("\\", "/").startswith("//"), "network paths are not supported")
     absolute = path.absolute()
     for entry in (absolute, *absolute.parents):
         info = entry.lstat()

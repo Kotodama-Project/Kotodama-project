@@ -261,6 +261,12 @@ class InputAndCliTests(unittest.TestCase):
                 with self.assertRaises((MODULE.InputError, OSError)):
                     MODULE.load_json(fifo)
 
+    def test_network_paths_are_refused_before_any_filesystem_probe(self):
+        with patch.object(Path, "lstat", side_effect=AssertionError("must not probe a network path")):
+            for value in ("//server.invalid/share/input.json", "\\\\server.invalid\\share\\input.json"):
+                with self.subTest(path=value), self.assertRaises(MODULE.InputError):
+                    MODULE.regular_bytes(Path(value))
+
     def test_symlink_input_is_refused_when_supported(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

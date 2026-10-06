@@ -27,6 +27,7 @@ Markdown中の未信頼文字列はHTML・リンク・行追加として解釈�
 
 1入力は1MiB、JSONは深さ24・幅1000・総node数50,000に制限します。
 file/descriptorとpathの読取前後を照合し、リンク・特殊file・観測できた差替えを拒否します。
+UNC形のnetwork pathは、filesystemへの最初の照会より前に拒否します。
 これは敵対する同権限writerからのatomic snapshotやOS sandboxではありません。
 
 出力のinput digestは実際に解析したbytes、bundle digestは現在のコードと統合契約を表します。
