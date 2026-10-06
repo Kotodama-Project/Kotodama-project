@@ -66,6 +66,61 @@ test("saved receipt corruption refuses restart and preserves the original bytes"
   }
 });
 
+test("a busy listen port leaves no virgin receipt and permits a renewed retry", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ktdm-model-port-"));
+  const occupied = createServer((_req, res) => res.end());
+  await new Promise(resolve => occupied.listen(0, "127.0.0.1", resolve));
+  const config = { upstream: "http://127.0.0.1:1/v1", model: "fixture", port: occupied.address().port,
+    expiresAt: new Date(Date.now() + 60000).toISOString(), maxRequests: 1, stateRoot: dir };
+  let proxy;
+  try {
+    await assert.rejects(startLocalModelProxy(config), { code: "EADDRINUSE" });
+    assert.equal(existsSync(join(dir, "model-proxy-receipt.json")), false);
+    assert.equal(existsSync(join(dir, "proxy-writer.lock")), false);
+    await new Promise(resolve => occupied.close(resolve));
+    proxy = await startLocalModelProxy({ ...config, expiresAt: new Date(Date.now() + 90000).toISOString() });
+    assert.equal((await fetch(proxy.origin + "/healthz").then(r => r.json())).invocations, 0);
+  } finally {
+    await proxy?.close();
+    if (occupied.listening) await new Promise(resolve => occupied.close(resolve));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("failed reservation persistence closes without calling upstream", async (context) => {
+  const dir = mkdtempSync(join(tmpdir(), "ktdm-model-reserve-"));
+  let upstreamCalls = 0;
+  const upstream = createServer((req, res) => { upstreamCalls++; req.resume(); res.end('{}'); });
+  await new Promise(resolve => upstream.listen(0, "127.0.0.1", resolve));
+  const config = { upstream: `http://127.0.0.1:${upstream.address().port}/v1`, model: "fixture", port: 0,
+    expiresAt: new Date(Date.now() + 60000).toISOString(), maxRequests: 1, stateRoot: dir };
+  let proxy, rename, timer;
+  try {
+    proxy = await startLocalModelProxy(config);
+    const originalRename = fs.renameSync, path = join(dir, "model-proxy-receipt.json");
+    rename = context.mock.method(fs, "renameSync", (from, to) => {
+      if (to === path && JSON.parse(readFileSync(from)).active) throw new Error("synthetic reservation failure");
+      return originalRename(from, to);
+    });
+    syncBuiltinESMExports();
+    let status;
+    await fetch(proxy.origin + "/v1/chat/completions", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "fixture", messages: [{ role: "user", content: "fixture" }] }) })
+      .then(r => { status = r.status; return r.text(); }).catch(() => {});
+    if (status !== undefined) assert.equal(status, 503);
+    const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("shutdown was not observed")), 2000); });
+    assert.deepEqual(await Promise.race([proxy.closed, timeout]), { error: true });
+    assert.equal(upstreamCalls, 0);
+    assert.equal(existsSync(join(dir, "proxy-writer.lock")), true);
+    await assert.rejects(fetch(proxy.origin + "/healthz"));
+  } finally {
+    clearTimeout(timer); rename?.mock.restore(); syncBuiltinESMExports();
+    await proxy?.close().catch(() => {});
+    await new Promise(resolve => upstream.close(resolve));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("receipt persistence failure settles transport and retains the reconciliation lock", async (context) => {
   const dir = mkdtempSync(join(tmpdir(), "ktdm-model-save-"));
   const upstream = createServer((req, res) => { req.resume(); res.writeHead(200, { "content-type": "application/json" }); res.end('{}'); });
