@@ -192,7 +192,8 @@ def _knowledge_inputs(bundle_root: Path) -> tuple[Path, ...]:
 
 
 def _capture_inputs(root: Path, paths: Iterable[Path]) -> tuple[tuple[str, str], ...]:
-    selected = sorted(set(paths))
+    # Path ordering case-folds on Windows. Hash the same path order on every OS.
+    selected = sorted(set(paths), key=lambda path: path.as_posix())
     if len(selected) > MAX_INPUT_FILES:
         raise KnowledgeBaseError("INPUT_FILE_BUDGET")
     total = 0

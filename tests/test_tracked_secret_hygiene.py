@@ -4429,8 +4429,8 @@ class TrackedSecretHygieneTests(unittest.TestCase):
             oid = subprocess.run(["git", "rev-parse", "HEAD:utf16.txt"], cwd=root,
                                  capture_output=True, text=True, check=True, timeout=10).stdout.strip()
             stages = "".join(f"100644 {oid} {stage}\tconflict.txt\n" for stage in (1, 2, 3))
-            subprocess.run(["git", "update-index", "--index-info"], cwd=root, input=stages,
-                           capture_output=True, text=True, check=True, timeout=10)
+            subprocess.run(["git", "update-index", "--index-info"], cwd=root, input=stages.encode("utf-8"),
+                           capture_output=True, check=True, timeout=10)
             with self.assertRaisesRegex(ValueError, "unmerged index entry"):
                 SCANNER.scan_repository(root)
 
