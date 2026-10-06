@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import math
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from knowledge_work_validator import QuietParser, read_bound
@@ -12,8 +12,9 @@ MAX_BYTES = 256 * 1024
 MAX_DEPTH = 32
 
 
-def load_contract(root: Path, relative: str | Path) -> dict[str, Any]:
-    value = load_strict_json_bytes(read_bound(root, str(relative), MAX_BYTES))
+def load_contract(root: Path, relative: str | PurePath) -> dict[str, Any]:
+    reference = relative.as_posix() if isinstance(relative, PurePath) else relative
+    value = load_strict_json_bytes(read_bound(root, reference, MAX_BYTES))
     stack = [(value, 0)]
     while stack:
         node, depth = stack.pop()

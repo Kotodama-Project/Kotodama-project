@@ -24,6 +24,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- Windowsでintegration contractの正規Pathを誤拒否する不具合を修正。文字列の危険な区切りは引き続き拒否する。検証fixtureのSQLite接続を明示的に閉じ、Git index入力のLFと子プロセスのUTF-8 decodeをOS共通にして既存の拒否・終了確認を保持する。
+
 - OKF v0.2の固定した公式仕様を参照し、日時のguidanceを最小conformanceと分離。判断readinessは明示した時刻・Taskへ束縛し、source・検証・鮮度・矛盾・access・attestation・必須contextを個別に報告する。未指定・未解決を準備完了にせず、Conceptの日時や履歴を書き換えない（#51）。
 
 - 移行元の誤コピー検査をbatch外の追跡ファイルへ広げ、HEAD・index・working treeに残る元blobと非公開元pathを内容を出さずに検出する（#161）。
