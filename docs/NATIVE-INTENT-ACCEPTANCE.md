@@ -1,6 +1,7 @@
 # 要件整理画面の利用者起点の受入試験
 
-比較の基準はこの移行直前の `d35dde11c6b2437b8154a172dc01ebbd6032f794`。
+比較の基準は#126を受け入れたmain `cbec86ad14faffe48abbe712cfac50181467fbe5`。
+その`client.js`は、感度試験で使った前身`d35dde11c6b2437b8154a172dc01ebbd6032f794`と同じbytesです。
 元#66の表示・応答順の修正だけを再配置し、過去の観測を現在の受入へ流用しない。
 この変更は実際のGadget `client.js`をChromiumで読み込み、合成RPCの応答と操作を与える**ブラウザコンポーネント試験**。Cloudflare OS本体・Gatekeeper・実認証・実Codex・会話理解・本番配備のE2Eではない。
 
