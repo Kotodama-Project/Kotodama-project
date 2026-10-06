@@ -186,6 +186,19 @@ class KnowledgeWorkTests(unittest.TestCase):
         self.assertIsNone(package)
         self.assertNotIn("UNCLASSIFIED_FIXTURE", json.dumps(report))
 
+    def test_compiler_cannot_bypass_the_executor_context_byte_ceiling(self):
+        for number in range(2):
+            claim=copy.deepcopy(self.package["claims"][0])
+            claim["id"]=f"claim-overflow-{number}"
+            self.package["claims"].append(claim)
+        for claim in self.package["claims"]:
+            claim["statement"]="x"*4000
+        self.save()
+        self.assertEqual(self.errors(),[])
+        self.assertEqual(compile_context(self.root,now=NOW,max_bytes=16384)["errors"],["CONTEXT_BYTE_BUDGET"])
+        with self.assertRaises(ValueError):
+            compile_context(self.root,now=NOW,max_bytes=65536)
+
     def test_downgraded_classification_never_returns_package_even_at_restricted_ceiling(self):
         self.package["sources"][0]["sensitivity"] = "restricted"
         self.save()

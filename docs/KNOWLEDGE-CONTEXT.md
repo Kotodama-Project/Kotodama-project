@@ -22,7 +22,9 @@ python -B tools/compile_knowledge_context.py examples/knowledge-work/business-re
 ```
 
 `--source-root`は既存validatorと同じ明示的なevidence rootで、暗黙の親探索や複製をしません。
-compilerの既定感度はpublic、既定予算は8 claim・16KiBです。構造検証後と返却前に
+compilerの既定感度はpublic、既定予算は8 claim・16KiBです。byte上限も実行器と同じ16KiBで、
+より大きな`--max-bytes`は指定できません。出力はWindowsでもUTF-8と一つのLFで予算を数えます。
+構造検証後と返却前に
 元のpackage・依存bytesを照合し、CLIはserialize後にも照合します。
 raw source本文やfilesystem locatorは文脈に複製せず、digestと既存Workの参照を使います。
 
