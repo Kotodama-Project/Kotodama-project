@@ -10,6 +10,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 - 知識のlocal source pinを実際のcaptured bytesへ束縛し、古い非critical Conceptもcontextへ戻さないようにした。重要な文脈を先に確保し、現在の出典へ戻る再開手順を追加。古いGitHub観測のsnapshotは持ち込まない（#130の知識部分、元#59）。
 
+- Knowledge Workの監査CLIと明示source-rootの回帰試験を追加。原資料を複製せずに各成果のbytesを検証し、最大64package・4096entryで探索を止める。既存validatorを保持し、未統合compilerのassertionは#137へ追跡する（#133 R3b）。
 - Cloudflare OSの任意の管理構成について、知識・会話・Task・agentの正本、読取adapter、訂正先、revision・grant境界と未接続部分を既存の設計契約へ明記。Dots-firstと単一Task ownerを保ち、native画面やprovider接続の完成とは区別する（#139）。
 - Luna Task swarmの過去版`7df1aea`で実施済みのlive fixture受入記録（4 model calls、7 messages/ACK、4 accepted）を文書へ反映。#159の公開実施記録に基づくLOCAL_PASSで、現在版のlive受入へ流用しない。未統合の文書候補`2d1e099`を現行説明へ再配置し、再実行はしない（#159）。
 - Git Stewardの業務演習を追加。69合成シナリオ、13回帰試験と実Git/SQLite/子プロセスによる訂正・再開を既存launcherと両OSのpath限定CIで検査する。現行の調整コアは維持し、実providerや新しいTask台帳は作らない（#132、元#58）。
