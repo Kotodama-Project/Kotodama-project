@@ -41,6 +41,41 @@ class ControlPlanePlannerTest(unittest.TestCase):
         self.assertNotEqual(planner.candidate_id(a),planner.candidate_id(b))
         self.assertEqual(planner.candidate_id(a),planner.candidate_id(dict(reversed(list(a.items())))))
 
+    def test_cli_rejects_symlink_selected_root_without_following_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            link=Path(directory).resolve()/"repo-link"
+            try:
+                link.symlink_to(ROOT,target_is_directory=True)
+            except OSError:
+                self.skipTest("directory symlink unavailable")
+            for tool in ("plan_control_plane_maintenance.py","audit_control_plane.py"):
+                with self.subTest(tool=tool):
+                    result=subprocess.run([sys.executable,str(ROOT/"tools"/tool),"--root",str(link),"--as-of","2026-10-06"],capture_output=True,timeout=20)
+                    self.assertEqual(2,result.returncode,result.stdout)
+                    self.assertEqual("REFUSED",json.loads(result.stdout)["status"])
+                    self.assertNotIn(str(link).encode(),result.stdout+result.stderr)
+
+    def test_unc_root_is_refused_before_any_filesystem_probe(self):
+        with patch.object(Path,"exists",side_effect=AssertionError("network probe")), patch.object(Path,"lstat",side_effect=AssertionError("network probe")):
+            with self.assertRaisesRegex(ValueError,"ROOT_REFUSED"):
+                planner.plan(Path("//invalid.example/share"),date(2026,10,6))
+
+    def test_markdown_preserves_origin_and_actionable_evidence_as_inert_text(self):
+        finding={"code":"inventory-coverage","severity":"error","message":"unclassified files",
+                 "source":"PUBLICREGISTRY","evidence":{"uncovered":["AFFECTEDFILE", "![fetch](https://example.invalid/pixel)<script>\n# heading"]}}
+        with patch.object(planner,"build_report",return_value={"status":"REFUSED","summary":{"error":1},"findings":[finding]}):
+            value=planner.plan(ROOT,date(2026,10,6))
+        text=planner.markdown(value)
+        self.assertIn("PUBLICREGISTRY",text);self.assertIn("AFFECTEDFILE",text)
+        self.assertNotIn("![fetch](",text);self.assertNotIn("<script>",text);self.assertNotIn("\n# heading",text)
+
+    def test_plan_explicitly_disclaims_every_human_and_promotion_outcome(self):
+        with patch.object(planner,"build_report",return_value={"status":"PASS","summary":{},"findings":[]}):
+            claims=planner.plan(ROOT,date(2026,10,6))["claims"]
+        for name in ("human_approval_created","promotion_created","final_human_go_created"):
+            with self.subTest(claim=name):
+                self.assertIs(claims.get(name),False)
+
     def test_invalid_clock_cli_refuses_without_reflecting_input(self):
         result = subprocess.run([sys.executable,str(ROOT/"tools/plan_control_plane_maintenance.py"),"--as-of","private-marker"],capture_output=True,timeout=20)
         self.assertEqual(2,result.returncode)

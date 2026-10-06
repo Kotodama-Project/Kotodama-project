@@ -13,7 +13,9 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - agentの状態をオフラインで投影するCLIを再配置。現在の責任索引に対応し、JSON・Markdownとも既定で名前・目的・Work/runを伏せる。未認証の観測、停止要求、実行終了を認可や独立検証へ格上げしない（#136前半）。
 
 - control-plane監査のfindingを現行Conceptと論理roleに束縛した修正候補へ変換するplanner、運用文書、関係pathだけを検査する任意CIを追加。Issue作成・Task実行・agent起動を行わない（#134）。
+- Discordの会話候補を処理するInteraction Policyを共通関数へ抽出。現在のadmissionを維持し、不明話者・非明示依頼・雑談を実行権限にしない。確認の送信と記録は後続（#145前半）。
 
+- 現行KBのcontextを、準備・session開始・完了の同じUTF-8 stdin digestへ束縛する限定adapterを再配置。未来時刻・撤回・不正shape・予算超過を拒否し、実子プロセスへの入力と訂正後の旧pin拒否を検査する（#130のruntime部分、元#59）。
 - 公開ファイル分類と7役割の責任索引を既存知識へ接続した。98%分類gateを維持し、旧OKFの別定義と稼働宣言を持ち込まず、元のreview日付に基づく鮮度警告を保持する（#134）。
 - Discordの既存4actionを固定のcapability laneへ対応付け、設定・analyzer・コマンドの語彙を一つにした。既定grantを維持し、編集の確認待ち・実際の読取境界・外部操作を表現しない条件を文書化（#146後半）。
 

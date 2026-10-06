@@ -2,6 +2,7 @@ import {Analysis,modelExecution} from './llm.mjs';
 import {check,digest,errorCode} from './common.mjs';
 import {verifyArtifacts} from './worker.mjs';
 import {AnalysisAdmission} from './analysis-admission.mjs';
+import {decideInteraction} from './interaction-policy.mjs';
 
 export class Pipeline {
   constructor({store,owner=store,config,policy=()=>config,readPolicy=async()=>policy(),analyzer,worker,authorize=async()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onTaskQueued=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
@@ -58,7 +59,7 @@ export class Pipeline {
     const current=this.store.source(source.key,principal);check(current.revision===source.revision,'SOURCE_CHANGED');
     const ids=this.store.saveIntents(source,result.intents.map(i=>({...i,contextSources:bindings})),principal);const tasks=[];
     const admissionPolicy=execute&&!this.draining?await this.readPolicy():this.policy();checkInputs();
-    let requests=result.intents.map((intent,index)=>({intent,index})).filter(({intent})=>execute&&!this.draining&&source.provider==='discord'&&admissionPolicy.discord.operators.includes(source.actorId)&&intent.kind==='request'&&intent.explicit&&intent.complete&&intent.action!=='none');
+    let requests=result.intents.map((intent,index)=>({intent,index})).filter(({intent})=>decideInteraction({source,intent,policy:admissionPolicy,execute,draining:this.draining})==='execute');
     const requiredActions=[...new Set(requests.map(({intent})=>intent.action))];
     if(requests.length)await this.#checkAdmission(source,requiredActions,admissionPolicy);
     // One installation has one write workspace. Related edits from one message
