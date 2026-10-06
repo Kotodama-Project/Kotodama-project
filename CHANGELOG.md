@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 出典・Concept・Context Packなどの逆引きと有限の影響計算を追加。必須依存、任意参照、失効・矛盾・循環を分け、削除前の依存も保持する。上限超過を完全な結果として扱わない（#53影響計算）。
+
 - Source Binding・Concept Revision・型付き関係の閉じたmetadata契約とread-only検査を追加。同じpathのbytes変更やmetadataの不一致を拒否し、opaque出典を未確認として保持する（#53前半）。
 
 - KGI-INTENTの候補計算と外部receiptのattesterを追加。版・scope・検証・受入・学習が結ばれた宣言入力だけを数え、重複や無記録取消、境界違反、KPIだけの改善を区別する（#52計算）。

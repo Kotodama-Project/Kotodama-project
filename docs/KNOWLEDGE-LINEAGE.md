@@ -2,7 +2,8 @@
 
 #53の最初の部分として、[閉じたmetadata契約](../schemas/knowledge-lineage.schema.json)と
 read-onlyの検査を提供します。[既存KB](KNOWLEDGE-BASE.md)のproseやTask ownerを置き換えません。
-逆引き・影響計算、外部ownerのcurrent pointerとCAS、利用直前の取消検査は後続で接続します。
+逆引き・影響計算もmetadataから再構築します。外部ownerのcurrent pointerとCAS、
+利用直前の取消検査は後続で接続します。
 
 ## Bindingの意味
 
@@ -51,3 +52,28 @@ python -m unittest tests.test_knowledge_lineage -v
 
 検査はファイルへ書き込みません。呼出側はreadbackのinput_bindingsを実際の使用まで維持し、
 sourceやowner状態が変われば再取得します。後続の取消・CASを未実装のまま成立したと扱いません。
+
+## 逆引きと変更・失効の影響
+
+```text
+python -B tools/knowledge_lineage.py index --snapshot examples/knowledge-lineage/snapshot.json
+python -B tools/knowledge_lineage.py impact --before examples/knowledge-lineage/snapshot.json --snapshot examples/knowledge-lineage/snapshot.json
+```
+
+Source revisionからConceptとcatalog/graph/search、Context Pack/metric inputへ、Conceptから各
+projectionへ、Goal/KGI/InitiativeからConcept・Task・evidence・riskへ、invalidation keyから
+影響する全nodeへ逆引きします。宣言入力からの計算で、欠けたreceiptやTaskを推測しません。
+
+before/afterの両方の依存を用いるため、削除されたSourceや古いConceptへの参照も影響範囲に
+残ります。同一bytesでもaccess/観測/retentionやrelationが変われば更新です。同じ入力はNO_CHANGEの
+receiptになり、再生成を必要としません。ただし既にrevokedの入力はno-opでもquarantineに残ります。
+
+必須の依存は推移的にquarantineへ伝え、optionalの参照は別の一覧へ報告します。
+supersedes/invalidatesは対象を、conflicts_withは両側をquarantineにし、依存の辺とは分けます。
+欠落・未解決・失効した必須関係、依存循環は利用可能な状態にしません。optionalを含む循環も
+別に報告します。外部ownerのtargetは構文上のresolved申告だけでは解決済みにしません。
+
+既定の上限はdepth 32、768 nodes、4096 edgesです。呼出側は下げられますが引き上げられません。
+node/edge超過は拒否し、depth超過はcomplete=false / BUDGET_EXCEEDEDとなり全nodeをquarantineへ
+置きます。部分的な影響範囲を完全な結果として使いません。計算receiptのdigestは入力・予算・
+affected/optional/quarantine集合を結びます。これをowner認証や実際の取消・配送の証明へ使いません。

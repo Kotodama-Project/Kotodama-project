@@ -6,13 +6,16 @@ from pathlib import Path
 
 from kotodama_kb.foundation import KnowledgeBaseError
 from kotodama_kb.lineage_contract import read_snapshot, digest, validate_public_bytes
+from kotodama_kb.lineage_impact import project_lineage, compare_lineage
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('validate', 'readback'))
+    parser.add_argument('command', choices=('validate', 'readback', 'index', 'impact'))
     parser.add_argument('--snapshot', type=Path, required=True)
     parser.add_argument('--root', type=Path)
+    parser.add_argument('--before', type=Path)
+    parser.add_argument('--invalidation-key', action='append', default=[])
     args = parser.parse_args(argv)
     try:
         snapshot = read_snapshot(args.snapshot)
@@ -21,6 +24,15 @@ def main(argv=None):
                 raise KnowledgeBaseError('LINEAGE_ROOT_REQUIRED')
             result = validate_public_bytes(snapshot, repository_root=args.root)
             successful = result['local_bytes_match'] and not result['opaque_unverified_revision_refs']
+        elif args.command in {'index', 'impact'}:
+            if args.command == 'impact':
+                if args.before is None:
+                    raise KnowledgeBaseError('LINEAGE_PREVIOUS_SNAPSHOT_REQUIRED')
+                projection = compare_lineage(read_snapshot(args.before), snapshot, invalidation_keys=args.invalidation_key)
+            else:
+                projection = project_lineage(snapshot)
+            successful = projection['complete'] and not projection['quarantine_revision_refs']
+            result = {'projection': projection}
         else:
             successful = True
             result = {'snapshot_sha256': digest(snapshot), 'authority': 'projection_only',
