@@ -44,6 +44,7 @@ export class Store {
       CREATE INDEX IF NOT EXISTS tasks_actor ON tasks(actor);
       CREATE INDEX IF NOT EXISTS tasks_actor_room ON tasks(actor,room);
       CREATE INDEX IF NOT EXISTS tasks_state ON tasks(state);
+      CREATE INDEX IF NOT EXISTS task_progress_events ON events(task_id,type);
       CREATE INDEX IF NOT EXISTS intents_source ON intents(source_key);
       CREATE TABLE IF NOT EXISTS usage_totals(name TEXT PRIMARY KEY,total INTEGER NOT NULL CHECK(total>=0));
     `);
