@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Source Binding・Concept Revision・型付き関係の閉じたmetadata契約とread-only検査を追加。同じpathのbytes変更やmetadataの不一致を拒否し、opaque出典を未確認として保持する（#53前半）。
+
 - KGI-INTENTの候補計算と外部receiptのattesterを追加。版・scope・検証・受入・学習が結ばれた宣言入力だけを数え、重複や無記録取消、境界違反、KPIだけの改善を区別する（#52計算）。
 
 - OUT/KGI/8つのINITを個別の知識Conceptへ束縛し、既定profileで未定義参照を拒否。型付きgraphとMarkdownを接続し、リンクされた重要定義を任意の文脈より優先する（#52定義統合）。

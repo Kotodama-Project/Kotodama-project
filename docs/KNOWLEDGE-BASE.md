@@ -2,6 +2,9 @@
 
 Kotodama のナレッジベースは、リポジトリ内外の正本を置き換える Wiki ではありません。人とエージェントが、同じ公開可能な知識を段階的に読み、出典・鮮度・矛盾・担当・Goal/KGIとの関係まで辿れるようにする、**再構築可能な読取投影**です。
 
+[出典・Conceptの版固定](KNOWLEDGE-LINEAGE.md)は、外側のmetadata契約とローカルbytes照合を
+提供します。current pointerやaccessの正本をproseに持ち込みません。
+
 入口は [`knowledge/index.md`](../knowledge/index.md) です。形式は Open Knowledge Format（OKF）v0.2 の Markdown＋YAML frontmatter を採用し、その上に Kotodama 固有の安全・運用プロファイルを追加しています。
 
 公式仕様は[GoogleCloudPlatform Knowledge CatalogのOKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/82a483de8a381f1ed25b9dfe1dc5622622afff55/okf/SPEC.md)です。

@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/knowledge-lineage.schema.json",
+  "title": "Public-safe revision-bound knowledge lineage snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "schema_revision", "authority", "contains_content", "sources", "concepts", "relations", "projections"],
+  "properties": {
+    "kind": {"const": "kotodama.knowledge-lineage"},
+    "schema_revision": {"const": "v1"},
+    "authority": {"const": "projection_only"},
+    "contains_content": {"const": false},
+    "sources": {"type": "array", "minItems": 0, "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/source"}},
+    "concepts": {"type": "array", "minItems": 0, "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/concept"}},
+    "relations": {"type": "array", "minItems": 0, "maxItems": 1024, "uniqueItems": true, "items": {"$ref": "#/$defs/relation"}},
+    "projections": {"type": "array", "minItems": 0, "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/projection"}}
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 512,
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
+    },
+    "public_ref_safety": {
+      "allOf": [
+        {"not": {"pattern": "[0-9]{17,20}"}},
+        {"not": {"pattern": "(sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)"}},
+        {"not": {"pattern": "[@\\s\\\\:]"}},
+        {"not": {"pattern": "(^|/)([0-9]{1,3}\\.){3}[0-9]{1,3}(/|$)"}},
+        {"not": {"pattern": "(^|/)([a-z0-9-]+\\.)+[a-z]{2,}(/|$)"}},
+        {"not": {"pattern": "(^|/)(https?://|file://|[A-Za-z]:[\\\\/]|\\\\\\\\)"}}
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "concept_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9/_-]{2,254}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}],
+      "not": {"pattern": "//|/$"}
+    },
+    "semantic_id": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$", "maxLength": 96},
+    "refs": {"type": "array", "minItems": 0, "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+    "public_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?:[A-Z][A-Z0-9_-]*\\.md|(?:docs|knowledge|schemas|tools|runtime|examples|contracts)/[a-zA-Z0-9_./-]+)$",
+      "not": {"pattern": "(?:^|/)\\.\\.?(?:/|$)|//"}
+    },
+    "span": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "start", "end"],
+          "properties": {
+            "kind": {"const": "lines"},
+            "start": {"type": "integer", "minimum": 1},
+            "end": {"type": "integer", "minimum": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "pointer"],
+          "properties": {
+            "kind": {"const": "json_pointer"},
+            "pointer": {"type": "string", "maxLength": 256, "pattern": "^(?:/(?:[^~/]|~[01])*)*$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "from_event_ref", "to_event_ref"],
+          "properties": {
+            "kind": {"const": "events"},
+            "from_event_ref": {"$ref": "#/$defs/ref"},
+            "to_event_ref": {"$ref": "#/$defs/ref"}
+          }
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "revision_ref",
+        "revision_kind",
+        "revision_value",
+        "content_sha256",
+        "observed_at",
+        "observer_ref",
+        "authority_scope_ref",
+        "custodian_ref",
+        "access_policy_ref",
+        "access_state",
+        "retention_ref",
+        "legal_hold_ref",
+        "invalidation_key",
+        "locator_visibility",
+        "locator"
+      ],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/ref"},
+        "revision_ref": {"$ref": "#/$defs/ref"},
+        "revision_kind": {"enum": ["git_commit", "etag", "provider_version", "event_sequence", "content_digest"]},
+        "revision_value": {"type": "string", "pattern": "^[a-z0-9_-]{1,128}$", "allOf": [{"$ref": "#/$defs/public_ref_safety"}]},
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "observed_at": {"$ref": "#/$defs/timestamp"},
+        "observer_ref": {"$ref": "#/$defs/ref"},
+        "authority_scope_ref": {"$ref": "#/$defs/ref"},
+        "custodian_ref": {"$ref": "#/$defs/ref"},
+        "access_policy_ref": {"$ref": "#/$defs/ref"},
+        "access_state": {"enum": ["allowed", "denied", "revoked", "unknown"]},
+        "retention_ref": {"$ref": "#/$defs/ref"},
+        "legal_hold_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "invalidation_key": {"$ref": "#/$defs/ref"},
+        "locator_visibility": {"enum": ["public", "opaque"]},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 512},
+        "span": {"$ref": "#/$defs/span"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"locator_visibility": {"const": "public"}}},
+          "then": {"properties": {"locator": {"$ref": "#/$defs/public_path"}}}
+        },
+        {
+          "if": {"properties": {"locator_visibility": {"const": "opaque"}}},
+          "then": {"properties": {"locator": {"$ref": "#/$defs/ref"}}}
+        }
+      ]
+    },
+    "concept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "concept_id",
+        "revision_ref",
+        "parent_revision_ref",
+        "content_sha256",
+        "source_set_sha256",
+        "source_revision_refs",
+        "generator_invocation_ref",
+        "policy_revision_refs",
+        "intent_revision_refs",
+        "status"
+      ],
+      "properties": {
+        "concept_id": {"$ref": "#/$defs/concept_id"},
+        "revision_ref": {"$ref": "#/$defs/ref"},
+        "parent_revision_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "source_set_sha256": {"$ref": "#/$defs/sha256"},
+        "source_revision_refs": {"type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "generator_invocation_ref": {"$ref": "#/$defs/ref"},
+        "policy_revision_refs": {"type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "intent_revision_refs": {"type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "status": {"enum": ["candidate", "superseded", "conflicted", "revoked"]}
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from_revision_ref",
+        "predicate",
+        "target_kind",
+        "target_id",
+        "target_revision_ref",
+        "required",
+        "validity",
+        "resolution",
+        "evidence_ref"
+      ],
+      "properties": {
+        "from_revision_ref": {"$ref": "#/$defs/ref"},
+        "predicate": {
+          "enum": [
+            "derived_from",
+            "governed_by",
+            "advances_goal",
+            "supports_kgi",
+            "measures",
+            "computed_by",
+            "depends_on",
+            "requires_context",
+            "supersedes",
+            "conflicts_with",
+            "invalidates",
+            "implemented_by",
+            "owned_by",
+            "reviewed_by",
+            "attested_by"
+          ]
+        },
+        "target_kind": {
+          "enum": [
+            "source",
+            "concept",
+            "goal",
+            "kgi",
+            "initiative",
+            "task",
+            "evidence",
+            "risk",
+            "actor",
+            "policy",
+            "computation",
+            "attestation"
+          ]
+        },
+        "target_id": {"anyOf": [{"$ref": "#/$defs/ref"}, {"$ref": "#/$defs/concept_id"}, {"$ref": "#/$defs/semantic_id"}]},
+        "target_revision_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "required": {"type": "boolean"},
+        "validity": {"enum": ["current", "superseded", "conflicted", "revoked"]},
+        "resolution": {"enum": ["resolved", "unresolved", "denied"]},
+        "evidence_ref": {"$ref": "#/$defs/ref"}
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projection_ref",
+        "kind",
+        "content_sha256",
+        "concept_revision_refs",
+        "source_revision_refs",
+        "goal_refs",
+        "kgi_refs",
+        "initiative_refs"
+      ],
+      "properties": {
+        "projection_ref": {"$ref": "#/$defs/ref"},
+        "kind": {"enum": ["catalog", "graph", "search", "context_pack", "metric_input", "task", "evidence", "risk"]},
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "concept_revision_refs": {"$ref": "#/$defs/refs"},
+        "source_revision_refs": {"$ref": "#/$defs/refs"},
+        "goal_refs": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/semantic_id"}
+        },
+        "kgi_refs": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/semantic_id"}
+        },
+        "initiative_refs": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/semantic_id"}
+        }
+      }
+    }
+  }
+}
