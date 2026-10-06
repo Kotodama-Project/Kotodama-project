@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 元#46のlocal model proxy、native Proxmox template、固定公式OSへの2patchをコード・契約だけ再配置。モデル予算・receipt保全、seal、archive integrityを検査し、旧snapshotや運用方針は再導入しない（#125）。
+
 - 要件Gadgetと限定Codex brief bridgeを元#45から再配置。現在のcatalog v2を使い、保存済みinvocationの読取中の差替え・肥大化・消失を拒否する。権限・再送・取消を合成HTTPで検査し、native core／実モデルの受入とは分ける（#124）。
 
 - Knowledge Workの監査CLIと明示source-rootの回帰試験を追加。原資料を複製せずに各成果のbytesを検証し、最大64package・4096entryで探索を止める。既存validatorを保持し、未統合compilerのassertionは#137へ追跡する（#133 R3b）。
