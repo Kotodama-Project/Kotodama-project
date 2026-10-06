@@ -6,6 +6,9 @@ load_bundleの既定profile検査と生成graphへ接続しています。未定
 context生成前に拒否します。[KGI-INTENTの候補計算](INTENT-OUTCOME-METRIC.md)は外部receiptと
 deterministic attesterへ接続しています。補助型の全定義と採用した測定値は後続です。
 
+[補助指標と旧候補の対応](STRATEGY-METRIC-MAPPING.md)は、10のsupporting KPIを製品KGIと
+分けて定義しています。補助指標の値やthresholdは未測定・未採用です。
+
 ## 一つのConceptが一つの定義を持つ
 
 OKFのConcept IDは引き続きMarkdownの相対pathです。その`kotodama.strategy.id`に、
