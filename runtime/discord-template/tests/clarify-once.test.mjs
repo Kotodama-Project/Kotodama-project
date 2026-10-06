@@ -153,3 +153,14 @@ for(const change of ['operator','source'])test('question delivery rechecks '+cha
   await assert.rejects(DiscordAdapter.prototype.reply.call(adapter,f.replies[0]),/CLARIFICATION_SCOPE_CHANGED|SOURCE_ACCESS_DENIED/);
   assert.equal(sends,0);
 });
+
+for(const change of ['operator','source'])test('voice clarification rechecks '+change+' after audience access awaits',async t=>{
+  const f=await fixture(t);await ingest(f,source('first',{metadata:{kind:'voice',sessionId:'voice-a'}}));let responses=0;
+  const adapter={store:f.store,policy:()=>f.config,client:{channels:{fetch:async()=>{
+    if(change==='operator')f.config.discord.operators=[];
+    else f.store.ingest(source('first',{revision:2,withdrawn:true,text:'',metadata:{kind:'voice',sessionId:'voice-a'}}));
+    return {};
+  }}},canRead:async()=>true,voice:{speak:async(text,options)=>{await options.authorizeAudience([actor]);responses++;}}};
+  await assert.rejects(DiscordAdapter.prototype.reply.call(adapter,f.replies[0]),/CLARIFICATION_SCOPE_CHANGED|SOURCE_ACCESS_DENIED/);
+  assert.equal(responses,0);
+});
