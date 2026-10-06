@@ -192,6 +192,11 @@ def select_context(
         concept = by_id.get(linked_id)
         if not concept:
             continue
+        # A linked critical definition is already an omission blocker below.
+        # Reserve its place before ranking optional context, so a budget that
+        # fits all critical definitions does not lose them to optional matches.
+        if set(concept.metadata.get("tags", [])) & set(bundle.profile["quality"]["critical_tags"]):
+            required.add(linked_id)
         if eligible(concept):
             matches.setdefault(linked_id, concept)
         else:

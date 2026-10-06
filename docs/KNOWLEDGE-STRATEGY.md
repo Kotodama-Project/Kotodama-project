@@ -1,8 +1,9 @@
 # Goalと測定の型付きConcept
 
 #52の実装は、Conceptの契約、既存IDの定義、計算とattestationを分けて統合します。
-現在のこの部分はproducer extensionとread-onlyの参照検査です。既存bundleへ全定義を配置する
-前にload_bundleの既定gateは切り替えません。計算のreceiptや採用した測定値を追加する段階ではありません。
+既存のOUT-INTENT/OUT-LOCAL、KGI-INTENTと8つのINIT IDを個別Conceptへ束縛し、
+load_bundleの既定profile検査と生成graphへ接続しています。未定義の参照を持つbundleは
+context生成前に拒否します。計算のreceipt、補助型の全定義、採用した測定値は後続です。
 
 ## 一つのConceptが一つの定義を持つ
 
@@ -38,6 +39,10 @@ kgi_refs、initiative_refsとfactor_refsを検査します。Goal refsはGoal/Ou
 product_outcomeのMetricだけです。control_sloやsupporting_kpiを製品成果のKGIとして受理しません。
 Task ownerから取り出した参照だけも`strategy_reference_issues(record, index, path=...)`で検査できます。
 Taskの状態、grant、成果の採否はコピーせず、ownerに残します。
+
+catalogのstrategyとgraphのdefinition_conceptで、意味上のIDから同じMarkdownへ戻れます。
+新しく独立した重要Goalがリンクされている場合も、任意の文脈より先に場所を確保します。
+必須文脈が収まらなければneeds_resolutionとなり、既定の12 Concept上限は広げません。
 
 型付き関係はmeasured_by、computed_by、enabled_by、observed_by、advanced_by、tested_by、
 produces、governed_by、Decisionのadopts/revises/pauses/rejects、Riskのmitigatesです。

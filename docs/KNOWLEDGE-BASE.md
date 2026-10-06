@@ -48,7 +48,7 @@ Kotodama のナレッジベースは、リポジトリ内外の正本を置き�
 
 したがって、初期Conceptは `draft` / `candidate` / `projection_only` です。構造検証に成功しても、内容が人間確認済みになったとは扱いません。
 
-公開済み #48 の土台と #61 の互換修正を一緒に再配置しています。旧baseのCloudflare実装、除外したoperating-policy、日付付き提案文書は含めません。#128の記録済み判断に従い、出典は現行mainの文書、Goal/KGI/INITの候補定義は既存のgoalとsuccess-model Conceptに置きます。独立した内容検証は未成立です。
+公開済み #48 の土台と #61 の互換修正を一緒に再配置しています。旧baseのCloudflare実装、除外したoperating-policy、日付付き提案文書は含めません。#128の記録済み判断に従い、出典は現行mainの文書、Goal/KGIは既存のgoal・success-modelとlocal-outcome、8つのINITは個別のInitiative Conceptへ束縛します。[型付き参照の検査](KNOWLEDGE-STRATEGY.md)が既定profileとgraphへ接続されています。独立した内容検証や測定の採用は未成立です。
 
 `source_digest`は読み込んだknowledge/profile/schemaと参照するローカル出典のbytesを固定して結びます。後から変わったファイルのdigestを古いConceptへ付けません。変更・追加・削除を検出したらreloadが必要です。外部URLは取得せず、その現在の内容をdigestやPASSで証明しません。入力は通常fileのみ（各1MiB、合計8MiB、256 files、構造depth32）で、公開分類と固定した失敗条件をprofileで緩めることはできません。
 

@@ -29,6 +29,7 @@ def _catalog(bundle: Bundle) -> dict[str, Any]:
                 "goal_refs": sorted(extension.get("goal_refs", [])),
                 "kgi_refs": sorted(extension.get("kgi_refs", [])),
                 "initiative_refs": sorted(extension.get("initiative_refs", [])),
+                **({"strategy": extension["strategy"]} if "strategy" in extension else {}),
                 "agent_use": extension.get("agent_use", {}),
                 "source_resources": list(concept.source_resources),
                 "concept_links": list(concept.resolved_concept_links),
@@ -50,6 +51,14 @@ def _catalog(bundle: Bundle) -> dict[str, Any]:
 def _graph(bundle: Bundle) -> dict[str, Any]:
     nodes: dict[tuple[str, str], dict[str, Any]] = {}
     edges: set[tuple[str, str, str, str, str]] = set()
+    strategy, issues = strategy_model(bundle.concepts)
+    if issues:
+        raise KnowledgeBaseError("STRATEGY_INVALID")
+    definitions = strategy["definitions"]
+
+    def strategy_kind(identifier: str) -> str:
+        item = definitions[identifier]
+        return "kgi" if item.get("measurement_role") == "product_outcome" else item["kind"]
 
     def add_node(node_id: str, node_kind: str, **details: Any) -> None:
         key = (node_kind, node_id)
@@ -59,6 +68,13 @@ def _graph(bundle: Bundle) -> dict[str, Any]:
 
     def add_edge(source: str, source_kind: str, target: str, target_kind: str, relation: str) -> None:
         edges.add((source_kind, source, relation, target_kind, target))
+
+    for identifier, definition in definitions.items():
+        kind = strategy_kind(identifier)
+        add_node(identifier, kind, definition_concept=definition["concept_id"], measurement_role=definition.get("measurement_role"))
+        add_edge(definition["concept_id"], "concept", identifier, kind, "defines")
+    for relation in strategy["relationships"]:
+        add_edge(relation["from"], strategy_kind(relation["from"]), relation["to"], strategy_kind(relation["to"]), relation["type"])
 
     for concept in bundle.concepts:
         add_node(
@@ -75,14 +91,16 @@ def _graph(bundle: Bundle) -> dict[str, Any]:
             add_node(resource, "source")
             add_edge(concept.concept_id, "concept", resource, "source", "derived_from")
         for goal_ref in concept.extension.get("goal_refs", []):
-            add_node(goal_ref, "goal")
-            add_edge(concept.concept_id, "concept", goal_ref, "goal", "advances_goal")
+            add_node(goal_ref, strategy_kind(goal_ref))
+            add_edge(concept.concept_id, "concept", goal_ref, strategy_kind(goal_ref), "advances_goal")
         for kgi_ref in concept.extension.get("kgi_refs", []):
             add_node(kgi_ref, "kgi")
             add_edge(concept.concept_id, "concept", kgi_ref, "kgi", "supports_kgi")
         for initiative_ref in concept.extension.get("initiative_refs", []):
             add_node(initiative_ref, "initiative")
             add_edge(concept.concept_id, "concept", initiative_ref, "initiative", "implements_initiative")
+        for factor_ref in concept.extension.get("factor_refs", []):
+            add_edge(concept.concept_id, "concept", factor_ref, "factor", "supports_factor")
 
     node_rows = sorted(nodes.values(), key=lambda row: (row["kind"], row["id"]))
     edge_rows = [

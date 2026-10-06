@@ -67,8 +67,8 @@ def strategy_reference_issues(record: Mapping, index: Mapping, *, path: str) -> 
 def strategy_model(concepts: Iterable[Concept]) -> tuple[dict, list[Issue]]:
     """Validate all reference projections and produce a deterministic typed graph.
 
-    This is a separate inspection until the complete definition set is integrated
-    into load_bundle. An empty definition set does not validate unresolved refs.
+    load_bundle uses this after schema admission. An empty definition set does
+    not validate unresolved references, including a Task reference projection.
     """
     concepts = tuple(concepts)
     if len(concepts) > 256:
