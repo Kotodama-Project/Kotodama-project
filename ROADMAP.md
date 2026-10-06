@@ -84,9 +84,8 @@ work. The runtime remains unimplemented and Public Beta remains
 candidate, not signed or independently verifiable governance approval,
 rightsholder proof, canonical adoption, launch decision, or Final Human GO, and
 no receipt is fabricated. The root license is MIT (merged via #18 on 2026-09-12).
-[License scope](docs/LICENSE-SCOPE.md) records the accountable owner, admitted
-batch provenance, retained notices and historical SBOM receipt. Future exports
-and release artifacts still require individual provenance and notice checks.
+[License scope](docs/LICENSE-SCOPE.md) records Issue #25's owner decision, admitted
+batch provenance and notices. Future exports still require their own checks.
 
 ## Documentation revision history
 
