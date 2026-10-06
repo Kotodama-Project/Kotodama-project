@@ -42,9 +42,16 @@ def context_digest(value):
 
 def make_context(*, bundle_id, source_digest, as_of, filters=None, concepts=(),
                  omitted_ids=(), unresolved_ids=(), work=None, errors=()):
+    refused = bool(errors or unresolved_ids)
+    if refused and work is not None:
+        # A rejected Work must not survive through generic producer composition.
+        # Selectors and omitted/unresolved IDs can also identify the private Work.
+        work, source_digest, filters = None, None, None
+        concepts, omitted_ids, unresolved_ids = (), (), ()
+        errors = errors or ("WORK_CONTEXT_UNRESOLVED",)
     value = _normalized({"kind": KIND, "schema_revision": REVISION, "bundle_id": bundle_id,
         "source_digest": source_digest, "as_of": as_of, "authority": "projection_only",
-        "state": "needs_resolution" if errors or unresolved_ids else "ready_candidate",
+        "state": "needs_resolution" if refused else "ready_candidate",
         "filters": filters or {"goals": [], "kgis": [], "initiatives": [], "tags": []},
         "concepts": concepts, "omitted_ids": omitted_ids, "unresolved_ids": unresolved_ids,
         "consumer_rule": CONSUMER_RULE, "errors": sorted(set(errors)), "work": work,
