@@ -10,9 +10,10 @@ import {DiscordAdapter} from '../src/discord.mjs';
 import {QuietTaskProgress} from '../src/task-progress.mjs';
 import {Pipeline} from '../src/pipeline.mjs';
 
-async function fixture(t,{enabled=true}={}){
+async function fixture(t,{enabled=true,otherReader=false}={}){
   const root=await mkdtemp(path.join(os.tmpdir(),'quiet-progress-')),config=exampleConfig({workspace:root});config.dataDir=root;config.discord.voiceChannelId=config.discord.resultChannelId;config.notifications.taskProgress.enabled=enabled;
-  const store=new Store(root),actor=config.discord.operators[0],source={provider:'discord',guildId:config.discord.guildId,channelId:config.discord.voiceChannelId,sourceId:'synthetic-source',actorId:actor,readers:[actor],revision:1,final:true,text:'SYNTHETIC_PRIVATE_REQUEST',metadata:{kind:'voice',voiceEpoch:7}};
+  const store=new Store(root),actor=config.discord.operators[0],other='100000000000000099';if(otherReader)config.voice.participantIds.push(other);
+  const source={provider:'discord',guildId:config.discord.guildId,channelId:config.discord.voiceChannelId,sourceId:'synthetic-source',actorId:actor,readers:otherReader?[actor,other]:[actor],revision:1,final:true,text:'SYNTHETIC_PRIVATE_REQUEST',metadata:{kind:'voice',voiceEpoch:7}};
   const sr=store.ingest(source),s=store.source(sr.key,actor),task=store.createTask(s,{key:'synthetic',title:'SYNTHETIC_PRIVATE_REQUEST',request:source.text,action:'research',acceptance:[]});
   const edits=[],sent=[],errors=[];let now=100000,active=true,members=[actor];
   const pipeline={owner:store,readPolicy:async()=>config,authorize:async()=>{}};
@@ -67,6 +68,13 @@ for(const change of ['operator','source','task','epoch','permission','disable'])
     if(change==='disable')f.config.notifications.taskProgress.enabled=false;
     return f.dm;
   };await f.tick();assert.equal(f.edits.length,0);assert.equal(f.store.statement("SELECT count(*) AS n FROM events WHERE type='task.progress_attempt'").get().n,0);
+});
+
+for(const event of ['threadUpdate','channelDelete','guildUpdate'])test('permission event '+event+' during final owner authorization invalidates audience proof',async t=>{
+  const f=await fixture(t,{otherReader:true}),other='100000000000000099';f.setMembers([f.actor,other]);let revoked=false;
+  f.adapter.canRead=async(_channel,actor)=>actor!==other||!revoked;
+  f.pipeline.authorize=async()=>{revoked=true;f.adapter.client.emit(event,{guildId:f.source.guildId},{guildId:f.source.guildId});};
+  f.start();await f.tick();assert.equal(f.edits.length,0);assert.equal(f.store.statement("SELECT count(*) AS n FROM events WHERE type='task.progress_attempt'").get().n,0);
 });
 
 test('an uncertain edit is not resent; close waits for its owned in-flight request',async t=>{
