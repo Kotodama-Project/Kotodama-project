@@ -1,0 +1,21 @@
+[Unit]
+Description=Official Cloudflare OS evaluation on Proxmox
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/kotodama/os-instance.json
+[Service]
+User=os-runtime
+Group=os-runtime
+WorkingDirectory=/opt/kotodama-os/core
+Environment=PATH=/opt/kotodama-os/node-v24.19.0-linux-x64/bin:/opt/kotodama-os/toolchain/node_modules/.bin:/usr/local/bin:/usr/bin:/bin
+Environment=CI=true WRANGLER_SEND_METRICS=false DO_NOT_TRACK=1
+ExecStart=/opt/kotodama-os/node-v24.19.0-linux-x64/bin/node scripts/run-local.ts --port 8787
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+[Install]
+WantedBy=multi-user.target

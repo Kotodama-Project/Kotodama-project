@@ -1,0 +1,22 @@
+--- a/packages/workshop-backend/format-blueprints/workspace-docs/files/server.js
++++ b/packages/workshop-backend/format-blueprints/workspace-docs/files/server.js
+@@ -285,3 +285,3 @@
+ function sanitizeBlocks(blocks) {
+-  if (!Array.isArray(blocks)) return [];
++  if (!Array.isArray(blocks)) throw new TypeError("blocks must be an array of { id, html } objects");
+   const result = [];
+@@ -289,7 +289,9 @@
+   for (const value of blocks) {
+-    const id = String(value?.id || "").slice(0, 100);
+-    const html = String(value?.html || "");
+-    if (!id || seen.has(id) || html.length > 10_000_000) continue;
+-    seen.add(id);
+-    result.push({ id, html, baseVersion: Number(value?.baseVersion || 0) });
++    if (!value || typeof value !== "object" || Array.isArray(value) ||
++        typeof value.id !== "string" || !value.id.trim() || value.id.length > 100 ||
++        typeof value.html !== "string" || value.html.length > 10_000_000 || seen.has(value.id)) {
++      throw new TypeError("Each block must have a unique id and an html string");
++    }
++    seen.add(value.id);
++    result.push({ id: value.id, html: value.html, baseVersion: Number(value.baseVersion || 0) });
+   }
