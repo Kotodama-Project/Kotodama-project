@@ -489,7 +489,7 @@ lifecycle state は `prepared -> dispatched -> running -> completed | failed | c
 
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
 |---|---|---|---|
-| [Knowledge registry](../schemas/knowledge-registry.schema.json)、[Agent responsibility index](../schemas/agent-registry.schema.json)、[Audit policy](../schemas/audit-policy.schema.json) | [audit_control_plane.py](../tools/audit_control_plane.py) | [test_control_plane.py](../tests/test_control_plane.py) | [監査の境界](CONTROL-PLANE-AUDIT.md)。分類・参照・鮮度の構造検査。runtimeや独立検証の受入ではない。 |
+| [Knowledge registry](../schemas/knowledge-registry.schema.json)、[Agent responsibility index](../schemas/agent-registry.schema.json)、[Audit policy](../schemas/audit-policy.schema.json) | [audit_control_plane.py](../tools/audit_control_plane.py)、[保守planner](../tools/plan_control_plane_maintenance.py) | [監査](../tests/test_control_plane.py)、[台帳](../tests/test_control_plane_registry.py)、[保守提案](../tests/test_control_plane_planner.py) | [監査の境界](CONTROL-PLANE-AUDIT.md)と[運用入口](CONTROL-PLANE-OPERATIONS.md)。分類・参照・鮮度の構造検査。runtimeや独立検証の受入ではない。 |
 
 ## Related guidance
 
