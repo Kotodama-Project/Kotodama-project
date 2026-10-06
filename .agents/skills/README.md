@@ -26,6 +26,7 @@ own evidence and human-governance gates are satisfied.
 | `kotodama-implement` | Applying an approved local change without contaminating dirty state. |
 | `kotodama-public-review` | Separating local, device, provider, public, and human-go evidence. |
 | `kotodama-surface-audit` | Auditing skill manifests, links, triggers, and stale assumptions. |
+| `kotodama-agent-status` | Diagnosing responsibility indexes and offline observation snapshots without runtime controls ([diagnostic contract](../../docs/AGENT-DIAGNOSTICS-INTEGRATION.md)). |
 | `kotodama-handoff` | Resuming work from a compact, redacted, evidence-bound handoff. |
 | `kotodama-luna-swarm` | Running a bounded Task swarm with owner-bound packets, peer receipts, and independent review ([Luna Task swarm](../../docs/LUNA-TASK-SWARM.md)). |
 
