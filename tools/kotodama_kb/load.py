@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .foundation import *  # noqa: F401,F403
 from .reserved import *  # noqa: F401,F403
+from .strategy import strategy_model
 
 def load_bundle(repository_root: Path, *, as_of: dt.datetime | None = None) -> Bundle:
     root = repository_root.resolve()
@@ -258,6 +259,10 @@ def load_bundle(repository_root: Path, *, as_of: dt.datetime | None = None) -> B
     for concept in concepts:
         if concept.concept_id not in indexed_concepts and concept.concept_id not in linked_concepts:
             issues.append(Issue("error", "ORPHAN_CONCEPT", concept.document.path.relative_to(root).as_posix(), "concept is not reachable from an index or another concept"))
+
+    invalid_paths = {item.path for item in issues if item.code == "CONCEPT_SCHEMA"}
+    admitted = [concept for concept in concepts if concept.document.path.relative_to(root).as_posix() not in invalid_paths]
+    issues.extend(strategy_model(admitted)[1])
 
     if _capture_inputs(root, (root / relative for relative, _ in initial_bindings)) != initial_bindings:
         raise KnowledgeBaseError("INPUT_CHANGED_DURING_LOAD")

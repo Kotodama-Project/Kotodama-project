@@ -1,11 +1,11 @@
 ---
-type: Project Goal
+type: Goal
 title: Kotodama project goal
 description: Connect authorized conversation to reviewed intent, bounded work, evidence, outcomes and organizational learning inside an operator-controlled trust boundary.
 tags: [goal, intent, company-os, local-first]
 status: draft
 stale_after: 2026-12-07T00:00:00Z
-generated: { by: process:canonical-knowledge-port, at: 2026-10-04T14:00:00Z }
+generated: { by: process:strategy-definition, at: 2026-10-06T21:30:01Z }
 sources:
   - id: readme-goal
     resource: ../../README.md
@@ -31,6 +31,11 @@ kotodama:
   goal_refs: [OUT-INTENT, OUT-LOCAL]
   kgi_refs: [KGI-INTENT]
   initiative_refs: []
+  strategy:
+    id: OUT-INTENT
+    adoption_status: candidate
+    relationships:
+      - { type: measured_by, target: KGI-INTENT }
   agent_use:
     discoverable: true
     answer_mode: source_required
@@ -42,6 +47,10 @@ kotodama:
 
 Kotodama aims to make an authorized conversation traceable through reviewed intent, bounded work, candidate artifacts, evidence, outcomes and learning rather than stopping at a chat summary.[^readme-goal] The intended operating boundary is local-first and controlled by the operator; repository artifacts alone do not prove that runtime is deployed.[^owner-intent]
 
+# Measurement
+
+[The KGI-INTENT candidate](success-model.md) measures accepted requested outcomes, with definitions and per-run evidence kept separate. No numerical target or deadline is adopted.
+
 # Required properties
 
 The canonical knowledge projection uses these outcome IDs; they name candidate
@@ -50,7 +59,7 @@ definitions derived from the current product direction, not a second Goal owner:
 | ID | Definition |
 |---|---|
 | `OUT-INTENT` | Preserve authorized conversation and corrections through intent, bounded work, independently checked artifacts and learning |
-| `OUT-LOCAL` | Reproduce, stop and restore the selected local runtime within the operator's existing scope |
+| [OUT-LOCAL](local-outcome.md) | Reproduce, stop and restore the selected local runtime within the operator's existing scope |
 
 * Preserve the original requested outcome and its correction chain.
 * Keep source, decision, work, evidence, promotion and Current Truth distinct.

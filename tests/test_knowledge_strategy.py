@@ -10,6 +10,11 @@ from jsonschema import Draft202012Validator
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 from kotodama_kb.strategy import KINDS, strategy_template, strategy_model, strategy_reference_issues
+from kotodama_kb.load import load_bundle
+from kotodama_kb.project import _graph
+from kotodama_kb.retrieve import select_context
+import tempfile
+import shutil
 
 
 def concept(kind,identifier,relationships=(),**refs):
@@ -36,6 +41,38 @@ def fixture():
 
 
 class KnowledgeStrategyTests(unittest.TestCase):
+    def test_public_bundle_resolves_existing_ids_and_projects_typed_goal_kgi_edge(self):
+        bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts)
+        self.assertEqual([],issues);self.assertEqual(11,len(projection['definitions']))
+        self.assertEqual('project/success-model',projection['definitions']['KGI-INTENT']['concept_id'])
+        graph=_graph(bundle)
+        self.assertIn({'from':'OUT-INTENT','from_kind':'goal','relation':'measured_by','to':'KGI-INTENT','to_kind':'kgi'},graph['edges'])
+        self.assertEqual('project/success-model',next(n['definition_concept'] for n in graph['nodes'] if n['kind']=='kgi' and n['id']=='KGI-INTENT'))
+
+    def test_default_profile_gate_refuses_a_goal_reference_with_no_definition(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            baseline=load_bundle(ROOT)
+            for relative,_ in baseline.input_bindings:
+                target=root/relative;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/relative,target)
+            self.assertFalse([i for i in load_bundle(root).issues if i.level=='error'])
+            p=root/'knowledge/project/goal.md';text=p.read_text(encoding='utf-8');old='goal_refs: [OUT-INTENT, OUT-LOCAL]';self.assertIn(old,text)
+            p.write_text(text.replace(old,'goal_refs: [OUT-MISSING]',1),encoding='utf-8')
+            bundle=load_bundle(root)
+            self.assertIn('STRATEGY_REF_UNRESOLVED',{i.code for i in bundle.issues})
+
+    def test_linked_critical_definition_is_not_displaced_by_optional_context(self):
+        from datetime import datetime,timezone
+        bundle=load_bundle(ROOT,as_of=datetime(2026,10,4,14,tzinfo=timezone.utc))
+        args=dict(goals=['OUT-INTENT'],kgis=[],initiatives=['INIT-KNOWLEDGE-REFRESH'],tags=[])
+        critical={'project/goal','project/success-model','project/local-outcome','project/current-state',
+                  'governance/authority-boundaries','governance/agent-responsibilities','governance/knowledge-lifecycle'}
+        short=select_context(bundle,**args,max_concepts=6)
+        self.assertTrue(short.unresolved_ids)
+        complete=select_context(bundle,**args,max_concepts=7)
+        self.assertEqual((),complete.unresolved_ids)
+        self.assertEqual(critical,{c.concept_id for c in complete.selected})
+
     def test_every_template_is_closed_and_metric_adoption_remains_unknown(self):
         schema=json.loads((ROOT/'schemas/kotodama-okf-concept.schema.json').read_text(encoding='utf-8'))
         validator=Draft202012Validator({'$ref':'#/$defs/strategy','$defs':schema['$defs']})

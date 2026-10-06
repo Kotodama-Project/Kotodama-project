@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- OUT/KGI/8つのINITを個別の知識Conceptへ束縛し、既定profileで未定義参照を拒否。型付きgraphとMarkdownを接続し、リンクされた重要定義を任意の文脈より優先する（#52定義統合）。
+
 - Goal/KGI/Key Factor等の候補Concept拡張と型付き参照検査を追加。未定義・型違い・循環を拒否し、製品成果とcontrol SLOを区別する。既存IDの全定義と計算attestationは後続統合（#52前半）。
 - 削除receiptを既存archive台帳と現物へ照合する`verify-deletion`を追加。原音の残存・manifest不一致・期限超過・権限変更を拒否し、文字起こしの保持を明示して既存Storeへ記録する（#149後半）。
 

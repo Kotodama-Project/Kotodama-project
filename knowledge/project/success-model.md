@@ -1,11 +1,11 @@
 ---
-type: Success Model
+type: Metric
 title: Goal, KGI, KPI and knowledge-quality model
 description: Preserve the existing outcome and KGI references, then measure whether the knowledge system supplies fresh, source-backed context without treating coverage metrics as the product outcome.
 tags: [goal, kgi, kpi, quality, measurement]
 status: draft
 stale_after: 2026-12-07T00:00:00Z
-generated: { by: process:canonical-knowledge-port, at: 2026-10-04T14:00:00Z }
+generated: { by: process:strategy-definition, at: 2026-10-06T21:30:01Z }
 sources:
   - id: owner-direction
     resource: ../../docs/OWNER-INTENT-COMPANY-AGI.md
@@ -27,6 +27,16 @@ kotodama:
   goal_refs: [OUT-INTENT, OUT-LOCAL]
   kgi_refs: [KGI-INTENT]
   initiative_refs: [INIT-KNOWLEDGE-FORMAT, INIT-KNOWLEDGE-REFRESH, INIT-CONTEXT-AUDIT]
+  strategy:
+    id: KGI-INTENT
+    adoption_status: candidate
+    measurement_role: product_outcome
+    baseline: unknown
+    target: not_adopted
+    deadline: not_adopted
+    measurement_window: not_adopted
+    exclusion_policy: not_adopted
+    relationships: []
   agent_use:
     discoverable: true
     answer_mode: source_required
@@ -38,23 +48,23 @@ kotodama:
 
 The [goal concept](goal.md) defines `OUT-INTENT` and `OUT-LOCAL` from the current
 public product direction. This concept defines the canonical projection ID
-`KGI-INTENT`: independently checked intent-to-artifact outcomes within an existing
-authorized work scope. Receipt counts and accepted-intent counts are candidate
-proxy measures. They do not prove a completed outcome, adoption, or a numeric
-target. The owning intent, Task and decision systems retain those decisions.[^owner-direction]
+`KGI-INTENT`: requested outcomes accepted by the outcome owner after independent
+verification within the existing authorized scope. Artifacts, receipts, PRs, Tasks,
+reviews and agent counts cannot substitute for the requested outcome. The owning
+intent, Task and decision systems retain acceptance and adoption.[^owner-direction]
 
-The initiative IDs used by the nine concepts have these candidate meanings:
+The existing initiative IDs resolve to individual candidate Concepts:
 
 | ID | Scope |
 |---|---|
-| `INIT-KNOWLEDGE-FORMAT` | Maintain the public OKF projection and its separate producer checks |
-| `INIT-KNOWLEDGE-REFRESH` | Recheck and rebuild only affected source-backed concepts |
-| `INIT-AGENT-OWNERSHIP` | Resolve existing responsibilities without creating a Task owner |
-| `INIT-CONTEXT-AUDIT` | Inspect required, forbidden and omitted context against sources |
-| `INIT-CONTEXT-HANDOFF` | Preserve source and correction references during delegation |
-| `INIT-DYNAMIC-AGENT-CONTEXT` | Reassemble context after source, policy or work-boundary changes |
-| `INIT-CONTEXT-END-TO-END` | Evaluate delivered input and actual outcomes separately |
-| `INIT-METHOD-RENEWAL` | Compare retrieval methods on the same required/forbidden fixtures |
+| [INIT-KNOWLEDGE-FORMAT](../initiatives/knowledge-format.md) | Maintain the public OKF projection and its separate producer checks |
+| [INIT-KNOWLEDGE-REFRESH](../initiatives/knowledge-refresh.md) | Recheck and rebuild only affected source-backed concepts |
+| [INIT-AGENT-OWNERSHIP](../initiatives/agent-ownership.md) | Resolve existing responsibilities without creating a Task owner |
+| [INIT-CONTEXT-AUDIT](../initiatives/context-audit.md) | Inspect required, forbidden and omitted context against sources |
+| [INIT-CONTEXT-HANDOFF](../initiatives/context-handoff.md) | Preserve source and correction references during delegation |
+| [INIT-DYNAMIC-AGENT-CONTEXT](../initiatives/dynamic-agent-context.md) | Reassemble context after source, policy or work-boundary changes |
+| [INIT-CONTEXT-END-TO-END](../initiatives/context-end-to-end.md) | Evaluate delivered input and actual outcomes separately |
+| [INIT-METHOD-RENEWAL](../initiatives/method-renewal.md) | Compare retrieval methods on the same required/forbidden fixtures |
 
 These definitions implement the canonical #48 vocabulary choice. Mapping the
 older #49 strategy metrics is follow-up work under #52; its competing
