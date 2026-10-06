@@ -4,9 +4,21 @@
 担当索引の構造を読み取る道具です。知識の正本は `knowledge/` と既存のproducerです。
 別のOKF、Goal/KGI定義、Task owner、実行registryを作りません。
 
-この段階は #134 の道具とschemaです。実台帳とmaintenance plannerは後続で接続します。
-未配置の台帳で実行した場合は `REFUSED` です。合成台帳と実際の公開知識を組み合わせた
-試験を通しても、実agentの登録・配備・稼働は成立しません。
+この段階は #134 の道具・schemaと公開責任索引です。maintenance plannerは後続です。
+未配置の台帳で実行した場合は `REFUSED` です。公開知識との参照照合を通しても、
+実agentの登録・配備・稼働は成立しません。
+
+分類は既存14種類を保ち、Goal/KGIの出典を `knowledge/project/success-model.md`、
+知識操作を `knowledge/profile.yaml` へ向け直しました。7つの役割IDは担当の索引です。
+`knowledge-curator`と`context-compiler`はAI-LIBRARIAN、`agent-auditor`と
+`evidence-auditor`はAI-AUDITOR、`work-orchestrator`はAI-CHIEF、
+`quality-red-team`はAI-ANALYST、`git-steward`はAI-BUILDERに対応します。
+旧`okf-steward`と`weekly-okf-review`は除外しました。
+
+`reviewed_at: 2026-09-07`は移植元の記録として保持します。期限を超えたagent索引の
+警告は現在の稼働検証をしていないため残し、日付更新で消しません。今回のPRの検証は
+schema・正本への参照・分類・権限境界に限定されます。policyのcadenceは実行予定の
+候補であり、cron、agent、provider操作を自動設定しません。
 
 ```sh
 python tools/audit_control_plane.py --root . --as-of 2026-10-06 --format json

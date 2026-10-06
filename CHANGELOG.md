@@ -9,6 +9,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - 現行KBのcontextを、準備・session開始・完了の同じUTF-8 stdin digestへ束縛する限定adapterを再配置。未来時刻・撤回・不正shape・予算超過を拒否し、実子プロセスへの入力と訂正後の旧pin拒否を検査する（#130のruntime部分、元#59）。
+- 公開ファイル分類と7役割の責任索引を既存知識へ接続した。98%分類gateを維持し、旧OKFの別定義と稼働宣言を持ち込まず、元のreview日付に基づく鮮度警告を保持する（#134）。
+- Discordの既存4actionを固定のcapability laneへ対応付け、設定・analyzer・コマンドの語彙を一つにした。既定grantを維持し、編集の確認待ち・実際の読取境界・外部操作を表現しない条件を文書化（#146後半）。
 
 - control-planeの監査道具と3 schemasを現行知識基盤へ向け直した。競合OKFを除去し、98%分類・未知Concept・有限読取り・責任索引からの稼働宣言拒否を検証する。台帳の接続は後続（#134）。
 - 知識のlocal source pinを実際のcaptured bytesへ束縛し、古い非critical Conceptもcontextへ戻さないようにした。重要な文脈を先に確保し、現在の出典へ戻る再開手順を追加。古いGitHub観測のsnapshotは持ち込まない（#130の知識部分、元#59）。

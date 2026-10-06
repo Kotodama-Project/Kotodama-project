@@ -19,6 +19,29 @@ Discordのテキスト・音声 → 出典と版 → 意図・ToDo → 明示依
 Discord再生はLive出力と別の世代・閲覧許可・source revisionに束縛します。利用者の発話開始、権限変更、mode変更、queue overflowではplayerと未再生PCMを先に破棄します。Liveには停止指示を送りますが、そのACKを再生停止の証明には使いません。音声会話終了はLiveセッションだけを閉じ、既に許可されたTaskは取り消しません。
 
 
+## Capability lanes
+
+音声とテキストは同じactionを使います。`worker.actions`が唯一の実行grantであり、
+`src/capability-lanes.mjs`の固定写像は種類と既定を表すだけです。laneの設定や別台帳はありません。
+
+| lane | action | A019 / A022との対応 | 既定と境界 |
+|---|---|---|---|
+| 読取・調査 | `research`、`summarize` | inspect / Read-only | 明示依頼と現在のgrantがあれば追加確認なし |
+| 編集 | `write_file`、`develop` | reversible_change / Reversible write | 既定無効。明示grant後も隔離worktree・検証を経てneeds_reviewへ |
+| 試験 | 単独actionなし、`worker.verify` | 編集の検証 | 編集に必須。networkなしの固定Docker imageで実施 |
+| 依頼者への返却 | TaskのDM・応答 | 同じTaskのread_result | 送信直前に本人と現在の閲覧権限を再確認 |
+| 外部送信・公開・push・merge・deploy・credential変更・破壊的操作 | actionなし | privileged_change / Sensitive write等 | このruntimeでは表現・grantできない |
+
+読取workerの`cwd`は対象directoryであり、読取可能範囲を強制するsandboxではありません。
+実際の範囲とnetworkの可否はCodexのsandboxと実行ホストの設定に依存します。
+実装のsandbox、検証用Docker、権限の再確認は別の境界です。runtimeが一回のCodex実行の
+内部tool stepを一件ずつ認可しているとは主張しません。worker開始前・checkpoint・
+fallback前・各検証コマンド前と、実行中の監視で現在の権限を確認します。
+
+[受付の契約](TASK-OWNER.md)に従って複合依頼全体を検査し、受付後はTaskごとに再認可します。
+一件の権限取消で、既に完了した別Taskの成果を巻き戻すことはありません。
+実Discord・実音声での拒否と停止の受入は[#154](https://github.com/Kotodama-Project/Kotodama-project/issues/154)で扱います。
+
 ## Runtime admission and recovery boundary
 
 The conversation Pipeline records the current Source before it seeks a bounded
