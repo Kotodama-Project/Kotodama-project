@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 削除receiptを既存archive台帳と現物へ照合する`verify-deletion`を追加。原音の残存・manifest不一致・期限超過・権限変更を拒否し、文字起こしの保持を明示して既存Storeへ記録する（#149後半）。
+
 - 既存ledgerが参照する削除receiptの公開契約とread-only validatorを追加。同じ内容の別artifactをmanifest digestで区別し、件数・期限・readback申告の矛盾を拒否する。現物確認は後続（#149前半）。
 - persona意図監査を統一contextとoffline状態投影へ接続。12職務×18場面のうち192件を合成入力で検査し、実会話・実業務の24件はBLOCKEDとして保持する。任意CIはhash付き依存と限定試験のみ（#138）。
 - offline agent診断のhardening試験、Linux/Windowsの限定CI、公開skillを追加。skill・実装・統合契約を同じcontent digestに束縛し、各検査のfailure・skipを隠さず報告する（#136後半）。

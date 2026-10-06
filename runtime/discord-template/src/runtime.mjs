@@ -1,4 +1,5 @@
 import {ArchiveRuntime} from './archive-runtime.mjs';
+import {recordRetentionReadback} from './retention-readback.mjs';
 import http from 'node:http';
 import {randomBytes,timingSafeEqual} from 'node:crypto';
 import path from 'node:path';
@@ -96,6 +97,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         else if(input.action==='stop'){await pipeline.stop(input.taskId,input.actor);result={state:'stop_requested'};}
         else if(input.action==='resume')result=await pipeline.resume(input.taskId,input.actor);
         else if(input.action==='voice'){check(voice,'VOICE_NOT_CONFIGURED');result=await voiceCommand(voice,input.mode,{actor:input.actor});}
+        else if(input.action==='verify-deletion')result=await recordRetentionReadback({receipt:input.receipt,scope:input.scope,actor:input.actor,config,store,policy:()=>current,readConfig:async()=>{current=await loadConfig(filename);return current;},assertActive:()=>check(!closing&&store.lock()?.owner===ownerId,'RUNTIME_STOPPING')});
         else if(input.action==='dots'){
           check(dots&&current.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
           if(input.operation==='list')result=await dots.list({cursor:input.cursor,includeText:input.includeText,limit:input.limit});
