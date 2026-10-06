@@ -1,0 +1,34 @@
+import { DurableObject } from "cloudflare:workers";
+
+export class Gadget extends DurableObject {
+  #reserving = false;
+  async getState() {
+    if (!this.env.KOTODAMA_BRIEF) return { state: "not_connected", source: null, result: null };
+    const source = await this.env.KOTODAMA_BRIEF.getSource();
+    const job = this.ctx.storage.kv.get("current-request");
+    if (!job) return { state: "ready_to_request", source, result: null };
+    if (job.phase === "reserving" && this.#reserving) return { state: "awaiting_approval", source, result: null };
+    const result = await this.env.KOTODAMA_BRIEF.getResult(job.requestId);
+    return { state: result.state, source, result: result.brief };
+  }
+
+  async requestBrief() {
+    if (!this.env.KOTODAMA_BRIEF) throw new Error("ConnectionsからKotodamaの接続を設定してください。");
+    const source = await this.env.KOTODAMA_BRIEF.getSource();
+    // Recheck after the await, then reserve synchronously before another RPC can interleave.
+    if (this.ctx.storage.kv.get("current-request")) return this.getState();
+    const requestId = crypto.randomUUID();
+    this.#reserving = true;
+    this.ctx.storage.kv.put("current-request", { requestId, sourceRevision: source.revision, phase: "reserving" });
+    try {
+      await this.env.KOTODAMA_BRIEF.requestBrief(requestId, source.revision, source.binding_sha256);
+      // submitAction only queues approval. Read its durable state until applyAction runs.
+      this.ctx.storage.kv.put("current-request", { requestId, sourceRevision: source.revision, phase: "queued" });
+      return this.getState();
+    } catch (error) {
+      // Do not automatically dispatch a new UUID after an uncertain response.
+      this.ctx.storage.kv.put("current-request", { requestId, sourceRevision: source.revision, phase: "uncertain" });
+      throw error;
+    } finally { this.#reserving = false; }
+  }
+}
