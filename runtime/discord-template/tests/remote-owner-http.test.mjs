@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {RemoteOwner} from '../src/remote-owner.mjs';
+import {Refused} from '../src/common.mjs';
 
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 async function fixture(t,handler,limits={}){
@@ -27,13 +28,19 @@ test('remote owner refuses an oversized outgoing write before dispatch',async t=
 });
 
 test('remote owner response deadline cancels a hung streamed HTTP response',async t=>{
-  const disconnected=deferred(),f=await fixture(t,(_req,res)=>{res.once('close',()=>disconnected.resolve());res.writeHead(200,{'content-type':'application/json'});res.write('{"version":1,');},{timeoutMs:80});
-  await assert.rejects(f.owner.tasks('actor'),{code:'OWNER_TIMEOUT'});await disconnected.promise;await f.owner.close();assert.equal(f.owner.pending.size,0);assert.equal(f.calls(),1);
+  const entered=deferred(),disconnected=deferred(),f=await fixture(t,(_req,res)=>{res.once('close',()=>disconnected.resolve());res.writeHead(200,{'content-type':'application/json'});res.write('{"version":1,');entered.resolve();});
+  const result=assert.rejects(f.owner.tasks('actor'),{code:'OWNER_TIMEOUT'});
+  await entered.promise;[...f.owner.pending][0].deadline.abort(new Refused('OWNER_TIMEOUT'));
+  await result;await disconnected.promise;await f.owner.close();assert.equal(f.owner.pending.size,0);assert.equal(f.calls(),1);
 });
 
 test('a dispatched remote write reports uncertainty on deadline and is never retried',async t=>{
-  const f=await fixture(t,(_req,res,body)=>{assert.equal(body.method,'createTask');res.writeHead(200,{'content-type':'application/json'});res.write('{');},{timeoutMs:80});
-  await assert.rejects(f.owner.createTask({id:'stable-task'}),{code:'OWNER_RESULT_UNCERTAIN'});await f.owner.close();assert.equal(f.calls(),1);
+  const entered=deferred(),f=await fixture(t,(_req,res,body)=>{assert.equal(body.method,'createTask');res.writeHead(200,{'content-type':'application/json'});res.write('{');entered.resolve();});
+  const result=assert.rejects(f.owner.createTask({id:'stable-task'}),{code:'OWNER_RESULT_UNCERTAIN'});
+  // Observe actual dispatch before delivering the deadline signal. A short
+  // wall-clock timeout can otherwise fire before localhost receives the write.
+  await entered.promise;[...f.owner.pending][0].deadline.abort(new Refused('OWNER_TIMEOUT'));
+  await result;await f.owner.close();assert.equal(f.calls(),1);
 });
 
 test('a remote connection loss after write dispatch remains uncertain with one request',async t=>{
