@@ -494,6 +494,7 @@ lifecycle state は `prepared -> dispatched -> running -> completed | failed | c
 ## Related guidance
 
 - [agent状態のoffline投影](AGENT-STATUS-PROJECTION.md) — [projector](../tools/project_agent_status.py)と[境界試験](../tests/test_agent_status_projection.py)。責任索引・統合契約・観測snapshotを表示し、稼働・認可・独立検証を証明しない。
+- [統一context v2](KNOWLEDGE-CONTEXT.md) — [一つのschema](../schemas/knowledge-context-bundle.schema.json)、[envelope生成](../tools/knowledge_context.py)、[境界試験](../tests/test_knowledge_context_envelope.py)。入力の束縛であり、認可や意味的受入ではない。
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
 - [Validation Guide](VALIDATION.md) — fail-closed validatorとnegative tests
