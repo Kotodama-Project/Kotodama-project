@@ -11,6 +11,10 @@ on:
       - 'tools/audit_control_plane.py'
       - 'tools/plan_control_plane_maintenance.py'
       - 'tests/test_control_plane*.py'
+      - 'tools/project_agent_status.py'
+      - 'tests/test_agent_status*.py'
+      - 'tests/test_diagnostic_workflow_contract.py'
+      - '.agents/skills/kotodama-agent-status/**'
       - '.github/workflows/control-plane-audit.yml'
   push:
     branches: [main]
@@ -24,6 +28,10 @@ on:
       - 'tools/audit_control_plane.py'
       - 'tools/plan_control_plane_maintenance.py'
       - 'tests/test_control_plane*.py'
+      - 'tools/project_agent_status.py'
+      - 'tests/test_agent_status*.py'
+      - 'tests/test_diagnostic_workflow_contract.py'
+      - '.agents/skills/kotodama-agent-status/**'
       - '.github/workflows/control-plane-audit.yml'
 permissions:
   contents: read
@@ -44,11 +52,62 @@ jobs:
       - name: Check tracked credentials before dependencies
         run: python -S -B tools/check_tracked_secret_hygiene.py
       - name: Install hash-locked validation dependencies
+        id: dependencies
         run: python -m pip install --require-hashes -r requirements-ci.txt
       - name: Focused audit and planner regression
-        run: python -m unittest tests.test_control_plane tests.test_control_plane_registry tests.test_control_plane_planner -v
-      - name: Read-only audit and proposal
+        id: regression
+        run: python -m unittest tests.test_control_plane tests.test_control_plane_registry tests.test_control_plane_planner tests.test_diagnostic_workflow_contract -v
+      - name: Read-only knowledge validation
+        id: knowledge
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: |
-          python -B tools/audit_control_plane.py --fail-on error
-          python -B tools/plan_control_plane_maintenance.py --format markdown
-          git diff --exit-code
+          python -B tools/knowledge_base.py validate --root .
+          python -B tools/knowledge_base.py build --root . --check
+      - name: Read-only control plane audit
+        id: control_plane
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: python -B tools/audit_control_plane.py --fail-on error
+      - name: Read-only maintenance proposal
+        id: maintenance
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: python -B tools/plan_control_plane_maintenance.py --format markdown
+      - name: Report actual outcomes
+        if: ${{ !cancelled() }}
+        shell: python
+        env:
+          DEPENDENCIES: ${{ steps.dependencies.outcome }}
+          REGRESSION: ${{ steps.regression.outcome }}
+          KNOWLEDGE: ${{ steps.knowledge.outcome }}
+          CONTROL_PLANE: ${{ steps.control_plane.outcome }}
+          MAINTENANCE: ${{ steps.maintenance.outcome }}
+        run: |
+          import os
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## Local diagnostic outcomes\n\n")
+              for key in ("DEPENDENCIES", "REGRESSION", "KNOWLEDGE", "CONTROL_PLANE", "MAINTENANCE"):
+                  outcome = os.environ.get(key) or "not_reported"
+                  summary.write(f"- {key}: {outcome}\n")
+      - name: Refuse tracked changes
+        if: ${{ !cancelled() }}
+        run: git diff --exit-code
+  diagnostics:
+    name: Offline agent diagnostics (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+      - name: Run bounded offline diagnostics
+        run: python -B -m unittest discover -s tests -p "test_agent_status*.py" -v
+      - name: Audit public skill contracts
+        run: python -S -B tools/audit_public_skills.py
+      - name: Refuse tracked changes
+        run: git diff --exit-code
