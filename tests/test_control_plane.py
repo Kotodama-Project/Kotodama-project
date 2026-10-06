@@ -121,6 +121,34 @@ class ControlPlaneTest(unittest.TestCase):
         self.assertIn("stale-canonical-source", {f["code"] for f in report["findings"]})
         self.assertEqual("2026-09-07", self.agents["reviewed_at"])
 
+    def test_future_freshness_is_refused_in_both_supported_formats(self):
+        family = self.knowledge["fact_families"][0]
+        for mode in ("json_field", "date_line"):
+            with self.subTest(mode=mode):
+                family["canonical_path"] = "freshness.json" if mode=="json_field" else "freshness.md"
+                family["freshness"] = {"mode":mode,"field":"reviewed_at","prefix":"Updated:","max_age_days":None,"severity":"warning"}
+                if mode=="json_field": self.write("freshness.json",{"reviewed_at":"2026-10-07"})
+                else: (self.root/"freshness.md").write_text("Updated: 2026-10-07\n",encoding="utf-8")
+                self.assertEqual("REFUSED",self.report()["status"])
+
+    def test_contradictory_allowed_and_forbidden_outputs_are_refused(self):
+        self.policy["autonomy_boundaries"]["automatic_outputs_allowed"].append("runtime_deployment")
+        self.assertEqual("REFUSED",self.report()["status"])
+
+    def test_executable_cadence_is_refused_even_with_a_safe_default(self):
+        self.policy["cadence"][0]["authority"] = "bounded_execute"
+        self.assertEqual("REFUSED",self.report()["status"])
+
+    def test_knowledge_changed_after_reference_check_cannot_publish_pass(self):
+        original = audit.check_agents
+        def mutate(*args,**kwargs):
+            result = original(*args,**kwargs)
+            target = self.root/"knowledge/project/goal.md"
+            target.write_bytes(target.read_bytes()+b"\nConcurrent revision.\n")
+            return result
+        with patch.object(audit,"check_agents",side_effect=mutate):
+            self.assertEqual("REFUSED",self.report()["status"])
+
     def test_missing_boundary_and_invalid_registry_refuse(self):
         self.policy["autonomy_boundaries"]["automatic_outputs_forbidden"].remove("human_approval")
         self.assertEqual("REFUSED", self.report()["status"])

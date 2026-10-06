@@ -22,6 +22,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from integration_contract_inputs import load_contract, local_schema_references_only
 from knowledge_work_validator import read_bound
 from knowledge_base import load_bundle, KnowledgeBaseError
+from kotodama_kb.foundation import _assert_current
 
 SEVERITY = {"info": 0, "warning": 1, "error": 2, "critical": 3}
 REGISTRIES = {
@@ -130,12 +131,14 @@ def check_knowledge(root: Path, knowledge: dict[str, Any], findings: list[dict[s
             continue
         cfg = family.get("freshness", {})
         max_age = cfg.get("max_age_days")
-        if isinstance(max_age, int):
+        if cfg.get("mode") != "manual":
             try:
                 observed = freshness_day(root, family)
                 if observed is not None:
                     age = (as_of - observed).days
-                    if age > max_age:
+                    if age < 0:
+                        raise ValueError("future freshness evidence")
+                    if isinstance(max_age, int) and age > max_age:
                         stale_count += 1
                         add(findings, cfg.get("severity", "warning"), "stale-canonical-source", f"{family.get('id')} is {age} days old; SLA is {max_age} days", source=canonical_path, evidence={"observed_date": observed.isoformat(), "as_of": as_of.isoformat()})
             except Exception as exc:
@@ -203,6 +206,8 @@ def check_audit_policy(policy: dict[str, Any], findings: list[dict[str, Any]]) -
         "runtime_deployment", "final_human_go", "public_beta_go",
     }
     forbidden = set(boundaries.get("automatic_outputs_forbidden", []))
+    if forbidden.intersection(boundaries.get("automatic_outputs_allowed", [])):
+        add(findings, "critical", "autonomy-policy-conflict", "automatic outputs cannot be both allowed and forbidden", source=REGISTRIES["audit"])
     missing = sorted(required_forbidden - forbidden)
     if missing:
         add(findings, "critical", "autonomy-boundary-gap", f"automatic forbidden outputs are missing: {', '.join(missing)}", source=REGISTRIES["audit"])
@@ -231,6 +236,7 @@ def build_report(root: Path, as_of: date) -> dict[str, Any]:
             registries[name] = {}
 
     concept_ids: set[str] = set()
+    bundle = None
     try:
         bundle = load_bundle(root, as_of=datetime.combine(as_of, datetime.min.time(), tzinfo=timezone.utc))
         if any(issue.level == "error" for issue in bundle.issues):
@@ -241,6 +247,12 @@ def build_report(root: Path, as_of: date) -> dict[str, Any]:
     fact_ids, knowledge_metrics = check_knowledge(root, registries["knowledge"], findings, as_of)
     agent_metrics = check_agents(root, registries["agents"], fact_ids, concept_ids, findings)
     check_audit_policy(registries["audit"], findings)
+
+    if bundle is not None:
+        try:
+            _assert_current(bundle)
+        except (ValueError, OSError, KnowledgeBaseError):
+            add(findings, "error", "knowledge-input-changed", "canonical knowledge changed during the audit", source="knowledge/profile.yaml")
 
     findings.sort(key=lambda x: (-SEVERITY[x["severity"]], x["code"], x["message"]))
     counts = {level: sum(1 for x in findings if x["severity"] == level) for level in SEVERITY}
