@@ -494,6 +494,7 @@ lifecycle state は `prepared -> dispatched -> running -> completed | failed | c
 ## Related guidance
 
 - [削除receipt](RETENTION-DELETION-RECEIPT.md) — [schema](../schemas/retention-deletion-receipt.schema.json)、[構造validator](../tools/validate_retention_deletion_receipt.py)、[否定試験](../tests/test_retention_deletion_receipt.py)。digest/件数/時刻/readback申告の整合だけを検査し、実削除・現物不在・真正性・権限は証明しない。
+- [KGI-INTENTの候補計算](INTENT-OUTCOME-METRIC.md) — [snapshot schema](../schemas/intent-outcome-snapshot.schema.json)、[compute/attest](../tools/intent_metric.py)、[否定試験](../tests/test_intent_metric.py)。固定artifactと算術の一致を検査し、実際の受入・coverage・runtimeを認証しない。
 
 - [agent状態のoffline投影](AGENT-STATUS-PROJECTION.md) — [projector](../tools/project_agent_status.py)と[境界試験](../tests/test_agent_status_projection.py)。責任索引・統合契約・観測snapshotを表示し、稼働・認可・独立検証を証明しない。
 - [統一context v2](KNOWLEDGE-CONTEXT.md) — [一つのschema](../schemas/knowledge-context-bundle.schema.json)、[envelope生成](../tools/knowledge_context.py)、[境界試験](../tests/test_knowledge_context_envelope.py)。入力の束縛であり、認可や意味的受入ではない。

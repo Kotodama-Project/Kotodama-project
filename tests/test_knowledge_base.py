@@ -38,7 +38,7 @@ class KnowledgeBaseTests(unittest.TestCase):
         errors = [issue for issue in self.bundle.issues if issue.level == "error"]
         self.assertEqual([], errors)
         self.assertEqual("0.2", self.bundle.profile["okf_version"])
-        self.assertEqual(19, len(self.bundle.concepts))
+        self.assertEqual(20, len(self.bundle.concepts))
         self.assertEqual(
             {"public_candidate"},
             {concept.extension["classification"] for concept in self.bundle.concepts},
@@ -146,7 +146,7 @@ class KnowledgeBaseTests(unittest.TestCase):
         metrics = report["metrics"]
         self.assertEqual("v2", report["schema_revision"])
         self.assertEqual(0, metrics["error_count"])
-        self.assertEqual(19, metrics["concept_count"])
+        self.assertEqual(20, metrics["concept_count"])
         self.assertEqual(1.0, metrics["source_coverage_ratio"])
         self.assertEqual(0.0, metrics["independent_verification_ratio"])
         self.assertEqual(1.0, metrics["structural_retrieval_eligibility_ratio"])
@@ -304,7 +304,7 @@ class KnowledgeBaseTests(unittest.TestCase):
                 self.assertIn(concept_id, selection.unresolved_ids)
                 self.assertEqual("needs_resolution", KB.context_as_dict(selection, bundle=bundle)["state"])
                 report = KB.audit_report(bundle, as_of=AS_OF)
-                self.assertEqual(18, report["metrics"]["structurally_retrievable_count"])
+                self.assertEqual(len(self.bundle.concepts)-1, report["metrics"]["structurally_retrievable_count"])
                 ready = KB.decision_readiness_report(bundle, actor="human:reviewer", purpose="review lifecycle", concept_ids=[concept_id])
                 self.assertEqual("NOT_READY", ready["concepts"][0]["content_verdict"])
                 self.assertIn("DOCUMENT_NOT_STABLE", ready["concepts"][0]["blockers"])
@@ -333,7 +333,7 @@ class KnowledgeBaseTests(unittest.TestCase):
                 report = KB.decision_readiness_report(deprecated, actor="human:reviewer", purpose="review lifecycle", concept_ids=["project/goal"])
                 self.assertEqual(0, report["content_ready_count"])
                 self.assertIn("DOCUMENT_NOT_STABLE", report["concepts"][0]["blockers"])
-                self.assertEqual(18, KB.audit_report(deprecated, as_of=AS_OF)["metrics"]["structurally_retrievable_count"])
+                self.assertEqual(len(self.bundle.concepts)-1, KB.audit_report(deprecated, as_of=AS_OF)["metrics"]["structurally_retrievable_count"])
 
     def test_change_during_projection_generation_refuses_before_write(self):
         with tempfile.TemporaryDirectory() as temporary:

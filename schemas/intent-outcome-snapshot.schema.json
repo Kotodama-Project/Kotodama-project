@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/intent-outcome-snapshot.schema.json",
+  "title": "Declared snapshot for candidate intent-to-outcome computation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_revision",
+    "snapshot_ref",
+    "snapshot_revision_ref",
+    "parameters",
+    "coverage",
+    "cases",
+    "contains_content"
+  ],
+  "properties": {
+    "kind": {"const": "kotodama.intent-outcome-snapshot"},
+    "schema_revision": {"const": "v1"},
+    "snapshot_ref": {"$ref": "#/$defs/ref"},
+    "snapshot_revision_ref": {"$ref": "#/$defs/ref"},
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_id", "window_start", "window_end", "exclusion_mode"],
+      "properties": {
+        "metric_id": {"const": "KGI-INTENT"},
+        "window_start": {"$ref": "#/$defs/timestamp"},
+        "window_end": {"$ref": "#/$defs/timestamp"},
+        "exclusion_mode": {"enum": ["none", "receipted_withdrawal_or_cancel"]}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "owner_ref", "receipt_ref"],
+      "properties": {
+        "status": {"enum": ["synthetic_full", "owner_declared_full"]},
+        "owner_ref": {"$ref": "#/$defs/ref"},
+        "receipt_ref": {"$ref": "#/$defs/ref"}
+      }
+    },
+    "cases": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_ref",
+          "history_ref",
+          "owner_ref",
+          "goal_ref",
+          "intent_ref",
+          "intent_revision_ref",
+          "request_sha256",
+          "due_at",
+          "admitted",
+          "admitted_at",
+          "state",
+          "source",
+          "intent_review",
+          "work",
+          "outcome",
+          "verification",
+          "acceptance",
+          "learning",
+          "exclusion",
+          "violations",
+          "kpi_change",
+          "outcome_change"
+        ],
+        "properties": {
+          "case_ref": {"$ref": "#/$defs/ref"},
+          "history_ref": {"$ref": "#/$defs/ref"},
+          "owner_ref": {"$ref": "#/$defs/ref"},
+          "goal_ref": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$", "maxLength": 96},
+          "intent_ref": {"$ref": "#/$defs/ref"},
+          "intent_revision_ref": {"$ref": "#/$defs/ref"},
+          "request_sha256": {"$ref": "#/$defs/sha256"},
+          "due_at": {"$ref": "#/$defs/timestamp"},
+          "admitted": {"type": "boolean"},
+          "admitted_at": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/timestamp"}]},
+          "state": {"enum": ["active", "completed", "failed", "rejected", "inconclusive", "withdrawn", "cancelled"]},
+          "source": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["ref", "revision_ref", "sha256"],
+                "properties": {
+                  "ref": {"$ref": "#/$defs/ref"},
+                  "revision_ref": {"$ref": "#/$defs/ref"},
+                  "sha256": {"$ref": "#/$defs/sha256"}
+                }
+              }
+            ]
+          },
+          "intent_review": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "receipt_ref",
+                  "reviewer_ref",
+                  "intent_ref",
+                  "intent_revision_ref",
+                  "source_ref",
+                  "source_revision_ref",
+                  "source_sha256",
+                  "request_sha256",
+                  "reviewed_at"
+                ],
+                "properties": {
+                  "receipt_ref": {"$ref": "#/$defs/ref"},
+                  "reviewer_ref": {"$ref": "#/$defs/ref"},
+                  "intent_ref": {"$ref": "#/$defs/ref"},
+                  "intent_revision_ref": {"$ref": "#/$defs/ref"},
+                  "source_ref": {"$ref": "#/$defs/ref"},
+                  "source_revision_ref": {"$ref": "#/$defs/ref"},
+                  "source_sha256": {"$ref": "#/$defs/sha256"},
+                  "request_sha256": {"$ref": "#/$defs/sha256"},
+                  "reviewed_at": {"$ref": "#/$defs/timestamp"}
+                }
+              }
+            ]
+          },
+          "work": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "receipt_ref",
+                  "work_order_ref",
+                  "grant_ref",
+                  "executor_ref",
+                  "intent_revision_ref",
+                  "request_sha256",
+                  "started_at",
+                  "grant_issued_at",
+                  "grant_expires_at",
+                  "scope_matched"
+                ],
+                "properties": {
+                  "receipt_ref": {"$ref": "#/$defs/ref"},
+                  "work_order_ref": {"$ref": "#/$defs/ref"},
+                  "grant_ref": {"$ref": "#/$defs/ref"},
+                  "executor_ref": {"$ref": "#/$defs/ref"},
+                  "intent_revision_ref": {"$ref": "#/$defs/ref"},
+                  "request_sha256": {"$ref": "#/$defs/sha256"},
+                  "started_at": {"$ref": "#/$defs/timestamp"},
+                  "grant_issued_at": {"$ref": "#/$defs/timestamp"},
+                  "grant_expires_at": {"$ref": "#/$defs/timestamp"},
+                  "scope_matched": {"type": "boolean"}
+                }
+              }
+            ]
+          },
+          "outcome": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["ref", "sha256", "request_sha256"],
+                "properties": {
+                  "ref": {"$ref": "#/$defs/ref"},
+                  "sha256": {"$ref": "#/$defs/sha256"},
+                  "request_sha256": {"$ref": "#/$defs/sha256"}
+                }
+              }
+            ]
+          },
+          "verification": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "receipt_ref",
+                  "reviewer_ref",
+                  "outcome_sha256",
+                  "intent_revision_ref",
+                  "verdict",
+                  "verified_at"
+                ],
+                "properties": {
+                  "receipt_ref": {"$ref": "#/$defs/ref"},
+                  "reviewer_ref": {"$ref": "#/$defs/ref"},
+                  "outcome_sha256": {"$ref": "#/$defs/sha256"},
+                  "intent_revision_ref": {"$ref": "#/$defs/ref"},
+                  "verdict": {"enum": ["pass", "fail", "inconclusive"]},
+                  "verified_at": {"$ref": "#/$defs/timestamp"}
+                }
+              }
+            ]
+          },
+          "acceptance": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "receipt_ref",
+                  "owner_ref",
+                  "outcome_sha256",
+                  "request_sha256",
+                  "verdict",
+                  "requested_outcome_met",
+                  "accepted_at",
+                  "mode",
+                  "policy_ref",
+                  "policy_revision_ref",
+                  "policy_adoption_receipt_ref"
+                ],
+                "properties": {
+                  "receipt_ref": {"$ref": "#/$defs/ref"},
+                  "owner_ref": {"$ref": "#/$defs/ref"},
+                  "outcome_sha256": {"$ref": "#/$defs/sha256"},
+                  "request_sha256": {"$ref": "#/$defs/sha256"},
+                  "verdict": {"enum": ["accepted", "rejected", "pending"]},
+                  "requested_outcome_met": {"type": "boolean"},
+                  "accepted_at": {"$ref": "#/$defs/timestamp"},
+                  "mode": {"enum": ["owner", "adopted_policy"]},
+                  "policy_ref": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]},
+                  "policy_revision_ref": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]},
+                  "policy_adoption_receipt_ref": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]}
+                }
+              }
+            ]
+          },
+          "learning": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["receipt_ref", "intent_revision_ref", "disposition", "recorded_at"],
+                "properties": {
+                  "receipt_ref": {"$ref": "#/$defs/ref"},
+                  "intent_revision_ref": {"$ref": "#/$defs/ref"},
+                  "disposition": {"enum": ["retained", "failed", "inconclusive", "rejected"]},
+                  "recorded_at": {"$ref": "#/$defs/timestamp"}
+                }
+              }
+            ]
+          },
+          "exclusion": {
+            "oneOf": [
+              {"type": "null"},
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["receipt_ref", "owner_ref", "intent_revision_ref", "reason_ref", "action", "recorded_at"],
+                "properties": {
+                  "receipt_ref": {"$ref": "#/$defs/ref"},
+                  "owner_ref": {"$ref": "#/$defs/ref"},
+                  "intent_revision_ref": {"$ref": "#/$defs/ref"},
+                  "reason_ref": {"$ref": "#/$defs/ref"},
+                  "action": {"enum": ["withdrawn", "cancelled"]},
+                  "recorded_at": {"$ref": "#/$defs/timestamp"}
+                }
+              }
+            ]
+          },
+          "violations": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": ["authority", "forbidden_disclosure", "revoked_access", "stale_execution", "unsafe_rollback"]
+            }
+          },
+          "kpi_change": {"enum": ["improved", "unchanged", "unknown"]},
+          "outcome_change": {"enum": ["improved", "unchanged", "unknown"]}
+        }
+      }
+    },
+    "contains_content": {"const": false}
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 512,
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
+    },
+    "public_ref_safety": {
+      "allOf": [
+        {"not": {"pattern": "[0-9]{17,20}"}},
+        {"not": {"pattern": "(sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)"}},
+        {"not": {"pattern": "[@\\s\\\\:]"}},
+        {"not": {"pattern": "(^|/)([0-9]{1,3}\\.){3}[0-9]{1,3}(/|$)"}},
+        {"not": {"pattern": "(^|/)([a-z0-9-]+\\.)+[a-z]{2,}(/|$)"}},
+        {"not": {"pattern": "(^|/)(https?://|file://|[A-Za-z]:[\\\\/]|\\\\\\\\)"}}
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

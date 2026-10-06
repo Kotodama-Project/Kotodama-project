@@ -43,7 +43,7 @@ def fixture():
 class KnowledgeStrategyTests(unittest.TestCase):
     def test_public_bundle_resolves_existing_ids_and_projects_typed_goal_kgi_edge(self):
         bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts)
-        self.assertEqual([],issues);self.assertEqual(11,len(projection['definitions']))
+        self.assertEqual([],issues);self.assertEqual(12,len(projection['definitions']))
         self.assertEqual('project/success-model',projection['definitions']['KGI-INTENT']['concept_id'])
         graph=_graph(bundle)
         self.assertIn({'from':'OUT-INTENT','from_kind':'goal','relation':'measured_by','to':'KGI-INTENT','to_kind':'kgi'},graph['edges'])
