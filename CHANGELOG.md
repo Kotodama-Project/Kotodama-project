@@ -44,6 +44,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Changed
 
+- MITの権利者決定、受入済みA017/A019/A022の出典・保持notice、draft releaseのSBOM検証記録をライセンス範囲の文書へ反映。未移植部分や将来の依存配布を一括で許可する説明にはせず、古い未決表示を解消する（#25）。
+
 - 固定したPython監査の202改善候補を全件対応。154件の追加実装と48件の既存実装確認を独立レビューし、元の指摘・検証・負の対照・source hashを[個別対応表](docs/PYTHON-TEST-IMPROVEMENTS.json)へ束縛する。文書・CLI・schema・候補IO・通信計測のoracleを補強し、Task swarm依存導入前のtracked credential gateを追加（[#221](https://github.com/Kotodama-Project/Kotodama-project/issues/221)、[レビュー](docs/PYTHON-TEST-REVIEW.md)）。
 - Python検査の全1,193 casesと3委譲表示を個別レビューし、運用手順・リンク・拒否時出力・UTF-8・実Git ignoreのoracleを改善。既存mutationと実CLI境界を保ってlifecycle/ledger/scannerの重複コストとpytest collectionを減らした（[#212](https://github.com/Kotodama-Project/Kotodama-project/issues/212)、[レビュー](docs/PYTHON-TEST-REVIEW.md)）。
 - Discord CIを一つのLinux/Windows matrixへ統合し、全テスト・Docker probe・必須check名と失敗時の拒否を保持する。製品の理想との照合と、履歴を失わないbranch/parked候補の整理を改善ループに追加する。
