@@ -208,6 +208,9 @@ def check_audit_policy(policy: dict[str, Any], findings: list[dict[str, Any]]) -
     forbidden = set(boundaries.get("automatic_outputs_forbidden", []))
     if forbidden.intersection(boundaries.get("automatic_outputs_allowed", [])):
         add(findings, "critical", "autonomy-policy-conflict", "automatic outputs cannot be both allowed and forbidden", source=REGISTRIES["audit"])
+    for cadence in policy.get("cadence", []):
+        if forbidden.intersection(cadence.get("outputs", [])):
+            add(findings, "critical", "forbidden-cadence-output", "cadence declares a globally forbidden output", source=REGISTRIES["audit"])
     missing = sorted(required_forbidden - forbidden)
     if missing:
         add(findings, "critical", "autonomy-boundary-gap", f"automatic forbidden outputs are missing: {', '.join(missing)}", source=REGISTRIES["audit"])

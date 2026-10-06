@@ -139,6 +139,10 @@ class ControlPlaneTest(unittest.TestCase):
         self.policy["cadence"][0]["authority"] = "bounded_execute"
         self.assertEqual("REFUSED",self.report()["status"])
 
+    def test_read_only_cadence_cannot_declare_forbidden_outputs(self):
+        self.policy["cadence"][0]["outputs"] = ["runtime_deployment"]
+        self.assertEqual("REFUSED",self.report()["status"])
+
     def test_knowledge_changed_after_reference_check_cannot_publish_pass(self):
         original = audit.check_agents
         def mutate(*args,**kwargs):
