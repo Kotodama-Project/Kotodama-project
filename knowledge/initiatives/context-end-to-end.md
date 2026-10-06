@@ -30,7 +30,9 @@ kotodama:
   strategy:
     id: INIT-CONTEXT-END-TO-END
     adoption_status: candidate
-    relationships: []
+    relationships:
+      - { type: tested_by, target: EXP-CONTEXT-PRESERVATION }
+      - { type: produces, target: OUTCOME-VERIFIED-REQUEST }
     hypothesis:
       intervention: 実行器へ渡した入力digestと受入に使う出典を同じtraceへ結ぶ
       expected_effect: 準備した文脈と実行に使った文脈の取り違えを検出できる
@@ -54,3 +56,5 @@ kotodama:
 
 [^product-direction]: 公開されている製品方向。
 [^existing-initiative]: 既存IDの意味。仮説の正しさを保証する証拠ではありません。
+
+[候補実験](../strategy/context-preservation.md)で、[目指すOutcome](../strategy/verified-request.md)への寄与を確かめます。実験の実施や成果の受入は未記録です。

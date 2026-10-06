@@ -35,5 +35,8 @@ Attested Computationと入力/codeの固定、外部receipt、attester、coverag
 報告します。KGI-INTENTのattesterを、これらの別の式を検証した証拠へ流用しません。
 [8つのKey Factor](../knowledge/factors/index.md)は既存のKF-01〜KF-08を候補として維持し、
 KGI-INTENTのenabled_by、KPIへのobserved_by、既存Initiativeへのadvanced_byを結んでいます。
-寄与は仮説で、因果関係を実証したものではありません。Experiment/Outcome、Decision/Risk/
-Measurement Policyとの残る型付き接続は#52で続けます。
+寄与は仮説で、因果関係を実証したものではありません。
+[Experiment/Outcome、Decision/Risk/Measurement Policy](../knowledge/strategy/index.md)を
+個別に定義し、Initiativeのtested_by/produces、各指標のgoverned_by、policyのmitigates、
+riskのthreatensへ接続しています。正本選択のDecisionは#128の既存判断への参照で、
+そのscopeはcanonical_definition_onlyです。新しい数値・運用・実行許可を採用しません。

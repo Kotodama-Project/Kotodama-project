@@ -71,7 +71,7 @@ def _graph(bundle: Bundle) -> dict[str, Any]:
 
     for identifier, definition in definitions.items():
         kind = strategy_kind(identifier)
-        add_node(identifier, kind, definition_concept=definition["concept_id"], measurement_role=definition.get("measurement_role"))
+        add_node(identifier, kind, definition_concept=definition["concept_id"], measurement_role=definition.get("measurement_role"), decision_scope=definition.get("decision_scope"))
         add_edge(definition["concept_id"], "concept", identifier, kind, "defines")
     for relation in strategy["relationships"]:
         add_edge(relation["from"], strategy_kind(relation["from"]), relation["to"], strategy_kind(relation["to"]), relation["type"])

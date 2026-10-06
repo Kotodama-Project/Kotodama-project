@@ -43,7 +43,7 @@ def fixture():
 class KnowledgeStrategyTests(unittest.TestCase):
     def test_public_bundle_resolves_existing_ids_and_projects_typed_goal_kgi_edge(self):
         bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts)
-        self.assertEqual([],issues);self.assertEqual(37,len(projection['definitions']))
+        self.assertEqual([],issues);self.assertEqual(42,len(projection['definitions']))
         self.assertEqual('project/success-model',projection['definitions']['KGI-INTENT']['concept_id'])
         graph=_graph(bundle)
         self.assertIn({'from':'OUT-INTENT','from_kind':'goal','relation':'measured_by','to':'KGI-INTENT','to_kind':'kgi'},graph['edges'])
@@ -60,6 +60,30 @@ class KnowledgeStrategyTests(unittest.TestCase):
             p.write_text(text.replace(old,'goal_refs: [OUT-MISSING]',1),encoding='utf-8')
             bundle=load_bundle(root)
             self.assertIn('STRATEGY_REF_UNRESOLVED',{i.code for i in bundle.issues})
+
+    def test_outcome_experiment_policy_risk_and_recorded_decision_keep_explicit_boundaries(self):
+        bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts);self.assertEqual([],issues)
+        expected={'OUTCOME-VERIFIED-REQUEST':'outcome','EXP-CONTEXT-PRESERVATION':'experiment',
+            'DECISION-CANONICAL-DEFINITIONS':'decision','RISK-PROXY-OPTIMIZATION':'risk','POLICY-MEASUREMENT-GUARDS':'measurement_policy'}
+        for identifier,kind in expected.items():
+            self.assertEqual(kind,projection['definitions'][identifier]['kind'])
+            concept=bundle.by_id[projection['definitions'][identifier]['concept_id']]
+            self.assertEqual('candidate',concept.extension['strategy']['adoption_status']);self.assertEqual('projection_only',concept.extension['authority'])
+        self.assertEqual('canonical_definition_only',projection['definitions']['DECISION-CANONICAL-DEFINITIONS']['decision_scope'])
+        graph=_graph(bundle);self.assertEqual('canonical_definition_only',next(n['decision_scope'] for n in graph['nodes'] if n['kind']=='decision'))
+        for identifier in ('INIT-CONTEXT-END-TO-END','INIT-METHOD-RENEWAL'):
+            self.assertIn({'from':identifier,'type':'tested_by','to':'EXP-CONTEXT-PRESERVATION'},projection['relationships'])
+            self.assertIn({'from':identifier,'type':'produces','to':'OUTCOME-VERIFIED-REQUEST'},projection['relationships'])
+
+    def test_risk_feedback_is_not_a_dependency_cycle_but_reversed_mitigation_is_invalid(self):
+        items=[concept('Metric','KGI-CANDIDATE',[('governed_by','POLICY-CANDIDATE')]),
+            concept('Measurement Policy','POLICY-CANDIDATE',[('mitigates','RISK-CANDIDATE')]),
+            concept('Risk','RISK-CANDIDATE',[('threatens','KGI-CANDIDATE')])]
+        self.assertEqual([],strategy_model(items)[1])
+        items[-1].extension['strategy']['relationships'][0]['type']='mitigates'
+        self.assertIn('STRATEGY_RELATION_TYPE',{i.code for i in strategy_model(items)[1]})
+        decision=concept('Decision','DECISION-CANDIDATE');del decision.extension['strategy']['decision_scope']
+        self.assertIn('STRATEGY_DECISION_SCOPE',{i.code for i in strategy_model([decision])[1]})
 
     def test_phase_definitions_keep_sequence_separate_from_progress_or_authority(self):
         bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts);self.assertEqual([],issues)
