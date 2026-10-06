@@ -57,6 +57,19 @@ class KnowledgeContextEnvelopeTests(unittest.TestCase):
         self.assertEqual(refused["concepts"],[])
         self.assertEqual(refused["state"],"needs_resolution")
 
+    def test_work_payload_and_related_identifiers_are_cleared_on_refusal(self):
+        secret="SYNTHETIC_SENSITIVE_WORK"
+        for reason in ({"errors":["SENSITIVITY_CEILING"]},{"unresolved_ids":[secret]}):
+            with self.subTest(reason=reason):
+                value=make_context(bundle_id="kotodama-knowledge-work",source_digest="a"*64,
+                    as_of="2026-10-04T14:00:00Z",work={"objective":secret,"acceptance_criteria":[secret],"deliverable_bindings":[secret]},
+                    omitted_ids=[secret],filters={"goals":[secret],"kgis":[],"initiatives":[],"tags":[]},**reason)
+                self.assertIsNone(value["work"])
+                self.assertIsNone(value["source_digest"])
+                self.assertIsNone(value["context_sha256"])
+                self.assertNotIn(secret,context_json(value))
+                self.validator.validate(value)
+
 
 if __name__ == "__main__":
     unittest.main()
