@@ -19,7 +19,7 @@ async function fixture(t,{analyze,send}={}){
   const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-clarify-')),store=new Store(root),config=exampleConfig({workspace:root});
   config.analyzer.limits={...config.analyzer.limits,maxConcurrent:4,maxPerRoom:4,maxPerActor:4};
   const calls=[],replies=[],runs=[];
-  const pipeline=new Pipeline({store,config,analyzer:{analyze:async(s,c,o)=>{calls.push({source:s,options:o});return analyze?analyze(s,c,o):analysis();}},
+  const pipeline=new Pipeline({store,config,analyzer:{analyze:async(s,c,o)=>{calls.push({source:s,context:c,options:o});return analyze?analyze(s,c,o):analysis();}},
     worker:{run:async task=>{runs.push(task.id);return {state:'needs_review',summary:'candidate',artifacts:[]};}},
     onReply:async reply=>{replies.push(reply);if(send)await send(reply);}});
   const f={root,store,config,pipeline,calls,replies,runs,closed:false};
@@ -163,4 +163,73 @@ for(const change of ['operator','source'])test('voice clarification rechecks '+c
   }}},canRead:async()=>true,voice:{speak:async(text,options)=>{await options.authorizeAudience([actor]);responses++;}}};
   await assert.rejects(DiscordAdapter.prototype.reply.call(adapter,f.replies[0]),/CLARIFICATION_SCOPE_CHANGED|SOURCE_ACCESS_DENIED/);
   assert.equal(responses,0);
+});
+
+test('unaddressed channel chatter does not consume the requested reply route',async t=>{
+  const f=await fixture(t);await ingest(f,source('first'));
+  await f.pipeline.ingest(source('chatter'),{execute:false,reply:false});
+  await ingest(f,source('addressed-answer'));
+  assert.equal(f.calls[1].options.pendingClarification,null);
+  assert.equal(f.calls[2].options.pendingClarification.sourceKey,f.calls[0].source.key);
+});
+
+test('the verified original request survives a full recent-context window',async t=>{
+  const f=await fixture(t);f.config.analyzer.maxContextSources=1;f.config.discord.operators.push(other);
+  await ingest(f,source('first',{text:'SYNTHETIC_ORIGINAL_REQUEST: 対象を指定したら調査してください'}));
+  for(let n=0;n<3;n++)await f.pipeline.ingest(source('chatter-'+n,{actorId:other,readers:[actor,other],text:'unrelated'}),{execute:false,reply:false});
+  await ingest(f,source('answer',{text:'対象は合成資料Aです'}));
+  assert(f.calls.at(-1).context.some(item=>item.key===f.calls[0].source.key&&item.text.includes('SYNTHETIC_ORIGINAL_REQUEST')));
+  assert.equal(f.calls.at(-1).context.length,1);
+});
+
+for(const failure of ['timeout','invalid','changed'])test('failed answer analysis can retry with pending context: '+failure,async t=>{
+  let f;f=await fixture(t,{analyze:s=>{
+    if(s.sourceId==='bad-answer'){
+      if(failure==='timeout')throw Error('SYNTHETIC_TIMEOUT');
+      if(failure==='invalid')return {};
+      f.store.ingest({...s,revision:2,text:'synthetic correction'});
+    }
+    return analysis();
+  }});
+  await ingest(f,source('first'));await assert.rejects(ingest(f,source('bad-answer')));
+  await ingest(f,source('retry-answer'));
+  assert.equal(f.calls.at(-1).options.pendingClarification.sourceKey,f.calls[0].source.key);
+  assert.equal(f.replies.length,1);
+});
+
+test('current Discord channel access is checked after recipient lookup',async t=>{
+  const f=await fixture(t);await ingest(f,source('first'));let readable=true,sends=0;
+  const adapter={store:f.store,policy:()=>f.config,client:{user:{id:'100000000000000006'},channels:{fetch:async()=>({})},users:{fetch:async()=>{readable=false;return {send:async()=>sends++};}}},member:async()=>{},canRead:async()=>readable};
+  await assert.rejects(DiscordAdapter.prototype.reply.call(adapter,f.replies[0]),/SOURCE_ACCESS_DENIED/);
+  assert.equal(sends,0);
+});
+
+test('only one concurrent successful answer consumes the same pending request',async t=>{
+  let release;const ready=new Promise(resolve=>{release=resolve;});
+  const f=await fixture(t,{analyze:async s=>{if(s.sourceId.startsWith('answer')){await ready;return analysis(true);}return analysis();}});
+  await ingest(f,source('first'));
+  const first=ingest(f,source('answer-one')),second=ingest(f,source('answer-two'));
+  await new Promise(resolve=>setImmediate(resolve));release();
+  const outcomes=await Promise.allSettled([first,second]);await f.pipeline.tail;
+  assert.equal(outcomes.filter(item=>item.status==='fulfilled').length,1);
+  assert.equal(f.runs.length,1);
+});
+
+test('failure after successful analysis releases only that consumed answer',async t=>{
+  const f=await fixture(t);await ingest(f,source('first'));let changed=false;
+  f.pipeline.readPolicy=async()=>{if(!changed){changed=true;f.store.ingest(source('bad-answer',{revision:2,text:'changed while admitting'}));}return f.config;};
+  await assert.rejects(ingest(f,source('bad-answer')),/CONTEXT_CHANGED/);
+  await ingest(f,source('retry-answer'));
+  assert.equal(f.calls.at(-1).options.pendingClarification.sourceKey,f.calls[0].source.key);
+  assert.equal(f.replies.length,1);
+});
+
+test('an original request is refused rather than truncated when it cannot fit context',async t=>{
+  const f=await fixture(t);f.config.analyzer.maxContextChars=1000;
+  const text='SYNTHETIC_COMPLETE_ORIGINAL_'+ 'あ'.repeat(1500);
+  await ingest(f,source('first',{text}));
+  await assert.rejects(ingest(f,source('answer')),/CLARIFICATION_CONTEXT_BUDGET/);
+  assert.equal(f.calls.length,1);assert.equal(f.replies.length,1);
+  f.config.analyzer.maxContextChars=2000;await ingest(f,source('retry'));
+  assert.equal(f.calls.at(-1).context[0].text,text);
 });

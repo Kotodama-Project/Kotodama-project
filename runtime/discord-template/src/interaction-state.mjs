@@ -35,7 +35,16 @@ export class InteractionState {
       const state=this.snapshot(source,windowSeconds);
       if(state?.phase!=='pending'||state.sequence!==sequence||state.source_key===source.key)return false;
       const {sequence:unused,...body}=state;
-      this.store.event('interaction.clarification_closed',{...body,phase:'answered',answer_key:source.key,reason:'next_source'});
+      this.store.event('interaction.clarification_closed',{...body,phase:'answered',answer_key:source.key,answer_revision:source.revision,reason:'analyzed_reply'});
+      return true;
+    });
+  }
+  reopen(source){
+    return this.store.transaction(()=>{
+      const state=this.last(source);
+      if(state?.phase!=='answered'||state.answer_key!==source.key||state.answer_revision!==source.revision)return false;
+      const {sequence,answer_key,answer_revision,...body}=state;
+      this.store.event('interaction.clarification_closed',{...body,phase:'pending',reason:'answer_failed'});
       return true;
     });
   }
