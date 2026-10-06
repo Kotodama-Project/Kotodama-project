@@ -6,13 +6,14 @@ import {voiceNotice} from './consent.mjs';
 import {voiceCommand,voiceStatusText} from './voice-control.mjs';
 import {NotificationQueue} from './notifications.mjs';
 import {resultFiles} from './result-files.mjs';
+import {WORKER_ACTIONS} from './capability-lanes.mjs';
 
 export const commandDefinition={name:'kotodama',description:'ことだまに相談・依頼し、仕事と音声を操作します',options:[
   {type:1,name:'ask',description:'相談する',options:[{type:3,name:'text',description:'知りたいこと',required:true}]},
   {type:1,name:'dots',description:'作成済みのDotへ相談する（返答はDM）',options:[{type:3,name:'text',description:'Dotへの相談・イベントの依頼',required:true}]},
   {type:1,name:'dots_stop',description:'Dot宛の受付を取消す',options:[{type:3,name:'request',description:'Dot宛の受付ID',required:true}]},
   {type:1,name:'luma_review',description:'Lumaの内容確認を自分だけに再表示する',options:[{type:3,name:'draft',description:'Luma候補のID（省略時は最新）',required:false}]},
-  {type:1,name:'do',description:'許可範囲で仕事を実行する',options:[{type:3,name:'action',description:'仕事の種類',required:true,choices:['research','summarize','write_file','develop'].map(v=>({name:v,value:v}))},{type:3,name:'text',description:'やってほしいこと',required:true}]},
+  {type:1,name:'do',description:'許可範囲で仕事を実行する',options:[{type:3,name:'action',description:'仕事の種類',required:true,choices:WORKER_ACTIONS.map(v=>({name:v,value:v}))},{type:3,name:'text',description:'やってほしいこと',required:true}]},
   {type:1,name:'tasks',description:'自分の仕事を見る'},
   {type:1,name:'consent',description:'音声処理の運用と、自分の停止設定を確認する'},
   ...['result','stop','resume'].map(name=>({type:1,name,description:{result:'成果を読む',stop:'仕事を止める',resume:'停止した仕事を再開する'}[name],options:[{type:3,name:'task',description:'仕事のID',required:true}]})),

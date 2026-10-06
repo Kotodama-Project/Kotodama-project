@@ -2,6 +2,9 @@
 
 既定は`owner.kind=local`です。インストール先のSQLiteを一つのTask ownerとして使います。JSON/CLIの`task.id`は不変で、訂正と再開は同じIDの新しいrevisionになります。
 
+[capability lane](ARCHITECTURE.md#capability-lanes)は4つの既存actionの固定写像です。
+`worker.actions`以外のgrantを作らず、音声とテキストで権限を分けません。
+
 `owner.kind=remote`を選ぶ場合、接続先は次のprivateサービス契約を実装してください。ローカルTaskへのfallbackや二重書込はしません。既存の組織版ownerにこの契約を接続するadapterが必要です。
 
 `POST /v1/owner`、Bearer認証、入力`{version:1,method,args}`、成功`{version:1,ok:true,result}`。
