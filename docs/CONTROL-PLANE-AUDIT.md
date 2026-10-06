@@ -4,7 +4,11 @@
 担当索引の構造を読み取る道具です。知識の正本は `knowledge/` と既存のproducerです。
 別のOKF、Goal/KGI定義、Task owner、実行registryを作りません。
 
-この段階は #134 の道具・schemaと公開責任索引です。maintenance plannerは後続です。
+auditとplannerの`--root`は、元のpath表記のまま境界検査へ渡します。UNCとリンクされた
+root/祖先をファイル探索前に拒否し、解決済みのリンク先へ置き換えて検査を迂回しません。
+
+この段階は #134 の道具・schemaと公開責任索引です。[保守planner](CONTROL-PLANE-OPERATIONS.md)
+はfindingを修正候補へ変換し、変更や実行を行いません。
 未配置の台帳で実行した場合は `REFUSED` です。公開知識との参照照合を通しても、
 実agentの登録・配備・稼働は成立しません。
 

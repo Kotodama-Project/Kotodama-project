@@ -10,6 +10,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 - 不足情報の確認を話者・部屋ごとに一度へ制限するInteraction Policyを接続。既存eventsへの本文を含まない記録、再起動・並行配送の抑止、元チャンネルへの回答案内、送信直前の権限/出典再検査を追加（#145後半）。
 
+- 知識contextを同じ16欄のv2 envelopeへ統一し、KB producerとNode consumerを更新。内部digest、falseの権限claims、Work受入・成果物欄を定義し、旧版を自動変換せず拒否する。compilerは#137の後続。
+- control-plane監査のfindingを現行Conceptと論理roleに束縛した修正候補へ変換するplanner、運用文書、関係pathだけを検査する任意CIを追加。Issue作成・Task実行・agent起動を行わない（#134）。
 - Discordの会話候補を処理するInteraction Policyを共通関数へ抽出。現在のadmissionを維持し、不明話者・非明示依頼・雑談を実行権限にしない。確認の送信と記録は後続（#145前半）。
 
 - 現行KBのcontextを、準備・session開始・完了の同じUTF-8 stdin digestへ束縛する限定adapterを再配置。未来時刻・撤回・不正shape・予算超過を拒否し、実子プロセスへの入力と訂正後の旧pin拒否を検査する（#130のruntime部分、元#59）。
