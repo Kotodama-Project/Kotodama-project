@@ -42,6 +42,11 @@ mainには、[#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43)
 
 PRごとの処分と進み具合は[#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)にあります。名前の系統は[NAMES](NAMES.md)、公開リポジトリの関係は[REPOSITORIES](REPOSITORIES.md)にあります。PR一覧は作業選択のための入口です。件数やリンクの存在で全履歴読了、採用、配備を主張しません。元のPRが別branch向けでも、最終的にどのbytesがmainへ入ったかを確認します。
 
+要件の候補を作る限定経路として、[要件Gadget](../runtime/cloudflare-os-kotodama/README.md)と
+[Codex brief bridge](../runtime/codex-task-bridge/README.md)があります。catalog v2の閲覧範囲、
+source/policy revisionとoperatorのgrantを確認し、同じ要求への再送でモデルを二重起動しません。
+Task ownerを追加せず、実Codex・native core・配備の受入は残ります（#124、元#45）。
+
 ## 作業を一つ進める
 
 1. 上のどの要件と利用体験を前進させるか、一文で固定する。

@@ -22,7 +22,7 @@ const closed = (value, keys) => value && typeof value === "object" && !Array.isA
   && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 
 // JSON.parse validates grammar; this bounded lexical pass also rejects duplicate keys.
-function strictJson(bytes) {
+export function strictJson(bytes) {
   const text = decoder.decode(bytes);
   const stack = [];
   for (let i = 0; i < text.length; i += 1) {
@@ -112,7 +112,8 @@ function checkedRoot(value) {
   return root;
 }
 
-function readPinnedFile(path, denied) {
+export function readPinnedFile(path, denied, maxBytes = MAX_STORE_BYTES) {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_STORE_BYTES) throw new Error(denied);
   // Reject existing links before opening, including platforms without O_NOFOLLOW.
   try {
     readlinkSync(path);
@@ -125,9 +126,9 @@ function readPinnedFile(path, denied) {
     const opened = fstatSync(file);
     // Inspect the opened object; the pathname may have been replaced during open.
     const named = lstatSync(path);
-    if (!opened.isFile() || opened.nlink !== 1 || opened.size > MAX_STORE_BYTES
+    if (!opened.isFile() || opened.nlink !== 1 || opened.size > maxBytes
       || !named.isFile() || named.isSymbolicLink() || named.dev !== opened.dev || named.ino !== opened.ino) throw new Error(denied);
-    const buffer = Buffer.alloc(MAX_STORE_BYTES + 1);
+    const buffer = Buffer.alloc(maxBytes + 1);
     let length = 0;
     while (length < buffer.length) {
       const count = readSync(file, buffer, length, buffer.length - length, null);
@@ -135,8 +136,12 @@ function readPinnedFile(path, denied) {
       length += count;
     }
     const after = fstatSync(file);
-    if (length > MAX_STORE_BYTES || length !== opened.size || after.size !== opened.size
-      || after.mtimeMs !== opened.mtimeMs || after.nlink !== 1) throw new Error(denied);
+    const namedAfter = lstatSync(path);
+    if (length > maxBytes || length !== opened.size || after.size !== opened.size
+      || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs || after.nlink !== 1
+      || !namedAfter.isFile() || namedAfter.isSymbolicLink()
+      || namedAfter.dev !== opened.dev || namedAfter.ino !== opened.ino
+      || namedAfter.size !== opened.size || namedAfter.mtimeMs !== opened.mtimeMs) throw new Error(denied);
     return buffer.subarray(0, length);
   } finally { closeSync(file); }
 }
@@ -294,6 +299,15 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
   let closePromise;
   return {
     origin: `http://127.0.0.1:${server.address().port}`,
+    // For a trusted in-process adapter that has authenticated a vendor principal.
+    // The snapshot is atomic and detached; it is not a new public HTTP endpoint.
+    inspectHandoff(principalRef, handoffId) {
+      if (closing) throw new Error("gateway_closed");
+      const principal = catalog.principals.find((item) => item.principal_ref === principalRef);
+      const record = catalog.records.find((item) => item.projection.handoff_id === handoffId);
+      if (!principal || !record || !canAccess(record.access_policy, principalRef, "read")) throw new Error("handoff_not_found");
+      return structuredClone({ projection: record.projection, policy_revision: record.access_policy.revision, principal_kind: principal.kind });
+    },
     // Trusted in-process operator surface only. Never forwarded as an HTTP/Worker action.
     updateAccessPolicy({ handoffId, expectedPolicyRevision, policy } = {}) {
       if (closing) throw new Error("gateway_closed");
