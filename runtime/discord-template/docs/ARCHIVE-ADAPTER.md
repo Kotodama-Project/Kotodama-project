@@ -44,6 +44,10 @@ encoder失敗は同一idempotencyKeyのstagingを残して停止し、次回も�
 
 ## 確認範囲
 
+retention ownerから届いた削除receiptは[現物照合](RETENTION-READBACK.md)へ渡します。
+`verify-deletion`は保存台帳に束縛したPCM/MP3の不在と、policyで保持する文字起こしを検査し、
+既存Storeへ内容を含まないeventを記録します。削除自体とledgerの昇格は行いません。
+
 合成試験で最後のsample、共通時刻、mixed overlap、再送、誤話者、訂正時刻、再起動再開、取消、上限を検査。実ffmpeg、実HTTP fixture、CLIモデルfixture、既存Storeを通して原音保存→journal PCM解放→後処理再起動→Intent記録を検査する。既存の private source をread-only確認して契約を参照した新規MIT候補。既存private sourceを丸ごと移植していない。実 transcribe endpoint/Luna応答、音声の実聴、retentionの本番削除、分散排他、public Task ownerへの実配線は未受入。rootの統合・配備作業が必要。
 
 既存のraw-retention実装を合成sessionに対して実行し、29日目は削除対象0、31日目はPCM/MP3の6ファイルだけ削除、text削除0、再実行削除0を確認した。認証grantを発行した試験ではない。

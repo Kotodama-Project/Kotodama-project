@@ -12,7 +12,8 @@ python -B -m unittest tests.test_retention_deletion_receipt -v
 このCLIが読むのはreceipt自身です。PASSは構造と内部整合の検査だけで、ファイルの不在、
 削除の実行、receiptの真正性は検証しません。reportのclaimsはfalse、scopeはSTRUCTURAL_ONLYです。
 `--as-of`は歴史的な構造評価に使え、実際に使ったUTC時刻をreportへ残します。現在のreadbackを
-過去へ付け替える引数ではありません。Node側で現物を再読する口は#149後半で接続します。
+過去へ付け替える引数ではありません。Node側の[verify-deletion](../runtime/discord-template/docs/RETENTION-READBACK.md)は
+保存台帳・現物・現在の実時計を使う別の照合です。
 
 ## 内容と対象の区別
 

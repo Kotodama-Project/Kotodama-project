@@ -208,3 +208,5 @@ VM別の配備はインストール、Bot、VC、データ領域、作業領域�
 どちらもVM・Bot・VC・Task・source revision、対象操作と期限、重複抑止、取消、結果の閲覧範囲をadapterで検査します。actor文字列や委譲イベントだけを認証・依頼本文・許可と扱わず、音声APIキーや全会話を子へ渡しません。音声終了と仕事取消は別に扱い、結果を一つのTask ownerへ戻します。[remote owner契約](docs/TASK-OWNER.md)への接続実装と実経路の検証が必要です。
 
 実装時の一次資料：[OpenAI client delegation](https://developers.openai.com/api/docs/guides/live-delegation?delegation-mode=client)、[OpenClaw sub-agent tool](https://docs.openclaw.ai/tools/subagents/tool-reference)、[OpenClaw Discord voice](https://docs.openclaw.ai/channels/discord/voice-channels)。
+
+保持期限後の削除receiptは[verify-deletionの現物照合](docs/RETENTION-READBACK.md)で確認できます。原音削除は既存retention ownerが行い、コマンドは照合と本文を含まない記録を担当します。
