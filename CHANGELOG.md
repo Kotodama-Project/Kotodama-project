@@ -14,6 +14,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 - 要件Gadgetと限定Codex brief bridgeを元#45から再配置。現在のcatalog v2を使い、保存済みinvocationの読取中の差替え・肥大化・消失を拒否する。権限・再送・取消を合成HTTPで検査し、native core／実モデルの受入とは分ける（#124）。
 
+- Knowledge Workの監査CLIと明示source-rootの回帰試験を追加。原資料を複製せずに各成果のbytesを検証し、最大64package・4096entryで探索を止める。既存validatorを保持し、未統合compilerのassertionは#137へ追跡する（#133 R3b）。
 - Cloudflare OSの任意の管理構成について、知識・会話・Task・agentの正本、読取adapter、訂正先、revision・grant境界と未接続部分を既存の設計契約へ明記。Dots-firstと単一Task ownerを保ち、native画面やprovider接続の完成とは区別する（#139）。
 - Luna Task swarmの過去版`7df1aea`で実施済みのlive fixture受入記録（4 model calls、7 messages/ACK、4 accepted）を文書へ反映。#159の公開実施記録に基づくLOCAL_PASSで、現在版のlive受入へ流用しない。未統合の文書候補`2d1e099`を現行説明へ再配置し、再実行はしない（#159）。
 - Git Stewardの業務演習を追加。69合成シナリオ、13回帰試験と実Git/SQLite/子プロセスによる訂正・再開を既存launcherと両OSのpath限定CIで検査する。現行の調整コアは維持し、実providerや新しいTask台帳は作らない（#132、元#58）。
@@ -31,6 +32,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Fixed
 
 - 要件Gadgetの再確認・変更要求より古い応答が新しい状態を上書きする問題を修正。未確定の候補を表示せず、短い画面でも長文を折り返す。Chromiumの304バリエーションと12職務のlocalhost journeyを、hash固定の専用環境で検査する（#127、元#66）。
+- Windowsでintegration contractの正規Pathを誤拒否する不具合と、OSごとのPath並び順により知識のsource digestが変わる不具合を修正。文字列の危険な区切りは引き続き拒否する。検証fixtureのSQLite接続を明示的に閉じ、Git index入力のLFと子プロセスのUTF-8 decodeをOS共通にして既存の拒否・終了確認を保持する。
+- Remote ownerのtimeout回帰試験を実HTTPの受信観測へ同期させ、遅いrunnerで受信前に80msが経過する誤失敗を修正。実timerによる期限と、書込結果不明・再送禁止・未終了処理の枠保持の確認は維持する。
 
 - OKF v0.2の固定した公式仕様を参照し、日時のguidanceを最小conformanceと分離。判断readinessは明示した時刻・Taskへ束縛し、source・検証・鮮度・矛盾・access・attestation・必須contextを個別に報告する。未指定・未解決を準備完了にせず、Conceptの日時や履歴を書き換えない（#51）。
 
@@ -47,6 +50,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Uvicorn 0.54、csv-parse 7.0.3、ws 8.22を生成lockへ反映し、既存の設定と動作を検査する。実験的HTTP/2は有効にしない（#210、#211の更新を#209へ集約）。
 
 ### Changed
+
+- MITの権利者決定、受入済みA017/A019/A022の出典・保持notice、draft releaseのSBOM検証記録をライセンス範囲の文書へ反映。未移植部分や将来の依存配布を一括で許可する説明にはせず、古い未決表示を解消する（#25）。
 
 - 固定したPython監査の202改善候補を全件対応。154件の追加実装と48件の既存実装確認を独立レビューし、元の指摘・検証・負の対照・source hashを[個別対応表](docs/PYTHON-TEST-IMPROVEMENTS.json)へ束縛する。文書・CLI・schema・候補IO・通信計測のoracleを補強し、Task swarm依存導入前のtracked credential gateを追加（[#221](https://github.com/Kotodama-Project/Kotodama-project/issues/221)、[レビュー](docs/PYTHON-TEST-REVIEW.md)）。
 - Python検査の全1,193 casesと3委譲表示を個別レビューし、運用手順・リンク・拒否時出力・UTF-8・実Git ignoreのoracleを改善。既存mutationと実CLI境界を保ってlifecycle/ledger/scannerの重複コストとpytest collectionを減らした（[#212](https://github.com/Kotodama-Project/Kotodama-project/issues/212)、[レビュー](docs/PYTHON-TEST-REVIEW.md)）。

@@ -41,5 +41,6 @@ validation in `packages/workshop-backend/format-blueprints/workspace-docs/files/
 and the operator-selected model window in `packages/workshop-shared/src/api.ts`.
 The manifest binds both original and changed bytes. These are Kotodama
 evaluation changes, not endorsed or accepted upstream changes. Upstream
-ownership, license and notices are retained; this scoped record does not close
-the separate project-wide rights/provenance obligations in Issue #25.
+ownership, license and notices are retained. This scoped record does not settle
+the rights of later extracts; follow the current [license scope](../../../docs/LICENSE-SCOPE.md)
+for each additional export and distributed artifact.

@@ -113,3 +113,9 @@ a separate requirements-only adapter; neither adapter becomes the Task owner.
 The Node synthetic tests run in Cloudflare candidate CI. The native Gatekeeper
 test additionally needs the pinned official core checkout; it is not evidence
 of a configured OS account, actual Codex execution or a deployed Gadget.
+
+Executable hashing uses bounded descriptor/path-checked reads before and after
+the run (maximum 256 MiB); small files allocate only their observed size plus a
+growth-detection byte. The operator must still keep the selected executable and
+its dependencies immutable: these observations do not attest kernel execution
+identity against a same-privilege writer that swaps and restores files.

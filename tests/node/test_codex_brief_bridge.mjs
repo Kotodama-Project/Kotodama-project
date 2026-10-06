@@ -144,13 +144,14 @@ async function call(bridge, config, path, { body, who = config.grant.requester_r
 test("journal replacement, growth and disappearance during reads refuse without resetting history", async (context) => {
   for (const mutation of ["replace", "grow", "remove"]) {
     await context.test(mutation, async (child) => {
-      const { root, config } = fixture(); let bridge; let read;
+      const { root, config } = fixture(); let bridge; let read; let mutationFd;
       try {
         bridge = await startBriefBridge(config);
         await bridge.close(); bridge = null;
         const path = join(config.stateRoot, "invocations.json");
         const original = readFileSync(path);
-        const identity = fs.statSync(path);
+        mutationFd = fs.openSync(path, "r+");
+        const identity = fs.fstatSync(mutationFd);
         const originalRead = fs.readSync;
         let changed = false;
         read = child.mock.method(fs, "readSync", (fd, ...args) => {
@@ -158,7 +159,7 @@ test("journal replacement, growth and disappearance during reads refuse without 
           const opened = fs.fstatSync(fd);
           if (!changed && opened.dev === identity.dev && opened.ino === identity.ino) {
             changed = true;
-            if (mutation === "grow") fs.appendFileSync(path, " ");
+            if (mutation === "grow") fs.writeSync(mutationFd, Buffer.from(" "), 0, 1, original.length);
             else {
               fs.renameSync(path, join(root, "preserved.json"));
               if (mutation === "replace") fs.writeFileSync(path, original);
@@ -171,15 +172,40 @@ test("journal replacement, growth and disappearance during reads refuse without 
         assert.equal(changed, true);
         if (mutation === "remove") assert.equal(fs.existsSync(path), false);
         if (mutation !== "grow") assert.deepEqual(readFileSync(join(root, "preserved.json")), original);
-        else assert.deepEqual(readFileSync(path), Buffer.concat([original, Buffer.from(" ")]));
+        else assert.deepEqual(readFileSync(mutationFd), Buffer.concat([original, Buffer.from(" ")]));
         assert.equal(fs.existsSync(join(config.stateRoot, ".brief-writer.lock")), false);
       } finally {
         read?.mock.restore(); syncBuiltinESMExports();
+        if (mutationFd !== undefined) fs.closeSync(mutationFd);
         if (bridge) await bridge.close();
         rmSync(root, { recursive: true, force: true });
       }
     });
   }
+});
+
+test("an executable replaced during admission refuses before spawning a child", async (context) => {
+  const { root } = fixture(); let open; let calls = 0;
+  const executable = join(root, "synthetic-executable");
+  fs.writeFileSync(executable, "original synthetic executable");
+  const expectedExecutableSha256 = createHash("sha256").update(readFileSync(executable)).digest("hex");
+  try {
+    const originalOpen = fs.openSync; let replaced = false;
+    open = context.mock.method(fs, "openSync", (path, ...args) => {
+      const fd = originalOpen(path, ...args);
+      if (path === executable && !replaced) {
+        replaced = true;
+        fs.renameSync(executable, join(root, "preserved-executable"));
+        fs.writeFileSync(executable, "replacement");
+      }
+      return fd;
+    });
+    syncBuiltinESMExports();
+    await assert.rejects(runCodexBrief({ executable, expectedExecutableSha256, cwd: root,
+      model: "synthetic-model", input: "synthetic request" }, { spawnImpl() { calls++; throw new Error("must not spawn"); } }), /codex_binary_drift/);
+    assert.equal(replaced, true); assert.equal(calls, 0);
+    assert.equal(readFileSync(join(root, "preserved-executable"), "utf8"), "original synthetic executable");
+  } finally { open?.mock.restore(); syncBuiltinESMExports(); rmSync(root, { recursive: true, force: true }); }
 });
 
 test("oversized journals are refused before payload reading and leave bytes intact", async (context) => {
