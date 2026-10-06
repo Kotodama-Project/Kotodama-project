@@ -40,6 +40,22 @@ class DiagnosticWorkflowContractTests(unittest.TestCase):
         self.assertIn('fail-fast: false', self.workflow)
         self.assertIn('"test_agent_status*.py"', self.workflow)
 
+    def test_every_bundled_input_triggers_each_diagnostic_event(self):
+        import sys
+        import yaml
+        sys.path.insert(0,str(ROOT/'tools'))
+        import project_agent_status as projector
+        document=yaml.load(self.workflow,Loader=yaml.BaseLoader)
+        for event in ('pull_request','push'):
+            patterns=document['on'][event]['paths']
+            for path in projector.BUNDLE:
+                with self.subTest(event=event,path=path):
+                    selected=False
+                    for pattern in patterns:
+                        if fnmatch.fnmatchcase(path,pattern.lstrip('!')):
+                            selected=not pattern.startswith('!')
+                    self.assertTrue(selected, 'A bundled diagnostic input must trigger this event')
+
     def test_skill_is_classified_without_lowering_or_hiding_unknowns(self):
         registry = json.loads((ROOT / 'governance/knowledge-registry.json').read_text(encoding='utf-8'))
         self.assertEqual(registry['inventory_scope']['minimum_classification_coverage'], 0.98)

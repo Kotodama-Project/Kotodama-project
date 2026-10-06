@@ -4,6 +4,7 @@ on:
     paths:
       - 'governance/*registry.json'
       - 'governance/audit-policy.json'
+      - 'governance/openmaus-integration.json'
       - 'schemas/*registry.schema.json'
       - 'schemas/audit-policy.schema.json'
       - 'knowledge/**'
@@ -21,6 +22,7 @@ on:
     paths:
       - 'governance/*registry.json'
       - 'governance/audit-policy.json'
+      - 'governance/openmaus-integration.json'
       - 'schemas/*registry.schema.json'
       - 'schemas/audit-policy.schema.json'
       - 'knowledge/**'
