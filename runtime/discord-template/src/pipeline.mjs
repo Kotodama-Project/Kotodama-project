@@ -4,8 +4,8 @@ import {verifyArtifacts} from './worker.mjs';
 import {AnalysisAdmission} from './analysis-admission.mjs';
 
 export class Pipeline {
-  constructor({store,owner=store,config,policy=()=>config,analyzer,worker,authorize=async()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onTaskQueued=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
-    Object.assign(this,{store,owner,config,policy,analyzer,worker,authorize,authorizeAnalysis,onTask,onTaskQueued,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.tail=Promise.resolve();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);
+  constructor({store,owner=store,config,policy=()=>config,readPolicy=async()=>policy(),analyzer,worker,authorize=async()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onTaskQueued=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
+    Object.assign(this,{store,owner,config,policy,readPolicy,analyzer,worker,authorize,authorizeAnalysis,onTask,onTaskQueued,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.tail=Promise.resolve();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);
   }
   context(source,principal){
     const config=this.config.analyzer,maxSources=config.maxContextSources??12;let remaining=config.maxContextChars??24000;
@@ -57,18 +57,31 @@ export class Pipeline {
     checkInputs();if(modelExecution(analyzed))this.store.event('analysis.model_used',{source_key:source.key,revision:source.revision,...modelExecution(analyzed)});
     const current=this.store.source(source.key,principal);check(current.revision===source.revision,'SOURCE_CHANGED');
     const ids=this.store.saveIntents(source,result.intents.map(i=>({...i,contextSources:bindings})),principal);const tasks=[];
-    let requests=result.intents.map((intent,index)=>({intent,index})).filter(({intent})=>execute&&!this.draining&&source.provider==='discord'&&this.config.discord.operators.includes(source.actorId)&&intent.kind==='request'&&intent.explicit&&intent.complete&&intent.action!=='none');
-    for(const {intent} of requests)check(this.config.worker.actions.includes(intent.action),'ACTION_NOT_ALLOWED');
+    const admissionPolicy=execute&&!this.draining?await this.readPolicy():this.policy();checkInputs();
+    let requests=result.intents.map((intent,index)=>({intent,index})).filter(({intent})=>execute&&!this.draining&&source.provider==='discord'&&admissionPolicy.discord.operators.includes(source.actorId)&&intent.kind==='request'&&intent.explicit&&intent.complete&&intent.action!=='none');
+    const requiredActions=[...new Set(requests.map(({intent})=>intent.action))];
+    if(requests.length)await this.#checkAdmission(source,requiredActions,admissionPolicy);
     // One installation has one write workspace. Related edits from one message
     // share a candidate so verification sees the combined change.
     const writes=requests.filter(({intent})=>!intent.targetTaskId&&['develop','write_file'].includes(intent.action));
     if(writes.length>1){const first=writes[0],indexes=new Set(writes.map(r=>r.index));const combined={...first.intent,title:writes.map(r=>r.intent.title).join(' / ').slice(0,300),request:writes.map(r=>r.intent.request).join('\n\n'),action:writes.some(r=>r.intent.action==='develop')?'develop':'write_file',acceptance:[...new Set(writes.flatMap(r=>r.intent.acceptance))],intentIds:writes.map(r=>ids[r.index]),requiredActions:[...new Set(writes.map(r=>r.intent.action))]};check(combined.request.length<=16000,'REQUEST_GROUP_LIMIT');requests=requests.filter(r=>!indexes.has(r.index)||r===first).map(r=>r===first?{index:first.index,intent:combined}:r);}
-    for(const {index,intent} of requests){
-      if(intent.targetTaskId){const prior=await this.owner.task(intent.targetTaskId,source.actorId);check(prior.room===`${source.provider}:${source.guildId}:${source.channelId}`,'TASK_ROOM_MISMATCH');await this.authorize(prior,'revise');}
-      checkInputs();const boundIntent={...intent,intentIds:intent.intentIds??[ids[index]],requiredActions:intent.requiredActions??[intent.action],contextSources:bindings};const task=intent.targetTaskId?await this.owner.reviseTask(intent.targetTaskId,source,boundIntent):await this.owner.createTask(source,{...boundIntent,key:ids[index]});await this.authorize(task);
-      if(intent.targetTaskId)this.active.get(intent.targetTaskId)?.controller.abort();tasks.push(task.id);this.enqueue(task.id,task.actor,task.revision);
+    const staged=[];
+    try{
+      const targets=new Set();
+      for(const {intent} of requests)if(intent.targetTaskId){check(!targets.has(intent.targetTaskId),'TASK_TARGET_DUPLICATE');targets.add(intent.targetTaskId);const prior=await this.owner.task(intent.targetTaskId,source.actorId);check(prior.room===`${source.provider}:${source.guildId}:${source.channelId}`,'TASK_ROOM_MISMATCH');await this.authorize(prior,'revise');}
+      for(const {index,intent} of requests){
+        checkInputs();const boundIntent={...intent,intentIds:intent.intentIds??[ids[index]],requiredActions:intent.requiredActions??[intent.action],contextSources:bindings};const task=intent.targetTaskId?await this.owner.reviseTask(intent.targetTaskId,source,boundIntent):await this.owner.createTask(source,{...boundIntent,key:ids[index]});
+        staged.push({task,revised:Boolean(intent.targetTaskId)||Number(task.revision)>1});
+        if(intent.targetTaskId)this.active.get(intent.targetTaskId)?.controller.abort();
+        await this.authorize(task);
+      }
+      if(staged.length)await this.#checkAdmission(source,requiredActions);
+      checkInputs();if(staged.length)check(!this.draining,'RUNTIME_STOPPING');
+    }catch(error){await this.#discardAdmission(staged,error);throw error;}
+    for(const {task,revised} of staged){
+      tasks.push(task.id);this.enqueue(task.id,task.actor,task.revision);
       // Tell the requester at once; a failed notice never undoes the queued work.
-      const revised=Boolean(intent.targetTaskId)||Number(task.revision)>1;void (async()=>{try{await this.onTaskQueued(task,{revised});}catch(e){this.onError(errorCode(e));}})();
+      void (async()=>{try{await this.onTaskQueued(task,{revised});}catch(e){this.onError(errorCode(e));}})();
     }
     if(source.metadata?.kind==='voice'&&!source.metadata.nativeConversation&&result.voiceAction!=='none'){checkInputs();await this.onVoiceAction({source,action:result.voiceAction,contextSources:bindings});}
     else if(reply&&result.replyRequested){checkInputs();await this.onReply({source,text:result.reply,contextSources:bindings});}
@@ -76,16 +89,34 @@ export class Pipeline {
   }
   async request(source,{title,request,action,acceptance=[]}){
     check(!this.closing&&!this.draining,'RUNTIME_STOPPING');
-    check(source.provider==='discord'&&this.config.discord.operators.includes(source.actorId),'OPERATOR_REQUIRED');
-    check(this.config.worker.actions.includes(action),'ACTION_NOT_ALLOWED');
+    await this.#checkAdmission(source,[action]);
     source={...source,metadata:{...source.metadata,command:{title,request,action,acceptance}}};
     if(this.owner.kind==='remote')await this.owner.ingest({...source,final:true});const received=this.store.ingest({...source,final:true});const s=this.store.source(received.key,source.actorId);
-    const intentIds=this.store.saveIntents(s,[{kind:'request',title,request,action,acceptance,explicit:true,complete:true,origin:'explicit_command',contextSources:[{key:s.key,revision:s.revision}]}],source.actorId);const task=await this.owner.createTask(s,{title,request,action,acceptance,key:'explicit-command',intentIds,requiredActions:[action]});await this.authorize(task);this.enqueue(task.id,source.actorId,task.revision);return task;
+    const intentIds=this.store.saveIntents(s,[{kind:'request',title,request,action,acceptance,explicit:true,complete:true,origin:'explicit_command',contextSources:[{key:s.key,revision:s.revision}]}],source.actorId);let task;
+    try{task=await this.owner.createTask(s,{title,request,action,acceptance,key:'explicit-command',intentIds,requiredActions:[action]});await this.authorize(task);await this.#checkAdmission(source,[action]);}catch(error){await this.#discardAdmission(task?[{task}]:[],error);throw error;}
+    this.enqueue(task.id,source.actorId,task.revision);return task;
+  }
+  async #checkAdmission(source,actions,policy=null){
+    const current=policy??await this.readPolicy();
+    check(!this.closing&&!this.draining,'RUNTIME_STOPPING');
+    check(source.provider==='discord'&&current.discord.operators.includes(source.actorId),'OPERATOR_REQUIRED');
+    check(current.worker.workspace===this.config.worker.workspace&&current.owner.kind===this.config.owner.kind,'WORKSPACE_BINDING_CHANGED');
+    const granted=new Set(current.worker.actions);
+    for(const action of actions)check(granted.has(action),'ACTION_NOT_ALLOWED');
+  }
+  async #discardAdmission(staged,error){
+    let uncertain=errorCode(error)==='OWNER_RESULT_UNCERTAIN';
+    for(const {task} of staged){
+      if(task.state!=='queued')continue;
+      try{const result=await this.owner.cancelQueued(task.id,task.actor,task.revision);check(result?.id===task.id&&result.actor===task.actor&&result.state==='cancelled'&&result.revision===task.revision+1,'ADMISSION_CLEANUP_UNCERTAIN');}catch{uncertain=true;}
+    }
+    if(uncertain){this.draining=true;this.store.event('task.admission_cleanup_uncertain',{});this.onError('ADMISSION_CLEANUP_UNCERTAIN');}
   }
   enqueue(id,actor,revision){const key=id+':'+revision;if(this.queued.has(key))return;this.queued.add(key);this.tail=this.tail.then(()=>this.#execute(id,actor,revision)).catch(e=>this.onError(errorCode(e))).finally(()=>this.queued.delete(key));}
   async #execute(id,actor,revision){
     const task=await this.owner.task(id,actor);if(task.state!=='queued'||task.revision!==revision||this.closing||this.draining)return;
-    await this.authorize(task);if(this.closing||this.draining)return;await this.owner.claim(id,task.revision);
+    try{await this.authorize(task);}catch(error){await this.#discardAdmission([{task}],error);throw error;}
+    if(this.closing||this.draining)return;await this.owner.claim(id,task.revision);
     const controller=new AbortController();const active={revision:task.revision,sourceKey:task.source_key,sourceKeys:new Set([task.source_key]),controller};this.active.set(id,active);
     if(this.closing||this.draining)controller.abort();
     const authorize=async()=>{check(!controller.signal.aborted,'CANCELLED');const latest=await this.owner.task(id,actor);check(latest.revision===task.revision&&latest.state==='running','TASK_CHANGED');const source=this.store.source(task.source_key,actor);check(source.revision===task.source_revision,'SOURCE_CHANGED');await this.owner.assertContext(id,actor);await this.authorize(latest);};
