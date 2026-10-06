@@ -17,6 +17,18 @@ PROGRAM=NODE_PROGRAM.replace(
 
 
 class KnowledgeWorkContextBindingTests(unittest.TestCase):
+    def test_cli_emits_exact_utf8_budget_with_one_lf_on_every_platform(self):
+        sys.path.insert(0,str(ROOT/"tools"))
+        from compile_knowledge_context import compile_context
+        from knowledge_context import canonical_bytes
+        from knowledge_work_validator import evaluation_time
+        workspace=ROOT/"examples/knowledge-work/business-rehearsal"
+        context=compile_context(workspace,now=evaluation_time(AS_OF))
+        expected=canonical_bytes(context)+b"\n"
+        result=subprocess.run([sys.executable,"-B",str(ROOT/"tools/compile_knowledge_context.py"),str(workspace),"--as-of",AS_OF,"--max-bytes",str(len(expected))],capture_output=True,timeout=30)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(result.stdout,expected)
+
     def test_revised_acceptance_reaches_stdin_and_old_work_pin_is_refused(self):
         node=shutil.which("node.exe" if sys.platform=="win32" else "node")
         self.assertIsNotNone(node,"Node is required for the real adapter boundary")

@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+import sys
 
 from knowledge_context import canonical_bytes, context_json, make_context
 from knowledge_work_validator import QuietParser, SENSITIVITY, evaluation_time, validate_package
 
+MAX_CONTEXT_BYTES = 16384  # Matches runtime/codex-task-bridge/knowledge-input.mjs.
 
 def source_digest(validation):
     return hashlib.sha256(canonical_bytes({key: validation[key] for key in
@@ -29,7 +31,7 @@ def assert_current(workspace, context, *, ceiling, now, source_root):
 
 
 def compile_context(workspace, *, ceiling="public", max_claims=8, max_bytes=16384, now=None, source_root=None):
-    if ceiling not in SENSITIVITY or type(max_claims) is not int or not 1 <= max_claims <= 64 or type(max_bytes) is not int or not 256 <= max_bytes <= 65536:
+    if ceiling not in SENSITIVITY or type(max_claims) is not int or not 1 <= max_claims <= 64 or type(max_bytes) is not int or not 256 <= max_bytes <= MAX_CONTEXT_BYTES:
         raise ValueError("invalid context limits")
     now = now or evaluation_time()
     validation, package = validate_package(workspace, now, source_root=source_root, ceiling=ceiling)
@@ -81,7 +83,8 @@ def main():
             value, rendered = latest, context_json(latest)
     except (ValueError, TypeError):
         parser.error("invalid context inputs")
-    print(rendered)
+    # Count and emit the same bytes, including one LF on Windows pipes too.
+    sys.stdout.buffer.write((rendered + "\n").encode("utf-8"))
     return 0 if value["state"] == "ready_candidate" else 1
 
 
