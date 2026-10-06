@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
@@ -72,17 +73,19 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
             self.skipTest("ssh-keygen is unavailable")
 
     def run_concurrent(self, command: list[str]) -> list[tuple[int, dict[str, object], str]]:
-        processes: list[subprocess.Popen[str]] = []
+        processes: list[subprocess.Popen[bytes]] = []
         try:
             for _ in range(2):
                 processes.append(subprocess.Popen(
-                    command, cwd=ROOT, text=True, encoding="utf-8", errors="strict",
+                    command, cwd=ROOT,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 ))
             results = []
             for process in processes:
                 stdout, stderr = process.communicate(timeout=30)
-                results.append((process.returncode, json.loads(stdout), stderr))
+                # Decode in this thread. Windows' text-mode pipe reader can
+                # swallow a UnicodeError in its background reader thread.
+                results.append((process.returncode, json.loads(stdout.decode("utf-8")), stderr.decode("utf-8")))
             return results
         finally:
             cleanup_errors = []
@@ -123,12 +126,14 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
                     if failure == "close" and not owned:
                         stream = process.stdout
                         real_close = stream.close
-                        close_calls = 0
+                        close_failure_injected = False
 
                         def close():
-                            nonlocal close_calls
-                            close_calls += 1
-                            if close_calls == 2:
+                            nonlocal close_failure_injected
+                            # Inject in cleanup, independent of how often the
+                            # platform closes a pipe during normal communicate.
+                            if communicated.get(process, 0) >= 2 and not close_failure_injected:
+                                close_failure_injected = True
                                 raise OSError("synthetic pipe close failure")
                             return real_close()
 
@@ -332,7 +337,7 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             inputs = self.make_inputs(Path(directory))
             results = self.run_concurrent(self.evaluate_command(inputs))
-            with sqlite3.connect(str(inputs["store"])) as connection:
+            with closing(sqlite3.connect(str(inputs["store"]))) as connection:
                 self.assertEqual(connection.execute(
                     "SELECT COUNT(*) FROM nonce_reservations"
                 ).fetchone()[0], 1)
@@ -426,7 +431,7 @@ class ComposeAttestationOneUseEvaluationCliTests(unittest.TestCase):
             store_id = hashlib.sha256(b"concurrent-store").hexdigest()
             command = [sys.executable, str(INITIALIZE), str(target), store_id]
             results = self.run_concurrent(command)
-            with sqlite3.connect(str(target)) as connection:
+            with closing(sqlite3.connect(str(target))) as connection:
                 self.assertEqual(connection.execute(
                     "SELECT store_id_sha256 FROM store_metadata WHERE singleton=1"
                 ).fetchone()[0], store_id)

@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import subprocess
 import sys
 import tempfile
@@ -25,6 +25,15 @@ spec.loader.exec_module(module)
 
 
 class OpenMausIntegrationTest(unittest.TestCase):
+    def test_logical_windows_paths_use_portable_references_without_relaxing_string_inputs(self) -> None:
+        from integration_contract_inputs import load_contract
+        relative = PureWindowsPath("governance/openmaus-integration.json")
+        self.assertEqual(load_contract(ROOT, relative), json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
+        with self.assertRaises(ValueError):
+            load_contract(ROOT, "governance\\openmaus-integration.json")
+        with self.assertRaises(ValueError):
+            load_contract(ROOT, PureWindowsPath("C:/outside.json"))
+
     def setUp(self) -> None:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
