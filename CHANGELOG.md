@@ -9,9 +9,11 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - ローカルASRの15分rotationと非公開テキスト投稿を既定無効で追加。発話を分割せず、全閲覧者と出典を照合し、再起動・不明な配送から再送しない。実音声のPB-G2受入は別途（#148）。
+- persona意図監査を統一contextとoffline状態投影へ接続。12職務×18場面のうち192件を合成入力で検査し、実会話・実業務の24件はBLOCKEDとして保持する。任意CIはhash付き依存と限定試験のみ（#138）。
 - offline agent診断のhardening試験、Linux/Windowsの限定CI、公開skillを追加。skill・実装・統合契約を同じcontent digestに束縛し、各検査のfailure・skipを隠さず報告する（#136後半）。
 
 - Knowledge Work compilerを統一context v2へ接続。必須の主張・受入条件・成果物を落とさず、上限や分類・出典変更の拒否でWork情報を除去する。分離していたcompilerの回帰assertionと、実入力へ訂正を流す合成経路を復元（#137後半）。
+
 - agentの状態をオフラインで投影するCLIを再配置。現在の責任索引に対応し、JSON・Markdownとも既定で名前・目的・Work/runを伏せる。未認証の観測、停止要求、実行終了を認可や独立検証へ格上げしない（#136前半）。
 
 - 知識contextを同じ16欄のv2 envelopeへ統一し、KB producerとNode consumerを更新。内部digest、falseの権限claims、Work受入・成果物欄を定義し、旧版を自動変換せず拒否する。compilerは#137の後続。
@@ -19,6 +21,9 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Discordの会話候補を処理するInteraction Policyを共通関数へ抽出。現在のadmissionを維持し、不明話者・非明示依頼・雑談を実行権限にしない。確認の送信と記録は後続（#145前半）。
 
 - 現行KBのcontextを、準備・session開始・完了の同じUTF-8 stdin digestへ束縛する限定adapterを再配置。未来時刻・撤回・不正shape・予算超過を拒否し、実子プロセスへの入力と訂正後の旧pin拒否を検査する（#130のruntime部分、元#59）。
+
+
+
 - 公開ファイル分類と7役割の責任索引を既存知識へ接続した。98%分類gateを維持し、旧OKFの別定義と稼働宣言を持ち込まず、元のreview日付に基づく鮮度警告を保持する（#134）。
 - Discordの既存4actionを固定のcapability laneへ対応付け、設定・analyzer・コマンドの語彙を一つにした。既定grantを維持し、編集の確認待ち・実際の読取境界・外部操作を表現しない条件を文書化（#146後半）。
 
