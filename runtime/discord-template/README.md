@@ -1,5 +1,9 @@
 # Kotodama Discord Template
 
+ローカルASRの確定した文字起こしを15分ごとに非公開テキストチャンネルへ返す
+[Voice rotation](docs/VOICE-ROTATION.md)を実装しています。既定は無効で、全閲覧者と
+出典の権限を確認できる投稿先だけを使います。実音声の受入は未実施です。
+
 **Discordで話す・頼むところから、意図、仕事、成果へ。**
 
 作成済みのOpenAI Dotを使う場合は、[Discord / Luma plugin](dots-plugin/README.md)を設定できます。Dotへの受付と返答、Lumaイベント候補の確認を扱うlocal接続で、live接続は別途受け入れます。

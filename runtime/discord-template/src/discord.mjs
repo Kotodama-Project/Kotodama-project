@@ -42,7 +42,7 @@ export class DiscordAdapter {
     this.client.on('messageDelete',m=>this.withdraw(m).catch(e=>onError(errorCode(e))));
     this.client.on('interactionCreate',i=>this.interaction(i).catch(e=>onError(errorCode(e))));
     this.client.on('error',()=>onError('DISCORD_CLIENT_FAILED'));
-    this.accessCache=new Map();const forget=()=>this.accessCache.clear();for(const event of accessEvents)this.client.on(event,forget);
+    this.accessCache=new Map();this.accessGeneration=0;const forget=()=>{this.accessCache.clear();this.accessGeneration++;};for(const event of accessEvents)this.client.on(event,forget);
   }
   operator(actor){check(this.policy().discord.operators.includes(actor),'OPERATOR_REQUIRED');}
   artifactRoot(){return this.config.owner.kind==='local'?path.join(this.config.dataDir,'worktrees'):null;}

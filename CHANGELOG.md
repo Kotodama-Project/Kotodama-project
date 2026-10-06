@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- ローカルASRの15分rotationと非公開テキスト投稿を既定無効で追加。発話を分割せず、全閲覧者と出典を照合し、再起動・不明な配送から再送しない。実音声のPB-G2受入は別途（#148）。
+
 - control-plane監査のfindingを現行Conceptと論理roleに束縛した修正候補へ変換するplanner、運用文書、関係pathだけを検査する任意CIを追加。Issue作成・Task実行・agent起動を行わない（#134）。
 - Discordの会話候補を処理するInteraction Policyを共通関数へ抽出。現在のadmissionを維持し、不明話者・非明示依頼・雑談を実行権限にしない。確認の送信と記録は後続（#145前半）。
 

@@ -59,6 +59,13 @@ Still separate and not claimed here: a second person's clean installation,
 billing, configured production Docker daemon/image, and Human GO. Existing live
 receipts apply only to their own revisions and unchanged behaviors.
 
+## 15分のVoice rotation（#148）
+
+区間管理・非公開投稿を実装し、時計を注入した900秒境界・発話延長・ASR待ち・再起動と、
+全閲覧者/全Sourceの読取権限、取消、unknown配送の再送禁止を合成入力で検証します。
+実音声の受入、到着時刻・話者・途切れ・再参加の実測は未実施で、PB-G2は未完了です。
+[確認手順](VOICE-ROTATION.md)に従い、人の受入結果を#148へ記録します。
+
 ## 履歴増加時の保存・検索
 
 `tests/store-scale.test.mjs` は100チャンネル・12,000出典・2,400 Taskの合成履歴で、
