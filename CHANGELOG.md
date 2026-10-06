@@ -8,6 +8,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 声から始まった仕事の開始DMを状態変化時に更新する、既定無効の静かな進捗を追加。権限・出典・版・在室者を再検査し、同じ状態の再送と更新回数を制限する（#144）。
 - 削除receiptを既存archive台帳と現物へ照合する`verify-deletion`を追加。原音の残存・manifest不一致・期限超過・権限変更を拒否し、文字起こしの保持を明示して既存Storeへ記録する（#149後半）。
 
 - ローカルASRの15分rotationと非公開テキスト投稿を既定無効で追加。発話を分割せず、全閲覧者と出典を照合し、再起動・不明な配送から再送しない。実音声のPB-G2受入は別途（#148）。
