@@ -4,10 +4,16 @@
 
 ## Workflow 一覧
 
+mainへのpushで検証runが作られなかった場合は、現在のmain SHAを記録して
+`gh workflow run repository-validation.yml --repo Kotodama-Project/Kotodama-project --ref main`
+で同じ検証を手動起動できます。入力で検査を省略する選択肢はありません。
+runの`headSha`が確認対象のSHAと一致し、全jobが完了したことを読戻してください。
+別SHAの緑やrunが存在しない状態を、そのmain commitのPASSにしません。
+
 | Workflow（表示名） | ファイル | 起動 | 目安の所要 | 必須 | 内容 |
 |---|---|---|---|---|---|
-| Repository validation（job: Repository checks → **Trusted repository validation**） | `.github/workflows/repository-validation.yml` | PR、main への push | checks は最大 25 分、集約は全依存の終了後 | **必須**（集約が成功を要求） | Discord・swarm と並列に tracked credential hygiene、README の one-command smoke、runtime candidate validator、actionlint、hash-locked pip install、immutable workflow reference check、`python -m unittest discover -s tests`（docs lint を含む）、`git diff --check` と clean tree。Trusted job は全3経路の成功を確認 |
-| Repository validation（job: **test (ubuntu-latest)**・**test (windows-latest)**） | `.github/workflows/repository-validation.yml` | PR、main への push | 2〜3 分 | **必須**（`Trusted repository validation` も成功を要求） | `runtime/discord-template` の `pnpm test` と `pnpm check`。Linux は固定 digest の Docker image で検証隔離の実 probe を行う |
+| Repository validation（job: Repository checks → **Trusted repository validation**） | `.github/workflows/repository-validation.yml` | PR、main への push、手動 | checks は最大 25 分、集約は全依存の終了後 | **必須**（集約が成功を要求） | Discord・swarm と並列に tracked credential hygiene、README の one-command smoke、runtime candidate validator、actionlint、hash-locked pip install、immutable workflow reference check、`python -m unittest discover -s tests`（docs lint を含む）、`git diff --check` と clean tree。Trusted job は全3経路の成功を確認 |
+| Repository validation（job: **test (ubuntu-latest)**・**test (windows-latest)**） | `.github/workflows/repository-validation.yml` | PR、main への push、手動 | 2〜3 分 | **必須**（`Trusted repository validation` も成功を要求） | `runtime/discord-template` の `pnpm test` と `pnpm check`。Linux は固定 digest の Docker image で検証隔離の実 probe を行う |
 | Task swarm validation（job: swarm / validate (ubuntu-latest)・(windows-latest)） | `.github/workflows/task-swarm.yml` | 必須チェックから `workflow_call`、手動 | 2〜5 分 | **必須**（`Trusted repository validation` が成功を要求） | `requirements-task-swarm-ci.txt` の hash 付き install、filenameを限定した全100 pytest cases、offline demo（モデル呼出しなし） |
 | Git Steward validation（job: Git Steward (ubuntu-latest)・(windows-latest)） | `.github/workflows/git-steward-validation.yml` | Git Steward・Python launcher・このworkflowの変更を含むPR、mainへのpush | 最大5分 | 任意 | Node 24でcoordinatorと業務演習の59 Node testsを実行。依存install、全Python suite、provider操作は含まない |
 | Cloudflare candidate validation | `.github/workflows/cloudflare-candidate-validation.yml` | PR、main への push | 1〜2 分 | 任意 | Cloudflare edge / 公式 Cloudflare OS 候補の content-free validator |
