@@ -485,6 +485,12 @@ lifecycle state は `prepared -> dispatched -> running -> completed | failed | c
 診断は追跡先path・行・snapshot・理由codeだけを出し、元pathを含む追跡先名も伏せます。
 詳細は[migration README](../migration/README.md)を参照してください。
 
+## Control-plane responsibility audit
+
+| Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
+|---|---|---|---|
+| [Knowledge registry](../schemas/knowledge-registry.schema.json)、[Agent responsibility index](../schemas/agent-registry.schema.json)、[Audit policy](../schemas/audit-policy.schema.json) | [audit_control_plane.py](../tools/audit_control_plane.py) | [test_control_plane.py](../tests/test_control_plane.py) | [監査の境界](CONTROL-PLANE-AUDIT.md)。分類・参照・鮮度の構造検査。runtimeや独立検証の受入ではない。 |
+
 ## Related guidance
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
