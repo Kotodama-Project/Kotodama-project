@@ -43,7 +43,7 @@ def fixture():
 class KnowledgeStrategyTests(unittest.TestCase):
     def test_public_bundle_resolves_existing_ids_and_projects_typed_goal_kgi_edge(self):
         bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts)
-        self.assertEqual([],issues);self.assertEqual(30,len(projection['definitions']))
+        self.assertEqual([],issues);self.assertEqual(37,len(projection['definitions']))
         self.assertEqual('project/success-model',projection['definitions']['KGI-INTENT']['concept_id'])
         graph=_graph(bundle)
         self.assertIn({'from':'OUT-INTENT','from_kind':'goal','relation':'measured_by','to':'KGI-INTENT','to_kind':'kgi'},graph['edges'])
@@ -60,6 +60,18 @@ class KnowledgeStrategyTests(unittest.TestCase):
             p.write_text(text.replace(old,'goal_refs: [OUT-MISSING]',1),encoding='utf-8')
             bundle=load_bundle(root)
             self.assertIn('STRATEGY_REF_UNRESOLVED',{i.code for i in bundle.issues})
+
+    def test_phase_definitions_keep_sequence_separate_from_progress_or_authority(self):
+        bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts);self.assertEqual([],issues)
+        phases=[c for c in bundle.concepts if c.metadata['type']=='Phase']
+        self.assertEqual({f'PHASE-P{i}' for i in range(7)},{c.extension['strategy']['id'] for c in phases})
+        self.assertEqual({(f'PHASE-P{i}',f'PHASE-P{i-1}') for i in range(1,7)},
+            {(r['from'],r['to']) for r in projection['relationships'] if r['type']=='sequenced_after'})
+        for c in phases:
+            self.assertEqual({'id','adoption_status','relationships'},set(c.extension['strategy']))
+            self.assertEqual('candidate',c.extension['strategy']['adoption_status']);self.assertFalse(c.extension['agent_use']['runtime_authority'])
+        items=[concept('Phase','PHASE-A',[('sequenced_after','PHASE-B')]),concept('Phase','PHASE-B',[('sequenced_after','PHASE-A')])]
+        self.assertIn('STRATEGY_DEPENDENCY_CYCLE',{i.code for i in strategy_model(items)[1]})
 
     def test_every_factor_has_a_typed_path_from_product_kgi_to_kpi_and_falsifiable_initiative(self):
         bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts);self.assertEqual([],issues)
