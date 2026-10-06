@@ -4,9 +4,11 @@ import { lstatSync, readFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateBrief } from "../cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/protocol.mjs";
+import { readPinnedFile } from "../local-review-gateway/server.mjs";
 export { validateBrief };
 
 const SCHEMA = fileURLToPath(new URL("./brief.schema.json", import.meta.url));
+const MAX_EXECUTABLE_BYTES = 268_435_456;
 const DISABLED = ["shell_tool", "apps", "plugins", "browser_use", "computer_use", "memories", "multi_agent", "multi_agent_v2", "hooks", "image_generation", "view_image"];
 const ALLOWED_ENV = new Set(["PATH", "SYSTEMROOT", "WINDIR", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "COMSPEC", "PATHEXT", "PROGRAMDATA"]);
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -46,10 +48,9 @@ export function codexArguments({ model }) {
 
 export async function runCodexBrief({ executable, expectedExecutableSha256, cwd, model, input, signal }, { spawnImpl = spawn } = {}) {
   if (typeof executable !== "string" || !isAbsolute(executable) || typeof cwd !== "string" || !isAbsolute(cwd)
-    || !/^[0-9a-f]{64}$/.test(expectedExecutableSha256 ?? "") || !lstatSync(executable).isFile()
-    || lstatSync(executable).isSymbolicLink() || !lstatSync(cwd).isDirectory()
+    || !/^[0-9a-f]{64}$/.test(expectedExecutableSha256 ?? "") || !lstatSync(cwd).isDirectory()
     || typeof input !== "string" || !input.isWellFormed() || Buffer.byteLength(input) > 16384 || !input.trim()) throw new Error("codex_configuration_denied");
-  if (digest(readFileSync(executable)) !== expectedExecutableSha256) throw new Error("codex_binary_drift");
+  if (digest(readPinnedFile(executable, "codex_binary_drift", MAX_EXECUTABLE_BYTES)) !== expectedExecutableSha256) throw new Error("codex_binary_drift");
   if (signal?.aborted) throw new Error("codex_aborted");
   const args = codexArguments({ model });
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => ALLOWED_ENV.has(key.toUpperCase())));
@@ -94,7 +95,7 @@ export async function runCodexBrief({ executable, expectedExecutableSha256, cwd,
       cleanup();
       if (refused || code !== 0) return reject(new Error(refused ?? "codex_exit_failed"));
       try {
-        if (digest(readFileSync(executable)) !== expectedExecutableSha256) throw new Error("codex_binary_drift");
+        if (digest(readPinnedFile(executable, "codex_binary_drift", MAX_EXECUTABLE_BYTES)) !== expectedExecutableSha256) throw new Error("codex_binary_drift");
         const parsed = parseCodexEvents(new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(output)));
         accept({ ...parsed, model_requested: model, binary_sha256: expectedExecutableSha256,
           input_sha256: digest(Buffer.from(input)), schema_sha256: digest(readFileSync(SCHEMA)),
