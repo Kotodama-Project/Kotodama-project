@@ -5,6 +5,7 @@ import {check,digest,shortText,sourceIdentity,errorCode,atomicJson} from './comm
 import {voiceNotice} from './consent.mjs';
 import {voiceCommand,voiceStatusText} from './voice-control.mjs';
 import {NotificationQueue} from './notifications.mjs';
+import {QuietTaskProgress} from './task-progress.mjs';
 import {resultFiles} from './result-files.mjs';
 import {WORKER_ACTIONS} from './capability-lanes.mjs';
 
@@ -36,6 +37,7 @@ export class DiscordAdapter {
   constructor({config,store,pipeline,dots,policy=()=>config,onError=()=>{}}){
     Object.assign(this,{config,store,pipeline,dots,policy,onError});this.voice=null;this.verifiedInstallation=false;
     this.notifications=store.db?new NotificationQueue(store.db,()=>this.policy().notifications?.quietHours,{onError}):null;
+    this.progress=store.db?new QuietTaskProgress({store,policy:()=>this.policy(),deliver:(task,options)=>this.updateTaskProgress(task,options),onError}):null;
     this.client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent,GatewayIntentBits.GuildVoiceStates]});
     this.client.on('messageCreate',m=>this.message(m).catch(e=>onError(errorCode(e))));
     this.client.on('messageUpdate',(_old,m)=>this.message(m,{edited:true}).catch(e=>onError(errorCode(e))));
@@ -88,7 +90,7 @@ export class DiscordAdapter {
       if(kind==='luma')return this.notifyLumaImport(body);
       const task=await this.pipeline.owner.task(body.id,body.actor);if(task.revision!==body.revision)return {state:'stale'};
       return this.deliver(task);
-    });}catch(e){await this.client.destroy();throw e;}finally{clearTimeout(timer);}
+    });this.progress?.start();}catch(e){await this.client.destroy();throw e;}finally{clearTimeout(timer);}
   }
   async register(){
     check(this.verifiedInstallation,'BOT_INSTALLATION_NOT_VERIFIED');
@@ -138,7 +140,34 @@ export class DiscordAdapter {
     if(this.notifications?.quiet())return {state:'quiet'};
     const text=`${revised?'作業内容を更新して、走り直しています':'走り始めました'}：${task.title}\nID: ${task.id}\n終わったら、このDMで結果を届けます。止めるときは /kotodama stop でこのIDを指定してください。`;
     const user=await this.client.users.fetch(task.actor);const message=await user.send({content:shortText(text),allowedMentions:{parse:[]}});
-    check(message?.id,'NOTIFICATION_SEND_UNCONFIRMED');return {state:'sent'};
+    check(message?.id,'NOTIFICATION_SEND_UNCONFIRMED');
+    if(this.progress?.enabled()&&this.store.sourceInternal(task.source_key)?.metadata?.kind==='voice')this.progress.remember(task,message.id);
+    return {state:'sent'};
+  }
+  async updateTaskProgress(task,{messageId,claim,isActive}){
+    await this.pipeline.readPolicy();
+    const room=this.voice,epoch=room?.epoch,generation=room?.generation;
+    const bindings=[{key:task.source_key,revision:task.source_revision},...(task.contextSources??[])];
+    let audience;
+    const guard=()=>{
+      check(isActive()&&this.verifiedInstallation&&this.policy().owner.kind==='local'&&this.policy().notifications?.taskProgress?.enabled&&!this.notifications?.quiet(),'PROGRESS_DISABLED');
+      this.operator(task.actor);const latest=this.store.task(task.id,task.actor);
+      check(latest.revision===task.revision&&latest.state===task.state&&digest(latest.contextSources??[])===digest(task.contextSources??[]),'PROGRESS_TASK_CHANGED');
+      const source=this.store.source(task.source_key,task.actor);
+      check(source.metadata?.kind==='voice'&&room&&this.voice===room&&room.connectionReady()&&!room.paused&&!room.recovering&&room.epoch===epoch&&room.generation===generation&&source.metadata.voiceEpoch===epoch,'PROGRESS_VOICE_CHANGED');
+      check(source.channelId===room.target.voiceChannelId&&source.guildId===room.target.guildId&&room.audienceAllowed(),'PROGRESS_AUDIENCE_DENIED');
+      const members=room.audience().sort();check(members.includes(task.actor)&&members.length<=16&&bindings.length<=32,'PROGRESS_AUDIENCE_DENIED');
+      if(audience)check(digest(audience)===digest(members),'PROGRESS_AUDIENCE_CHANGED');else audience=members;
+      for(const actor of audience)for(const binding of bindings)check(this.store.source(binding.key,actor).revision===binding.revision,'CONTEXT_CHANGED');
+    };
+    guard();await this.member(task.actor);const user=await this.client.users.fetch(task.actor),dm=await user.createDM();
+    const channels=new Set(bindings.map(b=>this.store.source(b.key,task.actor)).filter(s=>s.provider==='discord').map(s=>s.channelId));
+    for(const id of channels){const channel=await this.client.channels.fetch(id,{force:true});for(const actor of audience)check(await this.canRead(channel,actor),'SOURCE_ACCESS_DENIED');}
+    await this.pipeline.authorize(task,'read_result');await this.pipeline.readPolicy();guard();
+    const key=claim();if(!key)return {state:'limited'};
+    const text=`仕事の進捗（確認時点）\nID: ${task.id}\n版: ${task.revision}\n状態: ${taskStateText(task.state)}\n確認日時: ${new Date().toISOString()}\n結果は別のDMで届きます。停止は /kotodama stop でこのIDを指定してください。`;
+    try{const updated=await dm.messages.edit(messageId,{content:shortText(text),allowedMentions:{parse:[]}});check(updated?.id===messageId,'PROGRESS_EDIT_UNCONFIRMED');this.store.delivered(key,messageId);return {state:'updated'};}
+    catch{this.onError('PROGRESS_EDIT_UNKNOWN');return {state:'unknown'};}
   }
   async withdraw(message){
     if(!this.verifiedInstallation||message.guildId!==this.config.discord.guildId)return;
@@ -256,5 +285,5 @@ export class DiscordAdapter {
     coverage.complete=coverage.channels.every(c=>['complete','not_authorized'].includes(c.state))&&coverage.imported<limit;coverage.finishedAt=new Date().toISOString();
     await atomicJson(path.join(this.config.dataDir,'latest-import-coverage.json'),coverage);return coverage;
   }
-  async close(){this.verifiedInstallation=false;await this.notifications?.stop();await this.voice?.dispose();await this.client.destroy();}
+  async close(){this.verifiedInstallation=false;await this.progress?.close();await this.notifications?.stop();await this.voice?.dispose();await this.client.destroy();}
 }

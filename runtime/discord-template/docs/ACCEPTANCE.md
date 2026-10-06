@@ -68,6 +68,9 @@ Interaction Policyとclarify_onceを実装し、合成のStore/Pipeline/Discord�
 
 ## 履歴増加時の保存・検索
 
+静かな仕事の進捗（#144）は[既存DMの更新](QUIET-TASK-PROGRESS.md)として既定無効で実装しています。
+権限・版・上限・退出後の仕事継続は合成試験で検証し、実Discord・実VCと通知の使いやすさは未受入です。
+
 `tests/store-scale.test.mjs` は100チャンネル・12,000出典・2,400 Taskの合成履歴で、
 会話contextのJSON読取りが設定した12出典に収まり、出典・Taskの検索と訂正の
 無効化が索引を使うことを検査します。閲覧不可・撤回済みの出典は件数制限の
