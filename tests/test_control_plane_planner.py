@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -44,6 +45,16 @@ class ControlPlanePlannerTest(unittest.TestCase):
         self.assertEqual(2,result.returncode)
         self.assertEqual("REFUSED",json.loads(result.stdout)["status"])
         self.assertNotIn(b"private-marker",result.stdout+result.stderr)
+
+    def test_real_cli_preserves_missing_registry_findings_as_proposals(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable,str(ROOT/"tools/plan_control_plane_maintenance.py"),"--root",directory,"--as-of","2026-10-06"],capture_output=True,timeout=20)
+            self.assertEqual(0,result.returncode)
+            value = json.loads(result.stdout)
+            self.assertEqual("REFUSED",value["source_audit_status"])
+            self.assertTrue(any(item["source_finding"]["code"]=="missing-registry" for item in value["candidate_work"]))
+            self.assertTrue(all(item["authority"]=="proposal_only" for item in value["candidate_work"]))
+            self.assertFalse(any(value["claims"].values()))
 
     def test_refused_audit_keeps_critical_finding_and_escaped_output(self):
         report = {"status":"REFUSED","summary":{"critical":1},"findings":[{"code":"autonomy-boundary-gap","severity":"critical","message":"<script> [x](https://invalid.example)"}]}
