@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import knowledge_work_validator as validator
 from create_knowledge_work_package import create_package
+from compile_knowledge_context import compile_context
+from knowledge_context import context_digest
 
 NOW = datetime(2026, 9, 9, tzinfo=timezone.utc)
 
@@ -99,6 +101,7 @@ class KnowledgeWorkTests(unittest.TestCase):
         source["expires_at"] = "2026-09-08T00:00:00Z"
         self.save()
         self.assertIn("SOURCE_EXPIRED", self.errors())
+        self.assertEqual(compile_context(self.root, now=NOW)["state"], "needs_resolution")
         source["expires_at"] = NOW.isoformat()
         self.save()
         at_expiry = validator.validate_package(self.root, NOW)[0]
@@ -152,6 +155,28 @@ class KnowledgeWorkTests(unittest.TestCase):
         self.assertEqual(report["bindings"], [])
         self.assertNotIn("PRIVATE_FIXTURE", json.dumps(report))
 
+    def test_compiler_ceiling_refusal_erases_all_private_context(self):
+        self.package["sensitivity"] = "restricted"
+        self.package["objective"] = "PRIVATE_COMPILER_OBJECTIVE"
+        self.package["criteria"][0]["description"] = "PRIVATE_CRITERION"
+        self.save()
+        result = compile_context(self.root, now=NOW)
+        self.assertEqual(result["errors"], ["SENSITIVITY_CEILING"])
+        self.assertIsNone(result["work"])
+        self.assertIsNone(result["source_digest"])
+        self.assertIsNone(result["context_sha256"])
+        self.assertNotIn("PRIVATE_", json.dumps(result))
+
+    def test_mandatory_and_byte_budgets_refuse_instead_of_truncating(self):
+        for limits, reason in (({"max_claims":1}, "REQUIRED_CONTEXT_BUDGET"), ({"max_bytes":256}, "CONTEXT_BYTE_BUDGET")):
+            with self.subTest(limits=limits):
+                result = compile_context(self.root, now=NOW, **limits)
+                self.assertEqual(result["state"], "needs_resolution")
+                self.assertIn(reason, result["errors"])
+                self.assertIsNone(result["work"])
+                self.assertEqual(result["concepts"], [])
+                self.assertEqual(result["omitted_ids"], [])
+
     def test_invalid_schema_cannot_return_an_unclassified_package(self):
         self.package["sensitivity"] = "unknown"
         self.package["objective"] = "UNCLASSIFIED_FIXTURE_NOT_FOR_API"
@@ -160,6 +185,19 @@ class KnowledgeWorkTests(unittest.TestCase):
         self.assertEqual(report["errors"], ["SCHEMA_INVALID"])
         self.assertIsNone(package)
         self.assertNotIn("UNCLASSIFIED_FIXTURE", json.dumps(report))
+
+    def test_compiler_cannot_bypass_the_executor_context_byte_ceiling(self):
+        for number in range(2):
+            claim=copy.deepcopy(self.package["claims"][0])
+            claim["id"]=f"claim-overflow-{number}"
+            self.package["claims"].append(claim)
+        for claim in self.package["claims"]:
+            claim["statement"]="x"*4000
+        self.save()
+        self.assertEqual(self.errors(),[])
+        self.assertEqual(compile_context(self.root,now=NOW,max_bytes=16384)["errors"],["CONTEXT_BYTE_BUDGET"])
+        with self.assertRaises(ValueError):
+            compile_context(self.root,now=NOW,max_bytes=65536)
 
     def test_downgraded_classification_never_returns_package_even_at_restricted_ceiling(self):
         self.package["sources"][0]["sensitivity"] = "restricted"
@@ -187,6 +225,49 @@ class KnowledgeWorkTests(unittest.TestCase):
         self.package["contradictions"].append({"id": "conflict-one", "claim_refs": ["claim-optional", "claim-scope"], "severity": 2, "state": "open"})
         self.save()
         self.assertEqual(self.errors(), [])
+        self.assertEqual(compile_context(self.root, now=NOW, max_claims=2)["state"], "needs_resolution")
+        result = compile_context(self.root, now=NOW, max_claims=3)
+        self.assertEqual(result["state"], "ready_candidate")
+        selected = {claim["id"] for claim in result["work"]["selected_claims"]}
+        self.assertTrue(all(set(item["claim_refs"]) <= selected for item in result["work"]["assumptions"] + result["work"]["contradictions"]))
+
+    def test_compiler_uses_one_closed_envelope_without_source_body(self):
+        result = compile_context(self.root, now=NOW)
+        schema = json.loads((ROOT/"schemas/knowledge-context-bundle.schema.json").read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+        Draft202012Validator(schema,format_checker=FormatChecker()).validate(result)
+        self.assertEqual(result["kind"], "kotodama.generated-knowledge-context")
+        self.assertEqual(result["schema_revision"], "v2")
+        self.assertFalse(any(result["claims"].values()))
+        self.assertEqual(result["context_sha256"], context_digest(result))
+        self.assertNotIn("Synthetic scenario, not a real conversation", json.dumps(result))
+        self.assertNotIn(str(self.root), json.dumps(result))
+
+    def test_acceptance_change_changes_context_and_refusal_hides_deliverables(self):
+        first = compile_context(self.root, now=NOW)
+        self.package["criteria"][0]["description"] += " and revised acceptance"
+        self.save()
+        second = compile_context(self.root, now=NOW)
+        self.assertNotEqual(first["context_sha256"], second["context_sha256"])
+        self.assertNotEqual(first["source_digest"], second["source_digest"])
+        self.assertIn("revised acceptance", second["work"]["acceptance_criteria"][0]["description"])
+        refused = compile_context(self.root, now=NOW, max_bytes=256)
+        self.assertIsNone(refused["work"])
+        self.assertNotIn("revised acceptance", json.dumps(refused))
+
+    def test_source_changed_during_context_assembly_cannot_be_returned(self):
+        import compile_knowledge_context as compiler
+        original = compiler.make_context
+        def change(**kwargs):
+            result = original(**kwargs)
+            if result["state"] == "ready_candidate":
+                path = self.root/"source.txt"
+                path.write_bytes(path.read_bytes()+b" changed during compilation")
+            return result
+        with mock.patch.object(compiler,"make_context",side_effect=change):
+            result = compiler.compile_context(self.root,now=NOW)
+        self.assertEqual(result["errors"],["SOURCE_DRIFT"])
+        self.assertIsNone(result["work"])
 
     def test_final_reread_detects_a_source_changed_after_its_initial_read(self):
         original = validator.read_bound
@@ -227,6 +308,7 @@ class KnowledgeWorkTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             create_package(target, "replacement")
         self.assertEqual((target / validator.MANIFEST).read_bytes(), before)
+        self.assertEqual(compile_context(target, ceiling="restricted", now=NOW)["errors"], ["CANDIDATE_REQUIRED"])
 
 if __name__ == "__main__":
     unittest.main()

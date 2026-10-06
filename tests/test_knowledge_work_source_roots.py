@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 import knowledge_work_validator as validator
 import audit_knowledge_workspaces as audit
+from compile_knowledge_context import compile_context
 
 NOW = datetime(2026, 9, 9, tzinfo=timezone.utc)
 
@@ -54,6 +55,7 @@ class KnowledgeWorkSourceRootTests(unittest.TestCase):
         self.assertEqual(report["status"], "PASS")
         self.assertEqual(len(report["bindings"]), 2)
         self.assertFalse(any(report["claims"].values()))
+        self.assertEqual(compile_context(self.workspace, now=NOW, source_root=self.evidence)["state"], "ready_candidate")
 
     def test_no_implicit_parent_search_and_no_fallback_to_workspace(self):
         report, _ = validator.validate_package(self.workspace, NOW)
@@ -162,10 +164,10 @@ class KnowledgeWorkSourceRootTests(unittest.TestCase):
                 self.assertEqual(json.loads(result.stdout)["errors"], ["INPUT_INVALID"])
                 self.assertNotIn(str(self.root), result.stdout)
 
-    def test_validate_cli_uses_root_and_ceiling(self):
+    def test_validate_and_compile_cli_share_root_and_ceiling(self):
         self.package["sensitivity"] = "restricted"
         self.save()
-        for tool in ("validate_knowledge_work_package.py",):
+        for tool in ("validate_knowledge_work_package.py", "compile_knowledge_context.py"):
             with self.subTest(tool=tool):
                 result = self.cli(tool, self.workspace, "--source-root", self.evidence, "--ceiling", "restricted")
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
