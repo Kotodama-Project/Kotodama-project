@@ -219,6 +219,7 @@ export class VoiceRoom {
   }
   async endSession(s,{drain=true,reason='unspecified',code=null}={}){
     if(s.ending)return s.ending;
+    this.pipeline.endInteraction?.({provider:'discord',guildId:this.config.discord.guildId,channelId:this.config.discord.voiceChannelId,actorId:s.actor,metadata:{sessionId:s.id}});
     this.diagnose('voice.session_ended',{voiceSession:s.id,reason,code,conversationActive:s.conversationActive,durationMs:Math.max(0,Date.now()-s.started)});
     s.stopped=true;clearInterval(s.budgetTimer);clearInterval(s.silenceTimer);s.finishInput?.();
     if(this.sessions.get(s.actor)===s)this.sessions.delete(s.actor);
