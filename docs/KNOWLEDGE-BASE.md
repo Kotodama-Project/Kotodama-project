@@ -281,3 +281,20 @@ python tools/knowledge_base.py build --root . --check
 ```
 
 出典がCLI出力の生成中に変わった場合も、古いcontextやreadinessをstdoutへ返す前に拒否します。
+
+## 出典pinと再開時の確認
+
+`sources[].sha256`はKotodama producerが任意に付けるlocal source bytesのpinです。
+64桁の小文字hexを、返却bundleが実際に保持する有限snapshotのSHA-256と照合します。
+不一致は`SOURCE_DIGEST_MISMATCH`、local fileへ解決できないpinは
+`SOURCE_DIGEST_UNAVAILABLE`としてprofileを拒否します。remote sourceを自動取得せず、
+hashの一致だけで意味的支持、ACL、本人性、独立reviewを確認済みにしません。
+
+通常queryで一致しない文書をpriorityだけで返しません。contextは非criticalを含むstaleなConcept、
+deprecated、revoked、conflicted、unknownを配送候補へ入れず、リンク経由でも再導入しません。
+直接必要なcritical Conceptとmandatory governanceを先に確保し、収まらない場合は
+`needs_resolution`のままです。未知のselectorは既存の`CONTEXT_REFERENCE_UNKNOWN`拒否を維持します。
+
+[再開手順](../knowledge/project/catchup.md)は現在の地図・STATUS・この契約を出典にします。
+過去の日付付きGitHub観測を現在地として再配置しません。これは#59の知識部分の移植で、
+実行器の最終stdinへのdigest束縛は#130の後続です。
