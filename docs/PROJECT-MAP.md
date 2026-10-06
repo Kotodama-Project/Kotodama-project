@@ -47,10 +47,13 @@ PRごとの処分と進み具合は[#30](https://github.com/Kotodama-Project/Kot
 source/policy revisionとoperatorのgrantを確認し、同じ要求への再送でモデルを二重起動しません。
 Task ownerを追加せず、実Codex・native core・配備の受入は残ります（#124、元#45）。
 
-[control-plane監査](CONTROL-PLANE-AUDIT.md)は現行知識への参照と責任索引を検査する
-道具・schemaの段階です。台帳が無い入力は拒否し、実agentの登録や稼働を主張しません。
+[control-plane監査](CONTROL-PLANE-AUDIT.md)は現行知識への参照と公開責任索引を検査します。
+[保守planner](CONTROL-PLANE-OPERATIONS.md)はfindingから修正候補を返し、実行や稼働を主張しません。
 
 ## 作業を一つ進める
+
+[agent状態のoffline投影](AGENT-STATUS-PROJECTION.md)は、責任索引と任意の観測を
+診断用に表示します。既定で文脈を伏せ、稼働や認可を静的snapshotから主張しません。
 
 1. 上のどの要件と利用体験を前進させるか、一文で固定する。
 2. 正本、現在の担当、対象commitと作業範囲を確認する。既存Taskを別台帳へ複製しない。

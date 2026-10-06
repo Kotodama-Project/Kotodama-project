@@ -489,12 +489,13 @@ lifecycle state は `prepared -> dispatched -> running -> completed | failed | c
 
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
 |---|---|---|---|
-| [Knowledge registry](../schemas/knowledge-registry.schema.json)、[Agent responsibility index](../schemas/agent-registry.schema.json)、[Audit policy](../schemas/audit-policy.schema.json) | [audit_control_plane.py](../tools/audit_control_plane.py) | [test_control_plane.py](../tests/test_control_plane.py) | [監査の境界](CONTROL-PLANE-AUDIT.md)。分類・参照・鮮度の構造検査。runtimeや独立検証の受入ではない。 |
+| [Knowledge registry](../schemas/knowledge-registry.schema.json)、[Agent responsibility index](../schemas/agent-registry.schema.json)、[Audit policy](../schemas/audit-policy.schema.json) | [audit_control_plane.py](../tools/audit_control_plane.py)、[保守planner](../tools/plan_control_plane_maintenance.py) | [監査](../tests/test_control_plane.py)、[台帳](../tests/test_control_plane_registry.py)、[保守提案](../tests/test_control_plane_planner.py) | [監査の境界](CONTROL-PLANE-AUDIT.md)と[運用入口](CONTROL-PLANE-OPERATIONS.md)。分類・参照・鮮度の構造検査。runtimeや独立検証の受入ではない。 |
 
 ## Related guidance
 
 - [統一context v2](KNOWLEDGE-CONTEXT.md) — [一つのschema](../schemas/knowledge-context-bundle.schema.json)、[envelope生成](../tools/knowledge_context.py)、[境界試験](../tests/test_knowledge_context_envelope.py)。入力の束縛であり、認可や意味的受入ではない。
 - [Knowledge Work compiler](../tools/compile_knowledge_context.py) — 検証済みcandidateを同じv2へ変換し、受入条件・成果物参照を保持する。期限・感度・必須情報の予算・最終source再読は[validation試験](../tests/test_knowledge_work_validation.py)と[source-root試験](../tests/test_knowledge_work_source_roots.py)、実stdinへの束縛は[compiler境界試験](../tests/test_knowledge_work_context_binding.py)で確認する。
+- [agent状態のoffline投影](AGENT-STATUS-PROJECTION.md) — [projector](../tools/project_agent_status.py)と[境界試験](../tests/test_agent_status_projection.py)。責任索引・統合契約・観測snapshotを表示し、稼働・認可・独立検証を証明しない。
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
 - [Validation Guide](VALIDATION.md) — fail-closed validatorとnegative tests
