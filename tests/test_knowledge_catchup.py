@@ -104,7 +104,11 @@ class KnowledgeCatchupTests(unittest.TestCase):
             path = self.root / "knowledge" / relative
             path.write_text(re.sub(r"(?m)^  context_priority: \d+$", f"  context_priority: {priority}", path.read_text(encoding="utf-8")), encoding="utf-8")
         bundle = KB.load_bundle(self.root, as_of=AS_OF)
-        context = self.context(bundle, max_concepts=6)
+        # OUT-LOCAL now has its own critical definition: seven mandatory
+        # Concepts must fit before any optional content can use the budget.
+        too_small = self.context(bundle, max_concepts=6)
+        self.assertEqual(KB.context_as_dict(too_small, bundle=bundle)["state"], "needs_resolution")
+        context = self.context(bundle, max_concepts=7)
         self.assertIn("project/current-state", {item.concept_id for item in context.selected})
         self.assertNotIn("operations/agent-context", {item.concept_id for item in context.selected})
         limited = self.context(bundle, max_concepts=1)
