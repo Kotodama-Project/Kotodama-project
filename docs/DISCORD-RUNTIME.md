@@ -1,5 +1,8 @@
 # Discordから使うKotodamaの最小構成
 
+ローカルASRの[15分Voice rotation](../runtime/discord-template/docs/VOICE-ROTATION.md)は
+既定無効の実装候補です。非公開投稿先の全閲覧者を照合し、実音声の受入は別途行います。
+
 `runtime/discord-template`は、カジュアル版で先行した汎用実装を公開本体の
 [任意ランタイム](../runtime/discord-template/README.md)として取り込んだ実装候補です。
 別製品ではなく、KotodamaをDiscordから使う最小構成です。組織の導入や他adapterは必須ではありません。

@@ -44,7 +44,7 @@ export class DiscordAdapter {
     this.client.on('messageDelete',m=>this.withdraw(m).catch(e=>onError(errorCode(e))));
     this.client.on('interactionCreate',i=>this.interaction(i).catch(e=>onError(errorCode(e))));
     this.client.on('error',()=>onError('DISCORD_CLIENT_FAILED'));
-    this.accessCache=new Map();const forget=()=>this.accessCache.clear();for(const event of accessEvents)this.client.on(event,forget);
+    this.accessCache=new Map();this.accessGeneration=0;const forget=()=>{this.accessCache.clear();this.accessGeneration++;};for(const event of accessEvents)this.client.on(event,forget);
   }
   operator(actor){check(this.policy().discord.operators.includes(actor),'OPERATOR_REQUIRED');}
   artifactRoot(){return this.config.owner.kind==='local'?path.join(this.config.dataDir,'worktrees'):null;}
@@ -146,11 +146,12 @@ export class DiscordAdapter {
   }
   async updateTaskProgress(task,{messageId,claim,isActive}){
     await this.pipeline.readPolicy();
-    const room=this.voice,epoch=room?.epoch,generation=room?.generation;
+    const room=this.voice,epoch=room?.epoch,generation=room?.generation,accessGeneration=this.accessGeneration;
     const bindings=[{key:task.source_key,revision:task.source_revision},...(task.contextSources??[])];
     let audience;
     const guard=()=>{
       check(isActive()&&this.verifiedInstallation&&this.policy().owner.kind==='local'&&this.policy().notifications?.taskProgress?.enabled&&!this.notifications?.quiet(),'PROGRESS_DISABLED');
+      check(this.accessGeneration===accessGeneration,'PROGRESS_ACCESS_CHANGED');
       this.operator(task.actor);const latest=this.store.task(task.id,task.actor);
       check(latest.revision===task.revision&&latest.state===task.state&&digest(latest.contextSources??[])===digest(task.contextSources??[]),'PROGRESS_TASK_CHANGED');
       const source=this.store.source(task.source_key,task.actor);
