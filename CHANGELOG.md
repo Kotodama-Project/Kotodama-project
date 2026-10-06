@@ -30,6 +30,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- 要件Gadgetの再確認・変更要求より古い応答が新しい状態を上書きする問題を修正。未確定の候補を表示せず、短い画面でも長文を折り返す。Chromiumの304バリエーションと12職務のlocalhost journeyを、hash固定の専用環境で検査する（#127、元#66）。
+
 - OKF v0.2の固定した公式仕様を参照し、日時のguidanceを最小conformanceと分離。判断readinessは明示した時刻・Taskへ束縛し、source・検証・鮮度・矛盾・access・attestation・必須contextを個別に報告する。未指定・未解決を準備完了にせず、Conceptの日時や履歴を書き換えない（#51）。
 
 - 移行元の誤コピー検査をbatch外の追跡ファイルへ広げ、HEAD・index・working treeに残る元blobと非公開元pathを内容を出さずに検出する（#161）。
