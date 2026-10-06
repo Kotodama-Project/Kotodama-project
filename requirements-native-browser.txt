@@ -1,0 +1,2 @@
+# Isolated synthetic browser regression harness; not a production dependency.
+playwright==1.57.0
