@@ -141,15 +141,15 @@ def select_context(
         raise KnowledgeBaseError("CONTEXT_REFERENCE_UNKNOWN")
     matches: dict[str, Concept] = {}
     unresolved: set[str] = set()
+    required: set[str] = set()
 
     def eligible(concept: Concept) -> bool:
         extension = concept.extension
-        critical = bool(set(concept.metadata.get("tags", [])) & set(bundle.profile["quality"].get("critical_tags", [])))
         return (
             bool(extension.get("agent_use", {}).get("discoverable", False))
             and concept.metadata.get("status") != "deprecated"
-            and extension.get("knowledge_state") not in {"revoked", "deprecated", "conflicted", "unknown"}
-            and not (concept.is_stale and critical)
+            and extension.get("knowledge_state") in {"candidate", "confirmed"}
+            and not concept.is_stale
         )
 
     for concept in bundle.concepts:
@@ -163,6 +163,8 @@ def select_context(
         )
         if not direct:
             continue
+        if set(concept.metadata.get("tags", [])) & set(bundle.profile["quality"]["critical_tags"]):
+            required.add(concept.concept_id)
         if not eligible(concept):
             unresolved.add(concept.concept_id)
             continue
@@ -170,6 +172,7 @@ def select_context(
 
     by_id = bundle.by_id
     mandatory = _mandatory_governance_ids(bundle)
+    required.update(mandatory)
     for concept_id in mandatory:
         concept = by_id[concept_id]
         if eligible(concept):
@@ -197,6 +200,12 @@ def select_context(
     ordered = sorted(
         matches.values(),
         key=lambda concept: (
+            concept.concept_id not in required,
+            not bool(
+                requested_initiatives & set(concept.extension.get("initiative_refs", []))
+                or requested_kgis & set(concept.extension.get("kgi_refs", []))
+                or requested_tags & {_normalized_text(str(tag)) for tag in concept.metadata.get("tags", [])}
+            ),
             int(concept.extension.get("context_priority", 1000)),
             concept.is_stale,
             concept.concept_id,
@@ -204,7 +213,7 @@ def select_context(
     )
     selected = tuple(ordered[:limit])
     omitted = tuple(concept.concept_id for concept in ordered[limit:])
-    unresolved.update(mandatory - {concept.concept_id for concept in selected})
+    unresolved.update(required - {concept.concept_id for concept in selected})
     critical_tags = set(bundle.profile["quality"].get("critical_tags", []))
     unresolved.update(concept_id for concept_id in omitted if set(by_id[concept_id].metadata.get("tags", [])) & critical_tags)
     return ContextSelection(
