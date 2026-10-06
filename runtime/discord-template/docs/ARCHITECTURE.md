@@ -1,5 +1,10 @@
 # 構成
 
+`interaction-policy.mjs`は一つのintentをexecute / candidate / ignoreへ分類します。
+実行候補の全actionは既存のadmissionで現在のgrantを確認してからTaskへ進みます。
+不明話者、非operator、引用等の非明示候補、雑談はTaskの権限になりません。
+clarify_onceの判定も副作用のない関数に置き、確認の送信・記録は#145後半で接続します。
+
 Discordのテキスト・音声 → 出典と版 → 意図・ToDo → 明示依頼 → CLI実行器 → 検証済み成果。
 
 `assist` は一回の呼びかけでGPT-Live会話を開き、その話者との複数ターンで同じWebSocketを使います。Lunaのbackend結果は同じセッションのcommentaryへ返し、回答ごとの音声セッションは作りません。`minutes` はVADと専用文字起こしを使い、音声を返しません。どちらも同じ意図抽出器とTask ownerを使います。
