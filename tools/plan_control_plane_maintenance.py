@@ -114,6 +114,9 @@ def plan(root: Path, as_of: date, include_info: bool = False) -> dict[str, Any]:
         "candidate_work_count": len(work),
         "candidate_work": work,
         "claims": {
+            "human_approval_created": False,
+            "promotion_created": False,
+            "final_human_go_created": False,
             "issue_created": False,
             "work_order_promoted": False,
             "agent_activated": False,
@@ -142,6 +145,8 @@ def markdown(value: dict[str, Any]) -> str:
             "",
             f"- Priority: **{item['priority']}**",
             f"- Finding: `{item['source_finding']['code']}` — {escaped(item['source_finding']['message'])}",
+            f"- Source: {escaped(str(item['source_finding']['source']))}",
+            f"- Evidence: {escaped(json.dumps(item['source_finding']['evidence'],ensure_ascii=False,sort_keys=True))}",
             f"- Knowledge: {', '.join(item['knowledge_refs'])}",
             f"- Next action: {escaped(item['next_action'])}",
             "- Verification:",
@@ -149,7 +154,7 @@ def markdown(value: dict[str, Any]) -> str:
         lines.extend(f"  - {criterion}" for criterion in item["verification"])
         lines.append("")
     lines += [
-        "This is proposal-only. It does not create an Issue, execute a Work Order, grant capability, activate an agent, promote Current Truth, deploy runtime, or create Public Beta GO.",
+        "This is proposal-only. It does not create an Issue, execute a Work Order, grant capability, activate an agent, create Human approval or Promotion, change Current Truth, deploy runtime, or create Final Human GO or Public Beta GO.",
         "",
     ]
     return "\n".join(lines)
@@ -163,7 +168,7 @@ def main() -> int:
     parser.add_argument("--include-info", action="store_true")
     args = parser.parse_args()
     try:
-        value = plan(args.root.resolve(), parse_day(args.as_of), args.include_info)
+        value = plan(args.root, parse_day(args.as_of), args.include_info)
     except (ValueError, OSError):
         print(json.dumps({"status":"REFUSED", "error":"invalid_or_unavailable_plan_input"}))
         return 2
