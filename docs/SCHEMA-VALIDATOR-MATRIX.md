@@ -493,6 +493,8 @@ lifecycle state は `prepared -> dispatched -> running -> completed | failed | c
 
 ## Related guidance
 
+- [統一context v2](KNOWLEDGE-CONTEXT.md) — [一つのschema](../schemas/knowledge-context-bundle.schema.json)、[envelope生成](../tools/knowledge_context.py)、[境界試験](../tests/test_knowledge_context_envelope.py)。入力の束縛であり、認可や意味的受入ではない。
+
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
 - [Validation Guide](VALIDATION.md) — fail-closed validatorとnegative tests
 - [Starter Walkthrough](STARTER-WALKTHROUGH.md) — 初回作業copyの歩き方
