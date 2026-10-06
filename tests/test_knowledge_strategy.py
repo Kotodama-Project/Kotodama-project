@@ -43,7 +43,7 @@ def fixture():
 class KnowledgeStrategyTests(unittest.TestCase):
     def test_public_bundle_resolves_existing_ids_and_projects_typed_goal_kgi_edge(self):
         bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts)
-        self.assertEqual([],issues);self.assertEqual(12,len(projection['definitions']))
+        self.assertEqual([],issues);self.assertEqual(22,len(projection['definitions']))
         self.assertEqual('project/success-model',projection['definitions']['KGI-INTENT']['concept_id'])
         graph=_graph(bundle)
         self.assertIn({'from':'OUT-INTENT','from_kind':'goal','relation':'measured_by','to':'KGI-INTENT','to_kind':'kgi'},graph['edges'])
@@ -60,6 +60,19 @@ class KnowledgeStrategyTests(unittest.TestCase):
             p.write_text(text.replace(old,'goal_refs: [OUT-MISSING]',1),encoding='utf-8')
             bundle=load_bundle(root)
             self.assertIn('STRATEGY_REF_UNRESOLVED',{i.code for i in bundle.issues})
+
+    def test_supporting_measurements_never_become_product_kgi_or_report_adopted_values(self):
+        bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts);self.assertEqual([],issues)
+        expected={'KPI-REQUIRED-CONTEXT','KPI-REVISION-PROPAGATION','KPI-DECISION-READINESS','KPI-SESSION-RECOVERY',
+            'KPI-GROUNDED-RETRIEVAL','KPI-FORBIDDEN-LEAKAGE','KPI-AUTHORITY-INTEGRITY','KPI-AGENT-GOVERNANCE',
+            'KPI-CLARIFICATION-LOAD','KPI-OWNER-RESPONSE'}
+        concepts=[c for c in bundle.concepts if c.metadata['type']=='KPI']
+        self.assertEqual(expected,{c.extension['strategy']['id'] for c in concepts})
+        for c in concepts:
+            value=c.extension['strategy'];self.assertEqual('supporting_kpi',value['measurement_role']);self.assertEqual('unknown',value['baseline'])
+            for field in ('target','deadline','measurement_window','exclusion_policy'):self.assertEqual('not_adopted',value[field])
+            self.assertIn('値はまだ報告しません',c.document.body)
+            self.assertTrue(strategy_reference_issues({'kgi_refs':[value['id']]},projection['definitions'],path='synthetic-task'))
 
     def test_linked_critical_definition_is_not_displaced_by_optional_context(self):
         from datetime import datetime,timezone

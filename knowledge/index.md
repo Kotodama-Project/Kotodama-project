@@ -30,3 +30,7 @@ This bundle is a **public-safe, rebuildable knowledge projection** for humans an
 * [`_generated/catalog.json`](_generated/catalog.json) - Deterministic concept catalog.
 * [`_generated/graph.json`](_generated/graph.json) - Deterministic relationship and provenance graph.
 * [`profile.yaml`](profile.yaml) - Kotodama's stricter producer profile layered on OKF v0.2.
+
+## Supporting measurement candidates
+
+* [Control measurements](metrics/index.md) - 製品KGIと分けた指標候補。数値の測定・採用は未実施。
