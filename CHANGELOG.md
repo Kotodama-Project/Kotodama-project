@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Codex brief bridgeの既存invocation journalへ、観測したsession開始を保存する。失敗・中断・再起動後も同じgrantで読み戻し、再送で二度目の実行を始めない。v1の元bytesをbackupに保持し、Task接続や再開可能なsessionとは区別する（#126、元#47）。
+
 - 元#46のlocal model proxy、native Proxmox template、固定公式OSへの2patchをコード・契約だけ再配置。モデル予算・receipt保全、seal、archive integrityを検査し、旧snapshotや運用方針は再導入しない（#125）。
 
 - 要件Gadgetと限定Codex brief bridgeを元#45から再配置。現在のcatalog v2を使い、保存済みinvocationの読取中の差替え・肥大化・消失を拒否する。権限・再送・取消を合成HTTPで検査し、native core／実モデルの受入とは分ける（#124）。
