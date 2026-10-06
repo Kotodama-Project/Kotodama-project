@@ -32,5 +32,5 @@ UNC形のnetwork pathは、filesystemへの最初の照会より前に拒否し�
 
 出力のinput digestは実際に解析したbytes、bundle digestは現在のコードと統合契約を表します。
 本人性、実行中コードのattestation、独立検証の証拠ではありません。公開skillと診断CIは
-#136後半でこのbundleへ追加します。元は公開#65 `d3452ed7cfd46bb689b83372ec5305307cae4cc5`
+[統合の説明](AGENT-DIAGNOSTICS-INTEGRATION.md)を参照してください。元は公開#65 `d3452ed7cfd46bb689b83372ec5305307cae4cc5`
 の投影器と試験で、旧OKFや別のTask台帳は導入しません。
