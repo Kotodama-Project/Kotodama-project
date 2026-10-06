@@ -1,0 +1,57 @@
+name: Persona intent audit
+on:
+  pull_request:
+    paths:
+      - 'tools/run_persona_intent_audit.py'
+      - 'tools/compile_knowledge_context.py'
+      - 'tools/knowledge_context.py'
+      - 'tools/knowledge_work_validator.py'
+      - 'tools/project_agent_status.py'
+      - 'schemas/knowledge-context-bundle.schema.json'
+      - 'schemas/knowledge-work-package.schema.json'
+      - 'examples/knowledge-work/**'
+      - 'tests/test_persona_intent.py'
+      - 'docs/TEST-INTENT-AUDIT.md'
+      - 'requirements-ci.txt'
+      - '.github/workflows/persona-intent-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/run_persona_intent_audit.py'
+      - 'tools/compile_knowledge_context.py'
+      - 'tools/knowledge_context.py'
+      - 'tools/knowledge_work_validator.py'
+      - 'tools/project_agent_status.py'
+      - 'schemas/knowledge-context-bundle.schema.json'
+      - 'schemas/knowledge-work-package.schema.json'
+      - 'examples/knowledge-work/**'
+      - 'tests/test_persona_intent.py'
+      - 'docs/TEST-INTENT-AUDIT.md'
+      - 'requirements-ci.txt'
+      - '.github/workflows/persona-intent-audit.yml'
+permissions:
+  contents: read
+concurrency:
+  group: persona-intent-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+      - name: Check tracked credentials before dependencies
+        run: python -S -B tools/check_tracked_secret_hygiene.py
+      - name: Install hash-locked validation dependencies
+        run: python -m pip install --require-hashes -r requirements-ci.txt
+      - name: Check the persona outcomes and refusal oracles
+        run: python -B -m unittest tests.test_persona_intent -v
+      - name: Emit the synthetic audit with blocked journeys visible
+        run: python -B tools/run_persona_intent_audit.py
+      - name: Refuse tracked changes
+        run: git diff --exit-code
