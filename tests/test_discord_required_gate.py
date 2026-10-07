@@ -55,7 +55,7 @@ class DiscordRequiredGateTests(unittest.TestCase):
                          'runtime/discord-template')
         self.assertNotIn('if', discord, 'both required contexts must always run')
         self.assertNotIn('uses', discord, 'a reusable job changes required context names')
-        self.assertEqual(discord['timeout-minutes'], 10)
+        self.assertEqual(discord['timeout-minutes'], 20)
         required = jobs['validate']
         self.assertEqual(required['name'], 'Trusted repository validation')
         self.assertIn('discord', required['needs'])
