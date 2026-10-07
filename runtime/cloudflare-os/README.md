@@ -10,6 +10,26 @@ repository head is intentionally not substituted for that gitlink. The two
 revisions differ, so an upstream drift review is required before changing the
 baseline.
 
+## 固定された上流差分のレビュー記録
+
+[`upstream-drift-review.json`](upstream-drift-review.json) はIssue #11の固定2版、
+99ファイル（+19,090 / -1,627）のreader記録です。別readerが79ファイルのdiff読解を
+申告し、generated declarations 19件とlockfileは部分確認として残しています。
+schema、件数、gap、blob IDと行数を検査できる構造にしたもので、validatorは読解の意味・
+reviewer本人・独立性承認・実行結果を証明しません。元のlocal-runtime-evaluationは保持します。
+
+```text
+python -B tools/validate_cloudflare_upstream_review.py
+python -B tools/validate_cloudflare_upstream_review.py --core-repo <public-core-clone>
+python -B -m unittest tests.test_cloudflare_upstream_review -v
+```
+
+共通のhash-locked Python依存が必要です。`--core-repo` は既存Git objectだけを読み、
+固定2版の全path／blob／行数を照合します。fetch、checkout、source編集は行いません。
+指定しない場合はrecordの契約検査だけです。どちらも採用pin、provider、Public Betaを変えません。
+toolchain更新、traceの保持・予算、Context/scheduler自動導入の権限、observer scope互換、
+snapshot replay、generated再現性の受入は未完了です。独立性承認とre-pinはownerの判断です。
+
 Validate the source pin, content-free Gatekeeper projection contract, and saved
 local runtime evaluation receipt:
 

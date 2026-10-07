@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Fixed Cloudflare OS drift reader packet; no adoption or approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_version",
+    "status",
+    "reader_packet_sha256",
+    "summary",
+    "files"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "../../schemas/cloudflare-os-upstream-drift-review.schema.json"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "status": {
+      "const": "REVIEW_PACKET_WITH_EXPLICIT_GAPS"
+    },
+    "reader_packet_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "baseline",
+        "changed_counts",
+        "actual_read_count",
+        "inventoried_count",
+        "partial_read_count",
+        "read_definition",
+        "findings",
+        "coverage_gaps",
+        "no_adoption",
+        "no_provider",
+        "no_independence_acceptance",
+        "scope",
+        "tests_executed",
+        "effects",
+        "owner_gates",
+        "issue_read"
+      ],
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "commit",
+            "tree"
+          ],
+          "properties": {
+            "repository": {
+              "const": "https://github.com/cloudflare/cloudflare-os"
+            },
+            "commit": {
+              "const": "1cb5e3d9096589e38f3fcfaf3f2191aa95a4c592"
+            },
+            "tree": {
+              "const": "2f1eb7b69cf6cbc0e0da159bf2cd09ef9a2ce7e7"
+            }
+          }
+        },
+        "baseline": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "commit",
+            "tree"
+          ],
+          "properties": {
+            "commit": {
+              "const": "bf7f762d7fa73553284d731ab6a978d3ea17be24"
+            },
+            "tree": {
+              "const": "023da57719fa9744a4ca909f9c3863c93cb614fa"
+            }
+          }
+        },
+        "changed_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "files",
+            "added_lines",
+            "deleted_lines"
+          ],
+          "properties": {
+            "files": {
+              "const": 99
+            },
+            "added_lines": {
+              "const": 19090
+            },
+            "deleted_lines": {
+              "const": 1627
+            }
+          }
+        },
+        "actual_read_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inventoried_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "partial_read_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "read_definition": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "maxItems": 100
+        },
+        "coverage_gaps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "maxItems": 100
+        },
+        "no_adoption": {
+          "type": "boolean",
+          "const": true
+        },
+        "no_provider": {
+          "type": "boolean",
+          "const": true
+        },
+        "no_independence_acceptance": {
+          "type": "boolean",
+          "const": true
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "tests_executed": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "effects": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_edits",
+            "upstream_execution",
+            "dependency_install",
+            "provider_mutation",
+            "credential_operation",
+            "external_post",
+            "repin"
+          ],
+          "properties": {
+            "source_edits": {
+              "type": "integer",
+              "const": 0
+            },
+            "upstream_execution": {
+              "type": "integer",
+              "const": 0
+            },
+            "dependency_install": {
+              "type": "integer",
+              "const": 0
+            },
+            "provider_mutation": {
+              "type": "integer",
+              "const": 0
+            },
+            "credential_operation": {
+              "type": "integer",
+              "const": 0
+            },
+            "external_post": {
+              "type": "integer",
+              "const": 0
+            },
+            "repin": {
+              "type": "integer",
+              "const": 0
+            }
+          }
+        },
+        "owner_gates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "maxItems": 100,
+          "minItems": 1
+        },
+        "issue_read": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repository",
+            "number",
+            "body",
+            "comments"
+          ],
+          "properties": {
+            "repository": {
+              "const": "Kotodama-Project/Kotodama-project"
+            },
+            "number": {
+              "const": 11
+            },
+            "body": {
+              "type": "boolean"
+            },
+            "comments": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 99,
+      "maxItems": 99,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "old_blob",
+          "new_blob",
+          "change_type",
+          "read_complete",
+          "risk",
+          "concrete_notes",
+          "tests_relevant",
+          "unresolved",
+          "review_mode",
+          "added_lines",
+          "deleted_lines"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.@/-]+$"
+          },
+          "old_blob": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "new_blob": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "change_type": {
+            "enum": [
+              "A",
+              "M",
+              "D"
+            ]
+          },
+          "read_complete": {
+            "type": "boolean"
+          },
+          "risk": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "concrete_notes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "maxItems": 100,
+            "minItems": 1
+          },
+          "tests_relevant": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "maxItems": 100
+          },
+          "unresolved": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "maxItems": 100
+          },
+          "review_mode": {
+            "enum": [
+              "complete_fixed_endpoint_diff",
+              "generated_header_and_provenance_only"
+            ]
+          },
+          "added_lines": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "deleted_lines": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}
