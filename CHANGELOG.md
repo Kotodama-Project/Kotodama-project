@@ -9,6 +9,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - 検索・文脈評価の公開用合成corpusを16区分24ケースで固定し、本文・期待値・出典版の変更を検査する契約を追加。評価器は後続で接続する（#54前半）。
+- Discordの任意channel workspaceに最大30分のleaseと再開前のGit/candidate照合を追加。停止・不一致でもデータを保持し、Task ownerと既存Docker検証を維持する（#143）。
+
 - Discordの任意Bot poolで複数VCをroom別に管理し、満杯時のbusyと対象roomを指定した操作・同意を追加。単一VC互換を維持し、実VCの受入は別に記録する（#142）。
 - 現在のConcept/出典の版を既存v2 Context Packへ束縛し、利用直前にowner generation・bytes・期限・scopeを照合するgateを追加。opaque locatorを伏せ、結果不明の配送を再送せず、生成したPackを影響indexへ接続する（#53文脈の接続）。
 
