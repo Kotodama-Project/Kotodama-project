@@ -37,6 +37,7 @@
 - [x] Tag `v0.1.0-preview` and a tag-triggered release workflow that drafts a pre-release with the smoke report, source archive, and provenance attestation (#97)
 - [x] Discord runtime review hardening merged via #99 on 2026-09-23: bounded analysis concurrency and limits, Linux Docker-isolated verification for write Tasks, restart states that never re-run work automatically, and fixes for #91, #92, and #93
 - [x] [Luna Task swarm](docs/LUNA-TASK-SWARM.md) merged via #100 on 2026-09-23: owner-bound plans, budgets, acknowledged peer messages, and an independent verifier, exercised offline on Linux and Windows; a live synthetic fixture pass at `7df1aea` is recorded in #159; current-revision live acceptance remains open
+- [x] [Explicit Task swarm research](docs/TASK-SWARM-RUN.md): one local Discord Task through fixed workers, independent fixture review, cancellation and result readback; dedicated authentication/input scope required, daily budget defaults to zero; live model/Discord acceptance remains open (#160, #286)
 - [x] Discord agent channels and an immediate start notice merged via #101 on 2026-09-23
 
 ## Current Cloudflare candidate
@@ -79,7 +80,7 @@ Production dataset/key custody/retention/deletion/replication binding remain pen
 and the bounded Goal Completion Loop remain product requirements. This
 documentation milestone does not implement the runtime: Voice-to-Requirement,
 Agent Swarm, Context/encoder, provider, storage, and Promotion remain separate
-work. The runtime remains unimplemented and Public Beta remains
+work. The full Company AGI runtime remains unimplemented; implemented Task and swarm components are listed above. Public Beta remains
 `NO_GO_UNPUBLISHED`. The public bytes are a redacted owner-directed direction
 candidate, not signed or independently verifiable governance approval,
 rightsholder proof, canonical adoption, launch decision, or Final Human GO, and

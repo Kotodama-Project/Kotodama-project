@@ -38,6 +38,11 @@ PR #79でこのNodeテンプレートのsourceはmainへ統合済みです。新
 このruntimeに無い考え方は[#142](https://github.com/Kotodama-Project/Kotodama-project/issues/142)〜[#146](https://github.com/Kotodama-Project/Kotodama-project/issues/146)、実音声の受入手順は[#154](https://github.com/Kotodama-Project/Kotodama-project/issues/154)で扱います。
 同じVCを二つのruntimeに所有させません。
 
+[Task swarmの調査](TASK-SWARM-RUN.md)は明示slashだけから、同じlocal Taskの
+3worker・別verifier・成果readbackへ接続します。専用Codex homeと読取制限が必要で、
+日次枠は既定0です。資料の現在版・アクセス・取消とreceiptの元bytesを照合します。
+Linuxの合成E2Eを確認しています。live利用枠・ログインと実モデル/実Discordの受入は残ります。
+
 [Company Pack実行](COMPANY-PACK-TASK-EXECUTION.md)は、Linuxのlocal ownerで
 `create_company_pack`を明示したCLI/slash requestから接続できます。既定無効で、
 analyzerは選びません。既存SQLiteの同じTask/Source/Intent版を読取り、固定Pythonで

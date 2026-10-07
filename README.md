@@ -16,7 +16,7 @@ Kotodama is a local-first Company OS that turns conversation into auditable inte
 同じ製品の中で、利用の場面を選べます。
 
 - **仕事を進める**: Company Pack と review chain で、依頼を Work Order、Verification Receipt、Promotion まで辿る。
-- **「OK」の後は agent に任せる**: 人が一度許可した範囲で agent swarm が調査・実装・検証を自律的に進め、判断材料や権限が足りないときだけ人へ戻す。設計方向です。`main` には限定 Task 実行と、offline の fixture で確かめた [Luna Task swarm](docs/LUNA-TASK-SWARM.md) があります（過去版の実モデル試験記録あり。現行版のlive受入は未実施）。
+- **「OK」の後は agent に任せる**: 明示した調査依頼を、同じTaskの3workerと独立reviewへつなぐ [Task swarm](docs/TASK-SWARM-RUN.md) を備えます。既定無効で、Linuxの専用実行領域を使います。合成の一連動作を検証済みで、実モデル・実Discordの受入は残っています。
 - **Voice channel で過ごす**: 楽しく過ごす、一緒に考える、必要なときだけ仕事を進める、のモードを選ぶ。雑談を勝手に仕事や追加の権限へ変えません。
 
 設計の全文は [docs/OVERVIEW.md](docs/OVERVIEW.md)、方向と現在地の対応は [docs/PRODUCT-DIRECTION.md](docs/PRODUCT-DIRECTION.md) と [docs/PROJECT-MAP.md](docs/PROJECT-MAP.md) にあります。
@@ -41,7 +41,7 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 | Discord / Voice で使う | `runtime/discord-template`。Node 24、Discord Bot、モデル接続が前提。local ASR と Live 会話、限定 Task worker、エージェント用チャンネルからの即時着手。書込みの仕事は Linux と Docker での検証が必要。実マイクの連続応答、2 人 30 分の会話、別設定での再現は未受入 | [Discord runtime](docs/DISCORD-RUNTIME.md) |
 | 既存 Task に結び付けて Company Pack を実生成し、確認・訂正する | `tools/run_company_pack_task.py` と local review gateway | [Task-bound execution](docs/COMPANY-PACK-TASK-EXECUTION.md)、[Gateway](runtime/local-review-gateway/README.md) |
 | 会社の runtime を配備する | Compose minimum / Proxmox segmented の lifecycle contract と validator（live receipt なし）。Cloudflare edge と公式 Cloudflare OS の候補（未 upload、未 deploy） | [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)、[Cloudflare OS](docs/CLOUDFLARE-OS-ADOPTION.md) |
-| agent swarm に任せる | Luna Task swarm（owner に束縛した計画・予算・ACK 付きの通信・独立した検証者。offline の fixture で動く）。agent swarm と route binding の契約（schema と読み取り専用の事前検査。agent は起動しない。#34）。[移行台帳の契約](docs/PUBLIC-MIGRATION-LEDGER.md)（#35）は schema・read-only verifier と合成 fixture の段階。[agent lifecycle の契約](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md)（#36）は schema・read-only verifier・合成 fixture の段階。実 registry は未作成 | [Luna Task swarm](docs/LUNA-TASK-SWARM.md)、[Agent swarm の契約](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) |
+| agent swarm に調査を任せる | 明示slashから同じTaskの3worker・別verifier・成果readbackへ接続。既定無効、Linux限定。移行台帳とlifecycle registryの実運用は別の未完事項 | [Task swarm run](docs/TASK-SWARM-RUN.md)、[実行基盤](docs/LUNA-TASK-SWARM.md)、[swarm契約](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) |
 | 知識基盤を使う | #48・#61 系の公開 knowledge projection。9つのConcept、出典・鮮度の検査、字句検索、限定context、判断ready度の監査。内容の独立検証と実agent入力への接続は未成立 | [Knowledge base](docs/KNOWLEDGE-BASE.md)、[公開知識の入口](knowledge/index.md) |
 
 ## 今 `main` にあるもの、候補、方向
