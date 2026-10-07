@@ -2,8 +2,8 @@
 
 #53の最初の部分として、[閉じたmetadata契約](../schemas/knowledge-lineage.schema.json)と
 read-onlyの検査を提供します。[既存KB](KNOWLEDGE-BASE.md)のproseやTask ownerを置き換えません。
-逆引き・影響計算もmetadataから再構築します。current pointerのローカル参照ownerを提供し、
-利用直前の出典・取消検査とKB/Context Packへの接続は後続で進めます。
+逆引き・影響計算もmetadataから再構築します。current pointerのローカル参照ownerと、
+既存v2 Context Packを利用する直前の版・出典・取消検査へ接続しています。
 
 ## Bindingの意味
 
@@ -107,10 +107,59 @@ conflictedである場合もcurrentのreadbackを拒否します。同generation
 途中の失敗はtransaction全体をrollbackします。
 
 これは**ローカルの版pointerの整合だけ**です。`current`はmetadataを返し、文書本文を配送しません。
-Source access/authenticity、実bytesの使用直前照合、Context Pack assembly後の取消、実際のagent入力は
-まだこのAPIの証拠にしません。register/publishをCompany truth・Promotion・runtime authorityや
+Source access/authenticityや実際のagent入力はこのownerだけの証拠にしません。
+register/publishをCompany truth・Promotion・runtime authorityや
 Human GOへの採用に読み替えません。opaque sourceの真正性も別ownerへの照合が必要です。
 
 ```text
 python -m unittest tests.test_knowledge_revision_owner -v
+```
+
+## Context Packを渡す直前に照合する
+
+`LineageContextGate`は既存のKB selectorと16欄のv2 producerを使います。別のcontext本文形式を
+作りません。`prepare(request)`は版・source-set・owner generation・rendered digest・期限・
+使用したcode/schema bytesのbinding manifestを返します。`consume(request, manifest, consumer)`は
+その入力から再構築・照合してから、同期consumerへUTF-8 bytesを渡します。
+
+requestはactor/recipient/purpose、Task/Session/Intent/Policy/Grant refs、expiry、既存の検索filter、
+Concept数/bytesの上限を閉じた形で持ちます。既存ownerの`authorize_context`を必須とし、literal true
+以外は拒否します。refsが存在するだけでは認可しません。actor本人性や外部providerの真正性を、
+callbackの成功だけで独立検証したと主張しません。
+
+Concept Revisionの任意の`source_aliases`は、元のOKF `sources[].id`をSource Binding revisionへ
+対応付けます。このgateで使うConceptでは全ての宣言sourceを対応付け、ちょうど同じsource-setへ
+結ぶ必要があります。現在版・実Concept bytes・Policy/Intent版・public-local出典のpath/digestを
+照合します。lines/JSON Pointerは固定bytes中の位置まで検査し、意味的な主張の正しさとは分けます。
+event rangeは既存event ownerの`verify_event_span`を必要とし、未知のevent schemaを推測しません。
+
+opaque出典は`verify_opaque`が元resourceとopaque bindingの対応・scope・固定版を照合します。
+元resourceはこの信頼された確認先だけへ渡し、contextではopaque locatorへ置き換えます。
+確認先がない、拒否・例外・不明なら利用しません。確認先は既存の認可・出典ownerへ接続する
+read-only callbackであり、別のgrantやTask ownerではありません。
+
+重要なGoal/制約と型付きrequired依存をoptionalより先に確保します。予算不足や古い依存版、
+portable Markdown linkの欠落を推測で補いません。版が未登録のoptionalは省略できますが、
+登録済み版と現物の矛盾やDB破損を隠して成功にしません。期限は確認callbackの後と利用直前にも
+確認します。opaqueの存在だけや、古いas_ofで現在の失効・期限切れを回避できません。
+
+同じlocal ownerのtransaction内で最後の検査とconsumer呼出しを行い、組立後の失効・更新は
+generationの不一致で拒否します。callbackは有限で同期的とし、同ownerへの再帰的な書込をしません。
+consumerが例外を返した場合は結果不明とし、このgateは再送しません。実際のtransport・deduplication・
+配送receiptは既存のconsumer ownerに残します。外部providerの取消や、送信後のbytesの回収を
+このlocal lockが保証するとは主張しません。
+
+manifestの`projection_record`は実際のrendered bytesと選ばれたSource/Concept revisionsを結び、
+既存のevidence ownerがlineage snapshotへ加えれば、Context Packも逆引きとinvalidationの対象に
+できます。KBへreceiptやCompany truthを自動保存しません。code pinは検査したファイルbytesの
+一致であり、OSの実行image・reviewer本人性・実providerの受入・Human GOを証明しません。
+
+`bind_generated_projections(bundle, snapshot)`は既存catalog/graph producerの実bytesも同じ形式の
+projection recordへ束縛します。全Conceptと宣言出典のcoverage、public-local bytesと対応を必須にし、
+欠落・複数版・opaque未確認を拒否します。出力は再構築可能なsnapshotで、自動保存や現在版の採用は
+行いません。この経路はpublic-local用で、opaque出典の認証・公開許可を推測しません。
+親がexternal_unresolvedである状態も保持し、単独snapshotのimpact indexではquarantineの対象です。
+
+```text
+python -m unittest tests.test_knowledge_lineage_context -v
 ```
