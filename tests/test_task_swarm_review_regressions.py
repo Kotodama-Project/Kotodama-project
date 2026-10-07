@@ -122,12 +122,23 @@ def test_crash_after_file_write_has_durable_admission_and_does_not_duplicate(tmp
 
 def test_concurrent_unique_sends_cannot_overrun_admission(tmp_path):
     a,b=peers(tmp_path,max_pending=3,max_messages=3)
+    diagnostics=[]
     def send(i):
         try: return a.peer_send('actor-b',f'body {i}',f'key-{i}')
-        except SwarmError as e: return e.code
+        except SwarmError as e:
+            if e.code not in {'BACKPRESSURE','QUOTA_EXCEEDED'}:
+                chain=[]; current=e
+                while current is not None:
+                    frames=[]; trace=current.__traceback__
+                    while trace is not None:
+                        frames.append(trace.tb_frame.f_code.co_name); trace=trace.tb_next
+                    chain.append((type(current).__name__,getattr(current,'sqlite_errorname',None),frames))
+                    current=current.__cause__
+                diagnostics.append(chain)
+            return e.code
     with ThreadPoolExecutor(max_workers=12) as pool: results=list(pool.map(send,range(60)))
     assert sum(isinstance(r,dict) for r in results)==3
-    assert set(r for r in results if isinstance(r,str)) <= {'BACKPRESSURE','QUOTA_EXCEEDED'}
+    assert set(r for r in results if isinstance(r,str)) <= {'BACKPRESSURE','QUOTA_EXCEEDED'}, diagnostics
     assert len(payload_files(a))==3
     assert len(b.peer_receive()['messages'])==3
 
