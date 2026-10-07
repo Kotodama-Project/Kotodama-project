@@ -22,12 +22,15 @@ class LocalRevisionOwner:
     def __init__(self, database: Path, *, repository_root: Path, authorize):
         if not callable(authorize):
             raise KnowledgeBaseError('LINEAGE_OWNER_AUTHORIZER_REQUIRED')
-        root = repository_root.resolve()
+        original_root = Path(repository_root).absolute()
         database = Path(database).absolute()
+        self._reject_ancestor_links(original_root)
+        self._reject_ancestor_links(database)
+        root = original_root.resolve()
         resolved = database.resolve()
         if not resolved.is_relative_to(root) or resolved.is_relative_to(root / 'knowledge'):
             raise KnowledgeBaseError('LINEAGE_OWNER_PATH')
-        self.root, self.database, self.authorize = root, database, authorize
+        self.root, self.original_root, self.database, self.authorize = root, original_root, database, authorize
         self._safe_path()
         database.parent.mkdir(parents=True, exist_ok=True)
         with self._transaction('initialize', (), None) as db:
@@ -49,14 +52,11 @@ class LocalRevisionOwner:
             db.execute('CREATE TABLE IF NOT EXISTS source_versions(source_id TEXT NOT NULL,kind TEXT NOT NULL,value TEXT NOT NULL,sha256 TEXT NOT NULL,PRIMARY KEY(source_id,kind,value))')
 
     def _safe_path(self):
+        self._reject_ancestor_links(self.original_root)
+        self._reject_ancestor_links(self.database)
         resolved = self.database.resolve()
         if not resolved.is_relative_to(self.root) or resolved.is_relative_to(self.root / 'knowledge'):
             raise KnowledgeBaseError('LINEAGE_OWNER_UNSAFE_PATH')
-        for path in (self.database, *self.database.parents):
-            if not path.is_relative_to(self.root):
-                break
-            if path.is_symlink() or getattr(path, 'is_junction', lambda: False)():
-                raise KnowledgeBaseError('LINEAGE_OWNER_UNSAFE_PATH')
         if self.database.exists():
             info = self.database.lstat()
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
@@ -64,6 +64,14 @@ class LocalRevisionOwner:
         for suffix in ('-journal', '-wal', '-shm'):
             sidecar = self.database.with_name(self.database.name + suffix)
             if sidecar.is_symlink() or sidecar.exists() and (not sidecar.is_file() or sidecar.stat().st_nlink != 1):
+                raise KnowledgeBaseError('LINEAGE_OWNER_UNSAFE_PATH')
+
+    @staticmethod
+    def _reject_ancestor_links(candidate):
+        # Inspect the original path before resolve: a linked repository root
+        # would otherwise disappear from a canonical-root-relative traversal.
+        for path in (candidate, *candidate.parents):
+            if path.is_symlink() or getattr(path, 'is_junction', lambda: False)():
                 raise KnowledgeBaseError('LINEAGE_OWNER_UNSAFE_PATH')
 
     @contextmanager

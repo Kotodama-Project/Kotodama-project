@@ -1,10 +1,12 @@
 """Synthetic local pointer ownership; no production policy or source authority."""
 import copy
 from contextlib import closing
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import sys
 import sqlite3
+import subprocess
 import tempfile
 import unittest
 
@@ -119,6 +121,18 @@ class KnowledgeRevisionOwnerTests(unittest.TestCase):
         self.register_first()
         with self.assertRaisesRegex(KnowledgeBaseError, 'REFERENCE_INVALID'):
             self.owner.revoke(KEY, evidence_ref='ref/sk-private-test-value', expected_generation=2)
+
+    def test_repository_root_alias_cannot_bypass_ancestor_link_refusal(self):
+        target = self.root / 'real-repository'; target.mkdir()
+        alias = self.root / 'alias-repository'
+        if os.name == 'nt':
+            created = subprocess.run(['cmd', '/d', '/c', 'mklink', '/J', str(alias), str(target)], capture_output=True, timeout=10)
+            self.assertEqual(0, created.returncode, 'synthetic directory junction creation failed')
+        else:
+            alias.symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(KnowledgeBaseError, 'UNSAFE_PATH'):
+            LocalRevisionOwner(alias / 'work/owner.sqlite', repository_root=alias, authorize=self.authorize)
+        self.assertFalse((target / 'work/owner.sqlite').exists())
 
 
 if __name__ == '__main__':
