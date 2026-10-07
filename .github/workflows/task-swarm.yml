@@ -29,6 +29,18 @@ jobs:
         run: python -S -B tools/check_tracked_secret_hygiene.py
       - name: Install the hash-locked task swarm dependency set
         run: python -m pip install --require-hashes -r requirements-task-swarm-ci.txt
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: runner.os == 'Linux'
+        with:
+          node-version: '24'
+      - name: Install pinned CLI for synthetic permission probes only
+        if: runner.os == 'Linux'
+        run: |
+          npm install --global pnpm@11.19.0
+          pnpm --dir tests/fixtures/codex-sandbox install --frozen-lockfile --ignore-scripts
+          binary="$(find tests/fixtures/codex-sandbox/node_modules/.pnpm -path '*/vendor/x86_64-unknown-linux-musl/bin/codex' -type f)"
+          test -n "$binary" && test "$(printf '%s\n' "$binary" | wc -l)" -eq 1
+          printf 'KOTODAMA_TEST_CODEX_SANDBOX=%s/%s\n' "$GITHUB_WORKSPACE" "$binary" >> "$GITHUB_ENV"
       - run: python -m pytest -q -p no:cacheprovider -o 'python_files=test_task_swarm_*.py' tests
       - run: python tools/task_swarm.py demo --root work/ci-offline-demo --allow-local-fixture
       - name: Benchmark long context, corrections, restart and retained history

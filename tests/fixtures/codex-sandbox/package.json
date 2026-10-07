@@ -1,0 +1,9 @@
+{
+  "name": "kotodama-codex-sandbox-test",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@11.19.0",
+  "dependencies": {
+    "@openai/codex": "0.162.0-alpha.2"
+  }
+}
