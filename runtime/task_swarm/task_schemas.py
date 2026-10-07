@@ -29,6 +29,7 @@ def review_schema(payload):
                       "status": {"type": "string", "enum": ["passed", "failed", "blocked", "not_run"]},
                       "evidence": {"type": "array", "items": evidence, "maxItems": 30},
                       "gap_reason": {"type": ["string", "null"], "maxLength": 1000}})
-    return obj({"report_digests": obj({job: {"type": "string", "pattern": "^[a-f0-9]{64}$"} for job in WORK_JOBS}),
+    return obj({"context_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                "report_digests": obj({job: {"type": "string", "pattern": "^[a-f0-9]{64}$"} for job in WORK_JOBS}),
                 "validations": {"type": "array", "items": validation,
                                 "minItems": len(criteria(payload)), "maxItems": len(criteria(payload))}})

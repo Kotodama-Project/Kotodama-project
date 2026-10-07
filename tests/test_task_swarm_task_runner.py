@@ -124,7 +124,7 @@ def test_tampered_or_incomplete_result_never_launches_another_run(tmp_path):
 
 @pytest.mark.parametrize("mode,code", [("stale", "REVIEW_STALE"), ("identity", "REVIEW_NOT_INDEPENDENT"),
                                      ("revoked", "INACTIVE_TASK"), ("bytes", "RUN_ARTIFACT_CHANGED"),
-                                     ("actor", "STALE_ACTOR")])
+                                     ("actor", "STALE_ACTOR"), ("requirements", "REVIEW_CONTEXT_MISMATCH")])
 def test_review_cannot_accept_changed_reports_owner_or_its_own_producer(tmp_path, mode, code):
     owner, file, document, root = setup(tmp_path)
     class Backend(SyntheticTaskBackend):
@@ -132,6 +132,8 @@ def test_review_cannot_accept_changed_reports_owner_or_its_own_producer(tmp_path
             value = super().review(payload, reports, directory, **kwargs)
             if mode == "stale":
                 value["result"]["report_digests"]["facts"] = "0"*64
+            elif mode == "requirements":
+                value["result"]["context_digest"] = digest({**payload, "request": "other-requirement"})
             elif mode == "identity":
                 value["receipt"]["invocation_ref"] = "fixture-facts"
             elif mode == "revoked":
