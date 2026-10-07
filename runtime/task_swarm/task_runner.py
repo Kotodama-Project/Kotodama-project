@@ -77,6 +77,7 @@ def safe_directory(directory: Path):
 
 def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=time.time):
     owner = OwnerFile(owner_path, clock=clock)
+    _, owner_input_sha = read_json(Path(owner_path), 1024*1024, with_digest=True)
     payload = read_json(Path(payload_path), 256*1024)
     binding = owner.read_task(payload.get("task_id"))
     payload = validate_input(payload, binding, now=clock())
@@ -100,13 +101,14 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
             require(owner.read_binding(binding["task_id"], actor) == initial, "STALE_ACTOR")
         require(clock() < plan["budget"]["deadline"], "DEADLINE_EXPIRED")
         require(owner.storage()["root"] == root and safe_directory(root) == root, "RUN_STORAGE_CHANGED")
+        require(read_json(Path(owner_path), 1024*1024, with_digest=True)[1] == owner_input_sha, "OWNER_INPUT_CHANGED")
     guard()
     directory = root / plan["run_id"]
     if directory.exists():
         safe_directory(directory)
         require((directory / "receipt.json").is_file(), "RUN_RECOVERY_REQUIRED")
         receipt = read_json(directory / "receipt.json")
-        require(receipt["binding_digest"] == expected and receipt["input_digest"] == digest(payload) and
+        require(receipt["binding_digest"] == expected and receipt["owner_input_sha256"] == owner_input_sha and receipt["input_digest"] == digest(payload) and
                 receipt["synthetic"] == bool(backend.synthetic), "RUN_REPLAY_CONFLICT")
         required = {*[job+".json" for job in WORK_JOBS], "review.json", "result.json", "input.json", "plan.json"}
         require(set(receipt["artifact_sha256"]) == required, "RUN_RECEIPT_INVALID")
@@ -200,7 +202,7 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
         result_sha = write_json(directory / "result.json", result)
         artifact_sha["result.json"] = result_sha
         receipt = {"version":1, "run_id":plan["run_id"], "binding_digest":expected,
-                   "input_digest":digest(payload), "synthetic":bool(backend.synthetic),
+                   "owner_input_sha256":owner_input_sha, "input_digest":digest(payload), "synthetic":bool(backend.synthetic),
                    "task_state_changed":False, "accepted":accepted,
                    "artifact_sha256": artifact_sha}
         guard()

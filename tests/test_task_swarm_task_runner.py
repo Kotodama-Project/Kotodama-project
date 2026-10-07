@@ -61,6 +61,7 @@ def test_existing_owner_task_reaches_four_jobs_readback_and_idempotent_result(tm
     assert result["result"]["state"] == "needs_review"
     assert result["result"]["synthetic"] is True and result["result"]["model_runtime_verified"] is False
     assert result["receipt"]["task_state_changed"] is False
+    assert result["receipt"]["owner_input_sha256"] == hashlib.sha256(before).hexdigest()
     assert set(backend.calls) == {*WORK_JOBS, "review"}
     assert owner.read_bytes() == before
     repeated = execute_task(owner, file, backend)
