@@ -841,6 +841,10 @@ class CodexBackend:
         if not isinstance(prompt, str):
             raise BackendError("prompt_invalid", "prompt must be text", retryable=False)
         try:
+            prompt_bytes = prompt.encode("utf-8")
+        except UnicodeError as exc:
+            raise BackendError("prompt_invalid", "prompt must be valid UTF-8 text", retryable=False) from exc
+        try:
             timeout_value = float(timeout)
         except (TypeError, ValueError) as exc:
             raise BackendError("timeout_invalid", "timeout must be finite and positive", retryable=False) from exc
@@ -878,6 +882,16 @@ class CodexBackend:
         exit_code: int | None = None
         peer_cfg: dict[str, Any] | None = None
         input_writer: threading.Thread | None = None
+
+        def failed(error: BackendError) -> BackendError:
+            if process is not None and pid is not None and created_at is not None and process.poll() is None:
+                diagnostics["cleanup"] = _terminate_owned(process, pid, created_at)
+            if process is not None and process.poll() is None:
+                error = BackendError("stop_unconfirmed", "the owned child has not been observed stopped", retryable=False)
+            error.paths = _public_paths(paths)
+            diagnostics.update(status="failed", error_code=error.code)
+            error.diagnostics = dict(diagnostics)
+            return error
 
         try:
             _write_json(paths["schema"], schema_object)
@@ -942,7 +956,7 @@ class CodexBackend:
             check_cancelled()
             def feed_prompt() -> None:
                 try:
-                    process.stdin.write(prompt.encode("utf-8"))
+                    process.stdin.write(prompt_bytes)
                 except (BrokenPipeError, OSError, ValueError):
                     pass  # the exit status and output decide the outcome
                 finally:
@@ -1077,15 +1091,7 @@ class CodexBackend:
             diagnostics.update({"status": "completed", "thread_id": thread_id, "turn_id": runtime["turn_id"], "finished_at": _utc_iso(finished)})
             return {"result": redacted_result, "receipt": _redact(receipt), "paths": _public_paths(paths)}
         except BackendError as exc:
-            if process is not None and pid is not None and created_at is not None and process.poll() is None:
-                diagnostics["cleanup"] = _terminate_owned(process, pid, created_at)
-            if process is not None and process.poll() is None:
-                exc = BackendError("stop_unconfirmed", "the owned child has not been observed stopped", retryable=False)
-            exc.paths = _public_paths(paths)
-            diagnostics["status"] = "failed"
-            diagnostics["error_code"] = exc.code
-            exc.diagnostics = dict(diagnostics)
-            raise exc
+            raise failed(exc)
         except _RuntimeResolutionError as exc:
             diagnostics.update({"status": "failed", **exc.details})
             error = BackendError(
@@ -1095,17 +1101,17 @@ class CodexBackend:
                 paths=_public_paths(paths),
                 diagnostics=diagnostics,
             )
-            raise error from exc
+            raise failed(error) from exc
         except (OwnerFileError, SwarmError) as exc:
             error = BackendError("peer_invalid", "peer owner input was refused", retryable=False, paths=_public_paths(paths))
             diagnostics.update({"status": "failed", "error_code": exc.code})
             error.diagnostics = dict(diagnostics)
-            raise error from exc
-        except (OSError, UnicodeError, ValueError, TypeError) as exc:
+            raise failed(error) from exc
+        except (OSError, UnicodeError, ValueError, TypeError, RuntimeError) as exc:
             error = BackendError("backend_internal", "the local backend failed safely", retryable=True, paths=_public_paths(paths))
             diagnostics.update({"status": "failed", "exception_type": type(exc).__name__})
             error.diagnostics = dict(diagnostics)
-            raise error from exc
+            raise failed(error) from exc
         finally:
             if process is not None and pid is not None and created_at is not None and process.poll() is None:
                 diagnostics["cleanup"] = _terminate_owned(process, pid, created_at)

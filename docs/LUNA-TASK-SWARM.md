@@ -123,8 +123,6 @@ host clock が deadline/TTL を計算します。UTC offset 付き時刻、finit
 
 `LOCAL_PASS` はローカル bytes と checks の証拠です。device、provider、public、Human の権限や結果を暗黙に上位へ昇格させません。今回の構成・静的 validation に `DEVICE_PASS`、`PROVIDER_PASS`、`PUBLIC_PASS`、`HUMAN_GO` は含まれません。
 
-## typed return
-
 ### Task runner の取消部品（#160）
 
 `CodexBackend.invoke(..., cancel_event=threading.Event())` は、起動前・実行中・結果の
@@ -142,6 +140,8 @@ scope終了時にhandlerを戻し、自分が複製したdescriptorだけを閉�
 まず現在のowner bindingを無効化してclaim/report/acceptをfenceし、owned process groupの
 終了を観測してから既存Taskをcancelledへ進めます。不明ならuncertainのままにします。
 モデル・sandbox・grant・live利用枠・既定の実行経路は変更しません。
+
+## typed return
 
 worker と verifier は、文章だけでなく次の形を返します。root は未観測の attempt/runtime/provenance を埋めるまで accepted と扱いません。
 

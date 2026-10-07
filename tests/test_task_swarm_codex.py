@@ -53,6 +53,14 @@ def test_invalid_cancellation_hook_is_rejected_before_work(tmp_path):
     assert not (tmp_path / "attempt").exists()
 
 
+def test_invalid_unicode_prompt_is_refused_before_launch(tmp_path, monkeypatch):
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: pytest.fail("must not spawn"))
+    with pytest.raises(BackendError) as raised:
+        CodexBackend("not-invoked").invoke("\ud800", SCHEMA, tmp_path / "attempt")
+    assert raised.value.code == "prompt_invalid" and raised.value.retryable is False
+    assert not (tmp_path / "attempt").exists()
+
+
 @pytest.mark.parametrize("during_input", [False, True])
 def test_owner_cancels_owned_child_even_when_it_never_reads_stdin(tmp_path, monkeypatch, during_input):
     fake = _fake_codex(tmp_path)
@@ -117,6 +125,31 @@ def test_unconfirmed_stop_is_nonretryable_and_never_claims_cancellation_complete
         assert not Path(raised.value.paths["receipt"]).exists()
     finally:
         # Restore real ownership checking before stopping only this test's child.
+        if seen and same_process(*seen[0]):
+            child = codex.psutil.Process(seen[0][0])
+            child.terminate()
+            child.wait(timeout=5)
+
+
+def test_internal_failure_cannot_retry_while_child_stop_is_unconfirmed(tmp_path, monkeypatch):
+    fake = _fake_codex(tmp_path)
+    monkeypatch.setenv("FAKE_MODE", "timeout")
+    seen = []
+    same_process, original_fstat = codex._same_process, os.fstat
+    def unavailable(_fd):
+        raise OSError("synthetic observation failure")
+    def started(pid, created):
+        seen.append((pid, created))
+        monkeypatch.setattr(codex, "_same_process", lambda *args: False)
+        monkeypatch.setattr(os, "fstat", unavailable)
+    try:
+        with pytest.raises(BackendError) as raised:
+            CodexBackend(fake).invoke("fixture", SCHEMA, tmp_path / "attempt", timeout=5, on_process=started)
+        assert raised.value.code == "stop_unconfirmed" and raised.value.retryable is False
+        assert same_process(*seen[0])
+        assert not Path(raised.value.paths["receipt"]).exists()
+    finally:
+        monkeypatch.setattr(os, "fstat", original_fstat)
         if seen and same_process(*seen[0]):
             child = codex.psutil.Process(seen[0][0])
             child.terminate()
