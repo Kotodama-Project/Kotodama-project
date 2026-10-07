@@ -11,7 +11,6 @@
 ## 製品としての振る舞い
 
 - **既定（`voice.naturalConversation: false`）**: 普段は黙って聞きます。挨拶、相槌、頼まれていない進み具合の発話はしません。話すのは呼びかけられたとき（呼び名、`conversationStart: "speech"` での操作者の話し始め、または `/kotodama voice mode:start_conversation`）だけで、返すのは確認済みの結果だけです。
-- **任意の自発参加**: `voice.proactive.enabled` は既定無効です。ローカルASR・通常のassistで短い手がかりだけを判定し、固定の自己紹介と申し出を話せます。入力を送らない専用Liveを使い、仕事は始めません。頻度・断り後の沈黙・同意の変更は[runtimeの設定](../runtime/discord-template/README.md#自発参加既定無効)を参照してください。実VCは未受入です。
 - **自然会話（`voice.naturalConversation: true`）**: 明示的に選ぶ方式です。挨拶や普通の会話にも応じ、短い無言では会話を終えません。会話の判断役（Luna）が使える tool は、資料の短い抜粋を読む、この Bot の状態を読む、会話を終える、の 3 つだけで、外部を操作する権限はありません。
 - **仕事を頼む**: 認証された参加者がはっきり頼んだときだけ、許可された操作（`worker.actions`）の範囲で仕事にします。名前が出ただけ、他人の依頼の引用、アイデアの議論、資料の読み上げは実行の許可になりません。対象が足りない依頼は実行せず、意図の候補として残します。
 - **進み具合と成果**: 仕事が走り始めたら依頼者へ DM で件名と仕事の ID を届け、完了したら同じ DM へ成果を届けます（[#101](https://github.com/Kotodama-Project/Kotodama-project/pull/101)）。
@@ -38,7 +37,7 @@ Discord の固定の 1 VC（discord.voiceChannelId）
 | 対象の VC | 設定した一つの VC だけです。別の VC へ利用者を追いかけません。対象外の人がいる間は、新しい音声処理と再生を止めて退出します。 |
 | 話者 | 話者ごとに別の Live session を使います。bot（自分と他の bot）は在室者の判定と受信から除きます。 |
 | 同意 | `voice.consentMode` は `owner_managed`（運用者が対象者を設定し、説明と同意に責任を持つ）か `participant_opt_in` です。どちらでも本人の明示の opt-out を守ります。 |
-| 文字起こし | `transcriptSource: "live"`（既定）は話者の音声を Live session へ送り、その文字起こしを使います。`"local"` はローカル ASR の確定した日本語を Source Evidence にし、自発参加が無効なら呼びかけ前は Live を開きません。自発参加の申し出用Liveにも入力音声は送りません。どちらの文字起こしも誤り得る認識結果で、確定した意図や実行の権限とは扱いません。 |
+| 文字起こし | `transcriptSource: "live"`（既定）は話者の音声を Live session へ送り、その文字起こしを使います。`"local"` はローカル ASR の確定した日本語を Source Evidence にし、呼びかけ前は Live を開かず、音声をクラウドへ送りません。どちらの文字起こしも誤り得る認識結果で、確定した意図や実行の権限とは扱いません。 |
 | 会話（`assist`） | SDK の `LiveWS` で `gpt-live-1` を使い、`store: false` を設定します。呼びかけ後は同じ session を複数ターン使い、返答は `session.commentary.append` で返します。返答ごとに新しい session は作りません。Live が使えないときは失敗として止まり、別の protocol へ自動で切り替えません。 |
 | 出力の許可 | 既定の方式では、アプリが返答を渡すまで Live の音声を再生しません（頼まれていない音声は捨てます）。再生は出力の世代・聞いてよい人・source revision に束縛し、在室者や権限が変われば止めます。 |
 | 割り込み | 利用者が話し始めたら、ローカルの再生と未再生の queue を先に捨て、同じ session へ `session.instructions.append` で停止を指示します。停止指示の ACK を、再生が止まった証明には使いません。 |
