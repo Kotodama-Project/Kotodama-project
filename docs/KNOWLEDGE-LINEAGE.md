@@ -2,8 +2,8 @@
 
 #53の最初の部分として、[閉じたmetadata契約](../schemas/knowledge-lineage.schema.json)と
 read-onlyの検査を提供します。[既存KB](KNOWLEDGE-BASE.md)のproseやTask ownerを置き換えません。
-逆引き・影響計算もmetadataから再構築します。外部ownerのcurrent pointerとCAS、
-利用直前の取消検査は後続で接続します。
+逆引き・影響計算もmetadataから再構築します。current pointerのローカル参照ownerを提供し、
+利用直前の出典・取消検査とKB/Context Packへの接続は後続で進めます。
 
 ## Bindingの意味
 
@@ -77,3 +77,31 @@ supersedes/invalidatesは対象を、conflicts_withは両側をquarantineにし�
 node/edge超過は拒否し、depth超過はcomplete=false / BUDGET_EXCEEDEDとなり全nodeをquarantineへ
 置きます。部分的な影響範囲を完全な結果として使いません。計算receiptのdigestは入力・予算・
 affected/optional/quarantine集合を結びます。これをowner認証や実際の取消・配送の証明へ使いません。
+
+## 現在版のpointerをproseの外に置く
+
+`LocalRevisionOwner`は既存ownerから渡すauthorization callbackを必須とする、ローカル参照実装です。
+SQLiteをproduction DBとして採用したものではありません。databaseはrepository内の専用work領域等へ
+置き、knowledge配下・外部path・link・別用途の既存DBへの混入を拒否します。callbackは毎回、
+action/対象ref/current generationを受け、登録時は固定snapshot digestも受けます。literal trueだけを
+許可として扱います。実grant・本人性・scopeの確認は既存ownerの責任で、callback自体は発行しません。
+
+`register(snapshot, expected_generation=...)`はimmutableなSource/Concept metadataを登録します。
+同refの内容差し替え、異なるsnapshotをまたぐ同provider版の矛盾、sourceのinvalidation key付替えを
+拒否します。親版や現在版は本文へ書き込みません。現在版は`publish`でexpected generationと
+expected parentを同じtransaction内で照合して更新します。後から終わった古いcandidateは、新しい
+generationだけ取得しても現在版を上書きできません。旧版・eventsは消しません。
+
+`revoke`はownerが照合したinvalidation keyとevidence refを記録し、同じkeyのread/publishを止めます。
+解除や強制rollback APIはありません。required dependencyが現在版でない、未解決・循環・失効・
+conflictedである場合もcurrentのreadbackを拒否します。同generationの競合更新は一つだけが成功し、
+途中の失敗はtransaction全体をrollbackします。
+
+これは**ローカルの版pointerの整合だけ**です。`current`はmetadataを返し、文書本文を配送しません。
+Source access/authenticity、実bytesの使用直前照合、Context Pack assembly後の取消、実際のagent入力は
+まだこのAPIの証拠にしません。register/publishをCompany truth・Promotion・runtime authorityや
+Human GOへの採用に読み替えません。opaque sourceの真正性も別ownerへの照合が必要です。
+
+```text
+python -m unittest tests.test_knowledge_revision_owner -v
+```

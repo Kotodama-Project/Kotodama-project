@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 知識の版pointerをproseの外でCAS更新するローカル参照ownerを追加。古いcandidate、版の差し替え、失効keyの付替えとrollbackを拒否し、実権限・出典bytes・配送の確認とは分ける（#53現在版owner）。
+
 - 出典・Concept・Context Packなどの逆引きと有限の影響計算を追加。必須依存、任意参照、失効・矛盾・循環を分け、削除前の依存も保持する。上限超過を完全な結果として扱わない（#53影響計算）。
 
 - Source Binding・Concept Revision・型付き関係の閉じたmetadata契約とread-only検査を追加。同じpathのbytes変更やmetadataの不一致を拒否し、opaque出典を未確認として保持する（#53前半）。
