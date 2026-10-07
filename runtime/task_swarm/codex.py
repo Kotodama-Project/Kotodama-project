@@ -925,7 +925,7 @@ class CodexBackend:
                     raise BackendError("policy_invalid", "confidential Task workers do not load peer tools", retryable=False)
                 from .confidential import ConfidentialScope
                 scope = ConfidentialScope(run_dir, executable_path, task_codex_home=task_codex_home)
-                diagnostics["permission_probe"] = scope.preflight(max_seconds=max(0,deadline-time.monotonic()),cancel_event=cancel_event)
+                diagnostics["permission_probe"] = scope.preflight(max_seconds=max(0,min(timeout_value,deadline-time.monotonic())),cancel_event=cancel_event)
                 check_cancelled()
                 if time.monotonic() >= deadline:
                     raise BackendError("timeout", "preflight consumed the attempt time budget", retryable=False)
