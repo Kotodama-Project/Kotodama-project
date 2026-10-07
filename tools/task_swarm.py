@@ -415,6 +415,7 @@ def main():
     task.add_argument("--input", required=True)
     task.add_argument("--backend", choices=("codex", "synthetic"), required=True)
     task.add_argument("--codex-executable")
+    task.add_argument("--task-codex-home")
     task.add_argument("--allow-codex", action="store_true")
     task.add_argument("--allow-local-fixture", action="store_true")
     task.add_argument("--expected-receipt-sha256")
@@ -429,9 +430,9 @@ def main():
                     raise SwarmError("LOCAL_FIXTURE_REQUIRED", "synthetic Task execution requires explicit fixture scope")
                 backend = SyntheticTaskBackend()
             else:
-                if not args.allow_codex or not args.codex_executable:
+                if not args.allow_codex or not args.codex_executable or not args.task_codex_home:
                     raise SwarmError("AUTHORIZATION_REQUIRED", "Codex Task execution requires explicit caller authorization")
-                backend = TaskBackend(args.codex_executable)
+                backend = TaskBackend(args.codex_executable, task_codex_home=args.task_codex_home)
             with ParentCancellation() as lifetime:
                 output = execute_task(args.owner, args.input, backend, cancel_event=lifetime.event,
                                       expected_receipt_sha256=args.expected_receipt_sha256)
