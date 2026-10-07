@@ -4,7 +4,8 @@
 既存のOUT-INTENT/OUT-LOCAL、KGI-INTENTと8つのINIT IDを個別Conceptへ束縛し、
 load_bundleの既定profile検査と生成graphへ接続しています。未定義の参照を持つbundleは
 context生成前に拒否します。[KGI-INTENTの候補計算](INTENT-OUTCOME-METRIC.md)は外部receiptと
-deterministic attesterへ接続しています。補助型の全定義と採用した測定値は後続です。
+deterministic attesterへ接続しています。補助型の定義も同じbundleに持ちます。
+測定値・数値target・windowは未採用です。
 
 [補助指標と旧候補の対応](STRATEGY-METRIC-MAPPING.md)は、10のsupporting KPIを製品KGIと
 分けて定義しています。補助指標の値やthresholdは未測定・未採用です。
@@ -49,9 +50,18 @@ catalogのstrategyとgraphのdefinition_conceptで、意味上のIDから同じM
 必須文脈が収まらなければneeds_resolutionとなり、既定の12 Concept上限は広げません。
 
 型付き関係はmeasured_by、computed_by、enabled_by、observed_by、advanced_by、tested_by、
-produces、governed_by、Phase同士のsequenced_after、Decisionのadopts/revises/pauses/rejects、Riskのmitigatesです。
-型の違う結び方、未定義ID、重複定義/関係、循環を拒否します。関係の相手は通常のMarkdown link
+produces、governed_by、Phase同士のsequenced_after、Decisionのadopts/revises/pauses/rejects、
+Initiative/Decision/Measurement PolicyからRiskへのmitigates、Riskから対象へのthreatensです。
+型の違う結び方、未定義ID、重複定義/関係、依存・段階・改訂の循環を拒否します。
+mitigates/threatensはリスク評価のfeedbackであり、依存の循環検査からのみ除外します。
+関係の相手は通常のMarkdown link
 でも結び、専用toolがなくても辿れるようにします。エラー時は使用可能に見えるgraphを返しません。
+
+[Outcome・実験・判断・policy・risk](../knowledge/strategy/index.md)も候補定義です。
+Outcomeは目指す状態、Experimentは未実行の比較を表し、実績を作りません。
+Decisionには`decision_scope`を必須とし、既存の正本選択のprojectionは
+`canonical_definition_only`、方法の候補は`method_candidate_only`に限定します。
+`adopts`のedgeだけで式・数値・実行権限・Human Decisionを発行しません。
 
 数値のbaseline、target、deadline、measurement window、exclusion policyはこのcontractでは
 採用しません。候補の構造が正しいことは、定義の独立検証・実測・per-run attestation・人の受入を

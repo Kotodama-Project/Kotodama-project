@@ -42,3 +42,7 @@ This bundle is a **public-safe, rebuildable knowledge projection** for humans an
 ## Capability phase definitions
 
 * [Phase definitions](phases/index.md) - 段階の意味だけを対応付け、現在の進捗を作らない。
+
+## Outcomes and measurement guards
+
+* [Strategy definitions](strategy/index.md) - Outcome、実験、既存判断、risk、測定policyの境界。
