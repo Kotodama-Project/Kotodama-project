@@ -188,5 +188,26 @@ class FrozenContextEvaluationTests(unittest.TestCase):
         with self.assertRaisesRegex(KnowledgeBaseError, 'EVALUATION_LINEAGE_INCOMPLETE'):
             affected_revisions(value, case)
 
+    def test_broken_optional_edge_is_reported_without_blocking_required_context(self):
+        from kotodama_kb.retrieval_lineage import fixture_lineage
+        case = self.case('broken-optional-link')
+        result = retrieve(self.corpus, case)
+        self.assertEqual('ready_candidate', result['verdict'])
+        self.assertIn({'ref': 'ref/document/missing-optional', 'reason': 'optional_dependency_unavailable'}, result['omitted'])
+        snapshot, index = fixture_lineage(self.corpus, case)
+        relation = next(row for row in snapshot['relations'] if row['target_revision_ref'] == 'ref/document/missing-optional')
+        self.assertFalse(relation['required']); self.assertEqual('unresolved', relation['resolution'])
+        self.assertNotIn('ref/document/optional-link', index['quarantine_revision_refs'])
+
+    def test_extra_or_invalidated_source_refs_are_counted_as_leakage_without_goldens(self):
+        case = self.case('exact-goal'); case['expected']['forbidden_source_refs'] = []
+        for source_ref in ('ref/source-revision/alpha-one', 'ref/source-revision/beta-one'):
+            result = retrieve(self.corpus, case); result['selected_source_refs'].append(source_ref)
+            score = score_case(self.corpus, case, result)
+            self.assertEqual(1, score['metrics']['forbidden_source_leakage']); self.assertTrue(score['hard_failure'])
+        case = self.case('revoked-after'); case['expected']['forbidden_source_refs'] = []
+        result = retrieve(self.corpus, case); result['selected_source_refs'] = ['ref/source-revision/alpha-two']
+        self.assertEqual(1, score_case(self.corpus, case, result)['metrics']['forbidden_source_leakage'])
+
 
 if __name__ == '__main__': unittest.main()

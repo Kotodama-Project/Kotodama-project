@@ -16,10 +16,10 @@ def fixture_lineage(corpus, case):
             'source_revision_refs': document['source_revision_refs'], 'generator_invocation_ref': 'ref/invocation/synthetic-evaluation',
             'policy_revision_refs': [case['request']['policy_ref']], 'intent_revision_refs': [case['request']['intent_ref']],
             'status': document['status'] if document['status'] in {'superseded', 'revoked', 'conflicted'} else 'candidate'})
-        for target in document['required_dependencies']:
+        for target, required in [(target, required) for field, required in (('required_dependencies', True), ('optional_dependencies', False)) for target in document[field]]:
             relations.append({'from_revision_ref': ref, 'predicate': 'requires_context', 'target_kind': 'concept',
                 'target_id': documents[target]['id'] if target in documents else 'synthetic/unresolved',
-                'target_revision_ref': target, 'required': True, 'validity': 'current',
+                'target_revision_ref': target, 'required': required, 'validity': 'current',
                 'resolution': 'resolved' if target in included else 'unresolved', 'evidence_ref': 'ref/evidence/synthetic-dependency'})
     snapshot = admit_snapshot({'kind': 'kotodama.knowledge-lineage', 'schema_revision': 'v1', 'authority': 'projection_only',
         'contains_content': False, 'sources': list(sources.values()), 'concepts': concepts, 'relations': relations, 'projections': []})

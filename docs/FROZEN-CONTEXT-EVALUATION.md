@@ -21,6 +21,9 @@ Source更新の影響集合は合成文書を既存の[履歴契約](KNOWLEDGE-L
 実際の逆引きindexで求めます。欠落出典を新しい出典として補完せず、必須依存の循環も同じ
 lineage検査で検出します。Source変更がないケースでは影響集合を空に保ちます。
 
+任意の欠落参照もfixture内の実edgeから読み、候補manifestのomittedへ理由付きで報告します。
+必須contextを阻止せず、lineageにはrequired=falseの未解決関係として保持します。
+
 ## 比較する基準線
 
 1. ID/revision/aliasの完全一致。

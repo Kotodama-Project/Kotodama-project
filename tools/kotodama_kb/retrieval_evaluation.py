@@ -45,8 +45,9 @@ def score_case(corpus, case, result, *, mode='typed_graph'):
             else: leaked_sources.add(source_ref)
     for source_ref in sources:
         source = bindings.get(source_ref)
-        if not source or source['access_state'] != 'allowed' or source['invalidation_key'] in revoked:
+        if not source or source['access_state'] != 'allowed' or source['invalidation_key'] in revoked or case['current_source_revisions'].get(source['source_id']) != source_ref:
             leaked_sources.add(source_ref)
+    leaked_sources.update(sources - actual_sources)
     known = all(ref in documents for ref in result['selected_revision_refs'])
     # Recompute mandatory policy/graph metadata from request and owner-state
     # inputs. Golden answers and the candidate's classifications cannot set it.

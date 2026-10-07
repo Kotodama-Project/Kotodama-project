@@ -136,6 +136,9 @@ def retrieve(corpus, case, mode='typed_graph'):
     # evaluation unit, not a claim about actual model token counts.
     if used > min(budget['max_bytes'], budget['max_tokens']):
         unknown.update(selected); selected = []; text = '[]'; used = 2
+    for target in sorted({target for ref in selected for target in documents[ref]['optional_dependencies']}):
+        if target not in documents or not permitted(documents[target], after):
+            omitted.append({'ref': target, 'reason': 'optional_dependency_unavailable'})
     verdict, next_action = ('needs_resolution', 'resolve_context') if unknown else ('ready_candidate', 'answer_with_sources')
     if not unknown and case['no_op_update']: verdict, next_action = 'no_change', 'no_regeneration'
     elif not unknown and case['declared_kpi_change'] == 'improved' and case['declared_outcome_change'] != 'improved':
