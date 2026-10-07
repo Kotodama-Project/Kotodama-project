@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Discordのlocal履歴を既存Session ledgerへ書き出す`ledger-export`と暗号化payload読戻しを追加。Source訂正と同一Taskの参照を保持し、実データ・鍵運用・自動保持削除は別の境界に残す（#153）。
+
 - Discordの自発参加を既定無効で追加。短い手がかり判定と固定の申し出、永続の頻度制限、断り後の沈黙、出力専用Liveを備え、Taskは明示依頼後に扱う。実VCは未受入（#150）。
 - 固定corpusにexact/lexical/日本語ngram/BM25/型付きgraphの基準線と採点・候補manifest・再計算attesterを接続。漏えいと出典改変を平均で隠さず拒否し、合成成果と実Task成果を区別する（#54評価器）。
 

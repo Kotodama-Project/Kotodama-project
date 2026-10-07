@@ -163,6 +163,7 @@ node bin/kotodama.mjs browser read --tab 0 --json
 
 履歴取込は起動中のBotを停止してから行います。上限到達・取得失敗・未対応添付を明示し、読めなかった情報を「全件読了」に含めません。現在の添付本文取込はUTF-8のテキスト・Markdown・CSV・JSONです。その他の形式は取得状況に未対応として残します。
 
+- [privateな会話台帳の書き出し・復元](docs/LEDGER-EXPORT.md)（`ledger-export`。実装済み・実データ未実施）
 - [CLIでのブラウザ操作](docs/BROWSER.md)
 - [無料Lumaとn8n](docs/LUMA-N8N.md)
 - [Task owner接続契約](docs/TASK-OWNER.md)
