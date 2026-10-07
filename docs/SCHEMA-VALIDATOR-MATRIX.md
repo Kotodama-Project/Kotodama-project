@@ -502,6 +502,7 @@ lifecycle state は `prepared -> dispatched -> running -> completed | failed | c
 - [Knowledge Work compiler](../tools/compile_knowledge_context.py) — 検証済みcandidateを同じv2へ変換し、受入条件・成果物参照を保持する。期限・感度・必須情報の予算・最終source再読は[validation試験](../tests/test_knowledge_work_validation.py)と[source-root試験](../tests/test_knowledge_work_source_roots.py)、実stdinへの束縛は[compiler境界試験](../tests/test_knowledge_work_context_binding.py)で確認する。
 
 - [Template Guide](TEMPLATE-GUIDE.md) — ideal/currentの会社テンプレート設計
+- [固定評価corpus](FROZEN-CONTEXT-CORPUS.md) — [schema](../schemas/frozen-context-corpus.schema.json)、[admission](../tools/kotodama_kb/retrieval_corpus.py)、[境界試験](../tests/test_frozen_context_corpus.py)。合成fixtureの本文・期待値・版・区分を固定し、実grantや採用を成立させない。
 - [Validation Guide](VALIDATION.md) — fail-closed validatorとnegative tests
 - [Starter Walkthrough](STARTER-WALKTHROUGH.md) — 初回作業copyの歩き方
 - [Installation Lifecycle](INSTALLATION-LIFECYCLE.md) — runtime profileを読む場合の別境界
