@@ -13,7 +13,7 @@ from audit_control_plane import build_report
 
 class ControlPlaneRegistryTest(unittest.TestCase):
     def test_repository_indexes_pass_the_unchanged_coverage_gate(self):
-        report = build_report(ROOT, date(2026, 10, 6))
+        report = build_report(ROOT, date(2026, 10, 7))
         self.assertEqual("PASS", report["status"], report["findings"])
         self.assertGreaterEqual(report["summary"]["classification_coverage"], .98)
         self.assertEqual(7, report["summary"]["registered_agent_count"])
@@ -34,7 +34,7 @@ class ControlPlaneRegistryTest(unittest.TestCase):
         self.assertEqual("knowledge/profile.yaml", paths["knowledge_operations"])
 
     def test_old_review_date_stays_visible_and_warning_exit_is_explicit(self):
-        result = subprocess.run([sys.executable,str(ROOT/"tools/audit_control_plane.py"),"--root",str(ROOT),"--as-of","2026-10-06","--fail-on","warning"],capture_output=True,timeout=30)
+        result = subprocess.run([sys.executable,str(ROOT/"tools/audit_control_plane.py"),"--root",str(ROOT),"--as-of","2026-10-07","--fail-on","warning"],capture_output=True,timeout=30)
         self.assertEqual(1,result.returncode)
         report = json.loads(result.stdout)
         self.assertEqual("PASS",report["status"])
