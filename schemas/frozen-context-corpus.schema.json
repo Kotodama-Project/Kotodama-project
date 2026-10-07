@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/frozen-context-corpus.schema.json",
+  "title": "Public synthetic frozen retrieval and context evaluation corpus",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_revision",
+    "synthetic",
+    "authority",
+    "corpus_ref",
+    "corpus_sha256",
+    "sources",
+    "documents",
+    "cases",
+    "model",
+    "external_calls_authorized",
+    "adoption_status"
+  ],
+  "properties": {
+    "kind": {"const": "kotodama.frozen-context-corpus"},
+    "schema_revision": {"const": "v1"},
+    "synthetic": {"const": true},
+    "authority": {"const": "evaluation_fixture_only"},
+    "corpus_ref": {"$ref": "#/$defs/ref"},
+    "corpus_sha256": {"$ref": "#/$defs/sha256"},
+    "sources": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/source_fixture"}},
+    "documents": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/document"}},
+    "cases": {"type": "array", "minItems": 16, "maxItems": 128, "items": {"$ref": "#/$defs/case"}},
+    "model": {"const": "none"},
+    "external_calls_authorized": {"const": false},
+    "adoption_status": {"const": "not_adopted"}
+  },
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "minLength": 7,
+      "maxLength": 512,
+      "pattern": "^ref/[a-z0-9][a-z0-9/_-]{1,510}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}]
+    },
+    "public_ref_safety": {
+      "allOf": [
+        {"not": {"pattern": "[0-9]{17,20}"}},
+        {"not": {"pattern": "(sk-|pk-|rk-|ghp_|gho_|github_pat_|xox[baprs]-|aiza|akia|eyj|bearer-)"}},
+        {"not": {"pattern": "[@\\s\\\\:]"}},
+        {"not": {"pattern": "(^|/)([0-9]{1,3}\\.){3}[0-9]{1,3}(/|$)"}},
+        {"not": {"pattern": "(^|/)([a-z0-9-]+\\.)+[a-z]{2,}(/|$)"}},
+        {"not": {"pattern": "(^|/)(https?://|file://|[A-Za-z]:[\\\\/]|\\\\\\\\)"}}
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "concept_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9/_-]{2,254}$",
+      "allOf": [{"$ref": "#/$defs/public_ref_safety"}],
+      "not": {"pattern": "//|/$"}
+    },
+    "public_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?:[A-Z][A-Z0-9_-]*\\.md|(?:docs|knowledge|schemas|tools|runtime|examples|contracts)/[a-zA-Z0-9_./-]+)$",
+      "not": {"pattern": "(?:^|/)\\.\\.?(?:/|$)|//"}
+    },
+    "span": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "start", "end"],
+          "properties": {
+            "kind": {"const": "lines"},
+            "start": {"type": "integer", "minimum": 1},
+            "end": {"type": "integer", "minimum": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "pointer"],
+          "properties": {
+            "kind": {"const": "json_pointer"},
+            "pointer": {"type": "string", "maxLength": 256, "pattern": "^(?:/(?:[^~/]|~[01])*)*$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "from_event_ref", "to_event_ref"],
+          "properties": {
+            "kind": {"const": "events"},
+            "from_event_ref": {"$ref": "#/$defs/ref"},
+            "to_event_ref": {"$ref": "#/$defs/ref"}
+          }
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "revision_ref",
+        "revision_kind",
+        "revision_value",
+        "content_sha256",
+        "observed_at",
+        "observer_ref",
+        "authority_scope_ref",
+        "custodian_ref",
+        "access_policy_ref",
+        "access_state",
+        "retention_ref",
+        "legal_hold_ref",
+        "invalidation_key",
+        "locator_visibility",
+        "locator"
+      ],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/ref"},
+        "revision_ref": {"$ref": "#/$defs/ref"},
+        "revision_kind": {"enum": ["git_commit", "etag", "provider_version", "event_sequence", "content_digest"]},
+        "revision_value": {"type": "string", "pattern": "^[a-z0-9_-]{1,128}$", "allOf": [{"$ref": "#/$defs/public_ref_safety"}]},
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "observed_at": {"$ref": "#/$defs/timestamp"},
+        "observer_ref": {"$ref": "#/$defs/ref"},
+        "authority_scope_ref": {"$ref": "#/$defs/ref"},
+        "custodian_ref": {"$ref": "#/$defs/ref"},
+        "access_policy_ref": {"$ref": "#/$defs/ref"},
+        "access_state": {"enum": ["allowed", "denied", "revoked", "unknown"]},
+        "retention_ref": {"$ref": "#/$defs/ref"},
+        "legal_hold_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+        "invalidation_key": {"$ref": "#/$defs/ref"},
+        "locator_visibility": {"enum": ["public", "opaque"]},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 512},
+        "span": {"$ref": "#/$defs/span"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"locator_visibility": {"const": "public"}}},
+          "then": {"properties": {"locator": {"$ref": "#/$defs/public_path"}}}
+        },
+        {
+          "if": {"properties": {"locator_visibility": {"const": "opaque"}}},
+          "then": {"properties": {"locator": {"$ref": "#/$defs/ref"}}}
+        }
+      ]
+    },
+    "source_fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding", "text"],
+      "properties": {"binding": {"$ref": "#/$defs/source"}, "text": {"type": "string", "minLength": 1, "maxLength": 8192}}
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision_ref",
+        "project_ref",
+        "task_ref",
+        "kind",
+        "title",
+        "text",
+        "aliases",
+        "content_sha256",
+        "source_revision_refs",
+        "constraint_refs",
+        "required_dependencies",
+        "optional_dependencies",
+        "inert_instruction_fragments",
+        "allowed_actor_refs",
+        "mandatory_for_roles",
+        "status"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/concept_id"},
+        "revision_ref": {"$ref": "#/$defs/ref"},
+        "project_ref": {"$ref": "#/$defs/ref"},
+        "task_ref": {"$ref": "#/$defs/ref"},
+        "kind": {"enum": ["goal", "kgi", "task", "intent", "decision", "policy", "information"]},
+        "title": {"type": "string", "minLength": 1, "maxLength": 256},
+        "text": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "aliases": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 256}
+        },
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "source_revision_refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "constraint_refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "required_dependencies": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "optional_dependencies": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "inert_instruction_fragments": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 512}},
+        "allowed_actor_refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "mandatory_for_roles": {"type": "array", "maxItems": 3, "uniqueItems": true, "items": {"enum": ["reader", "builder", "auditor"]}},
+        "status": {"enum": ["current", "stale", "superseded", "revoked", "conflicted"]}
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_ref",
+        "recipient_ref",
+        "purpose_ref",
+        "project_ref",
+        "task_ref",
+        "session_ref",
+        "intent_ref",
+        "policy_ref",
+        "grant_ref",
+        "recipient_role",
+        "query",
+        "requested_revision_refs",
+        "mandatory_constraint_refs"
+      ],
+      "properties": {
+        "actor_ref": {"$ref": "#/$defs/ref"},
+        "recipient_ref": {"$ref": "#/$defs/ref"},
+        "purpose_ref": {"$ref": "#/$defs/ref"},
+        "project_ref": {"$ref": "#/$defs/ref"},
+        "task_ref": {"$ref": "#/$defs/ref"},
+        "session_ref": {"$ref": "#/$defs/ref"},
+        "intent_ref": {"$ref": "#/$defs/ref"},
+        "policy_ref": {"$ref": "#/$defs/ref"},
+        "grant_ref": {"$ref": "#/$defs/ref"},
+        "recipient_role": {"enum": ["reader", "builder", "auditor"]},
+        "query": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "requested_revision_refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "mandatory_constraint_refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}}
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_concepts", "max_bytes", "max_tokens", "max_latency_ms", "max_external_cost_microunits"],
+      "properties": {
+        "max_concepts": {"type": "integer", "minimum": 1, "maximum": 32},
+        "max_bytes": {"type": "integer", "minimum": 1, "maximum": 131072},
+        "max_tokens": {"type": "integer", "minimum": 1, "maximum": 131072},
+        "max_latency_ms": {"type": "integer", "minimum": 1, "maximum": 60000},
+        "max_external_cost_microunits": {"oneOf": [{"type": "null"}, {"type": "integer", "minimum": 0, "maximum": 1000000}]}
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_revision_refs",
+        "required_source_refs",
+        "constraint_refs",
+        "forbidden_revision_refs",
+        "forbidden_source_refs",
+        "unknown_refs",
+        "affected_revision_refs",
+        "next_action",
+        "verdict"
+      ],
+      "properties": {
+        "required_revision_refs": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "required_source_refs": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "constraint_refs": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "forbidden_revision_refs": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "forbidden_source_refs": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "unknown_refs": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "affected_revision_refs": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "next_action": {"enum": ["answer_with_sources", "resolve_context", "review_outcome", "no_regeneration"]},
+        "verdict": {"enum": ["ready_candidate", "needs_resolution", "review_required", "no_change"]}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "revision_ref",
+        "category",
+        "as_of",
+        "synthetic_actor_class",
+        "request",
+        "current_revisions",
+        "current_source_revisions",
+        "source_revocations_before",
+        "source_revocations_after",
+        "expected",
+        "budget",
+        "evaluator_revision",
+        "changed_source_refs",
+        "no_op_update",
+        "declared_kpi_change",
+        "declared_outcome_change"
+      ],
+      "properties": {
+        "case_id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$"},
+        "revision_ref": {"$ref": "#/$defs/ref"},
+        "category": {
+          "enum": [
+            "exact_lookup",
+            "japanese_variation",
+            "false_neighbor",
+            "mandatory_ancestor",
+            "stale_source",
+            "superseded_intent",
+            "conflicting_correction",
+            "revoked_before",
+            "revoked_after",
+            "budget_exceeded",
+            "inert_instructions",
+            "missing_source",
+            "fresh_session",
+            "proxy_improvement",
+            "rollback",
+            "no_op"
+          ]
+        },
+        "as_of": {"$ref": "#/$defs/timestamp"},
+        "synthetic_actor_class": {"const": "fixture_actor_only"},
+        "previous_session_ref": {"$ref": "#/$defs/ref"},
+        "request": {"$ref": "#/$defs/request"},
+        "current_revisions": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 128,
+          "propertyNames": {"$ref": "#/$defs/concept_id"},
+          "additionalProperties": {"$ref": "#/$defs/ref"}
+        },
+        "current_source_revisions": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 128,
+          "propertyNames": {"$ref": "#/$defs/ref"},
+          "additionalProperties": {"$ref": "#/$defs/ref"}
+        },
+        "source_revocations_before": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "source_revocations_after": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "expected": {"$ref": "#/$defs/expected"},
+        "budget": {"$ref": "#/$defs/budget"},
+        "evaluator_revision": {"const": "frozen-baseline-v1"},
+        "changed_source_refs": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "no_op_update": {"type": "boolean"},
+        "declared_kpi_change": {"enum": ["improved", "unchanged", "unknown"]},
+        "declared_outcome_change": {"enum": ["improved", "unchanged", "unknown"]}
+      }
+    }
+  }
+}
