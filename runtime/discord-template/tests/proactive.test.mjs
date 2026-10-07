@@ -124,6 +124,20 @@ test('a stale or other-room decline cannot mute the current room',async t=>{
   assert(f.room.proactive.ledger.update('check',f.config.voice.proactive));
 });
 
+for(const change of ['revision','withdrawn','audience'])test(`last authorization await cannot dispatch after ${change} changes`,async t=>{
+  const f=await fixture(t),source=f.source();let calls=0,release;
+  f.pipeline.authorizeAnalysis=async()=>{if(++calls===2)await new Promise(resolve=>{release=resolve;});};
+  const running=f.room.proactive.consider(source);while(!release)await flush();
+  if(change==='audience')f.channel.members.delete(b);
+  else f.store.ingest({...source,revision:source.revision+1,text:'replacement',...(change==='withdrawn'?{withdrawn:true}:{})});
+  release();await running;assert.equal(f.calls.length,0);assert.equal(f.providers.length,0);
+});
+
+test('the source speaker leaving invalidates queued intro audio',async t=>{
+  const f=await fixture(t);await f.room.proactive.consider(f.source());assert(f.room.canPlay(f.room.reply));
+  f.channel.members.delete(a);assert.equal(f.room.canPlay(f.room.reply),false);
+});
+
 test('Responses cue sends only four truncated texts with strict output and no retries',async t=>{
   const f=await fixture(t);let request,options;const analyzer=new ResponsesAnalyzer(f.config,{sdk:{OpenAI:class{constructor(){this.responses={create:async(body,opts)=>{request=body;options=opts;return {status:'completed',output_text:'{"cue":"schedule","declined":false}'};}};}}}});
   const controller=new AbortController();assert.deepEqual(await analyzer.proactiveCue('a'.repeat(1000),Array.from({length:5},()=>({text:'b'.repeat(1000),secret:'not sent'})),{signal:controller.signal}),{cue:'schedule',declined:false});

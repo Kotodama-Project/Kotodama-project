@@ -241,7 +241,7 @@ export class VoiceRoom {
     })();this.draining.add(s.ending);s.ending.then(()=>this.draining.delete(s.ending),()=>this.draining.delete(s.ending));return s.ending;
   }
   canPlay(reply){
-    if(reply.proactiveSession&&(this.proactive.output!==reply.proactiveSession||reply.proactiveSession.stopped||!this.proactive.enabled()||!this.targetMatches()||this.sessions.size||this.audience().some(a=>this.policy().discord.unattributedUsers.includes(a))))return false;
+    if(reply.proactiveSession&&(this.proactive.output!==reply.proactiveSession||reply.proactiveSession.stopped||!this.proactive.enabled()||!this.targetMatches()||this.sessions.size||!this.audience().includes(reply.proactiveSession.actor)||this.audience().some(a=>this.policy().discord.unattributedUsers.includes(a))))return false;
     if(reply.naturalSession&&!this.current(reply.naturalSession))return false;
     if(!this.connectionReady()||this.mode!=='assist'||this.paused||this.recovering||reply.epoch!==this.epoch||Date.now()>reply.accessExpires||!this.audienceAllowed())return false;
     try{for(const actor of this.audience()){if(!reply.readers.includes(actor))return false;for(const b of reply.bindings){const source=this.store.source(b.key,actor);if(source.revision!==b.revision)return false;}}return true;}catch{return false;}

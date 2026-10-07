@@ -61,7 +61,10 @@ export class ProactiveVoice {
       check(this.enabled()&&r.targetMatches()&&source.metadata.voiceEpoch===r.epoch,'PROACTIVE_SUPERSEDED');
       const fresh=await r.sourceReaders();check(actors.length>0&&actors.every(a=>fresh.includes(a)&&r.allowed(a)&&!r.policy().discord.unattributedUsers.includes(a)),'SOURCE_ACCESS_DENIED');
       for(const actor of actors)for(const binding of bindings){const saved=r.store.source(binding.key,actor);check(saved.revision===binding.revision,'CONTEXT_CHANGED');await r.pipeline.authorizeAnalysis(saved,actor);}
-      check(this.enabled()&&r.targetMatches()&&source.metadata.voiceEpoch===r.epoch,'PROACTIVE_SUPERSEDED');return actors;
+      check(this.enabled()&&r.targetMatches()&&source.metadata.voiceEpoch===r.epoch&&digest([...actors].sort())===digest(r.audience().sort()),'PROACTIVE_SUPERSEDED');
+      // Re-read every binding after the last await, immediately before dispatch.
+      for(const actor of actors){check(r.allowed(actor)&&!r.policy().discord.unattributedUsers.includes(actor),'SOURCE_ACCESS_DENIED');for(const binding of bindings)check(r.store.source(binding.key,actor).revision===binding.revision,'CONTEXT_CHANGED');}
+      return actors;
     };
     try{
       await authorizeAudience(r.audience());current();
