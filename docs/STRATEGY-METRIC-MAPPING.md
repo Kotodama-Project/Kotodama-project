@@ -31,4 +31,7 @@ required context、訂正/撤回、decision readiness、新session復旧、groun
 **補助指標の値は未報告です。** 採用する対象集合・window・式をownerが決め、専用の
 Attested Computationと入力/codeの固定、外部receipt、attester、coverage/真正性の確認を揃えてから
 報告します。KGI-INTENTのattesterを、これらの別の式を検証した証拠へ流用しません。
-Key Factor、Experiment/Outcome、Decision/Risk/Measurement Policyとの残る型付き接続は#52で続けます。
+[8つのKey Factor](../knowledge/factors/index.md)は既存のKF-01〜KF-08を候補として維持し、
+KGI-INTENTのenabled_by、KPIへのobserved_by、既存Initiativeへのadvanced_byを結んでいます。
+寄与は仮説で、因果関係を実証したものではありません。Experiment/Outcome、Decision/Risk/
+Measurement Policyとの残る型付き接続は#52で続けます。

@@ -34,3 +34,7 @@ This bundle is a **public-safe, rebuildable knowledge projection** for humans an
 ## Supporting measurement candidates
 
 * [Control measurements](metrics/index.md) - 製品KGIと分けた指標候補。数値の測定・採用は未実施。
+
+## Key factor candidates
+
+* [Key Factors](factors/index.md) - 製品KGI、補助KPI、介入候補を結ぶ仮説。
