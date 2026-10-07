@@ -112,6 +112,7 @@ export class ChannelWorkspaceWorker {
       const result=await this.workerFactory(scoped).run(task,context,{...options,signal,authorize:guard});
       await guard();
       check(digest(await this.snapshot(value.path,{signal}))===digest(value.checkpoint),'CHANNEL_WORKSPACE_CHANGED');
+      await guard();
       return {...result,channelWorkspace:{roomRef:digest(room),generation:value.generation,kind:'git_worktree',baseRevision:value.source.head,expiresAt:new Date(value.expiresAt).toISOString(),directoryIsSandbox:false}};
     }catch(error){failureCode=errorCode(error);uncertain=failureCode==='STOP_UNCONFIRMED';throw error;}
     finally{

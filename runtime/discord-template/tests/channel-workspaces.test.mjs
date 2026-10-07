@@ -54,6 +54,14 @@ test('expiry cancels only the owned active worker and prevents a late successful
   f.behavior.run=async()=>({state:'needs_review',artifacts:[]});await f.run(channels[1]);
 });
 
+test('expiry during final checkpoint readback does not return a successful result',async t=>{
+  const f=await fixture(t);let completed=false;
+  f.behavior.run=async()=>{completed=true;return {state:'needs_review',artifacts:[]};};
+  const snapshot=f.manager.snapshot;
+  f.manager.snapshot=async(...args)=>{const value=await snapshot(...args);if(completed)f.advance(61000);return value;};
+  await assert.rejects(f.run(),{code:'CHANNEL_WORKSPACE_EXPIRED'});
+});
+
 test('a changed base or dirty channel worktree blocks resume without resetting files',async t=>{
   const f=await fixture(t);await f.run();const directory=f.seen[0].scoped.worker.workspace;
   await writeFile(path.join(directory,'source.txt'),'user change\n');f.advance(61000);
