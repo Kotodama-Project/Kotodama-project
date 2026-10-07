@@ -62,7 +62,7 @@ export class VoicePool {
         return {channel,group:`${this.config.installation}:${slot.applicationId}`,release};
       }catch(error){release();throw error;}
     }
-    const error=new Error('VOICE_POOL_BUSY');error.code='VOICE_POOL_BUSY';throw error;
+    check(false,'VOICE_POOL_BUSY');
   }
   async dispose(){
     this.stopped=true;await Promise.all([...this.rooms.values()].map(room=>room.dispose()));

@@ -13,6 +13,7 @@ import {Store} from '../src/store.mjs';
 import {Config,exampleConfig,loadConfig} from '../src/config.mjs';
 import {voiceNotice} from '../src/consent.mjs';
 import {startRuntime} from '../src/runtime.mjs';
+import {errorCode} from '../src/common.mjs';
 
 const a='100000000000000002',b='100000000000000004';
 const channels=['100000000000000005','100000000000000006','100000000000000007'];
@@ -46,7 +47,7 @@ test('two rooms have independent states and Bot slots; a full pool is busy witho
   await Promise.all([first.join(),second.join()]);
   assert.notEqual(f.connections[0].options.group,f.connections[1].options.group);
   assert.notEqual(f.connections[0].options.adapterCreator.applicationId,f.connections[1].options.adapterCreator.applicationId);
-  await assert.rejects(third.join(),{code:'VOICE_POOL_BUSY'});assert.equal(f.connections.length,2);
+  await assert.rejects(third.join(),error=>errorCode(error)==='VOICE_POOL_BUSY');assert.equal(f.connections.length,2);
   await first.setMode('minutes');assert.equal(second.mode,'assist');
   await first.pause();assert.equal(second.paused,false);assert.equal(second.connectionReady(),true);
   assert.equal(first.allowed(b),false);assert.equal(second.allowed(a),false);
