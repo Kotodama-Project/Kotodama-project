@@ -410,11 +410,39 @@ def main():
     run.add_argument("--allow-peer-writes", action="store_true")
     run.add_argument("--codex-executable")
     run.add_argument("--timeout", type=float, default=360)
+    task = sub.add_parser("task-run")
+    task.add_argument("--owner", required=True)
+    task.add_argument("--input", required=True)
+    task.add_argument("--backend", choices=("codex", "synthetic"), required=True)
+    task.add_argument("--codex-executable")
+    task.add_argument("--task-codex-home")
+    task.add_argument("--allow-codex", action="store_true")
+    task.add_argument("--allow-local-fixture", action="store_true")
+    task.add_argument("--expected-receipt-sha256")
     args = parser.parse_args()
     try:
+        if args.command == "task-run":
+            from task_swarm.cancellation import ParentCancellation
+            from task_swarm.task_backend import TaskBackend, SyntheticTaskBackend
+            from task_swarm.task_runner import execute_task
+            if args.backend == "synthetic":
+                if not args.allow_local_fixture:
+                    raise SwarmError("LOCAL_FIXTURE_REQUIRED", "synthetic Task execution requires explicit fixture scope")
+                backend = SyntheticTaskBackend()
+            else:
+                if not args.allow_codex or not args.codex_executable or not args.task_codex_home:
+                    raise SwarmError("AUTHORIZATION_REQUIRED", "Codex Task execution requires explicit caller authorization")
+                backend = TaskBackend(args.codex_executable, task_codex_home=args.task_codex_home)
+            with ParentCancellation() as lifetime:
+                output = execute_task(args.owner, args.input, backend, cancel_event=lifetime.event,
+                                      expected_receipt_sha256=args.expected_receipt_sha256)
+                print(json.dumps({"status": output["result"]["state"], "run_id": output["receipt"]["run_id"],
+                                  "synthetic": output["result"]["synthetic"], "duplicate": output["duplicate"],
+                                  "receipt_sha256": output["receipt_sha256"], "task_state_changed": False}, ensure_ascii=False))
+            return 0
         return demo(args)
-    except (SwarmError, FileExistsError) as exc:
-        print(json.dumps({"status": "refused", "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+    except Exception as exc:
+        print(json.dumps({"status": "refused", "error": getattr(exc, "code", "TASK_RUN_FAILED")}, ensure_ascii=False), file=sys.stderr)
         return 2
 
 

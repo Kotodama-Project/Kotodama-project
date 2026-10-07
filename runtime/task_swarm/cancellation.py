@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import select
 import signal
+import socket
 import stat
 import threading
 
@@ -50,7 +51,20 @@ class ParentCancellation:
         if threading.current_thread() is not threading.main_thread() or self._fd is not None or self._done.is_set() or _active_scope is not None:
             raise SwarmError("CANCELLATION_SCOPE_INVALID", "use one scope from the runner main thread")
         try:
-            if not stat.S_ISFIFO(os.fstat(self.parent_fd).st_mode):
+            mode = os.fstat(self.parent_fd).st_mode
+            connected_local_stream = False
+            if stat.S_ISSOCK(mode):
+                # Node/libuv implements child stdio pipes with socketpair.
+                # Accept only an already-connected local byte stream, not an
+                # internet listener, datagram, regular file or terminal.
+                with socket.socket(fileno=os.dup(self.parent_fd)) as parent:
+                    connected_local_stream = parent.family == socket.AF_UNIX and parent.type == socket.SOCK_STREAM
+                    if connected_local_stream:
+                        try:
+                            parent.getpeername()
+                        except OSError:
+                            connected_local_stream = False
+            if not stat.S_ISFIFO(mode) and not connected_local_stream:
                 raise SwarmError("PARENT_PIPE_REQUIRED", "the task runner requires its parent liveness pipe")
             self._fd = os.dup(self.parent_fd)
             _active_scope = self

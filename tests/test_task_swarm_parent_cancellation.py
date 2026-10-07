@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import signal
+import socket
 import sys
 import threading
 
@@ -22,6 +23,39 @@ def test_windows_refuses_before_opening_or_owning_parent_state():
         with ParentCancellation(-1):
             pytest.fail("must refuse")
     assert raised.value.code == "POSIX_REQUIRED"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Node/libuv POSIX socketpair transport")
+def test_connected_unix_stream_parent_eof_requests_stop_without_closing_callers_fd():
+    parent, child = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        with ParentCancellation(child.fileno()) as scope:
+            parent.sendall(b"heartbeat")
+            assert not scope.event.wait(.15)
+            parent.close()
+            assert scope.event.wait(2) and scope.reason == "parent_eof"
+        assert child.fileno() >= 0 and not scope._thread.is_alive()
+    finally:
+        parent.close()
+        child.close()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX descriptor transport checks")
+@pytest.mark.parametrize("kind", ["internet", "unconnected", "datagram"])
+def test_other_sockets_do_not_establish_parent_liveness(kind):
+    if kind == "datagram":
+        caller, other = socket.socketpair(socket.AF_UNIX,socket.SOCK_DGRAM)
+    else:
+        caller, other = socket.socket(socket.AF_INET if kind=="internet" else socket.AF_UNIX,socket.SOCK_STREAM), None
+    try:
+        with pytest.raises(SwarmError) as raised:
+            with ParentCancellation(caller.fileno()):
+                pytest.fail("not a connected local byte stream")
+        assert raised.value.code == "PARENT_PIPE_REQUIRED"
+    finally:
+        caller.close()
+        if other is not None:
+            other.close()
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX Task runner only")
