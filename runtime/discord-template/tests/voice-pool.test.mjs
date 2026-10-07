@@ -31,7 +31,7 @@ async function fixture(t,{bots=2}={}){
     voicePool:{rooms:channels.map((channelId,index)=>({channelId,participantIds:index===1?[b]:[a]})),bots:bots===2?[{applicationId:applications[1],botTokenEnv:'SYNTHETIC_SECOND_BOT'}]:[]}});
   const clients=applications.slice(0,bots).map(applicationId=>{
     const client=new EventEmitter();client.application={id:applicationId};client.ready=true;client.externalChannel=null;client.isReady=()=>client.ready;client.destroy=async()=>{client.ready=false;client.destroyed=true;};
-    const guild={id:config.discord.guildId,voiceAdapterCreator:{applicationId},members:{fetchMe:async()=>({voice:{channelId:client.externalChannel}})}};
+    const guild={id:config.discord.guildId,voiceAdapterCreator:{applicationId},members:{fetchMe:async()=>({get voice(){return {channelId:client.externalChannel};}})}};
     client.guilds={fetch:async()=>guild};client.channels={cache:new Map(channels.map((id,index)=>[id,{id,guildId:guild.id,guild,isVoiceBased:()=>true,members:new Map([[index===1?b:a,{id:index===1?b:a,user:{bot:false}}]])}])),fetch:async id=>client.channels.cache.get(id)};
     return {applicationId,client};
   });
@@ -92,6 +92,16 @@ test('closing while slot discovery awaits prevents late connection and returns t
   const joining=first.join(),rejected=assert.rejects(joining,{code:'VOICE_JOIN_SUPERSEDED'});await flush();
   assert(f.pool.slots[0].lease);await first.close();release({voice:{channelId:null}});await rejected;
   assert.equal(f.connections.length,0);assert.equal(f.pool.slots[0].lease,null);
+});
+
+test('external occupancy acquired during channel fetch or just before connect cannot be stolen',async t=>{
+  const f=await fixture(t,{bots:1}),first=f.pool.forChannel(channels[0]),client=f.clients[0].client;
+  client.channels.fetch=async id=>{client.externalChannel='100000000000000099';return client.channels.cache.get(id);};
+  await assert.rejects(first.join(),{code:'VOICE_POOL_BUSY'});assert.equal(f.pool.slots[0].lease,null);assert.equal(f.connections.length,0);
+  client.externalChannel=null;client.channels.fetch=async id=>client.channels.cache.get(id);
+  const original=first.acquireConnection;
+  first.acquireConnection=async target=>{const admission=await original(target);client.externalChannel='100000000000000099';return admission;};
+  await assert.rejects(first.join(),{code:'VOICE_POOL_BUSY'});assert.equal(f.pool.slots[0].lease,null);assert.equal(f.connections.length,0);
 });
 
 test('room policy revocation closes only that room and ambiguous commands are refused',async t=>{

@@ -59,7 +59,12 @@ export class VoicePool {
         if(member.voice.channelId){release();continue;}
         const channel=await slot.client.channels.fetch(target.voiceChannelId,{force:true});
         check(!this.stopped&&slot.lease===lease&&slot.client.isReady()&&this.store.lock()?.owner===this.ownerId&&layout(this.policy())===this.binding,'VOICE_POOL_OWNER_CHANGED');
-        return {channel,group:`${this.config.installation}:${slot.applicationId}`,release};
+        if(member.voice.channelId){release();continue;}
+        const beforeConnect=()=>{
+          check(!this.stopped&&slot.lease===lease&&slot.client.isReady()&&this.store.lock()?.owner===this.ownerId&&layout(this.policy())===this.binding,'VOICE_POOL_OWNER_CHANGED');
+          check(!member.voice.channelId,'VOICE_POOL_BUSY');
+        };
+        return {channel,group:`${this.config.installation}:${slot.applicationId}`,release,beforeConnect};
       }catch(error){release();throw error;}
     }
     check(false,'VOICE_POOL_BUSY');

@@ -71,6 +71,7 @@ export class VoiceRoom {
       await this.closing;check(valid(),'VOICE_JOIN_SUPERSEDED');
       admission=await this.acquireConnection?.(this.target);check(valid(),'VOICE_JOIN_SUPERSEDED');
       const channel=admission?.channel??await this.client.channels.fetch(this.config.discord.voiceChannelId);check(valid(),'VOICE_JOIN_SUPERSEDED');check(channel?.guildId===this.config.discord.guildId&&channel.isVoiceBased(),'VOICE_TARGET_MISMATCH');
+      admission?.beforeConnect();
       connection=this.connectionFactory({channelId:channel.id,guildId:channel.guildId,adapterCreator:channel.guild.voiceAdapterCreator,selfDeaf:false,selfMute:false,group:admission?.group??this.config.installation});
       this.connectionAdmission=admission;
       this.connection=connection;this.paused=false;
