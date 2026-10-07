@@ -16,7 +16,7 @@ except ModuleNotFoundError:
     raise unittest.SkipTest("runs in the required Task swarm pytest job")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "runtime"))
 from task_swarm.protocol import SwarmError, digest
-from task_swarm.task_backend import SyntheticTaskBackend
+from task_swarm.task_backend import SyntheticTaskBackend, TaskBackend
 from task_swarm.task_contract import WORK_JOBS
 from task_swarm.task_runner import execute_task, read_json
 
@@ -52,6 +52,25 @@ def setup(tmp_path):
     owner = tmp_path / "owner.json"
     owner.write_text(json.dumps(document), encoding="utf-8")
     return owner, file, document, root
+
+
+def test_every_task_producer_and_verifier_requires_the_dedicated_input_scope(tmp_path):
+    from types import SimpleNamespace
+    _, file, _, _ = setup(tmp_path)
+    payload=json.loads(file.read_text(encoding="utf-8"))
+    dedicated=tmp_path/"dedicated"
+    backend=TaskBackend("not-executed",task_codex_home=dedicated)
+    calls=[]
+    backend.codex=SimpleNamespace(invoke=lambda *args,**kwargs:calls.append(kwargs))
+    options={"timeout":20,"cancel_event":threading.Event(),"on_process":lambda *args:None}
+    reports={}
+    fixture=SyntheticTaskBackend()
+    for job in WORK_JOBS:
+        backend.produce(job,payload,tmp_path/job,**options)
+        reports[job]=fixture.produce(job,payload,tmp_path/job)["result"]
+    backend.review(payload,reports,tmp_path/"review",**options)
+    assert len(calls)==4
+    assert all(call["confidential"] is True and call["task_codex_home"]==dedicated for call in calls)
 
 
 def test_existing_owner_task_reaches_four_jobs_readback_and_idempotent_result(tmp_path):
