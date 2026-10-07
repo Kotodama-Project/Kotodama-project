@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 固定corpusにexact/lexical/日本語ngram/BM25/型付きgraphの基準線と採点・候補manifest・再計算attesterを接続。漏えいと出典改変を平均で隠さず拒否し、合成成果と実Task成果を区別する（#54評価器）。
+
 - 検索・文脈評価の公開用合成corpusを16区分24ケースで固定し、本文・期待値・出典版の変更を検査する契約を追加。評価器は後続で接続する（#54前半）。
 
 - 出典・Concept・Context Packなどの逆引きと有限の影響計算を追加。必須依存、任意参照、失効・矛盾・循環を分け、削除前の依存も保持する。上限超過を完全な結果として扱わない（#53影響計算）。
