@@ -138,6 +138,7 @@
       "properties": {
         "id": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$", "maxLength": 96},
         "adoption_status": {"const": "candidate"},
+        "decision_scope": {"enum": ["canonical_definition_only", "method_candidate_only"]},
         "measurement_role": {"enum": ["product_outcome", "control_slo", "supporting_kpi"]},
         "baseline": {"const": "unknown"},
         "target": {"const": "not_adopted"},
@@ -158,7 +159,7 @@
           "items": {
             "type": "object", "additionalProperties": false, "required": ["type", "target"],
             "properties": {
-              "type": {"enum": ["measured_by", "computed_by", "enabled_by", "observed_by", "advanced_by", "tested_by", "produces", "governed_by", "sequenced_after", "adopts", "revises", "pauses", "rejects", "mitigates"]},
+              "type": {"enum": ["measured_by", "computed_by", "enabled_by", "observed_by", "advanced_by", "tested_by", "produces", "governed_by", "sequenced_after", "adopts", "revises", "pauses", "rejects", "mitigates", "threatens"]},
               "target": {"type": "string", "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$", "maxLength": 96}
             }
           }
