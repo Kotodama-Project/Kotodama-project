@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 検索・文脈評価の公開用合成corpusを16区分24ケースで固定し、本文・期待値・出典版の変更を検査する契約を追加。評価器は後続で接続する（#54前半）。
+
 - 出典・Concept・Context Packなどの逆引きと有限の影響計算を追加。必須依存、任意参照、失効・矛盾・循環を分け、削除前の依存も保持する。上限超過を完全な結果として扱わない（#53影響計算）。
 
 - Source Binding・Concept Revision・型付き関係の閉じたmetadata契約とread-only検査を追加。同じpathのbytes変更やmetadataの不一致を拒否し、opaque出典を未確認として保持する（#53前半）。
