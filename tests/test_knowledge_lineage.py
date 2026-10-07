@@ -119,6 +119,13 @@ class KnowledgeLineageContractTests(unittest.TestCase):
         value = fixture(); value['projections'][0]['concept_revision_refs'] = ['ref/concept-revision/missing']
         self.assertRefused(value, 'LINEAGE_PROJECTION_TARGET_MISSING')
 
+    def test_optional_footnote_aliases_bind_exactly_the_declared_source_set(self):
+        value = fixture(); value['concepts'][0]['source_aliases'] = {'primary': value['sources'][0]['revision_ref']}
+        admitted = admit_snapshot(value)
+        self.assertEqual(value['concepts'][0]['source_aliases'], admitted['concepts'][0]['source_aliases'])
+        value['concepts'][0]['source_aliases']['primary'] = 'ref/source-revision/different'
+        self.assertRefused(value, 'LINEAGE_SOURCE_ALIAS_BINDING')
+
     def test_real_bytes_readback_catches_same_path_change_without_resolving_opaque(self):
         value = fixture()
         with tempfile.TemporaryDirectory() as directory:
