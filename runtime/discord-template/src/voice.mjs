@@ -179,7 +179,7 @@ export class VoiceRoom {
     state.chain=state.chain.then(async()=>{
       if(!turn.text||!this.allowed(state.actor))return;const readers=await this.sourceReaders();if(!this.allowed(state.actor))return;
       const cfg=this.policy(),identified=!cfg.discord.unattributedUsers.includes(state.actor);let transcriptCorrection=null;
-      const declined=Boolean(identified&&state.epoch===this.epoch&&this.audience().includes(state.actor)&&this.proactive.enabled()&&isProactiveDecline(turn.text));
+      const declined=Boolean(cfg.voice.proactive?.enabled&&identified&&state.epoch===this.epoch&&this.audience().includes(state.actor)&&this.proactive.enabled()&&isProactiveDecline(turn.text));
       if(declined)this.proactive.decline();
       if(cfg.voice.contextCorrection&&identified&&typeof this.pipeline.analyzer?.correctTranscript==='function'){
         try{const context=this.store.recentSources(state.actor,{guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceActor:state.actor,limit:3,order:'revision'}).reverse();transcriptCorrection=await this.pipeline.analyzer.correctTranscript(turn.text,context,cfg.voice.wakeWords);}
