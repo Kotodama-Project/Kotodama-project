@@ -4,6 +4,8 @@
 入力・出力契約に加え、既存ownerへ束縛したPOSIXのtask-run入口を備えます。
 Taskとgrantは作成・変更しません。Discord接続と実利用の受入は後続です。
 
+実行時の[Task workerの読取範囲](TASK-SWARM-ISOLATION.md)は別helperで制限します。
+
 ## Task入力と固定plan
 
 入力はversion、Task ID/revision、依頼、最大20件のacceptance、最大10件のSourceです。
