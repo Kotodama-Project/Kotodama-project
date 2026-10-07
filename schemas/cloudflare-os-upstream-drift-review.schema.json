@@ -19,7 +19,10 @@
       "const": "1.0.0"
     },
     "status": {
-      "const": "REVIEW_PACKET_WITH_EXPLICIT_GAPS"
+      "enum": [
+        "REVIEW_PACKET_WITH_EXPLICIT_GAPS",
+        "REVIEW_PACKET_COMPLETE_DIFF_READ_UNVERIFIED"
+      ]
     },
     "reader_packet_sha256": {
       "type": "string",
@@ -234,6 +237,41 @@
             },
             "comments": {
               "type": "boolean"
+            }
+          }
+        },
+        "followup_provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "parent_packet_sha256",
+            "previous_complete_entries_preserved",
+            "newly_complete_entries",
+            "generated_declared_api_guarantee",
+            "owner_independence_accepted"
+          ],
+          "properties": {
+            "parent_packet_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "previous_complete_entries_preserved": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            },
+            "newly_complete_entries": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 99
+            },
+            "generated_declared_api_guarantee": {
+              "type": "boolean",
+              "const": false
+            },
+            "owner_independence_accepted": {
+              "type": "boolean",
+              "const": false
             }
           }
         }

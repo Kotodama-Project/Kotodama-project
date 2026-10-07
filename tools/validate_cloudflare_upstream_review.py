@@ -58,9 +58,14 @@ def validate_packet(packet: dict) -> dict:
     if paths != sorted(set(paths)) or any(PurePosixPath(p).is_absolute() or ".." in PurePosixPath(p).parts for p in paths):
         raise ReviewViolation("paths must be unique, sorted repository-relative paths")
     partial = [row["path"] for row in rows if not row["read_complete"]]
+    if packet["status"] == "REVIEW_PACKET_COMPLETE_DIFF_WITH_RUNTIME_GAPS" and partial:
+        raise ReviewViolation("complete diff status cannot retain unread files")
     if (summary["inventoried_count"] != len(rows) or summary["actual_read_count"] != len(rows) - len(partial)
             or summary["partial_read_count"] != len(partial) or summary["coverage_gaps"] != partial):
         raise ReviewViolation("declared read coverage does not match every file")
+    followup = summary.get("followup_provenance")
+    if followup and followup["previous_complete_entries_preserved"] + followup["newly_complete_entries"] != summary["actual_read_count"]:
+        raise ReviewViolation("followup declared read counts mismatch")
     if sum(row["added_lines"] for row in rows) != 19090 or sum(row["deleted_lines"] for row in rows) != 1627:
         raise ReviewViolation("diff line totals mismatch")
     for row in rows:

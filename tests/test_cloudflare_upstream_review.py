@@ -18,9 +18,9 @@ class CloudflareUpstreamReviewTests(unittest.TestCase):
     def setUp(self):
         self.packet = review.load_packet()
 
-    def test_current_packet_retains_partial_reads_and_no_adoption(self):
+    def test_current_packet_reports_read_coverage_without_adoption(self):
         result = review.validate_packet(self.packet)
-        self.assertEqual(result, {"files": 99, "declared_complete_diff_reads": 79, "declared_partial_diff_reads": 20})
+        self.assertEqual(result, {"files": 99, "declared_complete_diff_reads": 99, "declared_partial_diff_reads": 0})
         output = io.StringIO()
         with redirect_stdout(output):
             self.assertEqual(review.main([]), 0)
@@ -30,7 +30,12 @@ class CloudflareUpstreamReviewTests(unittest.TestCase):
         self.assertEqual(result["public_beta"], "NO_GO_UNPUBLISHED")
 
     def test_partial_read_cannot_silently_become_complete(self):
-        row = next(row for row in self.packet["files"] if not row["read_complete"])
+        row = next(row for row in self.packet["files"] if row["path"].endswith("worker-configuration.d.ts"))
+        row.update(read_complete=False, review_mode="generated_header_and_provenance_only", unresolved=["synthetic partial read"])
+        self.packet["status"] = "REVIEW_PACKET_WITH_EXPLICIT_GAPS"
+        self.packet["summary"].update(actual_read_count=98, partial_read_count=1, coverage_gaps=[row["path"]])
+        self.packet["summary"]["followup_provenance"]["newly_complete_entries"] = 19
+        review.validate_packet(self.packet)
         row["read_complete"] = True
         with self.assertRaises(review.ReviewViolation):
             review.validate_packet(self.packet)
@@ -44,7 +49,7 @@ class CloudflareUpstreamReviewTests(unittest.TestCase):
             "invented approval": lambda p: p["summary"].update(no_independence_acceptance=False),
             "provider effects": lambda p: p["summary"]["effects"].update(provider_mutation=1),
             "invented test": lambda p: p["summary"].update(tests_executed=["passed"]),
-            "removed gap": lambda p: p["summary"]["coverage_gaps"].pop(),
+            "invented gap": lambda p: p["summary"].update(coverage_gaps=["unknown-path"]),
             "boolean count": lambda p: p["summary"].update(actual_read_count=True),
             "wrong add blob": lambda p: p["files"][0].update(old_blob="1" * 40),
         }

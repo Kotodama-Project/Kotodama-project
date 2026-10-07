@@ -13,8 +13,9 @@ baseline.
 ## 固定された上流差分のレビュー記録
 
 [`upstream-drift-review.json`](upstream-drift-review.json) はIssue #11の固定2版、
-99ファイル（+19,090 / -1,627）のreader記録です。別readerが79ファイルのdiff読解を
-申告し、generated declarations 19件とlockfileは部分確認として残しています。
+99ファイル（+19,090 / -1,627）のreader記録です。別readerがgenerated declarations
+19件とlockfileを含む全99ファイルの固定diffを読解し、未読範囲はゼロになりました。
+これは差分の読解であり、生成物の再現・型検査・runtime互換性は未確認です。
 schema、件数、gap、blob IDと行数を検査できる構造にしたもので、validatorは読解の意味・
 reviewer本人・独立性承認・実行結果を証明しません。元のlocal-runtime-evaluationは保持します。
 
