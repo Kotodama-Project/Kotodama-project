@@ -32,11 +32,15 @@ class LocalRevisionOwner:
             raise KnowledgeBaseError('LINEAGE_OWNER_PATH')
         self.root, self.original_root, self.database, self.authorize = root, original_root, database, authorize
         self._safe_path()
+        creating = not database.exists()
+        if creating:
+            self._authorize('initialize', (), 0, None)
+            self._safe_path()
         database.parent.mkdir(parents=True, exist_ok=True)
-        with self._transaction('initialize', (), None) as db:
+        with self._transaction('initialize', (), 0 if creating else None, initialization_authorized=creating) as db:
             application = db.execute('PRAGMA application_id').fetchone()[0]
-            tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-            if application != 0x4B544C4E and tables:
+            objects = db.execute("SELECT name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'").fetchall()
+            if application != 0x4B544C4E and (application != 0 or objects):
                 raise KnowledgeBaseError('LINEAGE_OWNER_UNRECOGNIZED_STORE')
             if application == 0x4B544C4E and db.execute('PRAGMA user_version').fetchone()[0] != 1:
                 raise KnowledgeBaseError('LINEAGE_OWNER_STORE_VERSION')
@@ -75,7 +79,7 @@ class LocalRevisionOwner:
                 raise KnowledgeBaseError('LINEAGE_OWNER_UNSAFE_PATH')
 
     @contextmanager
-    def _transaction(self, action, refs, expected_generation, request_digest=None):
+    def _transaction(self, action, refs, expected_generation, request_digest=None, *, initialization_authorized=False):
         self._safe_path()
         db = None
         try:
@@ -86,13 +90,8 @@ class LocalRevisionOwner:
             generation = db.execute('SELECT generation FROM state WHERE id=1').fetchone()[0] if exists else 0
             if expected_generation is not None and (type(expected_generation) is not int or generation != expected_generation):
                 raise KnowledgeBaseError('LINEAGE_OWNER_GENERATION_CONFLICT')
-            try:
-                allowed = self.authorize({'action': action, 'revision_refs': sorted(refs), 'generation': generation,
-                                          'request_sha256': request_digest})
-            except Exception as exc:
-                raise KnowledgeBaseError('LINEAGE_OWNER_AUTHORIZATION_UNAVAILABLE') from exc
-            if allowed is not True:
-                raise KnowledgeBaseError('LINEAGE_OWNER_FORBIDDEN')
+            if not initialization_authorized:
+                self._authorize(action, refs, generation, request_digest)
             yield db
             self._safe_path()
             db.execute('COMMIT')
@@ -101,6 +100,15 @@ class LocalRevisionOwner:
         finally:
             if db is not None:
                 db.close()  # Rolls back any transaction not committed above.
+
+    def _authorize(self, action, refs, generation, request_digest):
+        try:
+            allowed = self.authorize({'action': action, 'revision_refs': sorted(refs), 'generation': generation,
+                                      'request_sha256': request_digest})
+        except Exception as exc:
+            raise KnowledgeBaseError('LINEAGE_OWNER_AUTHORIZATION_UNAVAILABLE') from exc
+        if allowed is not True:
+            raise KnowledgeBaseError('LINEAGE_OWNER_FORBIDDEN')
 
     @staticmethod
     def _receipt(db, action, refs, *, changed):
@@ -174,11 +182,18 @@ class LocalRevisionOwner:
                     changed |= bool(inserted)
             return self._receipt(db, 'register', [r[0] for r in records], changed=changed)
 
-    def _eligible(self, db, revision_ref, active=None):
+    def _eligible(self, db, revision_ref, active=None, completed=None):
         active = set() if active is None else active
+        completed = {} if completed is None else completed
         if revision_ref in active or len(active) >= 32:
             raise KnowledgeBaseError('LINEAGE_OWNER_DEPENDENCY_CYCLE_OR_LIMIT')
+        if revision_ref in completed:
+            concept, height = completed[revision_ref]
+            if len(active) + height > 32:
+                raise KnowledgeBaseError('LINEAGE_OWNER_DEPENDENCY_CYCLE_OR_LIMIT')
+            return concept
         active.add(revision_ref)
+        height = 1
         record = self._record(db, revision_ref, 'concept'); concept = record['concept']
         if concept['parent_revision_ref'] is not None:
             parent = self._record(db, concept['parent_revision_ref'], 'concept')['concept']
@@ -191,6 +206,8 @@ class LocalRevisionOwner:
             if source['access_state'] != 'allowed' or db.execute('SELECT 1 FROM invalidations WHERE key=?', (source['invalidation_key'],)).fetchone():
                 raise KnowledgeBaseError('LINEAGE_OWNER_ACCESS_WITHHELD')
         for relation in record['relations']:
+            if relation['predicate'] == 'conflicts_with' and relation['resolution'] == 'resolved' and relation['validity'] == 'current':
+                raise KnowledgeBaseError('LINEAGE_OWNER_REVISION_WITHHELD')
             if not relation['required']:
                 continue
             if relation['resolution'] != 'resolved' or relation['validity'] != 'current':
@@ -199,13 +216,15 @@ class LocalRevisionOwner:
                 if relation['target_revision_ref'] not in concept['source_revision_refs']:
                     raise KnowledgeBaseError('LINEAGE_OWNER_REQUIRED_UNRESOLVED')
             elif relation['target_kind'] == 'concept' and relation['predicate'] not in {'supersedes', 'invalidates', 'conflicts_with'}:
-                target = self._eligible(db, relation['target_revision_ref'], active)
+                target = self._eligible(db, relation['target_revision_ref'], active, completed)
+                height = max(height, 1 + completed[relation['target_revision_ref']][1])
                 row = db.execute('SELECT revision_ref FROM pointers WHERE logical_id=?', (target['concept_id'],)).fetchone()
                 if row != (target['revision_ref'],):
                     raise KnowledgeBaseError('LINEAGE_OWNER_DEPENDENCY_NOT_CURRENT')
             else:
                 raise KnowledgeBaseError('LINEAGE_OWNER_REQUIRED_UNRESOLVED')
         active.remove(revision_ref)
+        completed[revision_ref] = (concept, height)
         return concept
 
     def publish(self, revision_ref, *, expected_parent_ref, expected_generation):
@@ -231,6 +250,9 @@ class LocalRevisionOwner:
             known = [json.loads(row[0]) for row in db.execute("SELECT body FROM records WHERE kind='source'")]
             if not any(row['invalidation_key'] == invalidation_key for row in known):
                 raise KnowledgeBaseError('LINEAGE_OWNER_INVALIDATION_UNKNOWN')
+            previous = db.execute('SELECT evidence_ref FROM invalidations WHERE key=?', (invalidation_key,)).fetchone()
+            if previous is not None and previous != (evidence_ref,):
+                raise KnowledgeBaseError('LINEAGE_OWNER_REVOCATION_EVIDENCE_CONFLICT')
             changed = db.execute('INSERT OR IGNORE INTO invalidations VALUES(?,?,?)',
                                  (invalidation_key, evidence_ref, expected_generation + 1)).rowcount == 1
             return self._receipt(db, 'revoke', (invalidation_key, evidence_ref), changed=changed)
