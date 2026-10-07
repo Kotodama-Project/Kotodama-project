@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Discordの自発参加を既定無効で追加。短い手がかり判定と固定の申し出、永続の頻度制限、断り後の沈黙、出力専用Liveを備え、Taskは明示依頼後に扱う。実VCは未受入（#150）。
+
 - Discordの任意Bot poolで複数VCをroom別に管理し、満杯時のbusyと対象roomを指定した操作・同意を追加。単一VC互換を維持し、実VCの受入は別に記録する（#142）。
 - 現在のConcept/出典の版を既存v2 Context Packへ束縛し、利用直前にowner generation・bytes・期限・scopeを照合するgateを追加。opaque locatorを伏せ、結果不明の配送を再送せず、生成したPackを影響indexへ接続する（#53文脈の接続）。
 
