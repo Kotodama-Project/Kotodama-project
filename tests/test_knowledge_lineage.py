@@ -178,6 +178,32 @@ class KnowledgeLineageContractTests(unittest.TestCase):
         for value in ({'x': float('nan')}, {'x': b'private-test-value'}, {'x': 'x' * (1024 * 1024 + 1)}):
             self.assertRefused(value)
 
+    def test_missing_parent_requires_an_explicit_unresolved_state(self):
+        value = fixture(); value['concepts'][0]['parent_revision_ref'] = 'ref/concept-revision/absent'
+        self.assertRefused(value, 'LINEAGE_PARENT_UNRESOLVED')
+        value['concepts'][0]['parent_resolution'] = 'external_unresolved'
+        from kotodama_kb.lineage_contract import unresolved_parent_refs
+        self.assertEqual(['ref/concept-revision/absent'], unresolved_parent_refs(admit_snapshot(value)))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'snapshot.json'; path.write_text(json.dumps(value), encoding='utf-8')
+            result = subprocess.run([sys.executable, str(ROOT / 'tools/knowledge_lineage.py'), 'validate', '--snapshot', str(path)],
+                                    capture_output=True, text=True, encoding='utf-8', timeout=20)
+            self.assertEqual(1, result.returncode); self.assertEqual('NEEDS_RESOLUTION', json.loads(result.stdout)['status'])
+        value['concepts'][0]['parent_revision_ref'] = None
+        self.assertRefused(value, 'LINEAGE_PARENT_RESOLUTION_MISMATCH')
+
+    def test_case_colliding_public_locators_are_not_portable_bindings(self):
+        value = fixture(); alias = copy.deepcopy(value['sources'][0])
+        alias.update(source_id='ref/source/beta', revision_ref='ref/source-revision/beta', locator='docs/SYNTHETIC-SOURCE.md')
+        value['sources'].append(alias)
+        self.assertRefused(value, 'LINEAGE_LOCATOR_CASE_COLLISION')
+
+    def test_resolved_external_relations_require_an_exact_revision(self):
+        value = fixture(); value['relations'][0].update(target_kind='goal', target_id='OUT-INTENT', target_revision_ref=None)
+        self.assertRefused(value, 'LINEAGE_RELATION_REVISION_REQUIRED')
+        value['relations'][0]['target_revision_ref'] = 'ref/goal-revision/one'
+        admit_snapshot(value)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -23,6 +23,7 @@ KEY = 'ref/invalidation/alpha'
 
 def revision(ref, parent):
     value = fixture(); value['concepts'][0].update(revision_ref=ref, parent_revision_ref=parent)
+    if parent is not None: value['concepts'][0]['parent_resolution'] = 'external_unresolved'
     value['relations'][0]['from_revision_ref'] = ref
     value['projections'][0]['concept_revision_refs'] = [ref]
     return value
@@ -133,6 +134,17 @@ class KnowledgeRevisionOwnerTests(unittest.TestCase):
         with self.assertRaisesRegex(KnowledgeBaseError, 'UNSAFE_PATH'):
             LocalRevisionOwner(alias / 'work/owner.sqlite', repository_root=alias, authorize=self.authorize)
         self.assertFalse((target / 'work/owner.sqlite').exists())
+
+    def test_external_parent_is_resolved_in_owner_and_cannot_cross_logical_ids(self):
+        self.register_first()
+        missing = revision(SECOND, 'ref/concept-revision/missing')
+        with self.assertRaisesRegex(KnowledgeBaseError, 'RECORD_MISSING'):
+            self.owner.register(missing, expected_generation=2)
+        self.assertEqual(2, self.owner.generation())
+        wrong = revision(SECOND, FIRST); wrong['concepts'][0]['concept_id'] = 'synthetic/other'
+        with self.assertRaisesRegex(KnowledgeBaseError, 'PARENT_MISMATCH'):
+            self.owner.register(wrong, expected_generation=2)
+        self.assertEqual(2, self.owner.generation())
 
 
 if __name__ == '__main__':

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from kotodama_kb.foundation import KnowledgeBaseError
-from kotodama_kb.lineage_contract import read_snapshot, digest, validate_public_bytes
+from kotodama_kb.lineage_contract import read_snapshot, digest, validate_public_bytes, unresolved_parent_refs
 from kotodama_kb.lineage_impact import project_lineage, compare_lineage
 
 
@@ -23,7 +23,7 @@ def main(argv=None):
             if args.root is None:
                 raise KnowledgeBaseError('LINEAGE_ROOT_REQUIRED')
             result = validate_public_bytes(snapshot, repository_root=args.root)
-            successful = result['local_bytes_match'] and not result['opaque_unverified_revision_refs']
+            successful = result['local_bytes_match'] and not result['opaque_unverified_revision_refs'] and not result['unresolved_parent_revision_refs']
         elif args.command in {'index', 'impact'}:
             if args.command == 'impact':
                 if args.before is None:
@@ -34,9 +34,11 @@ def main(argv=None):
             successful = projection['complete'] and not projection['quarantine_revision_refs']
             result = {'projection': projection}
         else:
-            successful = True
+            parents = unresolved_parent_refs(snapshot)
+            successful = not parents
             result = {'snapshot_sha256': digest(snapshot), 'authority': 'projection_only',
                       'source_count': len(snapshot['sources']), 'concept_count': len(snapshot['concepts']),
+                      'unresolved_parent_revision_refs': parents,
                       'access_authenticated': False, 'current_pointer_verified': False}
         print(json.dumps({'status': 'LOCAL_METADATA_PASS' if successful else 'NEEDS_RESOLUTION', **result}, sort_keys=True))
         return 0 if successful else 1

@@ -161,6 +161,12 @@ class LocalRevisionOwner:
                     raise KnowledgeBaseError('LINEAGE_OWNER_CAPACITY')
                 db.execute('INSERT INTO records VALUES(?,?,?,?,?)', (ref, kind, logical, json.dumps(canonical(body), sort_keys=True), fingerprint))
                 changed = True
+            for concept in snapshot['concepts']:
+                parent_ref = concept['parent_revision_ref']
+                if parent_ref is not None:
+                    parent = self._record(db, parent_ref, 'concept')['concept']
+                    if parent['concept_id'] != concept['concept_id']:
+                        raise KnowledgeBaseError('LINEAGE_OWNER_PARENT_MISMATCH')
             for source in snapshot['sources']:
                 if source['access_state'] != 'allowed':
                     inserted = db.execute('INSERT OR IGNORE INTO invalidations VALUES(?,?,?)',
@@ -174,6 +180,10 @@ class LocalRevisionOwner:
             raise KnowledgeBaseError('LINEAGE_OWNER_DEPENDENCY_CYCLE_OR_LIMIT')
         active.add(revision_ref)
         record = self._record(db, revision_ref, 'concept'); concept = record['concept']
+        if concept['parent_revision_ref'] is not None:
+            parent = self._record(db, concept['parent_revision_ref'], 'concept')['concept']
+            if parent['concept_id'] != concept['concept_id']:
+                raise KnowledgeBaseError('LINEAGE_OWNER_PARENT_MISMATCH')
         if concept['status'] != 'candidate':
             raise KnowledgeBaseError('LINEAGE_OWNER_REVISION_WITHHELD')
         for source_ref in concept['source_revision_refs']:
@@ -232,6 +242,7 @@ class LocalRevisionOwner:
                 raise KnowledgeBaseError('LINEAGE_OWNER_POINTER_MISSING')
             concept = self._eligible(db, row[0])
             return {'concept': concept, 'generation': db.execute('SELECT generation FROM state WHERE id=1').fetchone()[0],
+                    'direct_parent_checked_in_local_owner': True,
                     'authority': 'local_revision_pointer_only', 'source_access_authenticated': False, 'serving_authorized': False}
 
     @staticmethod
