@@ -77,7 +77,7 @@ def test_shared_or_aliased_auth_is_refused_before_sandbox(tmp_path, kind):
 
 
 @pytest.mark.skipif(os.name != "posix", reason="actual POSIX Codex sandbox")
-def test_actual_codex_sandbox_denies_sibling_and_metadata_reads_without_a_model(tmp_path):
+def test_actual_codex_sandbox_denies_sibling_and_metadata_reads_without_a_model(tmp_path, monkeypatch):
     executable = os.environ.get("KOTODAMA_TEST_CODEX_SANDBOX")
     if not executable:
         pytest.skip("the CI job installs and pins the Codex sandbox binary")
@@ -89,7 +89,19 @@ def test_actual_codex_sandbox_denies_sibling_and_metadata_reads_without_a_model(
     attempt.mkdir()
     scope = ConfidentialScope(attempt, executable, task_codex_home=auth_home,
                               environment={"PATH":os.environ["PATH"],"CODEX_HOME":str(tmp_path/"ambient")})
-    proof = scope.preflight()
+    import subprocess
+    run = subprocess.run
+    observed = []
+    def capture(*args, **kwargs):
+        result = run(*args, **kwargs)
+        observed.append((result.returncode,result.stdout[:2000],result.stderr[:4000]))
+        return result
+    monkeypatch.setattr(subprocess,"run",capture)
+    try:
+        proof = scope.preflight()
+    except SwarmError:
+        # This test has only synthetic files/auth; retain bounded CLI diagnostics.
+        pytest.fail(repr(observed))
     assert proof["outer_read_denied"] and proof["inner_metadata_read_denied"]
     assert proof["model_called"] is False
     command = scope.wrap([str(Path(executable).resolve()),"exec","-s","read-only","-"])
