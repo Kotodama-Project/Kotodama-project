@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Discordの明示Company Pack接続と既存Taskへの成果readbackを、PROJECT-MAP/STATUS/導入説明へ反映。実Linux検証と実Discord未受入を区別する（#152）。
+
 - 明示CLI/slashのCompany Pack作成を既存local Task ownerへ接続。modelには選ばせず、Linux・固定Docker・専用出力rootで生成とhashを検査し、同じTaskの成果へ返す。実Discordは未受入（#152接続）。
 
 - Company Pack executorにDiscord local ownerのSQLiteを読取専用で照合するbindingを追加。Task/Source/Intentの現在版と明示コマンドを束縛し、別Task台帳を作らず既存record方式を維持する（#152前半）。

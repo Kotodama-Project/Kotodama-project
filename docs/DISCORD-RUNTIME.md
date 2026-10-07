@@ -38,9 +38,15 @@ PR #79でこのNodeテンプレートのsourceはmainへ統合済みです。新
 このruntimeに無い考え方は[#142](https://github.com/Kotodama-Project/Kotodama-project/issues/142)〜[#146](https://github.com/Kotodama-Project/Kotodama-project/issues/146)、実音声の受入手順は[#154](https://github.com/Kotodama-Project/Kotodama-project/issues/154)で扱います。
 同じVCを二つのruntimeに所有させません。
 
-この導入候補はpublic mainの既存Company Pack実行や確認Gatewayへ
-自動接続済みではありません。個人構成ではlocal ownerを一つ選び、
-組織構成では既存ownerへ明示接続します。Taskや知識の二重正本を作らない統合は残件です。
+[Company Pack実行](COMPANY-PACK-TASK-EXECUTION.md)は、Linuxのlocal ownerで
+`create_company_pack`を明示したCLI/slash requestから接続できます。既定無効で、
+analyzerは選びません。既存SQLiteの同じTask/Source/Intent版を読取り、固定Pythonで
+実Packを生成し、固定Dockerのreadonly/no-network検証と成果readbackを経て、
+同じTaskを`needs_review`へ戻します。別Task台帳、Work Order、capabilityを発行しません。
+
+現在grant・出典版・出力scope・設定・期限を維持し、Windows/macOSのlocal書込みと
+remote ownerは拒否します。実Linux HTTP経路をCIで検証済みですが、実Discord/Human受入は
+未実施です。確認Gatewayと組織の既存ownerへの統合、Taskと知識の全経路の接続は残件です。
 
 統合時点（2026-09-13）の実マイクでは、一度の返答後に継続応答が不安定だった観測があり、
 ローカルASRのモデル・認識・開始条件の修正が残っています。
