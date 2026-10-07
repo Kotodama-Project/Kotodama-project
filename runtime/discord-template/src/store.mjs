@@ -171,7 +171,9 @@ export class Store {
     check(['queued','needs_review','failed','paused','cancelled','stale'].includes(task.state),'TASK_CORRECTION_BUSY');
     check(taskRevision===null||task.revision===taskRevision,'TASK_CHANGED');check(sourceRevision===null||source.revision===sourceRevision,'SOURCE_CHANGED');
     const busy=this.statement("SELECT id FROM tasks WHERE state IN ('running','stopping','uncertain') AND (source_key=? OR id IN (SELECT task_id FROM task_source_bindings WHERE source_key=?)) LIMIT 1").get(source.key,source.key);
-    check(!busy,'TASK_CORRECTION_BUSY');return {task,source};
+    check(!busy,'TASK_CORRECTION_BUSY');
+    const shared=this.statement('SELECT id FROM tasks WHERE id<>? AND (source_key=? OR id IN (SELECT task_id FROM task_source_bindings WHERE source_key=?)) LIMIT 1').get(id,source.key,source.key);
+    check(!shared,'TASK_CORRECTION_SHARED_SOURCE');return {task,source};
   }
   correctTask(id,actor,{taskRevision,sourceRevision,title,request,acceptance,interactionId,at}){
     check(Number.isSafeInteger(taskRevision)&&taskRevision>0&&Number.isSafeInteger(sourceRevision)&&sourceRevision>=0,'CORRECTION_REVISION_REQUIRED');
@@ -180,7 +182,8 @@ export class Store {
     check(typeof interactionId==='string'&&/^\d{5,24}$/.test(interactionId)&&Number.isSafeInteger(at)&&at>=0,'CORRECTION_PROVENANCE_REQUIRED');
     return this.transaction(()=>{
       const {task,source}=this.correctionTarget(id,actor,{taskRevision,sourceRevision}),revision=Math.max(at,source.revision+1);check(Number.isSafeInteger(revision),'SOURCE_REVISION_REQUIRED');
-      const updated={...source,text:request,revision,metadata:{...source.metadata,transcriptCorrection:null,command:{title,request,action:task.action,acceptance},manualCorrection:{surface:'discord_native_ui',actor,interactionId,at:new Date(at).toISOString(),previousSourceRevision:source.revision,previousTaskRevision:task.revision,taskId:id}}};
+      const origin=source.metadata?.kind==='voice'?{transcriptOrigin:'manual_correction',finality:'manual_correction',archiveSessionRefs:[]}:{};
+      const updated={...source,text:request,revision,metadata:{...source.metadata,...origin,transcriptCorrection:null,command:{title,request,action:task.action,acceptance},manualCorrection:{surface:'discord_native_ui',actor,interactionId,at:new Date(at).toISOString(),previousSourceRevision:source.revision,previousTaskRevision:task.revision,taskId:id}}};
       this.ingest(updated);const intentIds=this.saveIntents(updated,[{kind:'request',title,request,action:task.action,acceptance,explicit:true,complete:true,targetTaskId:id,origin:'native_correction',contextSources:[{key:source.key,revision}]}],actor);
       return this.reviseTask(id,updated,{title,request,action:task.action,acceptance,intentIds,requiredActions:task.requiredActions??[task.action],contextSources:[{key:source.key,revision}]});
     });

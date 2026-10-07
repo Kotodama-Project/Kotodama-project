@@ -9,13 +9,13 @@ export function parseCorrectionId(value,kind){
   const taskRevision=parseInt(match[3],36),sourceRevision=parseInt(match[4],36);check(Number.isSafeInteger(taskRevision)&&taskRevision>0&&Number.isSafeInteger(sourceRevision)&&sourceRevision>=0,'CORRECTION_ID_INVALID');return {id:match[2],taskRevision,sourceRevision};
 }
 export function correctionModal(target){
-  const {task,source}=target;check(source.text.length<=4000&&task.title.length<=120&&task.acceptance.join('\n').length<=4000,'CORRECTION_TOO_LARGE_FOR_MODAL');
-  const field=(id,label,value,style,max,required=true)=>({type:18,label,component:{type:4,custom_id:id,style,value,max_length:max,required}});
+  // Opening performs no network/Source read and discloses no cached private text.
+  const field=(id,label,style,max,required=true)=>({type:18,label,component:{type:4,custom_id:id,style,max_length:max,required}});
   return {custom_id:correctionId(target,'submit'),title:'依頼を訂正して実行',components:[
-    field('title','件名',task.title,1,120),field('request','元の依頼（訂正後）',source.text,2,4000),field('acceptance','できたと判断する条件（1行ずつ）',task.acceptance.join('\n'),2,4000,false)
+    field('title','訂正後の件名',1,120),field('request','訂正後の依頼（全文）',2,4000),field('acceptance','できたと判断する条件（1行ずつ）',2,4000,false)
   ]};
 }
-const notice=error=>error.code==='TASK_CORRECTION_BUSY'?'関連する仕事の処理が終わってから訂正してください。実行中なら停止し、終了を確認してください。':['SOURCE_CHANGED','TASK_CHANGED'].includes(error.code)?'内容が更新されています。仕事の一覧を開き直してから訂正してください。':`訂正できませんでした：${errorCode(error)}`;
+const notice=error=>error.code==='TASK_CORRECTION_BUSY'?'関連する仕事の処理が終わってから訂正してください。実行中なら停止し、終了を確認してください。':error.code==='TASK_CORRECTION_SHARED_SOURCE'?'この出典は別の仕事でも使われています。音声・テキストで対象の仕事を指定して訂正を依頼してください。':['SOURCE_CHANGED','TASK_CHANGED'].includes(error.code)?'内容が更新されています。仕事の一覧を開き直してから訂正してください。':`訂正できませんでした：${errorCode(error)}`;
 
 export class NativeCorrections {
   constructor(adapter){this.adapter=adapter;}
@@ -33,18 +33,16 @@ export class NativeCorrections {
     const adapter=this.adapter,accessGeneration=adapter.accessGeneration;
     const assertCurrent=()=>check(adapter.accessGeneration===accessGeneration,'SOURCE_ACCESS_DENIED');
     try{
-      check(adapter.verifiedInstallation&&i.guildId===adapter.policy().discord.guildId,'SOURCE_ACCESS_DENIED');adapter.operator(i.user.id);await adapter.member(i.user.id);
+      check(adapter.verifiedInstallation&&i.guildId===adapter.policy().discord.guildId,'SOURCE_ACCESS_DENIED');adapter.operator(i.user.id);
       if(i.isModalSubmit?.()){
-        await i.deferReply({flags:MessageFlags.Ephemeral});const {id,...expected}=parseCorrectionId(i.customId,'submit');
+        await i.deferReply({flags:MessageFlags.Ephemeral});await adapter.member(i.user.id);const {id,...expected}=parseCorrectionId(i.customId,'submit');
         const acceptance=i.fields.getTextInputValue('acceptance').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
         const task=await adapter.pipeline.correctTask(id,i.user.id,{...expected,title:i.fields.getTextInputValue('title').trim(),request:i.fields.getTextInputValue('request').trim(),acceptance,interactionId:i.id,at:i.createdTimestamp},{assertCurrent});
         await i.editReply({content:`訂正を同じ仕事へ反映しました。\n${task.id}\n結果は「result」で確認できます。`,components:[],allowedMentions:{parse:[]}});return;
       }
       const value=i.isStringSelectMenu?.()?(check(i.customId==='kc:select'&&i.values?.length===1,'CORRECTION_ID_INVALID'),i.values[0]):i.customId;
-      const {id,...expected}=parseCorrectionId(value,'edit'),target=await this.target(id,i.user.id,expected);
-      const current=adapter.pipeline.currentCorrectionTarget(id,i.user.id,{taskRevision:target.task.revision,sourceRevision:target.source.revision});
-      assertCurrent();
-      await i.showModal(correctionModal(current));
+      const {id,taskRevision,sourceRevision}=parseCorrectionId(value,'edit');
+      await i.showModal(correctionModal({task:{id,revision:taskRevision},source:{revision:sourceRevision}}));
     }catch(error){const body={content:notice(error),allowedMentions:{parse:[]}};if(i.deferred)await i.editReply({...body,components:[]});else if(!i.replied)await i.reply({...body,flags:MessageFlags.Ephemeral});}
   }
 }

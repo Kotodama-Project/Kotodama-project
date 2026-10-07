@@ -4,7 +4,7 @@
 
 ## native UIの訂正（#151）
 
-button/select/modalから、元のSource keyの新版と同じTask IDの新版へ戻すlocal owner実装です。SDKのpayload検査とSQLite/Pipelineの合成試験で、text/voiceの訂正、音声の後続SourceとUIの連続履歴、CAS、別人、古いUI、二重送信、現在grant、送信直前のSource変更、関連処理の終了不明、remote拒否を検査します。原文と訂正metadataを保存し、UI専用の正本は作りません。
+button/select/modalから、元のSource keyの新版と同じTask IDの新版へ戻すlocal owner実装です。SDKのpayload検査とSQLite/Pipelineの合成試験で、text/voiceの訂正、音声の後続SourceとUIの連続履歴、CAS、別人、古いUI、二重送信、現在grant、送信直前のSource変更、関連処理の終了不明、共有Sourceによる他Task成果の保持、空modalの即時応答とsubmitの先行defer、手動訂正のASR区別・archive置換防止、remote拒否を検査します。原文と訂正metadataを保存し、UI専用の正本は作りません。
 
 実Discordでの確認は**未受入**です。人が、明示依頼のTask IDを記録し、自由文編集・音声での後続訂正・native modalを順に操作して、同じTask履歴と新旧Source参照へ戻ることを確認します。もう一人の操作拒否、古いフォームの拒否、選択だけでは実行されないこと、訂正後の成果を読み戻した結果も #151 に記録します。
 

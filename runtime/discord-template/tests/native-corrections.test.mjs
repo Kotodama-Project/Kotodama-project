@@ -98,10 +98,38 @@ test('invalid correction fields roll back without changing the Source history',a
   assert.equal(f.store.source(f.created.source_key,a).revision,100);assert.equal(f.store.db.prepare('SELECT COUNT(*) AS n FROM source_versions').get().n,1);
 });
 
-test('malformed IDs and oversized prefills are refused rather than truncated',async t=>{
+test('malformed IDs are refused and forms never copy private prefills',async t=>{
   const f=await fixture(t);for(const value of ['kc:submit:task-x:NaN:1','kc:edit:task-x:zzzzzzzzzzzzzz:1','kc:edit:task-x:0:1'])assert.throws(()=>parseCorrectionId(value,'edit'));
-  const target=f.target();target.source.text='x'.repeat(4001);assert.throws(()=>correctionModal(target),{code:'CORRECTION_TOO_LARGE_FOR_MODAL'});
+  const target=f.target();target.source.text='x'.repeat(4001);assert(correctionModal(target).components.every(c=>!('value' in c.component)));
   assert.deepEqual(await f.adapter.corrections.buttons(f.created.id,a,undefined),[]);
+});
+
+for(const viaContext of [false,true])test(`shared Source correction preserves another completed Task (${viaContext?'context':'primary'})`,async t=>{
+  const f=await fixture(t),input=f.input(),source=f.target().source;
+  const siblingSource=viaContext?{...source,sourceId:'sibling-source',key:undefined}:source;
+  if(viaContext)siblingSource.key=f.store.ingest(siblingSource).key;
+  const sibling=f.store.createTask(siblingSource,{key:'sibling',title:'保持する別の仕事',request:'別の依頼',action:'research',contextSources:viaContext?[{key:source.key,revision:source.revision}]:[]});
+  f.store.claim(sibling.id,sibling.revision);f.store.finish(sibling.id,sibling.revision,{state:'needs_review',summary:'保持する成果',artifacts:[]});const before=f.store.taskInternal(sibling.id);
+  await assert.rejects(f.pipeline.correctTask(f.created.id,a,input),{code:'TASK_CORRECTION_SHARED_SOURCE'});assert.deepEqual(f.store.taskInternal(sibling.id),before);assert.equal(f.store.source(source.key,a).revision,100);
+});
+
+test('blank modal opens immediately without waiting for network authorization',async t=>{
+  const f=await fixture(t),i=f.interaction('button',correctionId(f.target()));let release;const wait=new Promise(resolve=>{release=resolve;});f.adapter.member=()=>wait;
+  const running=f.adapter.interaction(i);try{assert(i.modal);assert(i.modal.components.every(c=>!('value' in c.component)));}finally{release();await running;}
+});
+
+test('modal submission defers its response before slow membership authorization',async t=>{
+  const f=await fixture(t),i=f.interaction('modal',correctionId(f.target(),'submit'));let release;const wait=new Promise(resolve=>{release=resolve;});f.adapter.member=()=>wait;
+  const running=f.adapter.interaction(i);try{assert.equal(i.deferred,true);}finally{release();await running;await f.pipeline.tail;}
+});
+
+test('manual correction stays distinct from ASR and is not replaced by an archive projection',async t=>{
+  const f=await fixture(t,'voice'),original=f.target().source;
+  await f.pipeline.ingest({...original,revision:150,metadata:{...original.metadata,archiveSessionRefs:['synthetic-archive']}},{analyze:false});
+  const updated=await f.pipeline.correctTask(f.created.id,a,f.input());await f.pipeline.tail;
+  const current=f.store.source(updated.source_key,a);assert.equal(current.metadata.transcriptOrigin,'manual_correction');assert.equal(current.metadata.finality,'manual_correction');
+  f.store.ingest({...original,sourceId:'archive-projection',revision:151,text:'archive transcript',metadata:{kind:'archived_voice',sessionId:'synthetic-archive'}});
+  assert(f.store.contextSources(a,{guildId:f.config.discord.guildId,channelId:f.config.discord.resultChannelId}).some(source=>source.key===updated.source_key));
 });
 
 test('a grant revoked after atomic correction cancels the new queued revision before execution',async t=>{
@@ -109,13 +137,12 @@ test('a grant revoked after atomic correction cancels the new queued revision be
   await assert.rejects(f.pipeline.correctTask(f.created.id,a,f.input()),{code:'ACTION_NOT_ALLOWED'});await f.pipeline.tail;assert.equal(f.store.taskInternal(f.created.id).state,'cancelled');assert.equal(f.executions.length,1);assert.equal(f.store.source(f.created.source_key,a).text,'訂正した依頼');
 });
 
-test('modal dispatch rejects a source changed after the authorized snapshot promise settles',async t=>{
-  const f=await fixture(t),id=correctionId(f.target()),read=f.pipeline.correctionTarget.bind(f.pipeline);
-  f.pipeline.correctionTarget=async(...args)=>{const target=await read(...args);queueMicrotask(()=>f.store.ingest({...target.source,revision:150,text:'new private revision'}));return target;};
-  const i=f.interaction('button',id);await f.adapter.interaction(i);assert.equal(i.modal,undefined);assert.match(i.response.content,/更新されています/);
+test('opening a static modal does not request a private Source snapshot',async t=>{
+  const f=await fixture(t),id=correctionId(f.target());f.pipeline.correctionTarget=async()=>assert.fail('no Source fetch before modal');f.adapter.member=async()=>assert.fail('no network before modal');
+  const i=f.interaction('button',id);await f.adapter.interaction(i);assert(i.modal);assert(!JSON.stringify(i.modal).includes('原文の依頼'));
 });
 
-for(const kind of ['button','modal'])test(`Discord access events during authorization block ${kind} without disclosure or mutation`,async t=>{
+for(const kind of ['modal'])test(`Discord access events during authorization block ${kind} without disclosure or mutation`,async t=>{
   const f=await fixture(t),id=correctionId(f.target(),kind==='modal'?'submit':'edit'),read=f.pipeline.correctionTarget.bind(f.pipeline);
   f.pipeline.correctionTarget=async(...args)=>{const target=await read(...args);queueMicrotask(()=>f.adapter.client.emit('channelUpdate',{},{ }));return target;};
   const i=f.interaction(kind,id);await f.adapter.interaction(i);await f.pipeline.tail;assert.equal(i.modal,undefined);assert.match(i.response.content,/SOURCE_ACCESS_DENIED/);assert.equal(f.store.source(f.created.source_key,a).revision,100);assert.equal(f.executions.length,1);
