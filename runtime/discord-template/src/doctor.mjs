@@ -76,13 +76,15 @@ export async function diagnose(config,{platform=process.platform,nodeVersion=pro
   const verificationConfigured=Boolean(config.worker.verification&&config.worker.verify.length);
   const image=writeRequested&&platform==='linux'&&verificationConfigured&&docker.available
     ?await imageCheck(config.worker.verification):{available:false,reason:'not_checked'};
-  const localAsrCredentialRequired=Boolean(config.discord.voiceChannelId&&config.voice.transcriptSource==='local'&&config.voice.localAsr?.apiKeyEnv);
+  const voiceConfigured=Boolean(config.discord.voiceChannelId||config.voicePool);
+  const localAsrCredentialRequired=Boolean(voiceConfigured&&config.voice.transcriptSource==='local'&&config.voice.localAsr?.apiKeyEnv);
   const ownerCredentialRequired=config.owner.kind==='remote';
   const bridgeCredentialRequired=Boolean(config.bridge?.enabled);
   const result={node:nodeVersion,nodeSupported:Number(nodeVersion.split('.')[0])>=24,taskOwner:config.owner.kind,
     discordCredentialPresent:Boolean(env[config.discord.botTokenEnv]),openaiCredentialPresent:Boolean(env[config.voice.apiKeyEnv]),
     analyzerAdapter:config.analyzer.kind,analyzerAvailable:analyzer.available,workerAvailable:worker.available,gitAvailable:git.available,
-    voiceConfigured:Boolean(config.discord.voiceChannelId),privacyMode:config.voice.consentMode,voiceParticipantsConfigured:config.voice.participantIds.length,audioBudgetSeconds:config.voice.maxDailyAudioSeconds,
+    voiceConfigured,privacyMode:config.voice.consentMode,voiceParticipantsConfigured:config.voice.participantIds.length,audioBudgetSeconds:config.voice.maxDailyAudioSeconds,
+    voicePoolCredentialsPresent:(config.voicePool?.bots??[]).every(bot=>Boolean(env[bot.botTokenEnv])),
     browserConfigured:Boolean(config.browser.cdpUrl),localWriteWorkerSupported:platform==='linux',providerVerified:false,
     localAsrCredential:{required:localAsrCredentialRequired,present:!localAsrCredentialRequired||Boolean(env[config.voice.localAsr.apiKeyEnv])},
     ownerCredential:{required:ownerCredentialRequired,present:!ownerCredentialRequired||Boolean(env[config.owner.tokenEnv])},
@@ -97,6 +99,7 @@ export async function diagnose(config,{platform=process.platform,nodeVersion=pro
   if(!result.pnpm.supported)add('PNPM_REQUIRED',platform==='win32'&&!pnpm.available?`pnpmの版は未確認です。端末のpnpm --versionで${expectedPnpm}を確認してから、pnpm install --frozen-lockfile --ignore-scriptsを実行してください。`:`pnpm ${expectedPnpm}を用意し、pnpm install --frozen-lockfile --ignore-scriptsを実行してください。`);
   if(!result.gitAvailable)add('GIT_REQUIRED','Gitを用意し、CLIから実行できる状態にしてください。');
   if(!result.discordCredentialPresent)add('DISCORD_CREDENTIAL_REQUIRED','設定で指定した環境変数へDiscord Bot tokenを保存してください。tokenを診断結果へ貼り付ける必要はありません。');
+  if(!result.voicePoolCredentialsPresent)add('VOICE_POOL_CREDENTIAL_REQUIRED','追加Botの認証情報を、それぞれ設定した環境変数へ保存してください。');
   if(!result.localAsrCredential.present)add('LOCAL_ASR_CREDENTIAL_REQUIRED','ローカルASR用の認証情報を、設定で指定した環境変数へ保存してください。');
   if(!result.ownerCredential.present)add('OWNER_CREDENTIAL_REQUIRED','remote owner用の認証情報を、設定で指定した環境変数へ保存してください。');
   if(!result.bridgeCredential.validLength)add('BRIDGE_CREDENTIAL_REQUIRED','有効にしたbridgeには、設定で指定した環境変数に24文字以上の認証情報が必要です。');

@@ -30,6 +30,7 @@ export const Config = z.object({
   discord:z.object({guildId:id,applicationId:id.optional(), textChannelIds:z.array(id).min(1), voiceChannelId:id.optional(), resultChannelId:id,
     operators:z.array(id).min(1), agentChannelIds:z.array(id).default([]), consentingUsers:z.array(id).default([]),unattributedUsers:z.array(id).default([]),botTokenEnv:z.string().regex(/^[A-Z_][A-Z0-9_]*$/).default('DISCORD_BOT_TOKEN')}).strict(),
   voice,
+  voicePool:z.object({rooms:z.array(z.object({channelId:id,mode:z.enum(['assist','minutes']).optional(),autoJoin:z.boolean().optional(),participantIds:z.array(id).optional()}).strict()).min(1).max(8),bots:z.array(z.object({applicationId:id,botTokenEnv:envName}).strict()).max(7).default([])}).strict().optional(),
   archive:z.object({enabled:z.boolean(),archiveRoot:z.string(),journalPath:z.string(),retentionPolicyRef:z.string(),sourceRef:z.string(),actorId:id,readers:z.array(id).min(1),ffmpeg:z.string().default('ffmpeg'),whisperEndpoint:z.string().url(),batchMs:z.number().int().min(20).max(250).default(250),rotationMs:z.number().int().min(1000).max(60000).default(55000),maxPendingSessions:z.number().int().min(1).max(128).default(16),maxJournalPcmBytes:z.number().int().min(1000000).max(1073741824).default(536870912),maxPcmBytes:z.number().int().min(1000000).max(134217728).default(134217728),vocabulary:z.array(z.string().max(100)).max(100).default([])}).strict().optional(),
   interaction:z.object({clarification:z.enum(['once','off']).default('once'),clarificationWindowSeconds:z.number().int().min(60).max(3600).default(600)}).strict().prefault({}),
   notifications:z.object({taskProgress:z.object({enabled:z.boolean().default(false),minIntervalSeconds:z.number().int().min(30).max(3600).default(30),maxUpdates:z.number().int().min(1).max(6).default(6)}).strict().prefault({}),quietHours:z.object({enabled:z.boolean().default(false),startHour:z.number().int().min(0).max(23).default(22),endHour:z.number().int().min(0).max(23).default(9),timeZone:z.string().min(1).max(100).refine(isTimeZone,{message:'TIME_ZONE_INVALID'}).default('Asia/Tokyo')}).strict().prefault({})}).strict().prefault({}),
@@ -50,6 +51,14 @@ export const Config = z.object({
 export async function loadConfig(filename) {
   const config=Config.parse(await readJson(filename));check(Boolean(config.archive?.enabled)===config.voice.storeAudio,'ARCHIVE_RECORDING_CONFIG_REQUIRED');if(config.archive?.enabled){check(config.voice.transcriptSource==='local'&&config.voice.consentMode==='owner_managed'&&config.agentBinding&&config.owner.kind==='local','ARCHIVE_BINDING_REQUIRED');const endpoint=new URL(config.archive.whisperEndpoint);check(['127.0.0.1','localhost',new URL(config.voice.localAsr.url).hostname].includes(endpoint.hostname),'ARCHIVE_ASR_HOST_MISMATCH');}
   check(!config.notifications.taskProgress.enabled||config.owner.kind==='local','QUIET_PROGRESS_LOCAL_OWNER_REQUIRED');
+  if(config.voicePool){
+    const channels=[config.discord.voiceChannelId,...config.voicePool.rooms.map(room=>room.channelId)].filter(Boolean);
+    const applications=[config.discord.applicationId,...config.voicePool.bots.map(bot=>bot.applicationId)];
+    const tokens=[config.discord.botTokenEnv,...config.voicePool.bots.map(bot=>bot.botTokenEnv)];
+    check(channels.length<=8&&new Set(channels).size===channels.length,'VOICE_POOL_DUPLICATE_ROOM');
+    check(applications.every(Boolean)&&new Set(applications).size===applications.length&&new Set(tokens).size===tokens.length,'VOICE_POOL_DUPLICATE_BOT');
+    check(!config.archive?.enabled&&!config.voice.storeAudio&&!config.voice.rotation.enabled,'VOICE_POOL_ARCHIVE_SCOPE_REQUIRED');
+  }
   const root=path.dirname(path.resolve(filename));
   config.dataDir=path.resolve(root,config.dataDir);if(config.archive?.enabled)check(path.isAbsolute(config.archive.archiveRoot)&&path.isAbsolute(config.archive.journalPath)&&inside(config.dataDir,config.archive.journalPath),'ARCHIVE_PATH_SCOPE');config.worker.workspace=path.resolve(root,config.worker.workspace);
   const commandAdapters=[config.worker,config.worker.fallback,...(config.analyzer.kind==='codex_cli'?[config.analyzer,config.analyzer.fallback]:[])];for(const adapter of commandAdapters)if(adapter?.codexHome)adapter.codexHome=path.resolve(root,adapter.codexHome);

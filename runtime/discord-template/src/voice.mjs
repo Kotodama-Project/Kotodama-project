@@ -35,8 +35,8 @@ export function accessEventRelevant(event,args,target){
 }
 
 export class VoiceRoom {
-  constructor({client,config,store,pipeline,policy=()=>config,onError=()=>{},sourceReaders=async()=>[],providerFactory=o=>new VoiceProvider(o),localAsrFactory=o=>new LocalAsr(o),connectionFactory=joinVoiceChannel,waitForState=entersState}){
-    Object.assign(this,{client,config,store,pipeline,policy,onError,sourceReaders,providerFactory,localAsrFactory,connectionFactory,waitForState});
+  constructor({client,config,store,pipeline,policy=()=>config,onError=()=>{},sourceReaders=async()=>[],providerFactory=o=>new VoiceProvider(o),localAsrFactory=o=>new LocalAsr(o),connectionFactory=joinVoiceChannel,waitForState=entersState,acquireConnection=null}){
+    Object.assign(this,{client,config,store,pipeline,policy,onError,sourceReaders,providerFactory,localAsrFactory,connectionFactory,waitForState,acquireConnection});
     this.target=Object.freeze({guildId:config.discord.guildId,voiceChannelId:config.discord.voiceChannelId});this.voiceBinding=voiceBinding(config);
     this.sessions=new Map();this.draining=new Set();this.localCaptures=new Map();this.localStates=new Map();this.localAsrTail=Promise.resolve();this.localAsrPending=0;this.mode=config.voice.mode;this.connection=null;this.paused=false;this.reply=null;this.generation=0;this.epoch=0;this.controlGeneration=0;this.modeChange=null;
     if(config.voice.transcriptSource==='local'&&config.voice.localAsr.apiKeyEnv)check(process.env[config.voice.localAsr.apiKeyEnv],'LOCAL_ASR_CREDENTIAL_REQUIRED');
@@ -65,12 +65,14 @@ export class VoiceRoom {
   }
   async join({shouldJoin=()=>true}={}){
     check(!this.connection&&!this.joining,'VOICE_ALREADY_CONNECTED');check(this.config.discord.voiceChannelId,'VOICE_CHANNEL_REQUIRED');this.assertBudget();
-    const attempt={abort:new AbortController()};this.joining=attempt;this.controlGeneration++;let connection;
+    const attempt={abort:new AbortController()};this.joining=attempt;this.controlGeneration++;let connection,admission;
     const valid=()=>this.joining===attempt&&!attempt.abort.signal.aborted&&this.targetMatches()&&shouldJoin();
     try{
       await this.closing;check(valid(),'VOICE_JOIN_SUPERSEDED');
-      const channel=await this.client.channels.fetch(this.config.discord.voiceChannelId);check(valid(),'VOICE_JOIN_SUPERSEDED');check(channel?.guildId===this.config.discord.guildId&&channel.isVoiceBased(),'VOICE_TARGET_MISMATCH');
-      connection=this.connectionFactory({channelId:channel.id,guildId:channel.guildId,adapterCreator:channel.guild.voiceAdapterCreator,selfDeaf:false,selfMute:false,group:this.config.installation});
+      admission=await this.acquireConnection?.(this.target);check(valid(),'VOICE_JOIN_SUPERSEDED');
+      const channel=admission?.channel??await this.client.channels.fetch(this.config.discord.voiceChannelId);check(valid(),'VOICE_JOIN_SUPERSEDED');check(channel?.guildId===this.config.discord.guildId&&channel.isVoiceBased(),'VOICE_TARGET_MISMATCH');
+      connection=this.connectionFactory({channelId:channel.id,guildId:channel.guildId,adapterCreator:channel.guild.voiceAdapterCreator,selfDeaf:false,selfMute:false,group:admission?.group??this.config.installation});
+      this.connectionAdmission=admission;
       this.connection=connection;this.paused=false;
       // Error listeners exist during the Ready wait as well as after attachment.
       connection.on('error',()=>{if(this.connection===connection){this.onError('DISCORD_VOICE_FAILED');void this.recover(connection);}});
@@ -86,7 +88,7 @@ export class VoiceRoom {
         if([...this.sessions.values()].some(s=>!this.privacyMatches(s))){void this.pause();return;}
         for(const s of this.sessions.values())if(s.readers&&this.audience().some(id=>!s.readers.includes(id)))void this.endSession(s,{drain:false,reason:'audience_changed'});else if(!this.allowed(s.actor))void this.endSession(s,{drain:false,reason:'access_denied'});else if(!this.audience().includes(s.actor))void this.endSession(s,{reason:'speaker_left'});
       },250);this.policyTimer.unref();
-    }catch(e){if(connection){if(this.connection===connection)this.connection=null;if(connection.state?.status!==VoiceConnectionStatus.Destroyed)connection.destroy();}throw e;}
+    }catch(e){if(connection){if(this.connection===connection)this.connection=null;if(connection.state?.status!==VoiceConnectionStatus.Destroyed)connection.destroy();}if(this.connectionAdmission===admission)this.connectionAdmission=null;admission?.release();throw e;}
     finally{if(this.joining===attempt)this.joining=null;}
   }
   async recover(connection){
@@ -291,6 +293,7 @@ export class VoiceRoom {
     this.closing=this.pause({sealLocal:true}).finally(()=>{this.closing=null;});
     // A sealed transcript may finish after departure; it must not keep the Bot in the VC.
     if(connection&&connection.state?.status!==VoiceConnectionStatus.Destroyed)connection.destroy();
+    this.connectionAdmission?.release();this.connectionAdmission=null;
     try{this.archive?.seal();}catch{this.onError('ARCHIVE_SEAL_FAILED');}
     return this.closing;
   }

@@ -16,14 +16,15 @@ export const commandDefinition={name:'kotodama',description:'ことだまに相�
   {type:1,name:'luma_review',description:'Lumaの内容確認を自分だけに再表示する',options:[{type:3,name:'draft',description:'Luma候補のID（省略時は最新）',required:false}]},
   {type:1,name:'do',description:'許可範囲で仕事を実行する',options:[{type:3,name:'action',description:'仕事の種類',required:true,choices:WORKER_ACTIONS.map(v=>({name:v,value:v}))},{type:3,name:'text',description:'やってほしいこと',required:true}]},
   {type:1,name:'tasks',description:'自分の仕事を見る'},
-  {type:1,name:'consent',description:'音声処理の運用と、自分の停止設定を確認する'},
+  {type:1,name:'consent',description:'音声処理の運用と、自分の停止設定を確認する',options:[{type:7,name:'channel',description:'対象の音声チャンネル',required:false}]},
   ...['result','stop','resume'].map(name=>({type:1,name,description:{result:'成果を読む',stop:'仕事を止める',resume:'停止した仕事を再開する'}[name],options:[{type:3,name:'task',description:'仕事のID',required:true}]})),
-  {type:1,name:'voice',description:'音声モード・録音・発話を操作する',options:[{type:3,name:'mode',description:'操作',required:true,choices:['assist','minutes','join','pause','resume','stop_speech','start_conversation','end_conversation','leave','status'].map(v=>({name:v,value:v}))}]}
+  {type:1,name:'voice',description:'音声モード・録音・発話を操作する',options:[{type:3,name:'mode',description:'操作',required:true,choices:['assist','minutes','join','pause','resume','stop_speech','start_conversation','end_conversation','leave','status'].map(v=>({name:v,value:v}))},{type:7,name:'channel',description:'対象の音声チャンネル',required:false}]}
 ]};
 
 const accessCacheMs=3000;
 const accessEvents=['channelUpdate','channelDelete','guildUpdate','guildMemberUpdate','guildMemberRemove','roleCreate','roleUpdate','roleDelete','threadUpdate','threadDelete','threadMembersUpdate'];
 const taskStates={queued:'受付済み',running:'実行中',needs_review:'成果確認待ち',stale:'訂正により無効',failed:'失敗',cancelled:'停止済み',stopping:'停止処理中',uncertain:'状態確認中（自動では再実行しません）',paused:'一時停止中（resumeで再開できます）'};
+const voiceRoomFor=(voice,source)=>voice?.forSource?voice.forSource(source):voice;
 export const taskStateText=state=>taskStates[state]??state;
 // Deferred analysis keeps the Source; say so instead of claiming it was analysed.
 export function deferredAnalysisText(reason){
@@ -47,6 +48,7 @@ export class DiscordAdapter {
     this.accessCache=new Map();this.accessGeneration=0;const forget=()=>{this.accessCache.clear();this.accessGeneration++;};for(const event of accessEvents)this.client.on(event,forget);
   }
   operator(actor){check(this.policy().discord.operators.includes(actor),'OPERATOR_REQUIRED');}
+  roomFor(source){return voiceRoomFor(this.voice,source);}
   artifactRoot(){return this.config.owner.kind==='local'?path.join(this.config.dataDir,'worktrees'):null;}
   async member(actor){this.operator(actor);const guild=await this.client.guilds.fetch(this.config.discord.guildId);return guild.members.fetch({user:actor,force:true});}
   // allowed / denied / unavailable. A Discord 4xx other than 429 is a denial;
@@ -146,7 +148,7 @@ export class DiscordAdapter {
   }
   async updateTaskProgress(task,{messageId,claim,isActive}){
     await this.pipeline.readPolicy();
-    const room=this.voice,epoch=room?.epoch,generation=room?.generation,accessGeneration=this.accessGeneration;
+    const room=voiceRoomFor(this.voice,this.store.sourceInternal(task.source_key)),epoch=room?.epoch,generation=room?.generation,accessGeneration=this.accessGeneration;
     const bindings=[{key:task.source_key,revision:task.source_revision},...(task.contextSources??[])];
     let audience;
     const guard=()=>{
@@ -155,7 +157,7 @@ export class DiscordAdapter {
       this.operator(task.actor);const latest=this.store.task(task.id,task.actor);
       check(latest.revision===task.revision&&latest.state===task.state&&digest(latest.contextSources??[])===digest(task.contextSources??[]),'PROGRESS_TASK_CHANGED');
       const source=this.store.source(task.source_key,task.actor);
-      check(source.metadata?.kind==='voice'&&room&&this.voice===room&&room.connectionReady()&&!room.paused&&!room.recovering&&room.epoch===epoch&&room.generation===generation&&source.metadata.voiceEpoch===epoch,'PROGRESS_VOICE_CHANGED');
+      check(source.metadata?.kind==='voice'&&room&&voiceRoomFor(this.voice,source)===room&&room.connectionReady()&&!room.paused&&!room.recovering&&room.epoch===epoch&&room.generation===generation&&source.metadata.voiceEpoch===epoch,'PROGRESS_VOICE_CHANGED');
       check(source.channelId===room.target.voiceChannelId&&source.guildId===room.target.guildId&&room.audienceAllowed(),'PROGRESS_AUDIENCE_DENIED');
       const members=room.audience().sort();check(members.includes(task.actor)&&members.length<=16&&bindings.length<=32,'PROGRESS_AUDIENCE_DENIED');
       if(audience)check(digest(audience)===digest(members),'PROGRESS_AUDIENCE_CHANGED');else audience=members;
@@ -196,19 +198,25 @@ export class DiscordAdapter {
       else if(sub==='stop'){await this.pipeline.stop(i.options.getString('task',true),i.user.id);text='停止を受け付けました。実行中の処理の終了を確認しています。';}
       else if(sub==='resume'){const t=await this.pipeline.resume(i.options.getString('task',true),i.user.id);text=`再開しました。${t.id}`;}
       else if(sub==='voice'){check(this.voice,'VOICE_NOT_CONFIGURED');const mode=i.options.getString('mode',true);
-        text=voiceStatusText(await voiceCommand(this.voice,mode,{actor:i.user.id}));
+        text=voiceStatusText(await voiceCommand(this.voice,mode,{actor:i.user.id,channelId:i.options.getChannel?.('channel')?.id}));
       }
       await i.editReply({content:shortText(text),allowedMentions:{parse:[]}});
     }catch(e){await i.editReply({content:`実行できませんでした：${errorCode(e)}`,allowedMentions:{parse:[]}});}
   }
   async consentInteraction(i){
     await i.deferReply({flags:MessageFlags.Ephemeral});
-    try{const cfg=this.policy();check(cfg.discord.voiceChannelId,'VOICE_CHANNEL_REQUIRED');const notice=voiceNotice(cfg);const revoke=i.isButton?.()&&i.customId.startsWith('kotodama-consent:revoke:');if(!revoke){const channel=await this.client.channels.fetch(cfg.discord.voiceChannelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}
-      if(i.isButton?.()){const [,action,noticeId]=i.customId.split(':');check(['agree','revoke'].includes(action)&&(action==='revoke'||noticeId===notice.id),'CONSENT_NOTICE_CHANGED');this.store.recordConsent({guild:cfg.discord.guildId,channel:cfg.discord.voiceChannelId,actor:i.user.id,notice:notice.id,granted:action==='agree',interactionId:i.id});if(action==='revoke'){await this.voice?.stopSpeech();const session=this.voice?.sessions.get(i.user.id);if(session)await this.voice.endSession(session,{drain:false,reason:'consent_revoked'});}}
-      void this.voice?.control.check();
+    try{
+      const pooled=Boolean(this.voice?.forChannel),fields=i.isButton?.()?i.customId.split(':'):[];
+      const channelId=fields[3]??i.options?.getChannel?.('channel')?.id;
+      const room=pooled?this.voice.forChannel(channelId):this.voice;check(!pooled||room,'VOICE_ROOM_REQUIRED');
+      const cfg=room?.policy?.()??this.policy();check(cfg.discord.voiceChannelId,'VOICE_CHANNEL_REQUIRED');const notice=voiceNotice(cfg);
+      const noticeKey=pooled?notice.id.slice(0,32):notice.id,suffix=pooled?':'+cfg.discord.voiceChannelId:'';
+      const revoke=i.isButton?.()&&fields[1]==='revoke';if(!revoke){const channel=await this.client.channels.fetch(cfg.discord.voiceChannelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}
+      if(i.isButton?.()){const [,action,noticeId]=fields;check(['agree','revoke'].includes(action)&&(action==='revoke'||noticeId===noticeKey),'CONSENT_NOTICE_CHANGED');this.store.recordConsent({guild:cfg.discord.guildId,channel:cfg.discord.voiceChannelId,actor:i.user.id,notice:notice.id,granted:action==='agree',interactionId:i.id});if(action==='revoke'){await room?.stopSpeech();const session=room?.sessions.get(i.user.id);if(session)await room.endSession(session,{drain:false,reason:'consent_revoked'});}}
+      void room?.control.check();
       const granted=this.store.consent(cfg.discord.guildId,cfg.discord.voiceChannelId,i.user.id,notice.id),managed=cfg.voice.consentMode==='owner_managed',optedOut=this.store.voiceOptedOut(cfg.discord.guildId,cfg.discord.voiceChannelId,i.user.id);
       const status=managed?(optedOut?'本人の希望で停止中':cfg.voice.participantIds.includes(i.user.id)?'人間側が管理する処理対象':'処理対象外'):(granted?'同意済み':'未同意');
-      const buttons=managed?(optedOut?[{type:2,style:2,label:'自分の停止設定を解除する',custom_id:'kotodama-consent:agree:'+notice.id}]:[{type:2,style:2,label:'自分の音声処理を停止する',custom_id:'kotodama-consent:revoke:'+notice.id}]):[{type:2,style:1,label:'同意して音声処理を許可',custom_id:'kotodama-consent:agree:'+notice.id},{type:2,style:2,label:'音声処理の同意を取り消す',custom_id:'kotodama-consent:revoke:'+notice.id}];
+      const buttons=managed?(optedOut?[{type:2,style:2,label:'自分の停止設定を解除する',custom_id:'kotodama-consent:agree:'+noticeKey+suffix}]:[{type:2,style:2,label:'自分の音声処理を停止する',custom_id:'kotodama-consent:revoke:'+noticeKey+suffix}]):[{type:2,style:1,label:'同意して音声処理を許可',custom_id:'kotodama-consent:agree:'+noticeKey+suffix},{type:2,style:2,label:'音声処理の同意を取り消す',custom_id:'kotodama-consent:revoke:'+noticeKey+suffix}];
       await i.editReply({content:`${managed?'プライバシーの説明・同意確認は人間側が責任を持つ運用です。Botの同意クリックは必須ではありません。\n\n':''}${notice.text}\n\nあなたの状態：${status}`,components:[{type:1,components:buttons}],allowedMentions:{parse:[]}});
     }catch(e){await i.editReply({content:`設定できませんでした：${errorCode(e)}`,components:[],allowedMentions:{parse:[]}});}
   }
@@ -256,11 +264,11 @@ export class DiscordAdapter {
     const assertClarification=()=>{if(!clarification)return;const policy=this.policy();check(policy.discord.operators.includes(source.actorId)&&policy.interaction.clarification==='once','CLARIFICATION_SCOPE_CHANGED');for(const b of contextSources){const latest=this.store.source(b.key,source.actorId);check(latest.revision===b.revision,'CONTEXT_CHANGED');}};
     assertClarification();
     for(const b of contextSources){const s=this.store.source(b.key,source.actorId);check(s.revision===b.revision,'CONTEXT_CHANGED');}if(source.metadata?.kind==='voice'){
-      await this.voice?.speak(text,{epoch:source.metadata.voiceEpoch,actorId:source.actorId,bindings:contextSources,authorizeAudience:async actors=>{assertClarification();for(const actor of actors){const channels=new Set();for(const b of contextSources){const s=this.store.source(b.key,actor);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord')channels.add(s.channelId);}for(const channelId of channels){const channel=await this.client.channels.fetch(channelId);check(await this.canRead(channel,actor),'SOURCE_ACCESS_DENIED');}}assertClarification();return actors;}});return;}
+      await voiceRoomFor(this.voice,source)?.speak(text,{epoch:source.metadata.voiceEpoch,actorId:source.actorId,bindings:contextSources,authorizeAudience:async actors=>{assertClarification();for(const actor of actors){const channels=new Set();for(const b of contextSources){const s=this.store.source(b.key,actor);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord')channels.add(s.channelId);}for(const channelId of channels){const channel=await this.client.channels.fetch(channelId);check(await this.canRead(channel,actor),'SOURCE_ACCESS_DENIED');}}assertClarification();return actors;}});return;}
     await this.member(source.actorId);
     const channel=await this.client.channels.fetch(source.channelId);const user=await this.client.users.fetch(source.actorId);check(await this.canRead(channel,source.actorId),'SOURCE_ACCESS_DENIED');assertClarification();if(clarification)text+=`\n回答は元の <#${source.channelId}> で <@${this.client.user.id}> にメンションして送ってください。このDMへの返信は受信しません。`;await user.send({content:shortText(text),allowedMentions:{parse:[]}});
   }
-  async voiceAction({source,action}){await this.voice?.applyModelAction(action,source);}
+  async voiceAction({source,action}){await voiceRoomFor(this.voice,source)?.applyModelAction(action,source);}
   async backfill(actor,{limit=10000,signal}={}){
     await this.member(actor);const guild=await this.client.guilds.fetch(this.config.discord.guildId);const all=await guild.channels.fetch();const channels=new Map([...all.values()].filter(c=>c?.isTextBased()&&!c.isThread()).map(c=>[c.id,c]));
     const coverage={startedAt:new Date().toISOString(),channels:[],imported:0,limit,complete:false};

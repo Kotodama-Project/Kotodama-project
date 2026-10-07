@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Discordの任意Bot poolで複数VCをroom別に管理し、満杯時のbusyと対象roomを指定した操作・同意を追加。単一VC互換を維持し、実VCの受入は別に記録する（#142）。
+
 - Source Binding・Concept Revision・型付き関係の閉じたmetadata契約とread-only検査を追加。同じpathのbytes変更やmetadataの不一致を拒否し、opaque出典を未確認として保持する（#53前半）。
 - Outcome・実験・既存判断の参照・測定policy・riskのConceptを接続。Decisionの範囲を必須にし、依存循環とリスクのfeedbackを分けて検査する（#52補助型）。
 
