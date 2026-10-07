@@ -43,7 +43,7 @@ def fixture():
 class KnowledgeStrategyTests(unittest.TestCase):
     def test_public_bundle_resolves_existing_ids_and_projects_typed_goal_kgi_edge(self):
         bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts)
-        self.assertEqual([],issues);self.assertEqual(12,len(projection['definitions']))
+        self.assertEqual([],issues);self.assertEqual(37,len(projection['definitions']))
         self.assertEqual('project/success-model',projection['definitions']['KGI-INTENT']['concept_id'])
         graph=_graph(bundle)
         self.assertIn({'from':'OUT-INTENT','from_kind':'goal','relation':'measured_by','to':'KGI-INTENT','to_kind':'kgi'},graph['edges'])
@@ -60,6 +60,44 @@ class KnowledgeStrategyTests(unittest.TestCase):
             p.write_text(text.replace(old,'goal_refs: [OUT-MISSING]',1),encoding='utf-8')
             bundle=load_bundle(root)
             self.assertIn('STRATEGY_REF_UNRESOLVED',{i.code for i in bundle.issues})
+
+    def test_phase_definitions_keep_sequence_separate_from_progress_or_authority(self):
+        bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts);self.assertEqual([],issues)
+        phases=[c for c in bundle.concepts if c.metadata['type']=='Phase']
+        self.assertEqual({f'PHASE-P{i}' for i in range(7)},{c.extension['strategy']['id'] for c in phases})
+        self.assertEqual({(f'PHASE-P{i}',f'PHASE-P{i-1}') for i in range(1,7)},
+            {(r['from'],r['to']) for r in projection['relationships'] if r['type']=='sequenced_after'})
+        for c in phases:
+            self.assertEqual({'id','adoption_status','relationships'},set(c.extension['strategy']))
+            self.assertEqual('candidate',c.extension['strategy']['adoption_status']);self.assertFalse(c.extension['agent_use']['runtime_authority'])
+        items=[concept('Phase','PHASE-A',[('sequenced_after','PHASE-B')]),concept('Phase','PHASE-B',[('sequenced_after','PHASE-A')])]
+        self.assertIn('STRATEGY_DEPENDENCY_CYCLE',{i.code for i in strategy_model(items)[1]})
+
+    def test_every_factor_has_a_typed_path_from_product_kgi_to_kpi_and_falsifiable_initiative(self):
+        bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts);self.assertEqual([],issues)
+        factors={f'KF-{i:02}' for i in range(1,9)};edges=projection['relationships'];definitions=projection['definitions']
+        self.assertEqual(factors,{r['to'] for r in edges if r['from']=='KGI-INTENT' and r['type']=='enabled_by'})
+        for factor in factors:
+            observed=[r['to'] for r in edges if r['from']==factor and r['type']=='observed_by']
+            initiatives=[r['to'] for r in edges if r['from']==factor and r['type']=='advanced_by']
+            self.assertTrue(observed);self.assertTrue(initiatives)
+            for ref in observed:self.assertEqual('supporting_kpi',definitions[ref]['measurement_role'])
+            for ref in initiatives:
+                target=bundle.by_id[definitions[ref]['concept_id']]
+                self.assertTrue(target.extension['strategy']['hypothesis']['falsifier'])
+
+    def test_supporting_measurements_never_become_product_kgi_or_report_adopted_values(self):
+        bundle=load_bundle(ROOT);projection,issues=strategy_model(bundle.concepts);self.assertEqual([],issues)
+        expected={'KPI-REQUIRED-CONTEXT','KPI-REVISION-PROPAGATION','KPI-DECISION-READINESS','KPI-SESSION-RECOVERY',
+            'KPI-GROUNDED-RETRIEVAL','KPI-FORBIDDEN-LEAKAGE','KPI-AUTHORITY-INTEGRITY','KPI-AGENT-GOVERNANCE',
+            'KPI-CLARIFICATION-LOAD','KPI-OWNER-RESPONSE'}
+        concepts=[c for c in bundle.concepts if c.metadata['type']=='KPI']
+        self.assertEqual(expected,{c.extension['strategy']['id'] for c in concepts})
+        for c in concepts:
+            value=c.extension['strategy'];self.assertEqual('supporting_kpi',value['measurement_role']);self.assertEqual('unknown',value['baseline'])
+            for field in ('target','deadline','measurement_window','exclusion_policy'):self.assertEqual('not_adopted',value[field])
+            self.assertIn('値はまだ報告しません',c.document.body)
+            self.assertTrue(strategy_reference_issues({'kgi_refs':[value['id']]},projection['definitions'],path='synthetic-task'))
 
     def test_linked_critical_definition_is_not_displaced_by_optional_context(self):
         from datetime import datetime,timezone

@@ -13,6 +13,12 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - 出典・Concept・Context Packなどの逆引きと有限の影響計算を追加。必須依存、任意参照、失効・矛盾・循環を分け、削除前の依存も保持する。上限超過を完全な結果として扱わない（#53影響計算）。
 
 - Source Binding・Concept Revision・型付き関係の閉じたmetadata契約とread-only検査を追加。同じpathのbytes変更やmetadataの不一致を拒否し、opaque出典を未確認として保持する（#53前半）。
+- 旧P0〜P6の能力定義を候補Conceptへ対応付け、循環を拒否する段階依存を追加。過去の予定・到達状態・数値targetを現在の進捗として取り込まない（#52段階モデル）。
+
+- 8つのKey Factor候補をKGI-INTENT、補助KPI、反証可能な既存Initiativeへ接続。旧数値targetやphaseを取り込まず、定義と検証すべき因果仮説を分ける（#52要因モデル）。
+- peer transportの接続初期化時の一時的なSQLiteロックにも既存の有限retryを適用し、初期化失敗時の接続を閉じる。同じtransportのwriterを有限の待ち行列へまとめ、待機を元のretry期間に含める。quota・backpressure・権限の拒否は維持する（#160/#162のCI調査）。
+
+- 必須文脈・訂正・復旧・出典・権限など10の補助KPI候補と旧指標の対応を追加。製品KGIで代用せず、windowや数値targetの採用・実測値の報告は行わない（#52補助指標）。
 
 - KGI-INTENTの候補計算と外部receiptのattesterを追加。版・scope・検証・受入・学習が結ばれた宣言入力だけを数え、重複や無記録取消、境界違反、KPIだけの改善を区別する（#52計算）。
 
