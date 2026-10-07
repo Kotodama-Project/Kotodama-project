@@ -2,6 +2,12 @@
 
 この文書は実装候補の受入境界です。ローカル試験で実サービスの成功を代用しません。
 
+## チャンネル別の作業場（#143）
+
+[作業場lease](CHANNEL-WORKSPACES.md)は実装済みです。一時Gitと合成CLIで、channel分離、
+期限切れ、変更/未push状態の再照合、終了不明時の拒否とデータ保持を検査します。
+directory分離をsandboxとは扱いません。実host/container/VMでの運用受入は未実施です。
+
 ## 複数roomとBot pool（#142）
 
 [Bot pool](VOICE-POOL.md)は実装済み・実VCは未受入です。同時room、満杯のbusy、二重join、
