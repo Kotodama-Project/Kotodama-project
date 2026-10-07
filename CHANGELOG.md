@@ -11,6 +11,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - 旧P0〜P6の能力定義を候補Conceptへ対応付け、循環を拒否する段階依存を追加。過去の予定・到達状態・数値targetを現在の進捗として取り込まない（#52段階モデル）。
 
 - 8つのKey Factor候補をKGI-INTENT、補助KPI、反証可能な既存Initiativeへ接続。旧数値targetやphaseを取り込まず、定義と検証すべき因果仮説を分ける（#52要因モデル）。
+- peer transportの接続初期化時の一時的なSQLiteロックにも既存の有限retryを適用し、初期化失敗時の接続を閉じる。同じtransportのwriterを有限の待ち行列へまとめ、待機を元のretry期間に含める。quota・backpressure・権限の拒否は維持する（#160/#162のCI調査）。
 
 - 必須文脈・訂正・復旧・出典・権限など10の補助KPI候補と旧指標の対応を追加。製品KGIで代用せず、windowや数値targetの採用・実測値の報告は行わない（#52補助指標）。
 
