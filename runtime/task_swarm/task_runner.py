@@ -65,12 +65,14 @@ def read_json(filename: Path, maximum=2*1024*1024, *, with_digest=False):
 def verify_runtime(value, attempt, *, freeze=False):
     """Reopen nested runtime evidence before publication, acceptance and replay."""
     from datetime import datetime
-    from .codex import _paths, _event_identity, _runtime_receipt, _redact, _result_from_message, MODEL, EFFORT, SANDBOX
+    from .codex import _paths, _event_identity, _runtime_receipt, _redact, _result_from_message, _json_dump, MODEL, EFFORT
+    from .confidential import require_observed_profile, runtime_paths
     receipt, supplied = value["receipt"], value["paths"]
     base = safe_directory(attempt)
     actual_attempt = Path(supplied["attempt_dir"])
     require(actual_attempt.parent == base and actual_attempt.name.startswith("attempt-"), "RUN_RUNTIME_PATH_CHANGED")
     paths = _paths(safe_directory(actual_attempt))
+    work = safe_directory(actual_attempt/"work")
     require(supplied == {key:str(path) for key,path in paths.items()}, "RUN_RUNTIME_PATH_CHANGED")
     saved_receipt, receipt_sha = read_json(paths["receipt"], with_digest=True)
     require(saved_receipt == receipt and (freeze or value.get("runtime_receipt_sha256") == receipt_sha),
@@ -81,6 +83,8 @@ def verify_runtime(value, attempt, *, freeze=False):
         require(hashlib.sha256(read_bytes(paths[key], 16*1024*1024)).hexdigest() == receipt["artifact_digests"][key],
                 "RUN_RUNTIME_ARTIFACT_CHANGED")
     require(read_json(paths["result"]) == value["result"], "RUN_RUNTIME_RESULT_CHANGED")
+    require(receipt.get("permission_probe") == {"kind":"task_synthetic_permission_probe_v1",
+            "outer_read_denied":True,"inner_metadata_read_denied":True,"model_called":False}, "RUN_RUNTIME_POLICY_MISSING")
     events = [json.loads(line) for line in read_bytes(paths["events"],16*1024*1024).splitlines() if line.strip()]
     thread, turn = _event_identity(events)
     process = read_json(paths["process"])
@@ -94,11 +98,18 @@ def verify_runtime(value, attempt, *, freeze=False):
     if not freeze:
         require(value.get("runtime_rollout_sha256") == sha, "RUN_RUNTIME_ROLLOUT_CHANGED")
     started = datetime.fromisoformat(receipt["started_at"].replace("Z", "+00:00")).timestamp()
-    runtime = _runtime_receipt(thread, receipt["turn_id"], rollout.parent, actual_attempt, started, exact_record=(rollout, raw))
+    runtime = _runtime_receipt(thread, receipt["turn_id"], rollout.parent, work, started, exact_record=(rollout, raw))
     require(runtime is not None and runtime["runtime_receipt_path"] == str(rollout) and
-            runtime["model"] == MODEL and runtime["effort"] == EFFORT and runtime["sandbox"] == SANDBOX and
+            runtime["model"] == MODEL and runtime["effort"] == EFFORT and
             runtime["approval_policy"] == "never" and not runtime["turn_failed"] and
             _redact(_result_from_message(runtime["completed_output"])) == value["result"], "RUN_RUNTIME_BINDING_CHANGED")
+    command = read_json(paths["command"])
+    require(isinstance(command.get("argv"),list) and command["argv"] and
+            isinstance(command["argv"][0],str) and Path(command["argv"][0]).is_absolute(), "RUN_RUNTIME_PATH_CHANGED")
+    require_observed_profile(runtime["permission_profile"],runtime["active_permission_profile"],
+                             {**runtime_paths(command["argv"][0]),str(work):"read"})
+    require(receipt.get("permission_profile_sha256") == hashlib.sha256(_json_dump(runtime["permission_profile"]).encode("utf-8")).hexdigest(),
+            "RUN_RUNTIME_POLICY_CHANGED")
     require(read_bytes(rollout,16*1024*1024) == raw, "RUN_RUNTIME_ROLLOUT_CHANGED")
     if freeze:
         value["runtime_rollout_sha256"] = sha

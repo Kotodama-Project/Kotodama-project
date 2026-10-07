@@ -4,6 +4,8 @@
 入力・出力契約に加え、既存ownerへ束縛したPOSIXのtask-run入口を備えます。
 Taskとgrantは作成・変更しません。Discord接続と実利用の受入は後続です。
 
+実行時の[Task workerの読取範囲](TASK-SWARM-ISOLATION.md)は別helperで制限します。
+
 ## Task入力と固定plan
 
 入力はversion、Task ID/revision、依頼、最大20件のacceptance、最大10件のSourceです。
@@ -48,7 +50,7 @@ worker-counterpoints、worker-options、verifierを指定します。owner_ref�
 しません。Task入力のbytesをsource_checksへ固定します。これらの参照は実際のTask/grantを
 代替しません。runtimeは本人と現在権限を先に検査し、取消時にはbindingを無効化します。
 
-    python tools/task_swarm.py task-run --owner PRIVATE_OWNER_JSON --input PRIVATE_TASK_INPUT --backend codex --codex-executable CODEX_EXECUTABLE --allow-codex
+    python tools/task_swarm.py task-run --owner PRIVATE_OWNER_JSON --input PRIVATE_TASK_INPUT --backend codex --codex-executable NATIVE_CODEX_EXECUTABLE --task-codex-home DEDICATED_TASK_HOME --allow-codex
 
 親は専用のstdin pipeを生存中だけ開いておき、取消時に閉じます。通常の対話terminalのstdinや
 既に閉じたpipeを生存証拠にしません。SIGTERM/SIGINT/pipe EOFと現在ownerの変化は
@@ -57,7 +59,9 @@ POSIX pipeにはFIFOとNode/libuvの接続済みUnix stream socketを認めま�
 internet socket、datagram、未接続socket、通常fileは生存証拠にしません。
 
 3 workerを最大同時3件で実行し、それぞれ別の報告を保存・読戻し、別invocationのverifierへ
-渡します。固定モデルはgpt-5.6-luna/max、sandboxはread-only、子agentは無効です。
+渡します。固定モデルはgpt-5.6-luna/max、専用root deny profileで読取先を限定し、子agentは無効です。
+別途ログインした専用Task homeを明示し、普段の認証をコピー・リンクしません。
+実読取probeと記録された全permission entry/networkの一致を検査します。
 CodexBackendが実process→thread→completed rollout→出力を照合し、controllerは4つの
 異なるthread IDを要求します。verifierは報告の書き手になりません。
 

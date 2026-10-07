@@ -8,8 +8,9 @@ from .task_schemas import report_schema, review_schema
 class TaskBackend:
     synthetic = False
 
-    def __init__(self, executable, *, session_root=None):
+    def __init__(self, executable, *, task_codex_home, session_root=None):
         self.codex = CodexBackend(executable, session_root=session_root)
+        self.task_codex_home = task_codex_home
 
     def produce(self, job, payload, directory, *, timeout, cancel_event, on_process):
         prompt = (
@@ -21,7 +22,8 @@ class TaskBackend:
             + canonical({"perspective": job, "task": payload})
         )
         return self.codex.invoke(prompt, report_schema(job), directory, timeout=timeout,
-                                 cancel_event=cancel_event, on_process=on_process)
+                                 cancel_event=cancel_event, on_process=on_process,
+                                 confidential=True, task_codex_home=self.task_codex_home)
 
     def review(self, payload, reports, directory, *, timeout, cancel_event, on_process):
         prompt = (
@@ -34,7 +36,8 @@ class TaskBackend:
                          "report_digests": {job: digest(value) for job, value in reports.items()}})
         )
         return self.codex.invoke(prompt, review_schema(payload), directory, timeout=timeout,
-                                 cancel_event=cancel_event, on_process=on_process)
+                                 cancel_event=cancel_event, on_process=on_process,
+                                 confidential=True, task_codex_home=self.task_codex_home)
 
 
 class SyntheticTaskBackend:
