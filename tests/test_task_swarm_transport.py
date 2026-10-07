@@ -4,6 +4,9 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
+import sqlite3
+import time
 
 from jsonschema import Draft202012Validator, ValidationError
 from pathlib import Path
@@ -64,6 +67,39 @@ class TransportTests(unittest.TestCase):
             clock=lambda: self.now[0],
             **kwargs,
         )
+
+    def test_busy_writer_queue_is_bounded_and_never_calls_the_payload_publisher(self):
+        transport=self._transport();held=threading.Event();release=threading.Event();published=[]
+        def hold():
+            with transport._write_guard:
+                held.set();release.wait(8)
+        holder=threading.Thread(target=hold)
+        holder.start();self.assertTrue(held.wait(2))
+        try:
+            started=time.monotonic()
+            with self.assertRaises(SwarmError) as raised:
+                transport.send(self._request(),publish=lambda:published.append(True))
+            self.assertEqual(raised.exception.code,'STORE_BUSY')
+            self.assertLess(time.monotonic()-started,6)
+            self.assertEqual(published,[])
+        finally:
+            release.set();holder.join(timeout=2)
+        self.assertFalse(holder.is_alive())
+        self.assertEqual(transport.receive('task-1','receiver'),[])
+
+    def test_expired_sqlite_contention_has_a_distinct_busy_reason(self):
+        transport=self._transport()
+        with mock.patch.object(transport,'_connect',side_effect=sqlite3.OperationalError('database is locked')):
+            with self.assertRaises(SwarmError) as raised:
+                transport._retry_transaction_before(lambda _connection:None,time.monotonic()-1)
+        self.assertEqual(raised.exception.code,'STORE_BUSY')
+
+    def test_unavailable_sqlite_is_not_silently_reclassified_as_backpressure(self):
+        transport=self._transport()
+        with mock.patch.object(transport,'_connect',side_effect=sqlite3.OperationalError('unable to open database file')):
+            with self.assertRaises(SwarmError) as raised:
+                transport._retry_transaction(lambda _connection:None)
+        self.assertEqual(raised.exception.code,'STORE_UNAVAILABLE')
 
     def _request(self, **changes):
         request = {
