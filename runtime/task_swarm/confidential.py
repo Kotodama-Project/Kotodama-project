@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import platform
 import stat
 import subprocess
 import uuid
@@ -124,20 +125,33 @@ class ConfidentialScope:
                 "--include-managed-config", *settings, "--", *command]
 
     def preflight(self):
+        # Root-deny mounts use canonical paths. Invoke glibc's actual loader
+        # directly so /lib64 symlink aliases are not required inside the root.
+        loader_name={"x86_64":"/lib64/ld-linux-x86-64.so.2", "aarch64":"/lib/ld-linux-aarch64.so.1"}.get(platform.machine())
+        refuse(loader_name is not None, "CONFIDENTIAL_PROBE_PLATFORM_UNSUPPORTED")
+        loader=Path(loader_name).resolve(strict=True)
+        refuse(any(loader.is_relative_to(Path(root).resolve()) for root in ("/lib","/usr/lib","/lib64","/usr/lib64")),
+               "CONFIDENTIAL_PROBE_PLATFORM_UNSUPPORTED")
         nonce = uuid.uuid4().hex
         allowed = self.work/"probe-input"
         denied = self.root/"probe-private"
         sibling = self.root.parent/("probe-outside-"+nonce)
         for file in (allowed, denied, sibling):
-            file.write_text(nonce, encoding="utf-8")
+            file.write_text(nonce+"\n", encoding="utf-8")
         # Only synthetic files are probed. Never try to read a real credential.
-        script = 'test "$(cat "$1")" = "$3" && ! cat "$2" >/dev/null 2>&1 && printf "%s" "$3"'
+        # Only shell builtins: a separate /usr/bin/cat would require its own
+        # logical ELF loader alias. Expected read denial goes to captured stderr.
+        script = 'IFS= read -r value < "$1" && test "$value" = "$3" && ! (IFS= read -r value < "$2") && printf "%s" "$3"'
         try:
             for name, settings, forbidden in (("task-runtime",self.outer,sibling),("task-input",self.inner,denied)):
-                result = subprocess.run(self.sandbox(name,settings,[str(Path("/bin/sh").resolve(strict=True)),"-c",script,"probe",str(allowed),str(forbidden),nonce]),
+                result = subprocess.run(self.sandbox(name,settings,[str(loader),"--library-path",str(loader.parent),
+                                        str(Path("/bin/sh").resolve(strict=True)),"-c",script,"probe",str(allowed),str(forbidden),nonce]),
                                         cwd=self.work,env=self.env,capture_output=True,timeout=15)
                 refuse(result.returncode == 0 and result.stdout.decode("utf-8","replace") == nonce,
                        "CONFIDENTIAL_SANDBOX_UNAVAILABLE")
+            launched=subprocess.run(self.sandbox("task-runtime",self.outer,[self.executable,"--version"]),
+                                    cwd=self.work,env=self.env,capture_output=True,timeout=15)
+            refuse(launched.returncode==0 and launched.stdout.startswith(b"codex-cli "), "CONFIDENTIAL_CLI_LAUNCH_UNAVAILABLE")
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise SwarmError("CONFIDENTIAL_SANDBOX_UNAVAILABLE", "sandbox probe did not complete") from exc
         finally:
