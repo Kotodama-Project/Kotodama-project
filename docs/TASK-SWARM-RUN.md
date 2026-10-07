@@ -61,10 +61,13 @@ CodexBackendが実process→thread→completed rollout→出力を照合し、co
 
 同じTask ID/revisionのrun directoryは一度だけ作り、入力・plan・報告・review・結果の
 exact bytesをreceiptへ束縛します。各acceptの前とfinal receiptの前に再読します。
-同一入力・現在bindingでの再実行は読み戻すだけです。未完directoryは復旧確認が必要として
+runtimeのreceipt・process・イベント・完了rolloutも再読し、元のbytesと実出力を照合します。
+同一入力・現在bindingでの再実行には、呼出し元が保持する最初のreceipt SHA-256を
+expected-receipt-sha256として要求し、一致した時だけ読み戻します。同じdirectoryの
+receipt自身から期待値を作りません。未完directoryは復旧確認が必要として
 拒否し、processを増やしたり既存候補を上書きしたりしません。
 
-stdoutはstate/run ID/合成かどうか/duplicateだけを返します。実本文はprivateな結果JSONに
+stdoutはstate/run ID/合成かどうか/duplicate/receipt SHA-256だけを返します。実本文はprivateな結果JSONに
 残ります。全criteriaがpassedの時だけjobをownerとしてacceptし、結果はneeds_reviewです。
 一つでもfailed/blocked/not_runならfailedで、Taskの完了やHuman GOを宣言しません。
 Taskのfinishと依頼者への返却はNode接続側が担当します。

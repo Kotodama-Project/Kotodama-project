@@ -417,6 +417,7 @@ def main():
     task.add_argument("--codex-executable")
     task.add_argument("--allow-codex", action="store_true")
     task.add_argument("--allow-local-fixture", action="store_true")
+    task.add_argument("--expected-receipt-sha256")
     args = parser.parse_args()
     try:
         if args.command == "task-run":
@@ -432,10 +433,11 @@ def main():
                     raise SwarmError("AUTHORIZATION_REQUIRED", "Codex Task execution requires explicit caller authorization")
                 backend = TaskBackend(args.codex_executable)
             with ParentCancellation() as lifetime:
-                output = execute_task(args.owner, args.input, backend, cancel_event=lifetime.event)
+                output = execute_task(args.owner, args.input, backend, cancel_event=lifetime.event,
+                                      expected_receipt_sha256=args.expected_receipt_sha256)
                 print(json.dumps({"status": output["result"]["state"], "run_id": output["receipt"]["run_id"],
                                   "synthetic": output["result"]["synthetic"], "duplicate": output["duplicate"],
-                                  "task_state_changed": False}, ensure_ascii=False))
+                                  "receipt_sha256": output["receipt_sha256"], "task_state_changed": False}, ensure_ascii=False))
             return 0
         return demo(args)
     except Exception as exc:
