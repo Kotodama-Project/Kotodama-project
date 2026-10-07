@@ -44,7 +44,7 @@ class DiscordCompanyPackBindingTests(unittest.TestCase):
                 CREATE TABLE intents(id TEXT PRIMARY KEY,source_key TEXT,revision INTEGER,body TEXT);
             """)
             connection.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?)", (self.task_id, actor, self.task["room"], self.source_key, 1, "running", json.dumps(self.task)))
-            connection.execute("INSERT INTO sources VALUES(?,?,?,?)", (self.source_key, 100, "c" * 64, json.dumps(self.source)))
+            connection.execute("INSERT INTO sources VALUES(?,?,?,?)", (self.source_key, 100, executor.discord_source_fingerprint(self.source), json.dumps(self.source)))
             connection.execute("INSERT INTO intents VALUES(?,?,?,?)", (self.intent_id, self.source_key, 100, json.dumps(self.intent)))
         self.request = {"kind": "company_pack_task_request", "operation": "CREATE_COMPANY_PACK",
             "operation_key": self.task_id + "-r1", "task_ref": "task:" + self.task_id,
@@ -66,6 +66,39 @@ class DiscordCompanyPackBindingTests(unittest.TestCase):
         self.assertIn(table, ("tasks", "sources", "intents"))
         with closing(sqlite3.connect(self.database)) as connection, connection:
             connection.execute(f"UPDATE {table} SET body=?", (json.dumps(value),))
+            if table == "sources":
+                connection.execute("UPDATE sources SET fingerprint=?", (executor.discord_source_fingerprint(value),))
+
+    def test_changed_body_without_matching_fingerprint_is_refused(self):
+        altered = copy.deepcopy(self.source)
+        altered["metadata"]["newAuthorityClaim"] = "synthetic-change"
+        with closing(sqlite3.connect(self.database)) as connection, connection:
+            connection.execute("UPDATE sources SET body=?", (json.dumps(altered),))
+        self.assert_refused("DISCORD_SOURCE_FINGERPRINT_MISMATCH")
+
+    def test_native_correction_keeps_text_source_kind_and_explicit_task_binding(self):
+        self.source["metadata"].update({"kind": "text", "manualCorrection": {
+            "surface": "discord_native_ui", "actor": self.task["actor"], "taskId": self.task_id,
+            "interactionId": "100000000000000025", "at": "2026-10-01T00:00:00Z",
+            "previousSourceRevision": 99, "previousTaskRevision": 1}})
+        self.intent.update({"origin": "native_correction", "targetTaskId": self.task_id})
+        self.update_document("sources", self.source)
+        self.update_document("intents", self.intent)
+        self.assertEqual("LOCAL_PASS", self.execute()["status"])
+
+    def test_native_correction_requires_matching_actor_target_and_interaction(self):
+        self.intent.update({"origin": "native_correction", "targetTaskId": self.task_id})
+        self.update_document("intents", self.intent)
+        for correction in (None, {"surface": "discord_native_ui", "actor": "other", "taskId": self.task_id},
+                           {"surface": "discord_native_ui", "actor": self.task["actor"], "taskId": self.task_id, "interactionId": "invalid"}):
+            self.source["metadata"]["manualCorrection"] = correction
+            self.update_document("sources", self.source)
+            self.assert_refused("DISCORD_EXPLICIT_COMMAND_REQUIRED")
+
+    def test_fingerprint_uses_owner_javascript_numbers_and_unicode(self):
+        self.source["metadata"]["numeric"] = {"tiny": 1e-7, "large": 1e21, "integer": 1.0, "日本語": "𠮷"}
+        self.update_document("sources", self.source)
+        self.assertEqual("LOCAL_PASS", self.execute()["status"])
 
     def execute(self):
         return executor.execute(self.request, self.output, self.binding_path)

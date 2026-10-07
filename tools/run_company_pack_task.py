@@ -35,6 +35,7 @@ REQUEST_KEYS = {
 SOURCE_FILES = (
     "tools/run_company_pack_task.py", "tools/create_company_pack.py",
     "tools/check_company_pack_customization.py", "tools/validate_template_pack.py",
+    "runtime/discord-template/src/common.mjs",
 )
 
 
@@ -230,6 +231,22 @@ def resolve_records(request: dict[str, Any], root: Path, binding_path: Path | No
     return {"sha256": digest(binding), "task_revision": entries["task"]["sha256"], "owner_ref": binding["owner_ref"], "records": entries}
 
 
+def discord_source_fingerprint(source: dict[str, Any]) -> str:
+    """Reuse the owner's exact JavaScript number/string canonicalization."""
+    module = (ROOT / "runtime/discord-template/src/common.mjs").as_uri()
+    program = ("import {readFileSync} from 'node:fs';import {sourceFingerprint} from "
+               + json.dumps(module) + ";process.stdout.write(sourceFingerprint(JSON.parse(readFileSync(0,'utf8'))));")
+    environment = {key: value for key, value in os.environ.items() if key.upper() not in {"NODE_OPTIONS", "NODE_PATH"}}
+    try:
+        result = subprocess.run(["node", "--input-type=module", "-e", program],
+            input=json.dumps(source, ensure_ascii=True, allow_nan=False).encode("utf-8"),
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5, env=environment)
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        raise Refused("DISCORD_FINGERPRINT_UNAVAILABLE") from exc
+    require(result.returncode == 0 and re.fullmatch(rb"[a-f0-9]{64}", result.stdout) is not None, "DISCORD_FINGERPRINT_UNAVAILABLE")
+    return result.stdout.decode("ascii")
+
+
 def resolve_discord_task(request: dict[str, Any], root: Path, binding: dict[str, Any]) -> dict[str, Any]:
     """Read the existing local owner. Snapshot references do not grant authority."""
     keys = {"kind", "version", "owner_kind", "owner_ref", "database_path", "task_id",
@@ -280,12 +297,13 @@ def resolve_discord_task(request: dict[str, Any], root: Path, binding: dict[str,
             require(source.get("provider") == "discord" and source.get("final") is True and source.get("withdrawn", False) is False, "DISCORD_SOURCE_REFUSED")
             actor = task_row["actor"]
             require(isinstance(actor, str) and re.fullmatch(r"[0-9]{5,24}", actor) is not None and source.get("actorId") == actor, "DISCORD_ACTOR_MISMATCH")
-            require(isinstance(source.get("readers"), list) and actor in source["readers"], "DISCORD_SOURCE_ACCESS_DENIED")
+            require(isinstance(source.get("readers"), list) and all(isinstance(reader, str) for reader in source["readers"]) and actor in source["readers"], "DISCORD_SOURCE_ACCESS_DENIED")
+            require(source_row["fingerprint"] == discord_source_fingerprint(source), "DISCORD_SOURCE_FINGERPRINT_MISMATCH")
             require(all(isinstance(source.get(key), str) and re.fullmatch(r"[0-9]{5,24}", source[key]) is not None for key in ("guildId", "channelId")), "DISCORD_SOURCE_INVALID")
             room = f'discord:{source["guildId"]}:{source["channelId"]}'
             require(task_row["room"] == task.get("room") == room, "TASK_ROOM_MISMATCH")
             metadata = source.get("metadata")
-            require(isinstance(metadata, dict) and metadata.get("kind") in ("command", "trusted_cli"), "DISCORD_EXPLICIT_COMMAND_REQUIRED")
+            require(isinstance(metadata, dict), "DISCORD_EXPLICIT_COMMAND_REQUIRED")
             command = metadata.get("command")
             require(isinstance(command, dict) and command.get("action") == "create_company_pack" and command.get("request") == task["request"] == source.get("text"), "DISCORD_EXPLICIT_COMMAND_REQUIRED")
             intents = task.get("intentIds")
@@ -295,6 +313,12 @@ def resolve_discord_task(request: dict[str, Any], root: Path, binding: dict[str,
             intent = document(intent_row, "DISCORD_INTENT_NOT_FOUND")
             require(intent_row["source_key"] == intent.get("source_key") == binding["source_key"] and intent_row["revision"] == intent.get("source_revision") == binding["source_revision"], "DISCORD_INTENT_MISMATCH")
             require(intent.get("kind") == "request" and intent.get("explicit") is True and intent.get("complete") is True and intent.get("origin") in ("explicit_command", "native_correction"), "DISCORD_EXPLICIT_COMMAND_REQUIRED")
+            if intent["origin"] == "native_correction":
+                correction = metadata.get("manualCorrection")
+                require(isinstance(correction, dict) and correction.get("surface") == "discord_native_ui" and correction.get("actor") == actor and correction.get("taskId") == binding["task_id"], "DISCORD_EXPLICIT_COMMAND_REQUIRED")
+                require(isinstance(correction.get("interactionId"), str) and re.fullmatch(r"[0-9]{5,24}", correction["interactionId"]) is not None and intent.get("targetTaskId") == binding["task_id"], "DISCORD_EXPLICIT_COMMAND_REQUIRED")
+            else:
+                require(metadata.get("kind") in ("command", "trusted_cli"), "DISCORD_EXPLICIT_COMMAND_REQUIRED")
             require(intent.get("action") == "create_company_pack" and intent.get("request") == task["request"], "DISCORD_INTENT_MISMATCH")
             snapshot = {"task": task, "task_revision": task_row["revision"], "state": task_row["state"], "source": source, "intent": intent}
         finally:
