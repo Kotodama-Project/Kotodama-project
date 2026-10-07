@@ -32,6 +32,10 @@ def shape(value: Any, keys: set[str], code: str) -> None:
 def text(value: Any, limit: int, code: str) -> None:
     require(isinstance(value, str) and bool(value.strip()) and len(value) <= limit, code)
     require("\x00" not in value, code)
+    try:
+        value.encode("utf-8")
+    except UnicodeError as exc:
+        raise SwarmError(code, "text must be valid UTF-8") from exc
 
 
 def validate_input(payload: Mapping[str, Any], binding: Mapping[str, Any], *, now: float) -> dict:
@@ -124,7 +128,8 @@ def validate_report(value: dict, job_id: str, payload: dict) -> dict:
 
 
 def validate_review(value: dict, payload: dict, reports: Mapping[str, dict]) -> dict:
-    shape(value, {"report_digests", "validations"}, "REVIEW_INVALID")
+    shape(value, {"context_digest", "report_digests", "validations"}, "REVIEW_INVALID")
+    require(value["context_digest"] == digest(payload), "REVIEW_CONTEXT_MISMATCH")
     require(isinstance(reports, Mapping) and set(reports) == set(WORK_JOBS), "REVIEW_INPUT_INVALID")
     checked = {job: validate_report(report, job, payload) for job, report in reports.items()}
     report_digests = {job: digest(report) for job, report in checked.items()}

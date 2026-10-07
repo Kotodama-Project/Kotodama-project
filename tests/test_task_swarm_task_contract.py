@@ -31,7 +31,7 @@ def fixture():
             {"source_key": "a"*64, "source_revision": 4, "start": 0, "end": 6, "quote": source[:6]}]}],
         "conflicts": []}
     reports = {job: {**copy.deepcopy(report), "job_id": job} for job in WORK_JOBS}
-    review = {"report_digests": {job: digest(value) for job, value in reports.items()},
+    review = {"context_digest": digest(payload), "report_digests": {job: digest(value) for job, value in reports.items()},
               "validations": [{"criterion_id": name, "status": "passed",
                                "evidence": [{"job_id": job, "claim_index": 0} for job in (WORK_JOBS if name == "C4" else ("facts",))], "gap_reason": None}
                               for name in criteria(payload)]}
@@ -122,3 +122,27 @@ def test_review_binds_exact_reports_and_every_user_criterion():
     review["validations"][0].update(status="not_run", evidence=[], gap_reason="合成試験の未検査")
     result = validate_review(review, payload, reports)
     assert result["validations"][0]["status"] == "not_run"
+
+
+@pytest.mark.parametrize("field,value", [("request", "別の問いへ変更"), ("acceptance", ["別の受入条件"])])
+def test_review_cannot_borrow_identical_reports_for_different_task_requirements(field, value):
+    payload, _, reports, review = fixture()
+    payload[field] = value
+    with pytest.raises(SwarmError) as raised:
+        validate_review(review, payload, reports)
+    assert raised.value.code == "REVIEW_CONTEXT_MISMATCH"
+
+
+@pytest.mark.parametrize("field", ["summary", "claim", "conflict", "gap"])
+def test_output_lone_surrogates_are_typed_refusals(field):
+    payload, _, reports, review = fixture()
+    if field == "summary": reports["facts"]["summary"] = "\ud800"
+    elif field == "claim": reports["facts"]["claims"][0]["text"] = "\ud800"
+    elif field == "conflict": reports["facts"]["conflicts"] = ["\ud800"]
+    else:
+        review["validations"][0].update(status="blocked", evidence=[], gap_reason="\ud800")
+    with pytest.raises(SwarmError):
+        if field == "gap":
+            validate_review(review, payload, reports)
+        else:
+            validate_report(reports["facts"], "facts", payload)
