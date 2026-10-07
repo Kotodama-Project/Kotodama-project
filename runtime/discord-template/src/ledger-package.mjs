@@ -1,5 +1,5 @@
 import {createCipheriv,createDecipheriv,createHmac,hkdfSync,randomBytes} from 'node:crypto';
-import {mkdirSync,writeFileSync,readSync,lstatSync,realpathSync,readdirSync,openSync,closeSync,fstatSync} from 'node:fs';
+import {mkdirSync,writeFileSync,readSync,lstatSync,realpathSync,readdirSync,openSync,closeSync,fstatSync,constants} from 'node:fs';
 import path from 'node:path';
 import {canonical,check,digest} from './common.mjs';
 
@@ -23,11 +23,14 @@ function directory(filename){
   return {path:resolved,identity:identity(s)};
 }
 function pinnedRead(root,name){
-  const filename=path.join(root,name),before=lstatSync(filename);
-  check(before.isFile()&&!before.isSymbolicLink()&&before.nlink===1&&before.size<=MAX,'LEDGER_FILE_REFUSED');
-  const fd=openSync(filename,'r');
+  const filename=path.join(root,name);
+  // Open first without following the final link or blocking on a substituted
+  // special file; validate and bound the actual descriptor before reading.
+  const fd=openSync(filename,constants.O_RDONLY|(constants.O_NOFOLLOW??0)|(constants.O_NONBLOCK??0));
   try{
-    check(canonical(identity(fstatSync(fd)))===canonical(identity(before)),'LEDGER_FILE_CHANGED');
+    const before=fstatSync(fd),namedBefore=lstatSync(filename);
+    check(before.isFile()&&before.nlink===1&&before.size<=MAX&&!namedBefore.isSymbolicLink(),'LEDGER_FILE_REFUSED');
+    check(canonical(identity(namedBefore))===canonical(identity(before)),'LEDGER_FILE_CHANGED');
     const buffer=Buffer.alloc(before.size+1);let length=0;
     while(length<buffer.length){const count=readSync(fd,buffer,length,buffer.length-length,null);if(!count)break;length+=count;}
     const bytes=buffer.subarray(0,length),after=fstatSync(fd),named=lstatSync(filename);
