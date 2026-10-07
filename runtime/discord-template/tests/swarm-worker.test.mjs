@@ -12,15 +12,22 @@ import {swarmPayload} from '../src/swarm-worker.mjs';
 import {Analysis} from '../src/llm.mjs';
 import {runCommand} from '../src/command.mjs';
 import {resultFiles} from '../src/result-files.mjs';
+import {startRuntime,controlCommand} from '../src/runtime.mjs';
 
 const actor='100000000000000002';
 const python=process.env.KOTODAMA_TEST_SWARM_PYTHON??process.env.KOTODAMA_TEST_PYTHON??'python3';
-async function fixture(t){
+async function fixture(t,{http=false}={}){
   const root=await mkdtemp(path.join(os.tmpdir(),'kotodama-swarm-worker-')),dataDir=path.join(root,'data');await mkdir(dataDir);
   const base=exampleConfig({workspace:root}),config=Config.parse({...base,dataDir,worker:{...base.worker,actions:['swarm_research'],swarm:{pythonExecutable:python,codexExecutable:'model-must-not-run',codexHome:path.join(root,'dedicated-model-fixture'),maxDailyTasks:3,ownerRef:'ref/owner/synthetic',authorityRef:'ref/authority/synthetic',authorityExpiresAt:new Date(Date.now()+3600000).toISOString()}}});
-  const store=new Store(dataDir),errors=[];
-  const pipeline=new Pipeline({store,config,analyzer:{analyze:async()=>{throw Error('analyzer-must-not-run');}},worker:new CliWorker(config,{store,syntheticSwarmFixture:true}),onError:code=>errors.push(code)});
-  t.after(async()=>{await pipeline.close();store.close();assert.equal(path.dirname(root),os.tmpdir());assert(path.basename(root).startsWith('kotodama-swarm-worker-'));await rm(root,{recursive:true,force:true});});
+  const errors=[];let store,pipeline,runtime;
+  if(http){
+    const file=path.join(root,'config.json');await writeFile(file,JSON.stringify(config));
+    const worker={run:(...args)=>new CliWorker(config,{store:runtime.store,syntheticSwarmFixture:true}).run(...args)};
+    runtime=await startRuntime(file,{offline:true,worker,log:()=>{}});store=runtime.store;pipeline=runtime.pipeline;pipeline.onError=code=>errors.push(code);
+  }else{
+    store=new Store(dataDir);pipeline=new Pipeline({store,config,analyzer:{analyze:async()=>{throw Error('analyzer-must-not-run');}},worker:new CliWorker(config,{store,syntheticSwarmFixture:true}),onError:code=>errors.push(code)});
+  }
+  t.after(async()=>{if(runtime)await runtime.close();else{await pipeline.close();store.close();}assert.equal(path.dirname(root),os.tmpdir());assert(path.basename(root).startsWith('kotodama-swarm-worker-'));await rm(root,{recursive:true,force:true});});
   const source=(id='100000000000000010')=>({provider:'discord',guildId:config.discord.guildId,channelId:config.discord.resultChannelId,sourceId:id,actorId:actor,revision:1,final:true,readers:[actor],text:'合成資料の観測値42と不明事項を示してください。',metadata:{kind:'command'}});
   return {root,config,store,pipeline,source,errors};
 }
@@ -108,17 +115,17 @@ test('an observed worker failure reaches the existing notification callback afte
   assert.equal(delivered.length,1);assert.equal(delivered[0].id,task.id);assert.equal(delivered[0].state,'failed');assert.equal(f.store.taskInternal(task.id).state,'failed');
 });
 
-test('actual slash command creates one Task, Python swarm, independent fixture review and result attachment',{skip:process.platform==='win32',timeout:60000},async t=>{
-  const f=await fixture(t),adapter=new DiscordAdapter({config:f.config,store:f.store,pipeline:f.pipeline,onError:code=>f.errors.push(code)});adapter.verifiedInstallation=true;adapter.member=async()=>({id:actor,guild:{id:f.config.discord.guildId}});
+test('actual slash handler creates one Task, Python swarm, fixture review and authenticated HTTP result readback',{skip:process.platform==='win32',timeout:60000},async t=>{
+  const f=await fixture(t,{http:true}),adapter=new DiscordAdapter({config:f.config,store:f.store,pipeline:f.pipeline,onError:code=>f.errors.push(code)});adapter.verifiedInstallation=true;adapter.member=async()=>({id:actor,guild:{id:f.config.discord.guildId}});
   t.after(()=>adapter.client.destroy());
   const replies=[],interaction={id:'100000000000000015',createdTimestamp:Date.now(),guildId:f.config.discord.guildId,channelId:f.config.discord.resultChannelId,user:{id:actor},commandName:'kotodama',isChatInputCommand:()=>true,isButton:()=>false,options:{getSubcommand:()=> 'do',getString:name=>name==='action'?'swarm_research':'合成資料の観測値42と不明事項を示してください。'},deferReply:async()=>{},editReply:async value=>replies.push(value)};
   await adapter.interaction(interaction);await f.pipeline.tail;
   assert.equal(f.store.tasks(actor).length,1);const task=f.store.tasks(actor)[0];assert.equal(task.state,'needs_review',JSON.stringify(f.errors)+JSON.stringify(replies));
   assert.equal(task.result.independentReview,true);assert.equal(task.result.synthetic,true);assert.equal(task.result.modelRuntimeVerified,false);
-  const result=await f.pipeline.result(task.id,actor),files=await resultFiles(result,{artifactRoot:path.join(f.config.dataDir,'worktrees')});assert.equal(files.length,1);assert.equal(files[0].name,'swarm-research.txt');
+  const result=await controlCommand(f.config,{action:'result',actor,taskId:task.id}),files=await resultFiles(result,{artifactRoot:path.join(f.config.dataDir,'worktrees')});assert.equal(files.length,1);assert.equal(files[0].name,'swarm-research.txt');
   const starts=f.store.statement("SELECT count(*) AS n FROM events WHERE type='worker.started'").get().n;
   await adapter.interaction(interaction);await f.pipeline.tail;assert.equal(f.store.tasks(actor).length,1);assert.equal(f.store.statement("SELECT count(*) AS n FROM events WHERE type='worker.started'").get().n,starts);
-  const artifact=result.artifacts.find(a=>a.relative==='deliverables/swarm-research.txt');await writeFile(artifact.path,'changed');await assert.rejects(f.pipeline.result(task.id,actor),{code:'ARTIFACT_CHANGED'});
+  const artifact=result.artifacts.find(a=>a.relative==='deliverables/swarm-research.txt');await writeFile(artifact.path,'changed');await assert.rejects(controlCommand(f.config,{action:'result',actor,taskId:task.id}),{code:'ARTIFACT_CHANGED'});
 });
 
 test('Task refuses a receipt whose bytes disagree with the child completion anchor',{skip:process.platform==='win32',timeout:60000},async t=>{
