@@ -14,7 +14,9 @@ def bind_generated_projections(bundle, value):
     if len(concepts) != len(snapshot['concepts']) or set(concepts) != set(bundle.by_id):
         raise KnowledgeBaseError('LINEAGE_PROJECTION_COVERAGE_REQUIRED')
     sources = {row['revision_ref']: row for row in snapshot['sources']}
-    readback = validate_public_bytes(snapshot, repository_root=bundle.root)
+    used_sources = {ref for row in concepts.values() for ref in row['source_revision_refs']}
+    readback = validate_public_bytes({**snapshot, 'sources': [sources[ref] for ref in sorted(used_sources)],
+        'relations': [], 'projections': []}, repository_root=bundle.root)
     if not readback['local_bytes_match'] or readback['opaque_unverified_revision_refs']:
         raise KnowledgeBaseError('LINEAGE_PROJECTION_SOURCE_UNVERIFIED')
     for logical, row in concepts.items():
@@ -37,7 +39,7 @@ def bind_generated_projections(bundle, value):
         safe = '-'.join(fingerprint[i:i + 8] for i in range(0, 64, 8))
         records.append({'projection_ref': f'ref/projection/{kind}/{safe}', 'kind': kind,
             'content_sha256': fingerprint, 'concept_revision_refs': sorted(row['revision_ref'] for row in concepts.values()),
-            'source_revision_refs': sorted(sources),
+            'source_revision_refs': sorted(used_sources),
             **{field: sorted({ref for concept in bundle.concepts for ref in concept.extension.get(field, [])})
                for field in ('goal_refs', 'kgi_refs', 'initiative_refs')}})
     existing = {row['projection_ref']: row for row in snapshot['projections']}

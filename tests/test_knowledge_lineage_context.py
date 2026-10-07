@@ -121,6 +121,19 @@ class KnowledgeLineageContextTests(unittest.TestCase):
             self.gate.consume(self.request, manifest, ambiguous)
         self.assertEqual(1, len(calls))
 
+    def test_lazy_generator_consumers_never_receive_a_success_receipt(self):
+        manifest = self.gate.prepare(self.request); calls = []
+        def lazy(body):
+            calls.append(body)
+            yield body
+        class LazyConsumer:
+            def __call__(self, body):
+                calls.append(body)
+                yield body
+        for consumer in (lazy, lambda body: lazy(body), LazyConsumer()):
+            with self.assertRaises(KnowledgeBaseError): self.gate.consume(self.request, manifest, consumer)
+        self.assertEqual([], calls)
+
     def test_real_copied_code_byte_change_invalidates_the_prepared_binding(self):
         import kotodama_kb.lineage_context as module
         original = module._read_bytes
@@ -228,6 +241,21 @@ class KnowledgeLineageContextTests(unittest.TestCase):
         with self.assertRaisesRegex(KnowledgeBaseError, 'EVENT_SPAN_UNVERIFIED'):
             self.gate.consume(self.request, manifest, lambda body: self.fail('unexpected consumer'))
 
+    def test_opaque_event_range_still_requires_the_event_owner(self):
+        self.meta['sources'][0]['resource'] = 'https://provider.invalid/synthetic-events'
+        self.revise(source_changes={'locator_visibility': 'opaque', 'locator': 'ref/locator/events',
+            'span': {'kind': 'events', 'from_event_ref': 'ref/event/one', 'to_event_ref': 'ref/event/two'}})
+        self.gate.verify_opaque = lambda value: True
+        with self.assertRaisesRegex(KnowledgeBaseError, 'EVENT_SPAN_OWNER_REQUIRED'): self.gate.prepare(self.request)
+        stages = []
+        def verify(value):
+            stages.append(value['stage'])
+            return value['stage'] == 'prepare'
+        self.gate.verify_event_span = verify; manifest = self.gate.prepare(self.request)
+        with self.assertRaisesRegex(KnowledgeBaseError, 'EVENT_SPAN_UNVERIFIED'):
+            self.gate.consume(self.request, manifest, lambda body: self.fail('unexpected consumer'))
+        self.assertEqual(['prepare', 'consume'], stages)
+
     def test_real_selector_and_v2_producer_reach_only_the_bound_consumer(self):
         manifest = self.gate.prepare(self.request)
         delivered = []
@@ -296,6 +324,55 @@ class KnowledgeLineageContextTests(unittest.TestCase):
         context = json.loads(delivered[0])
         self.assertEqual(['synthetic/example'], [item['id'] for item in context['concepts']])
         self.assertIn('synthetic/optional', context['omitted_ids'])
+
+    def test_selected_registered_context_cannot_be_hidden_when_its_source_is_revoked(self):
+        metadata = copy.deepcopy(self.meta); metadata['tags'] = ['synthetic']; metadata['kotodama']['id'] = 'synthetic/optional'
+        metadata['sources'][0]['resource'] = '../../docs/other.md'; self.write_concept(metadata)
+        raw = b'other synthetic source\n'; (self.root / 'docs/other.md').write_bytes(raw)
+        with (self.root / 'knowledge/index.md').open('a', encoding='utf-8') as stream: stream.write('* [任意](synthetic/optional.md)\n')
+        value = fixture(); source = value['sources'][0]; fingerprint = hashlib.sha256(raw).hexdigest()
+        source.update(source_id='ref/source/other', revision_ref='ref/source-revision/other', locator='docs/other.md',
+            invalidation_key='ref/invalidation/other', content_sha256=fingerprint, revision_value=fingerprint)
+        concept = value['concepts'][0]
+        concept.update(concept_id='synthetic/optional', revision_ref='ref/concept-revision/optional',
+            source_revision_refs=[source['revision_ref']], source_aliases={'manual': source['revision_ref']},
+            content_sha256=load_bundle(self.root, as_of=NOW).by_id['synthetic/optional'].content_sha256)
+        value['relations'] = []; value['projections'] = []; rebind(value)
+        self.owner.register(value, expected_generation=2); self.owner.publish(concept['revision_ref'], expected_parent_ref=None, expected_generation=3)
+        request = copy.deepcopy(self.request)
+        self.assertIn('synthetic/optional', self.gate.prepare(request)['concept_revisions'])
+        self.owner.revoke('ref/invalidation/other', evidence_ref='ref/evidence/other-revoked', expected_generation=4)
+        with self.assertRaisesRegex(KnowledgeBaseError, 'ACCESS_WITHHELD'): self.gate.prepare(request)
+
+    def test_optional_dependency_without_markdown_link_does_not_block_required_context(self):
+        import sqlite3
+        from contextlib import closing
+        from tests.test_knowledge_lineage_impact import edge
+        self.dependency_snapshot(); value = fixture(); value['projections'] = []
+        with closing(sqlite3.connect(self.owner.database)) as db:
+            record = self.owner._record(db, self.current_ref, 'concept')
+            value['concepts'] = [record['concept']] + [self.owner._record(db, 'ref/concept-revision/' + suffix, 'concept')['concept'] for suffix in ('policy', 'optional')]
+        concept = value['concepts'][0]; concept.update(revision_ref='ref/concept-revision/three', parent_revision_ref=self.current_ref, parent_resolution='external_unresolved')
+        value['relations'] = record['relations']
+        for relation in value['relations']: relation['from_revision_ref'] = concept['revision_ref']
+        value['relations'].append(edge(concept['revision_ref'], 'ref/concept-revision/optional', 'synthetic/optional', required=False))
+        self.owner.register(value, expected_generation=6); self.owner.publish(concept['revision_ref'], expected_parent_ref=self.current_ref, expected_generation=7)
+        manifest = self.gate.prepare(self.request)
+        self.assertEqual({'synthetic/example', 'synthetic/policy'}, set(manifest['concept_revisions']))
+
+    def test_generated_projections_do_not_depend_on_unreferenced_snapshot_sources(self):
+        from kotodama_kb.lineage_projection import bind_generated_projections
+        from kotodama_kb.lineage_impact import project_lineage, compare_lineage
+        snapshot = copy.deepcopy(self.snapshot); snapshot['projections'] = []
+        extra = copy.deepcopy(snapshot['sources'][0])
+        extra.update(source_id='ref/source/unrelated', revision_ref='ref/source-revision/unrelated',
+            invalidation_key='ref/invalidation/unrelated', locator='docs/unrelated.md')
+        (self.root / 'docs/unrelated.md').write_bytes(b'original source\n'); snapshot['sources'].append(extra)
+        result = bind_generated_projections(load_bundle(self.root, as_of=NOW), snapshot)
+        index = project_lineage(result['snapshot'])
+        self.assertEqual([], index['indexes']['source_revision_to_projections'][extra['revision_ref']])
+        impact = compare_lineage(result['snapshot'], result['snapshot'], invalidation_keys=[extra['invalidation_key']])
+        self.assertFalse(set(row['projection_ref'] for row in result['snapshot']['projections']) & set(impact['quarantine_revision_refs']))
 
 
 if __name__ == '__main__': unittest.main()

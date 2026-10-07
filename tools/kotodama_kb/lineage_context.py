@@ -162,14 +162,13 @@ class LineageContextGate:
                     found[logical] = self.owner._eligible(db, pointer[0])
                     record = self.owner._record(db, pointer[0], 'concept')
                     for relation in record['relations']:
-                        if relation['target_kind'] != 'concept':
+                        if relation['target_kind'] != 'concept' or not relation['required']:
                             continue
                         target = bundle.by_id.get(relation['target_id'])
                         source_concept = bundle.by_id.get(logical)
                         if target is not None and source_concept is not None and target.concept_id not in source_concept.resolved_concept_links:
                             raise KnowledgeBaseError('LINEAGE_CONTEXT_PORTABLE_LINK_REQUIRED')
-                        if relation['required']:
-                            following.add(relation['target_id'])
+                        following.add(relation['target_id'])
                 frontier = following - set(found)
                 if not frontier:
                     return found
@@ -182,11 +181,12 @@ class LineageContextGate:
                 continue
             try:
                 trial = expand({logical})
-                if len(set(rows) | set(trial)) > request['max_concepts']:
-                    raise KnowledgeBaseError('LINEAGE_CONTEXT_REQUIRED_BUDGET')
             except KnowledgeBaseError as exc:
-                if any(marker in str(exc) for marker in ('STORE', 'CORRUPT', 'UNSAFE', 'AUTHORIZATION')):
+                if str(exc) != 'LINEAGE_CONTEXT_POINTER_MISSING':
                     raise
+                omitted.add(logical)
+                continue
+            if len(set(rows) | set(trial)) > request['max_concepts']:
                 omitted.add(logical)
                 continue
             rows.update(trial)
@@ -215,13 +215,7 @@ class LineageContextGate:
                         repository_root=bundle.root, bundle_root=bundle.bundle_root)
                     if path is None or path != bundle.root / source['locator'] or dict(bundle.input_bindings).get(source['locator']) != source['content_sha256']:
                         raise KnowledgeBaseError('LINEAGE_CONTEXT_SOURCE_BINDING_MISMATCH')
-                    if source.get('span', {}).get('kind') == 'events':
-                        if self.verify_event_span is None:
-                            raise KnowledgeBaseError('LINEAGE_CONTEXT_EVENT_SPAN_OWNER_REQUIRED')
-                        self._require_true(self.verify_event_span,
-                            {'request': request, 'source_binding': source, 'declared_resource': declared[alias]['resource'], 'stage': stage},
-                            'LINEAGE_CONTEXT_EVENT_SPAN_UNVERIFIED')
-                    else:
+                    if source.get('span', {}).get('kind') != 'events':
                         _public_span(source, path)
                 else:
                     if self.verify_opaque is None:
@@ -230,6 +224,12 @@ class LineageContextGate:
                         {'request': request, 'concept_id': logical, 'source_alias': alias, 'source_binding': source,
                          'declared_resource': declared[alias]['resource'], 'stage': stage},
                         'LINEAGE_CONTEXT_OPAQUE_UNVERIFIED')
+                if source.get('span', {}).get('kind') == 'events':
+                    if self.verify_event_span is None:
+                        raise KnowledgeBaseError('LINEAGE_CONTEXT_EVENT_SPAN_OWNER_REQUIRED')
+                    self._require_true(self.verify_event_span,
+                        {'request': request, 'source_binding': source, 'declared_resource': declared[alias]['resource'], 'stage': stage},
+                        'LINEAGE_CONTEXT_EVENT_SPAN_UNVERIFIED')
                 sources[revision_ref] = source
             selected[logical] = concept
         # Use the established v2 producer, then redact opaque source locations
@@ -281,7 +281,8 @@ class LineageContextGate:
     def consume(self, value, manifest, consumer):
         request = _request(value)
         manifest = _clone(manifest, 64 * 1024)
-        if not callable(consumer) or inspect.iscoroutinefunction(consumer) or inspect.isasyncgenfunction(consumer) or not isinstance(manifest, dict) or type(manifest.get('owner_generation')) is not int:
+        if not callable(consumer) or any(check(callback) for callback in (consumer, getattr(consumer, '__call__', None))
+                for check in (inspect.iscoroutinefunction, inspect.isasyncgenfunction, inspect.isgeneratorfunction)) or not isinstance(manifest, dict) or type(manifest.get('owner_generation')) is not int:
             raise KnowledgeBaseError('LINEAGE_CONTEXT_MANIFEST_INVALID')
         with self.owner._transaction('consume_context', request['filters']['goals'], manifest['owner_generation'], digest(request)) as db:
             rendered, current = self._candidate(db, request, as_of=manifest.get('as_of'), stage='consume')
@@ -293,8 +294,8 @@ class LineageContextGate:
             # its receipts. A failure may be ambiguous; never retry it here.
             try:
                 result = consumer(rendered)
-                if inspect.isawaitable(result) or inspect.isasyncgen(result):
-                    if inspect.iscoroutine(result): result.close()
+                if inspect.isawaitable(result) or inspect.isasyncgen(result) or inspect.isgenerator(result):
+                    if inspect.iscoroutine(result) or inspect.isgenerator(result): result.close()
                     raise KnowledgeBaseError('LINEAGE_CONTEXT_CONSUMER_NOT_SYNCHRONOUS')
             except Exception as exc:
                 raise KnowledgeBaseError('LINEAGE_CONTEXT_CONSUMER_OUTCOME_UNCONFIRMED') from exc
