@@ -14,7 +14,7 @@ deterministic attesterへ接続しています。補助型の全定義と採用�
 OKFのConcept IDは引き続きMarkdownの相対pathです。その`kotodama.strategy.id`に、
 `KGI-INTENT`などの既存の意味上のIDを対応付けます。別のregistryを手書きの正本にしません。
 Goal、Outcome、Metric、Key Factor、KPI、Initiative、Experiment、Decision、Risk、
-Measurement Policy、Attested Computation、Evidenceを扱います。
+Measurement Policy、Attested Computation、Evidence、Phaseを扱います。
 
 ```yaml
 type: Metric
@@ -49,7 +49,7 @@ catalogのstrategyとgraphのdefinition_conceptで、意味上のIDから同じM
 必須文脈が収まらなければneeds_resolutionとなり、既定の12 Concept上限は広げません。
 
 型付き関係はmeasured_by、computed_by、enabled_by、observed_by、advanced_by、tested_by、
-produces、governed_by、Decisionのadopts/revises/pauses/rejects、Riskのmitigatesです。
+produces、governed_by、Phase同士のsequenced_after、Decisionのadopts/revises/pauses/rejects、Riskのmitigatesです。
 型の違う結び方、未定義ID、重複定義/関係、循環を拒否します。関係の相手は通常のMarkdown link
 でも結び、専用toolがなくても辿れるようにします。エラー時は使用可能に見えるgraphを返しません。
 

@@ -11,6 +11,7 @@ KINDS = {
     "Experiment": "experiment", "Decision": "decision", "Risk": "risk",
     "Measurement Policy": "measurement_policy", "Attested Computation": "computation",
     "Evidence": "evidence",
+    "Phase": "phase",
 }
 REFERENCE_KINDS = {
     "goal_refs": {"goal", "outcome"}, "kgi_refs": {"metric"},
@@ -25,6 +26,7 @@ RELATIONS = {
     "tested_by": ({"initiative"}, {"experiment"}),
     "produces": ({"initiative", "experiment"}, {"outcome", "evidence"}),
     "governed_by": (set(KINDS.values()), {"measurement_policy"}),
+    "sequenced_after": ({"phase"}, {"phase"}),
     **{verb: ({"decision"}, set(KINDS.values())) for verb in ("adopts", "revises", "pauses", "rejects")},
     "mitigates": ({"risk"}, {"goal", "outcome", "metric", "factor", "initiative"}),
 }

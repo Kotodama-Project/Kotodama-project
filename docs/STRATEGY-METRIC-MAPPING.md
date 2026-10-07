@@ -19,7 +19,9 @@
 | KGI-05 | [KPI-CLARIFICATION-LOAD](../knowledge/metrics/clarification-load.md)。重要な確認・訂正を隠さず扱う人の負担 |
 | KGI-06 | [KPI-OWNER-RESPONSE](../knowledge/metrics/owner-response.md)。findingから既存ownerと次の作業への時間 |
 
-旧候補の数値target、P0〜P6の予定・到達状態は取り込みません。baseline、target/threshold、
+旧候補の数値target、P0〜P6の予定・到達状態は取り込みません。[段階の意味だけ](../knowledge/phases/index.md)を
+PHASE-P0〜PHASE-P6のConceptへ対応付けています。sequenced_afterは候補の能力依存であり、
+現在地・期日・完了率・新しい実行許可を持ちません。baseline、target/threshold、
 deadline、測定window、除外の採用はunknown/not_adoptedです。現在の稼働や達成の証拠にしません。
 
 ## 値を出す前に必要なもの
