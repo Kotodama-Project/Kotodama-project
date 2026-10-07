@@ -194,10 +194,10 @@ class PeerTransport:
         # competing with the publisher. Other processes still use SQLite's
         # transaction lock. Time spent in this queue counts toward retry time.
         if not self._write_guard.acquire(timeout=2.5):
-            raise SwarmError("STORE_UNAVAILABLE", "transport writer queue remained busy")
+            raise SwarmError("STORE_BUSY", "transport writer queue remained busy")
         try:
             if time.monotonic() >= deadline:
-                raise SwarmError("STORE_UNAVAILABLE", "transport writer queue exceeded its deadline")
+                raise SwarmError("STORE_BUSY", "transport writer queue exceeded its deadline")
             return self._retry_transaction_before(operation, deadline)
         finally:
             self._write_guard.release()
@@ -227,8 +227,10 @@ class PeerTransport:
                     except sqlite3.DatabaseError:
                         pass
                 last = exc
-                if not self._locked(exc) or time.monotonic() >= deadline:
+                if not self._locked(exc):
                     raise SwarmError("STORE_UNAVAILABLE", "transport store write was not available") from exc
+                if time.monotonic() >= deadline:
+                    raise SwarmError("STORE_BUSY", "transport store write remained busy") from exc
                 time.sleep(delay)
                 delay = min(delay * 1.7, 0.15)
             except sqlite3.DatabaseError as exc:
@@ -242,7 +244,7 @@ class PeerTransport:
                 if connection is not None:
                     connection.close()
             if last is not None and time.monotonic() >= deadline:
-                raise SwarmError("STORE_UNAVAILABLE", "transport store remained busy") from last
+                raise SwarmError("STORE_BUSY", "transport store remained busy") from last
 
     def _read(self, operation: Callable[[sqlite3.Connection], Any]) -> Any:
         deadline = time.monotonic() + 2.5
@@ -253,8 +255,10 @@ class PeerTransport:
                 connection = self._connect()
                 return operation(connection)
             except sqlite3.OperationalError as exc:
-                if not self._locked(exc) or time.monotonic() >= deadline:
+                if not self._locked(exc):
                     raise SwarmError("STORE_UNAVAILABLE", "transport store read was not available") from exc
+                if time.monotonic() >= deadline:
+                    raise SwarmError("STORE_BUSY", "transport store read remained busy") from exc
                 time.sleep(delay)
                 delay = min(delay * 1.7, 0.15)
             except sqlite3.DatabaseError as exc:

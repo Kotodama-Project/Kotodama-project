@@ -18,6 +18,12 @@
 
 ## 最初の一手
 
+peer transportはwriter queueとSQLiteのlock待ちを有限に制限し、混雑で期限に達した場合は
+`STORE_BUSY`を返します。quotaの`QUOTA_EXCEEDED`/`BACKPRESSURE`、storeを開けない
+`STORE_UNAVAILABLE`、破損の拒否を区別します。混雑は配送成功や無作用の証明ではありません。
+すでに予約されたpending payloadがあり得るため、現在のownerと同じidempotency keyの
+記録を確認します。枠やpayloadを推測で削除せず、盲目的な新規keyへの再送はしません。
+
 作業開始前に、次の packet を一つの immutable な入力として束縛します。タイトル、モデル名、ディレクトリ名、過去の assistant completion だけから値を推測しません。
 
 ```json
