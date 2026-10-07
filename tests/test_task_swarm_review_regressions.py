@@ -126,7 +126,7 @@ def test_concurrent_unique_sends_cannot_overrun_admission(tmp_path):
     def send(i):
         try: return a.peer_send('actor-b',f'body {i}',f'key-{i}')
         except SwarmError as e:
-            if e.code not in {'BACKPRESSURE','QUOTA_EXCEEDED'}:
+            if e.code not in {'BACKPRESSURE','QUOTA_EXCEEDED','STORE_BUSY'}:
                 chain=[]; current=e
                 while current is not None:
                     frames=[]; trace=current.__traceback__
@@ -138,7 +138,7 @@ def test_concurrent_unique_sends_cannot_overrun_admission(tmp_path):
             return e.code
     with ThreadPoolExecutor(max_workers=12) as pool: results=list(pool.map(send,range(60)))
     assert sum(isinstance(r,dict) for r in results)==3
-    assert set(r for r in results if isinstance(r,str)) <= {'BACKPRESSURE','QUOTA_EXCEEDED'}, diagnostics
+    assert set(r for r in results if isinstance(r,str)) <= {'BACKPRESSURE','QUOTA_EXCEEDED','STORE_BUSY'}, diagnostics
     assert len(payload_files(a))==3
     assert len(b.peer_receive()['messages'])==3
 

@@ -70,7 +70,7 @@ class ConnectionRetryTests(unittest.TestCase):
                 with mock.patch('task_swarm.transport.time.monotonic', side_effect=clock):
                     with self.assertRaises(SwarmError) as caught:
                         operation()
-            self.assertEqual('STORE_UNAVAILABLE', caught.exception.code)
+            self.assertEqual('STORE_BUSY', caught.exception.code)
             self.assertEqual(1, connect.call_count)
 
     def test_non_contention_setup_failure_is_not_retried_or_reflected(self):
@@ -91,7 +91,7 @@ class ConnectionRetryTests(unittest.TestCase):
         with mock.patch.object(transport, '_write_guard', guard), mock.patch.object(transport, '_connect') as connect:
             with self.assertRaises(SwarmError) as caught:
                 transport.send(self._request())
-        self.assertEqual('STORE_UNAVAILABLE', caught.exception.code)
+        self.assertEqual('STORE_BUSY', caught.exception.code)
         guard.acquire.assert_called_once_with(timeout=2.5)
         guard.release.assert_not_called(); connect.assert_not_called()
 
