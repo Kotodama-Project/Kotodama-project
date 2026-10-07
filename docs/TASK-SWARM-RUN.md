@@ -28,7 +28,8 @@ workerの報告はsummary、claims、conflictsを持ち、各claimはsupported/i
 start/end、完全一致するquoteが必要です。別の版や本文・範囲違いを拒否します。
 引用が一致しても意味の正しさやSource本人性を証明したとは扱いません。
 
-独立verifierは正確な3報告のdigestに束縛され、C1〜C4とすべてのユーザー条件について
+独立verifierは依頼・acceptance・資料を含む全Task入力のcontext_digestと、正確な3報告の
+digestに束縛され、C1〜C4とすべてのユーザー条件について
 passed/failed/blocked/not_runと証拠位置を返します。証拠は実在するjob/claim番号です。
 passedには証拠が必要で、C4は3報告すべてを参照します。未検査・拒否にはgap_reasonを
 残します。古い報告のreview、条件抜け、重複、無いclaimへの参照は拒否します。

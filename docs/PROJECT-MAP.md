@@ -63,3 +63,10 @@ Task ownerを追加せず、実Codex・native core・配備の受入は残りま
 Task契約を持つcheckoutでは、そのresolver / records / events / restart checkpointを使います。ない契約をあるものとして扱わず、別のTask正本を先に作りません。
 
 公開Botの提供、配備、会社のCurrent Truth、Public Betaへの移行は、それぞれの対象に合う実行証拠と決定で判断します。コードのmain統合だけでそれらを完了扱いにしません。
+
+### Taskに束縛するswarmの入口
+
+既存Taskからの固定plan・出典付き報告・独立reviewの閉じた形は
+[Task swarm run契約](TASK-SWARM-RUN.md)、実行基盤とownerの境界は
+[Luna Task swarm](LUNA-TASK-SWARM.md)を参照します（#286）。この契約だけで
+Discordのdispatchやlive受入を完成扱いしません。
