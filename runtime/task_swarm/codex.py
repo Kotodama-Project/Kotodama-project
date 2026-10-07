@@ -921,7 +921,7 @@ class CodexBackend:
                     raise BackendError("policy_invalid", "confidential Task workers do not load peer tools", retryable=False)
                 from .confidential import ConfidentialScope
                 scope = ConfidentialScope(run_dir, executable_path, task_codex_home=task_codex_home)
-                diagnostics["confidential_scope"] = scope.preflight()
+                diagnostics["permission_probe"] = scope.preflight()
                 check_cancelled()
                 command = scope.wrap(command)
                 execution_cwd, execution_sessions, execution_env = scope.work, scope.codex_home/"sessions", scope.env
@@ -1092,7 +1092,9 @@ class CodexBackend:
                 "duration_s": max(0.0, finished - started_unix),
                 "peer_tools": list(EXACT_TOOLS) if peer_cfg else [],
                 "peer_write_authorized": bool(authorize_peer_writes) if peer_cfg else False,
-                "confidential_scope": diagnostics.get("confidential_scope"),
+                "permission_probe": ({"kind":"task_synthetic_permission_probe_v1",
+                                      "outer_read_denied":True,"inner_metadata_read_denied":True,
+                                      "model_called":False} if scope is not None else None),
             }
             redacted_result = _redact(result)
             check_cancelled()

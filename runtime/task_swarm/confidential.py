@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import shutil
 import stat
 import subprocess
 import uuid
@@ -119,7 +118,7 @@ class ConfidentialScope:
             for file in (allowed, denied, sibling):
                 file.unlink(missing_ok=True)
         self.proof = {"kind":"task_synthetic_permission_probe_v1","outer_read_denied":True,"inner_metadata_read_denied":True,
-                      "work_root":str(self.work),"codex_home":str(self.codex_home),"model_called":False}
+                      "model_called":False}
         return dict(self.proof)
 
     def wrap(self, command):
