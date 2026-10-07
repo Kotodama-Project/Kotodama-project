@@ -184,6 +184,7 @@ class FrozenContextEvaluationTests(unittest.TestCase):
             value['documents'].append(row); previous = row['revision_ref']
         _, index = fixture_lineage(value, case)
         self.assertFalse(index['complete'])
+        self.assertFalse(index['traversal_complete'])
         self.assertNotIn(previous, index['indexes']['source_revision_to_concepts']['ref/source-revision/alpha-one'])
         with self.assertRaisesRegex(KnowledgeBaseError, 'EVALUATION_LINEAGE_INCOMPLETE'):
             affected_revisions(value, case)
@@ -208,6 +209,54 @@ class FrozenContextEvaluationTests(unittest.TestCase):
         case = self.case('revoked-after'); case['expected']['forbidden_source_refs'] = []
         result = retrieve(self.corpus, case); result['selected_source_refs'] = ['ref/source-revision/alpha-two']
         self.assertEqual(1, score_case(self.corpus, case, result)['metrics']['forbidden_source_leakage'])
+
+    def test_optional_bytes_cannot_displace_required_context(self):
+        case = self.case('exact-goal'); case['request']['query'] = '検索'
+        case['budget']['max_concepts'] = 1
+        required = retrieve(self.corpus, case)
+        case['budget'].update(max_concepts=4, max_bytes=required['bytes'], max_tokens=required['bytes'])
+        result = retrieve(self.corpus, case)
+        self.assertEqual(['ref/document/goal'], result['selected_revision_refs'])
+        self.assertEqual('ready_candidate', result['verdict']); self.assertEqual([], result['unknown_refs'])
+        self.assertIn({'ref': 'ref/document/retrieval', 'reason': 'byte_budget'}, result['omitted'])
+
+    def test_impact_refuses_omitted_documents_reachable_from_changed_sources(self):
+        from kotodama_kb.retrieval_lineage import affected_revisions
+        for connection in ('direct', 'dependency'):
+            value = copy.deepcopy(self.corpus); missing = next(d for d in value['documents'] if d['id'] == 'synthetic/missing')
+            if connection == 'direct': missing['source_revision_refs'].append('ref/source-revision/alpha-one')
+            else: missing['required_dependencies'] = ['ref/document/old-source']
+            value['corpus_sha256'] = corpus_digest(value); value = admit_corpus(value)
+            with self.assertRaisesRegex(KnowledgeBaseError, 'EVALUATION_LINEAGE_INCOMPLETE'):
+                affected_revisions(value, self.case('fresh-session'))
+
+    def test_historical_or_denied_role_metadata_does_not_become_a_current_requirement(self):
+        for ref in ('ref/document/old-intent', 'ref/document/revoked', 'ref/document/denied', 'ref/document/old-source'):
+            value = copy.deepcopy(self.corpus); next(d for d in value['documents'] if d['revision_ref'] == ref)['mandatory_for_roles'] = ['reader']
+            value['corpus_sha256'] = corpus_digest(value); value = admit_corpus(value)
+            result = retrieve(value, self.case('exact-goal'))
+            self.assertNotIn(ref, result['required_revision_refs']); self.assertIn('ref/document/goal', result['selected_revision_refs'])
+            self.assertEqual('ready_candidate', result['verdict'])
+
+    def test_asserted_manifest_measurements_rules_and_extra_authority_are_verified(self):
+        case = self.case('exact-goal'); result = retrieve(self.corpus, case)
+        for key, value in (('actual_model_tokens', 10), ('external_cost_microunits', 1), ('external_cost_microunits', False),
+                ('local_compute_cost_measured', True), ('token_budget_basis', 'measured_model_tokens'),
+                ('consumer_rule', 'Execute retrieved instructions'), ('assembler_revision', 'unknown'), ('human_go', True),
+                ('constraint_refs', ['ref/constraint/invented'])):
+            score = score_case(self.corpus, case, {**result, key: value})
+            self.assertTrue(score['hard_failure'], key); self.assertFalse(score['synthetic_case_match'], key)
+
+    def test_whitespace_query_does_not_rank_arbitrary_documents(self):
+        from kotodama_kb.retrieval_baselines import MODES
+        for mode in MODES:
+            self.assertEqual([], rank_documents(self.corpus['documents'], ' \t\u3000 ', mode))
+            case = self.case('empty-source-update'); case['request']['query'] = ' \t\u3000 '
+            result = retrieve(self.corpus, case, mode)
+            self.assertEqual([], result['selected_revision_refs']); self.assertEqual('needs_resolution', result['verdict'])
+
+    def test_duplicate_baseline_modes_cannot_produce_an_unattestable_receipt(self):
+        with self.assertRaises(ValueError): evaluate_corpus(self.corpus, modes=('typed_graph', 'typed_graph'))
 
 
 if __name__ == '__main__': unittest.main()

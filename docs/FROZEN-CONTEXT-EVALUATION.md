@@ -19,7 +19,9 @@ expectedは**採点にだけ**使い、検索・選択の入力には使いま�
 
 Source更新の影響集合は合成文書を既存の[履歴契約](KNOWLEDGE-LINEAGE.md)へ対応させ、
 実際の逆引きindexで求めます。欠落出典を新しい出典として補完せず、必須依存の循環も同じ
-lineage検査で検出します。Source変更がないケースでは影響集合を空に保ちます。
+lineage検査で検出します。出典が欠けた文書はindexのcoverage欠落として明示し、変更出典から
+その文書へ到達するなら影響計算を拒否します。無関係な欠落を除外する場合も元corpusの依存を
+全て辿り、そのqueryの集合が実indexと一致することを確かめます。Source変更がない場合は空集合です。
 
 任意の欠落参照もfixture内の実edgeから読み、候補manifestのomittedへ理由付きで報告します。
 必須contextを阻止せず、lineageにはrequired=falseの未解決関係として保持します。

@@ -34,6 +34,7 @@ def content_digest(value):
 def rank_documents(documents, query, mode):
     if mode not in MODES: raise KnowledgeBaseError('RETRIEVAL_MODE_INVALID')
     normalized = normalize(query)
+    if not normalized: return []
     fields = {d['revision_ref']: normalize(' '.join([d['title'], *d['aliases'], d['text']])) for d in documents}
     bags = {key: Counter(terms(value)) for key, value in fields.items()}
     average = sum(sum(bag.values()) for bag in bags.values()) / max(1, len(bags))
@@ -83,8 +84,7 @@ def retrieve(corpus, case, mode='typed_graph'):
     eligible = [d for d in documents.values() if permitted(d, before)]
     ranked = rank_documents(eligible, request['query'], mode)
     required = set(request['requested_revision_refs'])
-    required.update(d['revision_ref'] for d in documents.values() if d['project_ref'] == request['project_ref']
-                    and d['task_ref'] == request['task_ref'] and request['recipient_role'] in d['mandatory_for_roles'])
+    required.update(d['revision_ref'] for d in eligible if request['recipient_role'] in d['mandatory_for_roles'])
     for constraint in request['mandatory_constraint_refs']:
         matches = [d['revision_ref'] for d in eligible if constraint in d['constraint_refs']]
         required.update(matches or [constraint])
@@ -112,25 +112,31 @@ def retrieve(corpus, case, mode='typed_graph'):
     if mode == 'typed_graph':
         required, unresolved = closure(required); unknown.update(unresolved)
     selected = sorted(ref for ref in required if ref in documents and ref not in unknown)
-    if len(selected) > budget['max_concepts']:
+    def render(refs):
+        return json.dumps([{'id': documents[ref]['id'], 'revision_ref': ref,
+            'text': documents[ref]['text'], 'source_revision_refs': documents[ref]['source_revision_refs']}
+            for ref in refs], ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    def fits(refs):
+        return len(refs) <= budget['max_concepts'] and len(render(refs).encode('utf-8')) <= min(budget['max_bytes'], budget['max_tokens'])
+    if not fits(selected):
         unknown.update(required); selected = []
     omitted = []
     for document, score in ranked:
+        if unknown: break
         ref = document['revision_ref']
         if ref in selected: continue
         expanded, blocked = closure({ref}) if mode == 'typed_graph' else ({ref}, set())
         if blocked:
             omitted.append({'ref': ref, 'reason': 'unresolved_dependency'}); continue
         extra = expanded - set(selected)
-        if len(selected) + len(extra) <= budget['max_concepts']: selected.extend(sorted(extra))
-        else: omitted.append({'ref': ref, 'reason': 'concept_budget'})
+        candidate = selected + sorted(extra)
+        if fits(candidate): selected = candidate
+        else: omitted.append({'ref': ref, 'reason': 'concept_budget' if len(candidate) > budget['max_concepts'] else 'byte_budget'})
     if not selected and not unknown: unknown.add('ref/context/no-match')
     revoked_selected = {ref for ref in selected if not permitted(documents[ref], after)}
     unknown.update(revoked_selected)
     if unknown: selected = []
-    text = json.dumps([{'id': documents[ref]['id'], 'revision_ref': ref,
-                       'text': documents[ref]['text'], 'source_revision_refs': documents[ref]['source_revision_refs']}
-                      for ref in selected], ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    text = render(selected)
     used = len(text.encode('utf-8'))
     # No model/tokenizer is selected. UTF-8 bytes are an explicit conservative
     # evaluation unit, not a claim about actual model token counts.

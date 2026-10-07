@@ -23,14 +23,27 @@ def fixture_lineage(corpus, case):
                 'resolution': 'resolved' if target in included else 'unresolved', 'evidence_ref': 'ref/evidence/synthetic-dependency'})
     snapshot = admit_snapshot({'kind': 'kotodama.knowledge-lineage', 'schema_revision': 'v1', 'authority': 'projection_only',
         'contains_content': False, 'sources': list(sources.values()), 'concepts': concepts, 'relations': relations, 'projections': []})
-    return snapshot, project_lineage(snapshot)
+    index = project_lineage(snapshot)
+    omitted = sorted(set(documents) - set(included))
+    index.update(traversal_complete=index['complete'], omitted_document_revision_refs=omitted,
+                 complete=index['complete'] and not omitted)
+    return snapshot, index
 
 
 def affected_revisions(corpus, case):
     if not case['changed_source_refs']:
         return []
     _, index = fixture_lineage(corpus, case)
-    if not index['complete']:
+    # Prove coverage for these changed sources over the original corpus, so a
+    # document with mixed known/missing sources cannot disappear from impact.
+    documents = {row['revision_ref']: row for row in corpus['documents']}
+    changed = set(case['changed_source_refs'])
+    reached = {ref for ref, row in documents.items() if changed & set(row['source_revision_refs'])}
+    for _ in range(len(documents) + 1):
+        following = {ref for ref, row in documents.items() if reached & set(row['required_dependencies'])} - reached
+        if not following: break
+        reached.update(following)
+    affected = {ref for source in changed for ref in index['indexes']['source_revision_to_concepts'].get(source, [])}
+    if not index['traversal_complete'] or reached & set(index['omitted_document_revision_refs']) or affected != reached:
         raise KnowledgeBaseError('EVALUATION_LINEAGE_INCOMPLETE')
-    return sorted({ref for source in case['changed_source_refs']
-                   for ref in index['indexes']['source_revision_to_concepts'].get(source, [])})
+    return sorted(affected)
