@@ -314,20 +314,38 @@ def test_backend_rejects_runtime_policy_mismatch(tmp_path: Path, monkeypatch: py
 
 
 def test_backend_timeout_writes_owned_process_record_and_stops_child(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import task_swarm.codex as backend_module
+
     fake = _fake_codex(tmp_path)
     sessions = tmp_path / "sessions"
     monkeypatch.setenv("FIXTURE_SESSIONS", str(sessions))
     monkeypatch.setenv("FAKE_MODE", "timeout")
+    # Expire the attempt only after its real child and ownership record exist.
+    # A loaded host can legitimately consume 100 ms before Popen; that tests
+    # prelaunch refusal, not the owned-child termination boundary named here.
+    clock = [0.0]
+    owned = []
+    monkeypatch.setattr(backend_module, "time", SimpleNamespace(
+        monotonic=lambda: clock[0], time=time.time, sleep=time.sleep,
+    ))
+
+    def expire_owned_child(pid: int, created_at: float) -> None:
+        owned.append((pid, created_at))
+        clock[0] = 1.0
+
     with pytest.raises(BackendError) as raised:
         CodexBackend(fake, session_root=sessions).invoke(
             "fixture prompt",
             SCHEMA,
             tmp_path / "attempts",
             timeout=0.1,
+            on_process=expire_owned_child,
         )
     assert raised.value.code == "timeout"
     process_path = Path(raised.value.paths["process"])
     assert process_path.is_file()
+    assert len(owned) == 1
+    assert not backend_module._same_process(*owned[0])
 
 
 def test_peer_command_contains_exact_tools_and_write_opt_in(tmp_path: Path) -> None:
