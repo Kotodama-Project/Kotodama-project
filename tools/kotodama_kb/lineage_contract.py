@@ -91,6 +91,8 @@ def admit_snapshot(value: dict) -> dict:
     for concept in concepts.values():
         if any(ref not in sources for ref in concept['source_revision_refs']):
             raise KnowledgeBaseError('LINEAGE_SOURCE_MISSING')
+        if 'source_aliases' in concept and set(concept['source_aliases'].values()) != set(concept['source_revision_refs']):
+            raise KnowledgeBaseError('LINEAGE_SOURCE_ALIAS_BINDING')
         expected = source_set_digest(sources[ref] for ref in concept['source_revision_refs'])
         if concept['source_set_sha256'] != expected:
             raise KnowledgeBaseError('LINEAGE_SOURCE_SET_DIGEST')
