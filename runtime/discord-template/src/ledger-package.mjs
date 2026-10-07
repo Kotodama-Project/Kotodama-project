@@ -1,5 +1,5 @@
 import {createCipheriv,createDecipheriv,createHmac,hkdfSync,randomBytes} from 'node:crypto';
-import {mkdirSync,writeFileSync,readFileSync,lstatSync,realpathSync,readdirSync,openSync,closeSync,fstatSync} from 'node:fs';
+import {mkdirSync,writeFileSync,readSync,lstatSync,realpathSync,readdirSync,openSync,closeSync,fstatSync} from 'node:fs';
 import path from 'node:path';
 import {canonical,check,digest} from './common.mjs';
 
@@ -28,7 +28,9 @@ function pinnedRead(root,name){
   const fd=openSync(filename,'r');
   try{
     check(canonical(identity(fstatSync(fd)))===canonical(identity(before)),'LEDGER_FILE_CHANGED');
-    const bytes=readFileSync(fd),after=fstatSync(fd),named=lstatSync(filename);
+    const buffer=Buffer.alloc(before.size+1);let length=0;
+    while(length<buffer.length){const count=readSync(fd,buffer,length,buffer.length-length,null);if(!count)break;length+=count;}
+    const bytes=buffer.subarray(0,length),after=fstatSync(fd),named=lstatSync(filename);
     check(bytes.length===before.size&&after.mtimeMs===before.mtimeMs&&after.ctimeMs===before.ctimeMs&&named.nlink===1&&!named.isSymbolicLink()&&canonical(identity(named))===canonical(identity(before)),'LEDGER_FILE_CHANGED');
     return bytes;
   }finally{closeSync(fd);}
