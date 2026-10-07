@@ -4,7 +4,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from .foundation import KnowledgeBaseError
-from .lineage_contract import admit_snapshot, digest
+from .lineage_contract import admit_snapshot, digest, unresolved_parent_refs
 
 STATE_RELATIONS = {'supersedes', 'conflicts_with', 'invalidates'}
 DEFAULT_BUDGET = {'max_depth': 32, 'max_nodes': 768, 'max_edges': 4096}
@@ -38,7 +38,7 @@ def _graph(snapshot, budget):
         if source['access_state'] != 'allowed':
             blocked.add(source['revision_ref'])
     for concept in snapshot['concepts']:
-        if concept['status'] != 'candidate':
+        if concept['status'] != 'candidate' or concept.get('parent_resolution') == 'external_unresolved':
             blocked.add(concept['revision_ref'])
         for target in concept['source_revision_refs']:
             edge(concept['revision_ref'], target, True)
@@ -139,6 +139,7 @@ def project_lineage(value, *, budget=None):
             'edge_count': len(mandatory) + len(optional) + len(unresolved) + len(state_edges),
             'indexes': indexes, 'mandatory_edges': sorted(mandatory), 'optional_edges': sorted(optional),
             'state_relations': state_edges, 'unresolved_relations': unresolved, 'cycle_revision_refs': sorted(cycles),
+            'unresolved_parent_revision_refs': unresolved_parent_refs(snapshot),
             'optional_cycle_revision_refs': sorted(_cycles(rows, mandatory | optional) - cycles),
             'quarantine_revision_refs': sorted(quarantine if complete else rows),
             'source_access_authenticated': False, 'serving_authorized': False}

@@ -139,6 +139,15 @@ class KnowledgeLineageImpactTests(unittest.TestCase):
         result = project_lineage(value)
         self.assertIn(PACK, result['quarantine_revision_refs']); self.assertEqual(1, len(result['unresolved_relations']))
 
+    def test_explicit_unresolved_parent_is_reported_and_quarantined_on_noop(self):
+        value = chain()
+        value['concepts'][0].update(parent_revision_ref='ref/concept-revision/missing-parent', parent_resolution='external_unresolved')
+        result = project_lineage(value)
+        self.assertEqual(['ref/concept-revision/missing-parent'], result['unresolved_parent_revision_refs'])
+        self.assertIn(PACK, result['quarantine_revision_refs'])
+        result = compare_lineage(value, value)
+        self.assertEqual('NO_CHANGE', result['status']); self.assertIn(PACK, result['quarantine_revision_refs'])
+
     def test_cli_emits_bound_index_noop_and_invalidation_receipts(self):
         example = ROOT / 'examples/knowledge-lineage/snapshot.json'
         cli = ROOT / 'tools/knowledge_lineage.py'

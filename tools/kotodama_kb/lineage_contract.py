@@ -64,6 +64,13 @@ def admit_snapshot(value: dict) -> dict:
             or set(concepts) & set(projections)):
         raise KnowledgeBaseError('LINEAGE_ID_COLLISION')
 
+    spellings = {}
+    locators = [row['locator'] for row in sources.values() if row['locator_visibility'] == 'public']
+    locators += ['knowledge/' + row['concept_id'] + '.md' for row in concepts.values()]
+    for locator in locators:
+        if spellings.setdefault(locator.casefold(), locator) != locator:
+            raise KnowledgeBaseError('LINEAGE_LOCATOR_CASE_COLLISION')
+
     versions = {}
     for source in sources.values():
         identity = (source['source_id'], source['revision_kind'], source['revision_value'])
@@ -88,6 +95,11 @@ def admit_snapshot(value: dict) -> dict:
         if concept['source_set_sha256'] != expected:
             raise KnowledgeBaseError('LINEAGE_SOURCE_SET_DIGEST')
         parent = concept['parent_revision_ref']
+        unresolved = parent is not None and parent not in concepts
+        if unresolved and concept.get('parent_resolution') != 'external_unresolved':
+            raise KnowledgeBaseError('LINEAGE_PARENT_UNRESOLVED')
+        if not unresolved and 'parent_resolution' in concept:
+            raise KnowledgeBaseError('LINEAGE_PARENT_RESOLUTION_MISMATCH')
         if parent == concept['revision_ref'] or (parent in concepts and concepts[parent]['concept_id'] != concept['concept_id']):
             raise KnowledgeBaseError('LINEAGE_PARENT_MISMATCH')
     for concept in concepts.values():
@@ -103,6 +115,8 @@ def admit_snapshot(value: dict) -> dict:
         if relation['from_revision_ref'] not in concepts:
             raise KnowledgeBaseError('LINEAGE_RELATION_ORIGIN')
         target_kind, target_id = relation['target_kind'], relation['target_id']
+        if relation['resolution'] == 'resolved' and relation['target_revision_ref'] is None:
+            raise KnowledgeBaseError('LINEAGE_RELATION_REVISION_REQUIRED')
         id_type = 'concept_id' if target_kind == 'concept' else 'semantic_id' if target_kind in {'goal', 'kgi', 'initiative'} else 'ref'
         if not Draft202012Validator({'$ref': '#/$defs/' + id_type, '$defs': schema['$defs']}).is_valid(target_id):
             raise KnowledgeBaseError('LINEAGE_RELATION_TARGET_TYPE')
@@ -123,6 +137,11 @@ def admit_snapshot(value: dict) -> dict:
 
 def read_snapshot(path: Path) -> dict:
     return admit_snapshot(_read_json(path))
+
+
+def unresolved_parent_refs(snapshot):
+    return sorted({row['parent_revision_ref'] for row in snapshot['concepts']
+                   if row.get('parent_resolution') == 'external_unresolved'})
 
 
 def validate_public_bytes(snapshot: dict, *, repository_root: Path) -> dict:
@@ -149,4 +168,5 @@ def validate_public_bytes(snapshot: dict, *, repository_root: Path) -> dict:
     return {'authority': 'projection_only', 'snapshot_sha256': digest(snapshot),
             'local_bytes_match': not mismatches, 'mismatched_revision_refs': sorted(mismatches),
             'opaque_unverified_revision_refs': sorted(opaque), 'input_bindings': sorted(bindings.items()),
+            'unresolved_parent_revision_refs': unresolved_parent_refs(snapshot),
             'access_authenticated': False, 'source_authenticated': False, 'current_pointer_verified': False}
