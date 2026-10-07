@@ -12,6 +12,7 @@ from pathlib import Path
 import platform
 import stat
 import subprocess
+import time
 import uuid
 
 from .protocol import SwarmError
@@ -124,7 +125,15 @@ class ConfidentialScope:
         return [self.executable, "sandbox", "--permission-profile", name, "--cd", str(self.work),
                 "--include-managed-config", *settings, "--", *command]
 
-    def preflight(self):
+    def preflight(self, *, max_seconds=45, cancel_event=None):
+        deadline=time.monotonic()+min(45,max_seconds)
+        def probe(command):
+            refuse(cancel_event is None or not cancel_event.is_set(), "CONFIDENTIAL_PREFLIGHT_CANCELLED")
+            remaining=deadline-time.monotonic()
+            refuse(remaining>0, "CONFIDENTIAL_PREFLIGHT_TIMEOUT")
+            result=subprocess.run(command,cwd=self.work,env=self.env,capture_output=True,timeout=min(15,remaining))
+            refuse(cancel_event is None or not cancel_event.is_set(), "CONFIDENTIAL_PREFLIGHT_CANCELLED")
+            return result
         # Root-deny mounts use canonical paths. Invoke glibc's actual loader
         # directly so /lib64 symlink aliases are not required inside the root.
         loader_name={"x86_64":"/lib64/ld-linux-x86-64.so.2", "aarch64":"/lib/ld-linux-aarch64.so.1"}.get(platform.machine())
@@ -144,13 +153,11 @@ class ConfidentialScope:
         script = 'IFS= read -r value < "$1" && test "$value" = "$3" && ! (IFS= read -r value < "$2") && printf "%s" "$3"'
         try:
             for name, settings, forbidden in (("task-runtime",self.outer,sibling),("task-input",self.inner,denied)):
-                result = subprocess.run(self.sandbox(name,settings,[str(loader),"--library-path",str(loader.parent),
-                                        str(Path("/bin/sh").resolve(strict=True)),"-c",script,"probe",str(allowed),str(forbidden),nonce]),
-                                        cwd=self.work,env=self.env,capture_output=True,timeout=15)
+                result = probe(self.sandbox(name,settings,[str(loader),"--library-path",str(loader.parent),
+                               str(Path("/bin/sh").resolve(strict=True)),"-c",script,"probe",str(allowed),str(forbidden),nonce]))
                 refuse(result.returncode == 0 and result.stdout.decode("utf-8","replace") == nonce,
                        "CONFIDENTIAL_SANDBOX_UNAVAILABLE")
-            launched=subprocess.run(self.sandbox("task-runtime",self.outer,[self.executable,"--version"]),
-                                    cwd=self.work,env=self.env,capture_output=True,timeout=15)
+            launched=probe(self.sandbox("task-runtime",self.outer,[self.executable,"--version"]))
             refuse(launched.returncode==0 and launched.stdout.startswith(b"codex-cli "), "CONFIDENTIAL_CLI_LAUNCH_UNAVAILABLE")
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise SwarmError("CONFIDENTIAL_SANDBOX_UNAVAILABLE", "sandbox probe did not complete") from exc

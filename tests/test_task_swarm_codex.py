@@ -61,6 +61,22 @@ def test_invalid_unicode_prompt_is_refused_before_launch(tmp_path, monkeypatch):
     assert not (tmp_path / "attempt").exists()
 
 
+def test_permission_preflight_consumes_the_same_attempt_deadline(tmp_path, monkeypatch):
+    import task_swarm.confidential as permission
+    class Scope:
+        def __init__(self,*args,**kwargs): pass
+        def preflight(self,**kwargs):
+            assert 0 <= kwargs["max_seconds"] <= .02
+            time.sleep(.03)
+            return {"model_called":False}
+    monkeypatch.setattr(permission,"ConfidentialScope",Scope)
+    monkeypatch.setattr(subprocess,"Popen",lambda *a,**kw:pytest.fail("expired attempt must not launch"))
+    with pytest.raises(BackendError) as raised:
+        CodexBackend(sys.executable).invoke("fixture",SCHEMA,tmp_path/"attempt",timeout=.02,confidential=True,
+                                           task_codex_home=tmp_path/"not-read")
+    assert raised.value.code == "timeout" and raised.value.retryable is False
+
+
 @pytest.mark.parametrize("during_input", [False, True])
 def test_owner_cancels_owned_child_even_when_it_never_reads_stdin(tmp_path, monkeypatch, during_input):
     fake = _fake_codex(tmp_path)

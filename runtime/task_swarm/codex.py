@@ -854,6 +854,7 @@ class CodexBackend:
             raise BackendError("timeout_invalid", "timeout must be finite and positive", retryable=False) from exc
         if not math.isfinite(timeout_value) or timeout_value <= 0 or timeout_value > MAX_TIMEOUT:
             raise BackendError("timeout_invalid", "timeout is outside the bounded range", retryable=False)
+        deadline = time.monotonic() + timeout_value
         if not isinstance(authorize_peer_writes, bool):
             raise BackendError("peer_invalid", "authorize_peer_writes must be boolean", retryable=False)
         if cancel_event is not None and not isinstance(cancel_event, threading.Event):
@@ -923,8 +924,10 @@ class CodexBackend:
                     raise BackendError("policy_invalid", "confidential Task workers do not load peer tools", retryable=False)
                 from .confidential import ConfidentialScope
                 scope = ConfidentialScope(run_dir, executable_path, task_codex_home=task_codex_home)
-                diagnostics["permission_probe"] = scope.preflight()
+                diagnostics["permission_probe"] = scope.preflight(max_seconds=max(0,deadline-time.monotonic()),cancel_event=cancel_event)
                 check_cancelled()
+                if time.monotonic() >= deadline:
+                    raise BackendError("timeout", "preflight consumed the attempt time budget", retryable=False)
                 command = scope.wrap(command)
                 execution_cwd, execution_sessions, execution_env = scope.work, scope.codex_home/"sessions", scope.env
             _write_json(paths["command"], {"argv": command, "shell": False, "cwd": str(execution_cwd)})
@@ -987,7 +990,6 @@ class CodexBackend:
             # A child that never reads stdin must not hide cancellation/timeout
             # behind a full pipe. Termination releases this owned writer.
             input_writer = threading.Thread(target=feed_prompt, name="swarm-prompt-writer", daemon=True)
-            deadline = time.monotonic() + timeout_value
             input_writer.start()
             limit_code: str | None = None
             while process.poll() is None:
