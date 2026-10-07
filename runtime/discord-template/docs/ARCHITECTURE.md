@@ -127,3 +127,11 @@ The existing required `Trusted repository validation` workflow calls the complet
 Discord reusable matrix and fails unless its result is success. Failure, skipped,
 cancelled and missing matrix results cannot produce a green required context.
 This candidate does not mutate GitHub administration settings.
+
+## Native correction
+
+Discordのbutton/selectは現在のTask/Sourceの版を参照するだけで、UI状態を保存の正本にしません。modalの明示送信は既存Pipelineの現在grantを通り、local ownerの同一transactionでSource履歴・意図・Taskを更新します。他Taskも同じSourceを参照する場合や関連処理が実行中または終了不明なら変更せず、remote ownerへは未対応として拒否します。旧版のフォームと、送信直前に変わった出典は受け入れません。
+
+modalはDiscordの[LabelとText Input](https://docs.discord.com/developers/components/reference#label)を使い、messageのbutton/selectは既存のAction Rowへ置きます。SDKで構造を検査していますが、実Discordでの人の操作確認は別です。
+
+modalの初期応答にはnetwork照合やSource本文の取得を挟みません。値を自動表示せず、静的な空欄を即時に開きます。submitはmembership/Source/grant照合の前にdeferし、検証後にだけ既存ownerへ書きます。遅いpermission応答を模した試験を用意し、実Discordの期限内応答は人の受入で確認します。
