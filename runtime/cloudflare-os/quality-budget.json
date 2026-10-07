@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "source": {
+    "repository": "cloudflare/cloudflare-os",
+    "commit": "bf7f762d7fa73553284d731ab6a978d3ea17be24",
+    "tree": "023da57719fa9744a4ca909f9c3863c93cb614fa",
+    "lock_sha256": "efd6eb15379a2d02b1bdf0db776c50d421193ef78199baa043f93d99a1307258",
+    "lock_line_endings": "LF",
+    "node": "24.14.0",
+    "pnpm": "11.9.0",
+    "dependency_graph": "original_pinned_no_overlay"
+  },
+  "observed_at": "2026-10-07T20:07:43Z",
+  "valid_until": "2026-11-07T00:00:00Z",
+  "review_scope": "temporary_local_evaluation_only",
+  "warning_limits": [
+    {
+      "package": "packages/gatekeeper-github",
+      "rule": "unicorn(consistent-function-scoping)",
+      "origin": "source",
+      "max": 1,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/gatekeeper-google",
+      "rule": "eslint(no-shadow)",
+      "origin": "source",
+      "max": 3,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/gatekeeper-homeassistant",
+      "rule": "typescript(no-this-alias)",
+      "origin": "source",
+      "max": 1,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/gatekeeper-supabase",
+      "rule": "unicorn(consistent-function-scoping)",
+      "origin": "source",
+      "max": 2,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/mcp-shared",
+      "rule": "typescript(no-extraneous-class)",
+      "origin": "source",
+      "max": 1,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/mcp-shared",
+      "rule": "unicorn(consistent-function-scoping)",
+      "origin": "source",
+      "max": 11,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/typed-storage",
+      "rule": "eslint(no-shadow)",
+      "origin": "source",
+      "max": 4,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/workshop-backend",
+      "rule": "eslint(no-shadow)",
+      "origin": "source",
+      "max": 13,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/workshop-backend",
+      "rule": "typescript(no-this-alias)",
+      "origin": "source",
+      "max": 3,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/workshop-backend",
+      "rule": "unicorn(consistent-function-scoping)",
+      "origin": "source",
+      "max": 6,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/workshop-frontend",
+      "rule": "eslint(no-shadow)",
+      "origin": "source",
+      "max": 11,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/workshop-frontend",
+      "rule": "typescript(no-extraneous-class)",
+      "origin": "source",
+      "max": 3,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "packages/workshop-frontend",
+      "rule": "unicorn(consistent-function-scoping)",
+      "origin": "source",
+      "max": 4,
+      "owner": "cloudflare_upstream"
+    },
+    {
+      "package": "scripts",
+      "rule": "unicorn(consistent-function-scoping)",
+      "origin": "source",
+      "max": 1,
+      "owner": "cloudflare_upstream"
+    }
+  ],
+  "warning_ids": [
+    "0239b6134834cdf1739f2cf7a6ed11508235e00641aa599030f671169b58dfa1",
+    "05cecbf1c8322b55c8463611f094f6fcaa499e7f15bc19937fb59d08dc1acde5",
+    "065c50216c019e4d968ce793b8d5571a96c432b58d686d87dbfc0d7de49b84f7",
+    "06cba98a5d3cabfa6e514f5ffffc3eaf73452d77286f68ecc5b1e966124dc8f3",
+    "07b9713c83214e3563d41f55fdc5b007a5675df8b5aa1d1c5c3febdabd9d3401",
+    "088936b8cef8e6c6e0cd9c3e12a31a9692ef30e73847ddaf4bd237c116b8e745",
+    "0e02b8f20af6a94e36af6729d7fb7699b1c9f32ab54379be901e4ebc13740c53",
+    "160b1ecf5b530a83310c3d6f2f6a9df059e64a2761f7d4726332108763eac58e",
+    "17be75669b49de7ca2f6f03a1ce9cf3bcb3efa051f768db45b8020c3057a9eb5",
+    "18761bae3d7c8839644b592d01196c737a2dc26d031b108a582a31a8033d5617",
+    "1a7d7b85e339c300bbf4190b7205823b31975220a2e3c23174b763fce7e55631",
+    "1cc06d0c7269aa3e596a375de0a53c998f01195b27dda58fd484282b226bf7ec",
+    "1e09d4a8eab84647bd90d9123b14b9f4cf783e4bff981c849b6b193f59a7b34d",
+    "1e665142a279b2719546c43edb87cbceb1a9d03738e7989df8f003a83c130cd9",
+    "1f2bdebda7da92762426aefa0a584a8bdd06c43ec009b328dcca2b1fc5d4a3eb",
+    "1f6dae8cbacde63348aa9ff2e2bf074290e6005b41683ebef5524938a809d2e3",
+    "24ea411e6a66e1ef9900525102634fa210549ee873d70cc1c5707758d75f7851",
+    "2e91680263697908afcfbefae804b65c4db1c00910ac12670a2cb0b2a122340f",
+    "307a47174f521294682214d974b4c8241ff029eebf8dd0cdd024dc96c5594f12",
+    "31621eb859f0340274c0eb0e3327b90ddd9e51b54af053c63b14f597d95f576f",
+    "317fa16771e7824db48d1ec40bf8e2e9c770e1cf3bc4a93e1f597f0e7039937b",
+    "36d75e31292452c6f9ff4f6e20efed72a9f4630b7f8223606fa7fe376543d9d6",
+    "38b06df4e11a4fabbcac7bdaae575350700e7bd679f7ca066c63add390a55e5d",
+    "39b96298a7ef3aad2c89d5414ff6d1dbb695617b03997727777e438006abc760",
+    "41dd309b9355161f3f5c9e9b6d22edf2c27815212206cef2f55f17628de9072f",
+    "433ad5ae6776634933073bf4644fb198bc7419004c6a079ec9be39902da29ab3",
+    "48b7cbdb8d1ad87cb58caf87a54d10e9df8ab5b8b6ced33770bb8f5905d3bde7",
+    "553488708a8ffe058312e39d1b2d88ceca6e5469c5b9194b35b76c0864cfc01f",
+    "5b33143cbedbe083170929f8ed47d591c0e0e67f845d99f2bc40a5a57e887285",
+    "5daf1a46c51a5154f330272c827872d56d3865b03b80207e8dc1855db06a2ad6",
+    "5f1f270a8ba974ed33187d46a9fb65f0fa60417cbeaf0f1d13f918b21b81032c",
+    "67f30d0e1c321b1e5b6d1377f57b5385efe7da1b2ff23e42f4203f75d889516d",
+    "71c9961a78554485eaa0ec0bced941064b46d4ae22303db9ba2558b557636f0c",
+    "7a3e7cb1eaed7476c77a5089c4c7db280da1de5e56a5589cf454be044f94ba44",
+    "7a4a081267e06338807860149a5864adce3762ed6c9169526121a79e5fd05845",
+    "7a723832d5154e5339fe84853fc1c602447be3681cb2c87574d8c9caa1e22262",
+    "7ae84f7cb5cb8d8e665cc557bda0fcce72338b0b7cd474744bdcae8c29755ea5",
+    "7e4d024bf17ace44b9a4a7eb33cd7346c5d884568bdfe5b0031261a38a34689b",
+    "7ed1ee791279e6be76527e607bd0378f049f13f5cb5635e41a3934f4cf4bcc50",
+    "87cbdbd3f1c632869ccf1d5bd9a6db0f879f3ce21397fcfc60b93ca278b4317b",
+    "8867a278ae97465741e0f33b2aa12afdd9b4148786507aa72cf0cb9346c43512",
+    "8d57f0bd544d6577cab4d0f77ef6b81699135c2839060b759c6d0446adcd85b5",
+    "932048f799da990d6be86b34fc5d92dce91a1269937300b75dabe02f53702511",
+    "99d62ebedeb7184f2d8f1369507ed4d1ae7823ca9754011fbf37b24de327240b",
+    "9a9b0b2740d731c4f4f7be23ab1f512ffddc4d6e177f623f6b65e5ac53c5df52",
+    "9d139e865daea136e0c0ba564411bfe0515fc992eed127e860efc1b530b89b06",
+    "9f365a45e10fe1805d2a1bbbb56e4dcf06f64cf697a0328825b0b36084a4ce60",
+    "a5c85513c7d4f7fb3c7422c42ed87989dd84d4568e66b6c208cda84c8270beb5",
+    "a7091f8b8b91f56f4c95d11cf39d906282f00ed487dbf89587496444f351b6e4",
+    "aa972d26dacd2d5450be3e2a6506d48b6c93813bc05a95521cf3e6efebc9765a",
+    "b84fe990a44473a7bf6a21f3af1db3f33ece97b1a41c8ac8e44a5c8305e6a1e3",
+    "bbabbd226848acd7c4cb49991159986d36458490084773e7d91e351a7ca86caf",
+    "bf554ed85e7dceef6560f327a2b05763e4d506515259bbbc3dba9216f950d833",
+    "c1e5d6881b85ca572dcf9ec928e07fd7b34a0886dee23a42cd04faae7850e2e0",
+    "c3013d5474e480733dd1341055af1e3f379d9190579da5259efa17552334763c",
+    "d016ac945f904f59e20d0501129c9884100482fa89767686c4b169d4ae04a480",
+    "d39653626d959e4df4cc9a912bf357d4f7eab8f868f9eedb71b0dcd6ca459a6c",
+    "d655f3fa4e883675b02acfe333d40455ff4cff11fed4cf234e1e1552f2f6a1a9",
+    "d8c9e7e9eaf773057c57c2783b1355dcf2fe516ba91fbf0888c0183db54ed934",
+    "d989a73f59a2c09e78595730223faf0f51d7379f60b72264fcd62bc7d254d71d",
+    "e08701ec54077131bd915f91680ac1c11c4c660de39435ad6cf07a51c1966e90",
+    "e5780ec9b73fbb752d70571eb02e4fc5635dd32b1b039eb72163746f797563a9",
+    "e9f812380cfe125a86b7ba565e8c5edcfb4bf00e88bbf25efdcd632e4ff7a174",
+    "f1f4ce4e44161f8ae3aec3e2860c7ff23c8176850b9b975330f5b4ecb368a52b"
+  ],
+  "frontend_limits": {
+    "small_js_bytes": 500000,
+    "large_js": {
+      "index": {
+        "count": 1,
+        "bytes": 1474051,
+        "gzip_bytes": 431912
+      },
+      "workspace._id": {
+        "count": 1,
+        "bytes": 2571092,
+        "gzip_bytes": 660826
+      }
+    },
+    "js_count": 26,
+    "js_bytes": 4484205,
+    "js_gzip_bytes": 1234935,
+    "css_count": 2,
+    "css_bytes": 296339,
+    "css_gzip_bytes": 46010
+  },
+  "measurement": {
+    "lint_files": 600,
+    "lint_rules": 131,
+    "lint_input_sha256": "554ed5390f3ebf412f2c90937c556973b6ee6ebfd9ac9d619a5a0eae7f1d7efc",
+    "asset_set_sha256": "2d0de5f424b3069b7c191e6ccee38604a08c7b25083afd893f69758ba516c202",
+    "cold_build_ms": 30786,
+    "navigation_load_ms": [
+      332,
+      300,
+      211
+    ],
+    "interactive_ready": false,
+    "provider_verified": false
+  }
+}

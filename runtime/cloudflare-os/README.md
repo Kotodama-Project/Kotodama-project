@@ -20,6 +20,8 @@ python tools/validate_cloudflare_os_local_runtime_evaluation.py
 python -m unittest tests.test_cloudflare_os_local_runtime_evaluation -v
 python tools/validate_cloudflare_os_security_candidate.py
 python -m unittest tests.test_cloudflare_os_security_overlay -v
+python -S -B tools/validate_cloudflare_quality.py
+python -m unittest tests.test_cloudflare_quality_budget -v
 ```
 
 These validation commands read local candidate files and run synthetic
@@ -63,3 +65,38 @@ public/protected data class and refuses Context admission/corpus binding
 mismatches.
 
 `NO_GO_UNPUBLISHED` remains in force.
+
+## 固定版の品質予算（#15）
+
+[`quality-budget.json`](quality-budget.json) は上流sourceを含まない数値とdigestの予算です。
+2026-10-07にstarterのcore gitlink `bf7f762` をNode 24.14.0 / pnpm 11.9.0で
+scripts-disabled frozen installし、oxlintとfrontendのtsc/Vite buildを実行しました。
+security overlayは適用していません。Git blobのLF lock digestを使い、古いruntime記録の
+CRLF digestとは区別します。依存の意味的な変更はありません。
+
+警告64件を14個のpackage/rule/origin bucketと個別fingerprintへ結び、すべて上流sourceの
+警告として記録しました。generated/vendorの警告をsource枠へ混ぜたり、新しい警告と
+同じ件数で交換したりしても拒否します。no-shadow、consistent-function-scoping、
+no-extraneous-class、no-this-aliasは、固定版を変更しないlocal評価の既知の品質債として
+2026-11-07までの一時例外にします。providerや公開に対する例外ではありません。
+この予算変更自体を独立reviewへ付け、期限後は再検討まで検査が失敗します。
+
+frontendはJS 26 files / 4,484,205 bytes、CSS 2 files / 296,339 bytesです。
+JSの通常上限は500,000 bytes、indexとworkspace routeの大きい2chunkだけを個別の
+bytes/gzip/countで固定します。合計とfile数にも上限があり、各予算はPR baseより増やせません。
+新しいbucketや増額が必要なら、予算を黙って上書きせず別のowner判断として扱います。
+
+依存install後の空のdistからのfrontend buildは約30.8秒でした。ローカルstatic shellを
+Chromeで3回読み込んだload eventは332 / 300 / 211ms（四捨五入）です。HTTPはno-store、
+同じbrowser process、外部接続はfixtureのCSPで拒否、backendは合成401です。
+画面はLoading/再接続表示で、ログイン・編集・WAN・cold V8 cache・実利用の速さは未検証です。
+時間は観測値として残し、変動するlatencyを数値予算の成功やprovider受入に読み替えません。
+
+再計測したoxlint JSONと同じcore checkoutのdistは次のように検査します。
+
+```text
+python -S -B tools/validate_cloudflare_quality.py --core-repo PINNED_CORE --lint-json LOCAL_OXLINT_JSON --dist PINNED_CORE/packages/workshop-frontend/dist
+```
+
+validatorはsource pin、tracked差分、lock、与えられた診断と実asset bytesを照合します。
+buildやreviewを自分で実行した証明は発行せず、数値範囲内であることだけを返します。
