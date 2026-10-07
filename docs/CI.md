@@ -137,6 +137,6 @@ Task swarm の tests は `tests/test_task_swarm_*.py` に置きます。pytest �
 
 Discord jobは依存・音声encoderの準備を含め20分で打ち切ります。Windowsの
 source-binding実CLI fixtureは起動に最大30秒（他OSは15秒）を許し、終了を観測する
-15秒の上限と既存のsource/権限検査は維持します。600件を超える試験群で観測した
+15秒の上限と既存のsource/権限検査は維持します。実CLIを起動する各caseは90秒で打ち切り、準備・起動・検査・cleanupを含む外側の上限が30秒の起動待ちより先に発火しないようにします。600件を超える試験群で観測した
 Windowsの起動待ちと10分job打切りに対する余裕で、runtimeの本番timeoutや許可を
 変更するものではありません。失敗や取消を成功として扱わず、全必須checkを要求します。
