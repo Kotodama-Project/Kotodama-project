@@ -53,6 +53,8 @@ worker-counterpoints、worker-options、verifierを指定します。owner_ref�
 親は専用のstdin pipeを生存中だけ開いておき、取消時に閉じます。通常の対話terminalのstdinや
 既に閉じたpipeを生存証拠にしません。SIGTERM/SIGINT/pipe EOFと現在ownerの変化は
 cancel_eventへ返します。WindowsのTask-run CLIは実行前に拒否します。
+POSIX pipeにはFIFOとNode/libuvの接続済みUnix stream socketを認めます。
+internet socket、datagram、未接続socket、通常fileは生存証拠にしません。
 
 3 workerを最大同時3件で実行し、それぞれ別の報告を保存・読戻し、別invocationのverifierへ
 渡します。固定モデルはgpt-5.6-luna/max、sandboxはread-only、子agentは無効です。
