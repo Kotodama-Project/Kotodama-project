@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -115,6 +116,52 @@ class AgentEnvironmentSetupTests(unittest.TestCase):
             self.assertNotIn("private detail", json.dumps(result))
             self.assertFalse((root / "work/agent-env/ready.json").exists())
             self.assertFalse((root / "work/agent-env/setup.lock").exists())
+
+    def test_initial_write_failure_is_nonblocking(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(setup.sys, "platform", "linux"), patch.object(setup.sys, "version_info", (3, 12, 10)), patch.object(Path, "mkdir", side_effect=PermissionError("private detail")):
+            result = setup.prepare(Path(temporary))
+            self.assertEqual(result["status"], "INCOMPLETE")
+            self.assertIn("write access", result["stage"])
+            self.assertNotIn("private detail", json.dumps(result))
+
+    def test_external_work_and_child_links_do_not_write_outside(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(setup.sys, "platform", "linux"), patch.object(setup.sys, "version_info", (3, 12, 10)), patch.object(setup, "run") as run:
+            base = Path(temporary)
+            outside = base / "outside"
+            outside.mkdir()
+            for relative in ("work", "work/agent-env/bin", "work/agent-env/venv"):
+                with self.subTest(relative=relative):
+                    root = base / relative.replace("/", "-")
+                    root.mkdir()
+                    link = root / relative
+                    link.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        link.symlink_to(outside, target_is_directory=True)
+                    except OSError:
+                        self.skipTest("host does not permit test symlinks")
+                    self.assertEqual(setup.prepare(root)["status"], "INCOMPLETE")
+                    self.assertEqual(list(outside.iterdir()), [])
+            run.assert_not_called()
+
+    @unittest.skipUnless(shutil.which("node"), "Node is needed for real dependency probe")
+    def test_real_node_probe_rejects_missing_dependency_and_entry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "package.json").write_text('{"dependencies":{"fixture":"1.0.0"}}', encoding="utf-8")
+            package = root / "node_modules/fixture"
+            package.mkdir(parents=True)
+            (package / "package.json").write_text('{"version":"1.0.0","main":"index.js"}', encoding="utf-8")
+            entry = package / "index.js"
+            entry.write_text("module.exports = {};", encoding="utf-8")
+            script = root / "dependency-probe.cjs"
+            script.write_text(setup.NODE_DEPENDENCY_PROBE, encoding="utf-8")
+            def probe():
+                return subprocess.run([shutil.which("node"), str(script)], cwd=root, capture_output=True, timeout=10).returncode
+            self.assertEqual(probe(), 0)
+            entry.unlink()
+            self.assertNotEqual(probe(), 0)
+            (package / "package.json").unlink()
+            self.assertNotEqual(probe(), 0)
 
     @unittest.skipUnless(sys.platform == "linux", "Linux cloud hook")
     def test_real_bash_hook_returns_zero_without_cloud_flag(self):

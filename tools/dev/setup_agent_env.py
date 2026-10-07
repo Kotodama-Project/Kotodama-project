@@ -27,10 +27,42 @@ NODE_HASHES = {
 COREPACK_VERSION = "0.34.6"
 COREPACK_SHA512 = base64.b64decode("gvylq9kzJB09mSsiOnKOnhg0YdCWNy2aGaeGbYF4HlyGd/v4moxEonQjJPYI45/K4zP7q1hW9qCVvaYYKK5nkA==").hex()
 LOCKS = ("requirements-ci.txt", "requirements-task-swarm-ci.txt")
+NODE_DEPENDENCY_PROBE = """
+const fs = require('node:fs'), path = require('node:path');
+const manifest = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+for (const [name, expected] of Object.entries(manifest.dependencies ?? {})) {
+  const base = path.join('node_modules', name);
+  const installed = JSON.parse(fs.readFileSync(path.join(base, 'package.json'), 'utf8'));
+  if (installed.version !== expected) process.exit(1);
+  for (const entry of [installed.main, installed.module].filter(Boolean)) {
+    if (!fs.existsSync(path.join(base, entry))) process.exit(1);
+  }
+}
+"""
 
 
 class Unavailable(Exception):
     """A named preparation stage could not be completed."""
+
+
+def owned_path(root: Path, path: Path) -> None:
+    """Validate existing ancestors before creating or writing a task path."""
+    if not path.resolve().is_relative_to(root.resolve()):
+        raise Unavailable("workspace path")
+
+
+def owned_tree(root: Path, path: Path, python_bin: Path) -> None:
+    """Reject redirected children; a venv may link its exact base interpreter."""
+    owned_path(root, path)
+    if not path.exists():
+        return
+    for directory, folders, files in os.walk(path, followlinks=False):
+        for name in (*folders, *files):
+            child = Path(directory) / name
+            if child.is_symlink() or child.is_junction():
+                if child.parent == python_bin and name in ("python", "python3", "python3.12") and child.resolve() == Path(sys.executable).resolve():
+                    continue
+                owned_path(root, child)
 
 
 def safe_environment(state: Path) -> dict[str, str]:
@@ -100,15 +132,19 @@ def prepare(root: Path, *, hook: bool = False) -> dict[str, object]:
     if sys.platform != "linux" or sys.version_info[:2] != (3, 12):
         return {"status": "INCOMPLETE", "stage": "Linux and Python 3.12 required; CI uses 3.12.10"}
     state = root / "work" / "agent-env"
-    state.mkdir(parents=True, exist_ok=True)
-    # Do not follow an externally redirected installation directory.
-    if state.resolve() != root.resolve() / "work" / "agent-env":
-        return {"status": "INCOMPLETE", "stage": "workspace path"}
+    try:
+        owned_tree(root, state, state / "venv/bin")
+        owned_tree(root, root / "runtime/discord-template/node_modules", state / "venv/bin")
+        state.mkdir(parents=True, exist_ok=True)
+    except (Unavailable, OSError, RuntimeError):
+        return {"status": "INCOMPLETE", "stage": "workspace path or write access; no installation started"}
     lock = state / "setup.lock"
     try:
         lock.mkdir()
     except FileExistsError:
         return {"status": "INCOMPLETE", "stage": "setup already owned; inspect its process before retrying"}
+    except OSError:
+        return {"status": "INCOMPLETE", "stage": "workspace lock write access; no installation started"}
     stage = "credential gate"
     try:
         env = safe_environment(state)
@@ -160,10 +196,11 @@ def prepare(root: Path, *, hook: bool = False) -> dict[str, object]:
         if stamp.exists() and python.exists() and (root / "runtime/discord-template/node_modules/.modules.yaml").is_file():
             ready = json.loads(stamp.read_text(encoding="utf-8")).get("fingerprint") == signature
         if ready:
-            stage = "cached Python dependency consistency"
+            stage = "cached dependency consistency"
             try:
                 run([str(python), "-m", "pip", "check"], cwd=root, env=env, timeout=30)
                 run([str(python), "-m", "pip", "install", "--dry-run", "--no-index", "--require-hashes", *[arg for name in LOCKS for arg in ("-r", name)]], cwd=root, env=env, timeout=30)
+                run([node, "-e", NODE_DEPENDENCY_PROBE], cwd=root / "runtime/discord-template", env=env, timeout=30)
             except Unavailable:
                 ready = False
         if not ready:
@@ -174,6 +211,7 @@ def prepare(root: Path, *, hook: bool = False) -> dict[str, object]:
             stage = "Discord frozen dependencies (registry.npmjs.org)"
             run([str(launcher), "install", "--frozen-lockfile", "--ignore-scripts", "--store-dir", str(state / "pnpm-store")], cwd=root / "runtime/discord-template", env=env)
             run([str(python), "-m", "pip", "check"], cwd=root, env=env, timeout=30)
+            run([node, "-e", NODE_DEPENDENCY_PROBE], cwd=root / "runtime/discord-template", env=env, timeout=30)
             stamp.write_text(json.dumps({"fingerprint": signature}) + "\n", encoding="utf-8")
         activate = state / "activate.sh"
         activate.write_text(f"export PATH={shlex.quote(str(venv/'bin')+os.pathsep+str(launcher.parent)+os.pathsep+str(Path(node).parent))}:\"$PATH\"\nexport KOTODAMA_TEST_SWARM_PYTHON={shlex.quote(str(python))}\n", encoding="utf-8")
@@ -188,7 +226,10 @@ def prepare(root: Path, *, hook: bool = False) -> dict[str, object]:
     except (Unavailable, OSError, ValueError, KeyError):
         return {"status": "INCOMPLETE", "stage": stage, "retry": "Check this stage's network or tool availability, then rerun setup. Session can continue."}
     finally:
-        lock.rmdir()
+        try:
+            lock.rmdir()
+        except OSError:
+            pass  # Preserve another owner's state; never mask the stage result.
 
 
 def main() -> int:
