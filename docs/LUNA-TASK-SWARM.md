@@ -269,3 +269,8 @@ native host route、世界規模の負荷、長時間稼働、本番swarm、Publ
 ## 公式参照
 
 role の配置と custom agent の field は [Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents) を、CLI の stdio、startup、timeout、tool allow-list は [MCP for CLI](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) を基準にします。これらの説明は requested configuration の根拠であり、現在の host で role が loaded されたこと、child spawn が callable であること、実効 permission が read-only であることの証明ではありません。
+
+## Taskからの実行入口の契約
+
+[Task swarm run](TASK-SWARM-RUN.md)は、既存Taskの入力・固定plan・報告・独立reviewを
+束縛する純粋な契約です（#286）。controllerとDiscord接続は後続の実装として区別します。
