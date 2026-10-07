@@ -112,5 +112,5 @@ test('Task refuses a receipt whose bytes disagree with the child completion anch
   await writeFile(wrapper,script,{mode:0o700,flag:'wx'});f.config.worker.swarm.pythonExecutable=wrapper;
   const task=await f.pipeline.request(f.source(),{title:'fixture',request:'fixture',action:'swarm_research'});await f.pipeline.tail;
   const current=f.store.taskInternal(task.id);assert.equal(current.state,'failed');
-  assert(f.errors.includes('SWARM_RECEIPT_CHANGED'));assert.equal(current.result,null);
+  assert(f.errors.includes('SWARM_RECEIPT_CHANGED'));assert.deepEqual(current.result.artifacts,[]);
 });
