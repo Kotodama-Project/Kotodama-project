@@ -24,8 +24,8 @@ worktreeを作ります。声・テキストから作られたTaskは元Source�
 
 次の処理や期限後の再開では、次を照合してから利用します。
 
-- 元repositoryのbase commit、変更の有無、未push commitのdigest。
-- channel worktreeのHEAD、tracked差分、untrackedの名前と実bytesのdigest。
+- 元repositoryのcanonical root/common Git directory、base commit、変更の有無、未push commitのdigest。
+- channel worktreeのHEAD、tracked差分、ignoredを含むuntrackedの名前と実bytesのdigest。
 - 前Taskが残した候補worktreeの同じcheckpoint。
 - 前の自分の処理が終了し、現在のhost lock・設定・Task/Source scopeが一致すること。
 
@@ -39,6 +39,17 @@ worktreeを作ります。声・テキストから作られたTaskは元Source�
 終了不明の処理はgeneration変更でも迂回できません。設定変更を実行中のleaseへ黙って適用しません。
 
 ## 隔離の強さ
+
+有効時の`worker.workspace`はGit repositoryのtop levelを指定します。subdirectoryを
+黙ってrepository全体へ広げず拒否し、同じcommitを持つ別cloneへも旧leaseを流用しません。
+元repositoryのignored filesは新しいworktreeへcopyしません。作業場に後から加わった
+ignored filesは次の照合対象です。検査は30秒、untracked/ignoredは最大2000 files・合計20 MB
+（1 file最大5 MB）に制限し、大きすぎるcandidateも成功のcheckpointにはしません。
+
+この機能のGitコマンドだけで[hooksを無効にし](https://git-scm.com/docs/git-config#Documentation/git-config.txt-corehooksPath)、
+checkout/statusが任意programを動かすfilter属性も処理前に拒否します。利用者のGit設定は変更しません。
+candidateの最終照合中もleaseを維持し、期限切れ・読み戻し失敗を成功したTask結果として返しません。
+保存候補128件の上限は新規write candidateだけに適用し、read-onlyの仕事は継続できます。
 
 directoryやGit worktreeの分離をsandboxとは呼びません。channel worktreeは参照baseで、
 書込みTaskは引き続きTask/revision別のworktreeと既存の固定Docker verifierを使います。

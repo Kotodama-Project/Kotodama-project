@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,readFile,rm,chmod} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {Store} from '../src/store.mjs';
@@ -25,7 +25,7 @@ async function fixture(t){
     schedule:(fn,delay)=>{const timer={fn,delay,unref(){}};timers.push(timer);return timer;},cancel:timer=>{timer.cancelled=true;}});
   const source=channel=>({key:'source-'+channel,provider:'discord',guildId:config.discord.guildId,channelId:channel,actorId:config.discord.operators[0]});
   let serial=0;
-  const run=(channel=channels[0],options={})=>{const input=source(channel);return manager.run({id:'task-'+(++serial),revision:1,room:roomKey(input.guildId,channel),source_key:input.key,action:'research'},[input],{authorize:async()=>{},...options});};
+  const run=(channel=channels[0],{action='research',...options}={})=>{const input=source(channel);return manager.run({id:'task-'+(++serial),revision:1,room:roomKey(input.guildId,channel),source_key:input.key,action},[input],{authorize:async()=>{},...options});};
   t.after(async()=>{await manager.close();store.close();assert(inside(os.tmpdir(),root));await rm(root,{recursive:true,force:true});});
   return {root,repo,data,store,config,manager,timers,seen,behavior,source,run,advance:ms=>{clock+=ms;}};
 }
@@ -139,4 +139,79 @@ test('offline HTTP Task execution reaches the real scoped CLI worker and existin
     const status=await controlCommand(f.config,{action:'status'});assert.equal(status.channelWorkspaces.length,1);
     assert.equal(status.taskOwner,'local');assert.equal(runtime.store.tasks(f.config.discord.operators[0]).length,1);
   }finally{await runtime.close();}
+});
+
+test('ignored bytes added to a channel are detected before its next worker',async t=>{
+  const f=await fixture(t);await writeFile(path.join(f.repo,'.gitignore'),'.env\n');await git(f.repo,['add','.gitignore']);await git(f.repo,['commit','-qm','ignore fixture']);
+  await f.run();const directory=f.seen[0].scoped.worker.workspace;await writeFile(path.join(directory,'.env'),'SYNTHETIC_ONLY=value\n');
+  await assert.rejects(f.run(),{code:'CHANNEL_WORKSPACE_CHANGED'});assert.equal(f.seen.length,1);
+});
+
+test('ignored source-repository files are not copied into the channel checkout',async t=>{
+  const f=await fixture(t);await writeFile(path.join(f.repo,'.gitignore'),'.env\n');await git(f.repo,['add','.gitignore']);await git(f.repo,['commit','-qm','ignore source fixture']);
+  await writeFile(path.join(f.repo,'.env'),'SYNTHETIC_ONLY=value\n');await f.run();
+  await assert.rejects(readFile(path.join(f.seen[0].scoped.worker.workspace,'.env')),{code:'ENOENT'});
+});
+
+test('repository checkout filters are refused before metadata or worktree processing',async t=>{
+  const f=await fixture(t);await writeFile(path.join(f.repo,'.gitattributes'),'source.txt filter=fixture\n');
+  await git(f.repo,['add','.gitattributes']);await git(f.repo,['commit','-qm','filter fixture']);
+  await git(f.repo,['config','filter.fixture.smudge','node --version']);
+  await assert.rejects(f.run(),{code:'CHANNEL_WORKSPACE_FILTER_REFUSED'});assert.equal(f.seen.length,0);
+});
+
+test('candidate checkpointing remains inside the lease deadline',async t=>{
+  const f=await fixture(t);let candidate;
+  f.behavior.run=async task=>{candidate=path.join(f.data,'worktrees',`${task.id}-r1`);await mkdir(path.dirname(candidate),{recursive:true});await git(f.repo,['worktree','add','--detach',candidate,'HEAD']);return {state:'needs_review',workspace:candidate,artifacts:[]};};
+  const snapshot=f.manager.snapshot;f.manager.snapshot=async(directory,options)=>{const result=await snapshot(directory,options);if(directory===candidate)f.advance(61000);return result;};
+  await assert.rejects(f.run(channels[0],{action:'develop'}));
+});
+
+test('failed candidate checkpointing cannot return a successful Task result',async t=>{
+  const f=await fixture(t);let candidate;
+  f.behavior.run=async task=>{candidate=path.join(f.data,'worktrees',`${task.id}-r1`);await mkdir(path.dirname(candidate),{recursive:true});await git(f.repo,['worktree','add','--detach',candidate,'HEAD']);return {state:'needs_review',workspace:candidate,artifacts:[]};};
+  const snapshot=f.manager.snapshot;f.manager.snapshot=async(directory,options)=>{if(directory===candidate)throw new Refused('ARTIFACT_CHANGED');return snapshot(directory,options);};
+  await assert.rejects(f.run(channels[0],{action:'develop'}));assert.equal(f.manager.status()[0].state,'uncertain');
+});
+
+test('research workspace creation does not run repository checkout hooks',async t=>{
+  const f=await fixture(t),hooks=path.join(f.repo,'.git','hooks'),marker=path.join(f.root,'hook-fired');await mkdir(hooks,{recursive:true});
+  await git(f.repo,['config','core.hooksPath',hooks]);
+  const hook=path.join(hooks,'post-checkout'),quoted=marker.replaceAll('\\','/').replaceAll("'","'\\''");
+  await writeFile(hook,`#!/bin/sh\nprintf fixture > '${quoted}'\n`,{mode:0o755});await chmod(hook,0o755);
+  await f.run();await assert.rejects(readFile(marker),{code:'ENOENT'});
+});
+
+test('a different clone with identical Git state cannot reuse the old repository lease',async t=>{
+  const f=await fixture(t);await f.run();const clone=path.join(f.root,'another-repository');
+  await git(f.root,['clone','--no-hardlinks',f.repo,clone]);await git(clone,['remote','remove','origin']);
+  const config=structuredClone(f.config);config.worker.workspace=clone;
+  const manager=new ChannelWorkspaceWorker({config,store:f.store,ownerId:'workspace-owner',workerFactory:()=>({run:async()=>({state:'needs_review',artifacts:[]})})});
+  const source=f.source(channels[0]);await assert.rejects(manager.run({id:'task-clone',revision:1,room:roomKey(source.guildId,source.channelId),source_key:source.key,action:'research'},[source]),{code:'CHANNEL_WORKSPACE_BASE_CHANGED'});
+});
+
+test('a configured repository subdirectory cannot silently expand into sibling projects',async t=>{
+  const f=await fixture(t),sub=path.join(f.repo,'subdir');await mkdir(sub);await writeFile(path.join(sub,'allowed.txt'),'fixture\n');await git(f.repo,['add','subdir']);await git(f.repo,['commit','-qm','subdir']);
+  const config=structuredClone(f.config);config.worker.workspace=sub;
+  const manager=new ChannelWorkspaceWorker({config,store:f.store,ownerId:'workspace-owner',workerFactory:()=>({run:async()=>({state:'needs_review',artifacts:[]})})});
+  const source=f.source(channels[0]);await assert.rejects(manager.run({id:'task-subdir',revision:1,room:roomKey(source.guildId,source.channelId),source_key:source.key,action:'research'},[source]),{code:'CHANNEL_WORKSPACE_REPOSITORY_ROOT_REQUIRED'});
+});
+
+test('current authorization sees a configuration change before the policy poll',async t=>{
+  const f=await fixture(t);f.store.releaseHost('workspace-owner');const file=path.join(f.root,'scope-config.json');await writeFile(file,JSON.stringify(f.config));
+  t.mock.timers.enable({apis:['setInterval']});
+  const runtime=await startRuntime(file,{offline:true,log:()=>{},worker:{run:async()=>{
+    const changed=structuredClone(f.config);changed.worker.channelWorkspaces.generation='new';await writeFile(file,JSON.stringify(changed));return {state:'needs_review',summary:'fixture',artifacts:[]};
+  }}});
+  try{const task=await controlCommand(f.config,{action:'request',actor:f.config.discord.operators[0],operation:'research',text:'fixture',requestId:'changed-policy'});await runtime.pipeline.tail;
+    const result=runtime.store.task(task.id,f.config.discord.operators[0]);assert.equal(result.state,'failed');assert.match(result.result.summary,/CHANNEL_WORKSPACE_CONFIG_CHANGED/);
+  }finally{await runtime.close();}
+});
+
+test('a full candidate ledger still permits read-only work',async t=>{
+  const f=await fixture(t);await f.run();const room=roomKey(f.config.discord.guildId,channels[0]),value=f.manager.read(room);
+  for(let index=0;index<128;index++){const candidate=path.join(f.data,'worktrees','preserved-'+index);await mkdir(candidate,{recursive:true});value.candidates.push({path:candidate,checkpoint:value.checkpoint});}
+  f.manager.save(room,value);const snapshot=f.manager.snapshot;f.manager.snapshot=(directory,options)=>directory.startsWith(path.join(f.data,'worktrees'))?Promise.resolve(value.checkpoint):snapshot(directory,options);
+  const result=await f.run();assert.equal(result.state,'needs_review');assert.equal(f.seen.length,2);
+  await assert.rejects(f.run(channels[0],{action:'develop'}),{code:'CHANNEL_WORKSPACE_CAPACITY'});assert.equal(f.seen.length,2);
 });

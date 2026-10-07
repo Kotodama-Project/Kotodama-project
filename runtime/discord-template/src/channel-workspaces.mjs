@@ -1,27 +1,38 @@
 import path from 'node:path';
-import {mkdir,lstat} from 'node:fs/promises';
+import {mkdir,lstat,realpath} from 'node:fs/promises';
 import {runCommand} from './command.mjs';
 import {readArtifact} from './artifact.mjs';
 import {CliWorker} from './worker.mjs';
 import {check,digest,inside,roomKey,uid,errorCode,Refused,safePath} from './common.mjs';
 
 async function exists(file){try{await lstat(file);return true;}catch(error){if(error.code==='ENOENT')return false;throw error;}}
-async function git(cwd,args,signal){
-  const result=await runCommand('git',['-c','core.fsmonitor=false',...args],{cwd,signal,timeoutMs:30000,maxBytes:4000000});
+async function git(cwd,args,signal,input=''){
+  const result=await runCommand('git',['-c','core.fsmonitor=false','-c','core.hooksPath=/dev/null',...args],{cwd,signal,input,timeoutMs:30000,maxBytes:4000000});
   check(result.code===0,'CHANNEL_WORKSPACE_GIT_FAILED');return result.stdout;
 }
-export async function workspaceSnapshot(cwd,{signal,maxBytes=20000000}={}){
+export async function workspaceSnapshot(cwd,{signal,maxBytes=20000000,includeIgnored=true}={}){
+  const repositoryRoot=await realpath((await git(cwd,['rev-parse','--show-toplevel'],signal)).trim());
+  check(await realpath(cwd)===repositoryRoot,'CHANNEL_WORKSPACE_REPOSITORY_ROOT_REQUIRED');
+  const commonDirectory=await realpath((await git(cwd,['rev-parse','--path-format=absolute','--git-common-dir'],signal)).trim());
   const head=(await git(cwd,['rev-parse','HEAD'],signal)).trim();
+  const tracked=await git(cwd,['ls-files','-z'],signal);
+  // Metadata and checkout must not invoke repository filter programs either.
+  for(const from of [[],['--source=HEAD']]){
+    const attributes=(await git(cwd,['check-attr',...from,'-z','--stdin','filter'],signal,tracked)).split('\0');
+    for(let index=2;index<attributes.length;index+=3)check(['unspecified','unset'].includes(attributes[index]),'CHANNEL_WORKSPACE_FILTER_REFUSED');
+  }
   const status=await git(cwd,['status','--porcelain=v1','--untracked-files=all','-z'],signal);
   const diff=await git(cwd,['diff','--no-ext-diff','--no-textconv','--binary','HEAD'],signal);
   const unpublished=await git(cwd,['rev-list','HEAD','--not','--remotes'],signal);
-  const names=(await git(cwd,['ls-files','--others','--exclude-standard','-z'],signal)).split('\0').filter(Boolean).sort();
+  const other=await git(cwd,['ls-files','--others','--exclude-standard','-z'],signal);
+  const ignored=includeIgnored?await git(cwd,['ls-files','--others','--ignored','--exclude-standard','-z'],signal):'';
+  const names=[...new Set((other+ignored).split('\0').filter(Boolean))].sort();
   check(names.length<=2000,'CHANNEL_WORKSPACE_INSPECTION_LIMIT');let total=0;const untracked=[];
   for(const name of names){
     const file=await safePath(cwd,name),bytes=await readArtifact(file,Math.min(maxBytes-total,5000000));
     total+=bytes.length;check(total<=maxBytes,'CHANNEL_WORKSPACE_INSPECTION_LIMIT');untracked.push({name,sha256:digest(bytes)});
   }
-  return {head,dirty:Boolean(status),statusSha256:digest(status),diffSha256:digest(diff),untrackedSha256:digest(untracked),unpublishedSha256:digest(unpublished)};
+  return {repositoryRoot,commonDirectory,head,dirty:Boolean(status),statusSha256:digest(status),diffSha256:digest(diff),untrackedSha256:digest(untracked),unpublishedSha256:digest(unpublished)};
 }
 
 // These are local resource leases. Task state remains in the configured owner.
@@ -54,7 +65,8 @@ export class ChannelWorkspaceWorker {
     let value=this.read(room);
     signal=AbortSignal.any([...(signal?[signal]:[]),AbortSignal.timeout(30000)]);
     try{
-    const source=await this.snapshot(this.config.worker.workspace,{signal});
+    // Ignored source-repository files are never copied into the fresh worktree.
+    const source=await this.snapshot(this.config.worker.workspace,{signal,includeIgnored:false});
     check(!source.dirty,'CHANNEL_WORKSPACE_BASE_DIRTY');
     const expectedPath=await safePath(this.config.dataDir,path.join('channel-workspaces',digest(this.key(room))),{mustExist:false});
     if(value){
@@ -82,7 +94,6 @@ export class ChannelWorkspaceWorker {
       value.checkpoint=await this.snapshot(target,{signal});check(!value.checkpoint.dirty&&value.checkpoint.head===source.head,'CHANNEL_WORKSPACE_CREATE_UNCONFIRMED');
       value.state='ready';this.save(room,value);
     }
-    check(value.candidates.length<128,'CHANNEL_WORKSPACE_CAPACITY');
     await authorize();check(!signal.aborted,'CANCELLED');
     if(this.now()>=value.expiresAt)value.expiresAt=this.now()+this.config.worker.channelWorkspaces.maxAgeSeconds*1000;
     value.state='ready';value.reason=null;
@@ -95,12 +106,17 @@ export class ChannelWorkspaceWorker {
     check(/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(task.id)&&Number.isSafeInteger(task.revision)&&task.revision>0,'CHANNEL_WORKSPACE_TASK_PATH');
     check(!this.active.has(room),'CHANNEL_WORKSPACE_BUSY');
     const active={id:uid('workspace-run'),controller:new AbortController(),value:null};this.active.set(room,active);
-    let timer,uncertain=false,failureCode=null;
+    let timer,uncertain=false,failureCode=null,result,runError,checkpointError,guard;
+    const write=['develop','write_file'].includes(task.action);
+    const candidate=path.join(this.config.dataDir,'worktrees',`${task.id}-r${task.revision}`);
+    check(inside(path.join(this.config.dataDir,'worktrees'),candidate),'CHANNEL_WORKSPACE_TASK_PATH');
     const signal=options.signal?AbortSignal.any([options.signal,active.controller.signal]):active.controller.signal;
     try{
       await options.authorize?.();check(!signal.aborted,'CANCELLED');
-      const value=await this.reconcile(room,{signal,authorize:async()=>{this.scope(source);await options.authorize?.();}});active.value=value;value.activeRun=active.id;this.save(room,value);
-      const guard=async()=>{
+      const value=await this.reconcile(room,{signal,authorize:async()=>{this.scope(source);await options.authorize?.();}});active.value=value;
+      check(!write||value.candidates.some(item=>item.path===candidate)||value.candidates.length<128,'CHANNEL_WORKSPACE_CAPACITY');
+      value.activeRun=active.id;this.save(room,value);
+      guard=async()=>{
         this.scope(source);check(!signal.aborted,'CANCELLED');
         check(this.active.get(room)===active&&this.read(room)?.activeRun===active.id,'CHANNEL_WORKSPACE_LEASE_CHANGED');
         check(this.now()<value.expiresAt,'CHANNEL_WORKSPACE_EXPIRED');await options.authorize?.();
@@ -109,30 +125,35 @@ export class ChannelWorkspaceWorker {
       timer=this.schedule(()=>active.controller.abort(new Refused('CHANNEL_WORKSPACE_EXPIRED')),Math.max(0,Math.min(this.config.worker.channelWorkspaces.maxAgeSeconds*1000,value.expiresAt-this.now())));timer?.unref?.();
       await guard();
       const scoped={...this.config,worker:{...this.config.worker,workspace:value.path}};
-      const result=await this.workerFactory(scoped).run(task,context,{...options,signal,authorize:guard});
+      result=await this.workerFactory(scoped).run(task,context,{...options,signal,authorize:guard});
       await guard();
       check(digest(await this.snapshot(value.path,{signal}))===digest(value.checkpoint),'CHANNEL_WORKSPACE_CHANGED');
       await guard();
-      return {...result,channelWorkspace:{roomRef:digest(room),generation:value.generation,kind:'git_worktree',baseRevision:value.source.head,expiresAt:new Date(value.expiresAt).toISOString(),directoryIsSandbox:false}};
-    }catch(error){failureCode=errorCode(error);uncertain=failureCode==='STOP_UNCONFIRMED';throw error;}
+    }catch(error){runError=error;failureCode=errorCode(error);uncertain=failureCode==='STOP_UNCONFIRMED';}
     finally{
-      if(timer)this.cancel(timer);
       const value=active.value;
       if(value){
         try{
-          const candidate=path.join(this.config.dataDir,'worktrees',`${task.id}-r${task.revision}`);
-          check(inside(path.join(this.config.dataDir,'worktrees'),candidate),'CHANNEL_WORKSPACE_TASK_PATH');
-          if(await exists(candidate)){
+          const present=await exists(candidate);
+          check(!result||runError||!write||present,'CHANNEL_WORKSPACE_CHECKPOINT_UNCONFIRMED');
+          if(present&&!uncertain){
             await safePath(this.config.dataDir,path.relative(this.config.dataDir,candidate));
-            const checkpoint=await this.snapshot(candidate);
-            if(!value.candidates.some(item=>item.path===candidate))value.candidates.push({path:candidate,checkpoint});
+            const checkpoint=await this.snapshot(candidate,{signal:runError?AbortSignal.timeout(30000):signal});
+            const previous=value.candidates.find(item=>item.path===candidate);
+            if(previous)previous.checkpoint=checkpoint;else value.candidates.push({path:candidate,checkpoint});
           }
+          if(!runError)await guard();
           if(!uncertain)value.activeRun=null;
           value.state=uncertain?'uncertain':failureCode?.startsWith('CHANNEL_WORKSPACE_')?'needs_reconciliation':'ready';value.reason=failureCode;this.save(room,value);
-        }catch{value.state='uncertain';value.reason='WORKSPACE_CHECKPOINT_UNCONFIRMED';this.save(room,value);}
+        }catch(error){checkpointError=error;value.state='uncertain';value.reason='WORKSPACE_CHECKPOINT_UNCONFIRMED';this.save(room,value);}
       }
+      if(timer)this.cancel(timer);
       this.active.delete(room);
     }
+    if(runError)throw runError;
+    if(checkpointError)throw new Refused('CHANNEL_WORKSPACE_CHECKPOINT_UNCONFIRMED');
+    const value=active.value;
+    return {...result,channelWorkspace:{roomRef:digest(room),generation:value.generation,kind:'git_worktree',baseRevision:value.source.head,expiresAt:new Date(value.expiresAt).toISOString(),directoryIsSandbox:false}};
   }
   async close(){for(const active of this.active.values())active.controller.abort();}
 }
