@@ -20,6 +20,11 @@ ConceptはOKFのlogical path IDを維持し、外側のmetadataにrevision/paren
 source-set digest、generator invocation、policy/intent revisionを記録します。
 hashをprose内に埋めて自己参照を作りません。親の別Conceptへの付替えと親循環を拒否します。
 
+non-nullの親がsnapshot外の場合は`parent_resolution: external_unresolved`を明記し、CLIは
+NEEDS_RESOLUTIONと未解決refを返します。完全に照合した親鎖とは扱いません。既存revision ownerへ
+差分を登録する場合も、そこで親の存在とlogical IDを照合する必要があります。resolved relationは
+外部targetでも固定revisionを必須にします。public locatorのcase衝突も、platformを問わず拒否します。
+
 型付きrelationは相手のlogical IDと固定revision、必須/任意、validity/resolution、evidenceを
 保持します。source/conceptが見つからない場合はunresolvedと明記し、resolvedの偽装を拒否します。
 Goal等の外部owner参照が構文上妥当なことは、そのownerへの照合成功ではありません。
