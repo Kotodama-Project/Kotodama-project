@@ -9,12 +9,14 @@ import sqlite3
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from kotodama_kb.foundation import KnowledgeBaseError
 from kotodama_kb.revision_owner import LocalRevisionOwner
 from tests.test_knowledge_lineage import fixture, rebind
+from tests.test_knowledge_lineage_impact import edge
 
 FIRST = 'ref/concept-revision/example-one'
 SECOND = 'ref/concept-revision/example-two'
@@ -145,6 +147,112 @@ class KnowledgeRevisionOwnerTests(unittest.TestCase):
         with self.assertRaisesRegex(KnowledgeBaseError, 'PARENT_MISMATCH'):
             self.owner.register(wrong, expected_generation=2)
         self.assertEqual(2, self.owner.generation())
+
+    def test_denied_initialization_creates_no_directory_or_database(self):
+        for mode in ('deny', 'raise'):
+            target = self.root / mode / 'nested/owner.sqlite'
+            def authorize(_request):
+                if mode == 'raise': raise RuntimeError('synthetic unavailable')
+                return False
+            with self.assertRaises(KnowledgeBaseError):
+                LocalRevisionOwner(target, repository_root=self.root, authorize=authorize)
+            self.assertFalse((self.root / mode).exists())
+
+    def test_foreign_application_without_tables_is_preserved(self):
+        target = self.root / 'foreign.sqlite'
+        with closing(sqlite3.connect(target)) as db, db:
+            db.execute('PRAGMA application_id=1234')
+            db.execute('CREATE VIEW foreign_view AS SELECT 1')
+        original = target.read_bytes()
+        with self.assertRaisesRegex(KnowledgeBaseError, 'UNRECOGNIZED_STORE'):
+            LocalRevisionOwner(target, repository_root=self.root, authorize=self.authorize)
+        self.assertEqual(original, target.read_bytes())
+
+    def test_revocation_noop_cannot_claim_different_evidence(self):
+        self.register_first()
+        first = self.owner.revoke(KEY, evidence_ref='ref/evidence/first', expected_generation=2)
+        same = self.owner.revoke(KEY, evidence_ref='ref/evidence/first', expected_generation=3)
+        self.assertFalse(same['changed']); self.assertEqual(first['revision_refs'], same['revision_refs'])
+        with self.assertRaisesRegex(KnowledgeBaseError, 'REVOCATION_EVIDENCE_CONFLICT'):
+            self.owner.revoke(KEY, evidence_ref='ref/evidence/second', expected_generation=3)
+        self.assertEqual(3, self.owner.generation())
+
+    def test_optional_current_conflict_is_withheld_on_publish_and_current(self):
+        value = fixture()
+        other = copy.deepcopy(value['concepts'][0]); other.update(concept_id='synthetic/other', revision_ref=SECOND)
+        value['concepts'].append(other)
+        value['relations'].append(edge(FIRST, SECOND, 'synthetic/other', required=False, predicate='conflicts_with'))
+        self.owner.register(value, expected_generation=0)
+        with self.assertRaisesRegex(KnowledgeBaseError, 'REVISION_WITHHELD'):
+            self.owner.publish(FIRST, expected_parent_ref=None, expected_generation=1)
+        # Simulate a pointer admitted by an older owner; readback must still refuse.
+        with closing(sqlite3.connect(self.owner.database)) as db, db:
+            db.execute('INSERT INTO pointers VALUES(?,?)', ('synthetic/example', FIRST))
+        with self.assertRaisesRegex(KnowledgeBaseError, 'REVISION_WITHHELD'):
+            self.owner.current('synthetic/example')
+
+    def test_incoming_state_relation_withholds_the_target_and_its_source_consumers(self):
+        for predicate in ('conflicts_with', 'supersedes', 'invalidates'):
+            with self.subTest(predicate=predicate):
+                owner = LocalRevisionOwner(self.root / (predicate + '.sqlite'), repository_root=self.root, authorize=self.authorize)
+                value = fixture(); other = copy.deepcopy(value['concepts'][0])
+                other.update(concept_id='synthetic/other', revision_ref=SECOND); value['concepts'].append(other)
+                value['relations'].append(edge(FIRST, SECOND, 'synthetic/other', required=False, predicate=predicate))
+                owner.register(value, expected_generation=0)
+                with self.assertRaisesRegex(KnowledgeBaseError, 'REVISION_WITHHELD'):
+                    owner.publish(SECOND, expected_parent_ref=None, expected_generation=1)
+                with closing(sqlite3.connect(owner.database)) as db, db:
+                    db.execute('INSERT INTO pointers VALUES(?,?)', ('synthetic/other', SECOND))
+                with self.assertRaisesRegex(KnowledgeBaseError, 'REVISION_WITHHELD'):
+                    owner.current('synthetic/other')
+        source_case = fixture(); relation = source_case['relations'][0]
+        relation.update(predicate='invalidates', required=False)
+        self.owner.register(source_case, expected_generation=0)
+        with self.assertRaisesRegex(KnowledgeBaseError, 'ACCESS_WITHHELD'):
+            self.owner.publish(FIRST, expected_parent_ref=None, expected_generation=1)
+
+    def test_shared_dependency_dag_is_checked_once_per_revision(self):
+        value = fixture(); base = copy.deepcopy(value['concepts'][0]); value['concepts'] = []; value['relations'] = []; value['projections'] = []
+        layers = [[(f'synthetic/layer-{layer}-{side}', f'ref/concept-revision/layer-{layer}-{side}') for side in range(2)] for layer in range(16)]
+        for layer, nodes in enumerate(layers):
+            for logical, ref in nodes:
+                concept = copy.deepcopy(base); concept.update(concept_id=logical, revision_ref=ref)
+                value['concepts'].append(concept)
+                if layer + 1 < len(layers):
+                    value['relations'].extend(edge(ref, target, target_id) for target_id, target in layers[layer + 1])
+        self.owner.register(value, expected_generation=0)
+        # Valid dependency pointers are fixture state, not timed setup work.
+        with closing(sqlite3.connect(self.owner.database)) as db, db:
+            db.executemany('INSERT INTO pointers VALUES(?,?)', [node for layer in layers[1:] for node in layer])
+        original = self.owner._record; calls = 0
+        def bounded_record(*args):
+            nonlocal calls
+            calls += 1
+            self.assertLessEqual(calls, 100, 'dependency traversal revisits shared records exponentially')
+            return original(*args)
+        with patch.object(self.owner, '_record', side_effect=bounded_record):
+            self.owner.publish(layers[0][0][1], expected_parent_ref=None, expected_generation=1)
+        self.assertLessEqual(calls, 64)
+
+    def test_cached_subtree_cannot_hide_longer_paths_or_dependency_cycles(self):
+        value = fixture(); base = copy.deepcopy(value['concepts'][0]); value['relations'] = []; value['projections'] = []
+        tail = [(f'synthetic/a-tail-{i}', f'ref/concept-revision/a-tail-{i}') for i in range(3)]
+        long = [(f'synthetic/z-chain-{i}', f'ref/concept-revision/z-chain-{i}') for i in range(29)]
+        for logical, ref in tail + long:
+            concept = copy.deepcopy(base); concept.update(concept_id=logical, revision_ref=ref); value['concepts'].append(concept)
+        for route in ([(base['concept_id'], FIRST)] + tail, [(base['concept_id'], FIRST)] + long + tail[:1]):
+            value['relations'].extend(edge(origin[1], target[1], target[0]) for origin, target in zip(route, route[1:]))
+        self.owner.register(value, expected_generation=0)
+        with closing(sqlite3.connect(self.owner.database)) as db, db:
+            db.executemany('INSERT INTO pointers VALUES(?,?)', tail + long)
+        with self.assertRaisesRegex(KnowledgeBaseError, 'DEPENDENCY_CYCLE_OR_LIMIT'):
+            self.owner.publish(FIRST, expected_parent_ref=None, expected_generation=1)
+        self.assertEqual(1, self.owner.generation())
+        cyclic = revision(SECOND, FIRST)
+        cyclic['relations'].append(edge(SECOND, SECOND, 'synthetic/example'))
+        self.owner.register(cyclic, expected_generation=1)
+        with self.assertRaisesRegex(KnowledgeBaseError, 'DEPENDENCY_CYCLE_OR_LIMIT'):
+            self.owner.publish(SECOND, expected_parent_ref=FIRST, expected_generation=2)
 
 
 if __name__ == '__main__':
