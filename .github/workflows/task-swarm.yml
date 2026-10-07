@@ -9,7 +9,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # Hosted ubuntu-latest refused bwrap uid maps. Test on the explicit
+        # 22.04 image without changing either host's security policy.
+        os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
