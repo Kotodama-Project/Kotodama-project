@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sqlite3
 import stat
 import subprocess
 from typing import Any
@@ -34,6 +35,7 @@ REQUEST_KEYS = {
 SOURCE_FILES = (
     "tools/run_company_pack_task.py", "tools/create_company_pack.py",
     "tools/check_company_pack_customization.py", "tools/validate_template_pack.py",
+    "runtime/discord-template/src/common.mjs",
 )
 
 
@@ -155,6 +157,8 @@ def resolve_records(request: dict[str, Any], root: Path, binding_path: Path | No
     """Read an operator-selected snapshot; never mint authority or update records."""
     require(binding_path is not None, "EXISTING_RECORD_BINDING_REQUIRED")
     binding = read_json(binding_path)
+    if binding.get("kind") == "company_pack_discord_task_binding":
+        return resolve_discord_task(request, root, binding)
     require(set(binding) == {"kind", "version", "owner_ref", "task_updated_at", "records"}, "RECORD_BINDING_INVALID")
     require(binding["kind"] == "company_pack_existing_record_binding" and binding["version"] == "1.0", "RECORD_BINDING_INVALID")
     require(isinstance(binding["owner_ref"], str) and re.fullmatch(r"ref/[A-Za-z0-9][A-Za-z0-9._/@-]*(?:/[A-Za-z0-9][A-Za-z0-9._/@-]*)*", binding["owner_ref"]) is not None and not any(pattern.search(binding["owner_ref"]) for pattern in SECRET_VALUE_PATTERNS), "RECORD_OWNER_INVALID")
@@ -225,6 +229,107 @@ def resolve_records(request: dict[str, Any], root: Path, binding_path: Path | No
     issued_at = datetime.fromisoformat(capability["issued_at"].replace("Z", "+00:00"))
     require(issued_at.tzinfo is not None and issued_at <= datetime.now(timezone.utc), "CAPABILITY_NOT_YET_ISSUED")
     return {"sha256": digest(binding), "task_revision": entries["task"]["sha256"], "owner_ref": binding["owner_ref"], "records": entries}
+
+
+def discord_source_fingerprint(source: dict[str, Any]) -> str:
+    """Reuse the owner's exact JavaScript number/string canonicalization."""
+    module = (ROOT / "runtime/discord-template/src/common.mjs").as_uri()
+    program = ("import {readFileSync} from 'node:fs';import {sourceFingerprint} from "
+               + json.dumps(module) + ";process.stdout.write(sourceFingerprint(JSON.parse(readFileSync(0,'utf8'))));")
+    environment = {key: value for key, value in os.environ.items() if key.upper() not in {"NODE_OPTIONS", "NODE_PATH"}}
+    try:
+        result = subprocess.run(["node", "--input-type=module", "-e", program],
+            input=json.dumps(source, ensure_ascii=True, allow_nan=False).encode("utf-8"),
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5, env=environment)
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        raise Refused("DISCORD_FINGERPRINT_UNAVAILABLE") from exc
+    require(result.returncode == 0 and re.fullmatch(rb"[a-f0-9]{64}", result.stdout) is not None, "DISCORD_FINGERPRINT_UNAVAILABLE")
+    return result.stdout.decode("ascii")
+
+
+def resolve_discord_task(request: dict[str, Any], root: Path, binding: dict[str, Any]) -> dict[str, Any]:
+    """Read the existing local owner. Snapshot references do not grant authority."""
+    keys = {"kind", "version", "owner_kind", "owner_ref", "database_path", "task_id",
+            "task_revision", "source_key", "source_revision", "required_actions", "request_sha256"}
+    require(set(binding) == keys and binding["kind"] == "company_pack_discord_task_binding" and binding["version"] == "1.0", "DISCORD_BINDING_INVALID")
+    require(binding["owner_kind"] == "local", "DISCORD_LOCAL_OWNER_REQUIRED")
+    require(isinstance(binding["owner_ref"], str) and re.fullmatch(r"ref/[A-Za-z0-9][A-Za-z0-9._/@-]{1,180}", binding["owner_ref"]) is not None, "RECORD_OWNER_INVALID")
+    require(not any(pattern.search(binding["owner_ref"]) for pattern in SECRET_VALUE_PATTERNS), "RECORD_OWNER_INVALID")
+    require(isinstance(binding["task_id"], str) and re.fullmatch(r"task-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", binding["task_id"]) is not None, "DISCORD_TASK_ID_INVALID")
+    for name, minimum in (("task_revision", 1), ("source_revision", 0)):
+        require(type(binding[name]) is int and minimum <= binding[name] <= 9007199254740991, "DISCORD_REVISION_INVALID")
+    require(isinstance(binding["source_key"], str) and re.fullmatch(r"[a-f0-9]{64}", binding["source_key"]) is not None, "DISCORD_SOURCE_INVALID")
+    require(binding["required_actions"] == ["create_company_pack"], "DISCORD_ACTION_REFUSED")
+    require(binding["request_sha256"] == digest(request), "DISCORD_REQUEST_MISMATCH")
+    require(request["task_ref"] == "task:" + binding["task_id"], "TASK_REFERENCE_MISMATCH")
+    require(isinstance(binding["database_path"], str), "DISCORD_DATABASE_INVALID")
+    database = safe_path(Path(binding["database_path"]))
+    require(database.is_file() and root / request["operation_key"] not in database.parents, "RECORD_PATH_REFUSED")
+
+    def document(row: sqlite3.Row | None, code: str) -> dict[str, Any]:
+        require(row is not None and isinstance(row["body"], str) and len(row["body"].encode("utf-8")) <= 65536, code)
+        value = json.loads(row["body"], object_pairs_hook=no_duplicates)
+        require(isinstance(value, dict), code)
+        return value
+
+    try:
+        connection = sqlite3.connect(database.as_uri() + "?mode=ro", uri=True, timeout=1)
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA query_only=ON")
+            steps = 0
+            def bounded_query() -> int:
+                nonlocal steps
+                steps += 1
+                return int(steps > 200)
+            connection.set_progress_handler(bounded_query, 1000)
+            connection.execute("BEGIN")
+            task_row = connection.execute("SELECT id,actor,room,source_key,revision,state,body FROM tasks WHERE id=?", (binding["task_id"],)).fetchone()
+            task = document(task_row, "DISCORD_TASK_NOT_FOUND")
+            require(task_row["state"] == "running" and task_row["revision"] == binding["task_revision"], "DISCORD_TASK_NOT_RUNNING")
+            require(task.get("id") == binding["task_id"] and task.get("actor") == task_row["actor"], "DISCORD_TASK_INVALID")
+            require(task_row["source_key"] == task.get("source_key") == binding["source_key"] and type(task.get("source_revision")) is int and task["source_revision"] == binding["source_revision"], "DISCORD_SOURCE_CHANGED")
+            require(task.get("action") == "create_company_pack" and task.get("requiredActions") == binding["required_actions"], "DISCORD_ACTION_REFUSED")
+            require(isinstance(task.get("request"), str) and task["request"].strip() == request["pack_id"], "DISCORD_PACK_REQUEST_MISMATCH")
+            source_row = connection.execute("SELECT key,revision,fingerprint,body FROM sources WHERE key=?", (binding["source_key"],)).fetchone()
+            source = document(source_row, "DISCORD_SOURCE_NOT_FOUND")
+            require(type(source.get("revision")) is int and source_row["revision"] == source["revision"] == binding["source_revision"] and source.get("key") == binding["source_key"], "DISCORD_SOURCE_CHANGED")
+            require(source.get("provider") == "discord" and source.get("final") is True and source.get("withdrawn", False) is False, "DISCORD_SOURCE_REFUSED")
+            actor = task_row["actor"]
+            require(isinstance(actor, str) and re.fullmatch(r"[0-9]{5,24}", actor) is not None and source.get("actorId") == actor, "DISCORD_ACTOR_MISMATCH")
+            require(isinstance(source.get("readers"), list) and all(isinstance(reader, str) for reader in source["readers"]) and actor in source["readers"], "DISCORD_SOURCE_ACCESS_DENIED")
+            require(source_row["fingerprint"] == discord_source_fingerprint(source), "DISCORD_SOURCE_FINGERPRINT_MISMATCH")
+            require(all(isinstance(source.get(key), str) and re.fullmatch(r"[0-9]{5,24}", source[key]) is not None for key in ("guildId", "channelId")), "DISCORD_SOURCE_INVALID")
+            room = f'discord:{source["guildId"]}:{source["channelId"]}'
+            require(task_row["room"] == task.get("room") == room, "TASK_ROOM_MISMATCH")
+            metadata = source.get("metadata")
+            require(isinstance(metadata, dict), "DISCORD_EXPLICIT_COMMAND_REQUIRED")
+            command = metadata.get("command")
+            require(isinstance(command, dict) and command.get("action") == "create_company_pack" and command.get("request") == task["request"] == source.get("text"), "DISCORD_EXPLICIT_COMMAND_REQUIRED")
+            intents = task.get("intentIds")
+            require(isinstance(intents, list) and len(intents) == 1 and isinstance(intents[0], str) and re.fullmatch(r"[a-f0-9]{64}", intents[0]) is not None, "DISCORD_INTENT_INVALID")
+            require(request["human_intent_ref"] == "human-intent:" + intents[0], "DISCORD_INTENT_MISMATCH")
+            intent_row = connection.execute("SELECT source_key,revision,body FROM intents WHERE id=?", (intents[0],)).fetchone()
+            intent = document(intent_row, "DISCORD_INTENT_NOT_FOUND")
+            require(intent_row["source_key"] == intent.get("source_key") == binding["source_key"] and intent_row["revision"] == intent.get("source_revision") == binding["source_revision"], "DISCORD_INTENT_MISMATCH")
+            require(intent.get("kind") == "request" and intent.get("explicit") is True and intent.get("complete") is True and intent.get("origin") in ("explicit_command", "native_correction"), "DISCORD_EXPLICIT_COMMAND_REQUIRED")
+            if intent["origin"] == "native_correction":
+                correction = metadata.get("manualCorrection")
+                require(isinstance(correction, dict) and correction.get("surface") == "discord_native_ui" and correction.get("actor") == actor and correction.get("taskId") == binding["task_id"], "DISCORD_EXPLICIT_COMMAND_REQUIRED")
+                require(isinstance(correction.get("interactionId"), str) and re.fullmatch(r"[0-9]{5,24}", correction["interactionId"]) is not None and intent.get("targetTaskId") == binding["task_id"], "DISCORD_EXPLICIT_COMMAND_REQUIRED")
+            else:
+                require(metadata.get("kind") in ("command", "trusted_cli"), "DISCORD_EXPLICIT_COMMAND_REQUIRED")
+            require(intent.get("action") == "create_company_pack" and intent.get("request") == task["request"], "DISCORD_INTENT_MISMATCH")
+            snapshot = {"task": task, "task_revision": task_row["revision"], "state": task_row["state"], "source": source, "intent": intent}
+        finally:
+            connection.close()
+    except sqlite3.Error as exc:
+        raise Refused("DISCORD_OWNER_UNAVAILABLE") from exc
+    return {"kind": "discord_local_owner_readback", "sha256": digest(binding), "owner_ref": binding["owner_ref"],
+            "task_revision": binding["task_revision"], "source_key": binding["source_key"],
+            "source_revision": binding["source_revision"], "required_actions": binding["required_actions"],
+            "owner_snapshot_sha256": digest(snapshot), "records": {"owner_database": {"path": str(database)}},
+            "authority_verified": False, "task_state_changed": False}
 
 
 def write_new_json(path: Path, value: dict[str, Any]) -> None:
