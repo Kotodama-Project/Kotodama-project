@@ -80,7 +80,8 @@ Production dataset/key custody/retention/deletion/replication binding remain pen
 and the bounded Goal Completion Loop remain product requirements. This
 documentation milestone does not implement the runtime: Voice-to-Requirement,
 Agent Swarm, Context/encoder, provider, storage, and Promotion remain separate
-work. Implemented subsets are listed above; whole-company runtime acceptance and Public Beta remain
+work. The full Company AGI runtime remains unimplemented; the implemented Task
+and swarm components are listed above. Public Beta remains
 `NO_GO_UNPUBLISHED`. The public bytes are a redacted owner-directed direction
 candidate, not signed or independently verifiable governance approval,
 rightsholder proof, canonical adoption, launch decision, or Final Human GO, and
