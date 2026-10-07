@@ -14,6 +14,7 @@ import {VoiceRoom} from '../src/voice.mjs';
 import {ResponsesAnalyzer} from '../src/llm.mjs';
 import {ProactiveLedger,isProactiveDecline} from '../src/proactive.mjs';
 import {voiceNotice} from '../src/consent.mjs';
+import {createAnalysisAuthorizer} from '../src/analysis-policy.mjs';
 
 const a='100000000000000002',b='100000000000000004';
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -148,4 +149,33 @@ test('Responses cue sends only four truncated texts with strict output and no re
   const f=await fixture(t);let request,options;const analyzer=new ResponsesAnalyzer(f.config,{sdk:{OpenAI:class{constructor(){this.responses={create:async(body,opts)=>{request=body;options=opts;return {status:'completed',output_text:'{"cue":"schedule","declined":false}'};}};}}}});
   const controller=new AbortController();assert.deepEqual(await analyzer.proactiveCue('a'.repeat(1000),Array.from({length:5},()=>({text:'b'.repeat(1000),secret:'not sent'})),{signal:controller.signal}),{cue:'schedule',declined:false});
   const input=JSON.parse(request.input);assert.equal(input.current.length,600);assert.equal(input.previous.length,3);assert(input.previous.every(s=>s.text.length===600));assert(!request.input.includes('secret'));assert.equal(request.store,false);assert.equal(request.text.format.strict,true);assert.equal(options.signal,controller.signal);assert.equal(options.maxRetries,0);
+});
+
+test('proactive provider startup obeys the configured per-session time cap',async t=>{
+  const f=await fixture(t);f.config.voice.maxSessionSeconds=10;t.mock.timers.enable({apis:['setTimeout','setInterval','Date'],now:Date.UTC(2026,0,1)});
+  const factory=f.room.providerFactory;let release;f.room.providerFactory=options=>{const p=factory(options);p.start=async()=>{p.active=true;await new Promise(resolve=>{release=resolve;});};return p;};
+  const running=f.room.proactive.consider(f.source());while(!release)await flush();
+  try{t.mock.timers.tick(10001);assert.equal(f.providers[0].active,false);assert.equal(f.room.proactive.output,null);}finally{release();await running;}
+});
+
+test('playback permission refresh checks each actor/channel once despite three context sources',async t=>{
+  const f=await fixture(t);let probes=0;
+  const adapter={client:{channels:{fetch:async()=>({})}},canRead:async()=>{probes++;return true;}};
+  f.pipeline.authorizeAnalysis=createAnalysisAuthorizer({config:f.config,readConfig:async()=>f.config,owner:f.store,voice:()=>f.room,discord:()=>adapter});
+  for(let i=0;i<3;i++)f.source('prior '+i);await f.room.proactive.consider(f.source('current'));assert(f.room.reply);const before=probes;
+  await f.room.reply.refreshAccess();assert.equal(probes-before,2);
+});
+
+for(const analysis of ['none','failure','deferred'])test(`an active conversation records a local decline even when analysis is ${analysis}`,async t=>{
+  const f=await fixture(t);const s=await f.room.session(a);s.conversationActive=true;
+  if(analysis==='failure')f.pipeline.analyzer.analyze=async()=>{throw new Error('synthetic failure');};
+  if(analysis==='deferred')f.store.db.prepare('INSERT INTO analysis_usage VALUES(?,?)').run(new Date().toISOString().slice(0,10),f.config.analyzer.limits.maxDailyAnalyses);
+  const receipt=await f.room.queueLocalTurn(f.room.localState(a),{id:'active-decline',text:'今はいい',startMs:0,endMs:100});
+  if(analysis==='deferred')assert.equal(receipt.analysis,'deferred');
+  assert.equal(f.room.proactive.ledger.update('check',f.config.voice.proactive),false);assert.equal(f.calls.length,0);
+});
+
+test('a non-operator offer does not advertise installation write capabilities',async t=>{
+  const f=await fixture(t);f.config.worker.actions=['develop','write_file'];await f.room.proactive.consider(f.source('質問です',{actorId:b}));
+  assert.equal(f.providers.length,1);assert(!f.providers[0].spoken[0].includes('実装や資料作成'));assert(f.providers[0].spoken[0].includes('会話の相談'));
 });

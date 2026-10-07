@@ -1,4 +1,4 @@
-import {ProactiveVoice} from './proactive.mjs';
+import {ProactiveVoice,isProactiveDecline} from './proactive.mjs';
 import {readProjectContext} from './project-context.mjs';
 import {SpeechAdmission} from './speech-admission.mjs';
 import {Readable} from 'node:stream';
@@ -179,6 +179,8 @@ export class VoiceRoom {
     state.chain=state.chain.then(async()=>{
       if(!turn.text||!this.allowed(state.actor))return;const readers=await this.sourceReaders();if(!this.allowed(state.actor))return;
       const cfg=this.policy(),identified=!cfg.discord.unattributedUsers.includes(state.actor);let transcriptCorrection=null;
+      const declined=Boolean(identified&&state.epoch===this.epoch&&this.audience().includes(state.actor)&&this.proactive.enabled()&&isProactiveDecline(turn.text));
+      if(declined)this.proactive.decline();
       if(cfg.voice.contextCorrection&&identified&&typeof this.pipeline.analyzer?.correctTranscript==='function'){
         try{const context=this.store.recentSources(state.actor,{guildId:cfg.discord.guildId,channelId:cfg.discord.voiceChannelId,sourceActor:state.actor,limit:3,order:'revision'}).reverse();transcriptCorrection=await this.pipeline.analyzer.correctTranscript(turn.text,context,cfg.voice.wakeWords);}
         catch{this.onError('TRANSCRIPT_CORRECTION_FAILED');}
@@ -199,7 +201,7 @@ export class VoiceRoom {
       let result;
       try{result=await this.pipeline.ingest(source,{execute:active&&eligible()&&cfg.discord.operators.includes(state.actor),reply:active&&eligible()&&this.mode==='assist'&&!cfg.voice.naturalConversation,analyze:this.mode==='minutes'||active&&eligible(),...(turn.rotationToken?{onSourceCommitted:recordRotation}:{})});}
       finally{recordRotation();}
-      if(!called&&!active&&eligible()&&result?.state!=='duplicate')void this.proactive.consider({...source,key:sourceIdentity(source)}).catch(()=>this.onError('PROACTIVE_CUE_FAILED'));
+      if(!declined&&!called&&!active&&eligible()&&result?.state!=='duplicate')void this.proactive.consider({...source,key:sourceIdentity(source)}).catch(()=>this.onError('PROACTIVE_CUE_FAILED'));
       if(startError&&!startError.voiceProviderReported)this.onError(errorCode(startError));
       return result;
     }).catch(e=>{if(!e.voiceProviderReported)this.onError(errorCode(e));});return state.chain;
