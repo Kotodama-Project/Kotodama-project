@@ -59,5 +59,46 @@ class FrozenContextCorpusTests(unittest.TestCase):
         cyclic = {}; cyclic['child'] = cyclic
         with self.assertRaises(KnowledgeBaseError): admit_corpus(cyclic)
 
+    def test_current_maps_reject_absent_revisions(self):
+        for field in ('current_revisions', 'current_source_revisions'):
+            value = copy.deepcopy(self.corpus); key = next(iter(value['cases'][0][field]))
+            value['cases'][0][field][key] = 'ref/synthetic/missing-current'
+            value['corpus_sha256'] = corpus_digest(value)
+            with self.assertRaisesRegex(KnowledgeBaseError, 'CURRENT_'): admit_corpus(value)
+
+    def test_revocation_goldens_cover_every_invalidated_source_revision(self):
+        for case in self.corpus['cases']:
+            keys = set(case['source_revocations_before'] + case['source_revocations_after'])
+            revoked = {row['binding']['revision_ref'] for row in self.corpus['sources'] if row['binding']['invalidation_key'] in keys}
+            self.assertTrue(revoked <= set(case['expected']['forbidden_source_refs']), case['case_id'])
+        value = copy.deepcopy(self.corpus)
+        next(case for case in value['cases'] if case['category'] == 'revoked_before')['expected']['forbidden_source_refs'] = []
+        value['corpus_sha256'] = corpus_digest(value)
+        with self.assertRaises(KnowledgeBaseError): admit_corpus(value)
+
+    def test_broken_optional_case_contains_an_actual_missing_optional_edge(self):
+        documents = {row['revision_ref']: row for row in self.corpus['documents']}
+        case = next(case for case in self.corpus['cases'] if case['case_id'] == 'broken-optional-link')
+        document = documents[case['request']['requested_revision_refs'][0]]
+        self.assertTrue(set(document.get('optional_dependencies', [])) - documents.keys())
+        value = copy.deepcopy(self.corpus)
+        next(row for row in value['documents'] if row['revision_ref'] == document['revision_ref'])['optional_dependencies'] = []
+        value['corpus_sha256'] = corpus_digest(value)
+        with self.assertRaises(KnowledgeBaseError): admit_corpus(value)
+
+    def test_refreezing_cannot_turn_labels_without_inputs_into_coverage(self):
+        value = copy.deepcopy(self.corpus)
+        exact = next(case for case in value['cases'] if case['case_id'] == 'exact-goal')
+        revoked = next(case for case in value['cases'] if case['case_id'] == 'revoked-before')
+        exact['category'], revoked['category'] = revoked['category'], exact['category']
+        value['corpus_sha256'] = corpus_digest(value)
+        with self.assertRaises(KnowledgeBaseError): admit_corpus(value)
+        for category, field, changed in (('no_op', 'no_op_update', False), ('no_op', 'changed_source_refs', ['ref/source-revision/alpha-one']),
+                ('proxy_improvement', 'declared_kpi_change', 'unchanged'), ('proxy_improvement', 'declared_outcome_change', 'improved'),
+                ('fresh_session', 'changed_source_refs', []), ('revoked_after', 'source_revocations_after', [])):
+            value = copy.deepcopy(self.corpus); next(case for case in value['cases'] if case['category'] == category)[field] = changed
+            value['corpus_sha256'] = corpus_digest(value)
+            with self.assertRaises(KnowledgeBaseError): admit_corpus(value)
+
 
 if __name__ == '__main__': unittest.main()
