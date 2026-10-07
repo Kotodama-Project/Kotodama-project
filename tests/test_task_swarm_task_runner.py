@@ -92,6 +92,26 @@ def test_blocked_review_is_not_owner_acceptance(tmp_path):
     assert result["result"]["independent_review"] is False
 
 
+def test_replay_returns_the_exact_checked_bytes_not_a_later_unchecked_read(tmp_path, monkeypatch):
+    import task_swarm.task_runner as runner
+    owner, file, _, _ = setup(tmp_path)
+    initial = execute_task(owner,file,SyntheticTaskBackend())
+    original = runner.read_json
+    changed = []
+    def swap(filename,*args,**kwargs):
+        result=original(filename,*args,**kwargs)
+        if filename.name=="result.json" and kwargs.get("with_digest"):
+            replacement=copy.deepcopy(result[0])
+            replacement["state"]="tampered_after_hash"
+            filename.write_text(json.dumps(replacement),encoding="utf-8")
+            changed.append(True)
+        return result
+    monkeypatch.setattr(runner,"read_json",swap)
+    repeated=execute_task(owner,file,SyntheticTaskBackend(),expected_receipt_sha256=initial["receipt_sha256"])
+    assert changed and repeated["duplicate"]
+    assert repeated["result"] == initial["result"]
+
+
 def test_current_owner_revocation_stops_before_any_report_or_completion(tmp_path):
     owner, file, document, root = setup(tmp_path)
     class Backend(SyntheticTaskBackend):

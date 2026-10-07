@@ -167,13 +167,15 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
         require(set(receipt["artifact_sha256"]) == required, "RUN_RECEIPT_INVALID")
         for name, sha in receipt["artifact_sha256"].items():
             require(name in required, "RUN_RECEIPT_INVALID")
-            _, actual = read_json(directory / name, with_digest=True)
+            document, actual = read_json(directory / name, with_digest=True)
             require(actual == sha, "RUN_ARTIFACT_CHANGED")
+            if name == "result.json":
+                checked_result = document
         if not backend.synthetic:
             for job in (*WORK_JOBS, REVIEW_JOB):
                 verify_runtime(read_json(directory/(job+".json")), directory/"attempts"/job)
         guard()
-        return {"result": read_json(directory / "result.json"), "receipt": receipt, "receipt_sha256":receipt_sha, "duplicate": True}
+        return {"result": checked_result, "receipt": receipt, "receipt_sha256":receipt_sha, "duplicate": True}
     require(expected_receipt_sha256 is None, "RUN_REPLAY_MISSING")
     directory.mkdir(mode=0o700)
     input_sha = write_json(directory / "input.json", payload)
