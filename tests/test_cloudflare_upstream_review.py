@@ -32,9 +32,11 @@ class CloudflareUpstreamReviewTests(unittest.TestCase):
     def test_partial_read_cannot_silently_become_complete(self):
         row = next(row for row in self.packet["files"] if row["path"].endswith("worker-configuration.d.ts"))
         row.update(read_complete=False, review_mode="generated_header_and_provenance_only", unresolved=["synthetic partial read"])
-        self.packet["status"] = "REVIEW_PACKET_WITH_EXPLICIT_GAPS"
         self.packet["summary"].update(actual_read_count=98, partial_read_count=1, coverage_gaps=[row["path"]])
         self.packet["summary"]["followup_provenance"]["newly_complete_entries"] = 19
+        with self.assertRaises(review.ReviewViolation):
+            review.validate_packet(self.packet)
+        self.packet["status"] = "REVIEW_PACKET_WITH_EXPLICIT_GAPS"
         review.validate_packet(self.packet)
         row["read_complete"] = True
         with self.assertRaises(review.ReviewViolation):
