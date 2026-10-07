@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 明示CLI/slashのCompany Pack作成を既存local Task ownerへ接続。modelには選ばせず、Linux・固定Docker・専用出力rootで生成とhashを検査し、同じTaskの成果へ返す。実Discordは未受入（#152接続）。
+
 - Company Pack executorにDiscord local ownerのSQLiteを読取専用で照合するbindingを追加。Task/Source/Intentの現在版と明示コマンドを束縛し、別Task台帳を作らず既存record方式を維持する（#152前半）。
 
 - 固定corpusにexact/lexical/日本語ngram/BM25/型付きgraphの基準線と採点・候補manifest・再計算attesterを接続。漏えいと出典改変を平均で隠さず拒否し、合成成果と実Task成果を区別する（#54評価器）。

@@ -34,3 +34,9 @@ Taskは `intentIds` と全構成操作の `requiredActions` を保持します�
 remote接続は同時8件、要求・応答それぞれ4,000,000 bytes、要求開始から応答本文の読取完了まで15秒に制限します。満杯では送信前に `OWNER_BUSY`、大きすぎる要求は `OWNER_REQUEST_LIMIT`、応答は `OWNER_RESPONSE_LIMIT` で拒否します。読取の期限超過は `OWNER_TIMEOUT` です。
 
 送信済みの書込が期限超過・停止・通信切断で中断された場合や、成功結果を検証できない場合は `OWNER_RESULT_UNCERTAIN` です。接続先での取消や未実行を証明するものではなく、自動再送・local ownerへのfallbackはしません。同じTask ID・source revisionと接続先の永続状態で結果を確認します。取消に応じない要求は実際に完了するまで枠を保持し、その間の同一書込payloadを `OWNER_WRITE_PENDING` で拒否します。停止は新規要求を拒否し、取消と最大15秒のdrainを行います。`OWNER_DRAIN_UNCERTAIN` の場合は既存のTask ownerとデータ領域の所有を保持し、未確定の処理を照合してください。
+
+## 明示Company Packコマンド
+
+`create_company_pack`はlocal owner限定です。remote構成ではSourceの取込・Task作成前に拒否し、localにTaskを複製しません。明示Sourceから保存済みIntentへ結び、同じTask IDとrevisionをPythonのread-only SQLite bindingへ渡します。Task/Work Order/capabilityの代替recordを生成しません。Pythonの`authority_verified: false`は記録の読戻しが本人性の証明ではないことを示し、実行の現在grantは既存runtimeが検査します。
+
+結果とartifact hashは既存`finish`のCASと`result`の再読へ戻します。実行中の再起動は既存のuncertain回復を使い、自動再実行しません。権限を外した後も、本人のSource閲覧権限が維持される履歴の読取りは別です。

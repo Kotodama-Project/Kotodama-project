@@ -36,6 +36,7 @@ export const Config = z.object({
   notifications:z.object({taskProgress:z.object({enabled:z.boolean().default(false),minIntervalSeconds:z.number().int().min(30).max(3600).default(30),maxUpdates:z.number().int().min(1).max(6).default(6)}).strict().prefault({}),quietHours:z.object({enabled:z.boolean().default(false),startHour:z.number().int().min(0).max(23).default(22),endHour:z.number().int().min(0).max(23).default(9),timeZone:z.string().min(1).max(100).refine(isTimeZone,{message:'TIME_ZONE_INVALID'}).default('Asia/Tokyo')}).strict().prefault({})}).strict().prefault({}),
   analyzer:analyzerConfig.prefault({kind:'codex_cli',executable:'codex',args:[],model:'gpt-5.6-luna',timeoutSeconds:120}),
   worker:command.extend({workspace:z.string(),actions:z.array(z.enum(WORKER_ACTIONS)).default([...DEFAULT_WORKER_ACTIONS]),
+    companyPack:z.object({pythonExecutable:z.string().min(1).default('python3'),outputRoot:z.string().min(1),ownerRef:z.string().regex(/^ref\/[A-Za-z0-9][A-Za-z0-9._/@-]{1,180}$/),workOrderRef:z.string().regex(/^work-order:[A-Za-z0-9][A-Za-z0-9._/-]{1,127}$/),capabilityRef:z.string().regex(/^capability:[A-Za-z0-9][A-Za-z0-9._/-]{1,127}$/),retentionPolicyRef:z.string().min(1).max(200),authorityExpiresAt:z.string().datetime({offset:true})}).strict().optional(),
     channelWorkspaces:z.object({channelIds:z.array(id).min(1).max(8),maxAgeSeconds:z.number().int().min(60).max(1800).default(1800),generation:z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/).default('initial')}).strict().optional(),
     verification:z.object({kind:z.literal('docker'),image:z.string().regex(immutableImage),executable:z.string().min(1).default('docker'),memoryMb:z.number().int().min(128).max(8192).default(512),cpus:z.number().min(0.1).max(8).default(1),pidsLimit:z.number().int().min(16).max(512).default(64)}).strict().optional(),
     verify:z.array(z.object({executable:z.string().min(1),args:z.array(z.string())}).strict()).default([]),maxArtifactBytes:z.number().int().min(1000).max(50000000).default(5000000)}).strict(),
@@ -63,6 +64,7 @@ export async function loadConfig(filename) {
   }
   const root=path.dirname(path.resolve(filename));
   config.dataDir=path.resolve(root,config.dataDir);if(config.archive?.enabled)check(path.isAbsolute(config.archive.archiveRoot)&&path.isAbsolute(config.archive.journalPath)&&inside(config.dataDir,config.archive.journalPath),'ARCHIVE_PATH_SCOPE');config.worker.workspace=path.resolve(root,config.worker.workspace);
+  if(config.worker.companyPack)config.worker.companyPack.outputRoot=path.resolve(root,config.worker.companyPack.outputRoot);
   const commandAdapters=[config.worker,config.worker.fallback,...(config.analyzer.kind==='codex_cli'?[config.analyzer,config.analyzer.fallback]:[])];for(const adapter of commandAdapters)if(adapter?.codexHome)adapter.codexHome=path.resolve(root,adapter.codexHome);
   check(new Set(config.discord.operators).size===config.discord.operators.length,'DUPLICATE_OPERATOR');
   // Agent channels are text channels the Bot already reads; they only drop the @mention requirement for operators.

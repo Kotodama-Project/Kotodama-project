@@ -147,6 +147,30 @@ minutesや自然会話への割込み、声からDMへの切替は行いませ�
 
 会話（テキストでも音声でも）から仕事が走り始めると、依頼した人へすぐにDMで「走り始めました：件名」と仕事のIDを届けます。止めるときは `/kotodama stop` にそのIDを指定します。完了すると同じDMへ成果を届けます。VCで呼び名なしに話し始めたい場合は、[会話の開始と退出](#会話の開始と退出)の `voice.conversationStart: "speech"` を使います。
 
+### Company Packを作る（任意）
+
+Linuxのlocal ownerでは、明示コマンドからCompany Packのdraftを作れます。Python 3.12と、`node`を実行できる事前準備済みの固定Docker imageが必要です。モデルは呼び出しません。analyzerはこのactionを選べず、既定の権限にも含めません。
+
+操作者が`worker.actions`へ`create_company_pack`を追加し、`worker.verification`へimage digestを設定したうえで、次の`worker.companyPack`を指定します。参照と期限は自身の運用に対応する値を用意してください。例の文字列自体は承認ではありません。
+
+```json
+"companyPack": {
+  "pythonExecutable": "python3",
+  "outputRoot": "data/worktrees/company-pack-operations",
+  "ownerRef": "ref/local/your-owner",
+  "workOrderRef": "work-order:your-approved-operation",
+  "capabilityRef": "capability:your-approved-operation",
+  "retentionPolicyRef": "retention-policy:your-policy",
+  "authorityExpiresAt": "2030-01-01T00:00:00Z"
+}
+```
+
+`outputRoot`はconfigファイル基準で解決します。自分の`dataDir/worktrees/company-pack-operations`内に、事前に既存directoryを用意します。通常のTask worktreeや別の保存領域は選べません。Company Packの固定executorはこのリポジトリの`tools/`から使うため、この任意機能にはリポジトリ全体が必要です。
+
+`/kotodama do action:create_company_pack text:demo-company`、またはCLIの`request --action create_company_pack --text demo-company`で、`text`にPack IDだけを指定します。小文字英数字とハイフンの2〜63文字です。同じTask IDとrevisionを既存SQLiteへ照合し、実Pack・validator・隔離されたfile hash検査の結果を`needs_review`へ返します。取得した`company-pack.txt`は、全ファイルの相対path・本文・digestを収めたJSON束です。実ファイルとoperation receiptもprivate出力先へ保持します。
+
+Windows/macOSのlocal書込みとremote ownerでは拒否します。現在grant、設定、期限、Source/Task版が変われば停止し、不完全な候補を残します。Work Orderや権限recordを作らず、既存のTask正本を増やしません。実Discordでの受入は未実施です。
+
 ## CLI・資料・連携
 
 実行できる操作と既定は[capability laneの表](docs/ARCHITECTURE.md#capability-lanes)を参照してください。

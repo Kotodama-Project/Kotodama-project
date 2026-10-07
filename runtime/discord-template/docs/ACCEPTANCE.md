@@ -111,3 +111,9 @@ projectionを再構築します。原文の閲覧制限も返却時に再確認�
 要求した件数に比例し、remote Task ownerの一覧取得は既存契約のままです。
 この合成試験は同時書込みの実測、世界規模のthroughput、実provider・Discordの
 遅延を証明しません。
+
+## Company Pack接続（#152）
+
+合成の明示Discord sourceをlocal HTTPコマンドから受け、同じTaskのclaim、Pythonによる実Pack生成とvalidator、固定Dockerのreadonly hash検査、既存resultと添付束の読戻しまでをLinux CIで確認します。Windowsは処理・出力前の`WRITE_WORKER_REQUIRES_LINUX_HOST`を確認します。モデル経由のaction選択、remoteへの二重書込み、権限/設定/期限の変更、同じfinishの二重採用、artifact改変を拒否します。
+
+これらは合成入力のローカル/CI確認です。実Discord、実音声、組織remote ownerでの受入は未実施です。
