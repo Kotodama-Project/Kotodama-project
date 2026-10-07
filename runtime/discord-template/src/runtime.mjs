@@ -13,6 +13,7 @@ import {Pipeline} from './pipeline.mjs';
 import {createAnalysisAuthorizer} from './analysis-policy.mjs';
 import {DiscordAdapter} from './discord.mjs';
 import {VoiceRoom} from './voice.mjs';
+import {createVoicePool} from './voice-pool.mjs';
 import {VoiceRotation} from './voice-rotation.mjs';
 import {deliverRotation} from './rotation-delivery.mjs';
 import {voiceCommand} from './voice-control.mjs';
@@ -51,7 +52,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     control.closeIdleConnections();return controlClosed;
   };
   const authorize=async(task,purpose='execute',{monitor=false}={})=>{const c=await loadConfig(filename);check(!monitor||!closing,'RUNTIME_STOPPING');check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(discord&&!offline){const channels=[];for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.provider==='discord')channels.push(source.channelId);}const access=await discord.actorAccess(task.actor,channels,{cached:monitor});check(!monitor||!closing,'RUNTIME_STOPPING');check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
-  const authorizeAnalysis=createAnalysisAuthorizer({readConfig:()=>loadConfig(filename),config,onPolicy:value=>{current=value;},voice:()=>voice,discord:()=>discord,owner,offline});
+  const authorizeAnalysis=createAnalysisAuthorizer({readConfig:()=>loadConfig(filename),config,onPolicy:value=>{current=value;},voice:source=>voice?.forSource?voice.forSource(source):voice,discord:()=>discord,owner,offline});
   const selectedAnalyzer=analyzer??(config.analyzer.kind==='responses'?new ResponsesAnalyzer(config):new CliAnalyzer(config));
   const pipeline=new Pipeline({store,owner,config,policy:()=>current,readPolicy:async()=>{current=await loadConfig(filename);return current;},analyzer:selectedAnalyzer,worker:worker??new CliWorker(config),authorize,authorizeAnalysis,onTask:async task=>{if(discord)await discord.deliver(task);},onTaskQueued:async(task,options)=>{if(discord)await discord.acknowledgeTask(task,options);},onReply:async reply=>{if(discord)await discord.reply(reply);},onVoiceAction:async action=>{if(discord)await discord.voiceAction(action);},onError:code=>log({event:'operation_failed',code})});
   try{
@@ -73,14 +74,21 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         return user.send(message);
       }});
     }
-    if(!offline){discord=new DiscordAdapter({config,store,pipeline,dots,policy:()=>current,onError:code=>log({event:'discord',code})});await discord.login();if(config.discord.voiceChannelId){voice=new VoiceRoom({client:discord.client,config,store,pipeline,policy:()=>current,sourceReaders:async()=>{const channel=await discord.client.channels.fetch(config.discord.voiceChannelId,{force:true});const candidates=new Set([...current.discord.operators,...voice.audience().filter(id=>voice.allowed(id))]);const readers=[];for(const actor of candidates)if(await discord.canRead(channel,actor))readers.push(actor);return readers;},onError:code=>log({event:'voice',code})});discord.voice=voice;}}
+    if(!offline){
+      discord=new DiscordAdapter({config,store,pipeline,dots,policy:()=>current,onError:code=>log({event:'discord',code})});await discord.login();
+      const readers=async room=>{const channel=await discord.client.channels.fetch(room.target.voiceChannelId,{force:true});const candidates=new Set([...current.discord.operators,...room.audience().filter(id=>room.allowed(id))]);const allowed=[];for(const actor of candidates)if(await discord.canRead(channel,actor))allowed.push(actor);return allowed;};
+      const options={client:discord.client,config,store,pipeline,policy:()=>current,onError:code=>log({event:'voice',code})};
+      if(config.voicePool)voice=await createVoicePool({...options,ownerId,readers});
+      else if(config.discord.voiceChannelId)voice=new VoiceRoom({...options,sourceReaders:()=>readers(voice)});
+      discord.voice=voice;
+    }
     if(config.archive?.enabled){
       check(voice&&config.voice.storeAudio,'ARCHIVE_RECORDING_CONFIG_REQUIRED');let failures=0,retryAt=0;
       const archivePolicy=()=>({...current,archive:{...current.archive,speakerIds:voice.audience().filter(id=>voice.allowed(id)),canProcess:!closing&&!voice.connectionReady()&&failures<3&&Date.now()>=retryAt}});
       archive=new ArchiveRuntime({config:archivePolicy(),policy:archivePolicy,store,analyzer:selectedAnalyzer,authorize:b=>b.readers.every(id=>current.discord.operators.includes(id))&&b.speakerIds.every(id=>voice.allowed(id)),onUsage:usage=>store.event('archive.model_usage',usage),onError:code=>{if(code==='ARCHIVE_SCOPE_REVOKED'&&voice.connectionReady())return;failures++;retryAt=Date.now()+60000;log({event:'archive',code,failures});}});
       voice.archive=archive;archiveTimer=setInterval(()=>{void archive.processPending().catch(()=>{if(voice.connectionReady())return;failures++;retryAt=Date.now()+60000;log({event:'archive',code:'ARCHIVE_PROCESSING_FAILED',failures});});},10000);archiveTimer.unref();
     }
-    if(voice){rotation=new VoiceRotation({store,config,policy:()=>current,deliver:batch=>deliverRotation(discord,batch,{voice,isActive:()=>!closing&&!rotation.stopped,readConfig:async()=>{check(!closing,'RUNTIME_STOPPING');current=await loadConfig(filename);return current;}}),onError:code=>log({event:'voice_rotation',code})});voice.rotation=rotation;rotation.start();}
+    if(voice&&!config.voicePool){rotation=new VoiceRotation({store,config,policy:()=>current,deliver:batch=>deliverRotation(discord,batch,{voice,isActive:()=>!closing&&!rotation.stopped,readConfig:async()=>{check(!closing,'RUNTIME_STOPPING');current=await loadConfig(filename);return current;}}),onError:code=>log({event:'voice_rotation',code})});voice.rotation=rotation;rotation.start();}
     voice?.control.start();
     const secret=randomBytes(32).toString('hex');const secretFile=path.join(config.dataDir,'control.secret');await atomicText(secretFile,secret);
     const handleControl=async(req,res)=>{
@@ -99,7 +107,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         else if(input.action==='result')result=await pipeline.result(input.taskId,input.actor);
         else if(input.action==='stop'){await pipeline.stop(input.taskId,input.actor);result={state:'stop_requested'};}
         else if(input.action==='resume')result=await pipeline.resume(input.taskId,input.actor);
-        else if(input.action==='voice'){check(voice,'VOICE_NOT_CONFIGURED');result=await voiceCommand(voice,input.mode,{actor:input.actor});}
+        else if(input.action==='voice'){check(voice,'VOICE_NOT_CONFIGURED');result=await voiceCommand(voice,input.mode,{actor:input.actor,channelId:input.channelId});}
         else if(input.action==='verify-deletion')result=await recordRetentionReadback({receipt:input.receipt,scope:input.scope,actor:input.actor,config,store,policy:()=>current,readConfig:async()=>{current=await loadConfig(filename);return current;},assertActive:()=>check(!closing&&store.lock()?.owner===ownerId,'RUNTIME_STOPPING')});
         else if(input.action==='dots'){
           check(dots&&current.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
@@ -134,7 +142,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         if(!policyAvailable){policyAvailable=true;log({event:'policy_restored'});}
       }catch{
         if(closing)return;
-        current={...config,discord:{...config.discord,operators:[],consentingUsers:[]},voice:{...config.voice,consentMode:'owner_managed',participantIds:[]}};
+        current={...config,voicePool:undefined,discord:{...config.discord,operators:[],consentingUsers:[]},voice:{...config.voice,consentMode:'owner_managed',participantIds:[]}};
         if(policyAvailable){policyAvailable=false;log({event:'policy_unavailable'});}
       }
       dots?.prune();if(JSON.stringify(previous)!==JSON.stringify(current))void voice?.control.check();

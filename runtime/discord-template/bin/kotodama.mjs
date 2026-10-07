@@ -34,7 +34,7 @@ try{
     output(report);if(report.parity!=='match')process.exitCode=1;
   }else if(['status','shutdown','tasks','result','stop','resume','voice','request'].includes(command)){
     if(command!=='status')check(options.actor&&config.discord.operators.includes(options.actor),'OPERATOR_REQUIRED');
-    output(await controlCommand(config,{action:command,actor:options.actor,taskId:options.task,mode:options.mode,operation:options.action,text:options.text,requestId:uid('cli')}));
+    output(await controlCommand(config,{action:command,actor:options.actor,taskId:options.task,mode:options.mode,channelId:options.channel,operation:options.action,text:options.text,requestId:uid('cli')}));
   }else if(command==='verify-deletion'){
     check(options.actor&&config.discord.operators.includes(options.actor),'OPERATOR_REQUIRED');check(options.file&&options.scope,'RETENTION_INPUT_REQUIRED');
     const {readRetentionInput}=await import('../src/retention-readback.mjs');
