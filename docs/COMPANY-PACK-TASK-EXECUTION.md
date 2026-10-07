@@ -193,3 +193,35 @@ python -B -m unittest discover -s tests -p test_create_company_pack.py -v
 link と未所有ファイルの拒否を検証します。symlink 作成権限がない環境ではその実試験は
 skip として明記します。従来 generator CLI の失敗時 cleanup の既定動作は変えず、
 executor だけが keyword-only の `preserve_incomplete=True` を渡します。
+
+## Discord local ownerへの束縛（#152 前半）
+
+`--record-binding` は `company_pack_discord_task_binding` も受け付けます。既存の三record方式はそのままです。新方式は、選択したDiscord runtimeのSQLiteをURIの`mode=ro`・`query_only`で読み、同じtransactionでTask/Source/Intentの現在版を照合します。WAL上の最新commitも対象です。Discord bindingではNodeも必要です。Source fingerprintは、固定された同じruntimeの`src/common.mjs`を、preload環境変数を除いた有限のNode subprocessで再計算し、数値・Unicodeもownerと同じ規則で照合します。本文だけを同じ版のまま変更した不整合を拒否します。native訂正は元のtext/voice種別を保持でき、明示command・IntentとmanualCorrectionのactor/Task/interactionを照合します。派生KTP-TASK、Work Order、capabilityのrecordファイルを作りません。
+
+bindingは次の閉じた形です。値は**合成の形式例**で、承認・実Task・実接続を表しません。
+
+```json
+{
+  "kind": "company_pack_discord_task_binding",
+  "version": "1.0",
+  "owner_kind": "local",
+  "owner_ref": "ref/local/discord-owner",
+  "database_path": "/path/to/private-data/kotodama.sqlite",
+  "task_id": "task-00000000-0000-4000-8000-000000000001",
+  "task_revision": 1,
+  "source_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "source_revision": 100,
+  "required_actions": ["create_company_pack"],
+  "request_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+}
+```
+
+`request_sha256`は、request全体をASCII escape・key昇順・空白なしのJSONと終端LFで直列化したSHA-256です（このtoolの`canonical` / `digest`）。本来のrequestを先に作り、そのdigestを設定します。opaqueなowner参照とDB pathを束縛するため、別ownerや別の入力に保存済みoperationを流用できません。
+
+現在Taskが`running`、ID/revision/actor/room/Sourceが一致し、actionとrequiredActionsが`create_company_pack`だけであることを要求します。Sourceは現在版・非撤回・final・本人が読めるDiscordの明示コマンドでなければなりません。既存Intentも同じSource版にあり、explicit/completeの`explicit_command`または`native_correction`であることを確認します。Pack IDはTaskの依頼と一致し、Human Intent参照はその実在するIntent IDを使います。
+
+生成の前後でownerを再読し、Task停止・版変更・権限撤回・Intent差替えなら成功receiptを作りません。途中の候補は保持します。保存するのはbindingとowner snapshotのdigest、Task/Source版です。raw SourceやTask本文はreceiptへ複製しません。DB pathはprivate receipt内に残るため公開しません。
+
+このreadbackは呼出者が選んだDBの整合検査です。Discord本人性、実runtimeの真正性、Work Order / capability / retention参照の承認を証明せず、`authority_verified: false`です。`--authorize-local-output-root`の明示指示は引き続き必須で、Task状態は更新しません。runtimeへの接続では、現在の操作者・grant・範囲を既存Task ownerが実行前後に確認します。
+
+Pythonの合成SQLite/CLI試験はWindowsとLinuxの対象です。Nodeのlocal書込みworkerをLinuxに限る既存条件は緩めません。Node connectorとその実Task経路は #152 の後半で追加します。実Discordでの受入は未実施です。
