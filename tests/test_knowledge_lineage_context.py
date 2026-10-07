@@ -77,6 +77,7 @@ class KnowledgeLineageContextTests(unittest.TestCase):
         source['revision_value'] = source['content_sha256']
         concept = value['concepts'][0]
         concept.update(revision_ref=f'ref/concept-revision/revision-{generation}', parent_revision_ref=self.current_ref,
+            parent_resolution='external_unresolved',
             source_revision_refs=[source['revision_ref']], source_aliases={'manual': source['revision_ref']},
             content_sha256=load_bundle(self.root, as_of=NOW).by_id['synthetic/example'].content_sha256)
         value['relations'][0].update(from_revision_ref=concept['revision_ref'], target_revision_ref=source['revision_ref'])
@@ -172,6 +173,7 @@ class KnowledgeLineageContextTests(unittest.TestCase):
                 parent_revision_ref=self.current_ref if suffix == 'two' else None,
                 content_sha256=bundle.by_id[logical].content_sha256,
                 source_aliases={'manual': value['sources'][0]['revision_ref']})
+            if suffix == 'two': concept['parent_resolution'] = 'external_unresolved'
             value['concepts'].append(concept)
         value['relations'].append({'from_revision_ref': 'ref/concept-revision/two', 'predicate': 'requires_context',
             'target_kind': 'concept', 'target_id': 'synthetic/policy', 'target_revision_ref': 'ref/concept-revision/policy',
@@ -200,7 +202,7 @@ class KnowledgeLineageContextTests(unittest.TestCase):
             stream.write('\n[Required policy](policy.md)\n')
         value = fixture(); source = value['sources'][0]; policy = value['concepts'][0]
         policy.update(concept_id='synthetic/policy', revision_ref='ref/concept-revision/policy-new',
-            parent_revision_ref='ref/concept-revision/policy', source_aliases={'manual': source['revision_ref']},
+            parent_revision_ref='ref/concept-revision/policy', parent_resolution='external_unresolved', source_aliases={'manual': source['revision_ref']},
             content_sha256=load_bundle(self.root, as_of=NOW).by_id['synthetic/policy'].content_sha256)
         value['relations'] = []; value['projections'] = []
         self.owner.register(value, expected_generation=6)
