@@ -1,13 +1,13 @@
 import path from 'node:path';
 import {mkdir,lstat,realpath} from 'node:fs/promises';
-import {runCommand} from './command.mjs';
+import {runWorkspaceGit,assertWorkspaceFiltersSafe} from './workspace-git.mjs';
 import {readArtifact} from './artifact.mjs';
 import {CliWorker} from './worker.mjs';
 import {check,digest,inside,roomKey,uid,errorCode,Refused,safePath} from './common.mjs';
 
 async function exists(file){try{await lstat(file);return true;}catch(error){if(error.code==='ENOENT')return false;throw error;}}
 async function git(cwd,args,signal,input=''){
-  const result=await runCommand('git',['-c','core.fsmonitor=false','-c','core.hooksPath=/dev/null',...args],{cwd,signal,input,timeoutMs:30000,maxBytes:4000000});
+  const result=await runWorkspaceGit(args,{cwd,signal,input,timeoutMs:30000,maxBytes:4000000});
   check(result.code===0,'CHANNEL_WORKSPACE_GIT_FAILED');return result.stdout;
 }
 export async function workspaceSnapshot(cwd,{signal,maxBytes=20000000,includeIgnored=true}={}){
@@ -15,12 +15,7 @@ export async function workspaceSnapshot(cwd,{signal,maxBytes=20000000,includeIgn
   check(await realpath(cwd)===repositoryRoot,'CHANNEL_WORKSPACE_REPOSITORY_ROOT_REQUIRED');
   const commonDirectory=await realpath((await git(cwd,['rev-parse','--path-format=absolute','--git-common-dir'],signal)).trim());
   const head=(await git(cwd,['rev-parse','HEAD'],signal)).trim();
-  const tracked=await git(cwd,['ls-files','-z'],signal);
-  // Metadata and checkout must not invoke repository filter programs either.
-  for(const from of [[],['--source=HEAD']]){
-    const attributes=(await git(cwd,['check-attr',...from,'-z','--stdin','filter'],signal,tracked)).split('\0');
-    for(let index=2;index<attributes.length;index+=3)check(['unspecified','unset'].includes(attributes[index]),'CHANNEL_WORKSPACE_FILTER_REFUSED');
-  }
+  await assertWorkspaceFiltersSafe(cwd,signal);
   const status=await git(cwd,['status','--porcelain=v1','--untracked-files=all','-z'],signal);
   const diff=await git(cwd,['diff','--no-ext-diff','--no-textconv','--binary','HEAD'],signal);
   const unpublished=await git(cwd,['rev-list','HEAD','--not','--remotes'],signal);

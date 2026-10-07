@@ -10,6 +10,7 @@ import {runCommand} from '../src/command.mjs';
 import {digest,roomKey,Refused,inside} from '../src/common.mjs';
 import {fileURLToPath} from 'node:url';
 import {startRuntime,controlCommand} from '../src/runtime.mjs';
+import {CliWorker} from '../src/worker.mjs';
 
 const channels=['100000000000000003','100000000000000005'];
 async function git(cwd,args){const result=await runCommand('git',args,{cwd,timeoutMs:15000});assert.equal(result.code,0,result.stderr);return result.stdout.trim();}
@@ -180,6 +181,37 @@ test('research workspace creation does not run repository checkout hooks',async 
   const hook=path.join(hooks,'post-checkout'),quoted=marker.replaceAll('\\','/').replaceAll("'","'\\''");
   await writeFile(hook,`#!/bin/sh\nprintf fixture > '${quoted}'\n`,{mode:0o755});await chmod(hook,0o755);
   await f.run();await assert.rejects(readFile(marker),{code:'ENOENT'});
+});
+
+test('the real write worker also suppresses checkout hooks in its Task worktree',{skip:process.platform!=='linux'},async t=>{
+  const f=await fixture(t),marker=path.join(f.root,'write-hook-fired'),hooks=path.join(f.repo,'.git','hooks');
+  await git(f.repo,['config','core.hooksPath',hooks]);
+  await writeFile(path.join(hooks,'post-checkout'),`#!/bin/sh\nprintf fixture > '${marker}'\n`,{mode:0o755});
+  await git(f.repo,['worktree','add','--detach',path.join(f.root,'hook-control'),'HEAD']);
+  assert.equal(await readFile(marker,'utf8'),'fixture');await rm(marker);
+  f.config.worker.actions=['develop'];f.config.worker.executable=process.execPath;
+  f.config.worker.args=[fileURLToPath(new URL('./fixtures/model-cli.mjs',import.meta.url)),'--fixture-write'];
+  f.config.worker.verify=[{executable:process.execPath,args:['--check','created.mjs']}];
+  Object.assign(f.manager.config.worker,f.config.worker);
+  // Only the verifier is a test double; Git and the model fixture are real processes.
+  let verified=0;const verifier={preflight:async()=>{},verify:async()=>{verified++;return {code:0,stdout:'fixture',stderr:'',isolation:{kind:'test_double'}};}};
+  f.behavior.run=(task,context,options,scoped)=>new CliWorker(scoped,{verifier}).run(task,context,options);
+  const result=await f.run(channels[0],{action:'develop'});assert.equal(result.state,'needs_review');assert.equal(verified,1);
+  assert.equal(await readFile(path.join(result.workspace,'created.mjs'),'utf8'),'export const answer = 42;\n');
+  await assert.rejects(readFile(marker),{code:'ENOENT'});
+});
+
+test('write worker refuses a model-added filter before host Git inventories new files',{skip:process.platform!=='linux'},async t=>{
+  const f=await fixture(t),marker=path.join(f.root,'filter-fired'),cli=path.join(f.root,'filter-cli.mjs');
+  await git(f.repo,['config','filter.fixture.clean',`printf fixture > '${marker}'`]);
+  await writeFile(cli,`import {writeFile} from 'node:fs/promises';\nawait writeFile('.gitattributes','created.mjs filter=fixture\\n');\nawait writeFile('created.mjs','export const answer = 42;\\n');\nconsole.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:JSON.stringify({summary:'fixture',files:[]})}}));\n`);
+  f.config.worker.actions=['develop'];f.config.worker.executable=process.execPath;f.config.worker.args=[cli];
+  f.config.worker.verify=[{executable:process.execPath,args:['--check','created.mjs']}];
+  Object.assign(f.manager.config.worker,f.config.worker);
+  let verified=0;const verifier={preflight:async()=>{},verify:async()=>{verified++;return {code:0,stdout:'',stderr:''};}};
+  f.behavior.run=(task,context,options,scoped)=>new CliWorker(scoped,{verifier}).run(task,context,options);
+  await assert.rejects(f.run(channels[0],{action:'develop'}),{code:'CHANNEL_WORKSPACE_FILTER_REFUSED'});
+  assert.equal(verified,0);await assert.rejects(readFile(marker),{code:'ENOENT'});
 });
 
 test('a different clone with identical Git state cannot reuse the old repository lease',async t=>{
