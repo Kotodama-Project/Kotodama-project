@@ -64,9 +64,10 @@ class ConnectionRetryTests(unittest.TestCase):
 
     def test_connection_contention_stops_at_the_existing_deadline(self):
         transport = self._transport()
-        for operation in (lambda: transport.send(self._request()), lambda: transport._read(lambda db: 1)):
+        for operation, clock in ((lambda: transport.send(self._request()), [0.0, 0.0, 3.0]),
+                                 (lambda: transport._read(lambda db: 1), [0.0, 3.0])):
             with mock.patch('task_swarm.transport.sqlite3.connect', side_effect=sqlite3.OperationalError('database is locked')) as connect:
-                with mock.patch('task_swarm.transport.time.monotonic', side_effect=[0.0, 3.0]):
+                with mock.patch('task_swarm.transport.time.monotonic', side_effect=clock):
                     with self.assertRaises(SwarmError) as caught:
                         operation()
             self.assertEqual('STORE_UNAVAILABLE', caught.exception.code)
@@ -83,3 +84,25 @@ class ConnectionRetryTests(unittest.TestCase):
         self.assertNotIn('private path', str(caught.exception))
         self.assertEqual(1, connect.call_count)
         partial.close.assert_called_once()
+
+    def test_writer_queue_is_bounded_and_does_not_open_another_database_when_full(self):
+        transport = self._transport()
+        guard = mock.MagicMock(); guard.acquire.return_value = False
+        with mock.patch.object(transport, '_write_guard', guard), mock.patch.object(transport, '_connect') as connect:
+            with self.assertRaises(SwarmError) as caught:
+                transport.send(self._request())
+        self.assertEqual('STORE_UNAVAILABLE', caught.exception.code)
+        guard.acquire.assert_called_once_with(timeout=2.5)
+        guard.release.assert_not_called(); connect.assert_not_called()
+
+    def test_writer_queue_releases_after_domain_refusal_and_keeps_its_original_deadline(self):
+        transport = self._transport()
+        guard = mock.MagicMock(); guard.acquire.return_value = True
+        with mock.patch.object(transport, '_write_guard', guard), mock.patch.object(transport, '_connect') as connect:
+            with mock.patch('task_swarm.transport.time.monotonic', side_effect=[0.0, 3.0]):
+                with self.assertRaises(SwarmError): transport.send(self._request())
+        guard.release.assert_called_once(); connect.assert_not_called()
+        with mock.patch.object(transport, '_write_guard', guard):
+            with self.assertRaises(SwarmError):
+                transport._retry_transaction(lambda db: (_ for _ in ()).throw(SwarmError('FORBIDDEN', 'synthetic refusal')))
+        self.assertEqual(2, guard.release.call_count)

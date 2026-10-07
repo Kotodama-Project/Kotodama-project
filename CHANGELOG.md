@@ -8,7 +8,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
-- peer transportの接続初期化時の一時的なSQLiteロックにも既存の有限retryを適用し、初期化失敗時の接続を閉じる。期限とquota・backpressure・権限の拒否は維持する（#160/#162のCI調査）。
+- peer transportの接続初期化時の一時的なSQLiteロックにも既存の有限retryを適用し、初期化失敗時の接続を閉じる。同じtransportのwriterを有限の待ち行列へまとめ、待機を元のretry期間に含める。quota・backpressure・権限の拒否は維持する（#160/#162のCI調査）。
 
 - 必須文脈・訂正・復旧・出典・権限など10の補助KPI候補と旧指標の対応を追加。製品KGIで代用せず、windowや数値targetの採用・実測値の報告は行わない（#52補助指標）。
 

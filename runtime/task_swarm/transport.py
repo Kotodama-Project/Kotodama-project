@@ -147,6 +147,7 @@ class PeerTransport:
         self.max_messages = integer(max_messages, "max_messages", minimum=1, maximum=100000)
         self.max_pending = integer(max_pending, "max_pending", minimum=1, maximum=100000)
         self._init_guard = threading.RLock()
+        self._write_guard = threading.RLock()
         self._init_schema()
 
     # ------------------------------------------------------------------
@@ -189,6 +190,19 @@ class PeerTransport:
     def _retry_transaction(self, operation: Callable[[sqlite3.Connection], Any]) -> Any:
         """Run a short transaction with a bounded busy retry budget."""
         deadline = time.monotonic() + 2.5
+        # Avoid a herd of this adapter's threads opening SQLite writers and
+        # competing with the publisher. Other processes still use SQLite's
+        # transaction lock. Time spent in this queue counts toward retry time.
+        if not self._write_guard.acquire(timeout=2.5):
+            raise SwarmError("STORE_UNAVAILABLE", "transport writer queue remained busy")
+        try:
+            if time.monotonic() >= deadline:
+                raise SwarmError("STORE_UNAVAILABLE", "transport writer queue exceeded its deadline")
+            return self._retry_transaction_before(operation, deadline)
+        finally:
+            self._write_guard.release()
+
+    def _retry_transaction_before(self, operation: Callable[[sqlite3.Connection], Any], deadline: float) -> Any:
         delay = 0.01
         last: BaseException | None = None
         while True:
