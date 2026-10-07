@@ -138,6 +138,12 @@ test('the source speaker leaving invalidates queued intro audio',async t=>{
   f.channel.members.delete(a);assert.equal(f.room.canPlay(f.room.reply),false);
 });
 
+test('dispatch rechecks bindings when another microtask runs after authorization returns',async t=>{
+  const f=await fixture(t),source=f.source();let calls=0;
+  f.pipeline.authorizeAnalysis=async()=>{if(++calls===2)queueMicrotask(()=>queueMicrotask(()=>f.store.ingest({...source,revision:source.revision+1,text:'replacement'})));};
+  await f.room.proactive.consider(source);assert.equal(f.calls.length,0);
+});
+
 test('Responses cue sends only four truncated texts with strict output and no retries',async t=>{
   const f=await fixture(t);let request,options;const analyzer=new ResponsesAnalyzer(f.config,{sdk:{OpenAI:class{constructor(){this.responses={create:async(body,opts)=>{request=body;options=opts;return {status:'completed',output_text:'{"cue":"schedule","declined":false}'};}};}}}});
   const controller=new AbortController();assert.deepEqual(await analyzer.proactiveCue('a'.repeat(1000),Array.from({length:5},()=>({text:'b'.repeat(1000),secret:'not sent'})),{signal:controller.signal}),{cue:'schedule',declined:false});

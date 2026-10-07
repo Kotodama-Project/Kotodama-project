@@ -56,7 +56,11 @@ export class ProactiveVoice {
     const signal=AbortSignal.any([token.controller.signal,AbortSignal.timeout(10000)]);
     const key=source.key??sourceIdentity(source),context=r.store.recentSources(source.actorId,{guildId:source.guildId,channelId:source.channelId,excludeKey:key,limit:3}).reverse().filter(s=>s.metadata?.kind==='voice'&&r.audience().every(actor=>s.readers.includes(actor)));
     const bindings=[...context.map(s=>({key:s.key,revision:s.revision})),{key,revision:source.revision}];
-    const current=()=>{check(!signal.aborted&&this.pending===token&&token.generation===this.generation&&this.available(source),'PROACTIVE_SUPERSEDED');};
+    let authorizedAudience=[];
+    const current=()=>{
+      check(!signal.aborted&&this.pending===token&&token.generation===this.generation&&this.available(source)&&digest(authorizedAudience)===digest(r.audience().sort()),'PROACTIVE_SUPERSEDED');
+      for(const actor of authorizedAudience)for(const binding of bindings)check(r.store.source(binding.key,actor).revision===binding.revision,'CONTEXT_CHANGED');
+    };
     const authorizeAudience=async actors=>{
       check(this.enabled()&&r.targetMatches()&&source.metadata.voiceEpoch===r.epoch,'PROACTIVE_SUPERSEDED');
       const fresh=await r.sourceReaders();check(actors.length>0&&actors.every(a=>fresh.includes(a)&&r.allowed(a)&&!r.policy().discord.unattributedUsers.includes(a)),'SOURCE_ACCESS_DENIED');
@@ -64,7 +68,7 @@ export class ProactiveVoice {
       check(this.enabled()&&r.targetMatches()&&source.metadata.voiceEpoch===r.epoch&&digest([...actors].sort())===digest(r.audience().sort()),'PROACTIVE_SUPERSEDED');
       // Re-read every binding after the last await, immediately before dispatch.
       for(const actor of actors){check(r.allowed(actor)&&!r.policy().discord.unattributedUsers.includes(actor),'SOURCE_ACCESS_DENIED');for(const binding of bindings)check(r.store.source(binding.key,actor).revision===binding.revision,'CONTEXT_CHANGED');}
-      return actors;
+      authorizedAudience=[...actors].sort();return actors;
     };
     try{
       await authorizeAudience(r.audience());current();
