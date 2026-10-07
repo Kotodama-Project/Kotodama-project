@@ -28,6 +28,6 @@ KPIだけの改善、失効情報のrollback、no-opを、正常ケースと別�
 python -m unittest tests.test_frozen_context_corpus -v
 ```
 
-この段階はschema・fixture・admissionだけを追加します。exact/lexical/ngram/BM25/graphの
-比較、Context Pack候補manifest、採点・attestationは後続の評価器PRで接続します。
+corpusのschema・fixture・admissionは[評価器](FROZEN-CONTEXT-EVALUATION.md)から独立して検査できます。
+同じ固定入力でexact/lexical/ngram/BM25/graphを比較し、候補manifest、採点・attestationを行います。
 embedding、vector DB、reranker、private dataset、本番Gatewayは採用しません。
