@@ -360,6 +360,35 @@ class KnowledgeLineageContextTests(unittest.TestCase):
         manifest = self.gate.prepare(self.request)
         self.assertEqual({'synthetic/example', 'synthetic/policy'}, set(manifest['concept_revisions']))
 
+    def test_oversized_optional_closure_is_omitted_while_required_context_remains(self):
+        from tests.test_knowledge_lineage_impact import edge
+        self.dependency_snapshot()
+        for name in ('extra-one', 'extra-two'):
+            metadata = copy.deepcopy(self.meta); metadata['tags'] = ['background']
+            metadata['kotodama'].update(id='synthetic/' + name, context_priority=100); self.write_concept(metadata)
+            with (self.root / 'knowledge/index.md').open('a', encoding='utf-8') as stream: stream.write(f'* [Extra](synthetic/{name}.md)\n')
+        for origin, target in (('optional', 'extra-one'), ('extra-one', 'extra-two')):
+            with (self.root / f'knowledge/synthetic/{origin}.md').open('a', encoding='utf-8') as stream: stream.write(f'\n[Required extra]({target}.md)\n')
+        bundle = load_bundle(self.root, as_of=NOW); value = fixture(); original = value['concepts'][0]
+        value['concepts'] = []; value['relations'] = []; value['projections'] = []
+        for name in ('extra-two', 'extra-one', 'optional'):
+            concept = copy.deepcopy(original)
+            concept.update(concept_id='synthetic/' + name, revision_ref='ref/concept-revision/' + name + '-large',
+                content_sha256=bundle.by_id['synthetic/' + name].content_sha256,
+                source_aliases={'manual': value['sources'][0]['revision_ref']})
+            if name == 'optional': concept.update(parent_revision_ref='ref/concept-revision/optional', parent_resolution='external_unresolved')
+            value['concepts'].append(concept)
+        for origin, target in (('optional', 'extra-one'), ('extra-one', 'extra-two')):
+            value['relations'].append(edge('ref/concept-revision/' + origin + '-large', 'ref/concept-revision/' + target + '-large', 'synthetic/' + target))
+        self.owner.register(value, expected_generation=6)
+        for generation, concept in enumerate(value['concepts'], 7):
+            self.owner.publish(concept['revision_ref'], expected_parent_ref=concept['parent_revision_ref'], expected_generation=generation)
+        manifest = self.gate.prepare(self.request); delivered = []
+        self.gate.consume(self.request, manifest, delivered.append)
+        context = json.loads(delivered[0])
+        self.assertEqual(['synthetic/example', 'synthetic/policy'], [row['id'] for row in context['concepts']])
+        self.assertIn('synthetic/optional', context['omitted_ids'])
+
     def test_generated_projections_do_not_depend_on_unreferenced_snapshot_sources(self):
         from kotodama_kb.lineage_projection import bind_generated_projections
         from kotodama_kb.lineage_impact import project_lineage, compare_lineage

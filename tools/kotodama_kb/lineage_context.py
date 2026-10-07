@@ -182,7 +182,9 @@ class LineageContextGate:
             try:
                 trial = expand({logical})
             except KnowledgeBaseError as exc:
-                if str(exc) != 'LINEAGE_CONTEXT_POINTER_MISSING':
+                # An optional closure may not fit. Never turn an owner access,
+                # revision, dependency or integrity failure into an omission.
+                if str(exc) not in {'LINEAGE_CONTEXT_POINTER_MISSING', 'LINEAGE_CONTEXT_REQUIRED_BUDGET'}:
                     raise
                 omitted.add(logical)
                 continue
