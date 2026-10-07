@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path, PurePosixPath
+import stat
 import subprocess
 
 from jsonschema import Draft202012Validator
@@ -30,8 +32,18 @@ def unique_object(pairs):
 
 
 def load_packet(path: Path = PACKET) -> dict:
-    with path.open("rb") as stream:
-        raw = stream.read(256 * 1024 + 1)
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0))
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ReviewViolation("packet must be a regular file")
+        raw = bytearray()
+        while len(raw) <= 256 * 1024:
+            chunk = os.read(descriptor, min(64 * 1024, 256 * 1024 + 1 - len(raw)))
+            if not chunk:
+                break
+            raw.extend(chunk)
+    finally:
+        os.close(descriptor)
     if len(raw) > 256 * 1024:
         raise ReviewViolation("packet byte bound exceeded")
     return json.loads(raw, object_pairs_hook=unique_object)
@@ -65,7 +77,8 @@ def validate_packet(packet: dict) -> dict:
 def git(repo: Path, *args: str) -> str:
     try:
         return subprocess.run(["git", "-c", "core.quotepath=false", "-C", str(repo), *args],
-                              check=True, capture_output=True, text=True, encoding="utf-8", timeout=30).stdout
+                              check=True, capture_output=True, text=True, encoding="utf-8", timeout=30,
+                              env={**os.environ, "GIT_NO_LAZY_FETCH": "1", "GIT_TERMINAL_PROMPT": "0"}).stdout
     except (OSError, subprocess.SubprocessError):
         raise ReviewViolation("fixed Git object read failed") from None
 

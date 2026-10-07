@@ -3,7 +3,10 @@ from contextlib import redirect_stdout
 import copy
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -82,6 +85,21 @@ class CloudflareUpstreamReviewTests(unittest.TestCase):
             with redirect_stdout(output):
                 self.assertEqual(review.main(["--packet", str(Path(temporary) / "missing.json")]), 1)
             self.assertNotIn(temporary, output.getvalue())
+
+    def test_git_cannot_lazy_fetch_missing_promisor_objects(self):
+        with patch.dict(os.environ, {"GIT_NO_LAZY_FETCH": "0", "GIT_TERMINAL_PROMPT": "1"}), patch.object(review.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "fixed-object")) as invoke:
+            self.assertEqual(review.git(Path("unused"), "rev-parse", review.BASE), "fixed-object")
+        self.assertEqual(invoke.call_args.kwargs["env"]["GIT_NO_LAZY_FETCH"], "1")
+        self.assertEqual(invoke.call_args.kwargs["env"]["GIT_TERMINAL_PROMPT"], "0")
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO input boundary")
+    def test_fifo_without_writer_is_refused_without_waiting(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fifo = Path(temporary) / "input.fifo"
+            os.mkfifo(fifo)
+            result = subprocess.run([sys.executable, str(Path(review.__file__)), "--packet", str(fifo)], capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(json.loads(result.stdout)["reason"], "packet must be a regular file")
 
 
 if __name__ == "__main__":
