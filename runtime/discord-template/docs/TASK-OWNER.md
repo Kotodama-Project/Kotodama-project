@@ -41,6 +41,23 @@ remote接続は同時8件、要求・応答それぞれ4,000,000 bytes、要求�
 
 結果とartifact hashは既存`finish`のCASと`result`の再読へ戻します。実行中の再起動は既存のuncertain回復を使い、自動再実行しません。権限を外した後も、本人のSource閲覧権限が維持される履歴の読取りは別です。
 
+## 明示swarm調査
+
+`swarm_research`の最初の入口は操作者の明示slashです。既定無効、日次枠0で、
+local owner限定です。analyzer、通常会話、trusted CLI request、remote ownerからは
+受け付けません。専用Codex homeがない場合もSource/Taskを書込む前に拒否します。
+
+既存Task ID/revision、依頼Sourceと最大9件の選択した履歴、actor/grantと期限を
+privateな実行入力へ束縛します。選んだSourceの全文を維持し、上限超過は拒否します。
+Pythonの実行DBとowner入力は同じTaskへの実行記録であり、Task状態の別の正本ではありません。
+日次予約は既存SQLite ownerが持ち、同版の二重実行や時計の巻戻りで枠を増やしません。
+
+全条件と別verifierの記録、限定読取profile、元の成果bytesを検査してから、同じrevisionの
+`finish`へ返します。結果は`needs_review`または`failed`です。取消を入力に固定してから
+owned process groupを止め、停止・無効化が確認できなければ`uncertain`に保ちます。
+Pythonの同版読戻しは外側が保存した初回receipt SHAを要求します。Nodeは同版を再dispatchせず、
+既存Taskのartifact hashで成果を再読します。実利用の意味的受入とHuman GOは利用者に残します。
+
 ## native UIからの訂正
 
 local ownerの`correctTask`は、Taskと現在Sourceの期待revisionを一つのSQLite transactionで照合します。既存`source.corrected`で関連Taskを無効化し、同じTask IDを`reviseTask`で更新します。このため無効化と再受付を通る場合はTask revisionが二段階進みます。原文は`source_versions`、訂正者・時刻・interactionと前の版はSource metadata、因果の参照は既存eventに保持します。
