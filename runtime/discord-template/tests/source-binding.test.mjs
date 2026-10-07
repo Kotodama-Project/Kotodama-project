@@ -45,7 +45,7 @@ async function cliFixture(t){
   const start=async({nodeArgs=[],extraEnv={}}={})=>{
     const env={...process.env,KOTODAMA_DEBUG:'',...extraEnv};if(!('NODE_OPTIONS' in extraEnv))delete env.NODE_OPTIONS;
     const child=spawn(process.execPath,[...nodeArgs,path.join(app,'bin/kotodama.mjs'),'start','--offline','--config',file],{env,stdio:['ignore','pipe','pipe']});children.push(child);let diagnostic='';child.stderr.on('data',bytes=>{diagnostic+=bytes;});
-    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('owned CLI startup timeout: '+diagnostic)),15000);child.once('exit',()=>{clearTimeout(timer);reject(new Error('owned CLI exited before readiness: '+diagnostic));});let output='';child.stdout.on('data',bytes=>{output+=bytes;if(output.includes('"event":"runtime_ready"')){clearTimeout(timer);resolve();}});});
+    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('owned CLI startup timeout: '+diagnostic)),process.platform==='win32'?30000:15000);child.once('exit',()=>{clearTimeout(timer);reject(new Error('owned CLI exited before readiness: '+diagnostic));});let output='';child.stdout.on('data',bytes=>{output+=bytes;if(output.includes('"event":"runtime_ready"')){clearTimeout(timer);resolve();}});});
     return {close:()=>stop(child)};
   };
   return {root,app,config,file,start};
