@@ -251,6 +251,24 @@ class KnowledgeLineageContextTests(unittest.TestCase):
         invalidated = compare_lineage(snapshot, snapshot, invalidation_keys=['ref/invalidation/alpha'])
         self.assertIn(ref, invalidated['quarantine_revision_refs'])
 
+    def test_real_catalog_and_graph_outputs_are_bound_and_reverse_indexed(self):
+        from kotodama_kb.lineage_projection import bind_generated_projections
+        from kotodama_kb.lineage_impact import project_lineage
+        from kotodama_kb.project import generated_outputs
+        bundle = load_bundle(self.root, as_of=NOW)
+        before = {path: path.read_bytes() for path in self.root.rglob('*') if path.is_file()}
+        result = bind_generated_projections(bundle, {**self.snapshot, 'projections': []})
+        records = result['snapshot']['projections']
+        self.assertEqual({'catalog', 'graph'}, {row['kind'] for row in records})
+        self.assertEqual({hashlib.sha256(value).hexdigest() for value in generated_outputs(bundle).values()}, {row['content_sha256'] for row in records})
+        index = project_lineage(result['snapshot'])
+        self.assertEqual(sorted(row['projection_ref'] for row in records), index['indexes']['source_revision_to_projections']['ref/source-revision/alpha-one'])
+        self.assertEqual(before, {path: path.read_bytes() for path in self.root.rglob('*') if path.is_file()})
+        self.assertFalse(result['current_pointer_verified'])
+        self.assertEqual(result, bind_generated_projections(bundle, result['snapshot']))
+        missing = {**self.snapshot, 'concepts': [], 'relations': [], 'projections': []}
+        with self.assertRaisesRegex(KnowledgeBaseError, 'COVERAGE_REQUIRED'): bind_generated_projections(bundle, missing)
+
     def test_revocation_after_assembly_blocks_consumer_without_a_regeneration(self):
         manifest = self.gate.prepare(self.request); delivered = []
         self.owner.revoke('ref/invalidation/alpha', evidence_ref='ref/evidence/withdrawn', expected_generation=2)

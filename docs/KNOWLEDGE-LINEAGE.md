@@ -145,6 +145,11 @@ manifestの`projection_record`は実際のrendered bytesと選ばれたSource/Co
 できます。KBへreceiptやCompany truthを自動保存しません。code pinは検査したファイルbytesの
 一致であり、OSの実行image・reviewer本人性・実providerの受入・Human GOを証明しません。
 
+`bind_generated_projections(bundle, snapshot)`は既存catalog/graph producerの実bytesも同じ形式の
+projection recordへ束縛します。全Conceptと宣言出典のcoverage、public-local bytesと対応を必須にし、
+欠落・複数版・opaque未確認を拒否します。出力は再構築可能なsnapshotで、自動保存や現在版の採用は
+行いません。この経路はpublic-local用で、opaque出典の認証・公開許可を推測しません。
+
 ```text
 python -m unittest tests.test_knowledge_lineage_context -v
 ```
