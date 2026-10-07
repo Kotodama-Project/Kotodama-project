@@ -1,8 +1,9 @@
-# 既存Taskに束縛するswarm run（実装中）
+# 既存Taskに束縛するswarm run
 
 #160の採用判断と#286の実装を、既存local Task ownerへ接続するための契約です。
 入力・出力契約に加え、既存ownerへ束縛したPOSIXのtask-run入口を備えます。
-Taskとgrantは作成・変更しません。Discord接続と実利用の受入は後続です。
+controllerはTaskとgrantを作成・変更しません。Discord接続は同じlocal ownerを使い、
+明示slashから結果readbackまでの合成E2Eを検証しています。実利用の受入は残ります。
 
 実行時の[Task workerの読取範囲](TASK-SWARM-ISOLATION.md)は別helperで制限します。
 
@@ -87,10 +88,15 @@ synthetic=true、model_runtime_verified=falseを返します。4つの論理role
 実モデルの独立受入に数えません。allow-local-fixtureを必須にし、通常のCodex実行へ
 黙って切り替わりません。
 
-## 残る接続
+## Discord接続と残る実利用の受入
 
 入力契約の合成試験は、Source改変・古い版・別Task・期限・権限参照・上限・証拠位置・
 古いreview・条件抜けを検査します。owner取消・未完run・artifact改変・同じreviewer identity
-による受入を拒否する合成runner試験もあります。Discordの実Task/grantからowner入力を
-作る接続、日次枠、Task取消とprocess groupの終了確認、依頼者への結果返却は後続です。
-日次枠の既定は0、live利用枠・有効化・本人ログインは別のowner判断です。
+による受入を拒否する合成runner試験もあります。Node接続は現在のTask/grantから入力を
+作り、同じSQLite ownerで日次枠を予約し、取消とprocess groupの終了確認、成果の返却を行います。
+依頼Sourceと最大9件の履歴を全文のまま束縛し、選んだ資料が上限を超えれば拒否します。
+再読込するreceiptは子processの初回completion hashと照合し、既存Taskにもartifactとして固定します。
+
+日次枠の既定は0です。残る実利用の受入は、ownerによる利用枠と有効化、専用の本人ログイン、
+実モデルの全4完了記録と意味的なreview、現在のSource権限、実Discordの依頼者による成果確認です。
+合成の成功を実モデルの検証やHuman GOへ読み替えません。
