@@ -153,6 +153,7 @@ class PeerTransport:
     # SQLite lifecycle and bounded retry helpers
     # ------------------------------------------------------------------
     def _connect(self) -> sqlite3.Connection:
+        connection: sqlite3.Connection | None = None
         try:
             connection = sqlite3.connect(
                 self._sqlite_target,
@@ -172,6 +173,12 @@ class PeerTransport:
                 pass
             return connection
         except sqlite3.DatabaseError as exc:
+            if connection is not None:
+                connection.close()
+            # A setup lock is still contention. Let the read/transaction loop
+            # apply its existing deadline instead of bypassing bounded retry.
+            if isinstance(exc, sqlite3.OperationalError) and self._locked(exc):
+                raise
             raise SwarmError("STORE_UNAVAILABLE", "cannot open transport store") from exc
 
     @staticmethod
