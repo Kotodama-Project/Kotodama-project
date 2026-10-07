@@ -30,18 +30,20 @@ export class NativeCorrections {
     return options.length?[{type:1,components:[{type:3,custom_id:'kc:select',placeholder:'訂正する仕事を選ぶ',min_values:1,max_values:1,options}]}]:[];
   }
   async handle(i){
-    const adapter=this.adapter;
+    const adapter=this.adapter,accessGeneration=adapter.accessGeneration;
+    const assertCurrent=()=>check(adapter.accessGeneration===accessGeneration,'SOURCE_ACCESS_DENIED');
     try{
       check(adapter.verifiedInstallation&&i.guildId===adapter.policy().discord.guildId,'SOURCE_ACCESS_DENIED');adapter.operator(i.user.id);await adapter.member(i.user.id);
       if(i.isModalSubmit?.()){
         await i.deferReply({flags:MessageFlags.Ephemeral});const {id,...expected}=parseCorrectionId(i.customId,'submit');
         const acceptance=i.fields.getTextInputValue('acceptance').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-        const task=await adapter.pipeline.correctTask(id,i.user.id,{...expected,title:i.fields.getTextInputValue('title').trim(),request:i.fields.getTextInputValue('request').trim(),acceptance,interactionId:i.id,at:i.createdTimestamp});
+        const task=await adapter.pipeline.correctTask(id,i.user.id,{...expected,title:i.fields.getTextInputValue('title').trim(),request:i.fields.getTextInputValue('request').trim(),acceptance,interactionId:i.id,at:i.createdTimestamp},{assertCurrent});
         await i.editReply({content:`訂正を同じ仕事へ反映しました。\n${task.id}\n結果は「result」で確認できます。`,components:[],allowedMentions:{parse:[]}});return;
       }
       const value=i.isStringSelectMenu?.()?(check(i.customId==='kc:select'&&i.values?.length===1,'CORRECTION_ID_INVALID'),i.values[0]):i.customId;
       const {id,...expected}=parseCorrectionId(value,'edit'),target=await this.target(id,i.user.id,expected);
       const current=adapter.pipeline.currentCorrectionTarget(id,i.user.id,{taskRevision:target.task.revision,sourceRevision:target.source.revision});
+      assertCurrent();
       await i.showModal(correctionModal(current));
     }catch(error){const body={content:notice(error),allowedMentions:{parse:[]}};if(i.deferred)await i.editReply({...body,components:[]});else if(!i.replied)await i.reply({...body,flags:MessageFlags.Ephemeral});}
   }

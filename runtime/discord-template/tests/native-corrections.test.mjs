@@ -114,3 +114,9 @@ test('modal dispatch rejects a source changed after the authorized snapshot prom
   f.pipeline.correctionTarget=async(...args)=>{const target=await read(...args);queueMicrotask(()=>f.store.ingest({...target.source,revision:150,text:'new private revision'}));return target;};
   const i=f.interaction('button',id);await f.adapter.interaction(i);assert.equal(i.modal,undefined);assert.match(i.response.content,/更新されています/);
 });
+
+for(const kind of ['button','modal'])test(`Discord access events during authorization block ${kind} without disclosure or mutation`,async t=>{
+  const f=await fixture(t),id=correctionId(f.target(),kind==='modal'?'submit':'edit'),read=f.pipeline.correctionTarget.bind(f.pipeline);
+  f.pipeline.correctionTarget=async(...args)=>{const target=await read(...args);queueMicrotask(()=>f.adapter.client.emit('channelUpdate',{},{ }));return target;};
+  const i=f.interaction(kind,id);await f.adapter.interaction(i);await f.pipeline.tail;assert.equal(i.modal,undefined);assert.match(i.response.content,/SOURCE_ACCESS_DENIED/);assert.equal(f.store.source(f.created.source_key,a).revision,100);assert.equal(f.executions.length,1);
+});

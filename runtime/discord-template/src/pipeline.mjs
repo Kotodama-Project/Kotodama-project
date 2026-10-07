@@ -148,13 +148,13 @@ export class Pipeline {
     check(![...this.active.values()].some(run=>run.sourceKey===first.source.key||run.sourceKeys?.has(first.source.key)),'TASK_CORRECTION_BUSY');
     return this.currentCorrectionTarget(id,actor,{taskRevision:first.task.revision,sourceRevision:first.source.revision});
   }
-  async correctTask(id,actor,input){
+  async correctTask(id,actor,input,{assertCurrent=()=>{}}={}){
     const target=await this.correctionTarget(id,actor,input);let task;
     try{
-      this.currentCorrectionTarget(id,actor,input);
+      this.currentCorrectionTarget(id,actor,input);assertCurrent();
       task=this.store.correctTask(id,actor,input);
       for(const [key,bindings]of this.analysisBindings)if(bindings.some(b=>b.key===target.source.key))this.analysisControllers.get(key)?.abort();
-      await this.authorize(task);await this.#checkAdmission(this.store.source(task.source_key,actor),[task.action,...(task.requiredActions??[])]);
+      await this.authorize(task);await this.#checkAdmission(this.store.source(task.source_key,actor),[task.action,...(task.requiredActions??[])]);assertCurrent();
     }catch(error){await this.#discardAdmission(task?[{task}]:[],error);throw error;}
     this.interactions.close(this.store.source(task.source_key,actor),'task_corrected');this.enqueue(task.id,actor,task.revision);return task;
   }
