@@ -175,6 +175,8 @@
         "source_revision_refs",
         "constraint_refs",
         "required_dependencies",
+        "optional_dependencies",
+        "inert_instruction_fragments",
         "allowed_actor_refs",
         "mandatory_for_roles",
         "status"
@@ -197,6 +199,8 @@
         "source_revision_refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
         "constraint_refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
         "required_dependencies": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "optional_dependencies": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "inert_instruction_fragments": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 512}},
         "allowed_actor_refs": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
         "mandatory_for_roles": {"type": "array", "maxItems": 3, "uniqueItems": true, "items": {"enum": ["reader", "builder", "auditor"]}},
         "status": {"enum": ["current", "stale", "superseded", "revoked", "conflicted"]}
@@ -321,6 +325,7 @@
         },
         "as_of": {"$ref": "#/$defs/timestamp"},
         "synthetic_actor_class": {"const": "fixture_actor_only"},
+        "previous_session_ref": {"$ref": "#/$defs/ref"},
         "request": {"$ref": "#/$defs/request"},
         "current_revisions": {
           "type": "object",
