@@ -135,3 +135,11 @@ This candidate does not mutate GitHub administration settings.
 Task ownerは既存のlocal SQLite一つです。executorは現在のrunning Task/Source/Intentを読取り、Task状態を更新しないreceiptを返します。Task ID/revisionからoperation keyを決め、Context/Grantの確認は既存Pipelineが維持します。作成後のPackはreadonly/no-network Dockerでhash検査し、Hostでも再読します。全ファイルとreceiptをartifactへ束縛し、Taskは`needs_review`です。
 
 出力は専用の`dataDir/worktrees/company-pack-operations`内、ダウンロード束は`company-pack-results`内です。どちらも通常のGit Task worktreeと重ねません。channel workspace使用時も同じTask owner・期限guardを通しますが、Company Pack自体はGit checkoutではありません。実pipelineの観測と実Discord/Human受入を分けます。
+
+## Native correction
+
+Discordのbutton/selectは現在のTask/Sourceの版を参照するだけで、UI状態を保存の正本にしません。modalの明示送信は既存Pipelineの現在grantを通り、local ownerの同一transactionでSource履歴・意図・Taskを更新します。他Taskも同じSourceを参照する場合や関連処理が実行中または終了不明なら変更せず、remote ownerへは未対応として拒否します。旧版のフォームと、送信直前に変わった出典は受け入れません。
+
+modalはDiscordの[LabelとText Input](https://docs.discord.com/developers/components/reference#label)を使い、messageのbutton/selectは既存のAction Rowへ置きます。SDKで構造を検査していますが、実Discordでの人の操作確認は別です。
+
+modalの初期応答にはnetwork照合やSource本文の取得を挟みません。値を自動表示せず、静的な空欄を即時に開きます。submitはmembership/Source/grant照合の前にdeferし、検証後にだけ既存ownerへ書きます。遅いpermission応答を模した試験を用意し、実Discordの期限内応答は人の受入で確認します。

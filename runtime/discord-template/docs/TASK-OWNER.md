@@ -40,3 +40,11 @@ remote接続は同時8件、要求・応答それぞれ4,000,000 bytes、要求�
 `create_company_pack`はlocal owner限定です。remote構成ではSourceの取込・Task作成前に拒否し、localにTaskを複製しません。明示Sourceから保存済みIntentへ結び、同じTask IDとrevisionをPythonのread-only SQLite bindingへ渡します。Task/Work Order/capabilityの代替recordを生成しません。Pythonの`authority_verified: false`は記録の読戻しが本人性の証明ではないことを示し、実行の現在grantは既存runtimeが検査します。
 
 結果とartifact hashは既存`finish`のCASと`result`の再読へ戻します。実行中の再起動は既存のuncertain回復を使い、自動再実行しません。権限を外した後も、本人のSource閲覧権限が維持される履歴の読取りは別です。
+
+## native UIからの訂正
+
+local ownerの`correctTask`は、Taskと現在Sourceの期待revisionを一つのSQLite transactionで照合します。既存`source.corrected`で関連Taskを無効化し、同じTask IDを`reviseTask`で更新します。このため無効化と再受付を通る場合はTask revisionが二段階進みます。原文は`source_versions`、訂正者・時刻・interactionと前の版はSource metadata、因果の参照は既存eventに保持します。
+
+actionとrequiredActionsは既存Taskから保持します。現在の操作者・閲覧範囲・実行grantを再確認し、別人、古いUI、関連する実行中/停止中/終了不明を拒否します。modalはprivate本文を含まない空の入力欄を即時に表示します。submitは先にdeferし、network認可の後、Source/Task版・Discord accessGenerationをatomic変更直前とenqueue前に再検査します。remote契約にこの原子的操作はまだ含めず、`TASK_CORRECTION_REQUIRES_LOCAL_OWNER`で書込み前に拒否します。
+
+共有Sourceの訂正は、別Taskのprimary Sourceまたはcontext bindingがある場合に拒否します。他Taskをstaleにしたりresult参照を消したりしません。音声の手動訂正は`manual_correction`とし、archiveの自動置換から外します。元のASRとarchive参照は以前のSource revisionへ保存されています。

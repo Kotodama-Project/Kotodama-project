@@ -134,6 +134,30 @@ export class Pipeline {
     this.interactions.close(s,'task_created');this.enqueue(task.id,source.actorId,task.revision);return task;
   }
   endInteraction(source){this.interactions.close(source,'voice_end');}
+  currentCorrectionTarget(id,actor,expected={}){
+    const current=this.policy();check(this.owner===this.store&&current.owner.kind==='local'&&this.config.owner.kind==='local','TASK_CORRECTION_REQUIRES_LOCAL_OWNER');
+    check(!this.closing&&!this.draining,'RUNTIME_STOPPING');check(current.discord.operators.includes(actor),'OPERATOR_REQUIRED');check(current.worker.workspace===this.config.worker.workspace,'WORKSPACE_BINDING_CHANGED');
+    const target=this.store.correctionTarget(id,actor,expected);
+    check([target.task.action,...(target.task.requiredActions??[])].every(action=>current.worker.actions.includes(action)),'ACTION_NOT_ALLOWED');
+    check(![...this.active.values()].some(run=>run.sourceKey===target.source.key||run.sourceKeys?.has(target.source.key)),'TASK_CORRECTION_BUSY');return target;
+  }
+  async correctionTarget(id,actor,expected={}){
+    check(this.owner===this.store&&this.config.owner.kind==='local','TASK_CORRECTION_REQUIRES_LOCAL_OWNER');
+    check(!this.closing&&!this.draining,'RUNTIME_STOPPING');const first=this.store.correctionTarget(id,actor,expected);
+    await this.authorize(first.task,'read_result');await this.#checkAdmission(first.source,[first.task.action,...(first.task.requiredActions??[])]);
+    check(![...this.active.values()].some(run=>run.sourceKey===first.source.key||run.sourceKeys?.has(first.source.key)),'TASK_CORRECTION_BUSY');
+    return this.currentCorrectionTarget(id,actor,{taskRevision:first.task.revision,sourceRevision:first.source.revision});
+  }
+  async correctTask(id,actor,input,{assertCurrent=()=>{}}={}){
+    const target=await this.correctionTarget(id,actor,input);let task;
+    try{
+      this.currentCorrectionTarget(id,actor,input);assertCurrent();
+      task=this.store.correctTask(id,actor,input);
+      for(const [key,bindings]of this.analysisBindings)if(bindings.some(b=>b.key===target.source.key))this.analysisControllers.get(key)?.abort();
+      await this.authorize(task);await this.#checkAdmission(this.store.source(task.source_key,actor),[task.action,...(task.requiredActions??[])]);assertCurrent();
+    }catch(error){await this.#discardAdmission(task?[{task}]:[],error);throw error;}
+    this.interactions.close(this.store.source(task.source_key,actor),'task_corrected');this.enqueue(task.id,actor,task.revision);return task;
+  }
   async #checkAdmission(source,actions,policy=null){
     const current=policy??await this.readPolicy();
     check(!this.closing&&!this.draining,'RUNTIME_STOPPING');
