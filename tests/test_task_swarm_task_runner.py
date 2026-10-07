@@ -64,7 +64,7 @@ def test_existing_owner_task_reaches_four_jobs_readback_and_idempotent_result(tm
     assert result["receipt"]["owner_input_sha256"] == hashlib.sha256(before).hexdigest()
     assert set(backend.calls) == {*WORK_JOBS, "review"}
     assert owner.read_bytes() == before
-    repeated = execute_task(owner, file, backend)
+    repeated = execute_task(owner, file, backend, expected_receipt_sha256=result["receipt_sha256"])
     assert repeated["duplicate"] and repeated["receipt"] == result["receipt"]
     assert len(backend.calls) == 4
     assert len(list(root.glob("task-run-*"))) == 1
@@ -119,8 +119,62 @@ def test_tampered_or_incomplete_result_never_launches_another_run(tmp_path):
     changed["state"] = "accepted"
     target.write_text(json.dumps(changed), encoding="utf-8")
     with pytest.raises(SwarmError) as raised:
-        execute_task(owner, file, SyntheticTaskBackend())
+        execute_task(owner, file, SyntheticTaskBackend(), expected_receipt_sha256=result["receipt_sha256"])
     assert raised.value.code == "RUN_ARTIFACT_CHANGED"
+
+
+def test_replay_cannot_trust_an_artifact_and_a_rewritten_receipt_hash(tmp_path):
+    owner, file, _, root = setup(tmp_path)
+    original = execute_task(owner, file, SyntheticTaskBackend())
+    directory = root/original["receipt"]["run_id"]
+    result_path, receipt_path = directory/"result.json", directory/"receipt.json"
+    result = json.loads(result_path.read_bytes())
+    result["reports"]["facts"]["summary"] = "forged summary"
+    raw = (json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":"))+"\n").encode()
+    result_path.write_bytes(raw)
+    receipt = json.loads(receipt_path.read_bytes())
+    receipt["artifact_sha256"]["result.json"] = hashlib.sha256(raw).hexdigest()
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    with pytest.raises(SwarmError) as refused:
+        execute_task(owner, file, SyntheticTaskBackend(), expected_receipt_sha256=original["receipt_sha256"])
+    assert refused.value.code == "RUN_REPLAY_ANCHOR_MISMATCH"
+    with pytest.raises(SwarmError) as missing:
+        execute_task(owner, file, SyntheticTaskBackend())
+    assert missing.value.code == "RUN_REPLAY_ANCHOR_REQUIRED"
+
+
+def test_missing_replay_never_starts_a_new_run(tmp_path):
+    owner, file, _, root = setup(tmp_path)
+    with pytest.raises(SwarmError) as raised:
+        execute_task(owner, file, SyntheticTaskBackend(), expected_receipt_sha256="a"*64)
+    assert raised.value.code == "RUN_REPLAY_MISSING"
+    assert not list(root.iterdir())
+
+
+def test_aggregate_output_limit_is_checked_before_acceptance(tmp_path):
+    import sqlite3
+    from contextlib import closing
+    owner, file, document, root = setup(tmp_path)
+    payload = json.loads(file.read_bytes())
+    source = payload["sources"][0]
+    source.update(text="a"*11000, sha256=hashlib.sha256(b"a"*11000).hexdigest())
+    file.write_text(json.dumps(payload), encoding="utf-8")
+    document["binding"]["context_digest"] = digest(payload)
+    document["source_checks"][0]["sha256"] = hashlib.sha256(file.read_bytes()).hexdigest()
+    owner.write_text(json.dumps(document), encoding="utf-8")
+    class Large(SyntheticTaskBackend):
+        def produce(self, job, payload, directory, **kwargs):
+            value = super().produce(job, payload, directory, **kwargs)
+            evidence = {"source_key":source["key"],"source_revision":source["revision"],"start":0,"end":11000,"quote":source["text"]}
+            value["result"]["claims"] = [{"text":"supported fixture","status":"supported","evidence":[evidence]*6} for _ in range(12)]
+            return value
+    with pytest.raises(SwarmError) as raised:
+        execute_task(owner, file, Large())
+    assert raised.value.code == "RUN_OUTPUT_LIMIT"
+    database = next(root.glob("task-run-*/execution.sqlite"))
+    with closing(sqlite3.connect(database)) as connection:
+        assert connection.execute("SELECT count(*) FROM jobs WHERE state='accepted'").fetchone()[0] == 0
+    assert not list(root.glob("task-run-*/receipt.json"))
 
 
 @pytest.mark.parametrize("mode,code", [("stale", "REVIEW_STALE"), ("identity", "REVIEW_NOT_INDEPENDENT"),

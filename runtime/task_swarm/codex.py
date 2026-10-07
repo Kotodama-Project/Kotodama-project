@@ -398,11 +398,11 @@ def _runtime_roots(explicit: Path | None) -> list[Path]:
 
 
 def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | None, expected_cwd: Path,
-                     started_unix: float | None = None) -> dict[str, Any] | None:
+                     started_unix: float | None = None, *, exact_record: tuple[Path, bytes] | None = None) -> dict[str, Any] | None:
     if not isinstance(thread_id, str) or _ID_RE.fullmatch(thread_id) is None:
         raise _RuntimeResolutionError("runtime_thread_invalid", "stdout thread identity is invalid")
     candidates: list[Path] = []
-    for root in _runtime_roots(session_root):
+    for root in (() if exact_record is not None else _runtime_roots(session_root)):
         if not root.is_dir():
             continue
         try:
@@ -416,7 +416,7 @@ def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | N
                     candidates.append(resolved)
         except OSError:
             continue
-    unique = sorted({os.path.normcase(str(path)): path for path in candidates}.values())
+    unique = [exact_record[0]] if exact_record is not None else sorted({os.path.normcase(str(path)): path for path in candidates}.values())
     if not unique:
         return None
     contexts: dict[str, Mapping[str, Any]] = {}
@@ -434,7 +434,8 @@ def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | N
         file_failures: set[str] = set()
         file_cwds: dict[str, str] = {}
         try:
-            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            lines = (exact_record[1].decode("utf-8", errors="replace") if exact_record is not None else
+                     path.read_text(encoding="utf-8", errors="replace")).splitlines()
         except OSError:
             continue
         for line in lines:

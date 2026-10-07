@@ -18,12 +18,12 @@ from .task_contract import (
 )
 
 
-def read_json(filename: Path, maximum=2*1024*1024, *, with_digest=False):
+def read_bytes(filename: Path, maximum=2*1024*1024):
     # Pin the actual descriptor before bounded reads. Owner paths are private
     # controlled inputs, but links/large files still cannot widen this reader.
     info = filename.lstat()
     require(not stat.S_ISLNK(info.st_mode) and not getattr(info, "st_file_attributes", 0) & 0x400, "RUN_FILE_REFUSED")
-    fd = os.open(filename, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    fd = os.open(filename, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
     try:
         before = os.fstat(fd)
         require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_size <= maximum, "RUN_FILE_REFUSED")
@@ -42,16 +42,64 @@ def read_json(filename: Path, maximum=2*1024*1024, *, with_digest=False):
                 (after.st_mtime_ns, after.st_ctime_ns) and (named.st_dev, named.st_ino) ==
                 (before.st_dev, before.st_ino) and named.st_nlink == 1 and
                 not stat.S_ISLNK(named.st_mode), "RUN_FILE_CHANGED")
-        def unique(pairs):
-            value = {}
-            for key, item in pairs:
-                require(key not in value, "RUN_DUPLICATE_JSON_KEY")
-                value[key] = item
-            return value
-        value = json.loads(raw, object_pairs_hook=unique)
-        return (value, hashlib.sha256(raw).hexdigest()) if with_digest else value
+        return raw
     finally:
         os.close(fd)
+
+
+def read_json(filename: Path, maximum=2*1024*1024, *, with_digest=False):
+    raw = read_bytes(filename, maximum)
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value, "RUN_DUPLICATE_JSON_KEY")
+            value[key] = item
+        return value
+    value = json.loads(raw, object_pairs_hook=unique)
+    return (value, hashlib.sha256(raw).hexdigest()) if with_digest else value
+
+
+def verify_runtime(value, attempt, *, freeze=False):
+    """Reopen nested runtime evidence before publication, acceptance and replay."""
+    from datetime import datetime
+    from .codex import _paths, _event_identity, _runtime_receipt, _redact, _result_from_message, MODEL, EFFORT, SANDBOX
+    receipt, supplied = value["receipt"], value["paths"]
+    base = safe_directory(attempt)
+    actual_attempt = Path(supplied["attempt_dir"])
+    require(actual_attempt.parent == base and actual_attempt.name.startswith("attempt-"), "RUN_RUNTIME_PATH_CHANGED")
+    paths = _paths(safe_directory(actual_attempt))
+    require(supplied == {key:str(path) for key,path in paths.items()}, "RUN_RUNTIME_PATH_CHANGED")
+    saved_receipt, receipt_sha = read_json(paths["receipt"], with_digest=True)
+    require(saved_receipt == receipt and (freeze or value.get("runtime_receipt_sha256") == receipt_sha),
+            "RUN_RUNTIME_RECEIPT_CHANGED")
+    required = {"schema", "command", "process", "events", "stderr", "last_message", "result"}
+    require(set(receipt.get("artifact_digests", {})) == required, "RUN_RUNTIME_RECEIPT_INVALID")
+    for key in required:
+        require(hashlib.sha256(read_bytes(paths[key], 16*1024*1024)).hexdigest() == receipt["artifact_digests"][key],
+                "RUN_RUNTIME_ARTIFACT_CHANGED")
+    require(read_json(paths["result"]) == value["result"], "RUN_RUNTIME_RESULT_CHANGED")
+    events = [json.loads(line) for line in read_bytes(paths["events"],16*1024*1024).splitlines() if line.strip()]
+    thread, turn = _event_identity(events)
+    process = read_json(paths["process"])
+    require(thread == receipt["thread_id"] and (turn is None or turn == receipt["turn_id"]) and
+            process["pid"] == receipt["pid"] and abs(process["created_at"]-receipt["created_at"]) <= .001,
+            "RUN_RUNTIME_IDENTITY_CHANGED")
+    rollout = Path(receipt["runtime_receipt_path"])
+    safe_directory(rollout.parent)
+    raw = read_bytes(rollout, 16*1024*1024)
+    sha = hashlib.sha256(raw).hexdigest()
+    if not freeze:
+        require(value.get("runtime_rollout_sha256") == sha, "RUN_RUNTIME_ROLLOUT_CHANGED")
+    started = datetime.fromisoformat(receipt["started_at"].replace("Z", "+00:00")).timestamp()
+    runtime = _runtime_receipt(thread, receipt["turn_id"], rollout.parent, actual_attempt, started, exact_record=(rollout, raw))
+    require(runtime is not None and runtime["runtime_receipt_path"] == str(rollout) and
+            runtime["model"] == MODEL and runtime["effort"] == EFFORT and runtime["sandbox"] == SANDBOX and
+            runtime["approval_policy"] == "never" and not runtime["turn_failed"] and
+            _redact(_result_from_message(runtime["completed_output"])) == value["result"], "RUN_RUNTIME_BINDING_CHANGED")
+    require(read_bytes(rollout,16*1024*1024) == raw, "RUN_RUNTIME_ROLLOUT_CHANGED")
+    if freeze:
+        value["runtime_rollout_sha256"] = sha
+        value["runtime_receipt_sha256"] = receipt_sha
 
 
 def write_json(filename: Path, value):
@@ -75,7 +123,7 @@ def safe_directory(directory: Path):
     return directory.resolve(strict=True)
 
 
-def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=time.time):
+def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=time.time, expected_receipt_sha256=None):
     owner = OwnerFile(owner_path, clock=clock)
     _, owner_input_sha = read_json(Path(owner_path), 1024*1024, with_digest=True)
     payload = read_json(Path(payload_path), 256*1024)
@@ -107,7 +155,9 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
     if directory.exists():
         safe_directory(directory)
         require((directory / "receipt.json").is_file(), "RUN_RECOVERY_REQUIRED")
-        receipt = read_json(directory / "receipt.json")
+        require(isinstance(expected_receipt_sha256, str) and len(expected_receipt_sha256) == 64, "RUN_REPLAY_ANCHOR_REQUIRED")
+        receipt, receipt_sha = read_json(directory / "receipt.json", with_digest=True)
+        require(receipt_sha == expected_receipt_sha256, "RUN_REPLAY_ANCHOR_MISMATCH")
         require(receipt["binding_digest"] == expected and receipt["owner_input_sha256"] == owner_input_sha and receipt["input_digest"] == digest(payload) and
                 receipt["synthetic"] == bool(backend.synthetic), "RUN_REPLAY_CONFLICT")
         required = {*[job+".json" for job in WORK_JOBS], "review.json", "result.json", "input.json", "plan.json"}
@@ -116,8 +166,12 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
             require(name in required, "RUN_RECEIPT_INVALID")
             _, actual = read_json(directory / name, with_digest=True)
             require(actual == sha, "RUN_ARTIFACT_CHANGED")
+        if not backend.synthetic:
+            for job in (*WORK_JOBS, REVIEW_JOB):
+                verify_runtime(read_json(directory/(job+".json")), directory/"attempts"/job)
         guard()
-        return {"result": read_json(directory / "result.json"), "receipt": receipt, "duplicate": True}
+        return {"result": read_json(directory / "result.json"), "receipt": receipt, "receipt_sha256":receipt_sha, "duplicate": True}
+    require(expected_receipt_sha256 is None, "RUN_REPLAY_MISSING")
     directory.mkdir(mode=0o700)
     input_sha = write_json(directory / "input.json", payload)
     plan_sha = write_json(directory / "plan.json", plan)
@@ -145,6 +199,8 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
             on_process=lambda pid, created: state.attach_identity(lease["token"], {"kind":"process","pid":pid,"created_at":created}))
         guard()
         report = validate_report(result["result"], job, payload)
+        if not backend.synthetic:
+            verify_runtime(result, directory/"attempts"/job, freeze=True)
         sha = write_json(directory / (job+".json"), result)
         guard()
         state.report(lease["token"], "ref/task-result/"+job, sha, "candidate", "ref/task-runtime/"+job)
@@ -175,6 +231,8 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
             on_process=lambda pid, created: state.attach_identity(lease["token"], {"kind":"process","pid":pid,"created_at":created}))
         guard()
         review = validate_review(reviewed["result"], payload, reports)
+        if not backend.synthetic:
+            verify_runtime(reviewed, directory/"attempts"/REVIEW_JOB, freeze=True)
         identities = [item["receipt"].get("invocation_ref" if backend.synthetic else "thread_id") for item in evidence.values()]
         identities.append(reviewed["receipt"].get("invocation_ref" if backend.synthetic else "thread_id"))
         require(all(isinstance(item,str) and item for item in identities) and len(set(identities)) == 4, "REVIEW_NOT_INDEPENDENT")
@@ -188,12 +246,10 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
             for name, sha in artifact_sha.items():
                 _, actual = read_json(directory / name, with_digest=True)
                 require(actual == sha, "RUN_ARTIFACT_CHANGED")
+            if not backend.synthetic:
+                for job in (*WORK_JOBS, REVIEW_JOB):
+                    verify_runtime(read_json(directory/(job+".json")), directory/"attempts"/job)
         verify_artifacts()
-        if accepted:
-            for job, sha in [(name, evidence[name]["sha256"]) for name in WORK_JOBS] + [(REVIEW_JOB, review_sha)]:
-                guard()
-                verify_artifacts()
-                state.accept(plan["run_id"], job, sha, "ref/task-verification/"+review_sha, binding["owner_ref"])
         result = {"state": "needs_review" if accepted else "failed",
                   "reports": reports, "validations": review["validations"],
                   "independent_review": accepted, "model_runtime_verified": not backend.synthetic,
@@ -201,15 +257,20 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
         guard()
         result_sha = write_json(directory / "result.json", result)
         artifact_sha["result.json"] = result_sha
+        if accepted:
+            for job, sha in [(name, evidence[name]["sha256"]) for name in WORK_JOBS] + [(REVIEW_JOB, review_sha)]:
+                guard()
+                verify_artifacts()
+                state.accept(plan["run_id"], job, sha, "ref/task-verification/"+review_sha, binding["owner_ref"])
         receipt = {"version":1, "run_id":plan["run_id"], "binding_digest":expected,
                    "owner_input_sha256":owner_input_sha, "input_digest":digest(payload), "synthetic":bool(backend.synthetic),
                    "task_state_changed":False, "accepted":accepted,
                    "artifact_sha256": artifact_sha}
         guard()
         verify_artifacts()
-        write_json(directory / "receipt.json", receipt)
+        receipt_sha = write_json(directory / "receipt.json", receipt)
         guard()
-        return {"result":result, "receipt":receipt, "duplicate":False}
+        return {"result":result, "receipt":receipt, "receipt_sha256":receipt_sha, "duplicate":False}
     finally:
         done.set()
         watcher.join(timeout=1)
