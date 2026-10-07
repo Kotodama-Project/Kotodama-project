@@ -38,7 +38,7 @@ class KnowledgeBaseTests(unittest.TestCase):
         errors = [issue for issue in self.bundle.issues if issue.level == "error"]
         self.assertEqual([], errors)
         self.assertEqual("0.2", self.bundle.profile["okf_version"])
-        self.assertEqual(20, len(self.bundle.concepts))
+        self.assertEqual(50, len(self.bundle.concepts))
         self.assertEqual(
             {"public_candidate"},
             {concept.extension["classification"] for concept in self.bundle.concepts},
@@ -146,7 +146,7 @@ class KnowledgeBaseTests(unittest.TestCase):
         metrics = report["metrics"]
         self.assertEqual("v2", report["schema_revision"])
         self.assertEqual(0, metrics["error_count"])
-        self.assertEqual(20, metrics["concept_count"])
+        self.assertEqual(50, metrics["concept_count"])
         self.assertEqual(1.0, metrics["source_coverage_ratio"])
         self.assertEqual(0.0, metrics["independent_verification_ratio"])
         self.assertEqual(1.0, metrics["structural_retrieval_eligibility_ratio"])

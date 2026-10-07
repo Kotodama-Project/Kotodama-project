@@ -37,7 +37,16 @@ kotodama:
     measurement_window: not_adopted
     exclusion_policy: not_adopted
     relationships:
+      - { type: governed_by, target: POLICY-MEASUREMENT-GUARDS }
       - { type: computed_by, target: COMP-INTENT }
+      - { type: enabled_by, target: KF-01 }
+      - { type: enabled_by, target: KF-02 }
+      - { type: enabled_by, target: KF-03 }
+      - { type: enabled_by, target: KF-04 }
+      - { type: enabled_by, target: KF-05 }
+      - { type: enabled_by, target: KF-06 }
+      - { type: enabled_by, target: KF-07 }
+      - { type: enabled_by, target: KF-08 }
   agent_use:
     discoverable: true
     answer_mode: source_required
@@ -103,3 +112,18 @@ Each candidate needs an owner, denominator, evidence source, baseline, target, d
 # 候補の計算と照合
 
 [COMP-INTENT](../computations/intent-outcome.md)は、既存のKGI-INTENTを置き換えず、閉じたsnapshot入力・deterministic computation・外部receipt・attesterへ結びます。数値の採用や実業務の達成を主張するものではありません。
+
+# Key Factor候補
+
+* [KF-01: 正本知識への到達](../factors/canonical-knowledge.md)
+* [KF-02: 目的と測定の対応](../factors/strategy-metrics.md)
+* [KF-03: agentの責任と検証](../factors/agent-accountability.md)
+* [KF-04: 証拠と権限の連鎖](../factors/evidence-authority.md)
+* [KF-05: 仕事に必要な文脈の組立](../factors/context-assembly.md)
+* [KF-06: 比較と観測の根拠](../factors/evaluation-evidence.md)
+* [KF-07: 訂正から次の限定作業へ](../factors/improvement-loop.md)
+* [KF-08: 人の判断と自然な体験](../factors/human-authority.md)
+
+各要因は補助KPIと反証条件を持つInitiativeへ繋がります。関係は候補の因果仮説であり、実証済みの寄与や新しいauthorityではありません。
+
+[測定policy候補](../strategy/measurement-guards.md)は、値の採用や実測の前に必要な確認を示します。新しいauthorityや数値targetではありません。
