@@ -182,9 +182,26 @@ class LocalRevisionOwner:
                     changed |= bool(inserted)
             return self._receipt(db, 'register', [r[0] for r in records], changed=changed)
 
-    def _eligible(self, db, revision_ref, active=None, completed=None):
+    @staticmethod
+    def _state_blocked(db):
+        # Read the registered immutable graph once per eligibility traversal.
+        # Incoming state edges affect their target, even when dependency is optional.
+        rows = db.execute("""SELECT r.ref, target.ref, json_extract(edge.value,'$.predicate')
+            FROM records r, json_each(r.body,'$.relations') edge
+            JOIN records target ON target.ref=json_extract(edge.value,'$.target_revision_ref')
+              AND target.kind=json_extract(edge.value,'$.target_kind')
+            WHERE r.kind='concept' AND json_extract(edge.value,'$.resolution')='resolved'
+              AND json_extract(edge.value,'$.validity')='current'
+              AND json_extract(edge.value,'$.predicate') IN ('conflicts_with','invalidates','supersedes')""").fetchall()
+        return {ref for origin, target, predicate in rows
+                for ref in ((origin, target) if predicate == 'conflicts_with' else (target,))}
+
+    def _eligible(self, db, revision_ref, active=None, completed=None, blocked=None):
         active = set() if active is None else active
         completed = {} if completed is None else completed
+        blocked = self._state_blocked(db) if blocked is None else blocked
+        if revision_ref in blocked:
+            raise KnowledgeBaseError('LINEAGE_OWNER_REVISION_WITHHELD')
         if revision_ref in active or len(active) >= 32:
             raise KnowledgeBaseError('LINEAGE_OWNER_DEPENDENCY_CYCLE_OR_LIMIT')
         if revision_ref in completed:
@@ -203,7 +220,7 @@ class LocalRevisionOwner:
             raise KnowledgeBaseError('LINEAGE_OWNER_REVISION_WITHHELD')
         for source_ref in concept['source_revision_refs']:
             source = self._record(db, source_ref, 'source')
-            if source['access_state'] != 'allowed' or db.execute('SELECT 1 FROM invalidations WHERE key=?', (source['invalidation_key'],)).fetchone():
+            if source_ref in blocked or source['access_state'] != 'allowed' or db.execute('SELECT 1 FROM invalidations WHERE key=?', (source['invalidation_key'],)).fetchone():
                 raise KnowledgeBaseError('LINEAGE_OWNER_ACCESS_WITHHELD')
         for relation in record['relations']:
             if relation['predicate'] == 'conflicts_with' and relation['resolution'] == 'resolved' and relation['validity'] == 'current':
@@ -216,7 +233,7 @@ class LocalRevisionOwner:
                 if relation['target_revision_ref'] not in concept['source_revision_refs']:
                     raise KnowledgeBaseError('LINEAGE_OWNER_REQUIRED_UNRESOLVED')
             elif relation['target_kind'] == 'concept' and relation['predicate'] not in {'supersedes', 'invalidates', 'conflicts_with'}:
-                target = self._eligible(db, relation['target_revision_ref'], active, completed)
+                target = self._eligible(db, relation['target_revision_ref'], active, completed, blocked)
                 height = max(height, 1 + completed[relation['target_revision_ref']][1])
                 row = db.execute('SELECT revision_ref FROM pointers WHERE logical_id=?', (target['concept_id'],)).fetchone()
                 if row != (target['revision_ref'],):

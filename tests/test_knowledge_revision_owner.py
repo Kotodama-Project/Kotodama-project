@@ -191,6 +191,26 @@ class KnowledgeRevisionOwnerTests(unittest.TestCase):
         with self.assertRaisesRegex(KnowledgeBaseError, 'REVISION_WITHHELD'):
             self.owner.current('synthetic/example')
 
+    def test_incoming_state_relation_withholds_the_target_and_its_source_consumers(self):
+        for predicate in ('conflicts_with', 'supersedes', 'invalidates'):
+            with self.subTest(predicate=predicate):
+                owner = LocalRevisionOwner(self.root / (predicate + '.sqlite'), repository_root=self.root, authorize=self.authorize)
+                value = fixture(); other = copy.deepcopy(value['concepts'][0])
+                other.update(concept_id='synthetic/other', revision_ref=SECOND); value['concepts'].append(other)
+                value['relations'].append(edge(FIRST, SECOND, 'synthetic/other', required=False, predicate=predicate))
+                owner.register(value, expected_generation=0)
+                with self.assertRaisesRegex(KnowledgeBaseError, 'REVISION_WITHHELD'):
+                    owner.publish(SECOND, expected_parent_ref=None, expected_generation=1)
+                with closing(sqlite3.connect(owner.database)) as db, db:
+                    db.execute('INSERT INTO pointers VALUES(?,?)', ('synthetic/other', SECOND))
+                with self.assertRaisesRegex(KnowledgeBaseError, 'REVISION_WITHHELD'):
+                    owner.current('synthetic/other')
+        source_case = fixture(); relation = source_case['relations'][0]
+        relation.update(predicate='invalidates', required=False)
+        self.owner.register(source_case, expected_generation=0)
+        with self.assertRaisesRegex(KnowledgeBaseError, 'ACCESS_WITHHELD'):
+            self.owner.publish(FIRST, expected_parent_ref=None, expected_generation=1)
+
     def test_shared_dependency_dag_is_checked_once_per_revision(self):
         value = fixture(); base = copy.deepcopy(value['concepts'][0]); value['concepts'] = []; value['relations'] = []; value['projections'] = []
         layers = [[(f'synthetic/layer-{layer}-{side}', f'ref/concept-revision/layer-{layer}-{side}') for side in range(2)] for layer in range(16)]
