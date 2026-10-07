@@ -4,6 +4,8 @@
 この段階は純粋な入力・出力検査で、Task、grant、processを作成しません。
 実行入口・Discord接続・実利用の受入は後続です。
 
+実行時の[Task workerの読取範囲](TASK-SWARM-ISOLATION.md)は別helperで制限します。
+
 ## Task入力と固定plan
 
 入力はversion、Task ID/revision、依頼、最大20件のacceptance、最大10件のSourceです。

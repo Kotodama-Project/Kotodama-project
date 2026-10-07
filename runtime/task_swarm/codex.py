@@ -540,6 +540,8 @@ def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | N
         "effort_context": context.get("effort"),
         "effort_settings": settings.get("reasoning_effort"),
         "sandbox": (context.get("sandbox_policy") or {}).get("type") if isinstance(context.get("sandbox_policy"), Mapping) else None,
+        "permission_profile": context.get("permission_profile"),
+        "active_permission_profile": context.get("active_permission_profile"),
         "approval_policy": context.get("approval_policy"),
         "completed": True,
         "turn_failed": selected in failures,
@@ -837,6 +839,8 @@ class CodexBackend:
         authorize_peer_writes: bool = False,
         on_process: Callable[[int, float], Any] | None = None,
         cancel_event: threading.Event | None = None,
+        confidential: bool = False,
+        task_codex_home: str | os.PathLike[str] | None = None,
     ) -> dict[str, Any]:
         if not isinstance(prompt, str):
             raise BackendError("prompt_invalid", "prompt must be text", retryable=False)
@@ -850,6 +854,7 @@ class CodexBackend:
             raise BackendError("timeout_invalid", "timeout must be finite and positive", retryable=False) from exc
         if not math.isfinite(timeout_value) or timeout_value <= 0 or timeout_value > MAX_TIMEOUT:
             raise BackendError("timeout_invalid", "timeout is outside the bounded range", retryable=False)
+        deadline = time.monotonic() + timeout_value
         if not isinstance(authorize_peer_writes, bool):
             raise BackendError("peer_invalid", "authorize_peer_writes must be boolean", retryable=False)
         if cancel_event is not None and not isinstance(cancel_event, threading.Event):
@@ -858,6 +863,8 @@ class CodexBackend:
             if cancel_event is not None and cancel_event.is_set():
                 raise BackendError("cancelled", "the attempt owner requested cancellation", retryable=False)
         check_cancelled()
+        if type(confidential) is not bool:
+            raise BackendError("policy_invalid", "confidential must be boolean", retryable=False)
         schema_object = _load_schema(schema)
         run_dir = _prepare_attempt(attempt_dir)
         paths = _paths(run_dir)
@@ -882,6 +889,10 @@ class CodexBackend:
         exit_code: int | None = None
         peer_cfg: dict[str, Any] | None = None
         input_writer: threading.Thread | None = None
+        scope = None
+        execution_cwd = run_dir
+        execution_sessions = self.session_root
+        execution_env = None
 
         def failed(error: BackendError) -> BackendError:
             if process is not None and pid is not None and created_at is not None and process.poll() is None:
@@ -908,20 +919,34 @@ class CodexBackend:
                 peer_config=peer_cfg,
                 authorize_peer_writes=authorize_peer_writes,
             )
-            _write_json(paths["command"], {"argv": command, "shell": False, "cwd": str(run_dir)})
+            if confidential:
+                if peer_cfg is not None:
+                    raise BackendError("policy_invalid", "confidential Task workers do not load peer tools", retryable=False)
+                from .confidential import ConfidentialScope
+                scope = ConfidentialScope(run_dir, executable_path, task_codex_home=task_codex_home)
+                diagnostics["permission_probe"] = scope.preflight(max_seconds=max(0,deadline-time.monotonic()),cancel_event=cancel_event)
+                check_cancelled()
+                if time.monotonic() >= deadline:
+                    raise BackendError("timeout", "preflight consumed the attempt time budget", retryable=False)
+                command = scope.wrap(command)
+                execution_cwd, execution_sessions, execution_env = scope.work, scope.codex_home/"sessions", scope.env
+            _write_json(paths["command"], {"argv": command, "shell": False, "cwd": str(execution_cwd)})
             diagnostics["executable"] = str(executable_path)
             # Child output goes to private spool files with a byte cap instead of
             # memory; the raw (unredacted) spools are removed in ``finally``.
             stdout_spool = open(run_dir / ".stdout.raw", "w+b")
             stderr_spool = open(run_dir / ".stderr.raw", "w+b")
             check_cancelled()
+            if time.monotonic() >= deadline:
+                raise BackendError("timeout", "attempt budget expired before process launch", retryable=False)
             process = subprocess.Popen(
                 command,
-                cwd=str(run_dir),
+                cwd=str(execution_cwd),
                 stdin=subprocess.PIPE,
                 stdout=stdout_spool,
                 stderr=stderr_spool,
                 shell=False,
+                env=execution_env,
             )
             pid = int(process.pid)
             created_at = _process_created(process)
@@ -937,7 +962,7 @@ class CodexBackend:
                 {
                     "pid": pid,
                     "created_at": created_at,
-                    "cwd": str(run_dir),
+                    "cwd": str(execution_cwd),
                     "started_at": _utc_iso(started_unix),
                     "owner": f"codex-backend:{run_dir.name}",
                 },
@@ -967,7 +992,6 @@ class CodexBackend:
             # A child that never reads stdin must not hide cancellation/timeout
             # behind a full pipe. Termination releases this owned writer.
             input_writer = threading.Thread(target=feed_prompt, name="swarm-prompt-writer", daemon=True)
-            deadline = time.monotonic() + timeout_value
             input_writer.start()
             limit_code: str | None = None
             while process.poll() is None:
@@ -1012,7 +1036,7 @@ class CodexBackend:
             if not thread_id:
                 raise BackendError("completion_identity_missing", "stdout did not identify a thread UUID", retryable=True)
             try:
-                runtime = _runtime_receipt(thread_id, stdout_turn, self.session_root, run_dir, started_unix)
+                runtime = _runtime_receipt(thread_id, stdout_turn, execution_sessions, execution_cwd, started_unix)
             except _RuntimeResolutionError as exc:
                 raise BackendError(exc.code, str(exc), retryable=False) from exc
             if runtime is None:
@@ -1022,10 +1046,13 @@ class CodexBackend:
             observed_model = runtime.get("model")
             observed_effort = runtime.get("effort")
             observed_sandbox = runtime.get("sandbox")
+            if scope is not None:
+                from .confidential import require_observed_profile
+                require_observed_profile(runtime.get("permission_profile"),runtime.get("active_permission_profile"),scope.input_paths)
             if (
                 observed_model != model
                 or observed_effort != effort
-                or observed_sandbox != SANDBOX
+                or (scope is None and observed_sandbox != SANDBOX)
                 or runtime.get("model_context") not in (None, model)
                 or runtime.get("model_settings") not in (None, model)
                 or runtime.get("effort_context") not in (None, effort)
@@ -1074,6 +1101,11 @@ class CodexBackend:
                 "duration_s": max(0.0, finished - started_unix),
                 "peer_tools": list(EXACT_TOOLS) if peer_cfg else [],
                 "peer_write_authorized": bool(authorize_peer_writes) if peer_cfg else False,
+                "permission_probe": ({"kind":"task_synthetic_permission_probe_v1",
+                                      "outer_read_denied":True,"inner_metadata_read_denied":True,
+                                      "model_called":False} if scope is not None else None),
+                "permission_profile_sha256": (hashlib.sha256(_json_dump(runtime["permission_profile"]).encode("utf-8")).hexdigest()
+                                               if scope is not None else None),
             }
             redacted_result = _redact(result)
             check_cancelled()
@@ -1103,7 +1135,8 @@ class CodexBackend:
             )
             raise failed(error) from exc
         except (OwnerFileError, SwarmError) as exc:
-            error = BackendError("peer_invalid", "peer owner input was refused", retryable=False, paths=_public_paths(paths))
+            code = exc.code.lower() if str(exc.code).startswith("CONFIDENTIAL_") else "peer_invalid"
+            error = BackendError(code, "bounded execution input was refused", retryable=False, paths=_public_paths(paths))
             diagnostics.update({"status": "failed", "error_code": exc.code})
             error.diagnostics = dict(diagnostics)
             raise failed(error) from exc
@@ -1127,9 +1160,18 @@ class CodexBackend:
                 if spool is not None:
                     try:
                         spool.close()
-                        os.unlink(spool.name)
+                        # Windows may briefly retain an inherited/file-scanner
+                        # handle after the exact owned child exits.
+                        for attempt in range(21):
+                            try:
+                                os.unlink(spool.name)
+                                break
+                            except PermissionError:
+                                if attempt == 20:
+                                    raise
+                                time.sleep(.05)
                     except OSError:
-                        pass
+                        diagnostics["raw_spool_cleanup_confirmed"] = False
             try:
                 if not records and stdout:
                     records, _, _ = _parse_events(stdout)
@@ -1166,6 +1208,8 @@ def invoke(
     authorize_peer_writes: bool = False,
     on_process: Callable[[int, float], Any] | None = None,
     cancel_event: threading.Event | None = None,
+    confidential: bool = False,
+    task_codex_home: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     return CodexBackend(executable, session_root=session_root).invoke(
         prompt,
@@ -1178,6 +1222,8 @@ def invoke(
         authorize_peer_writes=authorize_peer_writes,
         on_process=on_process,
         cancel_event=cancel_event,
+        confidential=confidential,
+        task_codex_home=task_codex_home,
     )
 
 
