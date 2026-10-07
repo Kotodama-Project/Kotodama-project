@@ -143,6 +143,19 @@ jobs:
       - name: Validate immutable workflow references
         run: python -B tools/check_workflow_references.py
 
+      - name: Check Cloudflare quality ceilings against the PR base
+        shell: bash
+        env:
+          QUALITY_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+        run: |
+          set -euo pipefail
+          if [ -n "$QUALITY_BASE_SHA" ]; then
+            git fetch --no-tags --depth=1 origin "$QUALITY_BASE_SHA"
+            python -S -B tools/validate_cloudflare_quality.py --previous-git-ref "$QUALITY_BASE_SHA"
+          else
+            python -S -B tools/validate_cloudflare_quality.py
+          fi
+
       - name: Run the public test suite
         run: python -m unittest discover -s tests -v
 
