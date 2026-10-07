@@ -108,6 +108,7 @@ def validate_budget(budget,*,now=None,previous=None):
             all(re.fullmatch('[a-f0-9]{64}',measurement[k]) for k in ('lint_input_sha256','asset_set_sha256')),'MEASUREMENT_INVALID')
     if previous is not None:
         require(previous['version']==budget['version'],'BUDGET_VERSION_CHANGED')
+        require(set(ids)<=set(previous['warning_ids']),'WARNING_EXCEPTION_ADDED')
         prior={(r['package'],r['rule'],r['origin']):r['max'] for r in previous['warning_limits']}
         require(all(value<=prior.get(key,0) for key,value in limits.items()),'WARNING_BUDGET_INCREASED')
         for key,value in frontend.items():

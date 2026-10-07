@@ -70,9 +70,12 @@ class CloudflareQualityBudgetTests(unittest.TestCase):
         with self.assertRaisesRegex(Refused,'ASSET_TOTAL_GROWTH'):compare(self.budget,self.lint,assets)
 
     def test_a_budget_update_can_only_reduce_previously_existing_ceilings(self):
+        synthetic_previous=copy.deepcopy(self.budget)
+        synthetic_previous['warning_limits'][0]['max']=2
+        synthetic_previous['warning_ids'].append('f'*64)
+        validate_budget(self.budget,previous=synthetic_previous)
         previous=read_json(ROOT/BUDGET_PATH)
-        validate_budget(self.budget,previous=previous)
-        for mode in ('warning','total','exception'):
+        for mode in ('warning','total','exception','identity'):
             with self.subTest(mode=mode):
                 current=copy.deepcopy(previous)
                 if mode=='warning':
@@ -80,7 +83,8 @@ class CloudflareQualityBudgetTests(unittest.TestCase):
                     # previously absent package: per-owner growth still fails.
                     current['warning_limits'][0]['package']='packages/new-owner'
                 elif mode=='total':current['frontend_limits']['js_bytes']+=1
-                else:current['frontend_limits']['large_js']['index']['bytes']+=1
+                elif mode=='exception':current['frontend_limits']['large_js']['index']['bytes']+=1
+                else:current['warning_ids'][0]='f'*64
                 with self.assertRaises(Refused):validate_budget(current,previous=previous)
 
     def test_expired_exception_wrong_graph_or_claimed_acceptance_is_refused(self):
