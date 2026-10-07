@@ -11,7 +11,26 @@ except ModuleNotFoundError:
     import unittest
     raise unittest.SkipTest("runs in the required Task swarm pytest job")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "runtime"))
-from task_swarm.confidential import ConfidentialScope, profile, runtime_paths
+from task_swarm.confidential import ConfidentialScope, profile, runtime_paths, require_observed_profile
+
+
+def test_observed_policy_is_compared_to_exact_permissions_not_its_name(tmp_path):
+    import copy
+    good={"type":"managed","file_system":{"type":"restricted","entries":[
+        {"path":{"type":"special","value":{"kind":"root"}},"access":"deny"},
+        {"path":{"type":"path","path":str(tmp_path)},"access":"read"}]},"network":"restricted"}
+    require_observed_profile(good,{"id":"task-input"},{str(tmp_path):"read"})
+    for mode in ("root","write","network","extra","missing","legacy"):
+        value=copy.deepcopy(good)
+        if mode=="root": value["file_system"]["entries"][0]["access"]="read"
+        if mode=="write": value["file_system"]["entries"][1]["access"]="write"
+        if mode=="network": value["network"]="enabled"
+        if mode=="extra": value["file_system"]["entries"].append({"path":{"type":"path","path":str(tmp_path.parent)},"access":"read"})
+        if mode=="missing": value["file_system"]["entries"].pop(0)
+        if mode=="legacy": value={"type":"read-only"}
+        with pytest.raises(SwarmError) as raised:
+            require_observed_profile(value,{"id":"task-input"},{str(tmp_path):"read"})
+        assert raised.value.code=="CONFIDENTIAL_RUNTIME_POLICY_UNVERIFIED"
 from task_swarm.protocol import SwarmError
 
 

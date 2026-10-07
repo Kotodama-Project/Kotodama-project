@@ -540,6 +540,8 @@ def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | N
         "effort_context": context.get("effort"),
         "effort_settings": settings.get("reasoning_effort"),
         "sandbox": (context.get("sandbox_policy") or {}).get("type") if isinstance(context.get("sandbox_policy"), Mapping) else None,
+        "permission_profile": context.get("permission_profile"),
+        "active_permission_profile": context.get("active_permission_profile"),
         "approval_policy": context.get("approval_policy"),
         "completed": True,
         "turn_failed": selected in failures,
@@ -1040,10 +1042,13 @@ class CodexBackend:
             observed_model = runtime.get("model")
             observed_effort = runtime.get("effort")
             observed_sandbox = runtime.get("sandbox")
+            if scope is not None:
+                from .confidential import require_observed_profile
+                require_observed_profile(runtime.get("permission_profile"),runtime.get("active_permission_profile"),scope.input_paths)
             if (
                 observed_model != model
                 or observed_effort != effort
-                or observed_sandbox != SANDBOX
+                or (scope is None and observed_sandbox != SANDBOX)
                 or runtime.get("model_context") not in (None, model)
                 or runtime.get("model_settings") not in (None, model)
                 or runtime.get("effort_context") not in (None, effort)
@@ -1095,6 +1100,8 @@ class CodexBackend:
                 "permission_probe": ({"kind":"task_synthetic_permission_probe_v1",
                                       "outer_read_denied":True,"inner_metadata_read_denied":True,
                                       "model_called":False} if scope is not None else None),
+                "permission_profile_sha256": (hashlib.sha256(_json_dump(runtime["permission_profile"]).encode("utf-8")).hexdigest()
+                                               if scope is not None else None),
             }
             redacted_result = _redact(result)
             check_cancelled()

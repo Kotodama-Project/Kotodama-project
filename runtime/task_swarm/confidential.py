@@ -34,8 +34,34 @@ def profile(name, paths, *, network):
             "-c", "permissions."+name+".network.enabled="+("true" if network else "false")]
 
 
+def require_observed_profile(observed, active, allowed_paths):
+    """Validate effective permissions, never just the selected profile name."""
+    refuse(isinstance(observed,dict) and set(observed)=={"type","file_system","network"} and
+           observed["type"]=="managed" and observed["network"]=="restricted" and
+           active=={"id":"task-input"}, "CONFIDENTIAL_RUNTIME_POLICY_UNVERIFIED")
+    filesystem=observed["file_system"]
+    refuse(isinstance(filesystem,dict) and set(filesystem)=={"type","entries"} and
+           filesystem["type"]=="restricted" and isinstance(filesystem["entries"],list),
+           "CONFIDENTIAL_RUNTIME_POLICY_UNVERIFIED")
+    actual=[]
+    for entry in filesystem["entries"]:
+        refuse(isinstance(entry,dict) and set(entry)=={"path","access"}, "CONFIDENTIAL_RUNTIME_POLICY_UNVERIFIED")
+        target=entry["path"]
+        if target=={"type":"special","value":{"kind":"root"}}:
+            key=":root"
+        else:
+            refuse(isinstance(target,dict) and set(target)=={"type","path"} and target["type"]=="path" and
+                   isinstance(target["path"],str) and Path(target["path"]).is_absolute(), "CONFIDENTIAL_RUNTIME_POLICY_UNVERIFIED")
+            key=str(Path(target["path"]).resolve(strict=True))
+        actual.append((key,entry["access"]))
+    expected={(":root","deny"),*((str(Path(name).resolve(strict=True)),access) for name,access in allowed_paths.items())}
+    refuse(set(actual)==expected and all(access in ("read","deny") for _,access in actual),
+           "CONFIDENTIAL_RUNTIME_POLICY_UNVERIFIED")
+
+
 def runtime_paths(executable):
     paths = {name:"read" for name in ("/bin","/lib","/lib64","/usr/bin","/usr/lib","/usr/lib64") if Path(name).exists()}
+    paths.update({str(Path(name).resolve(strict=True)):"read" for name in list(paths)})
     selected = Path(executable).resolve(strict=True)
     with selected.open("rb") as stream:
         refuse(stream.read(4) == b"\x7fELF", "CONFIDENTIAL_NATIVE_LINUX_CLI_REQUIRED")
@@ -77,7 +103,8 @@ class ConfidentialScope:
         for folder in (self.work, self.home):
             folder.mkdir(mode=0o700)
         paths = runtime_paths(self.executable)
-        self.inner = profile("task-input", {**paths,str(self.work):"read"}, network=False)
+        self.input_paths = {**paths,str(self.work):"read"}
+        self.inner = profile("task-input", self.input_paths, network=False)
         # The dedicated CLI owns its credential refresh and runtime metadata.
         # There is no alias to the interactive user's credential store.
         external = {str(self.codex_home):"write"}
@@ -107,7 +134,7 @@ class ConfidentialScope:
         script = 'test "$(cat "$1")" = "$3" && ! cat "$2" >/dev/null 2>&1 && printf "%s" "$3"'
         try:
             for name, settings, forbidden in (("task-runtime",self.outer,sibling),("task-input",self.inner,denied)):
-                result = subprocess.run(self.sandbox(name,settings,["/bin/sh","-c",script,"probe",str(allowed),str(forbidden),nonce]),
+                result = subprocess.run(self.sandbox(name,settings,[str(Path("/bin/sh").resolve(strict=True)),"-c",script,"probe",str(allowed),str(forbidden),nonce]),
                                         cwd=self.work,env=self.env,capture_output=True,timeout=15)
                 refuse(result.returncode == 0 and result.stdout.decode("utf-8","replace") == nonce,
                        "CONFIDENTIAL_SANDBOX_UNAVAILABLE")
