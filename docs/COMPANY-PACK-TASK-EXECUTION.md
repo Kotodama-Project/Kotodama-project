@@ -196,7 +196,7 @@ executor だけが keyword-only の `preserve_incomplete=True` を渡します�
 
 ## Discord local ownerへの束縛（#152 前半）
 
-`--record-binding` は `company_pack_discord_task_binding` も受け付けます。既存の三record方式はそのままです。新方式は、選択したDiscord runtimeのSQLiteをURIの`mode=ro`・`query_only`で読み、同じtransactionでTask/Source/Intentの現在版を照合します。WAL上の最新commitも対象です。派生KTP-TASK、Work Order、capabilityのrecordファイルを作りません。
+`--record-binding` は `company_pack_discord_task_binding` も受け付けます。既存の三record方式はそのままです。新方式は、選択したDiscord runtimeのSQLiteをURIの`mode=ro`・`query_only`で読み、同じtransactionでTask/Source/Intentの現在版を照合します。WAL上の最新commitも対象です。Discord bindingではNodeも必要です。Source fingerprintは、固定された同じruntimeの`src/common.mjs`を、preload環境変数を除いた有限のNode subprocessで再計算し、数値・Unicodeもownerと同じ規則で照合します。本文だけを同じ版のまま変更した不整合を拒否します。native訂正は元のtext/voice種別を保持でき、明示command・IntentとmanualCorrectionのactor/Task/interactionを照合します。派生KTP-TASK、Work Order、capabilityのrecordファイルを作りません。
 
 bindingは次の閉じた形です。値は**合成の形式例**で、承認・実Task・実接続を表しません。
 
