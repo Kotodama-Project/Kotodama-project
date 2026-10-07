@@ -31,6 +31,7 @@ python tools/validate_session_conversation_ledger.py validate NEW_PRIVATE_DIRECT
 ```
 
 Python commandはrepository rootから実行します。Node commandはこのcomponent rootからです。
+`retainUntil`は実在する未来のUTC日時（秒または1〜3桁の小数秒、末尾Z）です。存在しない日付や24時の正規化を拒否します。
 scopeの文字列は既存方針へのbindingであり、新しい同意・本人確認・実行grantを発行しません。
 鍵を失うと復元できません。鍵の保管/rotationや本番backup、復旧はownerの既存運用に従います。
 
@@ -61,7 +62,7 @@ Node標準cryptoだけを使い、外部依存やprivate donorコードは追加
 |---|---|---|
 | `source.created` | `human_message` / `voice_segment` | exact `source_versions` と元eventを暗号化 |
 | `source.corrected` | `source_update` / `SOURCE_UPDATED` | 直前のSource eventへcausal/invalidation ref |
-| Task create/start/correct/context/result/stop/resume/recovery | systemの`agent_action` | 同じTaskのopaque correlationと先行eventへのcausal ref |
+| Task create/start/correct/context/result/stop/resume/recovery | systemの`agent_action` | event作成時のTask版・Source/context版のbinding、同じTaskのopaque correlation、先行eventへのcausal ref |
 
 ledgerの時刻はstoreが観測したevent時刻です。元の取得時刻、話者track、原文、訂正前後の
 本文などは正確なSource JSON内に保持します。`RAW_SOURCE_JSON` はこの取得済みJSONを
@@ -72,16 +73,22 @@ ledgerの`correction`はbound SessionのHuman Decision専用です。原文訂�
 `UNVERIFIED_PUBLIC_CLAIM`のままです。Task正本を作らず、Taskの状態を変更しません。
 当時のTask本文や成果本文がevent履歴にない場合、現在値で埋めません。成果eventは
 元のstate/artifact_countのみを保持します。intentはmodel/decision provenance不足のため
-今回のexportには含めません。
+今回のexportには含めません。新しいTask eventは既存events表に入力scopeの小さなbindingを保持します。
+過去のeventにこのbindingが無い場合は除外し、現在のTaskから過去のscopeを補完しません。
+Task訂正eventは変更前のSource/contextも照合します。これは監査の参照であり、Task状態の正本ではありません。
 
 現在も読めるDiscord Sourceと、その各履歴版のreadersに操作者が含まれるものだけが対象です。
-Taskは本人のものに限り、現在のSource/contextとeventが参照するSourceも確認します。
+Taskは本人のものに限り、現在のSource/contextに加え、event時点のSource/contextの各版も確認します。
+音声は現在のspeaker opt-outも確認し、撤回後のSourceと依存Task eventを除外します。
 非Discord・撤回/権限外・未対応eventは`omitted_events`へ数え、receiptを暗号文に保持します。
 対象Sourceの過去版欠落、先行訂正event欠落は拒否します。全provider・全履歴の完全export
 ではありません。最大10,000 events/入力32 MiB/出力各64 MiBを超えれば、切捨てず拒否します。
 
-停止中のmaintenance lockとSQLite transactionで一貫したsnapshotを読みます。remote ownerは
-読取・書込前に拒否します。runtime lockを盗んだり、processを停止したりしません。
+既存runtime lockがないことを確認し、SQLiteのBEGIN IMMEDIATEによるwriter reservationを
+snapshot読取から同期出力・readbackまで保持します。既存のtransactionは借りません。
+export専用のpersistent host lockは書かないので、強制終了や電源断でもSQLiteが排他を解放します。
+実process強制終了後に通常runtimeを起動できることを合成試験で確認します。remote ownerは
+読取・書込前に拒否します。runtime lockを盗んだり、他processを停止したりしません。
 
 ## 保持と移行候補
 

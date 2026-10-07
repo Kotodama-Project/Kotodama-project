@@ -1,4 +1,4 @@
-import {canonical,check,digest,uid} from './common.mjs';
+import {canonical,check,digest} from './common.mjs';
 import {ledgerKeys,writeLedgerPackage} from './ledger-package.mjs';
 
 const TASK_EVENTS=new Set(['task.created','task.started','task.corrected','task.context_bound','task.result','task.stop_requested','task.stop_observed','task.admission_cancelled','task.resumed','task.recovery_required']);
@@ -7,47 +7,55 @@ function validateScope(scope,now){
   const fields=['mappingKeyEnv','policyId','policyRevision','retainUntil','consentBasis','knowledgeScope'];
   check(scope&&canonical(Object.keys(scope).sort())===canonical(fields.sort()),'LEDGER_SCOPE_INVALID');
   check(fields.every(k=>typeof scope[k]==='string'&&scope[k].length>0&&scope[k].length<=256),'LEDGER_SCOPE_INVALID');
-  check(/^[A-Z_][A-Z0-9_]*$/.test(scope.mappingKeyEnv)&&/^\d{4}-\d{2}-\d{2}T.*Z$/.test(scope.retainUntil)&&Date.parse(scope.retainUntil)>now,'LEDGER_SCOPE_EXPIRED_OR_INVALID');
+  const time=/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?Z$/.exec(scope.retainUntil),parsed=Date.parse(scope.retainUntil);
+  check(/^[A-Z_][A-Z0-9_]*$/.test(scope.mappingKeyEnv)&&time&&Number(scope.retainUntil.slice(0,4))>=1&&parsed>now&&new Date(parsed).toISOString()===`${time[1]}.${(time[2]??'').padEnd(3,'0')}Z`,'LEDGER_SCOPE_EXPIRED_OR_INVALID');
 }
 function snapshot(store,actor){
   const budget=store.statement('SELECT count(*) AS count,coalesce(sum(length(CAST(body AS BLOB))),0) AS bytes FROM events').get();
   check(budget.count<=MAX_EVENTS,'LEDGER_EVENT_LIMIT');check(budget.bytes<=MAX_BYTES,'LEDGER_SNAPSHOT_LIMIT');
   const rows=store.statement('SELECT seq,type,task_id,at,body FROM events ORDER BY seq LIMIT ?').all(MAX_EVENTS+1);
   check(rows.length<=MAX_EVENTS,'LEDGER_EVENT_LIMIT');let bytes=0,omitted=0;const items=[];
-  const sourceCache=new Map(),taskCache=new Map();
+  const sourceCache=new Map(),taskCache=new Map(),historyCache=new Map();
   const current=key=>{if(!sourceCache.has(key)){const size=store.statement('SELECT length(CAST(body AS BLOB)) AS bytes FROM sources WHERE key=?').get(key);bytes+=size?.bytes??0;check(bytes<=MAX_BYTES,'LEDGER_SNAPSHOT_LIMIT');sourceCache.set(key,store.sourceInternal(key));}return sourceCache.get(key);};
-  const readable=s=>s?.provider==='discord'&&!s.withdrawn&&s.readers?.includes(actor);
+  const readable=s=>s?.provider==='discord'&&!s.withdrawn&&s.readers?.includes(actor)&&!(s.metadata?.kind==='voice'&&store.voiceOptedOut(s.guildId,s.channelId,s.metadata.inputAccountId??s.actorId));
+  const history=(key,revision)=>{
+    const id=key+':'+revision;if(historyCache.has(id))return historyCache.get(id);
+    const size=store.statement('SELECT length(CAST(body AS BLOB)) AS bytes FROM source_versions WHERE key=? AND revision=?').get(key,revision);
+    check(size,'LEDGER_SOURCE_HISTORY_MISSING');bytes+=size.bytes;check(bytes<=MAX_BYTES,'LEDGER_SNAPSHOT_LIMIT');
+    const source=JSON.parse(store.statement('SELECT body FROM source_versions WHERE key=? AND revision=?').get(key,revision).body);
+    check(source.key===key&&source.revision===revision,'LEDGER_SOURCE_HISTORY_MISMATCH');historyCache.set(id,source);return source;
+  };
+  const readableBinding=b=>b&&typeof b.key==='string'&&Number.isSafeInteger(b.revision)&&b.revision>=0&&readable(current(b.key))&&readable(history(b.key,b.revision));
   for(const row of rows){
     bytes+=Buffer.byteLength(row.body);check(bytes<=MAX_BYTES,'LEDGER_SNAPSHOT_LIMIT');const body=JSON.parse(row.body);
     if(['source.created','source.corrected'].includes(row.type)){
       if(!readable(current(body.source_key))){omitted++;continue;}
-      const size=store.statement('SELECT length(CAST(body AS BLOB)) AS bytes FROM source_versions WHERE key=? AND revision=?').get(body.source_key,body.revision);
-      check(size,'LEDGER_SOURCE_HISTORY_MISSING');check(bytes+size.bytes<=MAX_BYTES,'LEDGER_SNAPSHOT_LIMIT');
-      const saved=store.statement('SELECT body FROM source_versions WHERE key=? AND revision=?').get(body.source_key,body.revision);
-      check(saved,'LEDGER_SOURCE_HISTORY_MISSING');bytes+=Buffer.byteLength(saved.body);check(bytes<=MAX_BYTES,'LEDGER_SNAPSHOT_LIMIT');
-      const source=JSON.parse(saved.body);if(!readable(source)){omitted++;continue;}
+      const source=history(body.source_key,body.revision);if(!readable(source)){omitted++;continue;}
       // A missing actor/track is not replaced with an invented human identity.
       if(!source.actorId||(source.metadata?.kind==='voice'&&!source.metadata?.inputAccountId)){omitted++;continue;}
       items.push({row,body,source,payload:{store_event:row,source}});
     }else if(TASK_EVENTS.has(row.type)&&row.task_id){
       if(!taskCache.has(row.task_id)){const size=store.statement('SELECT length(CAST(body AS BLOB)) AS bytes FROM tasks WHERE id=?').get(row.task_id);bytes+=size?.bytes??0;check(bytes<=MAX_BYTES,'LEDGER_SNAPSHOT_LIMIT');taskCache.set(row.task_id,store.taskInternal(row.task_id));}const task=taskCache.get(row.task_id);
       if(!task||task.actor!==actor||!readable(current(task.source_key))){omitted++;continue;}
+      const binding=body.ledgerBinding;
+      if(!binding||binding.version!==1||binding.taskId!==row.task_id||binding.actor!==actor||!Number.isSafeInteger(binding.taskRevision)||binding.taskRevision<1||!Array.isArray(binding.contextSources)||binding.contextSources.length>100||![binding.source,...binding.contextSources].every(readableBinding)){omitted++;continue;}
+      if(row.type==='task.corrected'&&(!Array.isArray(body.previousContextSources)||body.previousContextSources.length>100||![{key:body.previousSource,revision:body.previousSourceRevision},...body.previousContextSources].every(readableBinding))){omitted++;continue;}
       const references=[body.source_key,body.source,body.previousSource,...(body.bindings??[]).map(b=>b.key),...(task.contextSources??[]).map(b=>b.key)].filter(Boolean);
       if(references.some(key=>!readable(current(key)))){omitted++;continue;}
-      items.push({row,body,source:null,payload:{store_event:row}});
+      items.push({row,body,source:null,bindings:[binding.source,...binding.contextSources],payload:{store_event:row}});
     }else omitted++;
   }
   check(items.length,'LEDGER_NO_EXPORTABLE_EVENTS');return {items,omitted,total:rows.length};
 }
 function render(snapshot,keys,scope,installation,actor){
   const ref=(kind,value)=>keys.opaque(kind,[installation,value]);
-  const rows=[],entries=[],sourceEvents=new Map(),taskEvents=new Map();let previous='0'.repeat(64);
+  const rows=[],entries=[],sourceEvents=new Map(),sourceVersions=new Map(),taskEvents=new Map();let previous='0'.repeat(64);
   const scopeRef=ref('knowledge-scope',scope.knowledgeScope);
   for(const item of snapshot.items){
     const {row,source,body,payload}=item,reference=ref('event',[row.seq,digest(payload)]);
     const voice=source?.metadata?.kind==='voice',old=source?sourceEvents.get(source.key):taskEvents.get(row.task_id);
     const correcting=row.type==='source.corrected';check(!correcting||old,'LEDGER_CORRECTION_PARENT_MISSING');
-    const caused=[old,source?null:sourceEvents.get(body.source_key??body.source)].filter(Boolean);
+    const caused=[old,...(item.bindings??[]).map(b=>sourceVersions.get(b.key+':'+b.revision))].filter(Boolean);
     const vaultRef=ref('vault',reference),manifestRef=ref('vault-manifest',reference),cursorRef=ref('cursor',row.seq),recoveryRef=ref('recovery-receipt',reference);
     const record={kind:'kotodama.conversation-event',schema_revision:'v1',event_id:reference,sequence:rows.length+1,
       session:{state:'UNASSIGNED_INBOX',session_ref:null,revision_ref:null,binding_event_ref:null,governance:{creation_mode:'UNASSIGNED_INBOX',task_ssot_ref:null,plan_ref:null,requirement_refs:[],invocation_ref:null,model_ref:null,capability_grant_refs:[],knowledge_grant_refs:[],mcp_tool_grant_refs:[],delegation_ref:null,dependency_refs:[],parallel_status_ref:null,evidence_refs:[],invalidation_refs:[]}},
@@ -67,17 +75,19 @@ function render(snapshot,keys,scope,installation,actor){
       public_safety:{record_visibility:'PUBLIC_SANITIZED_METADATA',raw_payload_embedded:false,protected_payload_ref:vaultRef,knowledge_scope_ref:scopeRef,acl_state:'AVAILABLE'},integrity:{marker:'NONE',marker_ref:null},previous_event_hash:previous};
     record.event_hash=digest(record);previous=record.event_hash;rows.push(record);
     entries.push({event_ref:reference,vault_ref:vaultRef,manifest_ref:manifestRef,summary_ref:record.event.summary_ref,summary:{store_event_type:row.type,observed_at:row.at},recovery:{receipt_ref:recoveryRef,cursor_ref:cursorRef,store_sequence:row.seq,payload_sha256:digest(payload)},payload});
-    if(source)sourceEvents.set(source.key,reference);else taskEvents.set(row.task_id,reference);
+    if(source){sourceEvents.set(source.key,reference);sourceVersions.set(source.key+':'+source.revision,reference);}else taskEvents.set(row.task_id,reference);
   }
   return {ledger:rows.map(canonical).join('\n')+'\n',payload:{version:1,scope,entries,recovery:{total_events:snapshot.total,omitted_events:snapshot.omitted,exported_events:rows.length}}};
 }
 export function exportLedger(store,{config,actor,scope,output,env=process.env,now=Date.now()}){
   check(config.owner.kind==='local','LEDGER_LOCAL_OWNER_REQUIRED');check(config.discord.operators.includes(actor),'OPERATOR_REQUIRED');
-  validateScope(scope,now);const keys=ledgerKeys(env[scope.mappingKeyEnv]),lockOwner=uid('ledger-export');
-  let claimed=false;
-  try{
-    const data=store.transaction(()=>{check(!store.lock(),'STOP_RUNTIME_BEFORE_MAINTENANCE');store.claimHost(lockOwner,process.pid,new Date(now).toISOString(),'ledger-export');claimed=true;return snapshot(store,actor);});
+  validateScope(scope,now);const keys=ledgerKeys(env[scope.mappingKeyEnv]);
+  check(!store.db.isTransaction,'LEDGER_REQUIRES_OWN_TRANSACTION');
+  // Hold SQLite's writer reservation through synchronous output/readback. A
+  // killed exporter releases it automatically; no persistent host lock is left.
+  return store.transaction(()=>{
+    check(!store.lock(),'STOP_RUNTIME_BEFORE_MAINTENANCE');const data=snapshot(store,actor);
     const rendered=render(data,keys,scope,config.installation,actor),result=writeLedgerPackage(output,keys,rendered.ledger,rendered.payload);
     return {...result,omitted_events:data.omitted,scope:'authorized_local_snapshot',task_state_changed:false,retention_enforced:false,real_data_acceptance:false};
-  }finally{if(claimed)store.releaseHost(lockOwner);}
+  });
 }

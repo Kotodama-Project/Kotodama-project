@@ -10,6 +10,7 @@ import {exampleConfig} from '../src/config.mjs';
 import {digest,inside} from '../src/common.mjs';
 import {exportLedger} from '../src/ledger-export.mjs';
 import {ledgerKeys,readLedgerPackage} from '../src/ledger-package.mjs';
+import {startRuntime} from '../src/runtime.mjs';
 
 const actor='100000000000000002',raw='非公開原文-機密比較用',key='a7'.repeat(32);
 const source=(extra={})=>({provider:'discord',guildId:'100000000000000001',channelId:'100000000000000003',sourceId:'100000000000000004',actorId:actor,revision:1,readers:[actor],text:raw,final:true,metadata:{kind:'text',createdAt:'2026-10-01T00:00:00Z',privatePath:'C:\\private\\sample.txt',host:'private.example.test'},...extra});
@@ -86,6 +87,48 @@ test('voice source keeps its actual track and exact payload without claiming aud
   const f=await fixture(t);f.store.ingest(source({metadata:{kind:'voice',inputAccountId:actor,sessionId:'fixture-session',createdAt:'2026-10-01T00:00:00Z',rawText:raw,startMs:20,endMs:40}}));f.run();validate(f.output);
   const restored=readLedgerPackage(f.output,ledgerKeys(key)),row=JSON.parse(restored.ledger.toString('utf8'));assert.equal(row.source.type,'discord_voice');assert(row.source.speaker_track_ref.startsWith('ref/track/'));assert.equal(row.content.artifact_stage,'RAW_SOURCE_JSON');assert.deepEqual(row.content.derived_from_event_refs,[]);
   assert.equal(restored.payload.entries[0].payload.source.metadata.rawText,raw);
+});
+test('historical Task input bindings cannot borrow a revised Task current Source ACL',async t=>{
+  const f=await fixture(t),task=seed(f.store),oldSource=f.store.source(task.source_key,actor);
+  const fresh=f.store.ingest(source({sourceId:'new-source',text:'new-input'})),s=f.store.source(fresh.key,actor);
+  const revised=f.store.reviseTask(task.id,s,{action:'write_file',title:'new',request:'new-input',intentIds:[]});
+  f.store.claim(task.id,revised.revision);f.store.finish(task.id,revised.revision,{state:'needs_review',summary:'new-result',artifacts:[]});
+  f.store.ingest({...oldSource,revision:oldSource.revision+1,withdrawn:true});f.run();validate(f.output);
+  const exported=readLedgerPackage(f.output,ledgerKeys(key)).payload.entries.map(e=>e.payload.store_event).filter(e=>e.task_id===task.id);
+  assert.deepEqual(exported.map(e=>e.type),['task.started','task.result']);
+  assert(exported.every(e=>JSON.parse(e.body).ledgerBinding.source.key===fresh.key));
+});
+test('old context is checked at event time and legacy Task events without a binding are omitted',async t=>{
+  const f=await fixture(t),task=seed(f.store),context=f.store.ingest(source({sourceId:'context',text:'context-private'})),s=f.store.source(context.key,actor);
+  const revised=f.store.reviseTask(task.id,f.store.source(task.source_key,actor),{action:'write_file',title:'same',request:'fixture-request',intentIds:[]});
+  f.store.claim(task.id,revised.revision);f.store.bindContext(task.id,revised.revision,[{key:s.key,revision:s.revision}]);
+  f.store.event('task.result',{state:'failed',marker:'forbidden-old-context'},task.id);
+  f.store.bindContext(task.id,revised.revision,[]);f.store.ingest({...s,revision:2,withdrawn:true});
+  f.store.statement("UPDATE events SET body=json_remove(body,'$.ledgerBinding') WHERE type='task.created'").run();
+  f.run();validate(f.output);const text=JSON.stringify(readLedgerPackage(f.output,ledgerKeys(key)).payload);
+  assert(!text.includes('forbidden-old-context'));assert(!readLedgerPackage(f.output,ledgerKeys(key)).payload.entries.some(e=>e.payload.store_event.type==='task.created'));
+});
+test('a current voice opt-out excludes captured voice and its dependent Task events',async t=>{
+  const f=await fixture(t);const voice=f.store.ingest(source({sourceId:'voice-source',metadata:{kind:'voice',inputAccountId:actor,sessionId:'voice-session'}})),s=f.store.source(voice.key,actor);
+  const task=f.store.createTask(s,{action:'write_file',request:'fixture-request',title:'voice',intentIds:[]},'voice-request');f.store.claim(task.id,task.revision);f.store.finish(task.id,task.revision,{state:'needs_review',artifacts:[]});
+  f.store.ingest(source({sourceId:'unrelated',text:'visible-text'}));f.store.recordConsent({guild:s.guildId,channel:s.channelId,actor,notice:'fixture',granted:false,interactionId:'100000000000000030'});
+  const result=f.run();assert.equal(result.records,1);const restored=JSON.stringify(readLedgerPackage(f.output,ledgerKeys(key)).payload);assert(!restored.includes('voice-session')&&!restored.includes(task.id));validate(f.output);
+});
+test('retention dates must round-trip as real UTC calendar timestamps before any output',async t=>{
+  const f=await fixture(t);seed(f.store);
+  for(const retainUntil of ['2099-02-31T00:00:00Z','2100-02-29T00:00:00Z','2099-04-31T00:00:00Z','2099-12-31T24:00:00Z'])assert.throws(()=>f.run({scope:{...scope,retainUntil}}),/SCOPE_EXPIRED_OR_INVALID/);
+  await assert.rejects(readFile(path.join(f.output,'ledger.jsonl')),/ENOENT/);
+  f.run({scope:{...scope,retainUntil:'2096-02-29T01:02:03.004Z'}});validate(f.output);
+});
+test('a killed exporter leaves no persistent lock and normal runtime startup works',async t=>{
+  const f=await fixture(t);seed(f.store);const configPath=path.join(f.root,'config.json');await writeFile(configPath,JSON.stringify(f.options.config));
+  const script=`import fs from 'node:fs';import {syncBuiltinESMExports} from 'node:module';import {Store} from ${JSON.stringify(new URL('../src/store.mjs',import.meta.url).href)};import {exportLedger} from ${JSON.stringify(new URL('../src/ledger-export.mjs',import.meta.url).href)};const options=JSON.parse(process.argv[1]);const original=fs.writeFileSync;fs.writeFileSync=(file,...args)=>{if(String(file).endsWith('payload.aes256gcm'))process.kill(process.pid,'SIGKILL');return original(file,...args)};syncBuiltinESMExports();exportLedger(new Store(options.config.dataDir),options);`;
+  const child=spawnSync(process.execPath,['--input-type=module','-e',script,JSON.stringify(f.options)],{timeout:15000,encoding:'utf8'});assert.notEqual(child.status,0);assert.equal(child.error,undefined);assert.equal(f.store.lock(),undefined);
+  const runtime=await startRuntime(configPath,{offline:true,log:()=>{}});await runtime.close();assert.equal(f.store.lock(),undefined);
+  f.run({output:path.join(f.root,'retry')});validate(path.join(f.root,'retry'));
+});
+test('export refuses a borrowed transaction rather than assuming it owns the writer reservation',async t=>{
+  const f=await fixture(t);seed(f.store);assert.throws(()=>f.store.transaction(()=>f.run()),/REQUIRES_OWN_TRANSACTION/);assert.equal(f.store.lock(),undefined);
 });
 test('CLI ledger-export is distinct from document export and reports no private bytes or paths',async t=>{
   const f=await fixture(t);seed(f.store);const configPath=path.join(f.root,'config.json'),scopePath=path.join(f.root,'scope.json');await writeFile(configPath,JSON.stringify(f.options.config));await writeFile(scopePath,JSON.stringify(scope));
