@@ -11,8 +11,8 @@ export class Pipeline {
     this.interactions=new InteractionState(store);
     Object.assign(this,{store,owner,config,policy,readPolicy,analyzer,worker,authorize,authorizeAnalysis,onTask,onTaskQueued,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.tail=Promise.resolve();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);
   }
-  context(source,principal,pending=null){
-    const config=this.config.analyzer,maxSources=config.maxContextSources??12;let remaining=config.maxContextChars??24000;
+  context(source,principal,pending=null,{sourceLimit=Infinity,completeSources=false}={}){
+    const config=this.config.analyzer,maxSources=Math.min(config.maxContextSources??12,sourceLimit);let remaining=config.maxContextChars??24000;
     const result=[],time=s=>Date.parse(s.metadata?.createdAt??'')||0;
     let candidates;
     if(typeof this.store.contextSources==='function')candidates=this.store.contextSources(principal,{guildId:source.guildId,channelId:source.channelId,excludeKey:source.key??null,limit:maxSources});
@@ -29,7 +29,7 @@ export class Pipeline {
       const preferred=pending.bindings.filter(binding=>binding.key!==value.key).map(binding=>this.store.source(binding.key,principal));
       candidates=[...new Map([...preferred,...candidates].filter(item=>item.key!==value.key).map(item=>[item.key,item])).values()];
     }
-    for(const s of candidates){if(remaining<=0||result.length>=maxSources-(original?1:0))break;const text=s.text.slice(0,Math.min(12000,remaining));remaining-=text.length;result.unshift({key:s.key,revision:s.revision,text,actorId:s.actorId});}
+    for(const s of candidates){if(remaining<=0||result.length>=maxSources-(original?1:0))break;if(completeSources){check(s.text.length<=Math.min(12000,remaining),'SWARM_CONTEXT_LIMIT');remaining-=s.text.length;result.unshift(s);}else{const text=s.text.slice(0,Math.min(12000,remaining));remaining-=text.length;result.unshift({key:s.key,revision:s.revision,text,actorId:s.actorId});}}
     return original?[original,...result]:result;
   }
   async ingest(source,{execute=false,reply=false,analyze=true,onSourceCommitted=()=>{}}={}){
@@ -193,7 +193,7 @@ export class Pipeline {
     const authorize=async()=>{check(!controller.signal.aborted,'CANCELLED');const latest=await this.owner.task(id,actor);check(latest.revision===task.revision&&latest.state==='running','TASK_CHANGED');const source=this.store.source(task.source_key,actor);check(source.revision===task.source_revision,'SOURCE_CHANGED');await this.owner.assertContext(id,actor);await this.authorize(latest);};
     try{
       check(!controller.signal.aborted,'CANCELLED');
-      const source=this.store.source(task.source_key,actor);const context=[source,...this.context(source,actor)];const bindings=context.map(s=>({key:s.key,revision:s.revision}));await this.owner.bindContext(id,task.revision,bindings);active.sourceKeys=new Set(bindings.map(s=>s.key));
+      const source=this.store.source(task.source_key,actor);const options=task.action==='swarm_research'?{sourceLimit:9,completeSources:true}:{};const context=[source,...this.context(source,actor,null,options)];const bindings=context.map(s=>({key:s.key,revision:s.revision}));await this.owner.bindContext(id,task.revision,bindings);active.sourceKeys=new Set(bindings.map(s=>s.key));
       check(!controller.signal.aborted,'CANCELLED');
       const result=await this.worker.run({...task,contextSources:bindings},context,{signal:controller.signal,authorize,onStart:p=>this.store.event('worker.started',p,id)});
       await authorize();await this.owner.finish(id,task.revision,result);await this.onTask(await this.owner.task(id,actor));

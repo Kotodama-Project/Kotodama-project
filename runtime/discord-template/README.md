@@ -208,6 +208,8 @@ maxDailyTasksの既定は0（無効）、明示設定は1〜100です。UTCの�
 依頼・資料・受入条件・版を固定したowner入力をprivate実行領域へ置き、現在grant/設定/Sourceを
 再確認します。取消はowner入力を無効にしてから子process groupへ伝えます。終了や無効化を
 確認できなければuncertainとして自動再実行しません。会話の終了と仕事の取消は別です。
+swarmでは依頼のSourceと最大9件の既存履歴を選び、選んだSourceの全文とscope metadataを
+保持します。選択した資料が文字数/bytes予算を超えた場合は拒否し、途中で切り詰めません。
 
 全基準がpassedかつ独立reviewを確認した結果だけneeds_reviewへ戻し、既存resultで
 swarm-research.txtを取得できます。失敗・未検査はfailedとして、不足理由を保持します。

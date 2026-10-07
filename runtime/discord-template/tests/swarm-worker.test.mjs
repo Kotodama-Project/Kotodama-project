@@ -56,6 +56,23 @@ test('daily reservations live in the same owner and cannot be reused or renewed 
   assert.equal(f.store.statement('SELECT count(*) AS n FROM tasks').get().n,3);
 });
 
+test('Task context selects at most nine complete historical Sources and preserves scope metadata',async t=>{
+  const f=await fixture(t),seen=[];
+  for(let i=0;i<12;i++)f.store.ingest({...f.source('history-'+i),text:'historical source '+i,metadata:{kind:'voice',inputAccountId:actor,createdAt:new Date(1800000000000+i*1000).toISOString()}});
+  f.pipeline.worker={run:async(task,context)=>{seen.push({task,context});return {state:'needs_review',summary:'synthetic selector only',artifacts:[]};}};
+  const task=await f.pipeline.request(f.source(),{title:'fixture',request:'fixture',action:'swarm_research'});await f.pipeline.tail;
+  assert.equal(seen.length,1);assert.equal(seen[0].context.length,10);assert.equal(seen[0].task.contextSources.length,10);
+  assert(seen[0].context.slice(1).every(source=>source.metadata.kind==='voice'&&source.text===f.store.source(source.key,actor).text));
+  assert.equal(f.store.taskInternal(task.id).state,'needs_review');
+});
+
+test('Task context refuses an oversized selected Source before worker invocation instead of truncating it',async t=>{
+  const f=await fixture(t);f.store.ingest({...f.source('oversized-history'),text:'x'.repeat(12001)});
+  let called=false;f.pipeline.worker={run:async()=>{called=true;throw Error('must not call');}};
+  const task=await f.pipeline.request(f.source(),{title:'fixture',request:'fixture',action:'swarm_research'});await f.pipeline.tail;
+  assert.equal(called,false);assert.equal(f.store.taskInternal(task.id).state,'failed');assert(f.errors.includes('SWARM_CONTEXT_LIMIT'));
+});
+
 test('payload keeps exact Source versions and refuses silent truncation or incomplete bindings',()=>{
   const source={key:'a'.repeat(64),revision:1,text:'日本語😀資料'},task={id:'task-00000000-0000-4000-8000-000000000001',revision:1,source_key:source.key,source_revision:1,contextSources:[{key:source.key,revision:1}],request:'依頼',acceptance:['条件']};
   assert.equal(swarmPayload(task,[source]).sources[0].text,source.text);
