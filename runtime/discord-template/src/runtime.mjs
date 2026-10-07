@@ -7,6 +7,7 @@ import {loadConfig} from './config.mjs';
 import {Store} from './store.mjs';
 import {CliAnalyzer,ResponsesAnalyzer} from './llm.mjs';
 import {CliWorker,readArtifact} from './worker.mjs';
+import {ChannelWorkspaceWorker} from './channel-workspaces.mjs';
 import {AccessMonitor} from './access-grace.mjs';
 import {debugRequested,enableDebugLog,disableDebugLog} from './debug-log.mjs';
 import {Pipeline} from './pipeline.mjs';
@@ -41,7 +42,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   const stopDebug=()=>{if(debug)disableDebugLog();};
   let owner,claimed=false;
   try{owner=config.owner.kind==='remote'?new RemoteOwner(config.owner):store;const stale=store.lock();if(stale){check(Boolean(runtimeDomain)&&stale.domain===runtimeDomain,'RUNTIME_RECOVERY_DOMAIN_MISMATCH');check(!pidRunning(stale.pid),'RUNTIME_ALREADY_OWNED');store.replaceStaleHost(stale,ownerId,process.pid,startedAt,runtimeDomain);}else store.claimHost(ownerId,process.pid,startedAt,runtimeDomain??null);claimed=true;store.reconcileInterrupted();}catch(e){if(claimed)store.releaseHost(ownerId);store.close();stopDebug();throw e;}
-  let discord,voice,rotation,archive,archiveTimer,bridge,control,policyTimer,policyWork,dots,closing=false,closePromise,controlClosed,shutdownKeepAlive;
+  let discord,voice,rotation,archive,archiveTimer,bridge,control,policyTimer,policyWork,dots,channelWorker,closing=false,closePromise,controlClosed,shutdownKeepAlive;
   const controlOperations=new Set(),controlReads=new Set();
   const accessMonitor=new AccessMonitor();
   const stopControl=()=>{
@@ -54,7 +55,11 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   const authorize=async(task,purpose='execute',{monitor=false}={})=>{const c=await loadConfig(filename);check(!monitor||!closing,'RUNTIME_STOPPING');check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(discord&&!offline){const channels=[];for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.provider==='discord')channels.push(source.channelId);}const access=await discord.actorAccess(task.actor,channels,{cached:monitor});check(!monitor||!closing,'RUNTIME_STOPPING');check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
   const authorizeAnalysis=createAnalysisAuthorizer({readConfig:()=>loadConfig(filename),config,onPolicy:value=>{current=value;},voice:source=>voice?.forSource?voice.forSource(source):voice,discord:()=>discord,owner,offline});
   const selectedAnalyzer=analyzer??(config.analyzer.kind==='responses'?new ResponsesAnalyzer(config):new CliAnalyzer(config));
-  const pipeline=new Pipeline({store,owner,config,policy:()=>current,readPolicy:async()=>{current=await loadConfig(filename);return current;},analyzer:selectedAnalyzer,worker:worker??new CliWorker(config),authorize,authorizeAnalysis,onTask:async task=>{if(discord)await discord.deliver(task);},onTaskQueued:async(task,options)=>{if(discord)await discord.acknowledgeTask(task,options);},onReply:async reply=>{if(discord)await discord.reply(reply);},onVoiceAction:async action=>{if(discord)await discord.voiceAction(action);},onError:code=>log({event:'operation_failed',code})});
+  let selectedWorker;
+  try{selectedWorker=config.worker.channelWorkspaces?(channelWorker=new ChannelWorkspaceWorker({config,store,ownerId,policy:()=>current,workerFactory:scoped=>worker??new CliWorker(scoped)})):worker??new CliWorker(config);}
+  catch(error){if(owner.kind==='remote')await owner.close();store.releaseHost(ownerId);store.close();stopDebug();throw error;}
+  const workspaceAuthorize=async(task,purpose='execute',options)=>{await authorize(task,purpose,options);if(purpose==='execute')channelWorker?.scope(store.source(task.source_key,task.actor));};
+  const pipeline=new Pipeline({store,owner,config,policy:()=>current,readPolicy:async()=>{current=await loadConfig(filename);return current;},analyzer:selectedAnalyzer,worker:selectedWorker,authorize:workspaceAuthorize,authorizeAnalysis,onTask:async task=>{if(discord)await discord.deliver(task);},onTaskQueued:async(task,options)=>{if(discord)await discord.acknowledgeTask(task,options);},onReply:async reply=>{if(discord)await discord.reply(reply);},onVoiceAction:async action=>{if(discord)await discord.voiceAction(action);},onError:code=>log({event:'operation_failed',code})});
   try{
     if(config.dots.enabled){
       const refreshDotsPolicy=async source=>{
@@ -96,7 +101,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
       let scope;
       try{
         const auth=Buffer.from(String(req.headers.authorization??'')),expected=Buffer.from('Bearer '+secret);check(auth.length===expected.length&&timingSafeEqual(auth,expected),'UNAUTHORIZED');
-        if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status(),source});return;}
+        if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,...(channelWorker?{channelWorkspaces:channelWorker.status()}:{}),taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status(),source});return;}
         check(req.method==='POST'&&req.url==='/v1/command','ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');check(controlOperations.size<8,'CONTROL_BUSY');
         scope=deadlineScope(10000,'CONTROL_BODY_TIMEOUT');controlReads.add(scope);
         const body=await readHttpBody(req,{maxBytes:200000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});
@@ -150,7 +155,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         const kept=await accessMonitor.check(id,async()=>{
           check(!closing,'RUNTIME_STOPPING');const task=await owner.taskInternal(id);check(!closing,'RUNTIME_STOPPING');
           check(task.revision===run.revision&&task.state==='running','TASK_CHANGED');await owner.assertContext(id,task.actor);check(!closing,'RUNTIME_STOPPING');
-          await authorize(task,'execute',{monitor:true});
+          await workspaceAuthorize(task,'execute',{monitor:true});
         });
         if(!kept)run.controller.abort();else if(accessMonitor.grace.pending.has(id))log({event:'task_access',code:'ACCESS_UNAVAILABLE'});
       }));
@@ -174,7 +179,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     const stopped=stopControl();
     closePromise=(async()=>{
       // Keep the store and host lock if a dispatched import has an uncertain drain.
-      await bridge?.drain();await rotation?.close();await discord?.close();await archive?.close();await pipeline.close();
+      await bridge?.drain();await rotation?.close();await discord?.close();await archive?.close();await channelWorker?.close();await pipeline.close();
       await Promise.allSettled([...controlOperations]);await stopped;await accessMonitor.drain({pending:policyWork?[policyWork]:[]});if(owner.kind==='remote')await owner.close();
       store.releaseHost(ownerId);store.close();clearInterval(shutdownKeepAlive);log({event:'runtime_stopped',ownerId});stopDebug();
     })().catch(error=>{closePromise=null;if(errorCode(error).endsWith('_DRAIN_UNCERTAIN'))shutdownKeepAlive??=setInterval(()=>{},1000);throw error;});

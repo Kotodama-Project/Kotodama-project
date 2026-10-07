@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Discordの任意channel workspaceに最大30分のleaseと再開前のGit/candidate照合を追加。停止・不一致でもデータを保持し、Task ownerと既存Docker検証を維持する（#143）。
+
 - Discordの任意Bot poolで複数VCをroom別に管理し、満杯時のbusyと対象roomを指定した操作・同意を追加。単一VC互換を維持し、実VCの受入は別に記録する（#142）。
 - 知識の版pointerをproseの外でCAS更新するローカル参照ownerを追加。古いcandidate、版の差し替え、失効keyの付替えとrollbackを拒否し、実権限・出典bytes・配送の確認とは分ける（#53現在版owner）。
 
