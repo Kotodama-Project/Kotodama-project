@@ -123,6 +123,24 @@ host clock が deadline/TTL を計算します。UTC offset 付き時刻、finit
 
 `LOCAL_PASS` はローカル bytes と checks の証拠です。device、provider、public、Human の権限や結果を暗黙に上位へ昇格させません。今回の構成・静的 validation に `DEVICE_PASS`、`PROVIDER_PASS`、`PUBLIC_PASS`、`HUMAN_GO` は含まれません。
 
+### Task runner の取消部品（#160）
+
+`CodexBackend.invoke(..., cancel_event=threading.Event())` は、起動前・実行中・結果の
+保存前にownerの取消を照合します。stdinを読まない子へ長いpromptを送っている間も、
+timeoutと取消を監視します。観測したPID/作成時刻の子だけを停止し、終了を確認できなければ
+`stop_unconfirmed`（再試行不可）を返します。取消・終了不明のattemptにcompleted receiptを
+発行しません。これは直接起動した子の観測で、Task全体や子孫groupの停止完了を代替しません。
+
+POSIX用`ParentCancellation`は、専用のparent liveness pipeのEOF、SIGTERM、SIGINTを
+同じEventへ戻します。main threadに一つだけ所有させ、別のreaderに同じpipeを渡しません。
+scope終了時にhandlerを戻し、自分が複製したdescriptorだけを閉じます。Windowsでは
+このTask-runner部品を起動前に拒否します。
+
+この段階は取消部品です。Discord Task→swarmの入口は後続の接続で追加します。controllerは
+まず現在のowner bindingを無効化してclaim/report/acceptをfenceし、owned process groupの
+終了を観測してから既存Taskをcancelledへ進めます。不明ならuncertainのままにします。
+モデル・sandbox・grant・live利用枠・既定の実行経路は変更しません。
+
 ## typed return
 
 worker と verifier は、文章だけでなく次の形を返します。root は未観測の attempt/runtime/provenance を埋めるまで accepted と扱いません。

@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Task swarmのCodex attemptに取消Eventとstdin詰まり中の有限停止を追加。POSIXのparent pipe/停止signalを同じ取消へ渡す部品を用意し、終了不明を再試行可能な成功にしない（#160前半）。
+
 - Discordのlocal履歴を既存Session ledgerへ書き出す`ledger-export`と暗号化payload読戻しを追加。Source訂正と同一Taskの参照を保持し、実データ・鍵運用・自動保持削除は別の境界に残す（#153）。
 
 
