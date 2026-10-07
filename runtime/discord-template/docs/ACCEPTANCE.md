@@ -8,6 +8,12 @@
 
 実際に有効化する時期・参加者・利用量と自然な割り込み頻度の判断は #154 の人による受入です。合成モデル・SDKでの成功を実音声の受入にしません。
 
+## チャンネル別の作業場（#143）
+
+[作業場lease](CHANNEL-WORKSPACES.md)は実装済みです。一時Gitと合成CLIで、channel分離、
+期限切れ、変更/未push状態の再照合、終了不明時の拒否とデータ保持を検査します。
+directory分離をsandboxとは扱いません。実host/container/VMでの運用受入は未実施です。
+
 ## 複数roomとBot pool（#142）
 
 [Bot pool](VOICE-POOL.md)は実装済み・実VCは未受入です。同時room、満杯のbusy、二重join、

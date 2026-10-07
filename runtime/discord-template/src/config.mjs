@@ -37,6 +37,7 @@ export const Config = z.object({
   notifications:z.object({taskProgress:z.object({enabled:z.boolean().default(false),minIntervalSeconds:z.number().int().min(30).max(3600).default(30),maxUpdates:z.number().int().min(1).max(6).default(6)}).strict().prefault({}),quietHours:z.object({enabled:z.boolean().default(false),startHour:z.number().int().min(0).max(23).default(22),endHour:z.number().int().min(0).max(23).default(9),timeZone:z.string().min(1).max(100).refine(isTimeZone,{message:'TIME_ZONE_INVALID'}).default('Asia/Tokyo')}).strict().prefault({})}).strict().prefault({}),
   analyzer:analyzerConfig.prefault({kind:'codex_cli',executable:'codex',args:[],model:'gpt-5.6-luna',timeoutSeconds:120}),
   worker:command.extend({workspace:z.string(),actions:z.array(z.enum(WORKER_ACTIONS)).default([...DEFAULT_WORKER_ACTIONS]),
+    channelWorkspaces:z.object({channelIds:z.array(id).min(1).max(8),maxAgeSeconds:z.number().int().min(60).max(1800).default(1800),generation:z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/).default('initial')}).strict().optional(),
     verification:z.object({kind:z.literal('docker'),image:z.string().regex(immutableImage),executable:z.string().min(1).default('docker'),memoryMb:z.number().int().min(128).max(8192).default(512),cpus:z.number().min(0.1).max(8).default(1),pidsLimit:z.number().int().min(16).max(512).default(64)}).strict().optional(),
     verify:z.array(z.object({executable:z.string().min(1),args:z.array(z.string())}).strict()).default([]),maxArtifactBytes:z.number().int().min(1000).max(50000000).default(5000000)}).strict(),
   owner:z.discriminatedUnion('kind',[
@@ -52,6 +53,7 @@ export const Config = z.object({
 export async function loadConfig(filename) {
   const config=Config.parse(await readJson(filename));check(Boolean(config.archive?.enabled)===config.voice.storeAudio,'ARCHIVE_RECORDING_CONFIG_REQUIRED');if(config.archive?.enabled){check(config.voice.transcriptSource==='local'&&config.voice.consentMode==='owner_managed'&&config.agentBinding&&config.owner.kind==='local','ARCHIVE_BINDING_REQUIRED');const endpoint=new URL(config.archive.whisperEndpoint);check(['127.0.0.1','localhost',new URL(config.voice.localAsr.url).hostname].includes(endpoint.hostname),'ARCHIVE_ASR_HOST_MISMATCH');}
   check(!config.notifications.taskProgress.enabled||config.owner.kind==='local','QUIET_PROGRESS_LOCAL_OWNER_REQUIRED');
+  if(config.worker.channelWorkspaces)check(new Set(config.worker.channelWorkspaces.channelIds).size===config.worker.channelWorkspaces.channelIds.length,'CHANNEL_WORKSPACE_DUPLICATE_CHANNEL');
   if(config.voicePool){
     const channels=[config.discord.voiceChannelId,...config.voicePool.rooms.map(room=>room.channelId)].filter(Boolean);
     const applications=[config.discord.applicationId,...config.voicePool.bots.map(bot=>bot.applicationId)];

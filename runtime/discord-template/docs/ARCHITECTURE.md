@@ -4,6 +4,10 @@
 Sourceのguild/channelからVoiceRoomを選び、返答・操作・解析・同意を部屋へ束縛します。
 追加Botはvoice接続だけに使い、既存のTask ownerとSource履歴を共有します。
 
+[ChannelWorkspaceWorker](CHANNEL-WORKSPACES.md)は既存workerの前でchannelとTask Sourceを照合し、
+利用期限・base/candidate checkpoint・実行中処理を管理します。Task ownerを増やさず、
+書込みは従来のTask worktreeと固定Docker verifierへ渡します。directoryはsandboxではありません。
+
 `interaction-policy.mjs`は一つのintentをexecute / candidate / ignoreへ分類します。
 実行候補の全actionは既存のadmissionで現在のgrantを確認してからTaskへ進みます。
 不明話者、非operator、引用等の非明示候補、雑談はTaskの権限になりません。
