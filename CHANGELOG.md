@@ -9,6 +9,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - 検索・文脈評価の公開用合成corpusを16区分24ケースで固定し、本文・期待値・出典版の変更を検査する契約を追加。評価器は後続で接続する（#54前半）。
+- 知識の版pointerをproseの外でCAS更新するローカル参照ownerを追加。古いcandidate、版の差し替え、失効keyの付替えとrollbackを拒否し、実権限・出典bytes・配送の確認とは分ける（#53現在版owner）。
 
 - 出典・Concept・Context Packなどの逆引きと有限の影響計算を追加。必須依存、任意参照、失効・矛盾・循環を分け、削除前の依存も保持する。上限超過を完全な結果として扱わない（#53影響計算）。
 
