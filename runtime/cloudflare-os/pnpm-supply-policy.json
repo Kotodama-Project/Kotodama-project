@@ -1,0 +1,37 @@
+{
+  "kind": "kotodama/pnpm-supply-policy/v1",
+  "status": "CANDIDATE_TRUST_ACCEPTANCE_PENDING",
+  "package": "pnpm",
+  "version": "11.9.0",
+  "registry": "https://registry.npmjs.org/",
+  "tarball": "https://registry.npmjs.org/pnpm/-/pnpm-11.9.0.tgz",
+  "archive_sha512": "bd682d5d03fe525ef7c9fd6780c6884d1e756ac4c9c9fe00c538782824310dcf90e3ddc4f53835f06dfaebd5085e41855e0bcbb3b60de2ac5bbab89e5036f03b",
+  "archive_entries": 450,
+  "archive_unpacked_bytes": 18742792,
+  "registry_key_document_url": "https://registry.npmjs.org/-/npm/v1/keys",
+  "registry_key_document_sha256": "faf23d8753d5bb79df250f10391ac89b63ecf7743e48487a544a99c847f9c8df",
+  "registry_key_id": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+  "source_repository": "pnpm/pnpm",
+  "source_workflow": ".github/workflows/release.yml",
+  "source_ref": "refs/tags/v11.9.0",
+  "source_commit": "9671d9aeedb0039a114c2a2ff000170e51c61e3a",
+  "certificate_identity": "https://github.com/pnpm/pnpm/.github/workflows/release.yml@refs/tags/v11.9.0",
+  "certificate_issuer": "https://token.actions.githubusercontent.com",
+  "predicate_type": "https://slsa.dev/provenance/v1",
+  "verifier": {
+    "version": "2.96.0",
+    "release": "https://github.com/cli/cli/releases/tag/v2.96.0",
+    "binary_sha256": {
+      "windows-amd64": "cd79f16203f1fbe56937c4c96e2b6eadd10549418dcb241d91576ac77af0ac8b",
+      "linux-amd64": "56b8bbbb27b066ecb33dbef9a256dc9d1314adaeff0908a752feba6c34053b40"
+    },
+    "archive_sha256": {
+      "gh_2.96.0_windows_amd64.zip": "c2d6acc935cd2f00e2144d7e036d5cd82e6b6bd5594e8c75aa75ef2a4ed6aac3",
+      "gh_2.96.0_linux_amd64.tar.gz": "83d5c2ccad5498f58bf6368acb1ab32588cf43ab3a4b1c301bf36328b1c8bd60"
+    }
+  },
+  "trust_root_accepted": false,
+  "independent_approval": false,
+  "upstream_adopted": false,
+  "public_beta": "NO_GO_UNPUBLISHED"
+}

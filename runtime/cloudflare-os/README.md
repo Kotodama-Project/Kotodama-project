@@ -10,6 +10,36 @@ repository head is intentionally not substituted for that gitlink. The two
 revisions differ, so an upstream drift review is required before changing the
 baseline.
 
+## pnpm配布物の署名と公開元
+
+[`pnpm-supply-policy.json`](pnpm-supply-policy.json) はpnpm 11.9.0の固定archive、
+registry鍵文書、期待する `pnpm/pnpm` のrelease workflow／tag／source commitを
+束縛する候補policyです。registryの鍵IDは公開されたopaque IDとして使い、DERからの
+再導出を主張しません。鍵文書は公開registryから取得した観測であり、独立したtrust rootの
+採用判断は未実施です。
+
+Node 24とPython 3.12を信頼するローカル検証環境で、取得済みの公開入力を指定します。
+GH CLI 2.96.0は公式releaseのchecksumに照合したx64版（Windows／Linux）だけを
+policyのbinary hashで許容し、検証中はそのbytesを専用の一時ディレクトリへ固定します。
+
+```text
+python -B tools/verify_pnpm_supply.py --metadata <pnpm-11.9.0-registry.json> --keys <registry-keys.json> --archive <pnpm-11.9.0.tgz> --bundle <slsa-bundle.json> --gh-executable <verified-gh-binary> --node-executable <node24>
+python -B -m unittest tests.test_pnpm_supply_verifier -v
+```
+
+registryのECDSA P-256署名とartifact digestを照合し、GH CLIでSigstore/SLSA署名、
+期待する証明書identity／issuer／source ref・commit／github-hosted runnerを確認します。
+公開bundleはregistryのattestations応答からSLSA v1のbundleを一つ選んだJSONです。
+`--cert-identity` がworkflowとtagを含むため、相互排他的な `--signer-workflow` は併用しません。
+GH CLIの出力から証明書とsubjectをもう一度照合し、内容を含まないdigestと結果だけを返します。
+CLIは公開trust materialの取得に通信を使うことがあります。provider tokenやGitHub認証は
+引き継がず、proxy／CA設定とOS実行設定だけを渡します。archiveをinstall・実行しません。
+
+[`pnpm-supply-verification-2026-10-08.json`](pnpm-supply-verification-2026-10-08.json)
+は今回の実検証の観測です。元のlocal-runtime-evaluationは書き換えません。
+署名・identityの成功はpolicy trustの採用、独立reviewの受入、upstream採用、配備、Public Betaを
+意味しません。出力の該当gateはすべてfalseのままです（Issue #13）。
+
 Validate the source pin, content-free Gatekeeper projection contract, and saved
 local runtime evaluation receipt:
 
