@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import sys
 import textwrap
+import threading
+import time
 from types import SimpleNamespace
 import venv
 
@@ -32,6 +34,110 @@ SCHEMA = {
     "properties": {"job": {"type": "string"}, "answer": {"type": "string", "enum": ["ok"]}},
     "additionalProperties": False,
 }
+
+
+def test_precancelled_attempt_does_not_create_directory_or_child(tmp_path, monkeypatch):
+    cancelled = threading.Event()
+    cancelled.set()
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: pytest.fail("must not spawn"))
+    with pytest.raises(BackendError) as raised:
+        CodexBackend("not-invoked").invoke("fixture", SCHEMA, tmp_path / "attempt", cancel_event=cancelled)
+    assert raised.value.code == "cancelled" and raised.value.retryable is False
+    assert not (tmp_path / "attempt").exists()
+
+
+def test_invalid_cancellation_hook_is_rejected_before_work(tmp_path):
+    with pytest.raises(BackendError) as raised:
+        CodexBackend("not-invoked").invoke("fixture", SCHEMA, tmp_path / "attempt", cancel_event=lambda: True)
+    assert raised.value.code == "cancellation_invalid"
+    assert not (tmp_path / "attempt").exists()
+
+
+@pytest.mark.parametrize("during_input", [False, True])
+def test_owner_cancels_owned_child_even_when_it_never_reads_stdin(tmp_path, monkeypatch, during_input):
+    fake = _fake_codex(tmp_path)
+    monkeypatch.setenv("FAKE_MODE", "timeout")
+    cancelled = threading.Event()
+    timers = []
+    seen = []
+    def started(pid, created):
+        seen.append((pid, created))
+        if during_input:
+            timer = threading.Timer(.15, cancelled.set)
+            timer.start()
+            timers.append(timer)
+        else:
+            cancelled.set()
+    began = time.monotonic()
+    try:
+        with pytest.raises(BackendError) as raised:
+            CodexBackend(fake).invoke("x" * (2 * 1024 * 1024), SCHEMA, tmp_path / "attempt",
+                                      timeout=20, cancel_event=cancelled, on_process=started)
+        assert raised.value.code == "cancelled" and raised.value.retryable is False
+        assert time.monotonic() - began < 6
+        assert len(seen) == 1 and not codex._same_process(*seen[0])
+        assert not Path(raised.value.paths["receipt"]).exists()
+        diagnostics = json.loads(Path(raised.value.paths["diagnostics"]).read_text(encoding="utf-8"))
+        assert diagnostics["error_code"] == "cancelled"
+        assert diagnostics["cleanup"] in {"terminated", "already_exited", "killed_after_terminate_timeout"}
+        assert not list(Path(raised.value.paths["attempt_dir"]).glob("*.raw"))
+    finally:
+        for timer in timers:
+            timer.cancel()
+            timer.join()
+
+
+def test_timeout_is_observed_while_prompt_pipe_is_full(tmp_path, monkeypatch):
+    fake = _fake_codex(tmp_path)
+    monkeypatch.setenv("FAKE_MODE", "timeout")
+    began = time.monotonic()
+    with pytest.raises(BackendError) as raised:
+        CodexBackend(fake).invoke("x" * (2 * 1024 * 1024), SCHEMA, tmp_path / "attempt", timeout=.15)
+    assert raised.value.code == "timeout"
+    assert time.monotonic() - began < 6
+
+
+def test_unconfirmed_stop_is_nonretryable_and_never_claims_cancellation_complete(tmp_path, monkeypatch):
+    fake = _fake_codex(tmp_path)
+    monkeypatch.setenv("FAKE_MODE", "timeout")
+    cancelled = threading.Event()
+    seen = []
+    same_process = codex._same_process
+    def started(pid, created):
+        seen.append((pid, created))
+        cancelled.set()
+    monkeypatch.setattr(codex, "_same_process", lambda *args: False)
+    try:
+        with pytest.raises(BackendError) as raised:
+            CodexBackend(fake).invoke("fixture", SCHEMA, tmp_path / "attempt", timeout=5,
+                                      cancel_event=cancelled, on_process=started)
+        assert raised.value.code == "stop_unconfirmed" and raised.value.retryable is False
+        assert raised.value.diagnostics["cleanup"] == "identity_not_confirmed"
+        assert same_process(*seen[0])
+        assert not Path(raised.value.paths["receipt"]).exists()
+    finally:
+        # Restore real ownership checking before stopping only this test's child.
+        if seen and same_process(*seen[0]):
+            child = codex.psutil.Process(seen[0][0])
+            child.terminate()
+            child.wait(timeout=5)
+
+
+def test_cancellation_during_result_validation_never_publishes_completion(tmp_path, monkeypatch):
+    fake = _fake_codex(tmp_path)
+    monkeypatch.setenv("FIXTURE_SESSIONS", str(tmp_path / "sessions"))
+    cancelled = threading.Event()
+    validate = codex._validate_schema
+    def changed(*args, **kwargs):
+        value = validate(*args, **kwargs)
+        cancelled.set()
+        return value
+    monkeypatch.setattr(codex, "_validate_schema", changed)
+    with pytest.raises(BackendError) as raised:
+        CodexBackend(fake, session_root=tmp_path / "sessions").invoke(
+            "fixture", SCHEMA, tmp_path / "attempt", timeout=5, cancel_event=cancelled)
+    assert raised.value.code == "cancelled"
+    assert not Path(raised.value.paths["receipt"]).exists()
 
 
 def _fake_codex(tmp_path: Path) -> Path:

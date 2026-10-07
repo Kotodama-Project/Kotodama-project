@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
@@ -835,6 +836,7 @@ class CodexBackend:
         peer: Mapping[str, Any] | None = None,
         authorize_peer_writes: bool = False,
         on_process: Callable[[int, float], Any] | None = None,
+        cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
         if not isinstance(prompt, str):
             raise BackendError("prompt_invalid", "prompt must be text", retryable=False)
@@ -846,6 +848,12 @@ class CodexBackend:
             raise BackendError("timeout_invalid", "timeout is outside the bounded range", retryable=False)
         if not isinstance(authorize_peer_writes, bool):
             raise BackendError("peer_invalid", "authorize_peer_writes must be boolean", retryable=False)
+        if cancel_event is not None and not isinstance(cancel_event, threading.Event):
+            raise BackendError("cancellation_invalid", "cancel_event must be a threading Event", retryable=False)
+        def check_cancelled() -> None:
+            if cancel_event is not None and cancel_event.is_set():
+                raise BackendError("cancelled", "the attempt owner requested cancellation", retryable=False)
+        check_cancelled()
         schema_object = _load_schema(schema)
         run_dir = _prepare_attempt(attempt_dir)
         paths = _paths(run_dir)
@@ -869,6 +877,7 @@ class CodexBackend:
         created_at: float | None = None
         exit_code: int | None = None
         peer_cfg: dict[str, Any] | None = None
+        input_writer: threading.Thread | None = None
 
         try:
             _write_json(paths["schema"], schema_object)
@@ -891,6 +900,7 @@ class CodexBackend:
             # memory; the raw (unredacted) spools are removed in ``finally``.
             stdout_spool = open(run_dir / ".stdout.raw", "w+b")
             stderr_spool = open(run_dir / ".stderr.raw", "w+b")
+            check_cancelled()
             process = subprocess.Popen(
                 command,
                 cwd=str(run_dir),
@@ -929,19 +939,27 @@ class CodexBackend:
                     except (OSError, subprocess.TimeoutExpired):
                         pass
                     raise BackendError("process_callback", "process ownership callback failed", retryable=True) from exc
-            try:
-                process.stdin.write(prompt.encode("utf-8"))
-            except (BrokenPipeError, OSError):
-                pass  # the exit status and output decide the outcome
-            finally:
+            check_cancelled()
+            def feed_prompt() -> None:
                 try:
-                    process.stdin.close()
-                except OSError:
-                    pass
+                    process.stdin.write(prompt.encode("utf-8"))
+                except (BrokenPipeError, OSError, ValueError):
+                    pass  # the exit status and output decide the outcome
+                finally:
+                    try:
+                        process.stdin.close()
+                    except (OSError, ValueError):
+                        pass
+            # A child that never reads stdin must not hide cancellation/timeout
+            # behind a full pipe. Termination releases this owned writer.
+            input_writer = threading.Thread(target=feed_prompt, name="swarm-prompt-writer", daemon=True)
             deadline = time.monotonic() + timeout_value
+            input_writer.start()
             limit_code: str | None = None
             while process.poll() is None:
-                if time.monotonic() >= deadline:
+                if cancel_event is not None and cancel_event.is_set():
+                    limit_code = "cancelled"
+                elif time.monotonic() >= deadline:
                     limit_code = "timeout"
                 elif os.fstat(stdout_spool.fileno()).st_size > MAX_STDOUT_BYTES or os.fstat(stderr_spool.fileno()).st_size > MAX_STDERR_BYTES:
                     limit_code = "output_limit"
@@ -954,10 +972,16 @@ class CodexBackend:
                     stdout = _read_spool(stdout_spool, MAX_STDOUT_BYTES)
                     stderr = _read_spool(stderr_spool, MAX_STDERR_BYTES)
                     diagnostics.update({"status": limit_code, "cleanup": cleanup})
+                    if limit_code == "cancelled":
+                        raise BackendError("cancelled", "the attempt owner requested cancellation", retryable=False)
                     if limit_code == "timeout":
                         raise BackendError("timeout", "the Codex child exceeded timeout", retryable=True)
                     raise BackendError("output_limit", "the Codex child exceeded the output limit", retryable=False)
                 time.sleep(0.05)
+            check_cancelled()
+            input_writer.join(timeout=2.0)
+            if input_writer.is_alive():
+                raise BackendError("stdin_unconfirmed", "the input writer did not finish after child exit", retryable=False)
             stdout = _read_spool(stdout_spool, MAX_STDOUT_BYTES)
             stderr = _read_spool(stderr_spool, MAX_STDERR_BYTES)
             if os.fstat(stdout_spool.fileno()).st_size > MAX_STDOUT_BYTES or os.fstat(stderr_spool.fileno()).st_size > MAX_STDERR_BYTES:
@@ -1038,6 +1062,7 @@ class CodexBackend:
                 "peer_write_authorized": bool(authorize_peer_writes) if peer_cfg else False,
             }
             redacted_result = _redact(result)
+            check_cancelled()
             _write_json(paths["result"], redacted_result)
             # Materialize the redacted stream artifacts before returning so
             # the in-memory receipt and receipt.json carry the same digest
@@ -1047,14 +1072,20 @@ class CodexBackend:
             _atomic_write(paths["stderr"], _safe_text(stderr).encode("utf-8"))
             _scrub_last_message(paths["last_message"])
             receipt["artifact_digests"] = _artifact_digests(paths)
+            check_cancelled()
             _write_json(paths["receipt"], receipt)
             diagnostics.update({"status": "completed", "thread_id": thread_id, "turn_id": runtime["turn_id"], "finished_at": _utc_iso(finished)})
             return {"result": redacted_result, "receipt": _redact(receipt), "paths": _public_paths(paths)}
         except BackendError as exc:
+            if process is not None and pid is not None and created_at is not None and process.poll() is None:
+                diagnostics["cleanup"] = _terminate_owned(process, pid, created_at)
+            if process is not None and process.poll() is None:
+                exc = BackendError("stop_unconfirmed", "the owned child has not been observed stopped", retryable=False)
             exc.paths = _public_paths(paths)
             diagnostics["status"] = "failed"
+            diagnostics["error_code"] = exc.code
             exc.diagnostics = dict(diagnostics)
-            raise
+            raise exc
         except _RuntimeResolutionError as exc:
             diagnostics.update({"status": "failed", **exc.details})
             error = BackendError(
@@ -1076,6 +1107,16 @@ class CodexBackend:
             error.diagnostics = dict(diagnostics)
             raise error from exc
         finally:
+            if process is not None and pid is not None and created_at is not None and process.poll() is None:
+                diagnostics["cleanup"] = _terminate_owned(process, pid, created_at)
+            if input_writer is not None:
+                input_writer.join(timeout=2.0)
+                diagnostics["stdin_writer_finished"] = not input_writer.is_alive()
+            elif process is not None and process.stdin is not None:
+                try:
+                    process.stdin.close()
+                except (OSError, ValueError):
+                    pass
             for spool in (stdout_spool, stderr_spool):
                 if spool is not None:
                     try:
@@ -1118,6 +1159,7 @@ def invoke(
     peer: Mapping[str, Any] | None = None,
     authorize_peer_writes: bool = False,
     on_process: Callable[[int, float], Any] | None = None,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
     return CodexBackend(executable, session_root=session_root).invoke(
         prompt,
@@ -1129,6 +1171,7 @@ def invoke(
         peer=peer,
         authorize_peer_writes=authorize_peer_writes,
         on_process=on_process,
+        cancel_event=cancel_event,
     )
 
 

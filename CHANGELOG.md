@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Task swarmのCodex attemptに取消Eventとstdin詰まり中の有限停止を追加。POSIXのparent pipe/停止signalを同じ取消へ渡す部品を用意し、終了不明を再試行可能な成功にしない（#160前半）。
+
 - Company Pack executorにDiscord local ownerのSQLiteを読取専用で照合するbindingを追加。Task/Source/Intentの現在版と明示コマンドを束縛し、別Task台帳を作らず既存record方式を維持する（#152前半）。
 
 - Discordの訂正button/select/modalをlocal ownerのSource/Task履歴へ接続。古い版、二重送信、別人、権限変更、処理の終了不明を拒否し、元の依頼を保持する。実Discordは未受入（#151）。
