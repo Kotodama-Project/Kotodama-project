@@ -11,6 +11,10 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Discordのlocal履歴を既存Session ledgerへ書き出す`ledger-export`と暗号化payload読戻しを追加。Source訂正と同一Taskの参照を保持し、実データ・鍵運用・自動保持削除は別の境界に残す（#153）。
 
 
+- Discordの明示Company Pack接続と既存Taskへの成果readbackを、PROJECT-MAP/STATUS/導入説明へ反映。実Linux検証と実Discord未受入を区別する（#152）。
+
+- 明示CLI/slashのCompany Pack作成を既存local Task ownerへ接続。modelには選ばせず、Linux・固定Docker・専用出力rootで生成とhashを検査し、同じTaskの成果へ返す。実Discordは未受入（#152接続）。
+
 - Company Pack executorにDiscord local ownerのSQLiteを読取専用で照合するbindingを追加。Task/Source/Intentの現在版と明示コマンドを束縛し、別Task台帳を作らず既存record方式を維持する（#152前半）。
 
 - Discordの訂正button/select/modalをlocal ownerのSource/Task履歴へ接続。古い版、二重送信、別人、権限変更、処理の終了不明を拒否し、元の依頼を保持する。実Discordは未受入（#151）。

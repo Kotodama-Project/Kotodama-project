@@ -9,17 +9,17 @@ const sorted=value=>[...value].sort();
 const analysis=action=>({summary:'fixture',intents:[{kind:'request',title:'fixture',request:'fixture',action,explicit:true,complete:true,acceptance:[]}],replyRequested:false,reply:'',voiceAction:'none'});
 
 test('existing actions have a fixed immutable risk mapping and unchanged default grants',()=>{
-  assert.deepEqual(WORKER_ACTIONS,['research','summarize','write_file','develop']);
+  assert.deepEqual(WORKER_ACTIONS,['research','summarize','write_file','develop','create_company_pack']);
   assert.deepEqual(DEFAULT_WORKER_ACTIONS,['research','summarize']);
   assert.deepEqual(Config.parse(exampleConfig()).worker.actions,['research','summarize']);
-  for(const action of WORKER_ACTIONS){const write=['write_file','develop'].includes(action);assert.equal(ACTION_LANES[action].lane,write?'edit':'inspect');assert.equal(ACTION_LANES[action].riskClass,write?'reversible_change':'inspect');assert.equal(ACTION_LANES[action].defaultGranted,!write);assert(Object.isFrozen(ACTION_LANES[action]));}
+  for(const action of WORKER_ACTIONS){const write=['write_file','develop','create_company_pack'].includes(action);assert.equal(ACTION_LANES[action].lane,write?'edit':'inspect');assert.equal(ACTION_LANES[action].riskClass,write?'reversible_change':'inspect');assert.equal(ACTION_LANES[action].defaultGranted,!write);assert(Object.isFrozen(ACTION_LANES[action]));}
   assert.throws(()=>{ACTION_LANES.research.defaultGranted=false;},TypeError);
 });
-test('configuration analyzer and slash command share exactly the same action vocabulary',()=>{
+test('manual actions are configurable slash choices but stay outside analyzer vocabulary',()=>{
   const choices=commandDefinition.options.find(o=>o.name==='do').options.find(o=>o.name==='action').choices;
   assert.deepEqual(sorted(choices.map(c=>c.value)),sorted(WORKER_ACTIONS));
   assert.deepEqual(sorted(analysisSchema.properties.intents.items.properties.action.enum),sorted(INTENT_ACTIONS));
-  for(const action of WORKER_ACTIONS){const config=exampleConfig();config.worker.actions=[action];assert.equal(Config.safeParse(config).success,true);assert.equal(Analysis.safeParse(analysis(action)).success,true);}
+  for(const action of WORKER_ACTIONS){const config=exampleConfig();config.worker.actions=[action];assert.equal(Config.safeParse(config).success,true);assert.equal(Analysis.safeParse(analysis(action)).success,!ACTION_LANES[action].manualOnly);}
   assert.equal(Analysis.safeParse(analysis('none')).success,true);assert.equal(Object.hasOwn(ACTION_LANES,'none'),false);
 });
 test('privileged and unknown operations cannot be granted or emitted as runnable actions',()=>{
