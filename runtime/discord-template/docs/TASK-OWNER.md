@@ -34,3 +34,9 @@ Taskは `intentIds` と全構成操作の `requiredActions` を保持します�
 remote接続は同時8件、要求・応答それぞれ4,000,000 bytes、要求開始から応答本文の読取完了まで15秒に制限します。満杯では送信前に `OWNER_BUSY`、大きすぎる要求は `OWNER_REQUEST_LIMIT`、応答は `OWNER_RESPONSE_LIMIT` で拒否します。読取の期限超過は `OWNER_TIMEOUT` です。
 
 送信済みの書込が期限超過・停止・通信切断で中断された場合や、成功結果を検証できない場合は `OWNER_RESULT_UNCERTAIN` です。接続先での取消や未実行を証明するものではなく、自動再送・local ownerへのfallbackはしません。同じTask ID・source revisionと接続先の永続状態で結果を確認します。取消に応じない要求は実際に完了するまで枠を保持し、その間の同一書込payloadを `OWNER_WRITE_PENDING` で拒否します。停止は新規要求を拒否し、取消と最大15秒のdrainを行います。`OWNER_DRAIN_UNCERTAIN` の場合は既存のTask ownerとデータ領域の所有を保持し、未確定の処理を照合してください。
+
+## native UIからの訂正
+
+local ownerの`correctTask`は、Taskと現在Sourceの期待revisionを一つのSQLite transactionで照合します。既存`source.corrected`で関連Taskを無効化し、同じTask IDを`reviseTask`で更新します。このため無効化と再受付を通る場合はTask revisionが二段階進みます。原文は`source_versions`、訂正者・時刻・interactionと前の版はSource metadata、因果の参照は既存eventに保持します。
+
+actionとrequiredActionsは既存Taskから保持します。現在の操作者・閲覧範囲・実行grantを再確認し、別人、古いUI、関連する実行中/停止中/終了不明を拒否します。表示用のsnapshotもmodal送信直前に同期再読します。remote契約にこの原子的操作はまだ含めず、`TASK_CORRECTION_REQUIRES_LOCAL_OWNER`で書込み前に拒否します。

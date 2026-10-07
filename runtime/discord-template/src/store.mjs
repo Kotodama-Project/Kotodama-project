@@ -165,6 +165,26 @@ export class Store {
     });
   }
   taskInternal(id){const row=this.statement('SELECT * FROM tasks WHERE id=?').get(id);check(row,'TASK_NOT_FOUND');return {...JSON.parse(row.body),revision:row.revision,state:row.state,result:row.result?JSON.parse(row.result):null};}
+  correctionTarget(id,actor,{taskRevision=null,sourceRevision=null}={}){
+    const task=this.task(id,actor),source=this.source(task.source_key,actor);
+    check(source.provider==='discord'&&source.actorId===actor,'TASK_CORRECTION_SOURCE_REQUIRED');
+    check(['queued','needs_review','failed','paused','cancelled','stale'].includes(task.state),'TASK_CORRECTION_BUSY');
+    check(taskRevision===null||task.revision===taskRevision,'TASK_CHANGED');check(sourceRevision===null||source.revision===sourceRevision,'SOURCE_CHANGED');
+    const busy=this.statement("SELECT id FROM tasks WHERE state IN ('running','stopping','uncertain') AND (source_key=? OR id IN (SELECT task_id FROM task_source_bindings WHERE source_key=?)) LIMIT 1").get(source.key,source.key);
+    check(!busy,'TASK_CORRECTION_BUSY');return {task,source};
+  }
+  correctTask(id,actor,{taskRevision,sourceRevision,title,request,acceptance,interactionId,at}){
+    check(Number.isSafeInteger(taskRevision)&&taskRevision>0&&Number.isSafeInteger(sourceRevision)&&sourceRevision>=0,'CORRECTION_REVISION_REQUIRED');
+    check(typeof title==='string'&&title.trim()&&title.length<=120&&typeof request==='string'&&request.trim()&&request.length<=4000,'CORRECTION_TEXT_INVALID');
+    check(Array.isArray(acceptance)&&acceptance.length<=20&&acceptance.every(item=>typeof item==='string'&&item.trim()&&item.length<=1000),'CORRECTION_ACCEPTANCE_INVALID');
+    check(typeof interactionId==='string'&&/^\d{5,24}$/.test(interactionId)&&Number.isSafeInteger(at)&&at>=0,'CORRECTION_PROVENANCE_REQUIRED');
+    return this.transaction(()=>{
+      const {task,source}=this.correctionTarget(id,actor,{taskRevision,sourceRevision}),revision=Math.max(at,source.revision+1);check(Number.isSafeInteger(revision),'SOURCE_REVISION_REQUIRED');
+      const updated={...source,text:request,revision,metadata:{...source.metadata,transcriptCorrection:null,command:{title,request,action:task.action,acceptance},manualCorrection:{surface:'discord_native_ui',actor,interactionId,at:new Date(at).toISOString(),previousSourceRevision:source.revision,previousTaskRevision:task.revision,taskId:id}}};
+      this.ingest(updated);const intentIds=this.saveIntents(updated,[{kind:'request',title,request,action:task.action,acceptance,explicit:true,complete:true,targetTaskId:id,origin:'native_correction',contextSources:[{key:source.key,revision}]}],actor);
+      return this.reviseTask(id,updated,{title,request,action:task.action,acceptance,intentIds,requiredActions:task.requiredActions??[task.action],contextSources:[{key:source.key,revision}]});
+    });
+  }
   bindContext(id,revision,bindings){return this.transaction(()=>{const t=this.taskInternal(id);check(t.revision===revision&&t.state==='running','TASK_CHANGED');for(const b of bindings){const s=this.source(b.key,t.actor);check(s.revision===b.revision,'CONTEXT_CHANGED');}const body={...t,contextSources:bindings};delete body.result;delete body.state;delete body.revision;const r=this.statement("UPDATE tasks SET body=? WHERE id=? AND revision=? AND state='running'").run(JSON.stringify(body),id,revision);check(r.changes===1,'TASK_CHANGED');this.indexTaskBindings(id,bindings);this.indexesCurrent();this.event('task.context_bound',{bindings},id);});}
   assertContext(id,actor){const t=this.taskInternal(id);check(t.actor===actor,'TASK_ACCESS_DENIED');for(const b of t.contextSources??[]){const s=this.source(b.key,actor);check(s.revision===b.revision,'CONTEXT_CHANGED');}return true;}
   reviseTask(id,source,intent){return this.transaction(()=>{const old=this.task(id,source.actorId);check(old.room===`${source.provider}:${source.guildId}:${source.channelId}`,'TASK_ROOM_MISMATCH');const updated={...old,source_key:source.key,source_revision:source.revision,request:intent.request,title:intent.title,action:intent.action,intentIds:intent.intentIds??[],requiredActions:intent.requiredActions??[intent.action],acceptance:intent.acceptance??old.acceptance,contextSources:intent.contextSources??[]};delete updated.result;delete updated.state;delete updated.revision;const r=this.statement("UPDATE tasks SET source_key=?,source_revision=?,revision=revision+1,state='queued',body=?,result=NULL WHERE id=? AND revision=?").run(source.key,source.revision,JSON.stringify(updated),id,old.revision);check(r.changes===1,'TASK_CHANGED');this.indexTaskBindings(id,updated.contextSources);this.indexesCurrent();this.event('task.corrected',{previousSource:old.source_key,source:source.key,sourceRevision:source.revision,previousIntentIds:old.intentIds??[],intentIds:updated.intentIds},id);return this.task(id,source.actorId);});}

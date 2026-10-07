@@ -1,3 +1,4 @@
+import {NativeCorrections} from './native-corrections.mjs';
 import {Client,GatewayIntentBits,PermissionFlagsBits,ChannelType,MessageFlags} from 'discord.js';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -36,7 +37,7 @@ export function accessFailure(error){const status=error?.status;return Number.is
 
 export class DiscordAdapter {
   constructor({config,store,pipeline,dots,policy=()=>config,onError=()=>{}}){
-    Object.assign(this,{config,store,pipeline,dots,policy,onError});this.voice=null;this.verifiedInstallation=false;
+    Object.assign(this,{config,store,pipeline,dots,policy,onError});this.voice=null;this.verifiedInstallation=false;this.corrections=new NativeCorrections(this);
     this.notifications=store.db?new NotificationQueue(store.db,()=>this.policy().notifications?.quietHours,{onError}):null;
     this.progress=store.db?new QuietTaskProgress({store,policy:()=>this.policy(),deliver:(task,options)=>this.updateTaskProgress(task,options),onError}):null;
     this.client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent,GatewayIntentBits.GuildVoiceStates]});
@@ -183,24 +184,25 @@ export class DiscordAdapter {
   }
   interactionSource(i,text){return {provider:'discord',guildId:i.guildId,channelId:i.channelId,sourceId:i.id,actorId:i.user.id,readers:[i.user.id],revision:i.createdTimestamp,final:true,text,metadata:{kind:'command'}};}
   async interaction(i){
+    if(this.verifiedInstallation&&this.corrections.owns(i)){await this.corrections.handle(i);return;}
     if(this.verifiedInstallation&&i.isButton?.()&&i.customId.startsWith('kotodama-luma:')){await i.deferReply({flags:MessageFlags.Ephemeral});try{check(this.dots,'DOTS_DISABLED');const [,id,prefix]=i.customId.split(':');const draft=await this.dots.approve(id,prefix,i.user.id);await i.editReply({content:`この内容でのLuma操作を許可しました。5分以内の一回に限ります。\n${draft.id}`,allowedMentions:{parse:[]}});}catch(e){await i.editReply({content:`確認できませんでした：${errorCode(e)}`,allowedMentions:{parse:[]}});}return;}
     if(this.verifiedInstallation&&i.guildId===this.config.discord.guildId&&(i.isButton?.()&&i.customId.startsWith('kotodama-consent:')||i.isChatInputCommand()&&i.commandName==='kotodama'&&i.options.getSubcommand()==='consent')){await this.consentInteraction(i);return;}
     if(!this.verifiedInstallation||!i.isChatInputCommand()||i.commandName!=='kotodama'||i.guildId!==this.config.discord.guildId)return;
     await i.deferReply({flags:MessageFlags.Ephemeral});
-    try{this.operator(i.user.id);await this.member(i.user.id);const sub=i.options.getSubcommand();let text;
+    try{this.operator(i.user.id);await this.member(i.user.id);const sub=i.options.getSubcommand();let text,components=[];
       if(sub==='dots'){check(this.dots,'DOTS_DISABLED');const source=this.interactionSource(i,i.options.getString('text',true));const request=this.dots.enqueue(source);text=`Dotへの相談を受け付けました。返答はDMへ届けます。\nID: ${request.id}`;}
       else if(sub==='dots_stop'){check(this.dots,'DOTS_DISABLED');await this.dots.cancel(i.options.getString('request',true),i.user.id);text='この受付の返答・新しいイベント操作を止めました。Dotの別の作業は、ChatGPTのActivityで確認・停止してください。';}
       else if(sub==='luma_review'){check(this.dots&&this.policy().dots.actorId===i.user.id,'DOTS_ACTOR_REQUIRED');const id=i.options.getString('draft')??this.store.db.prepare("SELECT d.id FROM dot_event_drafts d JOIN dot_requests r ON r.id=d.request_id WHERE r.actor=? AND d.state IN ('needs_review','approved') ORDER BY d.rowid DESC LIMIT 1").get(i.user.id)?.id;check(id,'LUMA_DRAFT_NOT_FOUND');const draft=await this.dots.readDraft(id);check(['needs_review','approved'].includes(draft.state),'LUMA_OPERATION_ALREADY_STARTED');await i.editReply(this.dots.reviewMessage(draft));return;}
-      else if(sub==='do'){const request=i.options.getString('text',true),action=i.options.getString('action',true);const t=await this.pipeline.request(this.interactionSource(i,request),{title:request.slice(0,120),request,action});text=`受け付けました。\n${t.id}\n結果はこの仕事の「result」で確認できます。`;}
+      else if(sub==='do'){const request=i.options.getString('text',true),action=i.options.getString('action',true);const t=await this.pipeline.request(this.interactionSource(i,request),{title:request.slice(0,120),request,action});text=`受け付けました。\n${t.id}\n結果はこの仕事の「result」で確認できます。`;components=await this.corrections.buttons(t.id,i.user.id,t.revision);}
       else if(sub==='ask'){const source=this.interactionSource(i,i.options.getString('text',true));source.metadata.operation='ask';const receipt=await this.pipeline.ingest(source,{execute:false,reply:false});for(const b of receipt.contextSources??[]){const s=this.store.source(b.key,i.user.id);check(s.revision===b.revision,'CONTEXT_CHANGED');if(s.provider==='discord'){const channel=await this.client.channels.fetch(s.channelId);check(await this.canRead(channel,i.user.id),'SOURCE_ACCESS_DENIED');}}text=receipt.analysis==='deferred'?deferredAnalysisText(receipt.reason):receipt.answer??receipt.summary??'整理しました。';}
-      else if(sub==='tasks'){const visible=await this.pipeline.tasks(i.user.id);text=visible.slice(0,15).map(t=>`${t.id} · ${taskStateText(t.state)}\n${t.title}`).join('\n')||'読取可能な仕事はまだありません。';}
-      else if(sub==='result'){const result=await this.pipeline.result(i.options.getString('task',true),i.user.id);const files=await resultFiles(result,{artifactRoot:this.artifactRoot()});await i.editReply({content:shortText(result.summary),files,allowedMentions:{parse:[]}});return;}
+      else if(sub==='tasks'){const visible=await this.pipeline.tasks(i.user.id);text=visible.slice(0,15).map(t=>`${t.id} · ${taskStateText(t.state)}\n${t.title}`).join('\n')||'読取可能な仕事はまだありません。';components=await this.corrections.menu(visible,i.user.id);}
+      else if(sub==='result'){const result=await this.pipeline.result(i.options.getString('task',true),i.user.id);const files=await resultFiles(result,{artifactRoot:this.artifactRoot()});await i.editReply({content:shortText(result.summary),files,components:await this.corrections.buttons(i.options.getString('task',true),i.user.id,result.taskRevision),allowedMentions:{parse:[]}});return;}
       else if(sub==='stop'){await this.pipeline.stop(i.options.getString('task',true),i.user.id);text='停止を受け付けました。実行中の処理の終了を確認しています。';}
       else if(sub==='resume'){const t=await this.pipeline.resume(i.options.getString('task',true),i.user.id);text=`再開しました。${t.id}`;}
       else if(sub==='voice'){check(this.voice,'VOICE_NOT_CONFIGURED');const mode=i.options.getString('mode',true);
         text=voiceStatusText(await voiceCommand(this.voice,mode,{actor:i.user.id,channelId:i.options.getChannel?.('channel')?.id}));
       }
-      await i.editReply({content:shortText(text),allowedMentions:{parse:[]}});
+      await i.editReply({content:shortText(text),components,allowedMentions:{parse:[]}});
     }catch(e){await i.editReply({content:`実行できませんでした：${errorCode(e)}`,allowedMentions:{parse:[]}});}
   }
   async consentInteraction(i){
