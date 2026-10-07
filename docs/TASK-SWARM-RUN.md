@@ -1,8 +1,8 @@
 # 既存Taskに束縛するswarm run（実装中）
 
 #160の採用判断と#286の実装を、既存local Task ownerへ接続するための契約です。
-この段階は純粋な入力・出力検査で、Task、grant、processを作成しません。
-実行入口・Discord接続・実利用の受入は後続です。
+入力・出力契約に加え、既存ownerへ束縛したPOSIXのtask-run入口を備えます。
+Taskとgrantは作成・変更しません。Discord接続と実利用の受入は後続です。
 
 ## Task入力と固定plan
 
@@ -34,13 +34,53 @@ passedには証拠が必要で、C4は3報告すべてを参照します。未�
 残します。古い報告のreview、条件抜け、重複、無いclaimへの参照は拒否します。
 
 C1は依頼への回答、C2は主張の根拠、C3は推測と事実の区別、C4は3報告の食い違いの明示です。
-validatorはverifierの身元や独立した実行を証明しません。後続controllerが別の実行receipt、
+validatorはverifierの身元や独立した実行を証明しません。controllerが別の実行receipt、
 current binding、全criteria passed、各jobの受入を照合して初めて同じTaskへneeds_reviewを
 返します。構造が正しいだけ、報告件数だけ、quiescentだけでTask完了にしません。
+
+## POSIX Task runner
+
+runtime側ownerがprivateなowner JSONと入力JSONを用意します。owner JSONは既存
+OwnerFile形式（Task binding、actors、source_checks、storage、allowed_actions）です。
+active_homeとstorage.rootは同じ既存directoryにし、actorはworker-facts、
+worker-counterpoints、worker-options、verifierを指定します。owner_refをworkerと同じに
+しません。Task入力のbytesをsource_checksへ固定します。これらの参照は実際のTask/grantを
+代替しません。runtimeは本人と現在権限を先に検査し、取消時にはbindingを無効化します。
+
+    python tools/task_swarm.py task-run --owner PRIVATE_OWNER_JSON --input PRIVATE_TASK_INPUT --backend codex --codex-executable CODEX_EXECUTABLE --allow-codex
+
+親は専用のstdin pipeを生存中だけ開いておき、取消時に閉じます。通常の対話terminalのstdinや
+既に閉じたpipeを生存証拠にしません。SIGTERM/SIGINT/pipe EOFと現在ownerの変化は
+cancel_eventへ返します。WindowsのTask-run CLIは実行前に拒否します。
+
+3 workerを最大同時3件で実行し、それぞれ別の報告を保存・読戻し、別invocationのverifierへ
+渡します。固定モデルはgpt-5.6-luna/max、sandboxはread-only、子agentは無効です。
+CodexBackendが実process→thread→completed rollout→出力を照合し、controllerは4つの
+異なるthread IDを要求します。verifierは報告の書き手になりません。
+
+同じTask ID/revisionのrun directoryは一度だけ作り、入力・plan・報告・review・結果の
+exact bytesをreceiptへ束縛します。各acceptの前とfinal receiptの前に再読します。
+同一入力・現在bindingでの再実行は読み戻すだけです。未完directoryは復旧確認が必要として
+拒否し、processを増やしたり既存候補を上書きしたりしません。
+
+stdoutはstate/run ID/合成かどうか/duplicateだけを返します。実本文はprivateな結果JSONに
+残ります。全criteriaがpassedの時だけjobをownerとしてacceptし、結果はneeds_reviewです。
+一つでもfailed/blocked/not_runならfailedで、Taskの完了やHuman GOを宣言しません。
+Taskのfinishと依頼者への返却はNode接続側が担当します。
+
+### 合成backend
+
+    python tools/task_swarm.py task-run --owner SYNTHETIC_OWNER_JSON --input SYNTHETIC_TASK_INPUT --backend synthetic --allow-local-fixture
+
+合成backendは保存・引用・review構造を試す決定的fixtureです。モデルを呼ばず、
+synthetic=true、model_runtime_verified=falseを返します。4つの論理roleを分けた試験であり、
+実モデルの独立受入に数えません。allow-local-fixtureを必須にし、通常のCodex実行へ
+黙って切り替わりません。
 
 ## 残る接続
 
 入力契約の合成試験は、Source改変・古い版・別Task・期限・権限参照・上限・証拠位置・
-古いreview・条件抜けを検査します。worker/model dispatch、parent pipe、ownerによる
-停止fence、結果file読戻しは次のrunnerへ接続します。モデルは採用済みgpt-5.6-luna/max、
-read-onlyを維持し、日次枠の既定は0、live利用枠・有効化・本人ログインは別のowner判断です。
+古いreview・条件抜けを検査します。owner取消・未完run・artifact改変・同じreviewer identity
+による受入を拒否する合成runner試験もあります。Discordの実Task/grantからowner入力を
+作る接続、日次枠、Task取消とprocess groupの終了確認、依頼者への結果返却は後続です。
+日次枠の既定は0、live利用枠・有効化・本人ログインは別のowner判断です。
