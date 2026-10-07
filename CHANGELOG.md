@@ -8,6 +8,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Discordの自発参加を既定無効で追加。短い手がかり判定と固定の申し出、永続の頻度制限、断り後の沈黙、出力専用Liveを備え、Taskは明示依頼後に扱う。実VCは未受入（#150）。
 - 固定corpusにexact/lexical/日本語ngram/BM25/型付きgraphの基準線と採点・候補manifest・再計算attesterを接続。漏えいと出典改変を平均で隠さず拒否し、合成成果と実Task成果を区別する（#54評価器）。
 
 - 検索・文脈評価の公開用合成corpusを16区分24ケースで固定し、本文・期待値・出典版の変更を検査する契約を追加。評価器は後続で接続する（#54前半）。
