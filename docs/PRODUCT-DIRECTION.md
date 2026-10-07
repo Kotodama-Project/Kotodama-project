@@ -22,7 +22,7 @@ Kotodamaは一つの製品です。公開のKotodama-projectを、製品統合�
 
 Markdownだけへ固定せず、各surfaceのnative componentsで選択肢、補足入力、進捗、成果、根拠を読みやすく示します。固定wizardやcomponentの詰め込み、工程ごとの再承認を増やしません。自由文・音声・button・select・modalによる訂正を同じ履歴へ戻すことが目標です。このUI全体はmainで完成した機能ではありません。
 
-voice agentはまず静かに場と許可contextを理解し、役立つ場合はagentと分かる自己紹介で自発参加できる方向です。現行候補は呼びかけ中心で、自発参加は未実装・未受入です。聞く／話す／記録／仕事実行と、発話停止／会話終了／仕事取消を分けます。
+voice agentはまず静かに場と許可contextを理解し、役立つ場合はagentと分かる自己紹介で自発参加できる方向です。現行候補は呼びかけ中心で、自発参加は既定無効で実装済み・実VCは未受入です。短い手がかりから固定の申し出だけを話し、仕事は明示依頼後に限ります。聞く／話す／記録／仕事実行と、発話停止／会話終了／仕事取消を分けます。
 
 専門agentは必要な役割への限定委任、統合、独立検証として使います。基盤modelの訓練や無制限増殖を意味しません。会話や資料を毎回丸ごと送り直すことを避け、許可された必要context、実token使用量、Live時間、再試行も受入で確認します。
 
@@ -51,7 +51,8 @@ localとcloudの双方を認めます。Tailscaleはprivate接続の強い候補
 | room別Live／workspace | goal | 複数VCの同時運用は[#142](https://github.com/Kotodama-Project/Kotodama-project/issues/142)、チャンネル別の作業場は[#143](https://github.com/Kotodama-Project/Kotodama-project/issues/143)でNode runtimeへ移す（#69の別runtimeは取り込まない、2026-09-24 owner判断）。Source/Task/mediaの実接続は未受入 |
 | 静音Liveと会話制御 | goal | [GPT-Liveの採用方針](GPT-LIVE-ADOPTION.md)（#71の方針文書をNode runtimeに合わせて取り込み）。静かな進捗は[#144](https://github.com/Kotodama-Project/Kotodama-project/issues/144)、確認の方針は[#145](https://github.com/Kotodama-Project/Kotodama-project/issues/145)。継続発話、退出と仕事の分離をNode runtimeで検証する |
 | Slack／Salesforce | unconnected | #70／#77。公開mainで接続済みとはしない |
-| 自発参加／native UI統合 | goal | 個別候補があっても、同じ実会話での統合受入は未達 |
+| 自発参加 | main | 既定無効の固定自己紹介・頻度制限・断り後の沈黙を実装。実VCは未受入 |
+| native UI統合 | goal | 同じ実会話での統合受入は未達 |
 | object情報からCRM体験を構成 | hypothesis | 対象用途・権限・同期方向・人向け表示の実証が必要 |
 
 各PRのチェック・レビューはheadに束縛された観測です。他候補のレビューなしを承認済みと扱いません。[プロジェクト地図](PROJECT-MAP.md)と[現在の公開境界](../STATUS.md)から既存実装へ進めます。
