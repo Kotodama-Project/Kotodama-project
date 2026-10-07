@@ -307,3 +307,6 @@ deprecated、revoked、conflicted、unknownを配送候補へ入れず、リン�
 source/context pinと16KiB上限を確認し、`runCodexBrief`は実行器へ渡す最終UTF-8 stdinと
 schemaのdigestを開始・完了に束縛します。訂正前のpinは再利用できません。
 実プロセスとの境界は合成executorで検証し、実modelやproviderの受入とは区別します。
+
+検索方式は[固定corpusの評価](FROZEN-CONTEXT-EVALUATION.md)でexact/lexical/graph基準線と比較します。
+期待値の版・禁止情報・必須制約を固定し、実Task成果や実grantを合成成功から推測しません。
