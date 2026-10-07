@@ -1,0 +1,84 @@
+{
+  "kind": "kotodama.knowledge-lineage",
+  "schema_revision": "v1",
+  "authority": "projection_only",
+  "contains_content": false,
+  "sources": [
+    {
+      "source_id": "ref/source/alpha",
+      "revision_ref": "ref/source-revision/alpha-one",
+      "revision_kind": "content_digest",
+      "revision_value": "5424073a96f9f8a575231c720bdb3efa7f6d44f8e4ec63f480d1102c41750db8",
+      "content_sha256": "5424073a96f9f8a575231c720bdb3efa7f6d44f8e4ec63f480d1102c41750db8",
+      "observed_at": "2026-10-01T00:00:00Z",
+      "observer_ref": "ref/invocation/observation",
+      "authority_scope_ref": "ref/scope/synthetic",
+      "custodian_ref": "ref/actor/source-owner",
+      "access_policy_ref": "ref/policy/public-fixture",
+      "access_state": "allowed",
+      "retention_ref": "ref/retention/fixture",
+      "legal_hold_ref": null,
+      "invalidation_key": "ref/invalidation/alpha",
+      "locator_visibility": "public",
+      "locator": "docs/synthetic-source.md",
+      "span": {
+        "kind": "lines",
+        "start": 1,
+        "end": 1
+      }
+    }
+  ],
+  "concepts": [
+    {
+      "concept_id": "synthetic/example",
+      "revision_ref": "ref/concept-revision/example-one",
+      "parent_revision_ref": null,
+      "content_sha256": "f77f4606d53fc3bd005f48b48605cb1d970eb626c31dd7257a914cd8c445fbaa",
+      "source_set_sha256": "e2e30e23e4f9aabe2407c42209e5a3a4d217d864b2160b78ffc900f4e2a6786d",
+      "source_revision_refs": [
+        "ref/source-revision/alpha-one"
+      ],
+      "generator_invocation_ref": "ref/invocation/authoring",
+      "policy_revision_refs": [
+        "ref/policy-revision/one"
+      ],
+      "intent_revision_refs": [
+        "ref/intent-revision/one"
+      ],
+      "status": "candidate"
+    }
+  ],
+  "relations": [
+    {
+      "from_revision_ref": "ref/concept-revision/example-one",
+      "predicate": "derived_from",
+      "target_kind": "source",
+      "target_id": "ref/source/alpha",
+      "target_revision_ref": "ref/source-revision/alpha-one",
+      "required": true,
+      "validity": "current",
+      "resolution": "resolved",
+      "evidence_ref": "ref/evidence/source-check"
+    }
+  ],
+  "projections": [
+    {
+      "projection_ref": "ref/projection/context-one",
+      "kind": "context_pack",
+      "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "concept_revision_refs": [
+        "ref/concept-revision/example-one"
+      ],
+      "source_revision_refs": [
+        "ref/source-revision/alpha-one"
+      ],
+      "goal_refs": [
+        "OUT-INTENT"
+      ],
+      "kgi_refs": [
+        "KGI-INTENT"
+      ],
+      "initiative_refs": []
+    }
+  ]
+}
