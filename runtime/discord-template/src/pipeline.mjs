@@ -165,6 +165,7 @@ export class Pipeline {
     check(current.worker.workspace===this.config.worker.workspace&&current.owner.kind===this.config.owner.kind,'WORKSPACE_BINDING_CHANGED');
     const granted=new Set(current.worker.actions);
     for(const action of actions)check(granted.has(action),'ACTION_NOT_ALLOWED');
+    if(actions.includes('create_company_pack'))check(current.owner.kind==='local'&&this.owner===this.store,'COMPANY_PACK_LOCAL_OWNER_REQUIRED');
   }
   async #discardAdmission(staged,error){
     let uncertain=errorCode(error)==='OWNER_RESULT_UNCERTAIN';

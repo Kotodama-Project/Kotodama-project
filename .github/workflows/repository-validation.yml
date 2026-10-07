@@ -32,6 +32,12 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Set up Company Pack Python runtime
+        id: company_pack_python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+          check-latest: false
       - name: Check tracked credential hygiene before dependencies
         working-directory: .
         run: python -S -B tools/check_tracked_secret_hygiene.py
@@ -67,6 +73,8 @@ jobs:
           image="$(docker image inspect --format '{{.Id}}' "$fixture")"
           printf 'KOTODAMA_TEST_VERIFIER_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
       - run: pnpm test
+        env:
+          KOTODAMA_TEST_PYTHON: ${{ steps.company_pack_python.outputs.python-path }}
       - run: pnpm check
   swarm:
     uses: ./.github/workflows/task-swarm.yml
