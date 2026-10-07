@@ -1,3 +1,4 @@
+import {ProactiveCue,proactiveCueSchema,proactiveInstructions,proactiveInput} from './proactive.mjs';
 import {correctionSchema,correctionInstructions,correctionCandidate} from './transcript-correction.mjs';
 import path from 'node:path';
 import {mkdir,writeFile} from 'node:fs/promises';
@@ -63,6 +64,11 @@ export class CliAnalyzer {
   }
 }
 export class ResponsesAnalyzer {
+  async proactiveCue(text,context,{signal}={}){
+    check(!signal?.aborted,'CANCELLED');const adapter=this.config.analyzer;
+    const response=await this.client.responses.create({model:adapter.model,store:false,instructions:proactiveInstructions,input:proactiveInput(text,context),max_output_tokens:256,reasoning:{effort:'low'},text:{format:{type:'json_schema',name:'proactive_cue',strict:true,schema:proactiveCueSchema}}},{signal,timeout:10000,maxRetries:0});
+    check(!signal?.aborted&&response?.status==='completed','PROACTIVE_CUE_FAILED');return ProactiveCue.parse(parseModelJson(response.output_text));
+  }
   async correctTranscript(raw,context,vocabulary){
     const adapter=this.config.analyzer;
     const response=await this.client.responses.create({model:adapter.model,store:false,instructions:correctionInstructions,input:JSON.stringify({raw,context:context.slice(-3).map(s=>({text:s.text.slice(0,600)})),vocabulary}),max_output_tokens:500,reasoning:{effort:'low'},text:{format:{type:'json_schema',name:'transcript_correction',strict:true,schema:correctionSchema}}});

@@ -32,3 +32,10 @@ test('a consenting non-operator can contribute intent but cannot start a Task',a
   t.after(async()=>{await p.close();store.close();await rm(dir,{recursive:true,force:true});});
   await p.ingest(source,{execute:true});assert.equal(calls,1);assert.equal(store.listIntents(participant).length,1);assert.equal(store.tasks(participant).length,0);
 });
+
+test('batch permission probes are local to one refresh and retain every remote source check',async()=>{
+  let probes=0,remoteReads=0,allow=true;const cfg={...config,owner:{kind:'remote'}},other={...source,key:'second-source'};
+  const authorize=createAnalysisAuthorizer({config:cfg,readConfig:async()=>cfg,voice:()=>({allowed:()=>true}),discord:()=>({client:{channels:{fetch:async()=>({})}},canRead:async()=>{probes++;return allow;}}),owner:{kind:'remote',source:async()=>{remoteReads++;return {revision:1};}}});
+  await authorize.batch([source,other],[participant]);assert.equal(probes,1);assert.equal(remoteReads,2);
+  allow=false;await assert.rejects(authorize.batch([source,other],[participant]),{code:'SOURCE_ACCESS_DENIED'});assert.equal(probes,2);assert.equal(remoteReads,2);
+});
