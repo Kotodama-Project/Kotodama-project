@@ -29,7 +29,7 @@ Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なと�
 
 後続作業は、PRの本文だけでなく現在のhead/base、差分、レビュー、必須CIを確認して選びます。古いSHAや承認待ちの記述を、現在の停止条件として使い回しません。
 
-mainには、[#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43)由来の[ローカル確認・訂正Gateway](../runtime/local-review-gateway/README.md)と[既存Taskに束縛したCompany Pack作成](COMPANY-PACK-TASK-EXECUTION.md)、Discordから使う[最小構成](DISCORD-RUNTIME.md)（`runtime/discord-template`）も含まれます。三つは限定された別の実行経路であり、会話からTaskを自動作成・実行するconnectorはまだ接続されていません。
+mainには、[#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43)由来の[ローカル確認・訂正Gateway](../runtime/local-review-gateway/README.md)と[既存Taskに束縛したCompany Pack作成](COMPANY-PACK-TASK-EXECUTION.md)、Discordから使う[最小構成](DISCORD-RUNTIME.md)（`runtime/discord-template`）も含まれます。Discordの明示`create_company_pack`は、local ownerの同じTaskへPython生成・隔離検証・成果readbackを接続しています。既定無効でLinux限定、自然会話のanalyzerからは選びません。確認Gateway、組織remote owner、実Discord/Human受入は別の境界です。
 
 | 系統 | 次に確認する候補 | 判断の要点 |
 |---|---|---|
