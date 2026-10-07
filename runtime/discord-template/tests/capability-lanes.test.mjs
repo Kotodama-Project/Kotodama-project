@@ -9,10 +9,10 @@ const sorted=value=>[...value].sort();
 const analysis=action=>({summary:'fixture',intents:[{kind:'request',title:'fixture',request:'fixture',action,explicit:true,complete:true,acceptance:[]}],replyRequested:false,reply:'',voiceAction:'none'});
 
 test('existing actions have a fixed immutable risk mapping and unchanged default grants',()=>{
-  assert.deepEqual(WORKER_ACTIONS,['research','summarize','write_file','develop','create_company_pack']);
+  assert.deepEqual(WORKER_ACTIONS,['research','summarize','write_file','develop','create_company_pack','swarm_research']);
   assert.deepEqual(DEFAULT_WORKER_ACTIONS,['research','summarize']);
   assert.deepEqual(Config.parse(exampleConfig()).worker.actions,['research','summarize']);
-  for(const action of WORKER_ACTIONS){const write=['write_file','develop','create_company_pack'].includes(action);assert.equal(ACTION_LANES[action].lane,write?'edit':'inspect');assert.equal(ACTION_LANES[action].riskClass,write?'reversible_change':'inspect');assert.equal(ACTION_LANES[action].defaultGranted,!write);assert(Object.isFrozen(ACTION_LANES[action]));}
+  for(const action of WORKER_ACTIONS){const write=['write_file','develop','create_company_pack'].includes(action);assert.equal(ACTION_LANES[action].lane,write?'edit':'inspect');assert.equal(ACTION_LANES[action].riskClass,write?'reversible_change':'inspect');assert.equal(ACTION_LANES[action].defaultGranted,!write&&action!=='swarm_research');assert(Object.isFrozen(ACTION_LANES[action]));}
   assert.throws(()=>{ACTION_LANES.research.defaultGranted=false;},TypeError);
 });
 test('manual actions are configurable slash choices but stay outside analyzer vocabulary',()=>{

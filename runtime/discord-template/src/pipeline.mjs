@@ -166,6 +166,12 @@ export class Pipeline {
     const granted=new Set(current.worker.actions);
     for(const action of actions)check(granted.has(action),'ACTION_NOT_ALLOWED');
     if(actions.includes('create_company_pack'))check(current.owner.kind==='local'&&this.owner===this.store,'COMPANY_PACK_LOCAL_OWNER_REQUIRED');
+    if(actions.includes('swarm_research')){
+      check(current.owner.kind==='local'&&this.owner===this.store,'SWARM_LOCAL_OWNER_REQUIRED');
+      check(source.metadata?.kind==='command','SWARM_REQUIRES_SLASH_COMMAND');
+      check(current.worker.swarm&&current.worker.swarm.maxDailyTasks>0,'SWARM_BUDGET_REQUIRED');
+      check(Date.parse(current.worker.swarm.authorityExpiresAt)>Date.now(),'SWARM_AUTHORITY_EXPIRED');
+    }
   }
   async #discardAdmission(staged,error){
     let uncertain=errorCode(error)==='OWNER_RESULT_UNCERTAIN';
@@ -191,7 +197,7 @@ export class Pipeline {
       await authorize();await this.owner.finish(id,task.revision,result);await this.onTask(await this.owner.task(id,actor));
     }catch(e){
       const current=await this.owner.taskInternal(id);if(current.state==='stopping')try{await this.owner.confirmStop(id,actor,errorCode(e)==='CANCELLED');}catch{}
-      else if(current.state==='running')try{await this.owner.finish(id,task.revision,{state:errorCode(e)==='STOP_UNCONFIRMED'?'uncertain':'failed',summary:errorCode(e),artifacts:[]});}catch{}
+      else if(current.state==='running')try{await this.owner.finish(id,task.revision,{state:errorCode(e)==='STOP_UNCONFIRMED'?'uncertain':'failed',summary:errorCode(e),artifacts:[]});await this.onTask(await this.owner.task(id,actor));}catch{}
       this.onError(errorCode(e));
     }finally{this.active.delete(id);}
   }

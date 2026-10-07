@@ -20,6 +20,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS deliveries(key TEXT PRIMARY KEY, digest TEXT NOT NULL, state TEXT NOT NULL, message_id TEXT);
       CREATE TABLE IF NOT EXISTS usage(day TEXT PRIMARY KEY, reserved_ms INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS analysis_usage(day TEXT PRIMARY KEY, reserved INTEGER NOT NULL CHECK(reserved>=0));
+      CREATE TABLE IF NOT EXISTS swarm_reservations(task_id TEXT NOT NULL,revision INTEGER NOT NULL,day TEXT NOT NULL,PRIMARY KEY(task_id,revision));
       CREATE TABLE IF NOT EXISTS voice_controls(guild TEXT NOT NULL,channel TEXT NOT NULL,suspension TEXT,PRIMARY KEY(guild,channel));
       CREATE TABLE IF NOT EXISTS voice_consents(guild TEXT NOT NULL,channel TEXT NOT NULL,actor TEXT NOT NULL,notice TEXT NOT NULL,granted INTEGER NOT NULL,updated TEXT NOT NULL,PRIMARY KEY(guild,channel,actor));
       CREATE TABLE IF NOT EXISTS host_lock(name TEXT PRIMARY KEY, owner TEXT NOT NULL, pid INTEGER NOT NULL, created TEXT NOT NULL, domain TEXT);
@@ -239,6 +240,16 @@ export class Store {
       check(used<limits.maxDailyAnalyses,'ANALYSIS_BUDGET_EXHAUSTED');check(total<limits.maxTotalAnalyses,'ANALYSIS_TOTAL_BUDGET_EXHAUSTED');
       this.statement('INSERT INTO analysis_usage VALUES(?,?) ON CONFLICT(day) DO UPDATE SET reserved=excluded.reserved').run(day,used+1);
       return {day,reserved:used+1,total:total+1};
+    });
+  }
+  reserveSwarmExecution(id,revision,maxDailyTasks,day=new Date().toISOString().slice(0,10)){
+    check(Number.isSafeInteger(maxDailyTasks)&&maxDailyTasks>0&&maxDailyTasks<=100&&/^\d{4}-\d{2}-\d{2}$/.test(day),'SWARM_BUDGET_REQUIRED');
+    return this.transaction(()=>{
+      const task=this.taskInternal(id);check(task&&task.revision===revision&&task.state==='running'&&task.action==='swarm_research','TASK_CHANGED');
+      const prior=this.statement('SELECT day FROM swarm_reservations WHERE task_id=? AND revision=?').get(id,revision);if(prior)return false;
+      const latest=this.statement('SELECT MAX(day) AS day FROM swarm_reservations').get().day;check(!latest||day>=latest,'SWARM_CLOCK_ROLLBACK');
+      check(this.statement('SELECT count(*) AS count FROM swarm_reservations WHERE day=?').get(day).count<maxDailyTasks,'SWARM_DAILY_LIMIT');
+      this.statement('INSERT INTO swarm_reservations VALUES(?,?,?)').run(id,revision,day);return true;
     });
   }
   close(){this.db.close();}

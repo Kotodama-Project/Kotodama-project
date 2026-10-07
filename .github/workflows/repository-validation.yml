@@ -43,6 +43,10 @@ jobs:
         run: python -S -B tools/check_tracked_secret_hygiene.py
       - run: npm install --global pnpm@11.19.0
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Install locked Task swarm dependencies for the offline integration
+        if: runner.os == 'Linux'
+        working-directory: .
+        run: python -m pip install --require-hashes -r requirements-task-swarm-ci.txt
       - name: Install audio encoder (Linux)
         if: runner.os == 'Linux'
         run: |

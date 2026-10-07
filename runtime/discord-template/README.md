@@ -183,6 +183,36 @@ Windows/macOSのlocal書込みとremote ownerでは拒否します。現在grant
 
 この訂正UIはlocal owner向けです。remote ownerには原子的なSource/Task訂正契約がまだなく、localへ代わりに書き込みません。実Discordでの使い勝手は未受入です。
 
+### 3つの観点で調査するswarm（任意）
+
+採用済みの最初の入口は、操作者の `/kotodama do action:swarm_research text:依頼` です。
+既定では無効で、analyzer・雑談・音声・trusted CLI requestからは開始しません。
+Task ownerは同じlocal SQLite一つです。POSIX host、Python 3.12と
+repository rootのhash固定requirements-task-swarm-ci.txt、本人がログイン済みのCodex CLIが必要です。
+Windowsはprocess起動前に拒否します。実model/Discordの受入は未実施です。
+
+利用枠と利用開始をownerが決めたときにだけ、worker.actionsへswarm_researchを追加し、
+worker.swarmへpythonExecutable、codexExecutable、ownerRef、authorityRef、
+authorityExpiresAt、maxDailyTasks、timeoutSecondsを設定します。ownerRef/authorityRefは
+ref/で始まる既存scopeへの参照で、文字列を置くだけでは許可になりません。
+
+maxDailyTasksの既定は0（無効）、明示設定は1〜100です。UTCの日次予約を既存ownerに保持し、
+同Task/revisionの二重起動や時計巻戻りで枠を増やしません。timeoutSecondsは20〜1260秒、
+既存許可の期限を超えません。固定3worker＋独立verifier1、N6/C3/V1、Luna/max/read-only、
+子agent無効です。金額の予算を自動管理する機能はありません。料金を含む実利用枠・本人ログインを
+この公開コードや合成CIの成功で承認済みにしません。
+
+依頼・資料・受入条件・版を固定したowner入力をprivate実行領域へ置き、現在grant/設定/Sourceを
+再確認します。取消はowner入力を無効にしてから子process groupへ伝えます。終了や無効化を
+確認できなければuncertainとして自動再実行しません。会話の終了と仕事の取消は別です。
+
+全基準がpassedかつ独立reviewを確認した結果だけneeds_reviewへ戻し、既存resultで
+swarm-research.txtを取得できます。失敗・未検査はfailedとして、不足理由を保持します。
+設定を無効にした後も、現在のSource権限内の既存成果は閲覧できます。合成backendは試験専用で、
+通常設定から選べません。日次枠・明示許可・別owner拒否・Windows拒否の合成試験と、
+Linuxでの同じTask→Python swarm→fixture verifier→成果readbackをCIで確認します。
+契約と残る受入は [Task swarm run](../../docs/TASK-SWARM-RUN.md) を参照してください。
+
 ## CLI・資料・連携
 
 実行できる操作と既定は[capability laneの表](docs/ARCHITECTURE.md#capability-lanes)を参照してください。
