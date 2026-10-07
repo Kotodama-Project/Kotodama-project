@@ -45,7 +45,7 @@ async function cliFixture(t){
   const start=async({nodeArgs=[],extraEnv={}}={})=>{
     const env={...process.env,KOTODAMA_DEBUG:'',...extraEnv};if(!('NODE_OPTIONS' in extraEnv))delete env.NODE_OPTIONS;
     const child=spawn(process.execPath,[...nodeArgs,path.join(app,'bin/kotodama.mjs'),'start','--offline','--config',file],{env,stdio:['ignore','pipe','pipe']});children.push(child);let diagnostic='';child.stderr.on('data',bytes=>{diagnostic+=bytes;});
-    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('owned CLI startup timeout: '+diagnostic)),15000);child.once('exit',()=>{clearTimeout(timer);reject(new Error('owned CLI exited before readiness: '+diagnostic));});let output='';child.stdout.on('data',bytes=>{output+=bytes;if(output.includes('"event":"runtime_ready"')){clearTimeout(timer);resolve();}});});
+    await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('owned CLI startup timeout: '+diagnostic)),process.platform==='win32'?30000:15000);child.once('exit',()=>{clearTimeout(timer);reject(new Error('owned CLI exited before readiness: '+diagnostic));});let output='';child.stdout.on('data',bytes=>{output+=bytes;if(output.includes('"event":"runtime_ready"')){clearTimeout(timer);resolve();}});});
     return {close:()=>stop(child)};
   };
   return {root,app,config,file,start};
@@ -107,7 +107,7 @@ test('aggregate source bytes, directory traversal and depth have finite limits',
   await assert.rejects(computeSourceBinding(deep),{code:'SOURCE_SET_LIMIT'});
 });
 
-test('an instance started from candidate A matches A on disk and as the candidate',async t=>{
+test('an instance started from candidate A matches A on disk and as the candidate',{timeout:90000},async t=>{
   const {root,app:a,config,start}=await cliFixture(t);const candidate=path.join(root,'candidate');await mkdir(candidate);await copySource(a,candidate);
   await start();if(!await assertPlatformBinding(config))return;
   const report=await integrityReport({diskRoot:a,candidateRoot:candidate,revision:'0123456789abcdef',readStatus:live(config)});
@@ -117,7 +117,7 @@ test('an instance started from candidate A matches A on disk and as the candidat
   assert(!JSON.stringify(report).includes(root)&&!JSON.stringify(report).includes(JSON.stringify(root).slice(1,-1)));
 });
 
-test('an old process is not matched by new bytes on disk until it is restarted',async t=>{
+test('an old process is not matched by new bytes on disk until it is restarted',{timeout:90000},async t=>{
   const {root,app:a,config,start}=await cliFixture(t);const b=path.join(root,'candidate-b');await mkdir(b);await copySource(a,b);const changed=await readFile(path.join(a,'src/worker.mjs'),'utf8')+'\n// owned candidate B\n';await writeFile(path.join(b,'src/worker.mjs'),changed);
   const r=await start();if(!await assertPlatformBinding(config))return;
   await writeFile(path.join(a,'src/worker.mjs'),changed);
@@ -132,7 +132,7 @@ test('an old process is not matched by new bytes on disk until it is restarted',
   assert.equal(restarted.parity,'match');assert.equal(restarted.instance.setDigest,restarted.candidate.setDigest);
 });
 
-test('a replaced instance, a missing binding and a saved or stale report stay unverified',async t=>{
+test('a replaced instance, a missing binding and a saved or stale report stay unverified',{timeout:90000},async t=>{
   const {app:a,config,start}=await cliFixture(t);
   await start();if(!await assertPlatformBinding(config))return;
   const saved=await controlCommand(config,{action:'status'});const disk=await computeSourceBinding(a);const now=Date.now();
@@ -155,7 +155,7 @@ test('a replaced instance, a missing binding and a saved or stale report stay un
   const replaced=await integrityReport({diskRoot:a,candidateRoot:a,readStatus:live(config)});assert.equal(replaced.parity,'unverified');assert.deepEqual(replaced.reasons,['RUNTIME_OWNER_CHANGED']);assert.equal(replaced.instance,null);
 });
 
-test('a runtime whose source cannot be bound still starts but is never reported as matching',async t=>{
+test('a runtime whose source cannot be bound still starts but is never reported as matching',{timeout:90000},async t=>{
   const {root,app:broken,config,start}=await cliFixture(t);const clean=path.join(root,'clean');await mkdir(clean);await copySource(broken,clean);
   await link(path.join(broken,'src/worker.mjs'),path.join(root,'outside-link.mjs'));
   await start();

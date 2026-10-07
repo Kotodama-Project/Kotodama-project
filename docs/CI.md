@@ -132,3 +132,11 @@ Task swarm の tests は `tests/test_task_swarm_*.py` に置きます。pytest �
 - Actions は full commit SHA と `# vX.Y.Z` コメントで固定します（`tools/check_workflow_references.py` が検査）。
 - Python の依存は hash 付き lock から入れます。共通の `requirements-ci.txt`（pip-compile）に加え、MCP SDK など依存の多い Task swarm だけは `requirements-task-swarm-ci.txt`（`uv pip compile --universal`、Windows 専用依存も marker 付きで同じ lock に入る）を使い、共通 lock を小さく保ちます。
 - `runtime/discord-template/.github/workflows/ci.yml` はテンプレート同梱用で、このリポジトリでは実行されません。
+
+## Discord matrix の実行上限
+
+Discord jobは依存・音声encoderの準備を含め20分で打ち切ります。Windowsの
+source-binding実CLI fixtureは起動に最大30秒（他OSは15秒）を許し、終了を観測する
+15秒の上限と既存のsource/権限検査は維持します。実CLIを起動する各caseは90秒で打ち切り、準備・起動・検査・cleanupを含む外側の上限が30秒の起動待ちより先に発火しないようにします。600件を超える試験群で観測した
+Windowsの起動待ちと10分job打切りに対する余裕で、runtimeの本番timeoutや許可を
+変更するものではありません。失敗や取消を成功として扱わず、全必須checkを要求します。
