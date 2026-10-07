@@ -6,13 +6,15 @@ import {invokeCodex,modelExecution,parseModelJson} from './llm.mjs';
 import {runWorkspaceGit,assertWorkspaceFiltersSafe} from './workspace-git.mjs';
 import {DockerVerifier} from './verification.mjs';
 import {CompanyPackWorker} from './company-pack-worker.mjs';
+import {SwarmWorker} from './swarm-worker.mjs';
 import {check,digest,safePath,atomicJson,errorCode} from './common.mjs';
 
 const resultSchema={type:'object',additionalProperties:false,required:['summary','files'],properties:{summary:{type:'string'},files:{type:'array',items:{type:'string'}}}};
 export class CliWorker {
-  constructor(config,{verifier}={}){this.config=config;this.verifier=verifier??new DockerVerifier(config.worker.verification);this.companyPack=new CompanyPackWorker(config,{verifier:this.verifier});}
+  constructor(config,{verifier,store,syntheticSwarmFixture=false}={}){this.config=config;this.verifier=verifier??new DockerVerifier(config.worker.verification);this.companyPack=new CompanyPackWorker(config,{verifier:this.verifier});this.swarm=new SwarmWorker(config,{store,syntheticFixture:syntheticSwarmFixture});}
   async run(task,context,{signal,authorize=async()=>{},onStart=()=>{}}={}) {
     if(task.action==='create_company_pack')return this.companyPack.run(task,context,{signal,authorize,onStart});
+    if(task.action==='swarm_research')return this.swarm.run(task,context,{signal,authorize,onStart});
     const cfg=this.config,write=['develop','write_file'].includes(task.action);
     check(cfg.worker.actions.includes(task.action),'ACTION_NOT_ALLOWED');await authorize();
     // POSIX process groups are required for a locally owned write worker.

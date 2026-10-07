@@ -1,3 +1,4 @@
+import path from 'node:path';
 import {Analysis,modelExecution} from './llm.mjs';
 import {check,digest,errorCode} from './common.mjs';
 import {verifyArtifacts} from './worker.mjs';
@@ -10,8 +11,8 @@ export class Pipeline {
     this.interactions=new InteractionState(store);
     Object.assign(this,{store,owner,config,policy,readPolicy,analyzer,worker,authorize,authorizeAnalysis,onTask,onTaskQueued,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.tail=Promise.resolve();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);
   }
-  context(source,principal,pending=null){
-    const config=this.config.analyzer,maxSources=config.maxContextSources??12;let remaining=config.maxContextChars??24000;
+  context(source,principal,pending=null,{sourceLimit=Infinity,completeSources=false}={}){
+    const config=this.config.analyzer,maxSources=Math.min(config.maxContextSources??12,sourceLimit);let remaining=config.maxContextChars??24000;
     const result=[],time=s=>Date.parse(s.metadata?.createdAt??'')||0;
     let candidates;
     if(typeof this.store.contextSources==='function')candidates=this.store.contextSources(principal,{guildId:source.guildId,channelId:source.channelId,excludeKey:source.key??null,limit:maxSources});
@@ -28,7 +29,7 @@ export class Pipeline {
       const preferred=pending.bindings.filter(binding=>binding.key!==value.key).map(binding=>this.store.source(binding.key,principal));
       candidates=[...new Map([...preferred,...candidates].filter(item=>item.key!==value.key).map(item=>[item.key,item])).values()];
     }
-    for(const s of candidates){if(remaining<=0||result.length>=maxSources-(original?1:0))break;const text=s.text.slice(0,Math.min(12000,remaining));remaining-=text.length;result.unshift({key:s.key,revision:s.revision,text,actorId:s.actorId});}
+    for(const s of candidates){if(remaining<=0||result.length>=maxSources-(original?1:0))break;if(completeSources){check(s.text.length<=Math.min(12000,remaining),'SWARM_CONTEXT_LIMIT');remaining-=s.text.length;result.unshift(s);}else{const text=s.text.slice(0,Math.min(12000,remaining));remaining-=text.length;result.unshift({key:s.key,revision:s.revision,text,actorId:s.actorId});}}
     return original?[original,...result]:result;
   }
   async ingest(source,{execute=false,reply=false,analyze=true,onSourceCommitted=()=>{}}={}){
@@ -166,6 +167,13 @@ export class Pipeline {
     const granted=new Set(current.worker.actions);
     for(const action of actions)check(granted.has(action),'ACTION_NOT_ALLOWED');
     if(actions.includes('create_company_pack'))check(current.owner.kind==='local'&&this.owner===this.store,'COMPANY_PACK_LOCAL_OWNER_REQUIRED');
+    if(actions.includes('swarm_research')){
+      check(current.owner.kind==='local'&&this.owner===this.store,'SWARM_LOCAL_OWNER_REQUIRED');
+      check(source.metadata?.kind==='command','SWARM_REQUIRES_SLASH_COMMAND');
+      check(current.worker.swarm&&current.worker.swarm.maxDailyTasks>0,'SWARM_BUDGET_REQUIRED');
+      check(typeof current.worker.swarm.codexHome==='string'&&path.isAbsolute(current.worker.swarm.codexHome),'SWARM_CODEX_HOME_REQUIRED');
+      check(Date.parse(current.worker.swarm.authorityExpiresAt)>Date.now(),'SWARM_AUTHORITY_EXPIRED');
+    }
   }
   async #discardAdmission(staged,error){
     let uncertain=errorCode(error)==='OWNER_RESULT_UNCERTAIN';
@@ -185,13 +193,13 @@ export class Pipeline {
     const authorize=async()=>{check(!controller.signal.aborted,'CANCELLED');const latest=await this.owner.task(id,actor);check(latest.revision===task.revision&&latest.state==='running','TASK_CHANGED');const source=this.store.source(task.source_key,actor);check(source.revision===task.source_revision,'SOURCE_CHANGED');await this.owner.assertContext(id,actor);await this.authorize(latest);};
     try{
       check(!controller.signal.aborted,'CANCELLED');
-      const source=this.store.source(task.source_key,actor);const context=[source,...this.context(source,actor)];const bindings=context.map(s=>({key:s.key,revision:s.revision}));await this.owner.bindContext(id,task.revision,bindings);active.sourceKeys=new Set(bindings.map(s=>s.key));
+      const source=this.store.source(task.source_key,actor);const options=task.action==='swarm_research'?{sourceLimit:9,completeSources:true}:{};const context=[source,...this.context(source,actor,null,options)];const bindings=context.map(s=>({key:s.key,revision:s.revision}));await this.owner.bindContext(id,task.revision,bindings);active.sourceKeys=new Set(bindings.map(s=>s.key));
       check(!controller.signal.aborted,'CANCELLED');
       const result=await this.worker.run({...task,contextSources:bindings},context,{signal:controller.signal,authorize,onStart:p=>this.store.event('worker.started',p,id)});
       await authorize();await this.owner.finish(id,task.revision,result);await this.onTask(await this.owner.task(id,actor));
     }catch(e){
       const current=await this.owner.taskInternal(id);if(current.state==='stopping')try{await this.owner.confirmStop(id,actor,errorCode(e)==='CANCELLED');}catch{}
-      else if(current.state==='running')try{await this.owner.finish(id,task.revision,{state:errorCode(e)==='STOP_UNCONFIRMED'?'uncertain':'failed',summary:errorCode(e),artifacts:[]});}catch{}
+      else if(current.state==='running')try{await this.owner.finish(id,task.revision,{state:errorCode(e)==='STOP_UNCONFIRMED'?'uncertain':'failed',summary:errorCode(e),artifacts:[]});await this.onTask(await this.owner.task(id,actor));}catch{}
       this.onError(errorCode(e));
     }finally{this.active.delete(id);}
   }
