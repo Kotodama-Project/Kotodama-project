@@ -17,7 +17,7 @@ const actor='100000000000000002';
 const python=process.env.KOTODAMA_TEST_SWARM_PYTHON??process.env.KOTODAMA_TEST_PYTHON??'python3';
 async function fixture(t){
   const root=await mkdtemp(path.join(os.tmpdir(),'kotodama-swarm-worker-')),dataDir=path.join(root,'data');await mkdir(dataDir);
-  const base=exampleConfig({workspace:root}),config=Config.parse({...base,dataDir,worker:{...base.worker,actions:['swarm_research'],swarm:{pythonExecutable:python,codexExecutable:'model-must-not-run',maxDailyTasks:3,ownerRef:'ref/owner/synthetic',authorityRef:'ref/authority/synthetic',authorityExpiresAt:new Date(Date.now()+3600000).toISOString()}}});
+  const base=exampleConfig({workspace:root}),config=Config.parse({...base,dataDir,worker:{...base.worker,actions:['swarm_research'],swarm:{pythonExecutable:python,codexExecutable:'model-must-not-run',codexHome:path.join(root,'dedicated-model-fixture'),maxDailyTasks:3,ownerRef:'ref/owner/synthetic',authorityRef:'ref/authority/synthetic',authorityExpiresAt:new Date(Date.now()+3600000).toISOString()}}});
   const store=new Store(dataDir),errors=[];
   const pipeline=new Pipeline({store,config,analyzer:{analyze:async()=>{throw Error('analyzer-must-not-run');}},worker:new CliWorker(config,{store,syntheticSwarmFixture:true}),onError:code=>errors.push(code)});
   t.after(async()=>{await pipeline.close();store.close();assert.equal(path.dirname(root),os.tmpdir());assert(path.basename(root).startsWith('kotodama-swarm-worker-'));await rm(root,{recursive:true,force:true});});
@@ -37,6 +37,8 @@ test('remote, trusted CLI, zero budget and disabled actions refuse before Source
   const f=await fixture(t),request={title:'fixture',request:'fixture',action:'swarm_research'};
   await assert.rejects(f.pipeline.request({...f.source(),metadata:{kind:'trusted_cli'}},request),{code:'SWARM_REQUIRES_SLASH_COMMAND'});
   f.config.worker.swarm.maxDailyTasks=0;await assert.rejects(f.pipeline.request(f.source(),request),{code:'SWARM_BUDGET_REQUIRED'});
+  const dedicated=f.config.worker.swarm.codexHome;f.config.worker.swarm.maxDailyTasks=3;delete f.config.worker.swarm.codexHome;
+  await assert.rejects(f.pipeline.request(f.source(),request),{code:'SWARM_CODEX_HOME_REQUIRED'});f.config.worker.swarm.codexHome=dedicated;
   f.config.worker.swarm.maxDailyTasks=3;f.config.worker.actions=[];await assert.rejects(f.pipeline.request(f.source(),request),{code:'ACTION_NOT_ALLOWED'});
   f.config.worker.actions=['swarm_research'];f.config.owner={kind:'remote',url:'http://127.0.0.1',tokenEnv:'UNUSED'};
   await assert.rejects(f.pipeline.request(f.source(),request),{code:'SWARM_LOCAL_OWNER_REQUIRED'});

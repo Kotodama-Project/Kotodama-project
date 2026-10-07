@@ -33,6 +33,7 @@ export class SwarmWorker {
     check(task.action==='swarm_research'&&cfg.worker.actions.includes('swarm_research'),'ACTION_NOT_ALLOWED');
     check(process.platform!=='win32','SWARM_WORKER_REQUIRES_POSIX_HOST');
     check(settings&&settings.maxDailyTasks>0,'SWARM_BUDGET_REQUIRED');
+    check(this.syntheticFixture||(typeof settings.codexHome==='string'&&path.isAbsolute(settings.codexHome)),'SWARM_CODEX_HOME_REQUIRED');
     const source=context.find(s=>s.key===task.source_key);check(source?.metadata?.kind==='command','SWARM_REQUIRES_SLASH_COMMAND');
     const payload=swarmPayload(task,context),executionRef=task.id+'-r'+task.revision;
     const deadline=Math.min(Date.parse(settings.authorityExpiresAt),Date.now()+settings.timeoutSeconds*1000);
@@ -61,7 +62,7 @@ export class SwarmWorker {
     if(signal?.aborted)aborted();
     try{
       await guard();check(!child.signal.aborted,'CANCELLED');
-      const args=['-B',path.join(repositoryRoot,'tools','task_swarm.py'),'task-run','--owner',ownerPath,'--input',inputPath,'--backend',this.syntheticFixture?'synthetic':'codex',...(this.syntheticFixture?['--allow-local-fixture']:['--codex-executable',settings.codexExecutable,'--allow-codex'])];
+      const args=['-B',path.join(repositoryRoot,'tools','task_swarm.py'),'task-run','--owner',ownerPath,'--input',inputPath,'--backend',this.syntheticFixture?'synthetic':'codex',...(this.syntheticFixture?['--allow-local-fixture']:['--codex-executable',settings.codexExecutable,'--task-codex-home',settings.codexHome,'--allow-codex'])];
       const command=await runCommand(settings.pythonExecutable,args,{cwd:repositoryRoot,keepStdinOpen:true,signal:child.signal,timeoutMs:Math.max(1,deadline-Date.now())+1000,maxBytes:1024*1024,onStart});
       if(fencePromise)await fencePromise;check(!fenceFailed,'STOP_UNCONFIRMED');await guard();
       if(command.code!==0){

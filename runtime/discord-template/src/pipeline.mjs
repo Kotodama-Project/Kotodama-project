@@ -1,3 +1,4 @@
+import path from 'node:path';
 import {Analysis,modelExecution} from './llm.mjs';
 import {check,digest,errorCode} from './common.mjs';
 import {verifyArtifacts} from './worker.mjs';
@@ -170,6 +171,7 @@ export class Pipeline {
       check(current.owner.kind==='local'&&this.owner===this.store,'SWARM_LOCAL_OWNER_REQUIRED');
       check(source.metadata?.kind==='command','SWARM_REQUIRES_SLASH_COMMAND');
       check(current.worker.swarm&&current.worker.swarm.maxDailyTasks>0,'SWARM_BUDGET_REQUIRED');
+      check(typeof current.worker.swarm.codexHome==='string'&&path.isAbsolute(current.worker.swarm.codexHome),'SWARM_CODEX_HOME_REQUIRED');
       check(Date.parse(current.worker.swarm.authorityExpiresAt)>Date.now(),'SWARM_AUTHORITY_EXPIRED');
     }
   }

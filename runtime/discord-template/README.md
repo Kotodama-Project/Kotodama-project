@@ -187,18 +187,21 @@ Windows/macOSのlocal書込みとremote ownerでは拒否します。現在grant
 
 採用済みの最初の入口は、操作者の `/kotodama do action:swarm_research text:依頼` です。
 既定では無効で、analyzer・雑談・音声・trusted CLI requestからは開始しません。
-Task ownerは同じlocal SQLite一つです。POSIX host、Python 3.12と
-repository rootのhash固定requirements-task-swarm-ci.txt、本人がログイン済みのCodex CLIが必要です。
+Task ownerは同じlocal SQLite一つです。対応するLinux host、Python 3.12と
+repository rootのhash固定requirements-task-swarm-ci.txt、native Codex CLIが必要です。
+普段のCodex homeを流用せず、operatorが別途ログインしたTask専用codexHomeを明示します。
+credentialのコピー・リンクは行いません。root denyの外側/内側profileと実読取probe、
+完了時の実効permission profile検査が通らなければ成果を受け付けません。
 Windowsはprocess起動前に拒否します。実model/Discordの受入は未実施です。
 
 利用枠と利用開始をownerが決めたときにだけ、worker.actionsへswarm_researchを追加し、
-worker.swarmへpythonExecutable、codexExecutable、ownerRef、authorityRef、
+worker.swarmへpythonExecutable、codexExecutable、codexHome（絶対path）、ownerRef、authorityRef、
 authorityExpiresAt、maxDailyTasks、timeoutSecondsを設定します。ownerRef/authorityRefは
 ref/で始まる既存scopeへの参照で、文字列を置くだけでは許可になりません。
 
 maxDailyTasksの既定は0（無効）、明示設定は1〜100です。UTCの日次予約を既存ownerに保持し、
 同Task/revisionの二重起動や時計巻戻りで枠を増やしません。timeoutSecondsは20〜1260秒、
-既存許可の期限を超えません。固定3worker＋独立verifier1、N6/C3/V1、Luna/max/read-only、
+既存許可の期限を超えません。固定3worker＋独立verifier1、N6/C3/V1、Luna/maxと専用読取profileで、
 子agent無効です。金額の予算を自動管理する機能はありません。料金を含む実利用枠・本人ログインを
 この公開コードや合成CIの成功で承認済みにしません。
 
