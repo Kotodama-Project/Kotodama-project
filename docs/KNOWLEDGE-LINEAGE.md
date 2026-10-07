@@ -97,6 +97,10 @@ action/対象ref/current generationを受け、登録時は固定snapshot digest
 expected parentを同じtransaction内で照合して更新します。後から終わった古いcandidateは、新しい
 generationだけ取得しても現在版を上書きできません。旧版・eventsは消しません。
 
+差分snapshotの`external_unresolved`な親は、register時とcurrentのreadback時にlocal owner内の
+immutable recordを引き、そのlogical IDを照合します。存在しない親や別Conceptの親では登録全体を
+rollbackします。この照合はlocal owner内の直接の親に限り、外部の本人性の証明ではありません。
+
 `revoke`はownerが照合したinvalidation keyとevidence refを記録し、同じkeyのread/publishを止めます。
 解除や強制rollback APIはありません。required dependencyが現在版でない、未解決・循環・失効・
 conflictedである場合もcurrentのreadbackを拒否します。同generationの競合更新は一つだけが成功し、
