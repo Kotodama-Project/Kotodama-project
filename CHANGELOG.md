@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 明示slashの`swarm_research`を既存local Taskへ接続。固定3workerと別verifier、専用homeと限定読取、取消・日次枠・元receiptのhash照合を通し、同じTaskへ確認待ちの成果を返す。既定無効で、実モデル/実Discordの受入は別途必要（#160、#286）。
+
 - Task swarmのCodex attemptに取消Eventとstdin詰まり中の有限停止を追加。POSIXのparent pipe/停止signalを同じ取消へ渡す部品を用意し、終了不明を再試行可能な成功にしない（#160前半）。
 
 - Discordのlocal履歴を既存Session ledgerへ書き出す`ledger-export`と暗号化payload読戻しを追加。Source訂正と同一Taskの参照を保持し、実データ・鍵運用・自動保持削除は別の境界に残す（#153）。
