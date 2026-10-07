@@ -72,6 +72,7 @@ export class SwarmWorker {
       let status;try{status=JSON.parse(command.stdout);}catch{throw new Refused('SWARM_OUTPUT_INVALID');}
       const runId='task-run-'+digest([task.id,task.revision]).slice(0,32);check(status.run_id===runId&&status.synthetic===this.syntheticFixture&&status.task_state_changed===false,'SWARM_OUTPUT_INVALID');
       const directory=await safePath(root,runId),receiptBytes=await readArtifact(await safePath(directory,'receipt.json'),2*1024*1024),receipt=JSON.parse(receiptBytes);
+      check(sha.test(status.receipt_sha256??'')&&digest(receiptBytes)===status.receipt_sha256,'SWARM_RECEIPT_CHANGED');
       check(receipt.version===1&&receipt.run_id===runId&&receipt.input_digest===digest(payload)&&receipt.owner_input_sha256===digest(ownerBytes)&&receipt.synthetic===this.syntheticFixture&&receipt.task_state_changed===false,'SWARM_RECEIPT_MISMATCH');
       check(Object.keys(receipt.artifact_sha256??{}).sort().join(',')===[...artifactNames].sort().join(','),'SWARM_ARTIFACT_SET_INVALID');
       const artifacts=[],documents={};

@@ -101,3 +101,16 @@ test('actual slash command creates one Task, Python swarm, independent fixture r
   await adapter.interaction(interaction);await f.pipeline.tail;assert.equal(f.store.tasks(actor).length,1);assert.equal(f.store.statement("SELECT count(*) AS n FROM events WHERE type='worker.started'").get().n,starts);
   const artifact=result.artifacts.find(a=>a.relative==='deliverables/swarm-research.txt');await writeFile(artifact.path,'changed');await assert.rejects(f.pipeline.result(task.id,actor),{code:'ARTIFACT_CHANGED'});
 });
+
+test('Task refuses a receipt whose bytes disagree with the child completion anchor',{skip:process.platform==='win32',timeout:60000},async t=>{
+  const f=await fixture(t),wrapper=path.join(f.root,'synthetic-python-wrapper');
+  const script='#!/usr/bin/env python3\nimport json,subprocess,sys\n'+
+    'result=subprocess.run(['+JSON.stringify(python)+',*sys.argv[1:]],stdin=sys.stdin,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=20)\n'+
+    'sys.stderr.buffer.write(result.stderr)\n'+
+    'if result.returncode: sys.exit(result.returncode)\n'+
+    'status=json.loads(result.stdout)\nstatus["receipt_sha256"]="0"*64\nprint(json.dumps(status))\n';
+  await writeFile(wrapper,script,{mode:0o700,flag:'wx'});f.config.worker.swarm.pythonExecutable=wrapper;
+  const task=await f.pipeline.request(f.source(),{title:'fixture',request:'fixture',action:'swarm_research'});await f.pipeline.tail;
+  const current=f.store.taskInternal(task.id);assert.equal(current.state,'failed');
+  assert(f.errors.includes('SWARM_RECEIPT_CHANGED'));assert.equal(current.result,null);
+});
