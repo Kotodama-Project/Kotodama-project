@@ -257,7 +257,7 @@ export class DiscordAdapter {
   async deliver(task){
     if(this.notifications?.quiet()){this.notifications.defer(digest(['task',task.id,task.revision]),'task',{id:task.id,revision:task.revision,actor:task.actor});return {state:'deferred'};}
     await this.pipeline.authorize(task,'read_result');await this.member(task.actor);const source=this.store.source(task.source_key,task.actor);const channel=await this.client.channels.fetch(source.channelId);check(await this.canRead(channel,task.actor),'SOURCE_ACCESS_DENIED');
-    const key=digest([task.id,task.revision,'result']);const text=`仕事の成果ができました（確認待ち）。\n${task.id}\n${task.result.summary}`;
+    const heading=task.state==='needs_review'?'仕事の成果ができました（確認待ち）。':task.state==='uncertain'?'仕事の状態を確認する必要があります。':task.state==='failed'?'仕事の実行または検証で失敗しました。':`仕事の状態: ${taskStates[task.state]??task.state}`;const key=digest([task.id,task.revision,'result']);const text=`${heading}\n${task.id}\n${task.result.summary}`;
     const files=await resultFiles(task.result,{artifactRoot:this.artifactRoot()});await this.pipeline.authorize(task,'read_result');
     if(!this.store.claimDelivery(key,text))return;
     try{const user=await this.client.users.fetch(task.actor);const message=await user.send({content:shortText(text),files,allowedMentions:{parse:[]}});this.store.delivered(key,message.id);}catch{this.onError('RESULT_DELIVERY_UNKNOWN');}

@@ -6,9 +6,10 @@ export function workerEnv(extra={}) {
   const names=['PATH','Path','HOME','USERPROFILE','HOMEDRIVE','HOMEPATH','APPDATA','LOCALAPPDATA','SYSTEMROOT','SystemRoot','WINDIR','TEMP','TMP','LANG','CODEX_HOME'];
   return {...Object.fromEntries(names.filter(k=>process.env[k]!==undefined).map(k=>[k,process.env[k]])),PYTHONUTF8:'1',NO_COLOR:'1',...extra};
 }
-export async function runCommand(executable,args,{cwd,input='',signal,timeoutMs=300000,maxBytes=4000000,onStart=()=>{},env=workerEnv()}={}) {
+export async function runCommand(executable,args,{cwd,input='',keepStdinOpen=false,signal,timeoutMs=300000,maxBytes=4000000,onStart=()=>{},env=workerEnv()}={}) {
   check(typeof executable==='string'&&Array.isArray(args),'COMMAND_INVALID');
   check(!signal?.aborted,'CANCELLED');
+  check(typeof keepStdinOpen==='boolean'&&(!keepStdinOpen||input===''),'COMMAND_STDIN_POLICY_INVALID');
   // Use a native executable on Windows. No shell interpolation or unquoted .cmd expansion.
   check(!(process.platform==='win32'&&/\.(cmd|bat)$/i.test(executable)),'NATIVE_EXECUTABLE_REQUIRED');
   return new Promise((resolve,reject)=>{
@@ -36,6 +37,6 @@ export async function runCommand(executable,args,{cwd,input='',signal,timeoutMs=
       }
       cleanup();output+=decoder.end();if(reason)reject(Object.assign(new Refused(process.platform==='win32'&&stopping?'STOP_UNCONFIRMED':reason),{exitCode:code,stderr}));else resolve({code,signal:endedSignal,stdout:output,stderr});
     });
-    child.stdin.on('error',()=>{});child.stdin.end(input,'utf8');
+    child.stdin.on('error',()=>{});if(!keepStdinOpen)child.stdin.end(input,'utf8');
   });
 }
