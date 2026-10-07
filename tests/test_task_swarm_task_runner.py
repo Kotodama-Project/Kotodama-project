@@ -18,7 +18,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "runtime"))
 from task_swarm.protocol import SwarmError, digest
 from task_swarm.task_backend import SyntheticTaskBackend
 from task_swarm.task_contract import WORK_JOBS
-from task_swarm.task_runner import execute_task
+from task_swarm.task_runner import execute_task, read_json
+
+
+@pytest.mark.parametrize("raw", [b"", b"{", b"\xff"])
+def test_incomplete_owner_json_is_a_typed_refusal(tmp_path, raw):
+    file = tmp_path/"owner.json"
+    file.write_bytes(raw)
+    with pytest.raises(SwarmError) as raised:
+        read_json(file)
+    assert raised.value.code == "RUN_JSON_INVALID"
 
 
 def setup(tmp_path):

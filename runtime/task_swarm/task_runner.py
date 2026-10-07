@@ -55,7 +55,10 @@ def read_json(filename: Path, maximum=2*1024*1024, *, with_digest=False):
             require(key not in value, "RUN_DUPLICATE_JSON_KEY")
             value[key] = item
         return value
-    value = json.loads(raw, object_pairs_hook=unique)
+    try:
+        value = json.loads(raw, object_pairs_hook=unique)
+    except (ValueError, UnicodeError) as exc:
+        raise SwarmError("RUN_JSON_INVALID", "Task evidence JSON could not be read") from exc
     return (value, hashlib.sha256(raw).hexdigest()) if with_digest else value
 
 
