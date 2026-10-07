@@ -72,6 +72,40 @@ class KnowledgeLineageImpactTests(unittest.TestCase):
             after['sources'][0][field] = change; rebind(after)
             self.assertIn(PACK, compare_lineage(before, after)['quarantine_revision_refs'])
 
+    def test_removed_or_retyped_state_relation_rechecks_old_target_and_consumers(self):
+        for predicate in ('supersedes', 'invalidates', 'conflicts_with'):
+            for replacement in (None, 'derived_from'):
+                with self.subTest(predicate=predicate, replacement=replacement):
+                    before = chain()
+                    before['relations'].append(edge(OPTIONAL, FIRST, 'synthetic/example', predicate=predicate))
+                    after = copy.deepcopy(before)
+                    if replacement is None:
+                        after['relations'].pop()
+                    else:
+                        after['relations'][-1]['predicate'] = replacement
+                    impact = compare_lineage(before, after)
+                    self.assertIn(FIRST, impact['affected_revision_refs'])
+                    self.assertIn(PACK, impact['affected_revision_refs'])
+                    # Reversing the change must also notify the newly blocked target.
+                    self.assertIn(PACK, compare_lineage(after, before)['affected_revision_refs'])
+
+    def test_optional_effect_reaches_required_and_further_optional_consumers(self):
+        before = chain()
+        optional_pack = copy.deepcopy(before['projections'][0])
+        optional_pack.update(projection_ref='ref/projection/optional-pack', concept_revision_refs=[OPTIONAL])
+        before['projections'].append(optional_pack)
+        extra = copy.deepcopy(before['concepts'][-1])
+        extra.update(concept_id='synthetic/further-optional', revision_ref='ref/concept-revision/further-optional')
+        before['concepts'].append(extra)
+        before['relations'].append(edge(extra['revision_ref'], OPTIONAL, 'synthetic/optional', required=False))
+        after = copy.deepcopy(before)
+        after['sources'][0].update(content_sha256='b' * 64, revision_value='b' * 64); rebind(after)
+        impact = compare_lineage(before, after)
+        for ref in (OPTIONAL, optional_pack['projection_ref'], extra['revision_ref']):
+            self.assertIn(ref, impact['optional_revision_refs'])
+            self.assertNotIn(ref, impact['affected_revision_refs'])
+            self.assertNotIn(ref, impact['quarantine_revision_refs'])
+
     def test_unchanged_input_is_noop_with_same_receipt_but_revoked_stays_quarantined(self):
         value = chain(); impact = compare_lineage(value, value)
         self.assertEqual('NO_CHANGE', impact['status']); self.assertEqual([], impact['affected_revision_refs'])
