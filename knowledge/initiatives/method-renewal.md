@@ -30,7 +30,9 @@ kotodama:
   strategy:
     id: INIT-METHOD-RENEWAL
     adoption_status: candidate
-    relationships: []
+    relationships:
+      - { type: tested_by, target: EXP-CONTEXT-PRESERVATION }
+      - { type: produces, target: OUTCOME-VERIFIED-REQUEST }
     hypothesis:
       intervention: 固定したrequired/forbidden corpusで候補方式を比較する
       expected_effect: 安全条件を維持したまま必要な知識の取得を改善できる
@@ -54,3 +56,5 @@ kotodama:
 
 [^product-direction]: 公開されている製品方向。
 [^existing-initiative]: 既存IDの意味。仮説の正しさを保証する証拠ではありません。
+
+[候補実験](../strategy/context-preservation.md)で、[目指すOutcome](../strategy/verified-request.md)への寄与を確かめます。実験の実施や成果の受入は未記録です。

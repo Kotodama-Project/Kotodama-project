@@ -37,6 +37,7 @@ kotodama:
     measurement_window: not_adopted
     exclusion_policy: not_adopted
     relationships:
+      - { type: governed_by, target: POLICY-MEASUREMENT-GUARDS }
       - { type: computed_by, target: COMP-INTENT }
       - { type: enabled_by, target: KF-01 }
       - { type: enabled_by, target: KF-02 }
@@ -124,3 +125,5 @@ Each candidate needs an owner, denominator, evidence source, baseline, target, d
 * [KF-08: 人の判断と自然な体験](../factors/human-authority.md)
 
 各要因は補助KPIと反証条件を持つInitiativeへ繋がります。関係は候補の因果仮説であり、実証済みの寄与や新しいauthorityではありません。
+
+[測定policy候補](../strategy/measurement-guards.md)は、値の採用や実測の前に必要な確認を示します。新しいauthorityや数値targetではありません。

@@ -32,7 +32,8 @@ kotodama:
     deadline: not_adopted
     measurement_window: not_adopted
     exclusion_policy: not_adopted
-    relationships: []
+    relationships:
+      - { type: governed_by, target: POLICY-MEASUREMENT-GUARDS }
   agent_use:
     discoverable: true
     answer_mode: source_required
@@ -55,3 +56,5 @@ kotodama:
 **値はまだ報告しません。** 具体的なattested computation、固定入力・code・parameter binding、外部receiptとattester、およびsource/coverageの確認が揃ってから報告します。この候補定義だけでSLO達成、稼働、Human GOを作りません。
 
 [^existing-contract]: 候補式の対象と検証境界の根拠。実測値の証拠ではありません。
+
+[測定policy候補](../strategy/measurement-guards.md)は、値の採用や実測の前に必要な確認を示します。新しいauthorityや数値targetではありません。

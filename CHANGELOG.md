@@ -9,6 +9,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - Source Binding・Concept Revision・型付き関係の閉じたmetadata契約とread-only検査を追加。同じpathのbytes変更やmetadataの不一致を拒否し、opaque出典を未確認として保持する（#53前半）。
+- Outcome・実験・既存判断の参照・測定policy・riskのConceptを接続。Decisionの範囲を必須にし、依存循環とリスクのfeedbackを分けて検査する（#52補助型）。
+
 - 旧P0〜P6の能力定義を候補Conceptへ対応付け、循環を拒否する段階依存を追加。過去の予定・到達状態・数値targetを現在の進捗として取り込まない（#52段階モデル）。
 
 - 8つのKey Factor候補をKGI-INTENT、補助KPI、反証可能な既存Initiativeへ接続。旧数値targetやphaseを取り込まず、定義と検証すべき因果仮説を分ける（#52要因モデル）。
