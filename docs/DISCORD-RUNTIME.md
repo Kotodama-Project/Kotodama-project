@@ -17,7 +17,7 @@ private設定に置きます。このリポジトリには既定の接続先や�
 ## 取り込んだ範囲
 
 - 固定VCの在室確認、話者別入力、停止・再開、privacy scope。
-- ローカル日本語ASRを確定Sourceとする選択肢。既定のwake方式では未呼びかけ時はLiveを起動しません。speech方式も明示選択できます。
+- ローカル日本語ASRを確定Sourceとする選択肢。自発参加が無効な既定のwake方式では未呼びかけ時はLiveを起動しません。speech方式も明示選択できます。
 - 同一Liveセッションへbackend結果を戻す複数ターンとローカル再生の割り込み。
 - Luna Responses analyzer、context/output上限、token使用量とLive時間の記録。
 - 既存のlocal Task owner、訂正、限定worker、成果の検証。remote ownerは任意の接続契約。
@@ -25,8 +25,8 @@ private設定に置きます。このリポジトリには既定の接続先や�
 - [#101](https://github.com/Kotodama-Project/Kotodama-project/pull/101)のエージェント用チャンネル: `discord.agentChannelIds`のチャンネルでは操作者の発言をメンションと同じに扱い、明確で実行に足りる依頼はすぐ仕事にして、依頼者へDMで件名と仕事のIDを届けます。
 
 ASR原文は認識結果であり誤り得ます。正しい人間の意図や実行権限と同一視せず、
-訂正と元の出典を保持します。現行の呼びかけ中心の実装は、雑談への自然な自発参加や
-既存許可内のすべての自走を完成したものではありません。
+訂正と元の出典を保持します。自発参加は既定無効で実装済み・実VCは未受入です。
+短い判定と固定の申し出に限り、既存許可内のすべての自走を完成したものではありません。
 
 PR #79でこのNodeテンプレートのsourceはmainへ統合済みです。新しい導入は[自然会話の設定例](../runtime/discord-template/docs/DISCORD-SETUP.md#自然会話を試す設定例)から確認できます。
 
