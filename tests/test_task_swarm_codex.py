@@ -77,6 +77,20 @@ def test_permission_preflight_consumes_the_same_attempt_deadline(tmp_path, monke
     assert raised.value.code == "timeout" and raised.value.retryable is False
 
 
+def test_expiry_during_command_persistence_never_launches_a_child(tmp_path, monkeypatch):
+    original=codex._write_json
+    def delayed(path,value):
+        if path.name=="command.json":
+            time.sleep(.03)
+        return original(path,value)
+    monkeypatch.setattr(codex,"_write_json",delayed)
+    monkeypatch.setattr(subprocess,"Popen",lambda *a,**kw:pytest.fail("expired publication must not launch"))
+    with pytest.raises(BackendError) as raised:
+        CodexBackend(sys.executable).invoke("fixture",SCHEMA,tmp_path/"attempt",timeout=.02)
+    assert raised.value.code=="timeout" and raised.value.retryable is False
+    assert not list((tmp_path/"attempt").rglob("*.raw"))
+
+
 @pytest.mark.parametrize("during_input", [False, True])
 def test_owner_cancels_owned_child_even_when_it_never_reads_stdin(tmp_path, monkeypatch, during_input):
     fake = _fake_codex(tmp_path)

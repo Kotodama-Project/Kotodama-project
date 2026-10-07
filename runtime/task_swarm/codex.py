@@ -937,6 +937,8 @@ class CodexBackend:
             stdout_spool = open(run_dir / ".stdout.raw", "w+b")
             stderr_spool = open(run_dir / ".stderr.raw", "w+b")
             check_cancelled()
+            if time.monotonic() >= deadline:
+                raise BackendError("timeout", "attempt budget expired before process launch", retryable=False)
             process = subprocess.Popen(
                 command,
                 cwd=str(execution_cwd),
