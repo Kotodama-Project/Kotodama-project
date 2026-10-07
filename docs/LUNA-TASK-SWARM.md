@@ -4,6 +4,18 @@
 
 この文書の例は synthetic shape です。実際の Task、actor、path、digest、ID、owner grant は、実行時に owner が供給した値へ置き換えます。過去の prototype の件数や pass は、現在の runtime receipt として再利用しません。
 
+## 既存Discord Taskからの調査
+
+明示した `/kotodama do action:swarm_research` は、local ownerの同じTaskを
+固定3workerと別verifierへ接続します。新たなTask正本やgrantを作りません。
+既定無効・日次枠0で、Linuxの専用Codex homeとroot denyの読取範囲が必要です。
+現在のactor/Source/grantを再確認し、取消後の受入と古いreceiptの再利用を拒否します。
+
+[Task runと結果の契約](TASK-SWARM-RUN.md)と
+[Discordでの設定](../runtime/discord-template/README.md#3つの観点で調査するswarm任意)を参照してください。
+合成E2Eは同じTaskの作成から結果添付までを確認し、実モデル・実Discordの受入は未実施です。
+以下の汎用packetや過去のdemoを、その実利用の証拠として代用しません。
+
 ## 最初の一手
 
 作業開始前に、次の packet を一つの immutable な入力として束縛します。タイトル、モデル名、ディレクトリ名、過去の assistant completion だけから値を推測しません。
