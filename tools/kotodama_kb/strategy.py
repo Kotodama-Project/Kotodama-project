@@ -28,7 +28,8 @@ RELATIONS = {
     "governed_by": (set(KINDS.values()), {"measurement_policy"}),
     "sequenced_after": ({"phase"}, {"phase"}),
     **{verb: ({"decision"}, set(KINDS.values())) for verb in ("adopts", "revises", "pauses", "rejects")},
-    "mitigates": ({"risk"}, {"goal", "outcome", "metric", "factor", "initiative"}),
+    "mitigates": ({"initiative", "decision", "measurement_policy"}, {"risk"}),
+    "threatens": ({"risk"}, {"goal", "outcome", "metric", "factor", "initiative"}),
 }
 ID = re.compile(r"[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+\Z")
 MEASUREMENT_FIELDS = ("baseline", "target", "deadline", "measurement_window", "exclusion_policy")
@@ -45,6 +46,8 @@ def strategy_template(concept_type: str, identifier: str) -> dict:
         value["measurement_role"] = "supporting_kpi" if concept_type == "KPI" else "control_slo"
     if concept_type == "Initiative":
         value["hypothesis"] = {"intervention": "TODO", "expected_effect": "TODO", "falsifier": "TODO"}
+    if concept_type == "Decision":
+        value["decision_scope"] = "method_candidate_only"
     return value
 
 
@@ -95,6 +98,10 @@ def strategy_model(concepts: Iterable[Concept]) -> tuple[dict, list[Issue]]:
         index[identifier] = {"concept_id": concept.concept_id, "kind": kind}
         if kind in {"metric", "kpi"}:
             index[identifier]["measurement_role"] = value.get("measurement_role")
+        if kind == "decision":
+            index[identifier]["decision_scope"] = value.get("decision_scope")
+            if value.get("decision_scope") not in {"canonical_definition_only", "method_candidate_only"}:
+                issue(concept, "STRATEGY_DECISION_SCOPE", "a projected decision must state its limited scope")
         definitions[identifier] = concept
         if kind in {"metric", "kpi", "measurement_policy"}:
             for field in MEASUREMENT_FIELDS:
@@ -135,7 +142,11 @@ def strategy_model(concepts: Iterable[Concept]) -> tuple[dict, list[Issue]]:
                 issue(concept, "STRATEGY_DUPLICATE_RELATION", "relationship is repeated")
             edges.add(edge)
     adjacency = {key: [] for key in index}
-    for origin, _, target in sorted(edges):
+    for origin, relation, target in sorted(edges):
+        # Risk assessment/mitigation forms feedback, not a prerequisite chain.
+        # Dependency, sequence and revision cycles remain failures.
+        if relation in {"mitigates", "threatens"}:
+            continue
         adjacency[origin].append(target)
     visited, active, cyclic = set(), set(), set()
     def visit(identifier):
