@@ -1,8 +1,9 @@
 # Session Conversation/Event Ledger Candidate 2
 
 これは、Kotodama の Session に関係する会話と操作を後から再構成するための、
-**レビュー中branch上の公開候補契約**です。実際の Discord、Notion、GitHub、Codex、Claude、
-Google Drive や provider へ接続する adapter は含みません。
+**公開候補契約**です。[Discord runtimeのledger-export](../runtime/discord-template/docs/LEDGER-EXPORT.md)
+は停止中のlocal SQLiteの履歴をこの契約へ書き出し、暗号化payloadを読み戻せます。
+合成試験は実装済み・実運用データでは未実施です。他providerへのlive connectorは含みません。
 
 ## Canonical boundary
 
@@ -94,9 +95,11 @@ Phoneme/G2P is an optional dictionary/alignment aid, not an assumed audio
 recovery stage.
 ```
 
-The vault manifest and retention/deletion enforcement are a private follow-up
-contract; this public candidate intentionally does not embed raw recognition
-text or audio.
+The Discord snapshot exporter includes an encrypted payload package and manifest
+with readback and exact Source JSON revision bindings. It does not reconstruct raw
+audio or claim live acquisition. Operational key management, backup recovery and
+retention/deletion enforcement remain private follow-up responsibilities; the
+public ledger intentionally does not embed raw recognition text or audio.
 
 Artifact lineage is a forward-only DAG. `RAW_AUDIO` and `RAW_SOURCE_JSON` are
 roots; `RAW_ASR` must derive from an earlier root, `ALIGNED_TRANSCRIPT` from
@@ -318,5 +321,9 @@ rebuildable and always reports `projection_is_source_authority: false`,
   permission invalidates the affected projection and blocks the next action.
 - A compaction summary can guide a rebuild but cannot supply source evidence or Human Decision.
 
-This candidate is committed on a review branch and has no device, provider,
-public-runtime, merge, or human-go effect.
+The snapshot exporter does not create a governed Session or Human Decision.
+Source corrections use source_update and earlier causal/invalidation refs, not
+the Human Decision correction lifecycle. Task events retain one opaque Task
+correlation and exact recorded event bytes, without inventing historical Task
+results or a second Task owner. Device, provider, public-runtime and Human GO
+remain separate acceptance boundaries.
