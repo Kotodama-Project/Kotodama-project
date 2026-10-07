@@ -162,6 +162,10 @@ def compare_lineage(previous, current, *, invalidation_keys=(), budget=None):
 
     old_hashes, new_hashes = signatures(before, old[0]), signatures(after, new[0])
     changed = {ref for ref in nodes if old_hashes.get(ref) != new_hashes.get(ref)}
+    old_states = {digest(relation): relation for relation in old[6]}
+    new_states = {digest(relation): relation for relation in new[6]}
+    state_targets = {(old_states.get(key) or new_states[key])['target_revision_ref']
+                     for key in old_states.keys() ^ new_states.keys()}
     if not isinstance(invalidation_keys, (list, tuple, set)) or len(invalidation_keys) > 256 or any(not isinstance(key, str) for key in invalidation_keys):
         raise KnowledgeBaseError('LINEAGE_INVALIDATION_KEY_INVALID')
     keys = set(invalidation_keys)
@@ -169,9 +173,13 @@ def compare_lineage(previous, current, *, invalidation_keys=(), budget=None):
     if keys - known_keys:
         raise KnowledgeBaseError('LINEAGE_INVALIDATION_KEY_UNKNOWN')
     revoked = {source['revision_ref'] for source in before['sources'] + after['sources'] if source['invalidation_key'] in keys}
-    affected, complete = _closure(changed | revoked, _reverse(mandatory), budget['max_depth'])
-    # Optional links are reported; they do not silently become mandatory.
-    optional_affected = {origin for origin, target in optional if target in affected} - affected
+    seeds = changed | revoked | state_targets
+    affected, complete = _closure(seeds, _reverse(mandatory), budget['max_depth'])
+    # All downstream consumers need a signal, including required consumers after
+    # an optional hop. Optional paths never become mandatory quarantine seeds.
+    all_affected, optional_complete = _closure(seeds, _reverse(mandatory | optional), budget['max_depth'])
+    optional_affected = all_affected - affected
+    complete &= optional_complete
     quarantined, quarantine_complete = _closure(new[5] | revoked | _cycles(nodes, mandatory), _reverse(mandatory), budget['max_depth'])
     complete &= quarantine_complete
     result = {'kind': 'kotodama.lineage-impact', 'authority': 'projection_only',
