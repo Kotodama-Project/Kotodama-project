@@ -6,6 +6,7 @@ on:
       - tools/run_cloudflare_linux_evaluation.py
       - tools/validate_cloudflare_security_patch.py
       - tests/test_cloudflare_linux_evaluation.py
+      - tests/fixtures/cloudflare-linux/**
       - runtime/cloudflare-os/security-2026-10-08/**
   workflow_dispatch:
 permissions:
@@ -81,7 +82,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for command in build test; do
+          for command in build test runtime-smoke; do
             python -B tools/run_cloudflare_linux_evaluation.py "$command" \
               --core "$RUNNER_TEMP/cfos-core" --node "$(command -v node)" \
               --pnpm "$RUNNER_TEMP/cfos-pnpm/package/bin/pnpm.cjs" \
@@ -91,7 +92,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          for command in build test; do
+          for command in build test runtime-smoke; do
             receipt="$RUNNER_TEMP/cfos-$command/receipt.json"
             if test -f "$receipt"; then cat "$receipt"; fi
           done
@@ -107,3 +108,5 @@ jobs:
             ${{ runner.temp }}/cfos-build/command.log
             ${{ runner.temp }}/cfos-test/receipt.json
             ${{ runner.temp }}/cfos-test/command.log
+            ${{ runner.temp }}/cfos-runtime-smoke/receipt.json
+            ${{ runner.temp }}/cfos-runtime-smoke/command.log
