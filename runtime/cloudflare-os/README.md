@@ -1,5 +1,8 @@
 # Official Cloudflare OS bounded runtime candidate
 
+正式なローカル実行OSはLinux／WSLです（Issue #14、2026-10-08 owner選択）。
+[固定sourceの開発runnerと検証範囲](../../docs/CLOUDFLARE-OS-LINUX-DEVELOPMENT.md)を参照します。
+
 This directory pins the first Kotodama review baseline for the official
 [Cloudflare OS](https://github.com/cloudflare/cloudflare-os) project.
 
