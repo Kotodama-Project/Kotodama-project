@@ -65,6 +65,32 @@ provider attestation や draft release の受入を証明しません（Issue #1
 
 ## ローカルで同じ確認をする
 
+### cloud agent の初期準備
+
+Linux と Python 3.12 がある環境では `bash tools/dev/setup_agent_env.sh` を実行し、
+`source work/agent-env/activate.sh` で準備した環境を使います。PythonのCI patch版は
+3.12.10です。スクリプトは実際のpatch版を表示し、版の違いをCI一致と主張しません。
+Node 24が無ければSHA-256固定の24.14.0、CorepackはSHA-512固定の0.34.6を
+workspace内へ導入し、packageManager指定のpnpm 11.19.0をCorepackで取得します。
+Pythonの共通・Task swarm依存は両方のhash付きlock、Discordはfrozen lockから
+scriptsを無効にして導入します。providerへの接続やモデル呼出しはありません。
+
+`.claude/settings.json` のSessionStartはstartup/resume時に同じ入口を呼びます。
+`CLAUDE_CODE_REMOTE=true` のcloudだけで実行し、`CLAUDE_ENV_FILE` があれば
+activationを次のshellへ渡します。ほかのagent環境ではsetup欄へ上のコマンドを登録し、
+実行shellでactivationしてください。環境側の設定はこのPRでは変更しません。
+[公式のcloud hook仕様](https://code.claude.com/docs/en/cloud-environments#install-dependencies-with-a-sessionstart-hook)
+に従います。
+
+初回はnodejs.org、registry.npmjs.org、pypi.org、files.pythonhosted.orgへの通信が
+必要です。通信不能や不足toolは `INCOMPLETE` と該当段階を表示し、終了0でsessionを
+継続します。secretファイル・ambient provider tokenは使いません。proxy/CA設定だけは
+既存ネットワークに従って引き継ぎ、値やpackage managerの生出力を表示しません。
+git・ffmpegとPython自体は環境側で準備します。lock・実行版が同じなら再installを省き、
+Pythonの整合性を再確認します。生成物は無視済みの `work/` と `node_modules/` です。
+READYは依存準備の結果です。以下の全検査は別に実行してください。Task swarmの実CLI
+permission probeには、CIの固定fixtureと対応Linux sandboxが別途必要です。
+
 文書だけの変更:
 
 ```text
