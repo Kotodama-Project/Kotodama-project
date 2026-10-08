@@ -1,5 +1,16 @@
 # Cloudflare OS の Linux／WSL 開発
 
+2026-10-08の[専用Linux CI](https://github.com/Kotodama-Project/Kotodama-project/actions/runs/37726483063)
+で、固定候補のbuildと上流全suiteが成功しました。25個のbuild scriptが完了し、
+source／lockの実行前後一致、build・test双方の所有processゼロを確認しました。
+[内容を含まない実行観測](../runtime/cloudflare-os/linux-runtime-evaluation-2026-10-08.json)
+はWindowsの旧失敗記録と分けて保持します。
+[追加のLinux HTTP試験](https://github.com/Kotodama-Project/Kotodama-project/actions/runs/37729077996)では
+実backend／frontendのHEAD 200を3回、bodyゼロ、終了後の接続拒否、観測したlistenerの
+loopback限定、所有process／listenerの残存ゼロを確認しました。
+[HTTP観測](../runtime/cloudflare-os/linux-http-evaluation-2026-10-08.json)はharnessのdigestと
+下記の限定scopeを保持します。実gatekeeper・ログイン・providerの受入は含めません。
+
 Issue #14で2026-10-08に選択された正式なローカル実行経路はLinuxです。
 WindowsではWSL内のLinux Node／pnpmを使います。Windowsのブラウザは利用できますが、
 固定SHAのC# shimは過去の評価用資料として保持し、正式launcherには使いません。
