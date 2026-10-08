@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kotodama-core"
+version = "0.2.0.dev0"
+description = "Public candidate core for Kotodama's Task-bound execution"
+readme = "python/README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = ["Development Status :: 2 - Pre-Alpha", "Programming Language :: Python :: 3"]
+dependencies = []
+
+[project.optional-dependencies]
+swarm = ["mcp==2.2.0", "psutil==7.2.2"]
+
+[project.scripts]
+kotodama-core = "kotodama_core.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Kotodama-Project/Kotodama-project"
+
+[tool.setuptools]
+packages = ["kotodama_core", "kotodama_core.task_swarm"]
+include-package-data = false
+
+[tool.setuptools.package-dir]
+kotodama_core = "python/src/kotodama_core"
+"kotodama_core.task_swarm" = "runtime/task_swarm"
