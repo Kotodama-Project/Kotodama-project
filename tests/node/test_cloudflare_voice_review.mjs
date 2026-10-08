@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 import worker, { __testing } from "../../runtime/cloudflare-edge/src/index.js";
 import { startReviewGateway } from "../../runtime/local-review-gateway/server.mjs";
@@ -13,6 +13,49 @@ import { syntheticSeed, syntheticCatalog, syntheticTenantDigest } from "../../ru
 const ISSUER = "https://team.cloudflareaccess.com";
 const AUDIENCE = "audience-test";
 const GATEWAY = "https://gateway.example.test";
+
+test("missing, conflicting and unbound Gateway metadata cannot accompany a successful projection", async () => {
+  __testing.reset();
+  const fixture = await signingFixture();
+  const jwt = await fixture.token();
+  const provenance = createHash("sha256").update(JSON.stringify(projection().evidence_pointers)).digest("hex");
+  for (const mode of ["missing", "provenance", "duplicate", "backend", "outcome", "latency", "valid"]) {
+    __testing.setFetch(async request => {
+      if (request.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [fixture.jwk] });
+      const response = Response.json(projection());
+      if (mode !== "missing") {
+        const values = { policy: "a".repeat(64), provenance, backend: "local-review-gateway/v3", latency: "under_100ms", outcome: "ok" };
+        if (mode === "provenance") values.provenance = "b".repeat(64);
+        if (mode === "duplicate") values.policy += "," + "b".repeat(64);
+        if (mode === "backend") values.backend = "unrecognized";
+        if (mode === "outcome") values.outcome = "refused";
+        if (mode === "latency") values.latency = "private-text";
+        for (const [key, value] of Object.entries(values)) response.headers.set(`x-kotodama-context-${key}`, value);
+        response.headers.set("x-kotodama-context-raw", "private-header-marker");
+      }
+      return response;
+    });
+    const response = await worker.fetch(withJwt("https://preview.example.test/voice/review", jwt), env());
+    assert.equal(response.status, mode === "valid" ? 200 : 502, mode);
+    assert.equal(response.headers.get("x-kotodama-context-raw"), null);
+    if (mode === "valid") assert.equal(response.headers.get("x-kotodama-context-provenance"), provenance);
+    else assert.equal((await response.text()).includes("Synthetic overview."), false);
+  }
+  __testing.reset();
+});
+
+function installTransport(callback) {
+  __testing.setFetch(async (request) => {
+    const response = await callback(request);
+    if (new URL(request.url).origin === GATEWAY && response?.ok && response.headers && !response.headers.has("x-kotodama-context-policy")) {
+      const provenance = createHash("sha256").update(JSON.stringify(projection().evidence_pointers)).digest("hex");
+      for (const [key, value] of Object.entries({ policy: "a".repeat(64), provenance, backend: "local-review-gateway/v3", latency: "under_100ms", outcome: "ok" })) {
+        response.headers.set(`x-kotodama-context-${key}`, value);
+      }
+    }
+    return response;
+  });
+}
 
 async function signingFixture(kid = "kid-test") {
   const keyPair = await crypto.subtle.generateKey(
@@ -185,7 +228,7 @@ function malformedJsonBytes(value, key, replacement) {
 
 function installFetch(fixture, { onJwks, onGateway } = {}) {
   const calls = { jwks: 0, gateway: 0 };
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) {
       calls.jwks += 1;
@@ -202,7 +245,7 @@ test("Access-verified review readback can only come through Context Gateway", as
   const { jwk, token } = await signingFixture();
   const jwt = await token();
   const calls = [];
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     calls.push(value);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) {
@@ -248,7 +291,7 @@ test("a stalled Access-key fetch reaches a deadline and cannot populate a late c
   let finish;
   let signal;
   __testing.setDeadline(25);
-  __testing.setFetch(request => {
+  installTransport(request => {
     signal = request.signal;
     return new Promise(resolve => { finish = resolve; });
   });
@@ -462,7 +505,7 @@ test("valid and absent optional speaker references survive projection allowlisti
       { summary: "A todo without an owner reference.", due: "2026-08-11" },
     ],
   });
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
     return Response.json(expected);
@@ -490,7 +533,7 @@ test("explicit speaker_ref and owner values must match safe reference syntax", a
       __testing.reset();
       const { jwk, token } = await signingFixture();
       let gatewayCalls = 0;
-      __testing.setFetch(async (request) => {
+      installTransport(async (request) => {
         const value = request instanceof Request ? request : new Request(request);
         if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
         gatewayCalls += 1;
@@ -518,7 +561,7 @@ test("missing, forged, and expired Access JWTs deny direct origin access", async
   __testing.reset();
   const { jwk, token } = await signingFixture();
   let gatewayCalls = 0;
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
     gatewayCalls += 1;
@@ -548,7 +591,7 @@ test("missing, forged, and expired Access JWTs deny direct origin access", async
 test("health and version surfaces require Access and exact preview host", async () => {
   __testing.reset();
   const { jwk, token } = await signingFixture();
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     assert.equal(value.url, `${ISSUER}/cdn-cgi/access/certs`);
     return Response.json({ keys: [jwk] });
@@ -579,7 +622,7 @@ test("J1-RED/J1-01: oversized Access JWKS streams are refused without arrayBuffe
     { trapArrayBuffer: true },
   );
   let gatewayCalls = 0;
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return stream.response;
     gatewayCalls += 1;
@@ -617,7 +660,7 @@ test("J1-02: Access JWKS stream read errors fail closed", async () => {
       throw new Error("JWKS arrayBuffer must not be called");
     },
   };
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return responseWithError;
     return Response.json({ keys: [] });
@@ -638,7 +681,7 @@ test("J1-03: an underreported Access JWKS length still enforces the byte bound",
     [new Uint8Array(262_144), new Uint8Array(1)],
     { contentLength: "1", trapArrayBuffer: true },
   );
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return stream.response;
     return Response.json({ keys: [] });
@@ -658,7 +701,7 @@ test("a cached JWKS refreshes once when Cloudflare rotates to a new kid", async 
   const original = await signingFixture("kid-original");
   const rotated = await signingFixture("kid-rotated");
   let jwksCalls = 0;
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     assert.equal(value.url, `${ISSUER}/cdn-cgi/access/certs`);
     jwksCalls += 1;
@@ -683,7 +726,7 @@ test("review actions are bounded and forwarded only to the Context Gateway", asy
   const { jwk, token } = await signingFixture();
   const jwt = await token();
   let observed;
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
     observed = value;
@@ -716,7 +759,7 @@ test("GW-RED/GW-STREAM: oversized gateway responses use a bounded reader, not ar
     { trapArrayBuffer: true },
   );
   let gatewayCalls = 0;
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
     gatewayCalls += 1;
@@ -739,7 +782,7 @@ test("GW-LENGTH: invalid or known-oversize gateway content lengths cancel before
     __testing.reset();
     const { jwk, token } = await signingFixture();
     const stream = streamingResponse([new Uint8Array(1)], { contentLength });
-    __testing.setFetch(async (request) => {
+    installTransport(async (request) => {
       const value = request instanceof Request ? request : new Request(request);
       if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
       return stream.response;
@@ -763,7 +806,7 @@ test("GW-UNDERREPORT: a gateway body larger than its declared length is cancelle
     [new Uint8Array(1_048_576), new Uint8Array(1)],
     { contentLength: "1", trapArrayBuffer: true },
   );
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
     return stream.response;
@@ -792,7 +835,7 @@ test("GW-REGRESSION: valid Unicode JSON keeps successful bounded readback semant
     [withBom.slice(0, splitAt), withBom.slice(splitAt)],
     { contentLength: String(withBom.byteLength), trapArrayBuffer: true },
   );
-  __testing.setFetch(async (request) => {
+  installTransport(async (request) => {
     const value = request instanceof Request ? request : new Request(request);
     if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
     return stream.response;
@@ -812,7 +855,7 @@ test("oversized review streams are cancelled as soon as the byte limit is crosse
     __testing.reset();
     const { jwk, token } = await signingFixture();
     let gatewayCalls = 0;
-    __testing.setFetch(async (request) => {
+    installTransport(async (request) => {
       const value = request instanceof Request ? request : new Request(request);
       if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
       gatewayCalls += 1;
@@ -861,7 +904,7 @@ test("raw Voice, transcript, credential, and corpus fields fail closed", async (
   for (const forbidden of ["raw_audio", "private_transcript", "credential", "private_corpus"]) {
     __testing.reset();
     const { jwk, token } = await signingFixture();
-    __testing.setFetch(async (request) => {
+    installTransport(async (request) => {
       const value = request instanceof Request ? request : new Request(request);
       if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
       return Response.json(projection({ [forbidden]: "must-not-cross" }));
@@ -889,7 +932,7 @@ test("excessively deep or wide gateway JSON fails closed without recursion", asy
   ]) {
     __testing.reset();
     const { jwk, token } = await signingFixture();
-    __testing.setFetch(async (request) => {
+    installTransport(async (request) => {
       const value = request instanceof Request ? request : new Request(request);
       if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
       return Response.json(projection(invalid));
@@ -915,7 +958,7 @@ test("schema drift and empty required sections fail closed", async () => {
   ]) {
     __testing.reset();
     const { jwk, token } = await signingFixture();
-    __testing.setFetch(async (request) => {
+    installTransport(async (request) => {
       const value = request instanceof Request ? request : new Request(request);
       if (value.url === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
       return Response.json(projection(invalid));
@@ -932,7 +975,7 @@ test("unsafe gateway origin and invalid review input are denied before fetch", a
   __testing.reset();
   const { token } = await signingFixture();
   let calls = 0;
-  __testing.setFetch(async () => {
+  installTransport(async () => {
     calls += 1;
     throw new Error("must not fetch");
   });
@@ -1011,7 +1054,7 @@ test("Worker GET -> review -> restart -> GET uses the actual persistent local HT
   try {
     gateway = await startReviewGateway({ ...gatewayConfig, seeds: syntheticCatalog() });
     __testing.reset();
-    __testing.setFetch(async (request) => {
+    installTransport(async (request) => {
       const url = new URL(request.url);
       if (url.href === `${ISSUER}/cdn-cgi/access/certs`) return Response.json({ keys: [fixture.jwk] });
       assert.equal(url.origin, GATEWAY);

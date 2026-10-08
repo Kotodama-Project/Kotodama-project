@@ -4,7 +4,7 @@ import { request } from "node:http";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { startReviewGateway } from "../../runtime/local-review-gateway/server.mjs";
 import { syntheticSeed, syntheticCatalog, syntheticTenantDigest } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
 
@@ -28,6 +28,8 @@ test("HTTP read and review reject mismatched or missing tenant/purpose despite v
       const headers = { ...auth(config, seed), ...patch };
       const read = await fetch(`${gateway.origin}/v1/voice/handoffs`, { headers });
       assert.equal(read.status, 404);
+      assert.equal(read.headers.get("x-kotodama-context-outcome"), "refused");
+      assert.equal(read.headers.get("x-kotodama-context-policy"), null);
       assert.equal((await read.text()).includes(seed.projection.overview), false);
       const review = await fetch(`${gateway.origin}/v1/voice/handoffs/${seed.projection.handoff_id}/review`, {
         method: "POST", headers, body: JSON.stringify({ action: "accept", expected_revision: 1 }),
@@ -37,6 +39,10 @@ test("HTTP read and review reject mismatched or missing tenant/purpose despite v
     assert.deepEqual(readFileSync(join(stateRoot, "voice-reviews.json")), original);
     const accepted = await fetch(`${gateway.origin}/v1/voice/handoffs`, { headers: auth(config, seed) });
     assert.equal(accepted.status, 200);
+    assert.equal(accepted.headers.get("x-kotodama-context-policy"), createHash("sha256").update(JSON.stringify(seed.access_policy)).digest("hex"));
+    assert.equal(accepted.headers.get("x-kotodama-context-provenance"), createHash("sha256").update(JSON.stringify(seed.projection.evidence_pointers)).digest("hex"));
+    assert.equal(accepted.headers.get("x-kotodama-context-backend"), "local-review-gateway/v3");
+    assert.ok(["under_100ms", "under_1s", "at_least_1s"].includes(accepted.headers.get("x-kotodama-context-latency")));
   } finally { if (gateway) await gateway.close(); rmSync(stateRoot, { recursive: true, force: true }); }
 });
 
