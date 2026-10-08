@@ -18,7 +18,7 @@ concurrency:
 jobs:
   validate-candidate:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Refuse malformed candidate input
@@ -64,7 +64,7 @@ jobs:
     needs: validate-candidate
     if: github.ref == 'refs/heads/main'
     environment: cloudflare-preview
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Check out trusted upload tooling from the dispatch revision
