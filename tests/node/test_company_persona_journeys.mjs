@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 import { startReviewGateway } from "../../runtime/local-review-gateway/server.mjs";
-import { syntheticSeed, syntheticCatalog } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
+import { syntheticSeed, syntheticCatalog, syntheticTenantDigest } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
 
 const personas = [
   ["executive", "取締役会の未承認数字を確定扱いにしない"],
@@ -37,6 +37,7 @@ for (const [role, intent] of personas) {
     catalog.principals.push({ principal_ref: readerRef, kind: "human", actor: reader });
     catalog.records[0].access_policy.readers.push(readerRef);
     const headers = actor => ({ "cf-access-client-id": config.clientId, "cf-access-client-secret": config.clientSecret,
+      "x-kotodama-tenant-digest": syntheticTenantDigest, "x-kotodama-purpose": "voice_review",
       "x-kotodama-access-subject": actor.subject, "x-kotodama-access-email": actor.email, "content-type": "application/json" });
     let gateway;
     try {

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/cloudflare-preview-receipt.schema.json",
+  "title": "Content-free reported Worker preview receipt",
+  "type": "object", "additionalProperties": false,
+  "required": ["kind", "synthetic", "candidate_sha", "dispatch_sha", "approved_sha", "readback_sha", "version_locator", "approval_receipt_sha256", "observed_at", "upload_state", "probes", "production_promoted", "public_beta"],
+  "properties": {
+    "kind": {"const": "kotodama/cloudflare-preview-receipt/v1"},
+    "synthetic": {"type": "boolean"},
+    "candidate_sha": {"$ref": "#/$defs/commit"},
+    "dispatch_sha": {"$ref": "#/$defs/commit"},
+    "approved_sha": {"$ref": "#/$defs/commit"},
+    "readback_sha": {"$ref": "#/$defs/commit"},
+    "version_locator": {"$ref": "#/$defs/nullable_digest"},
+    "approval_receipt_sha256": {"$ref": "#/$defs/nullable_digest"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "upload_state": {"enum": ["NOT_RUN", "REPORTED_UPLOADED", "UNKNOWN"]},
+    "probes": {
+      "type": "object", "additionalProperties": false,
+      "required": ["no_jwt", "wrong_host", "unknown_path", "health", "version"],
+      "properties": {
+        "no_jwt": {"$ref": "#/$defs/probe"}, "wrong_host": {"$ref": "#/$defs/probe"},
+        "unknown_path": {"$ref": "#/$defs/probe"}, "health": {"$ref": "#/$defs/probe"}, "version": {"$ref": "#/$defs/probe"}
+      }
+    },
+    "production_promoted": {"const": false},
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "nullable_digest": {"oneOf": [{"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}, {"type": "null"}]},
+    "probe": {
+      "type": "object", "additionalProperties": false, "required": ["http_status", "headers_sha256", "body_bytes_stored"],
+      "properties": {
+        "http_status": {"type": ["integer", "null"], "minimum": 100, "maximum": 599},
+        "headers_sha256": {"$ref": "#/$defs/nullable_digest"},
+        "body_bytes_stored": {"type": "integer", "const": 0}
+      }
+    }
+  }
+}

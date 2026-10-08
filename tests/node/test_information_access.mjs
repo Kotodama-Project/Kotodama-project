@@ -6,13 +6,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
 import { startReviewGateway, readAccessMetadata } from "../../runtime/local-review-gateway/server.mjs";
-import { syntheticSeed, syntheticCatalog } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
+import { syntheticSeed, syntheticCatalog, syntheticTenantDigest } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
 
 const reader = { subject: "reader-synthetic", email: "reader@example.test" };
 const readerRef = `urn:kotodama:principal:${randomUUID()}`;
 function headers(config, actor) {
   return { "cf-access-client-id": config.clientId, "cf-access-client-secret": config.clientSecret,
     "x-kotodama-access-subject": actor.subject, "x-kotodama-access-email": actor.email,
+    "x-kotodama-tenant-digest": syntheticTenantDigest, "x-kotodama-purpose": "voice_review",
     "content-type": "application/json" };
 }
 
