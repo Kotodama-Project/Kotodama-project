@@ -12,6 +12,15 @@ Issue #12の別候補です。従来の `security-overlay.json` と採用pinは�
 
 ## 再現手順
 
+配布物の整合性、任意の固定source、適用／lock生成後のbytesをそれぞれ検査できます。
+これは読み取りだけで、patch適用・install・auditやtestの再実行・採用は行いません。
+
+```text
+python -S -B tools/validate_cloudflare_security_patch.py
+python -S -B tools/validate_cloudflare_security_patch.py --source-core <pinned-core>
+python -S -B tools/validate_cloudflare_security_patch.py --materialized-core <patched-core>
+```
+
 新しい作業コピーを `bf7f762d7fa73553284d731ab6a978d3ea17be24` へ固定し、
 tracked treeがcleanで入力hashが一致することを確認します。既存の稼働copyには適用しません。
 Node 24.19.0とpnpm 11.9.0を用意し、本人のprovider設定を継承しない評価環境で行います。
