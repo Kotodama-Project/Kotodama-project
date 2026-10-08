@@ -232,8 +232,14 @@ provider棚卸しは[receipt schema](../schemas/cloudflare-provider-inventory-re
 [GETとprivate保存のrunbook](CLOUDFLARE-PROVIDER-INVENTORY.md)を使います。
 記録の整合性は実provider本人性・現況・課金承認を証明しません。
 
+Gatewayのv3 context policyは[実行時検査](../runtime/local-review-gateway/access-policy.mjs)、
+[HTTP境界試験](../tests/node/test_gateway_context_scope.mjs)、
+[設定・移行手順](../runtime/local-review-gateway/README.md)へ対応します。
+tenant・目的・同意・出典のローカル照合であり、実Access identityや本人の同意を認証しません。
+
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
 |---|---|---|---|
+| [ingress policy](../schemas/cloudflare-ingress-policy.schema.json) | [validator](../tools/validate_cloudflare_ingress_policy.py) | [boundary tests](../tests/test_cloudflare_ingress_policy.py) | [Tunnel / Access runbook](CLOUDFLARE-INGRESS.md)。一つのorigin、既定拒否、期限、管理portの禁止を提案として検査。実設定・token・origin閉鎖・deployは証明しない。 |
 | [cloudflare-os-upstream-pin.schema.json](../schemas/cloudflare-os-upstream-pin.schema.json) | [`validate_cloudflare_os_candidate.py`](../tools/validate_cloudflare_os_candidate.py) | [`test_cloudflare_os_candidate.py`](../tests/test_cloudflare_os_candidate.py) | [Cloudflare OS adoption](CLOUDFLARE-OS-ADOPTION.md)。official starter/core の exact source pin と content-free Gatekeeper projection を検査する。install、provider execution、billing、private Context、Promotion、Current Truth、Public Beta GO は証明しない。 |
 | [cloudflare-os-local-runtime-evaluation.schema.json](../schemas/cloudflare-os-local-runtime-evaluation.schema.json) | [`validate_cloudflare_os_local_runtime_evaluation.py`](../tools/validate_cloudflare_os_local_runtime_evaluation.py) | [`test_cloudflare_os_local_runtime_evaluation.py`](../tests/test_cloudflare_os_local_runtime_evaluation.py) | [Cloudflare OS local runtime evaluation](CLOUDFLARE-OS-LOCAL-RUNTIME-EVALUATION.md)。保存済み content-free local receipt の source pin、integrity、1060-test totals、loopback/body/cleanup、P0/P1/P2、zero effect を検査する。再実行freshness、provider deployment、private Context、production、Public Beta GO は証明しない。 |
 | なし（固定記録: [wrangler.jsonc](../runtime/cloudflare-edge/wrangler.jsonc)） | [`validate_cloudflare_edge_candidate.py`](../tools/validate_cloudflare_edge_candidate.py) `--root .` | [`test_cloudflare_edge_candidate.py`](../tests/test_cloudflare_edge_candidate.py)、[`test_cloudflare_voice_review.mjs`](../tests/node/test_cloudflare_voice_review.mjs) | [Cloudflare edge profile](../runtime/cloudflare-edge/README.md)。候補の code を実行せずに、Wrangler 設定と Worker の reviewed digest、全 environment での provider/data binding の禁止、Access JWT 検証と fetch 先 2 か所（Access JWKS と Context Gateway）、preview-upload workflow の `main` 先頭への束縛と Wrangler 検証の順序を静的に検査する。upload、Access と runtime secret の設定、Context Gateway の到達性、配備、Public Beta GO は証明しない。 |
