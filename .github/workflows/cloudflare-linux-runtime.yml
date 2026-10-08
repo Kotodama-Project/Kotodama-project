@@ -1,0 +1,109 @@
+name: Cloudflare Linux runtime
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cloudflare-linux-runtime.yml
+      - tools/run_cloudflare_linux_evaluation.py
+      - tools/validate_cloudflare_security_patch.py
+      - tests/test_cloudflare_linux_evaluation.py
+      - runtime/cloudflare-os/security-2026-10-08/**
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-linux-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONUTF8: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      PIP_NO_INPUT: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+          check-latest: false
+      - run: python -S -B tools/check_tracked_secret_hygiene.py
+      - run: python -m pip install --require-hashes -r requirements-task-swarm-ci.txt
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.19.0'
+          check-latest: false
+      - name: Verify launcher failure and cleanup cases
+        run: python -B -m unittest tests.test_cloudflare_linux_evaluation tests.test_cloudflare_security_patch -v
+      - name: Fetch only the fixed public source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -c core.autocrlf=false init "$RUNNER_TEMP/cfos-core"
+          git -C "$RUNNER_TEMP/cfos-core" fetch --depth=1 https://github.com/cloudflare/cloudflare-os bf7f762d7fa73553284d731ab6a978d3ea17be24
+          git -C "$RUNNER_TEMP/cfos-core" -c core.autocrlf=false checkout --detach FETCH_HEAD
+          python -S -B tools/validate_cloudflare_security_patch.py --source-core "$RUNNER_TEMP/cfos-core"
+          git -C "$RUNNER_TEMP/cfos-core" apply --check --index --unidiff-zero "$GITHUB_WORKSPACE/runtime/cloudflare-os/security-2026-10-08/candidate.patch"
+          git -C "$RUNNER_TEMP/cfos-core" apply --index --unidiff-zero "$GITHUB_WORKSPACE/runtime/cloudflare-os/security-2026-10-08/candidate.patch"
+      - name: Acquire the previously verified pnpm archive
+        shell: python
+        run: |
+          import hashlib, io, json, os, pathlib, tarfile, urllib.request
+          policy = json.loads(pathlib.Path('runtime/cloudflare-os/pnpm-supply-policy.json').read_text())
+          with urllib.request.urlopen(policy['tarball'], timeout=60) as response:
+              archive = response.read(32 * 1024 * 1024 + 1)
+          assert len(archive) <= 32 * 1024 * 1024
+          assert hashlib.sha512(archive).hexdigest() == policy['archive_sha512']
+          destination = pathlib.Path(os.environ['RUNNER_TEMP']) / 'cfos-pnpm'
+          destination.mkdir()
+          with tarfile.open(fileobj=io.BytesIO(archive), mode='r:gz') as source:
+              assert len(source.getmembers()) == policy['archive_entries']
+              assert sum(member.size for member in source.getmembers()) == policy['archive_unpacked_bytes']
+              source.extractall(destination, filter='data')
+      - name: Prepare dependencies separately from local execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/cfos-install-home"
+          node_exe="$(command -v node)"
+          pnpm_js="$RUNNER_TEMP/cfos-pnpm/package/bin/pnpm.cjs"
+          cd "$RUNNER_TEMP/cfos-core"
+          env -i PATH="$(dirname "$node_exe"):/usr/bin:/bin" HOME="$RUNNER_TEMP/cfos-install-home" CI=true \
+            "$node_exe" "$pnpm_js" install --lockfile-only --ignore-scripts --no-frozen-lockfile --registry=https://registry.npmjs.org/
+          env -i PATH="$(dirname "$node_exe"):/usr/bin:/bin" HOME="$RUNNER_TEMP/cfos-install-home" CI=true \
+            "$node_exe" "$pnpm_js" install --frozen-lockfile --ignore-scripts --registry=https://registry.npmjs.org/
+          cd "$GITHUB_WORKSPACE"
+          python -S -B tools/validate_cloudflare_security_patch.py --materialized-core "$RUNNER_TEMP/cfos-core"
+      - name: Build the fixed source and run the full upstream suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          for command in build test; do
+            python -B tools/run_cloudflare_linux_evaluation.py "$command" \
+              --core "$RUNNER_TEMP/cfos-core" --node "$(command -v node)" \
+              --pnpm "$RUNNER_TEMP/cfos-pnpm/package/bin/pnpm.cjs" \
+              --output "$RUNNER_TEMP/cfos-$command" --timeout 1200
+          done
+      - name: Read back content-free command receipts
+        if: always()
+        shell: bash
+        run: |
+          for command in build test; do
+            receipt="$RUNNER_TEMP/cfos-$command/receipt.json"
+            if test -f "$receipt"; then cat "$receipt"; fi
+          done
+      - name: Retain dedicated evaluation logs and receipts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cloudflare-linux-evaluation
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/cfos-build/receipt.json
+            ${{ runner.temp }}/cfos-build/command.log
+            ${{ runner.temp }}/cfos-test/receipt.json
+            ${{ runner.temp }}/cfos-test/command.log
