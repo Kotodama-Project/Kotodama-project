@@ -14,6 +14,7 @@ const MAX_ACCESS_JWKS_BYTES = 262_144;
 const MAX_GATEWAY_BODY_BYTES = 1_048_576;
 const MAX_GATEWAY_JSON_DEPTH = 32;
 const MAX_GATEWAY_JSON_NODES = 10_000;
+const MAX_BODY_CHUNKS = 16_384;
 const SAFE_DOCUMENT_ID = /^[a-z0-9][a-z0-9-]{0,127}$/;
 const SAFE_SPEAKER_REF = /^speaker-[a-z0-9-]{1,32}$/;
 const EVIDENCE_URN = /^urn:kotodama:evidence:sha256:[0-9a-f]{64}$/;
@@ -31,6 +32,10 @@ const FORBIDDEN_GATEWAY_KEYS = new Set([
 
 let fetchImpl = (...args) => globalThis.fetch(...args);
 let jwksCache = null;
+let requestDeadlineMs = 5_000;
+let requestClock = () => performance.now();
+const deadlines = new WeakMap();
+const stopped = signal => signal?.aborted || (signal && requestClock() >= deadlines.get(signal));
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -168,19 +173,20 @@ function normalizedIdentityClaim(value) {
   return value;
 }
 
-async function refreshAccessJwks(config) {
+async function refreshAccessJwks(config, signal) {
   let response;
   try {
     response = await fetchImpl(new Request(`${config.issuer}/cdn-cgi/access/certs`, {
       method: "GET",
       redirect: "error",
       headers: { accept: "application/json" },
+      signal,
     }));
   } catch {
     return null;
   }
   if (!response.ok) return null;
-  const bytes = await boundedBodyBytes(response, MAX_ACCESS_JWKS_BYTES);
+  const bytes = await boundedBodyBytes(response, MAX_ACCESS_JWKS_BYTES, signal);
   if (!bytes) return null;
   const text = decodeUtf8(bytes);
   if (text === null) return null;
@@ -190,12 +196,12 @@ async function refreshAccessJwks(config) {
   } catch {
     return null;
   }
-  if (!Array.isArray(value?.keys) || value.keys.length > 32) return null;
+  if (stopped(signal) || !Array.isArray(value?.keys) || value.keys.length > 32) return null;
   jwksCache = { issuer: config.issuer, keys: value.keys, expiresAt: Date.now() + 300_000 };
   return jwksCache.keys;
 }
 
-async function accessIdentity(request, config) {
+async function accessIdentity(request, config, signal) {
   const parsed = parseJwt(request.headers.get(ACCESS_HEADER));
   if (!parsed || parsed.header.alg !== "RS256" || typeof parsed.header.kid !== "string") {
     return null;
@@ -219,11 +225,11 @@ async function accessIdentity(request, config) {
     && jwksCache.issuer === config.issuer
     && jwksCache.expiresAt > Date.now()
     ? jwksCache.keys
-    : await refreshAccessJwks(config);
+    : await refreshAccessJwks(config, signal);
   if (!keys) return null;
   let jwk = keys.find((key) => key?.kid === parsed.header.kid && key?.kty === "RSA");
   if (!jwk) {
-    keys = await refreshAccessJwks(config);
+    keys = await refreshAccessJwks(config, signal);
     if (!keys) return null;
     jwk = keys.find((key) => key?.kid === parsed.header.kid && key?.kty === "RSA");
   }
@@ -242,7 +248,7 @@ async function accessIdentity(request, config) {
       parsed.signature,
       new TextEncoder().encode(parsed.signed),
     );
-    if (!valid) return null;
+    if (!valid || stopped(signal)) return null;
   } catch {
     return null;
   }
@@ -363,7 +369,7 @@ export function sanitizeProjection(value) {
   };
 }
 
-async function boundedBodyBytes(request, limit) {
+async function boundedBodyBytes(request, limit, signal) {
   if (!request.body) return new Uint8Array();
   let reader;
   try {
@@ -373,9 +379,16 @@ async function boundedBodyBytes(request, limit) {
   }
   const chunks = [];
   let total = 0;
+  let chunkCount = 0;
+  const cancel = () => {
+    try { Promise.resolve(reader.cancel("request_aborted")).catch(() => {}); } catch {}
+  };
+  signal?.addEventListener("abort", cancel, { once: true });
   try {
     while (true) {
+      if (stopped(signal) || chunkCount++ >= MAX_BODY_CHUNKS) { cancel(); return null; }
       const { done, value } = await reader.read();
+      if (stopped(signal)) return null;
       if (done) break;
       const chunk = value instanceof Uint8Array
         ? value
@@ -384,7 +397,7 @@ async function boundedBodyBytes(request, limit) {
           : null;
       if (!chunk || total + chunk.byteLength > limit) {
         try {
-          await reader.cancel("body_limit_exceeded");
+          Promise.resolve(reader.cancel("body_limit_exceeded")).catch(() => {});
         } catch {
           // The request is already denied; cancellation is best effort.
         }
@@ -395,12 +408,13 @@ async function boundedBodyBytes(request, limit) {
     }
   } catch {
     try {
-      await reader.cancel("body_read_failed");
+      Promise.resolve(reader.cancel("body_read_failed")).catch(() => {});
     } catch {
       // The request is already denied; cancellation is best effort.
     }
     return null;
   } finally {
+    signal?.removeEventListener("abort", cancel);
     reader.releaseLock();
   }
   const bytes = new Uint8Array(total);
@@ -417,7 +431,7 @@ async function cancelReadableBody(body, reason) {
   let reader;
   try {
     reader = body.getReader();
-    await reader.cancel(reason);
+    Promise.resolve(reader.cancel(reason)).catch(() => {});
   } catch {
     // The response is already denied; cancellation is best effort.
   } finally {
@@ -429,7 +443,7 @@ async function cancelReadableBody(body, reason) {
   }
 }
 
-async function boundedGatewayBody(response, limit) {
+async function boundedGatewayBody(response, limit, signal) {
   const declared = response.headers.get("content-length");
   if (declared !== null) {
     const declaredBytes = Number(declared);
@@ -442,17 +456,17 @@ async function boundedGatewayBody(response, limit) {
       return null;
     }
   }
-  return boundedBodyBytes(response, limit);
+  return boundedBodyBytes(response, limit, signal);
 }
 
-async function boundedReviewBody(request) {
+async function boundedReviewBody(request, signal) {
   const contentType = request.headers.get("content-type") ?? "";
   if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(contentType.trim())) return null;
   const declared = request.headers.get("content-length");
   if (declared && (!/^[0-9]+$/.test(declared) || Number(declared) > MAX_REVIEW_BODY_BYTES)) {
     return null;
   }
-  const bytes = await boundedBodyBytes(request, MAX_REVIEW_BODY_BYTES);
+  const bytes = await boundedBodyBytes(request, MAX_REVIEW_BODY_BYTES, signal);
   if (!bytes) return null;
   const text = decodeUtf8(bytes);
   if (text === null) return null;
@@ -497,7 +511,7 @@ export function validateReview(value) {
   return value;
 }
 
-async function gatewayReadback(request, config, pathname, identity) {
+async function gatewayReadback(request, config, pathname, identity, signal) {
   let target;
   let init;
   let requestedId;
@@ -514,7 +528,7 @@ async function gatewayReadback(request, config, pathname, identity) {
   } else if (request.method === "POST") {
     const match = pathname.match(/^\/voice\/review\/([a-z0-9][a-z0-9-]{0,127})$/);
     if (!match || !SAFE_DOCUMENT_ID.test(match[1])) return deny("path_denied", 404);
-    const body = await boundedReviewBody(request);
+    const body = await boundedReviewBody(request, signal);
     if (!body) return deny("review_body_denied", 400);
     reviewedId = match[1];
     reviewedBody = body;
@@ -534,8 +548,9 @@ async function gatewayReadback(request, config, pathname, identity) {
   if (identity.subject) headers.set("x-kotodama-access-subject", identity.subject);
   if (identity.email) headers.set("x-kotodama-access-email", identity.email);
   let response;
+  if (stopped(signal)) return deny("request_cancelled", 499);
   try {
-    response = await fetchImpl(new Request(target, { ...init, headers, redirect: "error" }));
+    response = await fetchImpl(new Request(target, { ...init, headers, redirect: "error", signal }));
   } catch {
     return deny("context_gateway_unavailable", 502);
   }
@@ -543,7 +558,7 @@ async function gatewayReadback(request, config, pathname, identity) {
     await cancelReadableBody(response.body, "gateway_refused");
     return deny("context_gateway_refused", [400, 403, 404, 409].includes(response.status) ? response.status : 502);
   }
-  const bytes = await boundedGatewayBody(response, MAX_GATEWAY_BODY_BYTES);
+  const bytes = await boundedGatewayBody(response, MAX_GATEWAY_BODY_BYTES, signal);
   if (!bytes) return deny("context_gateway_body_denied", 502);
   const text = decodeUtf8(bytes);
   if (text === null) return deny("context_gateway_body_denied", 502);
@@ -561,10 +576,10 @@ async function gatewayReadback(request, config, pathname, identity) {
     || projected.human_review.state !== { accept: "accepted", edit: "edited", reject: "rejected" }[reviewedBody.action]
     || (reviewedBody.action === "edit" && projected.overview !== reviewedBody.edited_overview)
   )) return deny("context_gateway_projection_denied", 502);
-  return projected ? json(projected, 200) : deny("context_gateway_projection_denied", 502);
+  return projected && !stopped(signal) ? json(projected, 200) : deny("context_gateway_projection_denied", 502);
 }
 
-async function evaluate(request, env) {
+async function evaluate(request, env, signal) {
   const url = new URL(request.url);
   const { pathname } = url;
   const config = runtimeConfig(env);
@@ -572,7 +587,7 @@ async function evaluate(request, env) {
   if (url.hostname.toLowerCase() !== config.previewHost) {
     return deny("direct_origin_denied", 403);
   }
-  const identity = await accessIdentity(request, config);
+  const identity = await accessIdentity(request, config, signal);
   if (!identity) return deny("access_denied", 401);
   if (pathname === "/healthz" || pathname === "/version") {
     if (request.method !== "GET" && request.method !== "HEAD") {
@@ -584,17 +599,54 @@ async function evaluate(request, env) {
     return request.method === "HEAD" ? new Response(null, { status: 200, headers: JSON_HEADERS }) : json(body);
   }
   if (!pathname.startsWith("/voice/review")) return deny("not_found", 404);
-  return gatewayReadback(request, config, pathname, identity);
+  return gatewayReadback(request, config, pathname, identity, signal);
 }
 
-export default { fetch: (request, env) => evaluate(request, env) };
+async function boundedEvaluate(request, env) {
+  if (request.signal.aborted) return deny("request_cancelled", 499);
+  const controller = new AbortController();
+  const deadline = requestClock() + requestDeadlineMs;
+  deadlines.set(controller.signal, deadline);
+  let timer;
+  let stop;
+  const interruption = new Promise((resolve) => {
+    stop = (code, status) => {
+      controller.abort();
+      resolve(deny(code, status));
+    };
+    timer = setTimeout(() => stop("request_timeout", 504), requestDeadlineMs);
+  });
+  const onAbort = () => stop("request_cancelled", 499);
+  request.signal.addEventListener("abort", onAbort, { once: true });
+  try {
+    const response = await Promise.race([evaluate(request, env, controller.signal), interruption]);
+    const finishedAt = requestClock();
+    if (request.signal.aborted) return deny("request_cancelled", 499);
+    return finishedAt >= deadline ? deny("request_timeout", 504) : response;
+  } finally {
+    clearTimeout(timer);
+    request.signal.removeEventListener("abort", onAbort);
+    controller.abort();
+  }
+}
+
+export default { fetch: (request, env) => boundedEvaluate(request, env) };
 
 export const __testing = {
   reset() {
     jwksCache = null;
     fetchImpl = (...args) => globalThis.fetch(...args);
+    requestDeadlineMs = 5_000;
+    requestClock = () => performance.now();
   },
   setFetch(value) {
     fetchImpl = value;
+  },
+  setDeadline(value) {
+    if (!Number.isInteger(value) || value < 1 || value > 5_000) throw new Error("invalid_test_deadline");
+    requestDeadlineMs = value;
+  },
+  setClock(value) {
+    requestClock = value;
   },
 };
