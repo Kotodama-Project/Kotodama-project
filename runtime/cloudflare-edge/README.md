@@ -1,5 +1,35 @@
 # Cloudflare Edge Profile Candidate
 
+## Previewの承認と読み戻し（#4）
+
+起動前に#3の対象account／zone、#10の実行者・承認者・secret・private receipt保存先、
+Work Orderと費用範囲を確認します。既存preview aliasがあれば元versionとの対応をprivateに
+保存し、衝突が不明なまま上書きしません。8つのruntime／provider bindingが必要です。
+workflowの両jobはUbuntu 24.04に固定し、validatorはdispatch revisionから読みます。
+
+承認するcandidate SHAは現在のmainと同じ値です。workflowは承認前と承認後にmain tipを
+再検査し、変わっていれば止まります。起動はownerが承認したWork Orderの下で行います。
+versions uploadは本番routeやproduction versionへのpromotionを行う工程ではありません。
+
+upload後はprivate作業領域でHEADのheaderだけを確認します。JWTなし401、別host403、
+認証された未知path404、health／version200が対象です。設定欠落の503を成功へ読み替えません。
+bodyを保存せず、version ID、host、認証header、raw response headerは公開receiptへ入れません。
+元記録はprivateに置き、公開候補は対象commit、version／headerのdigest、時刻、statusだけです。
+
+[preview receipt schema](../../schemas/cloudflare-preview-receipt.schema.json)を次で検査します。
+
+```text
+python -B tools/validate_cloudflare_preview_receipt.py examples/cloudflare-preview/synthetic-receipt.json --expected-candidate aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+```
+
+例のSHAとprobeは合成値です。実確認ではWork Orderに束縛したSHAを指定します。
+CLIはlocal JSONの整合とrevisionを確認するだけで、upload／再照会／Human approvalを
+検証しません。失敗statusや未実行probeも記録できますが、reported_checks_matchはfalseです。
+
+失敗時は新しい公開／route変更へ進まず、previewへの許可を止めます。本番versionとrouteに
+変化がないことを読み戻し、元aliasの復旧や生成versionの保持／削除は対象をprivate記録で
+特定して別の承認下で行います。保存先のrestoreと実rollbackは#8／#10の受入として残ります。
+
 This directory is a secret-free deployment candidate for the Cloudflare-facing
 edge of Kotodama. It is not the Kotodama data plane and it does not replace the
 Proxmox segmented profile.
