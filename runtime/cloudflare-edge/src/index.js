@@ -37,8 +37,21 @@ let requestClock = () => performance.now();
 const deadlines = new WeakMap();
 const stopped = signal => signal?.aborted || (signal && requestClock() >= deadlines.get(signal));
 
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+function json(body, status = 200, metadata = {}) {
+  return new Response(JSON.stringify(body), { status, headers: { ...JSON_HEADERS, ...metadata } });
+}
+
+async function gatewayReceiptHeaders(response, projection) {
+  if (!projection) return null;
+  const fields = ["policy", "provenance", "backend", "latency", "outcome"];
+  const values = Object.fromEntries(fields.map(key => [key, response.headers.get(`x-kotodama-context-${key}`)]));
+  if (!/^[a-f0-9]{64}$/.test(values.policy ?? "") || !/^[a-f0-9]{64}$/.test(values.provenance ?? "")
+    || values.backend !== "local-review-gateway/v3" || values.outcome !== "ok"
+    || !["under_100ms", "under_1s", "at_least_1s"].includes(values.latency)) return null;
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([...new Set(projection.evidence_pointers)].sort())));
+  const expected = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, "0")).join("");
+  if (expected !== values.provenance) return null;
+  return Object.fromEntries(fields.map(key => [`x-kotodama-context-${key}`, values[key]]));
 }
 
 function deny(code, status) {
@@ -581,7 +594,8 @@ async function gatewayReadback(request, config, pathname, identity, signal) {
     || projected.human_review.state !== { accept: "accepted", edit: "edited", reject: "rejected" }[reviewedBody.action]
     || (reviewedBody.action === "edit" && projected.overview !== reviewedBody.edited_overview)
   )) return deny("context_gateway_projection_denied", 502);
-  return projected && !stopped(signal) ? json(projected, 200) : deny("context_gateway_projection_denied", 502);
+  const receipt = await gatewayReceiptHeaders(response, projected);
+  return projected && receipt && !stopped(signal) ? json(projected, 200, receipt) : deny("context_gateway_projection_denied", 502);
 }
 
 async function evaluate(request, env, signal) {
