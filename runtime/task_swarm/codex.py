@@ -728,6 +728,8 @@ def _peer_config(peer: Mapping[str, Any], *, authorize_peer_writes: bool) -> dic
     # Resolving a POSIX venv's symlink selects the base Python and loses its packages.
     if not peer_python.is_file() or not os.access(peer_python, os.X_OK):
         raise BackendError("peer_python_invalid", "peer Python must be an existing executable file", retryable=False)
+    # An explicitly selected peer venv may contain only the peer dependencies.
+    # Load the server from this exact artifact; its bootstrap uses sibling code.
     args = [
         "-u",
         str(server_path),

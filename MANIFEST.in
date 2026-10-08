@@ -1,0 +1,5 @@
+global-exclude *
+include LICENSE pyproject.toml MANIFEST.in python/README.md
+recursive-include python/src/kotodama_core *.py
+recursive-include runtime/task_swarm *.py
+global-exclude *.pyc __pycache__

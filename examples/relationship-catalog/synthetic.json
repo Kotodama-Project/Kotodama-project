@@ -1,0 +1,129 @@
+{
+  "kind": "kotodama/relationship-catalog/v1",
+  "synthetic": true,
+  "records": [
+    {
+      "tenant": "example",
+      "connection": "local",
+      "provider": "manual",
+      "object": "person",
+      "record_id": "p1",
+      "source_revision": "fixture-1",
+      "revision": 1,
+      "entity_type": "person",
+      "label": "架空 太郎",
+      "owner": "example-owner",
+      "readers": [
+        "example-reader"
+      ],
+      "purposes": [
+        "planning"
+      ],
+      "expires_at": "2030-01-01T00:00:00Z",
+      "state": "active",
+      "fields": {
+        "role": "企画担当"
+      },
+      "links": []
+    },
+    {
+      "tenant": "example",
+      "connection": "local",
+      "provider": "manual",
+      "object": "organization",
+      "record_id": "o1",
+      "source_revision": "fixture-1",
+      "revision": 1,
+      "entity_type": "organization",
+      "label": "サンプル工房",
+      "owner": "example-owner",
+      "readers": [
+        "example-reader"
+      ],
+      "purposes": [
+        "planning"
+      ],
+      "expires_at": "2030-01-01T00:00:00Z",
+      "state": "active",
+      "fields": {
+        "summary": "架空の共同制作チーム"
+      },
+      "links": []
+    },
+    {
+      "tenant": "example",
+      "connection": "local",
+      "provider": "manual",
+      "object": "relationship",
+      "record_id": "r1",
+      "source_revision": "fixture-1",
+      "revision": 1,
+      "entity_type": "relationship",
+      "label": "企画の相談窓口",
+      "owner": "example-owner",
+      "readers": [
+        "example-reader"
+      ],
+      "purposes": [
+        "planning"
+      ],
+      "expires_at": "2030-01-01T00:00:00Z",
+      "state": "active",
+      "fields": {},
+      "links": [
+        "example::local::manual::person::p1",
+        "example::local::manual::organization::o1"
+      ]
+    },
+    {
+      "tenant": "example",
+      "connection": "local",
+      "provider": "manual",
+      "object": "activity",
+      "record_id": "a1",
+      "source_revision": "fixture-1",
+      "revision": 1,
+      "entity_type": "activity",
+      "label": "試作品の相談会",
+      "owner": "example-owner",
+      "readers": [
+        "example-reader"
+      ],
+      "purposes": [
+        "planning"
+      ],
+      "expires_at": "2030-01-01T00:00:00Z",
+      "state": "active",
+      "fields": {
+        "description": "次の試作品について話し合う架空の活動"
+      },
+      "links": [
+        "example::local::manual::relationship::r1"
+      ]
+    },
+    {
+      "tenant": "example",
+      "connection": "salesforce-synthetic",
+      "provider": "salesforce",
+      "object": "Contact",
+      "record_id": "p1",
+      "source_revision": "fixture-1",
+      "revision": 1,
+      "entity_type": "person",
+      "label": "架空 太郎",
+      "owner": "example-owner",
+      "readers": [
+        "example-reader"
+      ],
+      "purposes": [
+        "planning"
+      ],
+      "expires_at": "2030-01-01T00:00:00Z",
+      "state": "active",
+      "fields": {
+        "note": "表示名が同じでも別sourceとして保持する"
+      },
+      "links": []
+    }
+  ]
+}
