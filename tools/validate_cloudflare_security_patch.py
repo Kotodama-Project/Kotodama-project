@@ -96,10 +96,34 @@ def validate_candidate(candidate, patch, license_bytes):
 
 def git(core, *args):
     try:
-        return subprocess.run(["git", "--no-lazy-fetch", "-C", str(core), *args], check=True, capture_output=True, timeout=30,
+        return subprocess.run(["git", "--no-lazy-fetch", "-c", "core.fsmonitor=false", "-C", str(core), *args], check=True, capture_output=True, timeout=30,
                               env={**os.environ, "GIT_NO_LAZY_FETCH":"1", "GIT_TERMINAL_PROMPT":"0"}).stdout
     except (OSError, subprocess.SubprocessError):
         raise CandidateViolation("fixed Git object read failed") from None
+
+
+def changed_paths(core):
+    # Compare raw bytes to Git blobs: never run a working-tree diff, clean filter,
+    # textconv, or configured monitor merely to inspect a supplied checkout.
+    entries = git(core, "ls-tree", "-rz", "HEAD").split(b"\0")
+    changed = set()
+    tracked = set()
+    for entry in filter(None, entries):
+        metadata, raw_path = entry.split(b"\t", 1)
+        mode, kind, blob = metadata.split()
+        require(mode in (b"100644", b"100755", b"120000") and kind == b"blob", "tracked source blob required")
+        path = raw_path.decode("utf-8")
+        target = core / path
+        require(target.resolve().is_relative_to(core.resolve()), "tracked source escaped core")
+        # A Git symlink stores the link text, never its destination contents.
+        # Windows checkouts with core.symlinks=false store that text as a file.
+        data = os.fsencode(os.readlink(target)) if mode == b"120000" and target.is_symlink() else regular_bytes(target, 16 * 1024 * 1024)
+        actual = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+        if actual != blob.decode():
+            changed.add(path)
+        tracked.add(raw_path)
+    require(set(filter(None, git(core, "ls-files", "-z").split(b"\0"))) == tracked, "index path set mismatch")
+    return changed
 
 
 def verify_source(core, candidate, *, clean_working_tree=False):
@@ -112,12 +136,12 @@ def verify_source(core, candidate, *, clean_working_tree=False):
             require(target.resolve().is_relative_to(core.resolve()), "source path escaped core")
             verify_bytes(regular_bytes(target, 1024 * 1024), expected)
     if clean_working_tree:
-        require(not git(core, "diff", "--no-ext-diff", "--no-textconv", "--name-only", "HEAD", "--").strip(), "source tracked tree must be clean")
+        require(not changed_paths(core), "source tracked tree must use canonical Git bytes")
 
 
 def verify_materialized(core, candidate):
     verify_source(core, candidate)
-    changed = set(git(core, "diff", "--no-ext-diff", "--no-textconv", "--name-only", "HEAD", "--").decode().splitlines())
+    changed = changed_paths(core)
     require(changed == ALL_PATHS, "materialized tracked change set mismatch")
     for path, expected in candidate["materialized_files"].items():
         target = core / path

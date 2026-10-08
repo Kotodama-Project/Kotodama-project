@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch, Mock
 
 from tools import validate_cloudflare_security_patch as check
 
@@ -67,6 +68,24 @@ class CloudflareSecurityPatchTests(unittest.TestCase):
                 check.regular_bytes(path, 4)
         with self.assertRaises(check.CandidateViolation):
             json.loads('{"a":1,"a":2}', object_pairs_hook=check.unique_object)
+
+    def test_git_reads_disable_monitors_and_raw_comparison_refuses_crlf(self):
+        with patch.object(check.subprocess, "run", return_value=Mock(stdout=b"")) as run:
+            check.git(Path("fixture"), "ls-tree", "-rz", "HEAD")
+            self.assertIn("core.fsmonitor=false", run.call_args.args[0])
+        data = b"source\n"
+        blob = hashlib.sha1(b"blob 7\0" + data).hexdigest().encode()
+        tree = b"100644 blob " + blob + b"\tsource.txt\0"
+        def read_git(core, *args):
+            self.assertIn(args, (("ls-tree", "-rz", "HEAD"), ("ls-files", "-z")))
+            return tree if args[0] == "ls-tree" else b"source.txt\0"
+        with tempfile.TemporaryDirectory() as temporary, patch.object(check, "git", side_effect=read_git):
+            root = Path(temporary)
+            target = root / "source.txt"
+            target.write_bytes(data)
+            self.assertEqual(check.changed_paths(root), set())
+            target.write_bytes(b"source\r\n")
+            self.assertEqual(check.changed_paths(root), {"source.txt"})
 
 
 if __name__ == "__main__":
