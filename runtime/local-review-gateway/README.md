@@ -86,6 +86,19 @@ actor header 自体は認証証明ではありません。この秘密値をブ�
 利用者へ渡してはいけません。実 Worker は署名検証済み Access identity から header を
 新規構築します。Gateway は subject/email の組を actor digest として照合し、
 主体IDへ一意に解決し、情報ごとの現在のpolicyでreader/reviewer・分類・取消・期限を検査します。権限のないhandoffは存在しない場合と同じ `404` を返します。
+
+HTTP要求には `x-kotodama-tenant-digest` と `x-kotodama-purpose: voice_review` も必要です。
+Workerは検証に使った正規化issuerとaudienceの順のJSON配列をUTF-8でSHA-256化して
+tenant digestを作り、callerの同名headerをコピーしません。担当者はこのAccess application
+境界が意図したtenantに対応することを照合してpolicyへ設定します。digestだけで実組織の
+本人性を証明するものではありません。
+
+各policyの `context_scope` は `tenant_digest`、固定 `purpose`、`consent` を持ちます。
+consentは `state: active | revoked`、`expires_at`、空でない `source_refs` の閉objectです。
+projectionの全evidence pointerが同意対象に含まれなければ取込・policy更新を拒否します。
+HTTPのtenant・目的不一致、期限切れ・撤回済み同意は404です。POST bodyを読み終えた後にも
+現在policyを再検査します。信頼済みin-process参照も同意の期限・撤回を検査しますが、
+HTTP headerの認証を代行しないため、外部の要求をその入口へ直接転送してはいけません。
 ブラウザからの `Origin` 付き request、異なる Host、未認証 request は拒否します。
 
 | 操作 | 成功時の内容 |
@@ -118,7 +131,9 @@ revision + 1、指定 action の review state に一致しなければ `502` で
 - request body 16 KiB、edited overview 8000 UTF-8 bytes、query 256 UTF-8 bytes、
   同時接続 16、request/idle timeout 5 秒。
 - 最大 64 件、store 最大 4 MiB。保存先は明示したディレクトリ内の固定 filename
-  `voice-reviews.json`（v2）。v1は保全して起動を拒否し、分類・閲覧者を勝手に補完しません。request の ID を filesystem path に使用しません。
+  `voice-reviews.json`（v3）。v1/v2は保全して起動を拒否し、分類・閲覧者・tenant・同意を補完しません。
+  operatorが出典・同意・Access applicationを確認したv3候補を別の専用directoryへimportし、
+  旧storeはrollback用に保持します。request の ID を filesystem path に使用しません。
 - 親を含む symlink directory、symlink/hardlink store、破損 JSON、不正 projection、
   重複 JSON key、private field、malformed UTF-8 を拒否します。
 - UNC・device・network形式の保存先は、filesystemへ触れる前に拒否します。

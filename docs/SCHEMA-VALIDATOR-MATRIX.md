@@ -232,6 +232,11 @@ provider棚卸しは[receipt schema](../schemas/cloudflare-provider-inventory-re
 [GETとprivate保存のrunbook](CLOUDFLARE-PROVIDER-INVENTORY.md)を使います。
 記録の整合性は実provider本人性・現況・課金承認を証明しません。
 
+Gatewayのv3 context policyは[実行時検査](../runtime/local-review-gateway/access-policy.mjs)、
+[HTTP境界試験](../tests/node/test_gateway_context_scope.mjs)、
+[設定・移行手順](../runtime/local-review-gateway/README.md)へ対応します。
+tenant・目的・同意・出典のローカル照合であり、実Access identityや本人の同意を認証しません。
+
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
 |---|---|---|---|
 | [ingress policy](../schemas/cloudflare-ingress-policy.schema.json) | [validator](../tools/validate_cloudflare_ingress_policy.py) | [boundary tests](../tests/test_cloudflare_ingress_policy.py) | [Tunnel / Access runbook](CLOUDFLARE-INGRESS.md)。一つのorigin、既定拒否、期限、管理portの禁止を提案として検査。実設定・token・origin閉鎖・deployは証明しない。 |
