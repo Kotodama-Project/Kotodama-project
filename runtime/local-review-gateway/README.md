@@ -126,7 +126,21 @@ POST は `application/json`、次の閉じた body だけを受け付けます�
 `400` です。Worker も revision を必須検査して転送し、POST 応答が同じ ID、
 revision + 1、指定 action の review state に一致しなければ `502` で拒否します。
 
-## 保存・拒否境界
+## 内容を含まない処理記録
+
+Gatewayは応答headerへpolicyのSHA-256、重複除去・sortしたevidence pointer配列のSHA-256、
+固定backend版、3段階のlatency bucket、`ok/refused/unavailable`を返します。hashの入力は
+UTF-8の`JSON.stringify`で、policyのkey順は保存されたobjectと同じです。
+拒否時のpolicyとprovenanceはnullで、対応headerを省略します。actor・本文・host・tokenは
+処理記録に含めません。[receipt schema](../../schemas/context-gateway-receipt.schema.json)は
+`contextReceipt()`が返すobjectの契約です。受け手が保存する場合もprivateな記録先を用います。
+
+Workerは成功応答で5つのmetadata headerを必須検査し、provenance hashと返されたprojectionの
+出典を照合します。欠落・不正・不一致は502です。検査した5項目だけを応答へ写し、自由なheaderや
+backendのエラー本文を転送しません。署名されたreceiptではなく、policyの実効性や同意の真正性の
+独立証明にはなりません。publicなログや永続storeは追加しません。
+
+## 保存先と上限
 
 - request body 16 KiB、edited overview 8000 UTF-8 bytes、query 256 UTF-8 bytes、
   同時接続 16、request/idle timeout 5 秒。

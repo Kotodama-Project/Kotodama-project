@@ -231,6 +231,11 @@ Gatewayのv3 context policyは[実行時検査](../runtime/local-review-gateway/
 [設定・移行手順](../runtime/local-review-gateway/README.md)へ対応します。
 tenant・目的・同意・出典のローカル照合であり、実Access identityや本人の同意を認証しません。
 
+[Context Gateway receipt](../schemas/context-gateway-receipt.schema.json)は
+[生成関数](../runtime/local-review-gateway/context-receipt.mjs)、[実HTTP試験](../tests/node/test_gateway_context_scope.mjs)、
+[Workerの欠落・不一致試験](../tests/node/test_cloudflare_voice_review.mjs)で確認します。
+構造・digest束縛は署名、実provider、Human approvalではありません。
+
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
 |---|---|---|---|
 | [cloudflare-os-upstream-pin.schema.json](../schemas/cloudflare-os-upstream-pin.schema.json) | [`validate_cloudflare_os_candidate.py`](../tools/validate_cloudflare_os_candidate.py) | [`test_cloudflare_os_candidate.py`](../tests/test_cloudflare_os_candidate.py) | [Cloudflare OS adoption](CLOUDFLARE-OS-ADOPTION.md)。official starter/core の exact source pin と content-free Gatekeeper projection を検査する。install、provider execution、billing、private Context、Promotion、Current Truth、Public Beta GO は証明しない。 |
