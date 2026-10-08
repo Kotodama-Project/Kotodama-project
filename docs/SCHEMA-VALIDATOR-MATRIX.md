@@ -1,5 +1,9 @@
 # Schema / Validator / Test Matrix
 
+人・組織・関係・活動の架空catalogは[専用契約](RELATIONSHIP-CATALOG.md)から試せます。
+[schema](../schemas/relationship-catalog.schema.json)、[read-only CLI](../tools/relationship_catalog.py)、
+[更新・ACL・競合の試験](../tests/test_relationship_catalog.py)を同じ入口へ結びます。
+
 このページは、公開Company starterを読む人が「どのschemaを、どのCLIで、どの
 testとrunbookで確認するか」を一つの順序で辿るためのnavigation projectionです。
 schema単体のPASS、validatorのPASS、testのPASSは、Human approval、runtime、
@@ -215,6 +219,12 @@ python3 tools/verify_company_pack_review_decision_handoff.py \
 `NO_GO_UNPUBLISHED`のままです。
 
 ## 13. Cloudflare edge and official Cloudflare OS bounded candidates
+
+provider棚卸しは[receipt schema](../schemas/cloudflare-provider-inventory-receipt.schema.json)、
+[read-only validator](../tools/validate_cloudflare_provider_inventory.py)、
+[正負試験](../tests/test_cloudflare_provider_inventory.py)、
+[GETとprivate保存のrunbook](CLOUDFLARE-PROVIDER-INVENTORY.md)を使います。
+記録の整合性は実provider本人性・現況・課金承認を証明しません。
 
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
 |---|---|---|---|
