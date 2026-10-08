@@ -3,6 +3,7 @@
   "name": "kotodama-edge-candidate",
   "main": "src/index.js",
   "compatibility_date": "2026-08-07",
+  "compatibility_flags": ["enable_request_signal"],
   "workers_dev": false,
   "preview_urls": false,
   "send_metrics": false,

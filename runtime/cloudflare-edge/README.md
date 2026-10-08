@@ -1,5 +1,14 @@
 # Cloudflare Edge Profile Candidate
 
+Access key取得、Gatewayへの要求、response／review bodyの読取には、同じ5秒のrequest期限を
+適用します。期限超過は内容を含まない504、caller取消は499で終了し、fetch signalとreaderを
+取消します。タイマーcallbackが遅れても完了時の時刻で判定し、遅いJWKSをcacheへ入れません。
+bodyはbyte上限に加えてchunk数を制限します。POSTの応答が期限を超えた場合、Gatewayでの
+commitが無かったという意味にはなりません。再送前に同じhandoffのrevisionを読み戻します。
+tenant／purpose／consentの追加scopeと実provider受入は#6の別の未完事項です。
+incoming requestの取消通知には、[公式のRequest.signal設定](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#enable-requestsignal-for-incoming-requests)
+に従いenable_request_signalを明示します。compatibility dateだけで有効とは仮定しません。
+
 This directory is a secret-free deployment candidate for the Cloudflare-facing
 edge of Kotodama. It is not the Kotodama data plane and it does not replace the
 Proxmox segmented profile.
