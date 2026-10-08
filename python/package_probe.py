@@ -7,6 +7,10 @@ import json
 import pkgutil
 import subprocess
 import sys
+import tempfile
+from pathlib import Path
+import os
+import venv
 
 
 class PrivateImports(importlib.abc.MetaPathFinder):
@@ -30,6 +34,16 @@ except core.SwarmError as error:
     assert error.code == "INVALID_DOCUMENT"
 else:
     raise AssertionError("non-finite JSON accepted")
+cycle = []
+cycle.append(cycle)
+for invalid in ({1: "value"}, {"nested": {None: "value"}}, (1, 2), "\ud800", cycle):
+    for api in (core.canonical, core.digest):
+        try:
+            api(invalid)
+        except core.SwarmError as error:
+            assert error.code == "INVALID_DOCUMENT"
+        else:
+            raise AssertionError("non-JSON input was silently coerced")
 modules = list(pkgutil.iter_modules(swarm.__path__, swarm.__name__ + "."))
 assert len(modules) == 16
 for module in modules:
@@ -43,4 +57,13 @@ diagnostic = json.loads(result.stdout)
 assert diagnostic["self_check"] is True and diagnostic["provider_verified"] is False
 assert diagnostic["public_beta"] == "NO_GO_UNPUBLISHED"
 subprocess.run([sys.executable, "-I", "-m", "kotodama_core.task_swarm.mcp_server", "--help"], check=True, capture_output=True, timeout=10)
+with tempfile.TemporaryDirectory() as temporary:
+    peer = Path(temporary) / "peer"
+    venv.EnvBuilder(with_pip=False).create(peer)
+    executable = peer / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    subprocess.run([str(executable), "-I", "-c", "import importlib.util; assert importlib.util.find_spec('kotodama_core') is None"], check=True, capture_output=True, timeout=10)
+    # The external peer has no core distribution, yet can bootstrap sibling code
+    # from this exact installed artifact before loading its optional MCP dependency.
+    server = Path(swarm.__file__).with_name("mcp_server.py")
+    subprocess.run([str(executable), "-I", str(server), "--help"], check=True, capture_output=True, timeout=10)
 print(json.dumps({"status": "INSTALLED_CANDIDATE_PASS", "modules": len(modules), "version": core.__version__, "provider_verified": False}))
