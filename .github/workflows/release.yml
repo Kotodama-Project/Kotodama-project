@@ -63,8 +63,9 @@ jobs:
         run: |
           set -euo pipefail
           git archive --format=tar.gz --prefix="kotodama-${GITHUB_REF_NAME}/" -o "kotodama-${GITHUB_REF_NAME}.tar.gz" HEAD
+          cp work/python-package/*.whl work/python-package/*.tar.gz work/python-package/*.json work/python-package/SHA256SUMS .
           sha256sum "kotodama-${GITHUB_REF_NAME}.tar.gz" "smoke-${GITHUB_REF_NAME}.json" "sbom-python-ci-${GITHUB_REF_NAME}.cdx.json" "sbom-python-task-swarm-${GITHUB_REF_NAME}.cdx.json" "sbom-discord-${GITHUB_REF_NAME}.cdx.json" > "SHA256SUMS-${GITHUB_REF_NAME}.txt"
-          sha256sum work/python-package/*.whl work/python-package/*.tar.gz work/python-package/*.json work/python-package/SHA256SUMS >> "SHA256SUMS-${GITHUB_REF_NAME}.txt"
+          sha256sum kotodama_core-*.whl kotodama_core-*.tar.gz sbom-python-build.cdx.json sbom-python-swarm-extra.cdx.json build-receipt.json SHA256SUMS >> "SHA256SUMS-${GITHUB_REF_NAME}.txt"
           cat "SHA256SUMS-${GITHUB_REF_NAME}.txt"
 
       - name: Attest build provenance for source, smoke, SBOMs, and checksums
@@ -77,10 +78,12 @@ jobs:
             sbom-python-task-swarm-${{ github.ref_name }}.cdx.json
             sbom-discord-${{ github.ref_name }}.cdx.json
             SHA256SUMS-${{ github.ref_name }}.txt
-            work/python-package/*.whl
-            work/python-package/*.tar.gz
-            work/python-package/*.json
-            work/python-package/SHA256SUMS
+            kotodama_core-*.whl
+            kotodama_core-*.tar.gz
+            sbom-python-build.cdx.json
+            sbom-python-swarm-extra.cdx.json
+            build-receipt.json
+            SHA256SUMS
 
       - name: Draft the release with the matching CHANGELOG section
         shell: bash
@@ -103,7 +106,9 @@ jobs:
             "sbom-python-task-swarm-${GITHUB_REF_NAME}.cdx.json" \
             "sbom-discord-${GITHUB_REF_NAME}.cdx.json" \
             "SHA256SUMS-${GITHUB_REF_NAME}.txt" \
-            work/python-package/*.whl \
-            work/python-package/*.tar.gz \
-            work/python-package/*.json \
-            work/python-package/SHA256SUMS
+            kotodama_core-*.whl \
+            kotodama_core-*.tar.gz \
+            sbom-python-build.cdx.json \
+            sbom-python-swarm-extra.cdx.json \
+            build-receipt.json \
+            SHA256SUMS
