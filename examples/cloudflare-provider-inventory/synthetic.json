@@ -1,0 +1,78 @@
+{
+  "kind": "kotodama/cloudflare-provider-inventory/v1",
+  "synthetic": true,
+  "observed_at": "2026-10-08T00:00:00Z",
+  "identity_state": "REPORTED_MATCH",
+  "account_locator": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "zone_locator": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "private_receipt_sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+  "method": "GET",
+  "services": {
+    "workers": {
+      "status": "OBSERVED",
+      "http_status": 200,
+      "resource_count": 1,
+      "response_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    },
+    "pages": {
+      "status": "UNKNOWN",
+      "http_status": null,
+      "resource_count": null,
+      "response_sha256": null
+    },
+    "tunnels": {
+      "status": "UNKNOWN",
+      "http_status": null,
+      "resource_count": null,
+      "response_sha256": null
+    },
+    "access": {
+      "status": "UNKNOWN",
+      "http_status": null,
+      "resource_count": null,
+      "response_sha256": null
+    },
+    "dns": {
+      "status": "UNKNOWN",
+      "http_status": null,
+      "resource_count": null,
+      "response_sha256": null
+    },
+    "r2": {
+      "status": "UNKNOWN",
+      "http_status": null,
+      "resource_count": null,
+      "response_sha256": null
+    },
+    "ai_gateway": {
+      "status": "UNKNOWN",
+      "http_status": null,
+      "resource_count": null,
+      "response_sha256": null
+    },
+    "billing": {
+      "status": "DENIED",
+      "http_status": 403,
+      "resource_count": null,
+      "response_sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  },
+  "plan": {
+    "name": "UNKNOWN",
+    "entitlement_sha256": null
+  },
+  "budget": {
+    "state": "UNKNOWN",
+    "currency": null,
+    "monthly_ceiling": null,
+    "decision_sha256": null
+  },
+  "unknown_bindings": [
+    "hostname",
+    "origin",
+    "audience",
+    "access_policy",
+    "rollback"
+  ],
+  "public_beta": "NO_GO_UNPUBLISHED"
+}

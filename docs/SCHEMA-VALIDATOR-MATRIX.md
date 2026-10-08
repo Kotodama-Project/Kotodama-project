@@ -220,6 +220,12 @@ python3 tools/verify_company_pack_review_decision_handoff.py \
 
 ## 13. Cloudflare edge and official Cloudflare OS bounded candidates
 
+provider棚卸しは[receipt schema](../schemas/cloudflare-provider-inventory-receipt.schema.json)、
+[read-only validator](../tools/validate_cloudflare_provider_inventory.py)、
+[正負試験](../tests/test_cloudflare_provider_inventory.py)、
+[GETとprivate保存のrunbook](CLOUDFLARE-PROVIDER-INVENTORY.md)を使います。
+記録の整合性は実provider本人性・現況・課金承認を証明しません。
+
 | Schema | Validator / CLI | Regression test | Runbook / PASSの意味 |
 |---|---|---|---|
 | [cloudflare-os-upstream-pin.schema.json](../schemas/cloudflare-os-upstream-pin.schema.json) | [`validate_cloudflare_os_candidate.py`](../tools/validate_cloudflare_os_candidate.py) | [`test_cloudflare_os_candidate.py`](../tests/test_cloudflare_os_candidate.py) | [Cloudflare OS adoption](CLOUDFLARE-OS-ADOPTION.md)。official starter/core の exact source pin と content-free Gatekeeper projection を検査する。install、provider execution、billing、private Context、Promotion、Current Truth、Public Beta GO は証明しない。 |

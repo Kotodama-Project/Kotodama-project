@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/cloudflare-provider-inventory-receipt.schema.json",
+  "title": "Content-free reported Cloudflare provider inventory",
+  "type": "object", "additionalProperties": false,
+  "required": ["kind", "synthetic", "observed_at", "identity_state", "account_locator", "zone_locator", "private_receipt_sha256", "method", "services", "plan", "budget", "unknown_bindings", "public_beta"],
+  "properties": {
+    "kind": {"const": "kotodama/cloudflare-provider-inventory/v1"},
+    "synthetic": {"type": "boolean"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "identity_state": {"enum": ["REPORTED_MATCH", "UNKNOWN", "AMBIGUOUS"]},
+    "account_locator": {"$ref": "#/$defs/nullable_digest"},
+    "zone_locator": {"$ref": "#/$defs/nullable_digest"},
+    "private_receipt_sha256": {"$ref": "#/$defs/nullable_digest"},
+    "method": {"const": "GET"},
+    "services": {
+      "type": "object", "additionalProperties": false,
+      "required": ["workers", "pages", "tunnels", "access", "dns", "r2", "ai_gateway", "billing"],
+      "properties": {
+        "workers": {"$ref": "#/$defs/service"}, "pages": {"$ref": "#/$defs/service"},
+        "tunnels": {"$ref": "#/$defs/service"}, "access": {"$ref": "#/$defs/service"},
+        "dns": {"$ref": "#/$defs/service"}, "r2": {"$ref": "#/$defs/service"},
+        "ai_gateway": {"$ref": "#/$defs/service"}, "billing": {"$ref": "#/$defs/service"}
+      }
+    },
+    "plan": {
+      "type": "object", "additionalProperties": false, "required": ["name", "entitlement_sha256"],
+      "properties": {
+        "name": {"enum": ["FREE", "PAID", "ENTERPRISE", "UNKNOWN"]},
+        "entitlement_sha256": {"$ref": "#/$defs/nullable_digest"}
+      }
+    },
+    "budget": {
+      "type": "object", "additionalProperties": false, "required": ["state", "currency", "monthly_ceiling", "decision_sha256"],
+      "properties": {
+        "state": {"enum": ["REPORTED_DECISION", "UNKNOWN"]},
+        "currency": {"enum": ["USD", "JPY", null]},
+        "monthly_ceiling": {"type": ["number", "null"], "minimum": 0, "maximum": 1000000000},
+        "decision_sha256": {"$ref": "#/$defs/nullable_digest"}
+      }
+    },
+    "unknown_bindings": {
+      "type": "array", "uniqueItems": true, "maxItems": 5,
+      "items": {"enum": ["hostname", "origin", "audience", "access_policy", "rollback"]}
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "nullable_digest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "service": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "http_status", "resource_count", "response_sha256"],
+      "properties": {
+        "status": {"enum": ["OBSERVED", "DENIED", "UNAVAILABLE", "UNKNOWN"]},
+        "http_status": {"enum": [200, 401, 403, 404, 429, 500, 502, 503, null]},
+        "resource_count": {"type": ["integer", "null"], "minimum": 0, "maximum": 1000000000},
+        "response_sha256": {"$ref": "#/$defs/nullable_digest"}
+      }
+    }
+  }
+}
