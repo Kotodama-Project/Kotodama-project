@@ -4,9 +4,13 @@ on:
     paths:
       - pyproject.toml
       - MANIFEST.in
+      - LICENSE
       - python/**
       - runtime/task_swarm/**
       - requirements-package*.txt
+      - requirements-ci.txt
+      - requirements-task-swarm-ci.txt
+      - tools/build_release_sbom.py
       - tools/build_python_candidate.py
       - tests/test_python*py
       - .github/workflows/python-package-candidate.yml

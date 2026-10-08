@@ -17,7 +17,7 @@ class PythonCandidateArtifactsTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertNotEqual(first, builder.normalize_archive(Path("unused"), contents, 1788307210, wheel=wheel))
 
-    def test_unlisted_and_duplicate_wheel_files_are_rejected_before_install(self):
+    def test_unlisted_wheel_files_are_rejected_before_install(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "candidate.whl"
             with zipfile.ZipFile(path, "w") as archive:
