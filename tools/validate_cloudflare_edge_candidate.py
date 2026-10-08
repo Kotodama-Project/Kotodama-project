@@ -23,7 +23,7 @@ WRANGLER_RUNNER_LOCK = PROFILE / "wrangler-runner-package-lock.json"
 
 VERIFIED_COMPATIBILITY_DATE = "2026-08-07"
 VERIFIED_CONFIG_SHA256 = "88c6a3cd7ebdedff1add9d0c4d8d2a622dd70fcb7ca04362b6931c86cd89b63d"
-VERIFIED_WORKER_SHA256 = "2cd745b95fb18285b1c55844ec5a144ed5e8997ae74d731fead6b50c30df8ce0"
+VERIFIED_WORKER_SHA256 = "b67db0dbafe222d348252209569c4333549acac2d1dde90954221297e1661247"
 VERIFIED_WRANGLER_RUNNER_PACKAGE_SHA256 = "78050f0fc214eda989a097930c1daf53ef608259d9d861a128651ed94e0cdf74"
 VERIFIED_WRANGLER_RUNNER_LOCK_SHA256 = "e86ede152f4135397ee58a22023dbf029e36aa361b64d767c5cc33dae97a4cc4"
 EXPECTED_WRANGLER_RUNNER_DEPENDENCY = "file:wrangler-4.120.0.tgz"
@@ -419,7 +419,10 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         '"/voice/review"',
         '"cf-access-jwt-assertion"',
         "/cdn-cgi/access/certs",
-        "refreshAccessJwks(config)",
+        "refreshAccessJwks(config, signal)",
+        'requestDeadlineMs = 5_000',
+        'new AbortController()',
+        '"request_timeout"',
         '"RSASSA-PKCS1-v1_5"',
         "normalizedHostname(env?.PREVIEW_HOST)",
         '"direct_origin_denied"',
