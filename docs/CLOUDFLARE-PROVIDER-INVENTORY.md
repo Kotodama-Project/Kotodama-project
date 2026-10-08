@@ -28,6 +28,23 @@ API rootはCloudflare公式APIです。pathの識別子は担当者のprivate領
 この手順は実行済みという記録ではありません。対象が未確定ならAPIを呼びません。
 install、POST／PUT／PATCH／DELETE、token変更、paid plan有効化、deployを行いません。
 
+## 既存のDashboard認証を使う場合
+
+API tokenを作成せず、認証済みのDashboardを読み取った記録は`method: DASHBOARD_UI`を
+使います。API GETと区別し、全サービスの`http_status`はnullです。画面上の観測から
+200/403等のHTTP statusを作ってはいけません。`response_sha256`にはprivateに保存した
+内容を含まないUI観測記録のdigestを入れます。OBSERVEDには件数とdigestが必要で、
+DENIED/UNAVAILABLEにはdigestとnull件数を要求します。未閲覧はUNKNOWNのままです。
+
+zone一覧に登録がないと報告する場合は`zone_state: NO_ZONE_REPORTED`とnull locatorを
+使います。これはDNSレコード0件や新zone作成の承認ではありません。選択したzoneは
+SELECTED_REPORTED、未確定はUNKNOWNで、矛盾したlocatorを拒否します。
+
+UIから報告する既知planには`scope: WORKERS`を付けます。Workers FreeからR2等の
+他サービスまで無料と推定しません。予算判断には`scope: ADDITIONAL_PROJECT_SPEND`または
+`ACCOUNT_TOTAL`が必要です。追加予算0は、既存契約の停止やaccount全体の費用0を意味しません。
+これらはscope付き報告であり、validatorのauthenticity/identity/budget authorityはfalseです。
+
 ## 公開契約の検査
 
 ```text
