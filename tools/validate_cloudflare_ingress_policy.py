@@ -9,7 +9,10 @@ import stat
 from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parents[1]
-FORBIDDEN_PORTS = {22, 2375, 2376, 3306, 5432, 5678, 6379, 8006, 11434}
+FORBIDDEN_PORTS = {
+    22, 2375, 2376, 3306, 5432, 5678, 6379, 7700, 8006,
+    8983, 9200, 9300, 11434, 27017,
+}
 
 
 def require(condition, code):

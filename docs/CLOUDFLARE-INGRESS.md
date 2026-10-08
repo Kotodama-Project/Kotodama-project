@@ -15,7 +15,10 @@ python -B tools/validate_cloudflare_ingress_policy.py examples/cloudflare-ingres
 入力せず、private照合表へのSHA-256 locatorを使います。
 
 許すoriginはContext GatewayのHTTPサービス一つです。loopback以外の平文HTTP、
-複数origin、直接ingress、AccessのBypass、管理・DB・検索portを拒否します。
+複数origin、直接ingress、AccessのBypassを拒否します。portの拒否対象は
+22、2375、2376、3306、5432、5678、6379、7700、8006、8983、9200、9300、11434、27017です。
+port番号だけで実サービスの役割は証明できないため、別port上の管理・DB・検索サービスも
+実originの照合で除外します。
 frontendは人のidentity、GatewayはService Authを用い、二つのpolicy digestを分けます。
 tokenは未失効・未撤回で、提案上の有効期間を24時間以内に制限します。
 この24時間は候補の上限であり、Cloudflareがその期限を実設定したという意味ではありません。

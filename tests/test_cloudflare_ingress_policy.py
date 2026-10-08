@@ -35,7 +35,8 @@ class IngressPolicyTests(unittest.TestCase):
                 checker.validate(value,now=self.now)
 
     def test_admin_data_ports_and_cleartext_tailnet_origin_are_refused(self):
-        for port in checker.FORBIDDEN_PORTS:
+        for port in (22, 2375, 2376, 3306, 5432, 5678, 6379, 7700, 8006,
+                     8983, 9200, 9300, 11434, 27017):
             value=copy.deepcopy(self.policy); value["origins"][0]["port"]=port
             with self.subTest(port=port), self.assertRaises(ValueError):
                 checker.validate(value,now=self.now)
