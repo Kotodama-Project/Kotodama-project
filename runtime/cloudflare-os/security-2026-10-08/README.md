@@ -12,6 +12,12 @@ Issue #12の別候補です。従来の `security-overlay.json` と採用pinは�
 
 ## 再現手順
 
+このディレクトリのmanifestは最初のWindows観測を保持しています。後続のLinux評価では
+[build・上流全suite](../linux-runtime-evaluation-2026-10-08.json)と
+[限定HTTP／停止試験](../linux-http-evaluation-2026-10-08.json)が成功しました。
+元のWindows失敗flagと、validatorのその記録に対する結果は過去観測の検査であり、
+最新Linuxの失敗を示すものではありません。採用・providerの未受入は引き続き区別します。
+
 配布物の整合性、任意の固定source、適用／lock生成後のbytesをそれぞれ検査できます。
 これは読み取りだけで、patch適用・install・auditやtestの再実行・採用は行いません。
 

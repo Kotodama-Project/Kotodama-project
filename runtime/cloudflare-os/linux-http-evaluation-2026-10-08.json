@@ -1,0 +1,64 @@
+{
+  "kind": "kotodama/cloudflare-linux-http-observation/v1",
+  "status": "LOCAL_HTTP_AND_OWNED_CLEANUP_PASS",
+  "workflow_run_id": 37729077996,
+  "workflow_head": "102a197553cbaafea724d46a8f90e59ba9833ccc",
+  "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/37729077996",
+  "receipt_sha256": "41f57bcf1cfa24f1d9abe2773a78289b3bd98b6fd18a935b75bc8ba9f1b20484",
+  "receipt": {
+    "kind": "kotodama/cloudflare-linux-evaluation/v1",
+    "status": "PASS_LOCAL_COMMAND",
+    "command": "runtime-smoke",
+    "source_commit": "bf7f762d7fa73553284d731ab6a978d3ea17be24",
+    "files": {
+      "packages/mcp-shared/src/account.ts": {
+        "sha256": "22c6e2baf7bf6375f3b2672dd700d91fa78f91fdba27811474c638c35852e0a6",
+        "bytes": 44708
+      },
+      "packages/mcp-shared/__tests__/account-endpoint.test.ts": {
+        "sha256": "2d4cad61b1cbb2eca112fc8152ecab7d1d564fee15794ed0a3626dd6bd8efec6",
+        "bytes": 30531
+      },
+      "pnpm-workspace.yaml": {
+        "sha256": "2d0424ac1a14da658c6ecb71b6d1c3c13b4848c62518307c122e7d4c66683e72",
+        "bytes": 1364
+      },
+      "pnpm-lock.yaml": {
+        "sha256": "1bede6fcd86c2da9bc5b5e235c68158809cdbb8e4792e43981793b909c5d9b33",
+        "bytes": 269227
+      }
+    },
+    "node": "24.19.0",
+    "pnpm": "11.9.0",
+    "provider_credentials_inherited": false,
+    "provider_verified": false,
+    "additional_harness_sha256": "7838a66d69da5355d939f120097db5ff7c4bb9141eea4b6184a52f9a8adcebba",
+    "public_beta": "NO_GO_UNPUBLISHED",
+    "exit_code": 0,
+    "reason": "completed",
+    "tracked_processes": 19,
+    "owned_processes_remaining": 0,
+    "elapsed_seconds": 8.162,
+    "listeners_observed": true,
+    "all_listeners_loopback": true,
+    "owned_listeners_remaining": 0,
+    "source_bytes_unchanged": true,
+    "log_sha256": "d28ae24f9f964a30d973b08b1c39749467cb77e7cf8f41825fccc9051155b5b6"
+  },
+  "http": {
+    "kind": "kotodama/cloudflare-runtime-smoke/v1",
+    "statuses": [
+      200,
+      200,
+      200
+    ],
+    "response_body_bytes": 0,
+    "selected_listener_closed": true,
+    "worker_outbound_requests": 0,
+    "scope": "real-backend-and-built-frontend-no-gatekeepers-or-worker-loader",
+    "public_beta": "NO_GO_UNPUBLISHED"
+  },
+  "provider_verified": false,
+  "upstream_adopted": false,
+  "public_beta": "NO_GO_UNPUBLISHED"
+}
