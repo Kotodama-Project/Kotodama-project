@@ -25,6 +25,9 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULES = {"__init__", "cancellation", "codex", "confidential", "mcp_server", "owner_file", "payload_budget", "payloads", "privacy", "protocol", "sqlite_work", "state", "task_backend", "task_contract", "task_runner", "task_schemas", "transport"}
 PUBLIC = {"__init__.py", "__main__.py", "cli.py"}
 SOURCE_PATHS = {"LICENSE", "MANIFEST.in", "pyproject.toml", "python/README.md"} | {"python/src/kotodama_core/" + name for name in PUBLIC} | {"runtime/task_swarm/" + name + ".py" for name in MODULES}
+BUILDER_PATHS = {"tools/build_python_candidate.py", "tools/build_release_sbom.py", "tools/record_python_candidate_execution.py",
+                 "requirements-ci.txt", "requirements-package-ci.txt", "requirements-task-swarm-ci.txt",
+                 ".github/workflows/python-package-candidate.yml", ".github/workflows/release.yml", "python/package_probe.py"}
 SDIST_META = {"PKG-INFO", "setup.cfg", "kotodama_core.egg-info/SOURCES.txt"}
 WHEEL_META = {"licenses/LICENSE", "METADATA", "WHEEL", "entry_points.txt", "top_level.txt", "RECORD"}
 
@@ -42,13 +45,19 @@ def source_snapshot():
     commit = git("rev-parse", "HEAD").decode().strip()
     tree = git("rev-parse", "HEAD^{tree}").decode().strip()
     epoch = int(git("show", "-s", "--format=%ct", "HEAD"))
+    files = pinned_files(commit, SOURCE_PATHS)
+    builder_files = pinned_files(commit, BUILDER_PATHS)
+    return commit, tree, epoch, files, builder_files
+
+
+def pinned_files(commit, paths):
     files = {}
-    for name in sorted(SOURCE_PATHS):
+    for name in sorted(paths):
         raw = git("show", f"{commit}:{name}")
         require(raw == (ROOT / name).read_bytes(), "SOURCE_DIFFERS_FROM_COMMIT")
         require(len(raw) <= 1024 * 1024 and b"\r" not in raw, "SOURCE_BYTES_INVALID")
         files[name] = raw
-    return commit, tree, epoch, files
+    return files
 
 
 def archive_contents(path, version):
@@ -156,7 +165,7 @@ def normalize_archive(path, contents, epoch, *, wheel):
 def build(output):
     require(sys.version_info[:2] == (3, 12), "PYTHON_312_REQUIRED")
     require(not output.exists(), "NEW_OUTPUT_REQUIRED")
-    commit, tree, epoch, files = source_snapshot()
+    commit, tree, epoch, files, builder_files = source_snapshot()
     project = tomllib.loads(files["pyproject.toml"].decode())["project"]
     version = project["version"]
     versions = {name: importlib.metadata.version(name) for name in ("build", "setuptools")}
@@ -198,11 +207,15 @@ def build(output):
         filename = f"sbom-python-{label}.cdx.json"
         (output / filename).write_bytes(text)
         artifacts[filename] = {"sha256": hashlib.sha256(text).hexdigest(), "bytes": len(text)}
+    require(git("rev-parse", "HEAD").decode().strip() == commit, "HEAD_CHANGED_DURING_BUILD")
+    require(pinned_files(commit, SOURCE_PATHS) == files and pinned_files(commit, BUILDER_PATHS) == builder_files,
+            "INPUT_CHANGED_DURING_BUILD")
     receipt = {"kind": "kotodama/python-candidate-build/v1", "status": "BUILT_NOT_RELEASED",
                "source_commit": commit, "source_tree": tree, "source_date_epoch": epoch,
                "version": version, "tool_versions": versions, "python": sys.version.split()[0],
                "normalization": "generated metadata LF and regenerated RECORD; sorted entries, fixed epoch, regular 0644, zero owner, stable gzip/zip headers",
                "source_files": {name: hashlib.sha256(raw).hexdigest() for name, raw in sorted(files.items())},
+               "builder_inputs": {name: hashlib.sha256(raw).hexdigest() for name, raw in sorted(builder_files.items())},
                "license": "MIT", "artifacts": artifacts, "signature_verified": False,
                "private_consumer_verified": False, "public_beta": "NO_GO_UNPUBLISHED"}
     (output / "build-receipt.json").write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n", encoding="utf-8", newline="\n")
