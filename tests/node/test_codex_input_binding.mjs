@@ -148,6 +148,7 @@ test('schema drift after preparation refuses a successful-looking result', async
     for (const relative of ['runtime/codex-task-bridge/codex-runner.mjs', 'runtime/codex-task-bridge/brief.schema.json',
       'runtime/cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/protocol.mjs',
       'runtime/local-review-gateway/server.mjs', 'runtime/local-review-gateway/access-policy.mjs',
+      'runtime/local-review-gateway/context-receipt.mjs',
       'runtime/local-review-gateway/synthetic-fixture.mjs', 'runtime/cloudflare-edge/src/index.js']) {
       const path = join(root, relative); mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, readFileSync(new URL('../../' + relative, import.meta.url)));
