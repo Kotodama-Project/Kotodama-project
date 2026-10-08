@@ -68,9 +68,19 @@ for (const surface of ['slack', 'teams']) {
 }
 
 test('unknown media remains unavailable and passive source cannot authorize work', () => {
-  assert.throws(() => validateSurfaceEnvelope({ ...envelope, capabilities: { ...envelope.capabilities, receiveAudio: true } }, installation), /MEDIA_NOT_ACCEPTED/);
-  assert.throws(() => validateSurfaceEnvelope({ ...envelope, operation: 'delete' }, installation), /TOMBSTONE_CONTENT_REFUSED/);
+  assert.throws(() => validateSurfaceEnvelope({ ...envelope, capabilities: { ...envelope.capabilities, receiveAudio: true } }, installation), /ENVELOPE_SCHEMA_REFUSED/);
+  assert.throws(() => validateSurfaceEnvelope({ ...envelope, operation: 'delete' }, installation), /ENVELOPE_SCHEMA_REFUSED/);
   const receipt = validateSurfaceEnvelope(envelope, installation);
   assert.equal(receipt.publicationAuthorized, false);
   assert.equal(receipt.providerVerified, false);
+});
+
+test('Node admission follows the same closed schema as the read-only validator', () => {
+  for (const patch of [
+    { permissionRevision: 0 },
+    { acl: { ...envelope.acl, unreviewed: 'must not enter the receipt' } },
+    { acl: { ...envelope.acl, readers: ['actor-a', 'actor-a'] } },
+    { acl: { ...envelope.acl, readers: ['actor-a', 'bad\nreference'] } },
+    { unknown: true },
+  ]) assert.throws(() => validateSurfaceEnvelope({ ...envelope, ...patch }, installation), /ENVELOPE_SCHEMA_REFUSED/);
 });

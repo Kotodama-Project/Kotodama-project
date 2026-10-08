@@ -14,6 +14,8 @@ class SurfaceEnvelopeTests(unittest.TestCase):
         self.fixture = json.loads((ROOT / "examples/surface-envelope/slack.json").read_text(encoding="utf-8"))
 
     def test_each_surface_is_a_contract_without_authentication_or_execution_claims(self):
+        self.assertEqual((ROOT / "schemas/surface-event-envelope.schema.json").read_bytes(),
+                         (ROOT / "runtime/discord-template/schemas/surface-event-envelope.schema.json").read_bytes())
         for surface in ("slack", "teams"):
             report = validator.validate({**self.fixture, "surface": surface})
             self.assertEqual(report["status"], "SYNTHETIC_CONTRACT_VALID")

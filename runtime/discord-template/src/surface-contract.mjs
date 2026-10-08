@@ -1,5 +1,12 @@
 // Account-free contract checks. This module does not register a connector or Task.
 import { createHash, createHmac, createPublicKey, timingSafeEqual, verify } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
+
+const ajv = new Ajv2020({ strict: true });
+addFormats(ajv);
+const envelopeShape = ajv.compile(JSON.parse(readFileSync(new URL('../schemas/surface-event-envelope.schema.json', import.meta.url), 'utf8')));
 
 function requireValue(condition, code) {
   if (!condition) throw new Error(code);
@@ -60,6 +67,7 @@ export function verifyTeamsTokenFixture({ authorization, appId, serviceUrl, keys
 }
 
 export function validateSurfaceEnvelope(event, installation, prior = [], now = Math.floor(Date.now() / 1000)) {
+  requireValue(envelopeShape(event), 'ENVELOPE_SCHEMA_REFUSED');
   requireValue(event?.kind === 'kotodama/surface-envelope/v1' && event.synthetic === true, 'SYNTHETIC_CONTRACT_REQUIRED');
   requireValue(['slack', 'teams'].includes(event.surface) && installation.surface === event.surface, 'SURFACE_MISMATCH');
   for (const name of ['tenant', 'installation', 'channel', 'thread', 'actor', 'eventId', 'sourceId']) text(event[name]);

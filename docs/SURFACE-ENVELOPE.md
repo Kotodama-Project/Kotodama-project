@@ -42,6 +42,9 @@ Emulator、Graph、別cloud、meeting mediaへこのfixture検証を流用しま
 署名mechanismのPASSはprovider本人性のPASSではなく、戻り値はその区別を保持します。
 合成envelopeは常にTask作成とpublication authorityをfalseにします。
 
+Node入口も同じ閉じたschemaを使います。standalone runtimeへのcopyは
+`python tools/dev/sync_surface_schema.py`で生成し、byte一致を試験します。
+
 ## 利用能力の対応
 
 | 能力 | Slack | Teams | 現在の証拠 |
