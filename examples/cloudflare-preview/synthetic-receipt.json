@@ -1,0 +1,41 @@
+{
+  "kind": "kotodama/cloudflare-preview-receipt/v1",
+  "synthetic": true,
+  "candidate_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "dispatch_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "approved_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "readback_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "version_locator": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "approval_receipt_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "observed_at": "2026-10-08T00:00:00Z",
+  "upload_state": "REPORTED_UPLOADED",
+  "probes": {
+    "no_jwt": {
+      "http_status": 401,
+      "headers_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "body_bytes_stored": 0
+    },
+    "wrong_host": {
+      "http_status": 403,
+      "headers_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "body_bytes_stored": 0
+    },
+    "unknown_path": {
+      "http_status": 404,
+      "headers_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "body_bytes_stored": 0
+    },
+    "health": {
+      "http_status": 200,
+      "headers_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "body_bytes_stored": 0
+    },
+    "version": {
+      "http_status": 200,
+      "headers_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "body_bytes_stored": 0
+    }
+  },
+  "production_promoted": false,
+  "public_beta": "NO_GO_UNPUBLISHED"
+}

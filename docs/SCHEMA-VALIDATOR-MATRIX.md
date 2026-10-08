@@ -220,6 +220,12 @@ python3 tools/verify_company_pack_review_decision_handoff.py \
 
 ## 13. Cloudflare edge and official Cloudflare OS bounded candidates
 
+previewの[receipt schema](../schemas/cloudflare-preview-receipt.schema.json)は
+[read-only validator](../tools/validate_cloudflare_preview_receipt.py)、
+[正負試験](../tests/test_cloudflare_preview_receipt.py)、
+[承認・読み戻し手順](../runtime/cloudflare-edge/README.md)へ対応します。
+revisionと報告statusの一致は、実upload／provider本人性／Human approvalではありません。
+
 provider棚卸しは[receipt schema](../schemas/cloudflare-provider-inventory-receipt.schema.json)、
 [read-only validator](../tools/validate_cloudflare_provider_inventory.py)、
 [正負試験](../tests/test_cloudflare_provider_inventory.py)、
