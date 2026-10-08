@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kotodama.example/schemas/relationship-catalog.schema.json",
+  "title": "Synthetic relationship catalog candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "synthetic", "records"],
+  "properties": {
+    "kind": {"const": "kotodama/relationship-catalog/v1"},
+    "synthetic": {"const": true},
+    "records": {"type": "array", "maxItems": 512, "items": {"$ref": "#/$defs/record"}}
+  },
+  "$defs": {
+    "ref": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+    "refs": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+    "record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["tenant", "connection", "provider", "object", "record_id", "source_revision", "revision", "entity_type", "label", "owner", "readers", "purposes", "expires_at", "state", "fields", "links"],
+      "properties": {
+        "tenant": {"$ref": "#/$defs/ref"},
+        "connection": {"$ref": "#/$defs/ref"},
+        "provider": {"enum": ["manual", "salesforce"]},
+        "object": {"$ref": "#/$defs/ref"},
+        "record_id": {"$ref": "#/$defs/ref"},
+        "source_revision": {"type": "string", "minLength": 1, "maxLength": 128},
+        "revision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "entity_type": {"enum": ["person", "organization", "relationship", "activity"]},
+        "label": {"type": "string", "minLength": 1, "maxLength": 200},
+        "owner": {"$ref": "#/$defs/ref"},
+        "readers": {"$ref": "#/$defs/refs"},
+        "purposes": {"$ref": "#/$defs/refs"},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "state": {"enum": ["active", "deleted", "revoked"]},
+        "fields": {"type": "object", "maxProperties": 16, "propertyNames": {"pattern": "^[A-Za-z0-9._-]{1,64}$"}, "additionalProperties": {"type": "string", "maxLength": 2048}},
+        "links": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}::[A-Za-z0-9._-]{1,80}::[A-Za-z0-9._-]{1,80}::[A-Za-z0-9._-]{1,80}::[A-Za-z0-9._-]{1,80}$"}}
+      }
+    }
+  }
+}

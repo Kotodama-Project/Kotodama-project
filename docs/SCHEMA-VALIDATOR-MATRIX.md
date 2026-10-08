@@ -4,6 +4,10 @@ Slack／Teamsの[surface envelope schema](../schemas/surface-event-envelope.sche
 [read-only validator](../tools/validate_surface_envelope.py)、[契約試験](../tests/test_surface_envelope.py)、
 [対応範囲とNode署名試験](SURFACE-ENVELOPE.md)を参照します。
 
+人・組織・関係・活動の架空catalogは[専用契約](RELATIONSHIP-CATALOG.md)から試せます。
+[schema](../schemas/relationship-catalog.schema.json)、[read-only CLI](../tools/relationship_catalog.py)、
+[更新・ACL・競合の試験](../tests/test_relationship_catalog.py)を同じ入口へ結びます。
+
 このページは、公開Company starterを読む人が「どのschemaを、どのCLIで、どの
 testとrunbookで確認するか」を一つの順序で辿るためのnavigation projectionです。
 schema単体のPASS、validatorのPASS、testのPASSは、Human approval、runtime、

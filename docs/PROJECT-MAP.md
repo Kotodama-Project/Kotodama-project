@@ -52,6 +52,9 @@ Task ownerを追加せず、実Codex・native core・配備の受入は残りま
 
 ## 作業を一つ進める
 
+人・組織・関係・活動の[共通catalog候補](RELATIONSHIP-CATALOG.md)は、架空データの
+source／revision／ACLを同じ人向け一覧とagent Contextへ投影します。Salesforce実接続は未確認です。
+
 [agent状態のoffline投影](AGENT-STATUS-PROJECTION.md)は、責任索引と任意の観測を
 診断用に表示します。既定で文脈を伏せ、稼働や認可を静的snapshotから主張しません。
 
