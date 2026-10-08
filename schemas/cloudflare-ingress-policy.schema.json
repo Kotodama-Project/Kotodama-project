@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/cloudflare-ingress-policy.schema.json",
+  "title": "Proposed default-deny ingress policy",
+  "type": "object", "additionalProperties": false,
+  "required": ["kind", "candidate_sha", "account_locator", "zone_locator", "hostname_locator", "tunnel_mode", "origins", "access", "service_token", "public_beta"],
+  "properties": {
+    "kind": {"const": "kotodama/cloudflare-ingress-policy/v1"},
+    "candidate_sha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "account_locator": {"$ref": "#/$defs/digest"},
+    "zone_locator": {"$ref": "#/$defs/digest"},
+    "hostname_locator": {"$ref": "#/$defs/digest"},
+    "tunnel_mode": {"const": "outbound_only"},
+    "origins": {
+      "type": "array", "minItems": 1, "maxItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["locator", "role", "network", "transport", "port", "direct_ingress"],
+        "properties": {
+          "locator": {"$ref": "#/$defs/digest"},
+          "role": {"const": "context_gateway"},
+          "network": {"enum": ["loopback", "private_tailnet"]},
+          "transport": {"enum": ["loopback_http", "https"]},
+          "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+          "direct_ingress": {"const": "blocked"}
+        }
+      }
+    },
+    "access": {
+      "type": "object", "additionalProperties": false,
+      "required": ["default_deny", "bypass_allowed", "frontend_auth", "frontend_policy_digest", "gateway_auth", "gateway_policy_digest"],
+      "properties": {
+        "default_deny": {"const": true}, "bypass_allowed": {"const": false},
+        "frontend_auth": {"const": "human_identity"}, "frontend_policy_digest": {"$ref": "#/$defs/digest"},
+        "gateway_auth": {"const": "service_token"}, "gateway_policy_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "service_token": {
+      "type": "object", "additionalProperties": false, "required": ["handle_digest", "issued_at", "expires_at", "revoked"],
+      "properties": {
+        "handle_digest": {"$ref": "#/$defs/digest"},
+        "issued_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "revoked": {"const": false}
+      }
+    },
+    "public_beta": {"const": "NO_GO_UNPUBLISHED"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}}
+}
