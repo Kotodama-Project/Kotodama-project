@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/tools/dev/setup_agent_env.sh\" --hook",
+            "timeout": 900
+          }
+        ]
+      }
+    ]
+  }
+}
