@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { startReviewGateway, startReviewGatewayFromCli } from "../../runtime/local-review-gateway/server.mjs";
-import { syntheticSeed, syntheticCatalog } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
+import { syntheticSeed, syntheticCatalog, syntheticTenantDigest } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
 
 function options(stateRoot) {
   return { stateRoot, clientId: "synthetic-client-id", clientSecret: randomBytes(32).toString("hex") };
@@ -21,6 +21,8 @@ function headers(config, actor = syntheticSeed().actor) {
     "cf-access-client-secret": config.clientSecret,
     "x-kotodama-access-subject": actor.subject,
     "x-kotodama-access-email": actor.email,
+    "x-kotodama-tenant-digest": syntheticTenantDigest,
+    "x-kotodama-purpose": "voice_review",
     "content-type": "application/json",
   };
 }

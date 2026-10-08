@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Context Gatewayのv3 policyで、Access applicationに束縛したtenant、review目的、同意の期限・撤回・出典参照を検査。v1/v2 storeは保全し、暗黙に移行しない（#6）。
+
 - Cloudflareのprovider棚卸しに、件数・状態・digestだけのreceipt契約、読み取り専用validator、GET／private保存runbookを追加。実account／zoneの本人性、plan・費用の受入は別途必要（#3）。
 
 - 明示slashの`swarm_research`を既存local Taskへ接続。固定3workerと別verifier、専用homeと限定読取、取消・日次枠・元receiptのhash照合を通し、同じTaskへ確認待ちの成果を返す。既定無効で、実モデル/実Discordの受入は別途必要（#160、#286）。

@@ -4,7 +4,11 @@ const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12
 const PRINCIPAL = new RegExp(`^urn:kotodama:principal:${UUID}$`);
 const POLICY = new RegExp(`^urn:kotodama:access-policy:${UUID}$`);
 const DIGEST = /^[0-9a-f]{64}$/;
-const KEYS = ["policy_id", "revision", "classification", "owner_ref", "readers", "reviewers", "expires_at", "state"];
+const KEYS = ["policy_id", "revision", "classification", "owner_ref", "readers", "reviewers", "expires_at", "state", "context_scope"];
+const EVIDENCE = /^urn:kotodama:evidence:sha256:[0-9a-f]{64}$/;
+const exactTime = value => typeof value === "string"
+  && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
+  && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 const closed = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
   && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 export function validatePrincipals(principals) {
@@ -32,9 +36,16 @@ export function validateAccessPolicy(policy, principalRefs) {
     if (!Array.isArray(refs) || refs.length > 128 || new Set(refs).size !== refs.length
       || refs.some((ref) => typeof ref !== "string" || !principalRefs.has(ref))) throw new Error("policy_denied");
   }
-  if (policy.reviewers.some((ref) => !policy.readers.includes(ref))
-    || typeof policy.expires_at !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(policy.expires_at)
-    || !Number.isFinite(Date.parse(policy.expires_at)) || new Date(policy.expires_at).toISOString() !== policy.expires_at) throw new Error("policy_denied");
+  const scope = policy.context_scope;
+  if (policy.reviewers.some((ref) => !policy.readers.includes(ref)) || !exactTime(policy.expires_at)
+    || !closed(scope, ["tenant_digest", "purpose", "consent"])
+    || typeof scope.tenant_digest !== "string" || !DIGEST.test(scope.tenant_digest)
+    || scope.purpose !== "voice_review"
+    || !closed(scope.consent, ["state", "expires_at", "source_refs"])
+    || !["active", "revoked"].includes(scope.consent.state) || !exactTime(scope.consent.expires_at)
+    || !Array.isArray(scope.consent.source_refs) || !scope.consent.source_refs.length || scope.consent.source_refs.length > 64
+    || new Set(scope.consent.source_refs).size !== scope.consent.source_refs.length
+    || scope.consent.source_refs.some(ref => typeof ref !== "string" || !EVIDENCE.test(ref))) throw new Error("policy_denied");
   return policy;
 }
 
@@ -42,8 +53,19 @@ export function canAccess(policy, principalRef, action, now = Date.now()) {
   // No public/publish/execute action exists. Unclassified and secrets never reach this review UI.
   if (!principalRef || !Number.isFinite(now) || !["read", "review"].includes(action)
     || !["public_candidate", "internal", "restricted"].includes(policy.classification)
-    || policy.state !== "active" || Date.parse(policy.expires_at) <= now) return false;
+    || policy.state !== "active" || Date.parse(policy.expires_at) <= now
+    || policy.context_scope?.consent?.state !== "active"
+    || !Number.isFinite(Date.parse(policy.context_scope.consent.expires_at))
+    || Date.parse(policy.context_scope.consent.expires_at) <= now) return false;
   return policy.readers.includes(principalRef) && (action === "read" || policy.reviewers.includes(principalRef));
+}
+
+// HTTP callers must supply the context from the authenticated backend, never a browser assertion.
+export function matchesRequestContext(policy, context) {
+  return closed(context, ["tenant_digest", "purpose"])
+    && typeof context.tenant_digest === "string" && DIGEST.test(context.tenant_digest)
+    && context.tenant_digest === policy.context_scope.tenant_digest
+    && context.purpose === policy.context_scope.purpose;
 }
 
 // This endpoint records human review, not independent model review.
