@@ -312,6 +312,26 @@ test("a response completing after its deadline is refused even before the timer 
   __testing.reset();
 });
 
+test("caller cancellation at the final publication boundary overrides a ready response", async () => {
+  const fixture = await signingFixture();
+  const jwt = await fixture.token();
+  __testing.reset();
+  let baselineReads = 0;
+  __testing.setClock(() => { baselineReads += 1; return 0; });
+  installFetch(fixture);
+  assert.equal((await worker.fetch(withJwt("https://preview.example.test/healthz", jwt), env())).status, 200);
+  __testing.reset();
+  const controller = new AbortController();
+  let reads = 0;
+  __testing.setClock(() => {
+    if (++reads === baselineReads) controller.abort();
+    return 0;
+  });
+  installFetch(fixture);
+  assert.equal((await worker.fetch(withJwt("https://preview.example.test/healthz", jwt, { signal: controller.signal }), env())).status, 499);
+  __testing.reset();
+});
+
 test("GET handoff readback rejects a different requested ID", async () => {
   __testing.reset();
   const fixture = await signingFixture();

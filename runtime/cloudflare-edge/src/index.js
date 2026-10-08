@@ -620,7 +620,9 @@ async function boundedEvaluate(request, env) {
   request.signal.addEventListener("abort", onAbort, { once: true });
   try {
     const response = await Promise.race([evaluate(request, env, controller.signal), interruption]);
-    return requestClock() >= deadline ? deny("request_timeout", 504) : response;
+    const finishedAt = requestClock();
+    if (request.signal.aborted) return deny("request_cancelled", 499);
+    return finishedAt >= deadline ? deny("request_timeout", 504) : response;
   } finally {
     clearTimeout(timer);
     request.signal.removeEventListener("abort", onAbort);
