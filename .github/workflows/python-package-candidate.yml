@@ -80,7 +80,7 @@ jobs:
             work/package-first/SHA256SUMS
       - name: Bind run, job, workflow, and artifact metadata
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CANDIDATE_JOB_NAME: Build Python candidate (${{ matrix.os }})
           CANDIDATE_ARTIFACT_NAME: python-candidate-${{ matrix.os }}
           CANDIDATE_ARTIFACT_ID: ${{ steps.candidate.outputs.artifact-id }}
