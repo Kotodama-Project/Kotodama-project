@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/context-gateway-receipt.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "policy_sha256", "provenance_sha256", "backend_version", "latency_bucket", "outcome", "provider_verified", "publication_authorized"],
+  "properties": {
+    "kind": {"const": "kotodama/context-gateway-receipt/v1"},
+    "policy_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "provenance_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "backend_version": {"const": "local-review-gateway/v3"},
+    "latency_bucket": {"enum": ["under_100ms", "under_1s", "at_least_1s"]},
+    "outcome": {"enum": ["ok", "refused", "unavailable"]},
+    "provider_verified": {"const": false},
+    "publication_authorized": {"const": false}
+  },
+  "allOf": [{
+    "if": {"properties": {"outcome": {"const": "ok"}}},
+    "then": {"properties": {"policy_sha256": {"type": "string"}, "provenance_sha256": {"type": "string"}}},
+    "else": {"properties": {"policy_sha256": {"type": "null"}, "provenance_sha256": {"type": "null"}}}
+  }]
+}
