@@ -10,6 +10,11 @@ repository head is intentionally not substituted for that gitlink. The two
 revisions differ, so an upstream drift review is required before changing the
 baseline.
 
+Issue #12の2026-10-08の別候補は
+[`security-2026-10-08/README.md`](security-2026-10-08/README.md)にあります。
+依存graphとOAuth bindingのcomponent検査は成功しましたが、Windows local workerdの
+全suiteは共通baselineでも失敗しており、採用・全remediationの完了ではありません。
+
 ## 固定された上流差分のレビュー記録
 
 [`upstream-drift-review.json`](upstream-drift-review.json) はIssue #11の固定2版、

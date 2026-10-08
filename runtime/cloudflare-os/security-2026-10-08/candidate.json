@@ -1,0 +1,181 @@
+{
+  "kind": "kotodama/cloudflare-security-candidate/v1",
+  "status": "LOCAL_COMPONENT_PASS_FULL_SUITE_BLOCKED_NOT_ADOPTED",
+  "observed_at": "2026-10-08T00:59:44.418789+00:00",
+  "source": {
+    "repository": "https://github.com/cloudflare/cloudflare-os",
+    "commit": "bf7f762d7fa73553284d731ab6a978d3ea17be24",
+    "tree": "023da57719fa9744a4ca909f9c3863c93cb614fa",
+    "files": {
+      "packages/mcp-shared/src/account.ts": {
+        "blob": "ab3612f001479b237a67b72748fa703350ae6f19",
+        "sha256": "662beec864a8721a07b9f1fd63a5e4e7656809cd614ef809057f92dbe6b26816",
+        "bytes": 41541
+      },
+      "packages/mcp-shared/__tests__/account-endpoint.test.ts": {
+        "blob": "8cb28bc9c4730d26f399371c8ae3303e391095c1",
+        "sha256": "1b26bd42bfd96a6cdd7068fb854e2bc2e1f6c53a2dc5a31ca182cf4b473bb35c",
+        "bytes": 23096
+      },
+      "pnpm-workspace.yaml": {
+        "blob": "a6d915454aad18b607cd5242b7c8e31369cd248d",
+        "sha256": "ce7204ec08398d097c98b3b4f953d5a80e6d0572ffd848b77c70def1e2976843",
+        "bytes": 1066
+      },
+      "pnpm-lock.yaml": {
+        "blob": "df0720a64cbda3efbc598fcbfdef2c7bf8977edc",
+        "sha256": "efd6eb15379a2d02b1bdf0db776c50d421193ef78199baa043f93d99a1307258",
+        "bytes": 285775
+      }
+    }
+  },
+  "patch": {
+    "path": "candidate.patch",
+    "sha256": "94ceabb190042becc9feb7fd86ce3ea0236d774b0b38938d492918aff59433a5",
+    "bytes": 16761,
+    "paths": [
+      "packages/mcp-shared/__tests__/account-endpoint.test.ts",
+      "packages/mcp-shared/src/account.ts",
+      "pnpm-workspace.yaml"
+    ],
+    "includes_generated_lock": false,
+    "apply_requires_index_and_unidiff_zero": true
+  },
+  "license": {
+    "spdx": "Apache-2.0",
+    "path": "LICENSE",
+    "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "scope": "candidate.patch derivatives only; upstream source is not relicensed"
+  },
+  "materialized_files": {
+    "packages/mcp-shared/src/account.ts": {
+      "sha256": "22c6e2baf7bf6375f3b2672dd700d91fa78f91fdba27811474c638c35852e0a6",
+      "bytes": 44708
+    },
+    "packages/mcp-shared/__tests__/account-endpoint.test.ts": {
+      "sha256": "2d4cad61b1cbb2eca112fc8152ecab7d1d564fee15794ed0a3626dd6bd8efec6",
+      "bytes": 30531
+    },
+    "pnpm-workspace.yaml": {
+      "sha256": "2d0424ac1a14da658c6ecb71b6d1c3c13b4848c62518307c122e7d4c66683e72",
+      "bytes": 1364
+    },
+    "pnpm-lock.yaml": {
+      "sha256": "1bede6fcd86c2da9bc5b5e235c68158809cdbb8e4792e43981793b909c5d9b33",
+      "bytes": 269227
+    }
+  },
+  "toolchain": {
+    "node": "24.19.0",
+    "pnpm": "11.9.0",
+    "registry": "https://registry.npmjs.org/",
+    "lock_generated_by_package_manager": true,
+    "install_ignore_scripts": true,
+    "cache": "task-owned shared content cache"
+  },
+  "overrides": {
+    "postcss@8.5.25>nanoid": "3.3.18",
+    "@cloudflare/puppeteer@1.2.0>@puppeteer/browsers": "3.0.4",
+    "@tanstack/router-core@1.171.15>seroval": "1.6.3",
+    "postcss@8.5.25>source-map-js": "1.2.2",
+    "@tailwindcss/node@4.3.3>source-map-js": "1.2.2",
+    "@gadgets/mcp-shared@1.0.0>@modelcontextprotocol/client": "2.2.0"
+  },
+  "observed_verification": {
+    "production_audit_high": 0,
+    "production_audit_critical": 0,
+    "production_audit_other": 0,
+    "mcp_test_files": 19,
+    "mcp_tests_passed": 251,
+    "mcp_types_passed": true,
+    "recursive_build_exit": 0,
+    "recursive_build_projects_considered": 26,
+    "build_scripts_completed": 25,
+    "normal_seroval_source_map_nanoid_controls": true,
+    "windows_shim_source_unchanged": true,
+    "windows_formal_support": false,
+    "full_upstream_suite_passed": false
+  },
+  "remaining_failure": {
+    "scope": "Windows local workerd scheduler facet test",
+    "path": "packages/gatekeeper-scheduler/__tests__/scheduler-scope.test.ts",
+    "candidate_and_previous_overlay_both_fail": true,
+    "conclusion": "shared baseline failure, not a full-suite pass; Linux/source-runtime acceptance remains open"
+  },
+  "review": {
+    "separate_reader_performed": true,
+    "confirmed_issue": "late refresh outcomes must not overwrite or expire a newer credential bundle in the same generation",
+    "response": "private in-memory bundle snapshot fences deduplication, success and rejection; paired synthetic controls pass",
+    "owner_independence_accepted": false
+  },
+  "observations": {
+    "generate": {
+      "exit_code": 0,
+      "finished_at": "2026-10-08T00:04:16.923123+00:00",
+      "receipt_sha256": "d55f873e8f7b114d7c4f8421cfb199e787669ea4f84dfedbd00821039b903f88",
+      "log_sha256": "2cdc150f6741ca72d7eec33d1287107fff788006e98062596680f63a5b98f66a"
+    },
+    "install": {
+      "exit_code": 0,
+      "finished_at": "2026-10-08T00:08:56.407006+00:00",
+      "receipt_sha256": "2dc6379f2acaf76c4d6a6357eed486af06d820510407bff3e91a97a68cf44be1",
+      "log_sha256": "044cacd701f994c7b4761a1ca8015728768e0cfb2ebe20643a2734f28951c611"
+    },
+    "audit": {
+      "exit_code": 0,
+      "finished_at": "2026-10-08T00:08:57.974332+00:00",
+      "receipt_sha256": "afdc516866ee0590d431f06834c51e938f8d8a17e183b406cde86e61c0801aa8",
+      "log_sha256": "0992c017c1e9918a01ac2812c1630572425b4b8c06844feccd58ed12cdc435df"
+    },
+    "mcp-types-reviewed": {
+      "exit_code": 0,
+      "finished_at": "2026-10-08T00:28:37.584728+00:00",
+      "receipt_sha256": "30d2d854f894df772a862d7659f8c6ee1de07a280cd65d72c708502369251391",
+      "log_sha256": "019ee0ae4ac8134be8472c4a3cf36456e1093137ed1f578a6ebe32cb04935a9f"
+    },
+    "mcp-test-reviewed": {
+      "exit_code": 0,
+      "finished_at": "2026-10-08T00:28:43.753442+00:00",
+      "receipt_sha256": "8e551de92f8acdb8e35bc33e62edc38869cf8da67b678fea7ca61b7810144ac9",
+      "log_sha256": "6a48ee9c14d10a0a6ee1ac67c5b7b10204e57324d21077811eb2ce274efdc5ab"
+    },
+    "build-shim-reviewed": {
+      "exit_code": 0,
+      "finished_at": "2026-10-08T00:34:53.379955+00:00",
+      "receipt_sha256": "2256d39b7a3a36569757c614e60a89e153ef9d95c7746475be43e2c87dd85956",
+      "log_sha256": "3820b99d81dbb86480389fc2fddf3b5a77e5875d9cf39a985019285f3728dd6b"
+    },
+    "normal-controls": {
+      "exit_code": 0,
+      "finished_at": "2026-10-08T00:39:31.865337+00:00",
+      "receipt_sha256": "1fd23e83e1288efedf5c2b7528102e9f56ca914e460d068e7f70f0b451e5bbd6",
+      "log_sha256": "47c31dba1cfb5e50b32084cbe2d70235bafedf34d487de7f4cb6583f73f54f0a"
+    },
+    "test": {
+      "exit_code": 1,
+      "finished_at": "2026-10-08T00:42:22.870231+00:00",
+      "receipt_sha256": "293abc182d00be228346439145fa46b9bbee4bd17caf3278405af8375e6fafac",
+      "log_sha256": "9010e7aedd317f62dda7ee24d1f794657f596364c0bfe70abd46a91632f627e2"
+    },
+    "scheduler-control-candidate": {
+      "exit_code": 1,
+      "finished_at": "2026-10-08T00:45:39.882211+00:00",
+      "receipt_sha256": "23787aa4dda59cf2189dff159c693c5b8b63df0577ab29be8b25f4068a6c72d6",
+      "log_sha256": "57c90a60ddd817a1d9f0fb1dcc8f57f615753a9f40fefd31381e2e6e74e66fc9"
+    },
+    "scheduler-control-baseline": {
+      "exit_code": 1,
+      "finished_at": "2026-10-08T00:45:53.173556+00:00",
+      "receipt_sha256": "3a0a17211091f606d3700cc2cc21196b80f1670dcd1b9def0fd35f9c663bc3ff",
+      "log_sha256": "5b1f9d32e48330204daad1944d6947290264b3085ef7c77da5718e5eb4076ac2"
+    }
+  },
+  "adoption": {
+    "upstream_pin_changed": false,
+    "old_security_overlay_rebound": false,
+    "provider_deployed": false,
+    "trust_approved": false,
+    "full_remediation_claimed": false,
+    "public_beta": "NO_GO_UNPUBLISHED"
+  }
+}
