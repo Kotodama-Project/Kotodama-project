@@ -10,6 +10,7 @@ import { isDeepStrictEqual } from "node:util";
 import { sanitizeProjection, validateReview } from "../cloudflare-edge/src/index.js";
 import { syntheticCatalog } from "./synthetic-fixture.mjs";
 import { canAccess, canHumanReview, matchesRequestContext, validateAccessPolicy, validatePrincipals } from "./access-policy.mjs";
+import { contextReceipt, receiptHeaders } from "./context-receipt.mjs";
 
 const MAX_STORE_BYTES = 4_194_304;
 const MAX_PINNED_FILE_BYTES = 268_435_456;
@@ -18,6 +19,7 @@ const MAX_REVIEW_BYTES = 16_384;
 const STORE_SCHEMA = "kotodama/local-voice-review-candidates/v3";
 const ACTOR_DIGEST = /^[0-9a-f]{64}$/;
 const decoder = new TextDecoder("utf-8", { fatal: true });
+const responseStarts = new WeakMap();
 const hash = (value) => createHash("sha256").update(value).digest();
 const closed = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
   && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
@@ -189,8 +191,10 @@ function persist(root, catalog) {
   } catch (error) { unlinkSync(temporary); throw error; }
 }
 
-function reply(response, status, body) {
+function reply(response, status, body, record) {
+  const receipt = contextReceipt(record, status, performance.now() - responseStarts.get(response));
   response.writeHead(status, {
+    ...receiptHeaders(receipt),
     "content-type": "application/json; charset=utf-8", "cache-control": "no-store",
     "x-content-type-options": "nosniff", "content-security-policy": "default-src 'none'",
   });
@@ -250,6 +254,7 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
   const credentials = [hash(clientId), hash(clientSecret)];
   let closing = false;
   const server = createServer({ maxHeaderSize: 16_384, requestTimeout: 5_000, headersTimeout: 5_000 }, async (request, response) => {
+    responseStarts.set(response, performance.now());
     try {
       const port = server.address().port;
       const host = request.headers.host;
@@ -272,7 +277,7 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
         const record = catalog.records.find((item) => canAccess(item.access_policy, principalRef, "read")
           && matchesRequestContext(item.access_policy, context)
           && (query === null || query === item.projection.handoff_id));
-        return record ? reply(response, 200, record.projection) : refuse(response, 404, "handoff_not_found");
+        return record ? reply(response, 200, record.projection, record) : refuse(response, 404, "handoff_not_found");
       }
       const match = url.pathname.match(/^\/v1\/voice\/handoffs\/([a-z0-9][a-z0-9-]{0,127})\/review$/);
       if (request.method !== "POST" || !match || url.search) return refuse(response, 404, "path_denied");
@@ -294,7 +299,7 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
       // No await between CAS, durable replacement and publication of the new state.
       persist(root, next);
       catalog = next;
-      reply(response, 200, catalog.records[index].projection);
+      reply(response, 200, catalog.records[index].projection, catalog.records[index]);
     } catch { refuse(response, 503, "local_gateway_unavailable"); }
   });
   server.maxConnections = 16;
