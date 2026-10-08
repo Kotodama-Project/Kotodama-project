@@ -728,12 +728,11 @@ def _peer_config(peer: Mapping[str, Any], *, authorize_peer_writes: bool) -> dic
     # Resolving a POSIX venv's symlink selects the base Python and loses its packages.
     if not peer_python.is_file() or not os.access(peer_python, os.X_OK):
         raise BackendError("peer_python_invalid", "peer Python must be an existing executable file", retryable=False)
-    # Installed namespace uses module execution; checkout callers retain their
-    # existing direct-script entrypoint and explicitly selected interpreter.
-    server_args = ["-m", "kotodama_core.task_swarm.mcp_server"] if __package__ == "kotodama_core.task_swarm" else [str(server_path)]
+    # An explicitly selected peer venv may contain only the peer dependencies.
+    # Load the server from this exact artifact; its bootstrap uses sibling code.
     args = [
         "-u",
-        *server_args,
+        str(server_path),
         "--binding",
         str(binding),
         "--actor",

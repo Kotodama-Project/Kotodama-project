@@ -1,7 +1,9 @@
 """Public package naming, single-source mapping, and private import boundary."""
 import ast
+import importlib.util
 import json
 from pathlib import Path
+import sys
 import tomllib
 import unittest
 
@@ -10,6 +12,21 @@ PRIVATE_NAMES = {"runtime", "kotodama_operator", "kotodama_control_plane", "ktdm
 
 
 class PythonPackageContractTests(unittest.TestCase):
+    def test_public_digest_refuses_lossy_python_to_json_coercion(self):
+        spec = importlib.util.spec_from_file_location("candidate_public_core", ROOT / "python/src/kotodama_core/__init__.py",
+            submodule_search_locations=[str(ROOT / "python/src/kotodama_core"), str(ROOT / "runtime")])
+        core = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = core
+        spec.loader.exec_module(core)
+        self.assertEqual(core.canonical({"ok":[1,"日本語"]}), '{"ok":[1,"日本語"]}')
+        self.assertEqual(len(core.digest({"1":"value"})), 64)
+        cycle = []
+        cycle.append(cycle)
+        for value in ({1:"value"}, {"nested":{None:"value"}}, (1,2), float("nan"), "\ud800", cycle):
+            for method in (core.canonical, core.digest):
+                with self.subTest(kind=type(value).__name__, method=method.__name__), self.assertRaises(core.SwarmError):
+                    method(value)
+
     def test_namespace_mapping_has_one_source_and_no_console_collision(self):
         package = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
         self.assertEqual(package["project"]["name"], "kotodama-core")

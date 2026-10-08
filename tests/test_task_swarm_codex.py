@@ -427,13 +427,12 @@ def test_peer_python_selection_keeps_existing_precedence(tmp_path, monkeypatch, 
     assert codex._peer_config(peer_startup, authorize_peer_writes=False)["command"] == str(Path(sys.executable).absolute())
 
 
-def test_installed_package_uses_qualified_mcp_module(monkeypatch, peer_startup):
+def test_installed_package_preserves_external_peer_interpreter(monkeypatch, peer_startup):
     legacy = codex._peer_config(peer_startup, authorize_peer_writes=False)
     assert legacy["args"][1].endswith("mcp_server.py")
     monkeypatch.setattr(codex, "__package__", "kotodama_core.task_swarm")
     packaged = codex._peer_config(peer_startup, authorize_peer_writes=False)
-    assert packaged["args"][:3] == ["-u", "-m", "kotodama_core.task_swarm.mcp_server"]
-    assert packaged["args"][3:] == legacy["args"][2:]
+    assert packaged["args"] == legacy["args"]
     assert packaged["command"] == legacy["command"]
 
 
