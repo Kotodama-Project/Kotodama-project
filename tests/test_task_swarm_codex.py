@@ -427,6 +427,15 @@ def test_peer_python_selection_keeps_existing_precedence(tmp_path, monkeypatch, 
     assert codex._peer_config(peer_startup, authorize_peer_writes=False)["command"] == str(Path(sys.executable).absolute())
 
 
+def test_installed_package_preserves_external_peer_interpreter(monkeypatch, peer_startup):
+    legacy = codex._peer_config(peer_startup, authorize_peer_writes=False)
+    assert legacy["args"][1].endswith("mcp_server.py")
+    monkeypatch.setattr(codex, "__package__", "kotodama_core.task_swarm")
+    packaged = codex._peer_config(peer_startup, authorize_peer_writes=False)
+    assert packaged["args"] == legacy["args"]
+    assert packaged["command"] == legacy["command"]
+
+
 def test_peer_python_requires_os_execute_permission(monkeypatch, peer_startup):
     monkeypatch.setattr(codex.os, "access", lambda path, mode: False)
     with pytest.raises(BackendError) as raised:
