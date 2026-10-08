@@ -1,0 +1,33 @@
+{
+  "kind": "kotodama/cloudflare-ingress-policy/v1",
+  "candidate_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "account_locator": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "zone_locator": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "hostname_locator": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "tunnel_mode": "outbound_only",
+  "origins": [
+    {
+      "locator": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "role": "context_gateway",
+      "network": "loopback",
+      "transport": "loopback_http",
+      "port": 8787,
+      "direct_ingress": "blocked"
+    }
+  ],
+  "access": {
+    "default_deny": true,
+    "bypass_allowed": false,
+    "frontend_auth": "human_identity",
+    "frontend_policy_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "gateway_auth": "service_token",
+    "gateway_policy_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+  },
+  "service_token": {
+    "handle_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "issued_at": "2026-10-08T00:00:00Z",
+    "expires_at": "2026-10-08T01:00:00Z",
+    "revoked": false
+  },
+  "public_beta": "NO_GO_UNPUBLISHED"
+}
