@@ -545,6 +545,11 @@ async function gatewayReadback(request, config, pathname, identity, signal) {
   headers.set("accept", "application/json");
   headers.set("cf-access-client-id", config.clientId);
   headers.set("cf-access-client-secret", config.clientSecret);
+  // The verified issuer/audience binding defines this edge tenant. Do not copy caller scope headers.
+  const tenantBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([config.issuer, config.audience])));
+  headers.set("x-kotodama-tenant-digest", Array.from(new Uint8Array(tenantBytes), byte => byte.toString(16).padStart(2, "0")).join(""));
+  headers.set("x-kotodama-purpose", "voice_review");
+  if (stopped(signal)) return deny("request_cancelled", 499);
   if (identity.subject) headers.set("x-kotodama-access-subject", identity.subject);
   if (identity.email) headers.set("x-kotodama-access-email", identity.email);
   let response;

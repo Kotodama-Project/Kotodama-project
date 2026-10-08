@@ -52,13 +52,16 @@ importは閉じた `{principals, records}` object。
 `principals` の各要素は `{principal_ref, kind, actor: {subject, email}}`、
 `records` は `{projection, access_policy}`。具体的な合成入力は `syntheticCatalog()` を参照する。
 
-`access_policy` は次の8フィールドのみ。
+`access_policy` は次の9フィールドのみ。
 
 ```text
-policy_id, revision, classification, owner_ref, readers, reviewers, expires_at, state
+policy_id, revision, classification, owner_ref, readers, reviewers, expires_at, state, context_scope
 ```
 
 初期revision=1、state=active/revoked、期限は `YYYY-MM-DDTHH:mm:ss.sssZ` のUTC。
+`context_scope`はtenant digest、`voice_review`の目的、出典digest参照ごとの同意対象・状態・期限を
+束縛する閉object。HTTP要求ではWorkerがAccess issuer/audienceから導いたtenantと固定目的を照合する。
+詳しい形式と信頼済みin-process入口の限界は[Gateway手順](../runtime/local-review-gateway/README.md)を参照する。
 主体最大128・情報最大64・全store4MiB。ポリシーは現在版と最大32件の過去版を一緒に保存する。
 上限で更新を拒否し、勝手に履歴を破棄しない。次の保存形式への移行は別の明示された作業になる。
 
@@ -88,8 +91,8 @@ node runtime/local-review-gateway/server.mjs --inspect-access --state-root work/
 
 ## 既存データ・派生情報・公開
 
-v1 storeは自動移行せず起動を拒否し、既存bytesを保全する。
-必要な情報と担当/閲覧者を確認して新しい専用storeへv2形式で明示importする。
+v1/v2 storeは自動移行せず起動を拒否し、既存bytesを保全する。
+必要な情報と担当/閲覧者・tenant・出典への同意を確認して新しい専用storeへv3形式で明示importする。
 旧storeに再び旧実装を起動すれば新しい制限は適用されないため、運用切替には別の確認が必要。
 
 この版は要約・embedding・結合を生成しない。将来の派生経路は元情報の制限と出典を保持し、

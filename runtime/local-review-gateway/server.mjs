@@ -9,13 +9,13 @@ import { pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { sanitizeProjection, validateReview } from "../cloudflare-edge/src/index.js";
 import { syntheticCatalog } from "./synthetic-fixture.mjs";
-import { canAccess, canHumanReview, validateAccessPolicy, validatePrincipals } from "./access-policy.mjs";
+import { canAccess, canHumanReview, matchesRequestContext, validateAccessPolicy, validatePrincipals } from "./access-policy.mjs";
 
 const MAX_STORE_BYTES = 4_194_304;
 const MAX_PINNED_FILE_BYTES = 268_435_456;
 const MAX_RECORDS = 64;
 const MAX_REVIEW_BYTES = 16_384;
-const STORE_SCHEMA = "kotodama/local-voice-review-candidates/v2";
+const STORE_SCHEMA = "kotodama/local-voice-review-candidates/v3";
 const ACTOR_DIGEST = /^[0-9a-f]{64}$/;
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const hash = (value) => createHash("sha256").update(value).digest();
@@ -69,6 +69,8 @@ function validateCatalog(catalog) {
     if (!closed(record, ["projection", "access_policy", "policy_history"])
       || !isDeepStrictEqual(sanitizeProjection(record.projection), record.projection)) throw new Error("store_denied");
     const policy = validateAccessPolicy(record.access_policy, principalRefs);
+    if (!record.projection.evidence_pointers.length
+      || record.projection.evidence_pointers.some(ref => !policy.context_scope.consent.source_refs.includes(ref))) throw new Error("source_scope_denied");
     if (policies.has(policy.policy_id) || !Array.isArray(record.policy_history)
       || record.policy_history.length !== policy.revision - 1) throw new Error("store_denied");
     for (const [index, previous] of record.policy_history.entries()) {
@@ -260,6 +262,7 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
       try { actor = actorDigest({ subject: request.headers["x-kotodama-access-subject"] ?? null, email: request.headers["x-kotodama-access-email"] ?? null }); }
       catch { return refuse(response, 403, "actor_denied"); }
       const principalRef = catalog.principals.find((principal) => principal.actor_sha256 === actor)?.principal_ref;
+      const context = { tenant_digest: request.headers["x-kotodama-tenant-digest"], purpose: request.headers["x-kotodama-purpose"] };
       if (!request.url.startsWith("/") || request.url.length > 2048) return refuse(response, 400, "path_denied");
       const url = new URL(request.url, "http://127.0.0.1");
       if (request.method === "GET" && url.pathname === "/v1/voice/handoffs") {
@@ -267,6 +270,7 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
         if ([...url.searchParams.keys()].some((key) => key !== "q") || url.searchParams.getAll("q").length > 1
           || (query !== null && Buffer.byteLength(query, "utf8") > 256)) return refuse(response, 400, "query_denied");
         const record = catalog.records.find((item) => canAccess(item.access_policy, principalRef, "read")
+          && matchesRequestContext(item.access_policy, context)
           && (query === null || query === item.projection.handoff_id));
         return record ? reply(response, 200, record.projection) : refuse(response, 404, "handoff_not_found");
       }
@@ -278,6 +282,7 @@ export async function startReviewGateway({ stateRoot, clientId, clientSecret, se
       if (closing) return refuse(response, 503, "local_gateway_unavailable");
       const reviewPrincipal = catalog.principals.find((principal) => principal.actor_sha256 === actor);
       const index = catalog.records.findIndex((item) => canHumanReview(item.access_policy, reviewPrincipal)
+        && matchesRequestContext(item.access_policy, context)
         && item.projection.handoff_id === match[1]);
       if (index < 0) return refuse(response, 404, "handoff_not_found");
       const current = catalog.records[index].projection;

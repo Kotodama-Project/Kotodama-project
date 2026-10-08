@@ -1,4 +1,9 @@
+import { createHash } from "node:crypto";
+
 // Synthetic operator input only. No source transcripts or Task records are imported.
+export const syntheticTenantDigest = createHash("sha256").update(JSON.stringify([
+  "https://team.cloudflareaccess.com", "audience-test",
+])).digest("hex");
 export function syntheticSeed() {
   return {
     actor: { subject: "reviewer-synthetic", email: "reviewer@example.test" },
@@ -10,6 +15,11 @@ export function syntheticSeed() {
       readers: ["urn:kotodama:principal:ed494209-179c-4d14-a1c0-f82fb6d30788"],
       reviewers: ["urn:kotodama:principal:ed494209-179c-4d14-a1c0-f82fb6d30788"],
       expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      context_scope: {
+        tenant_digest: syntheticTenantDigest, purpose: "voice_review",
+        consent: { state: "active", expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+          source_refs: [`urn:kotodama:evidence:sha256:${"a".repeat(64)}`] },
+      },
     },
     projection: {
       schema: "kotodama.cloudflare_os.authorized_voice_projection",
