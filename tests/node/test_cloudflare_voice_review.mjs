@@ -47,7 +47,7 @@ test("missing, conflicting and unbound Gateway metadata cannot accompany a succe
 function installTransport(callback) {
   __testing.setFetch(async (request) => {
     const response = await callback(request);
-    if (request.url.startsWith(GATEWAY) && response?.ok && response.headers && !response.headers.has("x-kotodama-context-policy")) {
+    if (new URL(request.url).origin === GATEWAY && response?.ok && response.headers && !response.headers.has("x-kotodama-context-policy")) {
       const provenance = createHash("sha256").update(JSON.stringify(projection().evidence_pointers)).digest("hex");
       for (const [key, value] of Object.entries({ policy: "a".repeat(64), provenance, backend: "local-review-gateway/v3", latency: "under_100ms", outcome: "ok" })) {
         response.headers.set(`x-kotodama-context-${key}`, value);
