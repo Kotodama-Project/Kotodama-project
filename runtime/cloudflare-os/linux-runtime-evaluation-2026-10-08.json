@@ -1,0 +1,92 @@
+{
+  "kind": "kotodama/cloudflare-linux-observation/v1",
+  "status": "LINUX_BUILD_AND_UPSTREAM_SUITE_PASS",
+  "workflow_run_id": 37726483063,
+  "workflow_head": "170ffd7ceed145b27021d00aac56daf0409c9ee6",
+  "runner": "ubuntu-24.04",
+  "url": "https://github.com/Kotodama-Project/Kotodama-project/actions/runs/37726483063",
+  "observations": {
+    "build": {
+      "receipt_sha256": "e4e3b0a440f69808588b055720e0406d9d3f2b72fd24599eeaefd52762ffab1f",
+      "kind": "kotodama/cloudflare-linux-evaluation/v1",
+      "status": "PASS_LOCAL_COMMAND",
+      "command": "build",
+      "source_commit": "bf7f762d7fa73553284d731ab6a978d3ea17be24",
+      "files": {
+        "packages/mcp-shared/src/account.ts": {
+          "sha256": "22c6e2baf7bf6375f3b2672dd700d91fa78f91fdba27811474c638c35852e0a6",
+          "bytes": 44708
+        },
+        "packages/mcp-shared/__tests__/account-endpoint.test.ts": {
+          "sha256": "2d4cad61b1cbb2eca112fc8152ecab7d1d564fee15794ed0a3626dd6bd8efec6",
+          "bytes": 30531
+        },
+        "pnpm-workspace.yaml": {
+          "sha256": "2d0424ac1a14da658c6ecb71b6d1c3c13b4848c62518307c122e7d4c66683e72",
+          "bytes": 1364
+        },
+        "pnpm-lock.yaml": {
+          "sha256": "1bede6fcd86c2da9bc5b5e235c68158809cdbb8e4792e43981793b909c5d9b33",
+          "bytes": 269227
+        }
+      },
+      "node": "24.19.0",
+      "pnpm": "11.9.0",
+      "provider_credentials_inherited": false,
+      "provider_verified": false,
+      "public_beta": "NO_GO_UNPUBLISHED",
+      "exit_code": 0,
+      "reason": "completed",
+      "tracked_processes": 117,
+      "owned_processes_remaining": 0,
+      "elapsed_seconds": 49.583,
+      "source_bytes_unchanged": true,
+      "log_sha256": "57c38e0c7cdaaa25cc3b5a250f29e0b8e993aaf7b6569e8f012eb0885990bab9",
+      "completed_package_build_scripts": 25
+    },
+    "test": {
+      "receipt_sha256": "112bf2fa133939b2475aa4b60fb5298600415aed0b218563cbbc6b0099e56128",
+      "kind": "kotodama/cloudflare-linux-evaluation/v1",
+      "status": "PASS_LOCAL_COMMAND",
+      "command": "test",
+      "source_commit": "bf7f762d7fa73553284d731ab6a978d3ea17be24",
+      "files": {
+        "packages/mcp-shared/src/account.ts": {
+          "sha256": "22c6e2baf7bf6375f3b2672dd700d91fa78f91fdba27811474c638c35852e0a6",
+          "bytes": 44708
+        },
+        "packages/mcp-shared/__tests__/account-endpoint.test.ts": {
+          "sha256": "2d4cad61b1cbb2eca112fc8152ecab7d1d564fee15794ed0a3626dd6bd8efec6",
+          "bytes": 30531
+        },
+        "pnpm-workspace.yaml": {
+          "sha256": "2d0424ac1a14da658c6ecb71b6d1c3c13b4848c62518307c122e7d4c66683e72",
+          "bytes": 1364
+        },
+        "pnpm-lock.yaml": {
+          "sha256": "1bede6fcd86c2da9bc5b5e235c68158809cdbb8e4792e43981793b909c5d9b33",
+          "bytes": 269227
+        }
+      },
+      "node": "24.19.0",
+      "pnpm": "11.9.0",
+      "provider_credentials_inherited": false,
+      "provider_verified": false,
+      "public_beta": "NO_GO_UNPUBLISHED",
+      "exit_code": 0,
+      "reason": "completed",
+      "tracked_processes": 215,
+      "owned_processes_remaining": 0,
+      "elapsed_seconds": 39.09,
+      "source_bytes_unchanged": true,
+      "log_sha256": "520fdb41fa740dfb57df3cdb3ce21a2f14f919a74cb931bbe1232db1a8547630",
+      "passed_tests": 1070,
+      "skipped_tests": 7
+    }
+  },
+  "continuous_http_runtime_verified": false,
+  "windows_native_formally_supported": false,
+  "provider_verified": false,
+  "upstream_adopted": false,
+  "public_beta": "NO_GO_UNPUBLISHED"
+}
