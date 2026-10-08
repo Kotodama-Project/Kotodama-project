@@ -7,6 +7,8 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from unittest.mock import Mock
+from types import SimpleNamespace
 
 from tools import run_cloudflare_linux_evaluation as runner
 
@@ -17,6 +19,28 @@ except ImportError:
 
 
 class LinuxEvaluationTests(unittest.TestCase):
+    def test_listener_inspection_tolerates_exiting_child_but_refuses_live_denial(self):
+        api = SimpleNamespace(NoSuchProcess=ProcessLookupError, AccessDenied=PermissionError,
+                              STATUS_ZOMBIE="zombie", CONN_LISTEN="listen")
+        dying = Mock()
+        dying.net_connections.side_effect = PermissionError()
+        dying.is_running.return_value = True
+        dying.status.return_value = "zombie"
+        self.assertEqual(runner.process_listeners(dying, api), [])
+        live = Mock()
+        live.net_connections.side_effect = PermissionError()
+        live.is_running.return_value = True
+        live.status.return_value = "running"
+        with patch.object(runner.time, "sleep"), self.assertRaises(runner.CandidateViolation):
+            runner.process_listeners(live, api)
+        self.assertEqual(live.net_connections.call_count, 3)
+        transient = Mock()
+        transient.net_connections.side_effect = [PermissionError(), []]
+        transient.is_running.return_value = True
+        transient.status.return_value = "running"
+        with patch.object(runner.time, "sleep"):
+            self.assertEqual(runner.process_listeners(transient, api), [])
+
     def test_only_named_finite_local_commands_are_admitted(self):
         self.assertEqual(runner.command_arguments("build"), ["run", "build"])
         for command in ("install", "run-local", "deploy", "exec wrangler dev --remote", "test --watch", "build; install"):

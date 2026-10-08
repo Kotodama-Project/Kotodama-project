@@ -60,6 +60,27 @@ def preflight(core, node, pnpm, candidate):
         require(not any(name == ".npmrc" or name.startswith((".env", ".dev.vars")) for name in files), "local configuration must be absent from evaluation source")
 
 
+def process_listeners(item, psutil):
+    # Linux can revoke access to /proc/PID/fd while a process is exiting.
+    # Recheck its identity/liveness; persistent denial for a live child refuses.
+    for attempt in range(3):
+        try:
+            return [connection.laddr.ip for connection in item.net_connections(kind="inet")
+                    if connection.status == psutil.CONN_LISTEN]
+        except psutil.NoSuchProcess:
+            return []
+        except psutil.AccessDenied:
+            try:
+                if not item.is_running() or item.status() == psutil.STATUS_ZOMBIE:
+                    return []
+            except psutil.NoSuchProcess:
+                return []
+            if attempt == 2:
+                raise CandidateViolation("owned listener observation unavailable") from None
+            time.sleep(0.01)
+    raise CandidateViolation("owned listener observation unavailable")
+
+
 def owned_run(argv, core, environment, log, timeout, *, stop_requested=None, observe_listeners=False):
     """Track exact child identities; stop only this invocation's descendants."""
     import psutil  # Installed from requirements-task-swarm-ci.txt in the evaluator.
@@ -108,11 +129,7 @@ def owned_run(argv, core, environment, log, timeout, *, stop_requested=None, obs
     def listeners():
         result = []
         for item in alive():
-            try:
-                result.extend(connection.laddr.ip for connection in item.net_connections(kind="inet")
-                              if connection.status == psutil.CONN_LISTEN)
-            except psutil.NoSuchProcess:
-                pass
+            result.extend(process_listeners(item, psutil))
         return result
 
     reason = "completed"
