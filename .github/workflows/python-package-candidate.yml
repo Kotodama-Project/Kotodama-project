@@ -15,6 +15,7 @@ on:
       - tools/record_python_candidate_execution.py
       - tests/test_python*py
       - .github/workflows/python-package-candidate.yml
+      - .github/workflows/release.yml
   workflow_dispatch:
 permissions:
   contents: read
