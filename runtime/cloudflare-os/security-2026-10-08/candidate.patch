@@ -1,0 +1,291 @@
+diff --git a/packages/mcp-shared/__tests__/account-endpoint.test.ts b/packages/mcp-shared/__tests__/account-endpoint.test.ts
+index 8cb28bc9c4730d26f399371c8ae3303e391095c1..a5bb691560802e612f2ab6a59b72a8b6e13debb4 100644
+--- a/packages/mcp-shared/__tests__/account-endpoint.test.ts
++++ b/packages/mcp-shared/__tests__/account-endpoint.test.ts
+@@ -1,0 +2 @@ import { afterEach, describe, expect, it, vi } from "vitest";
++import type { OAuthClientProvider } from "@modelcontextprotocol/client";
+@@ -14,0 +16 @@ function fakeContext() {
++      async deleteAll() { values.clear(); },
+@@ -128,0 +131,135 @@ const server = (endpoint: string): ConnectedServer => ({
++function boundOAuthContext(expired = false) {
++  const context = fakeContext();
++  const connected = server("https://mcp.example/mcp");
++  const issuer = "https://auth.example";
++  context.storage.kv.put("server", connected);
++  context.storage.kv.put("tokens", {
++    access_token: "synthetic-access", token_type: "Bearer", refresh_token: "synthetic-refresh",
++    issuer, expiresAt: Date.now() + (expired ? -1000 : 3600000),
++  });
++  context.storage.kv.put("oauthClient", { client_id: "synthetic-client", issuer });
++  context.storage.kv.put("oauthDiscovery", {
++    authorizationServerUrl: issuer,
++    authorizationServerMetadata: {
++      issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`,
++      revocation_endpoint: `${issuer}/revoke`,
++    },
++  });
++  return { context, connected, issuer };
++}
++
++describe("explicit OAuth issuer binding", () => {
++  it("returns a bound fresh token without a request and tolerates one trailing slash", async () => {
++    const { context, connected, issuer } = boundOAuthContext();
++    context.storage.kv.put("oauthClient", { client_id: "synthetic-client", issuer: `${issuer}/` });
++    const fetch = vi.fn();
++    vi.stubGlobal("fetch", fetch);
++    await expect(new OAuthFlowAccount(context as never, {}).getConnection(connected.endpoint))
++      .resolves.toMatchObject({ authorization: "synthetic-access" });
++    expect(fetch).not.toHaveBeenCalled();
++  });
++
++  for (const expired of [false, true]) {
++    for (const [key, issuer] of [
++      ["tokens", undefined], ["oauthClient", undefined], ["tokens", "https://other.example"],
++      ["tokens", "https://auth.example/other"], ["tokens", "https://auth.example:8443"],
++      ["tokens", "http://auth.example"],
++    ] as const) {
++      it(`requires reconnect for ${key} binding ${String(issuer)} with expired=${expired}`, async () => {
++        const { context, connected } = boundOAuthContext(expired);
++        const original = context.storage.kv.get<Record<string, unknown>>(key)!;
++        context.storage.kv.put(key, { ...original, issuer });
++        const before = context.storage.kv.get(key);
++        const fetch = vi.fn();
++        vi.stubGlobal("fetch", fetch);
++        await expect(new OAuthFlowAccount(context as never, {}).getConnection(connected.endpoint))
++          .rejects.toThrow(/reconnect/);
++        expect(fetch).not.toHaveBeenCalled();
++        expect(context.storage.kv.get(key)).toEqual(before);
++      });
++    }
++  }
++
++  it.each([undefined, "https://other.example"])("refuses inconsistent discovered metadata issuer %s", async issuer => {
++    const { context, connected } = boundOAuthContext();
++    context.storage.kv.put("oauthDiscovery", {
++      authorizationServerUrl: "https://auth.example",
++      authorizationServerMetadata: { issuer, token_endpoint: "https://auth.example/token" },
++    });
++    const fetch = vi.fn();
++    vi.stubGlobal("fetch", fetch);
++    await expect(new OAuthFlowAccount(context as never, {}).getConnection(connected.endpoint))
++      .rejects.toThrow(/reconnect/);
++    expect(fetch).not.toHaveBeenCalled();
++  });
++
++  it("supports a stamped discovery fallback without metadata", async () => {
++    const { context, connected, issuer } = boundOAuthContext();
++    context.storage.kv.put("oauthDiscovery", { authorizationServerUrl: issuer });
++    await expect(new OAuthFlowAccount(context as never, {}).getConnection(connected.endpoint))
++      .resolves.toMatchObject({ authorization: "synthetic-access" });
++  });
++
++  it("retains issuer stamps with and without SDK callback context", async () => {
++    const { context, connected, issuer } = boundOAuthContext();
++    const account = new OAuthFlowAccount(context as never, {});
++    const provider = Reflect.get(account, "oauthProvider").call(account, connected, 0) as OAuthClientProvider;
++    await provider.saveClientInformation!({ client_id: "new-client", issuer });
++    await provider.saveTokens({ access_token: "new-access", token_type: "Bearer", issuer });
++    expect(context.storage.kv.get<{ issuer: string }>("oauthClient")?.issuer).toBe(issuer);
++    expect(context.storage.kv.get<{ issuer: string }>("tokens")?.issuer).toBe(issuer);
++    await provider.saveClientInformation!({ client_id: "new-client", issuer }, { issuer: `${issuer}/` });
++    const before = context.storage.kv.get("oauthClient");
++    await expect(Promise.resolve().then(() => provider.saveClientInformation!({ client_id: "changed", issuer }, { issuer: "https://other.example" })))
++      .rejects.toThrow(/reconnect/);
++    expect(context.storage.kv.get("oauthClient")).toEqual(before);
++    await expect(Promise.resolve().then(() => provider.saveTokens({ access_token: "unstamped", token_type: "Bearer" })))
++      .rejects.toThrow(/reconnect/);
++    context.storage.kv.put("tokens", { access_token: "legacy", token_type: "Bearer" });
++    expect(await provider.tokens()).toBeUndefined();
++    expect(await provider.tokens({ issuer })).toBeUndefined();
++  });
++
++  it("withholds unbound revocation requests while allowing local disconnect", async () => {
++    const { context } = boundOAuthContext();
++    context.storage.kv.put("tokens", { access_token: "legacy", token_type: "Bearer" });
++    const fetch = vi.fn();
++    vi.stubGlobal("fetch", fetch);
++    await new OAuthFlowAccount(context as never, {}).revoke();
++    expect(fetch).not.toHaveBeenCalled();
++    expect(context.storage.kv.get("server")).toBeUndefined();
++  });
++
++  it("revokes both bound tokens before local disconnect", async () => {
++    const { context } = boundOAuthContext();
++    const fetch = vi.fn(async () => new Response(null, { status: 200 }));
++    vi.stubGlobal("fetch", fetch);
++    await new OAuthFlowAccount(context as never, {}).revoke();
++    expect(fetch).toHaveBeenCalledTimes(2);
++    expect(context.storage.kv.get("server")).toBeUndefined();
++  });
++
++  it.each(["success", "invalid_grant"])("ignores late direct refresh %s after SDK token replacement", async outcome => {
++    const { context, connected, issuer } = boundOAuthContext(true);
++    const account = new ExpiringAccount(context as never, {});
++    account.installCallback();
++    let answer: ((response: Response) => void) | undefined;
++    const fetch = vi.fn(() => new Promise<Response>(resolve => { answer = resolve; }));
++    vi.stubGlobal("fetch", fetch);
++    const pending = account.getConnection(connected.endpoint);
++    await vi.waitFor(() => expect(answer).toBeDefined());
++    const provider = Reflect.get(account, "oauthProvider").call(account, connected, 0) as OAuthClientProvider;
++    await provider.saveTokens({ access_token: "new-sdk-access", token_type: "Bearer", refresh_token: "new-sdk-refresh", issuer });
++    const replacement = context.storage.kv.get("tokens");
++    answer!(Response.json(outcome === "success"
++      ? { access_token: "late-access", token_type: "Bearer", refresh_token: "late-refresh" }
++      : { error: "invalid_grant" }, { status: outcome === "success" ? 200 : 400 }));
++    await expect(pending).rejects.toThrow(/authorization state changed/);
++    expect(context.storage.kv.get("tokens")).toEqual(replacement);
++    expect(context.storage.kv.get("expiredNotified")).toBe(false);
++    expect(account.notifications).toBe(0);
++    await expect(account.getConnection(connected.endpoint)).resolves.toMatchObject({ authorization: "new-sdk-access" });
++    expect(fetch).toHaveBeenCalledOnce();
++  });
++});
++
+diff --git a/packages/mcp-shared/src/account.ts b/packages/mcp-shared/src/account.ts
+index ab3612f001479b237a67b72748fa703350ae6f19..8c5bf709944da9e986857afd591a00a89fcc2076 100644
+--- a/packages/mcp-shared/src/account.ts
++++ b/packages/mcp-shared/src/account.ts
+@@ -47,0 +48,47 @@ import { hostOf } from "./util.js";
++// Credentials need an explicit authorization-server identity. Legacy unstamped
++// records require reconnecting; discovering a new server cannot stamp them safely.
++function validIssuer(value: unknown): value is string {
++  if (typeof value !== "string" || !value || value.trim() !== value) return false;
++  try {
++    const url = new URL(value);
++    return (url.protocol === "https:" || url.protocol === "http:") &&
++      !url.username && !url.password && !url.search && !url.hash;
++  } catch {
++    return false;
++  }
++}
++
++function sameIssuer(left: unknown, right: unknown): boolean {
++  return validIssuer(left) && validIssuer(right) &&
++    (left === right || (left.endsWith("/") && left.slice(0, -1) === right) ||
++      (right.endsWith("/") && right.slice(0, -1) === left));
++}
++
++function discoveryIssuer(state: OAuthDiscoveryState | undefined): string | undefined {
++  if (!state || !validIssuer(state.authorizationServerUrl)) return undefined;
++  const metadata = state.authorizationServerMetadata;
++  if (metadata !== undefined) {
++    if (!metadata || typeof metadata !== "object") return undefined;
++    return sameIssuer(metadata.issuer, state.authorizationServerUrl) ? metadata.issuer : undefined;
++  }
++  return state.authorizationServerUrl;
++}
++
++function stampCredential<T extends { issuer?: string }>(value: T, contextIssuer?: string): T & { issuer: string } {
++  const issuer = value.issuer ?? contextIssuer;
++  if (!validIssuer(issuer) || (contextIssuer !== undefined && !sameIssuer(issuer, contextIssuer))) {
++    throw new Error("This MCP authorization identity is invalid. Please reconnect the account.");
++  }
++  return { ...value, issuer };
++}
++
++function bundleIssuer(
++  discovery: OAuthDiscoveryState | undefined,
++  client: StoredOAuthClientInformation | undefined,
++  tokens: OAuthTokens | undefined,
++): string | undefined {
++  const issuer = discoveryIssuer(discovery);
++  return issuer && sameIssuer(client?.issuer, issuer) && sameIssuer(tokens?.issuer, issuer)
++    ? issuer : undefined;
++}
++
+@@ -397 +444,2 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-      value !== undefined && (!issuer || !value.issuer || value.issuer === issuer);
++      value !== undefined && validIssuer(value.issuer) &&
++      (issuer === undefined || sameIssuer(value.issuer, issuer));
+@@ -419 +467 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-        this.ctx.storage.kv.put("oauthClient", { ...client, issuer: context?.issuer });
++        this.ctx.storage.kv.put("oauthClient", stampCredential(client, context?.issuer));
+@@ -434,2 +482 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-          ...tokens,
+-          issuer: context?.issuer,
++          ...stampCredential(tokens, context?.issuer),
+@@ -471,5 +518 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-        if (state && typeof state.authorizationServerUrl !== "string") {
+-          this.ctx.storage.kv.delete("oauthDiscovery");
+-          return undefined;
+-        }
+-        return state;
++        return discoveryIssuer(state) ? state : undefined;
+@@ -478,0 +522,3 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
++        if (!discoveryIssuer(state)) {
++          throw new Error("This MCP authorization discovery is invalid. Please reconnect the account.");
++        }
+@@ -677,0 +724,3 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
++    const discovery = this.ctx.storage.kv.get<OAuthDiscoveryState>("oauthDiscovery");
++    const client = this.ctx.storage.kv.get<StoredOAuthClientInformation>("oauthClient");
++    const issuer = bundleIssuer(discovery, client, tokens);
+@@ -679 +728 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-        typeof tokens.token_type !== "string") {
++        typeof tokens.token_type !== "string" || !issuer || !discovery || !client) {
+@@ -693,6 +742,3 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-    const discovery = this.ctx.storage.kv.get<OAuthDiscoveryState>("oauthDiscovery");
+-    const client = this.ctx.storage.kv.get<StoredOAuthClientInformation>("oauthClient");
+-    if (!discovery || !client) {
+-      await this.noteCredentialsExpired(server.endpoint, generation);
+-      throw new Error("This MCP connection has expired. Please reconnect the account.");
+-    }
++    return this.#refresh(server, generation, tokens.refresh_token, discovery, client, issuer,
++      JSON.stringify([client, tokens, discovery]));
++  }
+@@ -700 +746,7 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-    return this.#refresh(server, generation, tokens.refresh_token, discovery, client);
++  // Private, in-memory comparison only: never expose a serialized credential bundle.
++  #credentialSnapshot(): string {
++    return JSON.stringify([
++      this.ctx.storage.kv.get<StoredOAuthClientInformation>("oauthClient"),
++      this.ctx.storage.kv.get<OAuthTokens>("tokens"),
++      this.ctx.storage.kv.get<OAuthDiscoveryState>("oauthDiscovery"),
++    ]);
+@@ -706 +758 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-  #refreshing: { generation: number; promise: Promise<string> } | undefined;
++  #refreshing: { generation: number; snapshot: string; promise: Promise<string> } | undefined;
+@@ -717 +769 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-    discovery: OAuthDiscoveryState, client: StoredOAuthClientInformation,
++    discovery: OAuthDiscoveryState, client: StoredOAuthClientInformation, issuer: string, snapshot: string,
+@@ -719,2 +771,4 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-    if (this.#refreshing?.generation === generation) return this.#refreshing.promise;
+-    const promise = this.#performRefresh(server, generation, refreshToken, discovery, client)
++    if (this.#refreshing?.generation === generation && this.#refreshing.snapshot === snapshot) {
++      return this.#refreshing.promise;
++    }
++    const promise = this.#performRefresh(server, generation, refreshToken, discovery, client, issuer, snapshot)
+@@ -726 +780 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-    this.#refreshing = { generation, promise };
++    this.#refreshing = { generation, snapshot, promise };
+@@ -732 +786 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-    discovery: OAuthDiscoveryState, client: StoredOAuthClientInformation,
++    discovery: OAuthDiscoveryState, client: StoredOAuthClientInformation, issuer: string, snapshot: string,
+@@ -744,0 +799,3 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
++      if (this.#credentialSnapshot() !== snapshot) {
++        throw new Error("Discarded a refresh after the MCP authorization state changed.");
++      }
+@@ -749 +806 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-        issuer: client.issuer,
++        issuer,
+@@ -760,0 +818,6 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
++      if (this.#credentialSnapshot() !== snapshot) {
++        // A concurrent SDK auth() can save rotated credentials in this same generation.
++        // The older verdict must neither overwrite them nor mark them as expired.
++        // oxlint-disable-next-line eslint/preserve-caught-error -- OAuth errors may contain credentials.
++        throw new Error("Ignored a refresh after the MCP authorization state changed.", { cause: safeError });
++      }
+@@ -833 +896 @@ export abstract class McpAccountBase<E extends AccountEnv, P = unknown>
+-    if (tokens && discovery && client) {
++    if (tokens && discovery && client && bundleIssuer(discovery, client, tokens)) {
+diff --git a/pnpm-workspace.yaml b/pnpm-workspace.yaml
+index a6d915454aad18b607cd5242b7c8e31369cd248d..01cae47e567181d9dcbf0894a3d635fb591b5699 100644
+--- a/pnpm-workspace.yaml
++++ b/pnpm-workspace.yaml
+@@ -4,0 +5,6 @@ overrides:
++  '@tanstack/router-core@1.171.15>seroval': 1.6.3
++  'postcss@8.5.25>source-map-js': 1.2.2
++  '@tailwindcss/node@4.3.3>source-map-js': 1.2.2
++  '@gadgets/mcp-shared@1.0.0>@modelcontextprotocol/client': 2.2.0
++  'postcss@8.5.25>nanoid': 3.3.18
++  '@cloudflare/puppeteer@1.2.0>@puppeteer/browsers': 3.0.4
