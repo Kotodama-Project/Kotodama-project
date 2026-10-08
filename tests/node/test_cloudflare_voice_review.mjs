@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 
 import worker, { __testing } from "../../runtime/cloudflare-edge/src/index.js";
 import { startReviewGateway } from "../../runtime/local-review-gateway/server.mjs";
-import { syntheticSeed, syntheticCatalog } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
+import { syntheticSeed, syntheticCatalog, syntheticTenantDigest } from "../../runtime/local-review-gateway/synthetic-fixture.mjs";
 
 
 const ISSUER = "https://team.cloudflareaccess.com";
@@ -213,6 +213,8 @@ test("Access-verified review readback can only come through Context Gateway", as
     assert.equal(value.headers.get("cf-access-client-secret"), "synthetic-client-secret");
     assert.equal(value.headers.get("x-kotodama-access-subject"), "reviewer-synthetic");
     assert.equal(value.headers.get("x-kotodama-access-email"), "reviewer@example.test");
+    assert.equal(value.headers.get("x-kotodama-tenant-digest"), syntheticTenantDigest);
+    assert.equal(value.headers.get("x-kotodama-purpose"), "voice_review");
     return Response.json(projection());
   });
 
@@ -221,6 +223,8 @@ test("Access-verified review readback can only come through Context Gateway", as
       headers: {
         "x-kotodama-access-subject": "spoofed-subject",
         "x-kotodama-access-email": "spoofed@example.test",
+        "x-kotodama-tenant-digest": "b".repeat(64),
+        "x-kotodama-purpose": "export",
       },
     }),
     env(),
