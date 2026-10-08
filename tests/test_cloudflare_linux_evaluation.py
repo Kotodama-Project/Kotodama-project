@@ -66,6 +66,17 @@ class LinuxEvaluationTests(unittest.TestCase):
         self.assertEqual(result["exit_code"], 7)
         self.assertEqual(result["owned_processes_remaining"], 0)
 
+    @unittest.skipUnless(sys.platform == "linux" and psutil is not None, "Linux and locked psutil required")
+    def test_immediate_leader_exit_does_not_hide_living_grandchild(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            code = "import subprocess,sys; subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)'])"
+            with (root / "log").open("wb") as log:
+                result = runner.owned_run([sys.executable, "-c", code], root, dict(os.environ), log, 3)
+        self.assertEqual(result["exit_code"], 0)
+        self.assertGreaterEqual(result["tracked_processes"], 2)
+        self.assertEqual(result["owned_processes_remaining"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

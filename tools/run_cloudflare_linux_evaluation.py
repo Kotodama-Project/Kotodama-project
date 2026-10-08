@@ -104,7 +104,9 @@ def owned_run(argv, core, environment, log, timeout, *, stop_requested=None):
 
     reason = "completed"
     try:
-        while process.poll() is None:
+        # Do not reap the leader until cleanup. Its zombie retains our session
+        # identity even when it exits before the first descendant observation.
+        while leader.is_running() and leader.status() != psutil.STATUS_ZOMBIE:
             capture()
             if stop_requested() or time.monotonic() - started >= timeout:
                 reason = "cancelled" if stop_requested() else "timeout"
