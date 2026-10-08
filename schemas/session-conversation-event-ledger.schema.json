@@ -291,6 +291,8 @@
           "enum": [
             "discord_text",
             "discord_voice",
+            "slack_text",
+            "teams_text",
             "notion",
             "github",
             "codex",
@@ -337,7 +339,7 @@
           }
         },
         {
-          "if": {"properties": {"type": {"enum": ["discord_text", "discord_voice", "notion", "github", "codex", "claude", "google_drive", "n8n"]}}},
+          "if": {"properties": {"type": {"enum": ["discord_text", "discord_voice", "slack_text", "teams_text", "notion", "github", "codex", "claude", "google_drive", "n8n"]}}},
           "then": {
             "required": ["consent_ref"],
             "properties": {"consent_ref": {"$ref": "#/$defs/ref"}}

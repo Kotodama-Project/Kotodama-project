@@ -52,6 +52,9 @@ Task ownerを追加せず、実Codex・native core・配備の受入は残りま
 
 ## 作業を一つ進める
 
+Slack／Teamsの[共通event契約](SURFACE-ENVELOPE.md)は、合成の署名mechanism、
+tenant分離、編集・取消、元threadへの照合を検査する入口です。実adapterは未接続です。
+
 [agent状態のoffline投影](AGENT-STATUS-PROJECTION.md)は、責任索引と任意の観測を
 診断用に表示します。既定で文脈を伏せ、稼働や認可を静的snapshotから主張しません。
 

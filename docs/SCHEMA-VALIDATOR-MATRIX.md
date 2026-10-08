@@ -1,5 +1,9 @@
 # Schema / Validator / Test Matrix
 
+Slack／Teamsの[surface envelope schema](../schemas/surface-event-envelope.schema.json)は
+[read-only validator](../tools/validate_surface_envelope.py)、[契約試験](../tests/test_surface_envelope.py)、
+[対応範囲とNode署名試験](SURFACE-ENVELOPE.md)を参照します。
+
 このページは、公開Company starterを読む人が「どのschemaを、どのCLIで、どの
 testとrunbookで確認するか」を一つの順序で辿るためのnavigation projectionです。
 schema単体のPASS、validatorのPASS、testのPASSは、Human approval、runtime、
