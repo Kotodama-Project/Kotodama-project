@@ -237,6 +237,101 @@ test("Access-verified review readback can only come through Context Gateway", as
   assert.equal(JSON.stringify(body).includes("synthetic-client-secret"), false);
 });
 
+test("a stalled Access-key fetch reaches a deadline and cannot populate a late cache", async () => {
+  __testing.reset();
+  const fixture = await signingFixture();
+  const jwt = await fixture.token();
+  let finish;
+  let signal;
+  __testing.setDeadline(25);
+  __testing.setFetch(request => {
+    signal = request.signal;
+    return new Promise(resolve => { finish = resolve; });
+  });
+  const response = await worker.fetch(withJwt("https://preview.example.test/healthz", jwt), env());
+  assert.equal(response.status, 504);
+  assert.equal(signal.aborted, true);
+  finish(Response.json({ keys: [fixture.jwk] }));
+  await new Promise(resolve => setTimeout(resolve, 5));
+  const calls = installFetch(fixture);
+  __testing.setDeadline(5_000);
+  assert.equal((await worker.fetch(withJwt("https://preview.example.test/healthz", jwt), env())).status, 200);
+  assert.equal(calls.jwks, 1);
+  __testing.reset();
+});
+
+test("Gateway headers and response streams share a finite request deadline", async () => {
+  const fixture = await signingFixture();
+  const jwt = await fixture.token();
+  for (const stage of ["headers", "body"]) {
+    __testing.reset();
+    __testing.setDeadline(50);
+    let signal;
+    let cancelled = false;
+    installFetch(fixture, { onGateway(request) {
+      signal = request.signal;
+      if (stage === "headers") return new Promise(() => {});
+      return new Response(new ReadableStream({ pull() { return new Promise(() => {}); }, cancel() { cancelled = true; } }));
+    } });
+    const response = await worker.fetch(withJwt("https://preview.example.test/voice/review", jwt), env());
+    assert.equal(response.status, 504);
+    assert.equal(signal.aborted, true);
+    if (stage === "body") assert.equal(cancelled, true);
+  }
+  __testing.reset();
+});
+
+test("caller cancellation stops a stalled request and no review is forwarded after body timeout", async () => {
+  __testing.reset();
+  const fixture = await signingFixture();
+  const jwt = await fixture.token();
+  const controller = new AbortController();
+  installFetch(fixture, { onGateway: () => new Promise(() => {}) });
+  const pending = worker.fetch(withJwt("https://preview.example.test/voice/review", jwt, { signal: controller.signal }), env());
+  controller.abort();
+  assert.equal((await pending).status, 499);
+  __testing.reset();
+  __testing.setDeadline(50);
+  const calls = installFetch(fixture);
+  const body = new ReadableStream({ pull() { return new Promise(() => {}); } });
+  const response = await worker.fetch(withJwt("https://preview.example.test/voice/review/doc-safe-1", jwt,
+    { method: "POST", headers: { "content-type": "application/json" }, body, duplex: "half" }), env());
+  assert.equal(response.status, 504);
+  assert.equal(calls.gateway, 0);
+  __testing.reset();
+});
+
+test("a response completing after its deadline is refused even before the timer callback", async () => {
+  __testing.reset();
+  let now = 0;
+  __testing.setClock(() => now);
+  const fixture = await signingFixture();
+  installFetch(fixture, { onGateway() { now = 5_001; return Response.json(projection()); } });
+  const response = await worker.fetch(withJwt("https://preview.example.test/voice/review", await fixture.token()), env());
+  assert.equal(response.status, 504);
+  __testing.reset();
+});
+
+test("caller cancellation at the final publication boundary overrides a ready response", async () => {
+  const fixture = await signingFixture();
+  const jwt = await fixture.token();
+  __testing.reset();
+  let baselineReads = 0;
+  __testing.setClock(() => { baselineReads += 1; return 0; });
+  installFetch(fixture);
+  assert.equal((await worker.fetch(withJwt("https://preview.example.test/healthz", jwt), env())).status, 200);
+  __testing.reset();
+  const controller = new AbortController();
+  let reads = 0;
+  __testing.setClock(() => {
+    if (++reads === baselineReads) controller.abort();
+    return 0;
+  });
+  installFetch(fixture);
+  assert.equal((await worker.fetch(withJwt("https://preview.example.test/healthz", jwt, { signal: controller.signal }), env())).status, 499);
+  __testing.reset();
+});
+
 test("GET handoff readback rejects a different requested ID", async () => {
   __testing.reset();
   const fixture = await signingFixture();
