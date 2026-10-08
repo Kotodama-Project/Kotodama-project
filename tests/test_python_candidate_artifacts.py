@@ -9,6 +9,25 @@ from tools import build_python_candidate as builder
 
 
 class PythonCandidateArtifactsTests(unittest.TestCase):
+    def test_generated_metadata_lf_and_crlf_produce_same_record_without_source_changes(self):
+        source = b"do not rewrite source\r\n"
+        linux = {"kotodama_core/a.py": source,
+                 "kotodama_core-0.2.0.dev0.dist-info/METADATA": b"Name: kotodama-core\n\nDescription\n",
+                 "kotodama_core-0.2.0.dev0.dist-info/RECORD": b"prior record"}
+        windows = dict(linux)
+        name = "kotodama_core-0.2.0.dev0.dist-info/METADATA"
+        windows[name] = linux[name].replace(b"\n", b"\r\n")
+        a = builder.normalize_metadata(linux, wheel=True)
+        b = builder.normalize_metadata(windows, wheel=True)
+        self.assertEqual(a, b)
+        self.assertEqual(a["kotodama_core/a.py"], source)
+        self.assertEqual(builder.normalize_metadata(a, wheel=True), a)
+        tar = {"package/PKG-INFO": b"meta\r\n", "package/setup.cfg": b"cfg\r\n", "package/code.py": source}
+        normalized = builder.normalize_metadata(tar, wheel=False)
+        self.assertEqual(normalized["package/PKG-INFO"], b"meta\n")
+        self.assertEqual(normalized["package/setup.cfg"], b"cfg\n")
+        self.assertEqual(normalized["package/code.py"], source)
+
     def test_metadata_normalization_is_reproducible_and_preserves_contents(self):
         contents = {"candidate/z.txt": b"Japanese: \xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e\n", "candidate/a.txt": b"a\n"}
         for wheel in (False, True):

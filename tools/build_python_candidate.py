@@ -111,8 +111,28 @@ def verify_source_contents(contents, files, version, *, wheel):
         require(contents[target] == raw, "ARCHIVE_SOURCE_MISMATCH")
 
 
+def normalize_metadata(contents, *, wheel):
+    result = dict(contents)
+    for name, data in contents.items():
+        generated = name.endswith(".dist-info/METADATA") if wheel else name.endswith(("/PKG-INFO", "/setup.cfg"))
+        if generated:
+            result[name] = data.replace(b"\r\n", b"\n")
+    if wheel:
+        record = next(name for name in contents if name.endswith(".dist-info/RECORD"))
+        text = io.StringIO(newline="")
+        writer = csv.writer(text, lineterminator="\n")
+        for name, data in sorted(result.items()):
+            if name == record:
+                writer.writerow([name, "", ""])
+            else:
+                encoded = "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(data).digest()).decode().rstrip("=")
+                writer.writerow([name, encoded, str(len(data))])
+        result[record] = text.getvalue().encode("utf-8")
+    return result
+
+
 def normalize_archive(path, contents, epoch, *, wheel):
-    # Normalize metadata only; source and METADATA/RECORD contents are unchanged.
+    # Canonical member data is supplied separately; this fixes archive headers.
     output = io.BytesIO()
     if wheel:
         stamp = time.gmtime(max(epoch, 315532800))[:6]
@@ -159,6 +179,8 @@ def build(output):
         wheel = incoming.suffix == ".whl"
         contents = archive_contents(incoming, version)
         verify_source_contents(contents, files, version, wheel=wheel)
+        contents = normalize_metadata(contents, wheel=wheel)
+        verify_source_contents(contents, files, version, wheel=wheel)
         raw = normalize_archive(incoming, contents, epoch, wheel=wheel)
         (output / filename).write_bytes(raw)
         require(archive_contents(output / filename, version) == contents, "NORMALIZATION_CHANGED_CONTENTS")
@@ -179,7 +201,7 @@ def build(output):
     receipt = {"kind": "kotodama/python-candidate-build/v1", "status": "BUILT_NOT_RELEASED",
                "source_commit": commit, "source_tree": tree, "source_date_epoch": epoch,
                "version": version, "tool_versions": versions, "python": sys.version.split()[0],
-               "normalization": "sorted entries, fixed epoch, regular 0644, zero owner, stable gzip/zip headers",
+               "normalization": "generated metadata LF and regenerated RECORD; sorted entries, fixed epoch, regular 0644, zero owner, stable gzip/zip headers",
                "source_files": {name: hashlib.sha256(raw).hexdigest() for name, raw in sorted(files.items())},
                "license": "MIT", "artifacts": artifacts, "signature_verified": False,
                "private_consumer_verified": False, "public_beta": "NO_GO_UNPUBLISHED"}

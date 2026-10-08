@@ -40,7 +40,8 @@ Public Betaは`NO_GO_UNPUBLISHED`です。
 cleanな対象commitで`python -B tools/build_python_candidate.py --output work/new-candidate`
 を実行します。outputは未作成のディレクトリを指定します。固定commitの許可ファイルだけを
 stagingへ取り出し、wheel／sdistの内容とsource・MITを照合します。ZIP／tar／gzipの順序、
-時刻、mode、ownerを正規化し、wheel RECORDは変更しません。
+時刻、mode、ownerを正規化します。OSで異なる生成metadataの改行をLFに統一し、wheel
+RECORDのhash／sizeを再生成して検査します。package sourceとLICENSEのbytesは変更しません。
 
 SHA256SUMS、source commit／tree、各source digest、tool版、正規化方法、artifact digest、
 buildとoptional swarm用lockのCycloneDX inventoryを出力します。lock inventoryは全条件の
@@ -48,5 +49,6 @@ buildとoptional swarm用lockのCycloneDX inventoryを出力します。lock inv
 外部依存はゼロです。raw build logとstagingは診断用で、公開artifactには含めません。
 
 専用CIはLinuxとWindowsで各2回buildし、digestを照合して両artifactを新venvへinstallします。
+さらに両OSからdownloadした実bytesとreceiptを比較します。
 receiptは未署名のbuilder観測です。署名とdownload検証は既存のrelease workflowのowner
 採用方針およびtag/release受入を必要とし、PRのartifact uploadをreleaseの署名と呼びません。
