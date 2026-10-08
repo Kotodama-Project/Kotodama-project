@@ -1,0 +1,27 @@
+{
+  "status": "REGISTRY_AND_PROVENANCE_VERIFIED_CANDIDATE",
+  "observed_at": "2026-10-07T23:39:50.309077+00:00",
+  "package": "pnpm",
+  "version": "11.9.0",
+  "input_sha256": {
+    "metadata": "2a351872d65926213f8438837ec37633da373bebab9e8cbbf0140f108047a568",
+    "keys": "faf23d8753d5bb79df250f10391ac89b63ecf7743e48487a544a99c847f9c8df",
+    "archive": "2b567aa66026238078ac2e0a33bec3febd60e962987aac697456f3180819b287",
+    "bundle": "b69eacca4a40841193945bf2415736d60b7f7300be418693b82cc9309effa885"
+  },
+  "policy_sha256": "11e694dffeefba3c4038e1a237ed794ad178265f67117f53bc46d167a929c9bd",
+  "verifier_script_sha256": "61e486dfca397ff1a1d3ba3b1a3dce1295a84d114f2a2a2d964706743838d488",
+  "registry_helper_sha256": "eee1a840ebbd91726651c978dfed07392ae4bd7fc9024762db58d9e1cc5be596",
+  "verifier_sha256": "cd79f16203f1fbe56937c4c96e2b6eadd10549418dcb241d91576ac77af0ac8b",
+  "node_version": "v24.14.0",
+  "registry_signature_verified": true,
+  "provenance_signature_verified": true,
+  "source_identity_verified": true,
+  "trust_root_accepted": false,
+  "independent_approval": false,
+  "upstream_adopted": false,
+  "provider_credential_variables_inherited": false,
+  "package_installed": false,
+  "lifecycle_executed": false,
+  "public_beta": "NO_GO_UNPUBLISHED"
+}
