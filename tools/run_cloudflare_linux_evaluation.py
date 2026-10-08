@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,7 @@ COMMANDS = {
     "test": ("run", "test"),
     "types": ("run", "types:check"),
     "scheduler": ("--filter", "@gadgets/gatekeeper-scheduler", "exec", "vitest", "run", "__tests__/scheduler-scope.test.ts"),
+    "runtime-smoke": ("--filter", "@gadgets/integration-tests", "exec", "vitest", "run", "__tests__/kotodama-runtime-smoke.test.ts"),
 }
 
 
@@ -58,12 +60,13 @@ def preflight(core, node, pnpm, candidate):
         require(not any(name == ".npmrc" or name.startswith((".env", ".dev.vars")) for name in files), "local configuration must be absent from evaluation source")
 
 
-def owned_run(argv, core, environment, log, timeout, *, stop_requested=None):
+def owned_run(argv, core, environment, log, timeout, *, stop_requested=None, observe_listeners=False):
     """Track exact child identities; stop only this invocation's descendants."""
     import psutil  # Installed from requirements-task-swarm-ci.txt in the evaluator.
 
     stop_requested = stop_requested or (lambda: False)
     known = {}
+    listener_addresses = set()
     started = time.monotonic()
     process = subprocess.Popen(argv, cwd=core, env=environment, stdin=subprocess.DEVNULL,
                                stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
@@ -102,12 +105,24 @@ def owned_run(argv, core, environment, log, timeout, *, stop_requested=None):
                 pass
         return found
 
+    def listeners():
+        result = []
+        for item in alive():
+            try:
+                result.extend(connection.laddr.ip for connection in item.net_connections(kind="inet")
+                              if connection.status == psutil.CONN_LISTEN)
+            except psutil.NoSuchProcess:
+                pass
+        return result
+
     reason = "completed"
     try:
         # Do not reap the leader until cleanup. Its zombie retains our session
         # identity even when it exits before the first descendant observation.
         while leader.is_running() and leader.status() != psutil.STATUS_ZOMBIE:
             capture()
+            if observe_listeners:
+                listener_addresses.update(listeners())
             if stop_requested() or time.monotonic() - started >= timeout:
                 reason = "cancelled" if stop_requested() else "timeout"
                 break
@@ -123,9 +138,14 @@ def owned_run(argv, core, environment, log, timeout, *, stop_requested=None):
                     pass
             psutil.wait_procs(alive(), timeout=3)
         process.wait(timeout=3)
-    return {"exit_code": process.returncode, "reason": reason,
+    result = {"exit_code": process.returncode, "reason": reason,
             "tracked_processes": len(known), "owned_processes_remaining": len(alive()),
             "elapsed_seconds": round(time.monotonic() - started, 3)}
+    if observe_listeners:
+        result.update(listeners_observed=bool(listener_addresses),
+                      all_listeners_loopback=all(ipaddress.ip_address(value).is_loopback for value in listener_addresses),
+                      owned_listeners_remaining=len(listeners()))
+    return result
 
 
 def evaluate(args):
@@ -133,6 +153,16 @@ def evaluate(args):
     command = command_arguments(args.command)
     core, node, pnpm = (path.absolute() for path in (args.core, args.node, args.pnpm))
     preflight(core, node, pnpm, candidate)
+    harness_digest = None
+    if args.command == "runtime-smoke":
+        fixture = Path(__file__).resolve().parents[1] / "tests/fixtures/cloudflare-linux/runtime-smoke.test.ts"
+        target = core / "packages/integration-tests/__tests__/kotodama-runtime-smoke.test.ts"
+        require(not target.exists(), "fresh runtime smoke checkout required")
+        raw = regular_bytes(fixture, 16384)
+        require(b"\r" not in raw, "runtime fixture must use LF")
+        with target.open("xb") as stream:
+            stream.write(raw)
+        harness_digest = hashlib.sha256(raw).hexdigest()
     run_dir = args.output.absolute()
     require(not run_dir.exists() and not run_dir.is_relative_to(core), "new output directory outside core required")
     run_dir.mkdir(parents=True, mode=0o700)
@@ -157,15 +187,20 @@ def evaluate(args):
                "command": args.command, "source_commit": candidate["source"]["commit"],
                "files": candidate["materialized_files"], "node": "24.19.0", "pnpm": "11.9.0",
                "provider_credentials_inherited": False, "provider_verified": False,
+               "additional_harness_sha256": harness_digest,
                "public_beta": "NO_GO_UNPUBLISHED"}
     receipt_path = run_dir / "receipt.json"
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     try:
         with (run_dir / "command.log").open("xb") as log:
-            receipt.update(owned_run([str(node), str(pnpm), *command], core, environment, log, args.timeout, stop_requested=lambda: stopped))
+            receipt.update(owned_run([str(node), str(pnpm), *command], core, environment, log, args.timeout, stop_requested=lambda: stopped, observe_listeners=args.command == "runtime-smoke"))
         verify_materialized(core, candidate)
         receipt["source_bytes_unchanged"] = True
         receipt["status"] = "PASS_LOCAL_COMMAND" if receipt["exit_code"] == 0 and receipt["reason"] == "completed" and receipt["owned_processes_remaining"] == 0 else "FAILED"
+        if args.command == "runtime-smoke":
+            require(hashlib.sha256(regular_bytes(target, 16384)).hexdigest() == harness_digest, "runtime harness changed")
+            if not receipt["listeners_observed"] or not receipt["all_listeners_loopback"] or receipt["owned_listeners_remaining"]:
+                receipt["status"] = "FAILED"
     except Exception:
         receipt["status"] = "FAILED_UNCONFIRMED"
         raise

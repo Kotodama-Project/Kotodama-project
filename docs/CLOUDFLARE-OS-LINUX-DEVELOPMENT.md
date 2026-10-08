@@ -21,7 +21,8 @@ python -B tools/run_cloudflare_linux_evaluation.py build --core /absolute/core -
 python -B tools/run_cloudflare_linux_evaluation.py test --core /absolute/core --node /absolute/node --pnpm /absolute/pnpm.cjs --output /absolute/new-test-receipt
 ```
 
-許可commandは`build`、`test`、`types`、固定scheduler試験の`scheduler`だけです。
+許可commandは`build`、`test`、`types`、固定scheduler試験の`scheduler`と
+下記の`runtime-smoke`だけです。
 引数の追加、install、run-local、deploy、remote Wranglerは受け付けません。
 上流の`run-local`はinstallも行うため、この評価経路では使いません。
 `PATH`は専用Node／pnpmとOSの`/usr/bin:/bin`で構築し、利用者の環境やprovider key、
@@ -38,8 +39,24 @@ receiptはcommand、固定source／lock、終了理由、log digestを記録し�
 これは固定された公開sourceを実行する開発runnerであり、任意の不信コードを封じるsandbox
 ではありません。依存内部の通信やhost全体のlistenerゼロを証明しません。
 専用GitHub-hosted Linux jobの[workflow](../.github/workflows/cloudflare-linux-runtime.yml)
-でbuildと上流全suiteを確認します。継続HTTP runtime／loopback listenerの停止受入は
-この有限command試験と別の確認です。Windowsのscheduler失敗記録は保持します。
+でbuild、上流全suite、HTTP smokeを確認します。Windowsのscheduler失敗記録は保持します。
+
+## HTTPとlistenerの受入
+
+`runtime-smoke`はbuild済みの専用checkoutへ固定したテストharnessを一つ追加し、そのdigest
+をreceiptへ記録します。上流の公式integration harnessで実backendと実frontend assetsを
+起動し、HEADのHTTP 200を3回確認してbodyは読みません。選択したportへの接続が終了後に
+拒否されることと、上流のworker向けnetwork interceptorに未処理の外部要求がないことを
+検査します。実gatekeeper、worker loader、ログイン、provider機能はこのsmokeの対象外です。
+
+runnerは自分のprocessのTCP listenerを観測し、loopback以外、listener未観測、終了後に
+残るowned listenerのいずれもPASSにしません。wildcard bindをloopback成功として扱わない
+負例も含みます。任意コードの通信遮断やhost全体の監査を代替する機能ではありません。
+新しいcheckoutとoutputで次を実行します。同じcheckoutへのharness上書きは拒否します。
+
+```text
+python -B tools/run_cloudflare_linux_evaluation.py runtime-smoke --core /absolute/core --node /absolute/node --pnpm /absolute/pnpm.cjs --output /absolute/new-runtime-receipt
+```
 
 rollbackは新しい評価checkoutと専用outputの利用を止め、以前の採用pinを使い続けることです。
 launcherは既存pin、本番、provider、Windows shimを変更しません。

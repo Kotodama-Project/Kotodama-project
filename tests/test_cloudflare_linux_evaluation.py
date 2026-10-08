@@ -77,6 +77,16 @@ class LinuxEvaluationTests(unittest.TestCase):
         self.assertGreaterEqual(result["tracked_processes"], 2)
         self.assertEqual(result["owned_processes_remaining"], 0)
 
+    @unittest.skipUnless(sys.platform == "linux" and psutil is not None, "Linux and locked psutil required")
+    def test_wildcard_listener_is_not_reported_as_loopback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            code = "import socket,time; s=socket.socket(); s.bind(('0.0.0.0',0)); s.listen(); time.sleep(30)"
+            with (Path(temporary) / "log").open("wb") as log:
+                result = runner.owned_run([sys.executable, "-c", code], temporary, dict(os.environ), log, 0.5, observe_listeners=True)
+        self.assertTrue(result["listeners_observed"])
+        self.assertFalse(result["all_listeners_loopback"])
+        self.assertEqual(result["owned_listeners_remaining"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
