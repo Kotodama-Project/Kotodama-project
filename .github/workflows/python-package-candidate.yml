@@ -12,13 +12,19 @@ on:
       - requirements-task-swarm-ci.txt
       - tools/build_release_sbom.py
       - tools/build_python_candidate.py
+      - tools/record_python_candidate_execution.py
       - tests/test_python*py
       - .github/workflows/python-package-candidate.yml
+      - .github/workflows/release.yml
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   build:
+    name: Build Python candidate (${{ matrix.os }})
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -62,7 +68,8 @@ jobs:
               subprocess.run([str(binary), '-m', 'pip', 'install', '--require-hashes', '-r', str(root/'requirements-package-ci.txt')], check=True)
               subprocess.run([str(binary), '-m', 'pip', 'install', '--no-index', '--no-deps', '--no-build-isolation', str(root/'work/package-first'/name)], check=True)
               subprocess.run([str(binary), '-I', str(root/'python/package_probe.py')], cwd=environment, check=True)
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - id: candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: python-candidate-${{ matrix.os }}
           retention-days: 7
@@ -71,6 +78,19 @@ jobs:
             work/package-first/*.tar.gz
             work/package-first/*.json
             work/package-first/SHA256SUMS
+      - name: Bind run, job, workflow, and artifact metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_JOB_NAME: Build Python candidate (${{ matrix.os }})
+          CANDIDATE_ARTIFACT_NAME: python-candidate-${{ matrix.os }}
+          CANDIDATE_ARTIFACT_ID: ${{ steps.candidate.outputs.artifact-id }}
+          CANDIDATE_ARTIFACT_DIGEST: ${{ steps.candidate.outputs.artifact-digest }}
+        run: python -B tools/record_python_candidate_execution.py --build-receipt work/package-first/build-receipt.json --output work/execution-receipt.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-execution-${{ matrix.os }}
+          path: work/execution-receipt.json
+          retention-days: 7
   compare:
     name: Compare Python artifacts across operating systems
     needs: build
