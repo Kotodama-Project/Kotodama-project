@@ -56,3 +56,14 @@ buildとoptional swarm用lockのCycloneDX inventoryを出力します。lock inv
 さらに両OSからdownloadした実bytesとreceiptを比較します。
 receiptは未署名のbuilder観測です。署名とdownload検証は既存のrelease workflowのowner
 採用方針およびtag/release受入を必要とし、PRのartifact uploadをreleaseの署名と呼びません。
+
+builder自体、SBOM generator、実行記録ツール、workflow、probe、依存lockもcommitへ照合し、
+開始・完了時のHEADと入力bytesの変化を拒否します。`builder_inputs`がそのdigest一覧です。
+専用CIは別のexecution receiptへworkflow ref/SHA、run/attempt、実job ID、artifact IDと
+archive digestをGitHubの読み取りAPIで照合して記録します。PRのevent headと実buildの
+merge commitは別欄で保持します。この記録は未署名で、release承認やsigner受入ではありません。
+
+tagで起動するrelease workflowは、tagを`v`+pyprojectのversionと完全一致させ、wheel、
+sdist、packageのSBOM、builder receipt、checksumも既存のattestationとdraft prereleaseへ
+含めます。過去のsource-only tagを新しいpackage版へ読み替えません。実tagのpushはownerが
+版・署名者・private consumer条件を受け入れた後に行い、この変更だけでは起動しません。
