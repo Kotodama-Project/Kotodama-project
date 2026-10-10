@@ -10,6 +10,7 @@ from .project import *  # noqa: F401,F403
 from .retrieve import *  # noqa: F401,F403
 from .audit import *  # noqa: F401,F403
 from .verdicts import *  # noqa: F401,F403
+from .inspect import inspect_concept, inspection_markdown
 
 def _print_issues(issues: Iterable[Issue]) -> None:
     for issue in issues:
@@ -56,6 +57,18 @@ def _parser() -> argparse.ArgumentParser:
     query_parser.add_argument("--tag")
     query_parser.add_argument("--include-stale", action="store_true")
     query_parser.add_argument("--json", action="store_true")
+    query_parser.add_argument("--goal", action="append", default=[])
+    query_parser.add_argument("--kgi", action="append", default=[])
+    query_parser.add_argument("--initiative", action="append", default=[])
+
+    show_parser = subparsers.add_parser("show", help="read one current Concept or ATX section")
+    _add_common_root(show_parser)
+    show_parser.add_argument("concept_id")
+    show_parser.add_argument("--section", help="exact ATX heading text; duplicates are refused")
+    show_parser.add_argument("--max-chars", type=int, default=4000)
+    show_parser.add_argument("--offset", type=int, default=0, help="Unicode character offset in the selection")
+    show_parser.add_argument("--expected-digest", help="required for continuation; binds the source snapshot")
+    show_parser.add_argument("--json", action="store_true")
 
     context_parser = subparsers.add_parser("context", help="assemble bounded goal/KGI/initiative context")
     _add_common_root(context_parser)
@@ -163,6 +176,9 @@ def _execute(args: argparse.Namespace, bundle: Bundle, as_of: dt.datetime) -> in
             type_filter=args.type,
             tag_filter=args.tag,
             include_stale=args.include_stale,
+            goals=args.goal,
+            kgis=args.kgi,
+            initiatives=args.initiative,
         )
         if args.json:
             rows = [
@@ -180,7 +196,11 @@ def _execute(args: argparse.Namespace, bundle: Bundle, as_of: dt.datetime) -> in
                 }
                 for result in results
             ]
-            print(json.dumps({"query": args.query, "source_digest": bundle.source_digest, "as_of": bundle.as_of.isoformat().replace("+00:00", "Z"), "results": rows}, ensure_ascii=False, indent=2))
+            print(json.dumps({"query": args.query, "source_digest": bundle.source_digest,
+                              "as_of": bundle.as_of.isoformat().replace("+00:00", "Z"),
+                              "filters": {"goals": sorted(set(args.goal)), "kgis": sorted(set(args.kgi)),
+                                          "initiatives": sorted(set(args.initiative))},
+                              "results": rows}, ensure_ascii=False, indent=2))
         else:
             for index, result in enumerate(results, start=1):
                 concept = result.concept
@@ -189,6 +209,16 @@ def _execute(args: argparse.Namespace, bundle: Bundle, as_of: dt.datetime) -> in
                 print(f"   state={concept.extension.get('knowledge_state')} trust={concept.trust_tier} stale={concept.is_stale}")
                 print(f"   path={concept.document.path.relative_to(bundle.root).as_posix()}")
                 print(f"   sources={', '.join(concept.source_resources)}")
+        return 0
+
+    if args.command == "show":
+        report = inspect_concept(bundle, args.concept_id, section=args.section,
+                                 max_chars=args.max_chars, offset=args.offset,
+                                 expected_digest=args.expected_digest)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(inspection_markdown(report), end="")
         return 0
 
     if args.command == "context":
