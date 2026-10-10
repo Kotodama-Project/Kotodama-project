@@ -5,6 +5,8 @@
 [capability lane](ARCHITECTURE.md#capability-lanes)は4つの既存actionの固定写像です。
 `worker.actions`以外のgrantを作らず、音声とテキストで権限を分けません。
 
+既定の直列実行と任意の読取Task並行枠は[有限の並行受付](../../../docs/TASK-SWARM-PARALLEL.md)を参照します。
+
 `owner.kind=remote`を選ぶ場合、接続先は次のprivateサービス契約を実装してください。ローカルTaskへのfallbackや二重書込はしません。既存の組織版ownerにこの契約を接続するadapterが必要です。
 
 `POST /v1/owner`、Bearer認証、入力`{version:1,method,args}`、成功`{version:1,ok:true,result}`。
