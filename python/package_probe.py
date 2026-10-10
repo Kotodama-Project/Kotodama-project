@@ -45,7 +45,7 @@ for invalid in ({1: "value"}, {"nested": {None: "value"}}, (1, 2), "\ud800", cyc
         else:
             raise AssertionError("non-JSON input was silently coerced")
 modules = list(pkgutil.iter_modules(swarm.__path__, swarm.__name__ + "."))
-assert len(modules) == 19
+assert len(modules) == 20
 for module in modules:
     importlib.import_module(module.name)
 # Exercise both input versions from the installed namespace. Import enumeration
@@ -112,6 +112,7 @@ diagnostic = json.loads(result.stdout)
 assert diagnostic["self_check"] is True and diagnostic["provider_verified"] is False
 assert diagnostic["public_beta"] == "NO_GO_UNPUBLISHED"
 subprocess.run([sys.executable, "-I", "-m", "kotodama_core.task_swarm.mcp_server", "--help"], check=True, capture_output=True, timeout=10)
+subprocess.run([sys.executable, "-I", "-m", "kotodama_core.task_swarm.closed_loop", "--help"], check=True, capture_output=True, timeout=10)
 with tempfile.TemporaryDirectory() as temporary:
     peer = Path(temporary) / "peer"
     venv.EnvBuilder(with_pip=False).create(peer)
