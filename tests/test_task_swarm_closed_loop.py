@@ -9,7 +9,11 @@ import sys
 import threading
 import time
 
-import pytest
+try:
+    import pytest
+except ModuleNotFoundError:
+    import unittest
+    raise unittest.SkipTest("runs in the required Task swarm pytest job")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "runtime"))
 from task_swarm.closed_loop import execute_closed_loop
