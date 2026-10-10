@@ -128,6 +128,14 @@ successful result only when its reason and input digest are recorded.
 
 ## 6. Evidence gates
 
+For worker input, a `skillDelivery` receipt binds explicitly selected Skill
+names and committed contents to the Task/Source revision, workspace HEAD, and
+model stdin/schema digests. It proves delivered input only. It does not prove
+host discovery or model obedience, select a Skill from untrusted text, or grant
+an action. [Workflow evaluation](SKILL-WORKFLOW-EVALUATION.md) documents the
+separate local and outcome checks; unavailable model/outcome evidence remains
+unevaluated.
+
 Evidence is monotonic and cannot be promoted by wording:
 
 | Tier | Can prove | Cannot prove |
