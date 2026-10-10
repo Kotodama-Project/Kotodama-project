@@ -44,7 +44,7 @@ export async function invokeCodex(config,options){
     const answer=await invokeOnce(config.fallback,options);return bindExecution(answer,{model:config.fallback.model??null,adapter:'codex_cli',fallback:true,primaryModel:config.model??null,primaryFailure:e.code});
   }
 }
-async function invokeOnce(config,{cwd,dataDir,prompt,schema,sandbox='read-only',signal,onStart,decode=parseModelJson}) {
+async function invokeOnce(config,{cwd,dataDir,prompt,schema,sandbox='read-only',signal,onStart,decode=parseModelJson,onInputPrepared=async()=>{}}) {
   const runDir=path.join(dataDir,'runs',uid('run'));await mkdir(runDir,{recursive:true,mode:0o700});
   const schemaFile=path.join(runDir,'schema.json');
   // Trusted schema is not result data: never redact its property definitions.
@@ -53,6 +53,9 @@ async function invokeOnce(config,{cwd,dataDir,prompt,schema,sandbox='read-only',
   const args=[...config.args,...defaults,'exec','--json','--ephemeral','--skip-git-repo-check','--sandbox',sandbox,'--output-schema',schemaFile,'-C',cwd];
   if(config.ignoreUserConfig!==false)args.push('--ignore-user-config');
   if(config.model)args.push('--model',config.model);args.push('-');
+  // This binds the exact stdin and output schema before a process can run. The
+  // observer receives no prompt body, filesystem path or credential.
+  await onInputPrepared(Object.freeze({stdinSha256:digest(Buffer.from(prompt,'utf8')),stdinBytes:Buffer.byteLength(prompt,'utf8'),schemaSha256:digest(JSON.stringify(schema))}));
   let result;try{result=await runCommand(config.executable,args,{cwd,input:prompt,signal,onStart,timeoutMs:config.timeoutSeconds*1000,env:workerEnv(config.codexHome?{CODEX_HOME:config.codexHome}:{})});}catch(e){if(e.code==='CHILD_PROCESS_REMAINS'&&e.exitCode!==0&&codexFailure(e)==='CODEX_LOGIN_REQUIRED')throw new Refused('CODEX_LOGIN_REQUIRED');throw e;}
   check(result.code===0,codexFailure(result));
   return decode(lastAgentText(result.stdout));
