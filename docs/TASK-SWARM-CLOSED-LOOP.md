@@ -40,6 +40,10 @@ knowledge採用→次のfresh session入力への接続は未実装です。今�
 
 初期planの担当基準の和集合は全基準を覆う必要があります。修正planは失敗基準と不足spanを
 過不足なく覆い、範囲を広げません。同一内容のplanをIDだけ変えて再試行しません。
+初期plan全jobの選択spanの和集合も32個までです。33個以上はrun directoryを作る前に
+`LOOP_CONTEXT_LIMIT`で拒否するため、有効な初期planに直して同じTask/revisionで再試行できます。
+既にadmitしたrunの修正roundや実配送bytesの上限超過は、初期planの事前拒否とは異なり、
+元のrunと消費済み予算を保持して停止します。
 上位objectiveと親入力は不変です。新たなSourceが必要なら、このrunで勝手に取得・追加せず、
 既存ownerの次revisionを待ちます。
 
@@ -107,7 +111,22 @@ negative criticをacceptして修正を解放せず、新jobを同じDBへ一度
 中断したleaseの自動再配送は行わず、`RUN_RECOVERY_REQUIRED`で止めます。
 Python APIのcallbackは`timeout`と`cancel_event`を守る必要があります。任意のPython
 callbackをthreadから強制終了する機能はありません。取消を無視するcallbackでは、その戻りまで
-待つ可能性がありますが、期限後の結果は公開・acceptしません。これは硬いprocess時間制限の
-保証ではなく、その保証を必要とするprovider接続は後続です。CLIのsimulationは固定JSONを返します。
+待つ可能性があります。acceptは既存SQLite transaction内の取得後とcommit直前に取消・
+run期限を検査し、拒否時はそのjobとattemptの更新をrollbackします。以前にcommitした他jobの
+進捗は取り消しません。既受理jobへの同内容acceptも現在の取消・期限を検査します。
+SQLite外のEventや時計とcommitを一つの原子操作にはできず、最後の検査後の変更は次の操作で
+検出します。これは硬いprocess時間制限の保証ではなく、provider接続の受入は別途必要です。
+CLIのsimulationは固定JSONを返します。
+
+receiptは未公開の同一directory内ファイルへ書込み・fsync・再読し、owner/source/取消/期限と
+全artifactを再検査してからrenameで`receipt.json`へ確定します。その最後の資格検査を通過して
+確定した後は、追加のguardで戻り値を失わせず同じbytesのSHA-256を返します。取消などが
+最後の検査後に変わることは、確定済みreceiptのanchor返却を撤回しません。callerはこのanchorを
+外部で保持します。process kill、電源断、DBとfilesystemとcallerへの返却の完全な原子性、
+未完runの自動復旧はこの境界の保証に含めません。
+
+workerの完了順によらず、criticへ渡す報告、後続context、統合conflictはjob ID順に組み立てます。
+各report内のclaim/conflict順は保持します。同じ検証済み報告とcritic結果からは統合・学習候補の
+bytesが一致します。経過時間などを含む実行receipt全体の一致は要求しません。
 完了receiptの再読では、全artifactと保存されたexecution snapshotも照合します。
 候補がpassedでもownerのTask、knowledge、Current Truthを書き換えません。

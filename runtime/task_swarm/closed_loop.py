@@ -9,13 +9,14 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import copy
 import hashlib
+import os
 from pathlib import Path
 import threading
 import time
 
 from . import protocol
 from .closed_loop_contract import (integration_candidate, learning_candidate, loop_criteria,
-                                   validate_critic, validate_plan, verified_gap)
+                                   span_identity, validate_critic, validate_plan, verified_gap)
 from .closed_loop_context import derive_child_view, validate_report_in_view
 from .owner_file import OwnerFile
 from .state import SwarmState
@@ -118,6 +119,11 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         return {"candidate": checked["candidate.json"], "learning_candidate": checked.get("learning.json"),
                 "receipt": receipt, "receipt_sha256": sha, "duplicate": True}
     require(expected_receipt_sha256 is None, "RUN_REPLAY_MISSING")
+    # A structurally valid per-job selection can exceed the critic's union.
+    # Refuse before claiming this Task/revision's directory, so a corrected
+    # initial plan can still run without resetting any admitted run or budget.
+    require(len({span_identity(span) for job in specification["jobs"]
+                 for span in job["selected_spans"]}) <= 32, "LOOP_CONTEXT_LIMIT")
     directory.mkdir(mode=0o700)
     artifacts, artifact_bytes, context_bytes = {}, 0, 0
     save_lock = threading.Lock()
@@ -300,6 +306,10 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                     except Exception:
                         cancellation.set()
                         raise
+            # Future completion order must not determine critic iteration,
+            # later context order, or integration/learning artifact bytes.
+            all_reports = dict(sorted(all_reports.items()))
+            report_jobs = dict(sorted(report_jobs.items()))
             guard()
             critic_id = f"r{round_index}-critic"
             lease = state.claim(run_id, critic_actor, lease_seconds=min(390, deadline-clock()))
@@ -369,10 +379,12 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 guard()
                 verify_artifacts()
                 state.accept(run_id, job, report_jobs[job]["artifact_digest"],
-                             "ref/loop/verification/" + critic_sha, binding["owner_ref"])
+                             "ref/loop/verification/" + critic_sha, binding["owner_ref"],
+                             cancel_event=cancellation)
             guard()
             state.accept(run_id, f"r{final_critic['round']}-critic", critic_sha,
-                         "ref/loop/verification/" + critic_sha, binding["owner_ref"])
+                         "ref/loop/verification/" + critic_sha, binding["owner_ref"],
+                         cancel_event=cancellation)
         snapshot = state.snapshot(run_id)
         verify_dispatches(snapshot)
         save("execution.json", snapshot)
@@ -386,8 +398,24 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                    "dispatches": dispatches, "artifact_sha256": dict(artifacts)}
         guard()
         verify_artifacts()
-        receipt_sha = write_json(directory / "receipt.json", receipt)
-        guard()
+        # Staging is not completion. Recheck after all receipt I/O, then publish
+        # by one same-directory rename. Once published, return its anchor
+        # without a later stop check that could orphan the completed receipt.
+        pending = directory / ".receipt-pending.json"
+        try:
+            receipt_sha = write_json(pending, receipt)
+            guard()
+            verify_artifacts()
+            require(read_json(pending, with_digest=True) == (receipt, receipt_sha),
+                    "RUN_OUTPUT_READBACK")
+            guard()
+            os.replace(pending, directory / "receipt.json")
+        except Exception:
+            try:
+                pending.unlink(missing_ok=True)
+            except OSError:
+                pass  # Preserve the refusal; no completed receipt was returned.
+            raise
         return {"candidate": candidate, "learning_candidate": learning, "receipt": receipt,
                 "receipt_sha256": receipt_sha, "duplicate": False}
     finally:
