@@ -50,7 +50,13 @@ criticにも同じ文脈境界を使い、未配布のSourceを既知として�
 各dispatchのJSON全体を保存し、そのdigestをbackend receiptと照合します。
 criticのplan内`payload_digest`は、まだ成果がない時点の入力templateに束縛します。
 実dispatch時には依存する報告と各digestを加え、その全入力digestを別途receiptへ固定します。
-最終criticの検証は、実際に渡した報告集合と一致することを要求します。
+criticの検証は、初期planと受け付けた修正extensionの全work job集合に報告が過不足なく
+一致することを要求します。呼出側は保存済み実入力と別保存のdispatch digestを渡し、
+viewの親・plan・job・自己digest、報告集合、templateとの結合を再照合します。
+第2ラウンドは、保存済みの前critic入力・応答と受け付けたextensionを必須にします。
+前応答の全基準を再検査し、failedだった各基準が実際の修正jobの報告を引用する必要があります。
+空や一部だけの修正対象指定で、この検査を省略することはできません。
+これらは保存証拠の整合性検査であり、純粋関数だけでactorの権限や出典本人性を保証しません。
 
 ## 実行入口
 

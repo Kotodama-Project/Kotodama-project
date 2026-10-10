@@ -381,6 +381,48 @@ def test_critic_template_and_actual_dependency_input_are_separately_bound(tmp_pa
     assert delivered["report_digests"] == read_json(directory/"r0-critic-result.json")["result"]["report_digests"]
 
 
+def test_critic_contract_receives_saved_dispatch_and_admitted_work_in_both_rounds(tmp_path, monkeypatch):
+    from task_swarm import closed_loop
+    validate, calls = closed_loop.validate_critic, []
+    def observe(value, payload, reports, **options):
+        calls.append(copy.deepcopy(options))
+        return validate(value, payload, reports, **options)
+    monkeypatch.setattr(closed_loop, "validate_critic", observe)
+    setup = setup_loop(tmp_path)
+    result = execute(setup, MeasuredBackend(setup[3], setup[6]))
+    directory = setup[0].parent/"operations"/result["receipt"]["run_id"]
+    assert len(calls) == 2
+    assert set(calls[0]["expected_jobs"]) == {"r0-speed", "r0-uncertainty"}
+    assert set(calls[1]["expected_jobs"]) == {"r0-speed", "r0-uncertainty", "r1-memory"}
+    assert calls[0]["prior_review"] is calls[0]["repair_admission"] is None
+    assert calls[1]["repair_admission"] == read_json(directory/"extension.json")
+    previous = calls[1]["prior_review"]
+    assert previous["response"] == read_json(directory/"r0-critic-result.json")
+    assert hashlib.sha256((directory/"r0-critic-result.json").read_bytes()).hexdigest() == calls[1]["repair_admission"]["critic_result_digest"]
+    for index, call in enumerate(calls):
+        assert call["dispatched_input"] == read_json(directory/f"r{index}-critic-input.json")
+        assert call["dispatched_input_digest"] == result["receipt"]["dispatches"][f"r{index}-critic"]["delivered_input_digest"]
+
+
+def test_accidental_report_omission_at_coordinator_boundary_cannot_publish_a_candidate(tmp_path, monkeypatch):
+    from task_swarm import closed_loop
+    validate = closed_loop.validate_critic
+    def omit(value, payload, reports, **options):
+        reports, value = copy.deepcopy(reports), copy.deepcopy(value)
+        dropped = sorted(reports)[-1]
+        reports.pop(dropped)
+        value["report_digests"].pop(dropped)
+        for item in value["validations"]:
+            item["evidence"] = [ref for ref in item["evidence"] if ref["job_id"] != dropped]
+        return validate(value, payload, reports, **options)
+    monkeypatch.setattr(closed_loop, "validate_critic", omit)
+    setup = setup_loop(tmp_path)
+    with pytest.raises(SwarmError, match="LOOP_REPORT_SET"):
+        execute(setup, MeasuredBackend(setup[3], setup[6]))
+    directory = next((setup[0].parent/"operations").iterdir())
+    assert not (directory/"candidate.json").exists() and not (directory/"receipt.json").exists()
+
+
 def test_cli_runs_a_fully_declared_scenario_through_owner_and_state(tmp_path):
     setup = setup_loop(tmp_path, jobs=1)
     owner, file, document, payload, plan, actors, measure = setup

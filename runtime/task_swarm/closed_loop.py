@@ -266,7 +266,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 require(observed["declared_input_digest"] == observed["delivered_input_digest"],
                         "LOOP_DISPATCH_INPUT_MISMATCH")
 
-    repaired, stop_reason, final_critic, critic_sha = (), "review_complete", None, None
+    prior_review, stop_reason, final_critic, critic_sha = None, "review_complete", None, None
     try:
         for round_index in range(2):
             current_jobs, leases = set(work_inputs), {}
@@ -308,14 +308,23 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                          "report_digests": {job: protocol.digest(value) for job, value in all_reports.items()}}
             reviewed = invoke(lease, delivered, critic_actor, critic=True)
             try:
+                admission = state.extension(run_id)
+                planned = [*plan["jobs"], *(admission["jobs"] if admission else [])]
                 final_critic = validate_critic(reviewed["result"], payload, all_reports,
                     view=critic_input["view"], plan_digest=initial_digest, round_index=round_index,
-                    repaired_criteria=repaired, repair_jobs=current_jobs if round_index else ())
+                    initial_execution_plan_digest=protocol.digest(plan),
+                    expected_jobs=tuple(job["job_id"] for job in planned if job["kind"] == "work"),
+                    dispatched_input=read_json(directory/(critic_id+"-input.json")),
+                    dispatched_input_digest=dispatches[critic_id]["delivered_input_digest"],
+                    prior_review=prior_review, repair_admission=admission)
             except Exception as exc:
                 state.fail(lease["token"], getattr(exc, "code", "loop critic invalid"), retryable=False)
                 raise
             critic_sha = report(lease, reviewed)
             verify_artifacts()
+            prior_review = {"response": read_json(directory/(critic_id+"-result.json")),
+                "dispatched_input": read_json(directory/(critic_id+"-input.json")),
+                "dispatched_input_digest": dispatches[critic_id]["delivered_input_digest"]}
             gap = verified_gap(final_critic, critic_job_id=critic_id, critic_result_digest=critic_sha)
             if gap is None or round_index == 1:
                 stop_reason = "review_complete" if all(v["status"] == "passed" for v in final_critic["validations"]) else "unresolved_review"
@@ -344,9 +353,9 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                          "critic_job_id": critic_id, "critic_result_digest": critic_sha,
                          "proposal_digest": protocol.digest(proposal), "jobs": jobs}
             guard()
-            state.extend_run(run_id, extension)
+            extension = state.extend_run(run_id, extension)
             save("extension.json", extension)
-            repaired, specification = tuple(gap["failed_criteria"]), proposal
+            specification = proposal
         require(final_critic is not None and critic_sha is not None, "LOOP_REVIEW_REQUIRED")
         candidate = integration_candidate(payload, all_reports, final_critic, critic_sha, stop_reason=stop_reason)
         save("candidate.json", candidate)
