@@ -98,6 +98,7 @@ def test_a_rollout_changed_during_streaming_cannot_publish_a_receipt(tmp_path, m
     original = codex.json.loads
     changed = False
     mutation_succeeded = False
+    mutation_error = None
     descriptor_snapshots = []
     original_fstat = codex.os.fstat
 
@@ -118,7 +119,7 @@ def test_a_rollout_changed_during_streaming_cannot_publish_a_receipt(tmp_path, m
         return info
 
     def load(value, *args, **kwargs):
-        nonlocal changed, mutation_succeeded
+        nonlocal changed, mutation_succeeded, mutation_error
         result = original(value, *args, **kwargs)
         if not changed:
             changed = True
@@ -128,8 +129,17 @@ def test_a_rollout_changed_during_streaming_cannot_publish_a_receipt(tmp_path, m
                         out.write(b"\n{}")
                 elif change == "replace":
                     replacement = tmp_path / "replacement"
-                    replacement.write_bytes(path.read_bytes())
+                    replacement_bytes = path.read_bytes()
+                    replacement.write_bytes(replacement_bytes)
+                    if os.name == "nt":
+                        # Windows denies replacing this open target even with
+                        # delete sharing. Move it aside, then rebind its name.
+                        os.rename(path, tmp_path / "held-old")
+                        assert not path.exists()
                     os.replace(replacement, path)
+                    replacement_info = path.stat()
+                    assert path.read_bytes() == replacement_bytes
+                    assert (replacement_info.st_dev, replacement_info.st_ino) != named_before[:2]
                 elif change == "unlink":
                     path.unlink()
                 else:
@@ -141,10 +151,11 @@ def test_a_rollout_changed_during_streaming_cannot_publish_a_receipt(tmp_path, m
                 # _runtime_receipt treats an OSError as an unreadable candidate.
                 # A failed fixture mutation must not be mistaken for a missed
                 # runtime mutation; expose its native error before that catch.
-                pytest.fail(f"fixture {change} failed: {type(exc).__name__} "
-                            f"errno={exc.errno!r} winerror={getattr(exc, 'winerror', None)!r}; "
-                            f"named_before={named_before!r} named_after={named_snapshot()!r} "
-                            f"descriptor_snapshots={descriptor_snapshots!r}", pytrace=False)
+                mutation_error = (f"fixture {change} failed: {type(exc).__name__} "
+                                  f"errno={exc.errno!r} winerror={getattr(exc, 'winerror', None)!r}; "
+                                  f"named_before={named_before!r} named_after={named_snapshot()!r} "
+                                  f"descriptor_snapshots={descriptor_snapshots!r}")
+                pytest.fail(mutation_error, pytrace=False)
             mutation_succeeded = True
         return result
 
@@ -155,7 +166,7 @@ def test_a_rollout_changed_during_streaming_cannot_publish_a_receipt(tmp_path, m
         pytest.fail(f"runtime did not reject {change}; attempted={changed!r} "
                     f"succeeded={mutation_succeeded!r} named_before={named_before!r} "
                     f"named_after={named_snapshot()!r} descriptor_snapshots={descriptor_snapshots!r}")
-    assert changed and mutation_succeeded
+    assert changed and mutation_succeeded, mutation_error
     assert raised.value.code == "runtime_rollout_changed"
 
 
