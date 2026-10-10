@@ -34,6 +34,7 @@ def query_bundle(
     goals: Sequence[str] = (),
     kgis: Sequence[str] = (),
     initiatives: Sequence[str] = (),
+    _candidates: Iterable[Concept] | None = None,
 ) -> tuple[SearchResult, ...]:
     _require_valid_bundle(bundle)
     if not 1 <= limit <= 100:
@@ -49,7 +50,7 @@ def query_bundle(
         if requested - known:
             raise KnowledgeBaseError("QUERY_REFERENCE_UNKNOWN")
     results: list[SearchResult] = []
-    for concept in bundle.concepts:
+    for concept in bundle.concepts if _candidates is None else _candidates:
         extension = concept.extension
         if any(requested and not requested.intersection(extension.get(key, []))
                for key, requested in references.items()):

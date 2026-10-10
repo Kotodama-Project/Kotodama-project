@@ -19,6 +19,8 @@ python -B tools/knowledge_base.py validate
 Windows PowerShellも同じ引数を使えます。`--root PATH`で対象checkoutを明示できます。
 CLIは外部URLを取得せず、private donorを自動巡回しません。
 
+任意のSQLite索引の構築・検証・利用と未達の性能条件は[永続索引](KNOWLEDGE-INDEX.md)を参照します。
+
 ## 目的を保って検索する
 
 ```bash
