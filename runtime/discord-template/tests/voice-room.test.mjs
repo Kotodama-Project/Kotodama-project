@@ -10,6 +10,7 @@ import {VoiceConnectionStatus as State} from '@discordjs/voice';
 import {Store} from '../src/store.mjs';
 import {exampleConfig} from '../src/config.mjs';
 import {VoiceRoom,accessEventRelevant} from '../src/voice.mjs';
+import {VoiceProvider} from '../src/voice-providers.mjs';
 import {DiscordAdapter} from '../src/discord.mjs';
 import {voiceNotice} from '../src/consent.mjs';
 const a='100000000000000002',b='100000000000000004';
@@ -211,6 +212,96 @@ async function boundReply(store,config,channel,room){
   const key=store.ingest({provider:'discord',guildId:config.discord.guildId,channelId:channel.id,sourceId:'reply-source',actorId:a,revision:1,final:true,readers:[a],text:'資料',metadata:{}}).key;
   return async(text='回答')=>{await room.speak(text,{epoch:room.epoch,actorId:a,bindings:[{key,revision:1}],authorizeAudience:async()=>[a]});return room.reply;};
 }
+
+// The real room and provider share a fake Live transport; no network or model.
+async function commandConversation(t){
+  const transports=[],played=[];
+  class Client{}
+  class Live extends EventEmitter{
+    constructor(){super();this.sent=[];transports.push(this);}
+    send(event){this.sent.push(event);this.onSend?.(event);if(event.type==='session.start')queueMicrotask(()=>this.emit('event',{type:'session.started',session:{id:`fixture-live-${transports.length}`}}));if(event.type==='session.close')queueMicrotask(()=>this.emit('event',{type:'session.closed'}));}
+    close(){}
+  }
+  const ctx=await fixture(t,options=>new VoiceProvider({...options,sdk:{OpenAI:Client,LiveWS:Live}}));
+  ctx.channel.members.delete(b);ctx.room.player.play=resource=>played.push(resource);
+  const session=await ctx.room.session(a),speak=await boundReply(ctx.store,ctx.config,ctx.channel,ctx.room);
+  return {...ctx,session,speak,transports,played};
+}
+
+test('#147 a delayed old stop rejection preserves the next real-provider reply and playback',async t=>{
+  const c=await commandConversation(t),first=await c.speak('最初の回答'),next=await c.speak('次の回答'),ws=c.transports[0];
+  const stop=ws.sent.find(event=>event.type==='session.instructions.append');assert(stop);
+  const binding=c.session.provider.commandIds.get(stop.event_id);assert.equal(binding.replyToken,first.generation);assert.equal(binding.outputGeneration,first.outputGeneration);assert.notEqual(binding.replyToken,next.generation);
+  ws.emit('event',{type:'error',error:{code:'fixture_rejected',client_event_id:stop.event_id}});
+  assert.equal(c.room.reply===next,true,'old stop rejection must preserve the newer reply');assert.equal(c.room.sessions.get(a),c.session);assert(c.session.provider.active);
+  c.room.receiveReplyAudio(c.session,loudPcm(),c.session.provider.sessionId,first.outputGeneration);assert.equal(c.played.length,0);
+  for(let i=0;i<7;i++)ws.emit('event',{type:'session.output_audio.delta',delta:loudPcm().toString('base64')});
+  assert.equal(c.room.reply,next);assert.equal(c.played.length,1);assert(next.started);assert.equal(c.session.commandRejections,0);
+});
+
+test('#147 an old commentary rejection preserves B but B rejection still clears B',async t=>{
+  const c=await commandConversation(t),first=await c.speak('A'),ws=c.transports[0],firstId=ws.sent.at(-1).event_id,next=await c.speak('B');
+  const nextId=ws.sent.at(-1).event_id,source=c.store.source(next.bindings[0].key,a);
+  ws.emit('event',{type:'error',error:{code:'fixture_rejected',client_event_id:firstId}});
+  assert.equal(c.room.reply,next);assert.equal(c.session.commandRejections,1);
+  c.room.receiveReplyAudio(c.session,loudPcm(),c.session.provider.sessionId,first.outputGeneration);assert.equal(c.session.commandRejections,1);
+  for(let i=0;i<7;i++)ws.emit('event',{type:'session.output_audio.delta',delta:loudPcm().toString('base64')});
+  assert.equal(c.played.length,1);assert.equal(c.session.commandRejections,0);
+  ws.emit('event',{type:'error',error:{code:'fixture_rejected',client_event_id:nextId}});
+  assert.equal(c.room.reply,null);assert.equal(c.room.sessions.get(a),c.session);assert(c.session.provider.active);
+  assert.deepEqual(c.store.source(next.bindings[0].key,a),source);
+});
+
+for(const order of ['event-first','wrapper-first'])test(`#147 an old command pair counts once before a different current rejection (${order})`,async t=>{
+  const c=await commandConversation(t);await c.speak('A');const next=await c.speak('B'),ws=c.transports[0];
+  const oldId=ws.sent.find(event=>event.type==='session.instructions.append').event_id,currentId=ws.sent.at(-1).event_id,error={code:'fixture_rejected',client_event_id:oldId};
+  const event=()=>ws.emit('event',{type:'error',error}),wrapper=()=>ws.emit('error',{error});
+  if(order==='event-first'){event();wrapper();}else{wrapper();event();}
+  assert.equal(c.room.reply,next);assert.equal(c.session.commandRejections,1);
+  ws.emit('event',{type:'error',error:{code:'fixture_rejected',client_event_id:currentId}});
+  assert.equal(c.room.reply,null);assert.equal(c.session.commandRejections,2);assert(c.session.provider.active);
+});
+
+for(const change of ['source-revision','participant-revoke'])test(`#147 an old rejection does not bypass ${change} playback checks`,async t=>{
+  const c=await commandConversation(t);await c.speak('A');const next=await c.speak('B'),ws=c.transports[0];
+  if(change==='source-revision'){
+    const source=c.store.source(next.bindings[0].key,a);c.store.ingest({...source,revision:source.revision+1,text:'訂正後の資料'});
+  }else c.store.recordConsent({guild:c.config.discord.guildId,channel:c.channel.id,actor:a,notice:voiceNotice(c.config).id,granted:false,interactionId:'900000000000000030'});
+  const oldId=ws.sent.find(event=>event.type==='session.instructions.append').event_id;
+  ws.emit('event',{type:'error',error:{code:'fixture_rejected',client_event_id:oldId}});
+  assert.equal(c.room.reply,next);assert.equal(c.room.canPlay(next),false);
+  for(let i=0;i<7;i++)ws.emit('event',{type:'session.output_audio.delta',delta:loudPcm().toString('base64')});
+  assert.equal(c.played.length,0);assert.equal(c.session.commandRejections,1);
+});
+
+for(const timing of ['synchronous','before-continuation'])test(`#147 current rejection ${timing} clears only that pending reply`,async t=>{
+  const c=await commandConversation(t),ws=c.transports[0];let observed;
+  ws.onSend=event=>{if(event.type!=='session.commentary.append')return;ws.onSend=null;observed=c.room.reply;assert.equal(observed.outputGeneration,undefined);const reject=()=>ws.emit('event',{type:'error',error:{code:'fixture_rejected',client_event_id:event.event_id}});if(timing==='synchronous')reject();else queueMicrotask(reject);};
+  assert.equal(await c.speak('rejected pending reply'),null);assert(observed);assert.equal(c.played.length,0);assert.equal(c.room.sessions.get(a),c.session);
+  const next=await c.speak('accepted next reply');for(let i=0;i<7;i++)ws.emit('event',{type:'session.output_audio.delta',delta:loudPcm().toString('base64')});
+  assert.equal(c.room.reply,next);assert(next.started);assert.equal(c.played.length,1);assert.equal(c.session.commandRejections,0);
+});
+
+test('#147 interrupt preserves an old pending reply token without inventing its output generation',async t=>{
+  const c=await commandConversation(t),p=c.session.provider,respond=p.respond.bind(p);let release,entered;
+  const waiting=new Promise(resolve=>{entered=resolve;});p.respond=async(...args)=>{await new Promise(resolve=>{release=resolve;entered();});return respond(...args);};
+  const pending=c.speak('pending A');await waiting;const old=c.room.reply;assert.equal(old.outputGeneration,undefined);
+  await c.room.stopSpeech();const stop=c.transports[0].sent.at(-1),binding=p.commandIds.get(stop.event_id);
+  assert.equal(stop.type,'session.instructions.append');assert.equal(binding.replyToken,old.generation);assert.equal(binding.outputGeneration,null);
+  release();assert.equal(await pending,null);assert.equal(c.room.reply,null);assert.equal(c.played.length,0);
+});
+
+test('#147 a former provider callback cannot stop a replacement session reply',async t=>{
+  const c=await commandConversation(t),old=await c.speak('old reply'),oldError=c.session.provider.onError;
+  await c.room.setMode('minutes');await c.room.setMode('assist');const current=await c.room.session(a),next=await c.speak('replacement reply');
+  oldError('VOICE_PROVIDER_COMMAND_REJECTED',{commandType:'session.commentary.append',replyToken:old.generation,outputGeneration:old.outputGeneration});
+  assert.equal(c.room.sessions.get(a),current);assert.equal(c.room.reply,next);assert.equal(current.commandRejections,0);
+});
+
+for(const command of [undefined,{}, {commandType:'unknown',replyToken:1,outputGeneration:1}, {commandType:'session.instructions.append',replyToken:-1,outputGeneration:null}])test(`#147 unbound rejection remains conservative (${JSON.stringify(command)})`,async t=>{
+  const c=await commandConversation(t);await c.speak('current reply');c.session.provider.onError('VOICE_PROVIDER_COMMAND_REJECTED',command);
+  assert.equal(c.room.reply,null);assert.equal(c.room.sessions.get(a),c.session);assert.equal(c.session.commandRejections,1);
+});
 
 test('#147 a reply that finished normally is cleared without sending a stop instruction to Live',async t=>{
   const {store,config,room,channel}=await fixture(t,provider);channel.members.delete(b);const session=await room.session(a);const speak=await boundReply(store,config,channel,room);

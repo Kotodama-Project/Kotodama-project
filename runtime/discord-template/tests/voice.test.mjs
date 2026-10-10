@@ -89,3 +89,35 @@ test('natural conversation can speak again on the next input after a manual inte
   const output=[];const p=new VoiceProvider({mode:'assist',apiKey:'synthetic-test',sdk,naturalConversation:true,onAudio:b=>output.push(b)});await p.start();p.interrupt();Live.last.emit('event',{type:'session.output_audio.delta',delta:Buffer.alloc(960).toString('base64')});assert.equal(output.length,0);
   Live.last.emit('event',{type:'session.input_transcript.delta',event_id:'next-turn',delta:'続けて',start_ms:100,end_ms:200});Live.last.emit('event',{type:'session.output_audio.delta',delta:Buffer.alloc(960).toString('base64')});assert.equal(output.length,1);await p.close();
 });
+
+for(const first of ['event','wrapper'])test(`known command rejection keeps its own binding and handles the ID pair once (${first} first)`,async()=>{
+  const errors=[],events=[],p=new VoiceProvider({mode:'assist',apiKey:'synthetic-test',sdk,onError:(code,command)=>errors.push({code,command}),onEvent:(type,data)=>{if(type==='session.command.rejected')events.push(data);}});await p.start();
+  const a=await p.respond('A',{replyToken:11}),stop=p.interrupt({replyToken:11,outputGeneration:a.outputGeneration}),b=await p.respond('B',{replyToken:12}),ws=Live.last;
+  const event={type:'error',error:{code:'fixture_rejected',client_event_id:stop}},wrapper={error:event.error};
+  for(const kind of [first,first==='event'?'wrapper':'event'])ws.emit(kind==='event'?'event':'error',kind==='event'?event:wrapper);
+  assert.equal(errors.length,1);assert.equal(events.length,1);assert.deepEqual(errors[0],{code:'VOICE_PROVIDER_COMMAND_REJECTED',command:{commandType:'session.instructions.append',replyToken:11,outputGeneration:a.outputGeneration}});assert(Object.isFrozen(errors[0].command));assert(!p.commandIds.has(stop));
+  ws.emit('event',{type:'error',error:{code:'fixture_other',client_event_id:b.eventId}});
+  assert.equal(errors.length,2);assert.equal(errors[1].command.replyToken,12);assert.equal(errors[0].command.replyToken,11);
+  assert.deepEqual(events,[{commandType:'session.instructions.append',code:'fixture_rejected'},{commandType:'session.commentary.append',code:'fixture_other'}]);await p.close();
+});
+
+test('a command binds its reply before a synchronous send rejection without changing the wire',async()=>{
+  const errors=[];class Immediate extends Live{send(event){super.send(event);if(event.type==='session.commentary.append')this.emit('event',{type:'error',error:{code:'fixture_rejected',client_event_id:event.event_id}});}}
+  const p=new VoiceProvider({mode:'assist',apiKey:'synthetic-test',sdk:{...sdk,LiveWS:Immediate},onError:(code,command)=>errors.push(command)});await p.start();
+  const sent=await p.respond('answer',{replyToken:42});assert.deepEqual(errors,[{commandType:'session.commentary.append',replyToken:42,outputGeneration:sent.outputGeneration}]);
+  assert.deepEqual(Object.keys(Live.last.sent.at(-1)).sort(),['content','delegation_id','event_id','type']);await p.close();
+});
+
+test('ACK and abort clear command bindings while one-argument callbacks remain usable',async()=>{
+  const errors=[],p=new VoiceProvider({mode:'assist',apiKey:'synthetic-test',sdk,onError:code=>errors.push(code)});await p.start();const a=await p.respond('A',{replyToken:1}),ws=Live.last;
+  ws.emit('event',{type:'session.commentary.appended',client_event_id:a.eventId});assert(!p.commandIds.has(a.eventId));const b=await p.respond('B',{replyToken:2});
+  ws.emit('event',{type:'error',error:{code:'fixture_rejected',client_event_id:b.eventId}});assert.deepEqual(errors,['VOICE_PROVIDER_COMMAND_REJECTED']);p.abort();assert.equal(p.commandIds.size,0);assert.equal(p.rejectedCommands.size,0);
+});
+
+test('an ID-less wrapper first and a third duplicate retain conservative failure handling',async()=>{
+  for(const sequence of ['idless-first','third-duplicate']){
+    const errors=[],p=new VoiceProvider({mode:'assist',apiKey:'synthetic-test',sdk,onError:code=>errors.push(code)});await p.start();const sent=await p.respond('A',{replyToken:1}),ws=Live.last,event={type:'error',error:{code:'fixture_rejected',client_event_id:sent.eventId}};
+    if(sequence==='idless-first')ws.emit('error',{error:{code:'fixture_rejected'}});else{ws.emit('event',event);ws.emit('error',{error:event.error});ws.emit('event',event);}
+    assert.equal(errors.at(-1),'VOICE_PROVIDER_FAILED');assert.equal(p.active,false);await p.close();
+  }
+});
