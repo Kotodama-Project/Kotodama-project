@@ -53,6 +53,10 @@ node bin/kotodama.mjs doctor
 4. CLI実行器の実ファイル、モデル（既定はLuna）、作業対象、許す操作、検証コマンド。[モデルと任意のフォールバック](docs/MODELS.md)。
 5. 音声の一回・一日あたりの上限。既定の一日上限は0なので、設定前に音声APIへ接続しません。
 
+CLI workerへプロジェクトの手順を渡す場合は、[Project Skillsの配達設定](docs/SKILL-DELIVERY.md)を使います。
+仕事workspaceへcommitしたSkillを`worker.projectSkills`で操作ごとに選び、入力のdigestと版を
+同じTaskのreceiptへ残します。既定は選択なしで、モデルが手順を守ったかは成果で別に確認します。
+
 ファイルを書き換える `write_file` と `develop` を `worker.actions` に加える場合は、Linuxの実行ホストに検証用のDocker imageを事前に用意します。`worker.verify` に1つ以上の検証コマンドを、`worker.verification` にimageのID（`sha256:` と64桁、`docker image inspect` で確認）またはdigest付きの名前を指定します。検証は読取専用の作業領域・ネットワークなし・認証情報なしのコンテナで行い、通常のホストで代わりに実行することはありません。設定がない場合やLinux以外では、モデルを動かす前に `VERIFICATION_COMMAND_REQUIRED`・`VERIFICATION_ISOLATION_REQUIRED`・`WRITE_WORKER_REQUIRES_LINUX_HOST` で拒否します。実行中にimageを取得（pull）しません。検証コマンドはコンテナ内の `node` などを使い、ホストの絶対パスは使えません。書き込みは `/tmp` だけに行えます。
 
 ```json
@@ -226,6 +230,7 @@ Linuxでの同じTask→Python swarm→fixture verifier→成果readbackをCIで
 ```sh
 node bin/kotodama.mjs request --actor YOUR_USER_ID --action research --text "この資料の未決事項を整理して"
 node bin/kotodama.mjs tasks --actor YOUR_USER_ID
+node bin/kotodama.mjs judgment --actor YOUR_USER_ID
 node bin/kotodama.mjs import-discord --actor YOUR_USER_ID --limit 10000
 node bin/kotodama.mjs export --actor YOUR_USER_ID --output ./meeting.md
 node bin/kotodama.mjs import-luma --actor YOUR_USER_ID --file ./guests.csv
@@ -240,6 +245,9 @@ node bin/kotodama.mjs browser read --tab 0 --json
 - [Task owner接続契約](docs/TASK-OWNER.md)
 - [構成・権限・出典](docs/ARCHITECTURE.md)
 - [起動・停止・復旧](docs/OPERATIONS.md)
+
+仕事のgrant、独立review待ち、人間承認、Codex tool approvalの観測範囲は
+[判断と許可の現在地](docs/JUDGMENT-STATUS.md)で確認できます。
 
 ## 開発と公開
 
