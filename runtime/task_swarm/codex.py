@@ -9,6 +9,7 @@ local runtime metadata by its stdout thread UUID and a completed turn.
 from __future__ import annotations
 
 import json
+import fnmatch
 import io
 from contextlib import closing
 import hashlib
@@ -486,27 +487,75 @@ def _runtime_lines(path: Path, exact_bytes: bytes | None = None,
                     raise _RuntimeResolutionError("runtime_rollout_changed", "runtime rollout changed while reading")
 
 
+def _runtime_candidates(root: Path, thread_id: str,
+                        check_cancelled: Callable[[], None] | None) -> Iterable[Path]:
+    """Scan each directory once, retaining directories but not unrelated files.
+
+    Keep only one scandir handle open, including on cancellation or errors.
+    Directory order matches Path.walk; the caller still sorts resolved files.
+    """
+    pending = [str(root)]
+    pattern = re.compile(fnmatch.translate(f"*{thread_id}*.jsonl"),
+                         re.IGNORECASE if os.name == "nt" else re.NOFLAG).match
+    while pending:
+        if check_cancelled is not None:
+            check_cancelled()
+        directory = pending.pop()
+        try:
+            entries = os.scandir(directory)
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError as exc:
+            raise _RuntimeResolutionError("runtime_discovery_failed",
+                                          "runtime directory could not be enumerated") from exc
+        subdirectories = []
+        matches = []
+        with entries:
+            while True:
+                if check_cancelled is not None:
+                    check_cancelled()
+                try:
+                    entry = next(entries)
+                except StopIteration:
+                    break
+                except OSError as exc:
+                    raise _RuntimeResolutionError("runtime_discovery_failed",
+                                                  "runtime directory enumeration was incomplete") from exc
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        subdirectories.append(entry.path)
+                    if (pattern(entry.name) and thread_id in entry.name
+                            and entry.is_file()):
+                        matches.append(Path(entry.path))
+                except (FileNotFoundError, NotADirectoryError):
+                    continue
+                except OSError as exc:
+                    raise _RuntimeResolutionError("runtime_discovery_failed",
+                                                  "runtime directory entry could not be classified") from exc
+        for match in matches:
+            if check_cancelled is not None:
+                check_cancelled()
+            yield match
+        pending.extend(reversed(subdirectories))
+
+
 def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | None, expected_cwd: Path,
                      started_unix: float | None = None, *, exact_record: tuple[Path, bytes] | None = None,
                      check_cancelled: Callable[[], None] | None = None) -> dict[str, Any] | None:
     if not isinstance(thread_id, str) or _ID_RE.fullmatch(thread_id) is None:
         raise _RuntimeResolutionError("runtime_thread_invalid", "stdout thread identity is invalid")
-    candidates: list[Path] = []
+    candidates: dict[str, Path] = {}
     for root in (() if exact_record is not None else _runtime_roots(session_root)):
         if not root.is_dir():
             continue
-        try:
-            for candidate in root.rglob(f"*{thread_id}*.jsonl"):
-                if candidate.is_file() and thread_id in candidate.name:
-                    try:
-                        resolved = candidate.resolve(strict=True)
-                        resolved.relative_to(root)
-                    except (OSError, RuntimeError, ValueError):
-                        continue
-                    candidates.append(resolved)
-        except OSError:
-            continue
-    unique = [exact_record[0]] if exact_record is not None else sorted({os.path.normcase(str(path)): path for path in candidates}.values())
+        for candidate in _runtime_candidates(root, thread_id, check_cancelled):
+            try:
+                resolved = candidate.resolve(strict=True)
+                resolved.relative_to(root)
+            except (OSError, RuntimeError, ValueError):
+                continue
+            candidates[os.path.normcase(str(resolved))] = resolved
+    unique = [exact_record[0]] if exact_record is not None else sorted(candidates.values())
     if not unique:
         return None
     contexts: dict[str, Mapping[str, Any]] = {}
