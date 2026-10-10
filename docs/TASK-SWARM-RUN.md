@@ -1,5 +1,7 @@
 # 既存Taskに束縛するswarm run
 
+原意・訂正・目的と制約をTask入力へ渡す形式は、[Taskの目的契約](TASK-OBJECTIVE-CONTRACT.md)を参照してください。
+
 #160の採用判断と#286の実装を、既存local Task ownerへ接続するための契約です。
 入力・出力契約に加え、既存ownerへ束縛したPOSIXのtask-run入口を備えます。
 controllerはTaskとgrantを作成・変更しません。Discord接続は同じlocal ownerを使い、
