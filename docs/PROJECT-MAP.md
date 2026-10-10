@@ -57,6 +57,8 @@ Task ownerを追加せず、実Codex・native core・配備の受入は残りま
 
 [小単位の知識CLI](KNOWLEDGE-CLI.md)から、目的参照で検索しConcept/節を読む経路へ進めます。
 大規模索引、目的/制約の実入力束縛、限定改善は#326〜#328の後続受入です。
+[検証済みの学びの限定再利用](TASK-LEARNING-REUSE.md)は、独立reviewと既存owner判断を
+経て、一つの学びを同じ目的の次のTaskへ渡すlocal simulationの入口です。
 
 人・組織・関係・活動の[共通catalog候補](RELATIONSHIP-CATALOG.md)は、架空データの
 source／revision／ACLを同じ人向け一覧とagent Contextへ投影します。Salesforce実接続は未確認です。

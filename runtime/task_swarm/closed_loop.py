@@ -9,6 +9,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import copy
 import hashlib
+import json
 import os
 from pathlib import Path
 import threading
@@ -30,8 +31,9 @@ MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
 
 def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                         worker_actors, critic_actor="verifier", repair_planner=None,
-                        cancel_event=None, clock=time.time, expected_receipt_sha256=None):
-    """Execute a supplied finite DAG and one verified-gap repair in one run.
+                        cancel_event=None, clock=time.time, expected_receipt_sha256=None,
+                        reuse_context=None):
+    """Execute a supplied parallel frontier and one verified-gap repair in one run.
 
     ``repair_planner(gap)`` is a pure local data transform, called outside any
     database lock. Provider-backed planning is not supported by this entrypoint.
@@ -40,12 +42,28 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     """
     started = time.monotonic()
     require(getattr(backend, "synthetic", False) is True, "LOOP_SIMULATION_REQUIRED")
+    replay_only = expected_receipt_sha256 is not None
     owner_path, payload_path = Path(owner_path), Path(payload_path)
     owner = OwnerFile(owner_path, clock=clock)
     _, owner_sha = read_json(owner_path, 1024 * 1024, with_digest=True)
+    has_reuse_grant = "learning_reuse" in read_json(owner_path, 1024 * 1024)
+    require(has_reuse_grant == (reuse_context is not None), "LOOP_REUSE_CONTEXT_REQUIRED")
+    reuse_owner, context_binding, decision_digest = None, None, None
+    if reuse_context is not None:
+        # Construct the actual current owner/store reader here. A caller's
+        # success callback or self-declared binding cannot replace this check.
+        shape(reuse_context, {"origin_owner", "origin_input", "anchor", "proposal", "decision_digest"},
+              "LOOP_REUSE_CONTEXT_INVALID")
+        require(len(protocol.canonical(reuse_context).encode("utf-8")) <= 32768,
+                "LOOP_REUSE_CONTEXT_INVALID")
+        from .learning_reuse import ReuseOwner
+        decision_digest = reuse_context["decision_digest"]
+        reuse_owner = ReuseOwner(reuse_context["origin_owner"], reuse_context["origin_input"],
+            reuse_context["anchor"], owner_path, payload_path, reuse_context["proposal"], clock=clock,
+            allow_expired_objective=replay_only)
+        context_binding = reuse_owner.context_binding(decision_digest)
     payload = read_json(payload_path, 256 * 1024)
     binding = owner.read_task(payload.get("task_id"))
-    replay_only = expected_receipt_sha256 is not None
     payload = validate_input(payload, binding, now=clock(), allow_expired_objective=replay_only)
     require(payload["version"] == 2, "LOOP_OBJECTIVE_REQUIRED")
     specification = validate_plan(supplied_plan, payload)
@@ -79,6 +97,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         require(replay_only or clock() < deadline, "DEADLINE_EXPIRED")
         require(owner.storage()["root"] == root and safe_directory(root) == root, "RUN_STORAGE_CHANGED")
         require(read_json(owner_path, 1024 * 1024, with_digest=True)[1] == owner_sha, "OWNER_INPUT_CHANGED")
+        if reuse_owner is not None:
+            reuse_owner.current(decision_digest)
 
     # The Task/revision fixes the run identity, not the supplied plan or attempt.
     # Changing the plan cannot sidestep this directory and refill its budget.
@@ -111,11 +131,14 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
             checked[name] = value
         require(checked["input.json"] == payload and checked["specification.json"] == specification,
                 "RUN_REPLAY_CONFLICT")
+        require(checked.get("context-binding.json") == context_binding, "RUN_CONTEXT_REPLAY_CONFLICT")
         state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
         snapshot = state.snapshot(run_id)
         require(protocol.canonical(snapshot) == protocol.canonical(checked["execution.json"]),
                 "RUN_EXECUTION_CHANGED")
         guard()
+        if reuse_owner is not None:
+            reuse_owner.validate_candidate(checked["candidate.json"])
         return {"candidate": checked["candidate.json"], "learning_candidate": checked.get("learning.json"),
                 "receipt": receipt, "receipt_sha256": sha, "duplicate": True}
     require(expected_receipt_sha256 is None, "RUN_REPLAY_MISSING")
@@ -147,6 +170,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
 
     save("input.json", payload)
     save("specification.json", specification)
+    if context_binding is not None:
+        save("context-binding.json", context_binding)
     all_reports, report_jobs, invocations, dispatches = {}, {}, set(), {}
     criteria = loop_criteria(payload)
 
@@ -209,6 +234,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     def invoke(lease, delivered, actor, *, critic=False):
         nonlocal context_bytes
         guard()
+        if reuse_owner is not None and not critic:
+            reuse_owner.validate_delivery(delivered)
         if critic:
             template = {key: value for key, value in delivered.items()
                         if key not in {"template_digest", "reports", "report_digests"}}
@@ -327,6 +354,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                     dispatched_input=read_json(directory/(critic_id+"-input.json")),
                     dispatched_input_digest=dispatches[critic_id]["delivered_input_digest"],
                     prior_review=prior_review, repair_admission=admission)
+                if reuse_owner is not None:
+                    reuse_owner.validate_review(final_critic, all_reports)
             except Exception as exc:
                 state.fail(lease["token"], getattr(exc, "code", "loop critic invalid"), retryable=False)
                 raise
@@ -368,6 +397,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
             specification = proposal
         require(final_critic is not None and critic_sha is not None, "LOOP_REVIEW_REQUIRED")
         candidate = integration_candidate(payload, all_reports, final_critic, critic_sha, stop_reason=stop_reason)
+        if reuse_owner is not None:
+            reuse_owner.validate_candidate(candidate)
         save("candidate.json", candidate)
         learning = None
         passed = candidate["status"] == "needs_owner_review"

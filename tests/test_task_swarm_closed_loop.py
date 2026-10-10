@@ -81,10 +81,10 @@ class MeasuredBackend:
 
     def review(self, delivered, directory, *, actor_ref, **kwargs):
         reports = delivered["reports"]
-        memory_record = next(s for s in delivered["view"]["spans"] if s["text"] == "memory=8")
+        memory_record = next(s for s in delivered["view"]["spans"] if s["text"].startswith("memory="))
         memory_span = {key: memory_record[key] for key in ("source_key", "source_revision", "start", "end")}
         speed = next(job for job, report in reports.items() if report["claims"][0]["text"] == "speed=42")
-        memory = next((job for job, report in reports.items() if report["claims"][0]["text"] == "memory=8"), None)
+        memory = next((job for job, report in reports.items() if report["claims"][0]["text"] == memory_record["text"]), None)
         validations = []
         for key in delivered["criteria"]:
             failed = key in {"R", "A1"} and memory is None
