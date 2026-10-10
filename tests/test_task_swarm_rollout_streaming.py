@@ -97,31 +97,65 @@ def test_a_rollout_changed_during_streaming_cannot_publish_a_receipt(tmp_path, m
     path = fixture(tmp_path)
     original = codex.json.loads
     changed = False
+    mutation_succeeded = False
+    descriptor_snapshots = []
+    original_fstat = codex.os.fstat
+
+    def fingerprint(info):
+        return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+    def named_snapshot():
+        try:
+            return fingerprint(path.stat())
+        except OSError as exc:
+            return {"errno": exc.errno, "winerror": getattr(exc, "winerror", None)}
+
+    named_before = named_snapshot()
+
+    def observed_fstat(fd):
+        info = original_fstat(fd)
+        descriptor_snapshots.append(fingerprint(info))
+        return info
 
     def load(value, *args, **kwargs):
-        nonlocal changed
+        nonlocal changed, mutation_succeeded
         result = original(value, *args, **kwargs)
         if not changed:
             changed = True
-            if change == "append":
-                with path.open("ab") as out:
-                    out.write(b"\n{}")
-            elif change == "replace":
-                replacement = tmp_path / "replacement"
-                replacement.write_bytes(path.read_bytes())
-                os.replace(replacement, path)
-            elif change == "unlink":
-                path.unlink()
-            else:
-                with path.open("r+b") as out:
-                    out.write(b" ")
-                info = path.stat()
-                os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns + 1_000_000))
+            try:
+                if change == "append":
+                    with path.open("ab") as out:
+                        out.write(b"\n{}")
+                elif change == "replace":
+                    replacement = tmp_path / "replacement"
+                    replacement.write_bytes(path.read_bytes())
+                    os.replace(replacement, path)
+                elif change == "unlink":
+                    path.unlink()
+                else:
+                    with path.open("r+b") as out:
+                        out.write(b" ")
+                    info = path.stat()
+                    os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns + 1_000_000))
+            except OSError as exc:
+                # _runtime_receipt treats an OSError as an unreadable candidate.
+                # A failed fixture mutation must not be mistaken for a missed
+                # runtime mutation; expose its native error before that catch.
+                pytest.fail(f"fixture {change} failed: {type(exc).__name__} "
+                            f"errno={exc.errno!r} winerror={getattr(exc, 'winerror', None)!r}; "
+                            f"named_before={named_before!r} named_after={named_snapshot()!r} "
+                            f"descriptor_snapshots={descriptor_snapshots!r}", pytrace=False)
+            mutation_succeeded = True
         return result
 
     monkeypatch.setattr(codex.json, "loads", load)
+    monkeypatch.setattr(codex.os, "fstat", observed_fstat)
     with pytest.raises(codex._RuntimeResolutionError) as raised:
         resolve(tmp_path)
+        pytest.fail(f"runtime did not reject {change}; attempted={changed!r} "
+                    f"succeeded={mutation_succeeded!r} named_before={named_before!r} "
+                    f"named_after={named_snapshot()!r} descriptor_snapshots={descriptor_snapshots!r}")
+    assert changed and mutation_succeeded
     assert raised.value.code == "runtime_rollout_changed"
 
 
