@@ -1,0 +1,112 @@
+"""Repair admission reuses the same immutable plan, owner and attempt ledger."""
+import copy
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+import sys
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "runtime"))
+from task_swarm.protocol import SwarmError, digest, validate_binding
+from task_swarm.state import SwarmState
+
+
+def job(name, kind="work", dependencies=()):
+    return {"job_id": name, "kind": kind, "dependencies": list(dependencies),
+            "exclusive_keys": [], "payload_ref": "ref/payload/"+name, "payload_digest": "a"*64}
+
+
+def setup_state(tmp_path, *, budget=6):
+    owner = {"task_id": "task-fixture", "revision": 1, "context_digest": "a"*64,
+             "owner_ref": "owner", "active_home": "fixture", "authority_ref": "authority",
+             "capability_ref": "research", "expires_at": 2000, "status": "active"}
+    now = [1000]
+    state = SwarmState(tmp_path/"execution.sqlite", lambda _: copy.deepcopy(owner), clock=lambda: now[0])
+    plan = state.create_run({"run_id": "run-fixture", "task_id": owner["task_id"], "binding_digest": digest(validate_binding(owner, now=now[0])),
+        "budget": {"attempt_budget": budget, "concurrency": 2, "deadline": 1500, "verifier_reserve": 1},
+        "jobs": [job("r0-a"), job("r0-b"), job("r0-critic", "review", ["r0-a", "r0-b"])]})
+    for actor, expected in [("worker-a", "r0-a"), ("worker-b", "r0-b"), ("critic", "r0-critic")]:
+        lease = state.claim(plan["run_id"], actor)
+        assert lease["job_id"] == expected
+        state.report(lease["token"], "ref/result/"+expected, "b"*64, "candidate", "ref/runtime/"+expected)
+    extension = {"round": 1, "initial_plan_digest": digest(plan), "critic_job_id": "r0-critic",
+        "critic_result_digest": "b"*64, "proposal_digest": "c"*64,
+        "jobs": [job("r1-repair"), job("r1-critic", "review", ["r0-a", "r0-b", "r1-repair"])]}
+    return state, plan, extension, owner, now
+
+
+def test_concurrent_same_round_is_idempotent_and_budget_is_not_refilled(tmp_path):
+    state, plan, extension, owner, now = setup_state(tmp_path)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(lambda _: state.extend_run(plan["run_id"], extension), range(2)))
+    assert outcomes == [extension, extension]
+    assert state.create_run(plan) == plan
+    assert state.snapshot(plan["run_id"])["budget"]["attempts_used"] == 3
+    assert len(state.snapshot(plan["run_id"])["jobs"]) == 5
+    assert state.extension(plan["run_id"]) == extension
+    restarted = SwarmState(tmp_path/"execution.sqlite", lambda _: owner, clock=lambda: now[0])
+    lease = restarted.claim(plan["run_id"], "worker-a")
+    assert lease["job_id"] == "r1-repair"
+    restarted.report(lease["token"], "repair-result", "d"*64, "candidate", "repair-runtime")
+    assert restarted.claim(plan["run_id"], "worker-a") is None  # author cannot be its own critic
+    review = restarted.claim(plan["run_id"], "critic")
+    assert review["job_id"] == "r1-critic"
+    restarted.report(review["token"], "review-result", "e"*64, "candidate", "review-runtime")
+    assert restarted.snapshot(plan["run_id"])["budget"]["attempts_used"] == 5
+    assert restarted.snapshot(plan["run_id"])["jobs"]["r0-critic"]["state"] == "reported"
+    assert restarted.claim(plan["run_id"], "new-worker") is None
+
+
+@pytest.mark.parametrize("change,code", [
+    (lambda e: e.update(round=2), "ROUND_LIMIT"),
+    (lambda e: e.update(round=True), "ROUND_LIMIT"),
+    (lambda e: e.update(initial_plan_digest="d"*64), "ROUND_CONFLICT"),
+    (lambda e: e.update(critic_result_digest="d"*64), "ROUND_CRITIC_REQUIRED"),
+    (lambda e: e.update(critic_job_id="r0-a"), "ROUND_CRITIC_REQUIRED"),
+    (lambda e: e.update(jobs=None), "INVALID_PLAN"),
+    (lambda e: e.update(jobs=[job("r1-critic", "review", ["r0-a", "r0-b"])]), "INVALID_PLAN"),
+    (lambda e: e["jobs"][0].update(dependencies=["r0-critic"]), "INVALID_PLAN"),
+    (lambda e: e["jobs"][1].update(dependencies=["r1-repair"]), "INVALID_PLAN"),
+    (lambda e: e["jobs"][0].update(job_id="r0-a"), "INVALID_PLAN"),
+])
+def test_invalid_round_cannot_leave_partial_jobs(tmp_path, change, code):
+    state, plan, extension, _, _ = setup_state(tmp_path)
+    change(extension)
+    with pytest.raises(SwarmError, match=code):
+        state.extend_run(plan["run_id"], extension)
+    assert state.extension(plan["run_id"]) is None
+    assert len(state.snapshot(plan["run_id"])["jobs"]) == 3
+
+
+def test_insufficient_remaining_attempts_and_expired_deadline_refuse_the_entire_round(tmp_path):
+    state, plan, extension, _, now = setup_state(tmp_path, budget=4)
+    with pytest.raises(SwarmError, match="ROUND_BUDGET"):
+        state.extend_run(plan["run_id"], extension)
+    now[0] = 1501
+    with pytest.raises(SwarmError, match="ROUND_BUDGET"):
+        state.extend_run(plan["run_id"], extension)
+    assert state.extension(plan["run_id"]) is None
+    assert len(state.snapshot(plan["run_id"])["jobs"]) == 3
+
+
+def test_changed_owner_refuses_a_prepared_repair(tmp_path):
+    state, plan, extension, owner, _ = setup_state(tmp_path)
+    owner["revision"] = 2
+    with pytest.raises(SwarmError, match="STALE_BINDING"):
+        state.extend_run(plan["run_id"], extension)
+    assert state.extension(plan["run_id"]) is None
+
+
+def test_live_lease_and_unsettled_work_refuse_repair(tmp_path):
+    state, plan, extension, _, _ = setup_state(tmp_path)
+    # Simulate an interrupted job with a persisted outstanding lease. Admission
+    # must not assume another process has stopped or issue replacement work.
+    with state._connect() as db:
+        db.execute("UPDATE jobs SET state='leased' WHERE run_id=? AND job_id='r0-a'", (plan["run_id"],))
+    with pytest.raises(SwarmError, match="ROUND_BUSY"):
+        state.extend_run(plan["run_id"], extension)
+    with state._connect() as db:
+        db.execute("UPDATE jobs SET state='pending' WHERE run_id=? AND job_id='r0-a'", (plan["run_id"],))
+    with pytest.raises(SwarmError, match="ROUND_UNSETTLED"):
+        state.extend_run(plan["run_id"], extension)
+    assert state.extension(plan["run_id"]) is None
