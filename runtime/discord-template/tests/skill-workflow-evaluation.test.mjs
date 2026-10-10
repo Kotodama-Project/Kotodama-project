@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {evaluateSkillWorkflows,WORKFLOW_CASES,workflowSnapshot} from '../tools/evaluate-skill-workflows.mjs';
 import {Refused} from '../src/common.mjs';
-import {mkdtemp,mkdir,rm,symlink} from 'node:fs/promises';
+import {mkdtemp,mkdir,rm,symlink,writeFile} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -49,6 +49,26 @@ test('subprocess refusal remains bounded unknown evidence without error text',as
 test('current checkout snapshot covers declared source and test bytes deterministically',async()=>{
   const one=await workflowSnapshot(),two=await workflowSnapshot();
   assert.deepEqual(one,two);assert(one.fileCount>100);assert.match(one.sha256,/^[a-f0-9]{64}$/);
+});
+
+test('Dots plugin implementation and manifest drift invalidate otherwise passing groups',async t=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-evaluation-plugin-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const runtime=path.join(root,'runtime/discord-template');
+  for(const directory of ['src','tests','tools','bin','dots-plugin/scripts'])await mkdir(path.join(runtime,directory),{recursive:true});
+  for(const name of ['package.json','pnpm-lock.yaml','dots-plugin/plugin.json','dots-plugin/mcp.json','dots-plugin/scripts/server.mjs'])await writeFile(path.join(runtime,name),'synthetic fixture\n');
+  for(const relative of ['.agents/skills/kotodama-intent/SKILL.md','.agents/skills/kotodama-research/SKILL.md','.agents/skills/kotodama-handoff/SKILL.md','runtime/discord-template/.agents/skills/shareable-invitation/SKILL.md']){
+    const file=path.join(root,relative);await mkdir(path.dirname(file),{recursive:true});await writeFile(file,'synthetic skill\n');
+  }
+  for(const relative of ['dots-plugin/scripts/server.mjs','dots-plugin/plugin.json']){
+    const result=await evaluateSkillWorkflows({root,run:async(executable,args)=>{
+      if(args.includes('tests/dots-context.test.mjs'))await writeFile(path.join(runtime,relative),'changed synthetic fixture\n');
+      return tap();
+    }});
+    assert(result.cases.every(value=>value.status==='PASS'));
+    assert.equal(result.status,'UNKNOWN');assert.equal(result.inputStable,false);assert.equal(result.reason,'EVALUATION_INPUT_CHANGED');
+    assert.notEqual((await workflowSnapshot(root)).sha256,result.inputSnapshot.sha256);
+  }
 });
 
 test('snapshot refuses FIFO and symlink input before reading', {skip:process.platform==='win32'},async t=>{

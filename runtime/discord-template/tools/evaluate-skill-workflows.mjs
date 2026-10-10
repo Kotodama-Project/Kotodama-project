@@ -32,7 +32,7 @@ export async function workflowSnapshot(root=ROOT){
       }
     }
   }
-  for(const directory of ['src','tests','tools','bin'])await walk(RUNTIME+'/'+directory);
+  for(const directory of ['src','tests','tools','bin','dots-plugin'])await walk(RUNTIME+'/'+directory);
   paths.push(RUNTIME+'/package.json',RUNTIME+'/pnpm-lock.yaml');
   for(const name of ['intent','research','handoff'])paths.push('.agents/skills/kotodama-'+name+'/SKILL.md');
   paths.push(RUNTIME+'/.agents/skills/shareable-invitation/SKILL.md');

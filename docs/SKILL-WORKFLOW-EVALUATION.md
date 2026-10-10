@@ -30,7 +30,8 @@ node runtime/discord-template/tools/evaluate-skill-workflows.mjs
 このコマンドは固定した5組のローカルテストを順番に実行し、JSONをstdoutへ返します。
 新しいTask、Decision、モデル呼出やproviderへの書込みは作りません。
 各組は90秒、出力2 MB、個々のテストは30秒までです。入力snapshotは宣言した
-runtimeのsource/tests/tools/bin、packageとlock、対象Skillsの内容digestです。
+runtimeのsource/tests/tools/binとDots pluginの実行ファイル・設定（mjs/json）、
+packageとlock、対象Skillsの内容digestです。
 依存の実ファイル、private data、実環境、モデルの理解までは束縛しません。
 
 | 評価組 | 実際に確認すること | 自動PASSだけでは分からないこと |
