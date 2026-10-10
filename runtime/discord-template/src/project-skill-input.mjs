@@ -25,6 +25,13 @@ export function normalizeProjectSkills(value){
 }
 export const projectSkillsDigest=value=>digest(normalizeProjectSkills(value));
 
+export function projectSkillActions(action,requiredActions){
+  check(PROJECT_SKILL_ACTIONS.includes(action),'PROJECT_SKILL_ACTION_INVALID');
+  const required=requiredActions===undefined?[]:requiredActions;
+  check(Array.isArray(required)&&required.length<=PROJECT_SKILL_ACTIONS.length&&required.every(value=>PROJECT_SKILL_ACTIONS.includes(value)),'PROJECT_SKILL_REQUIRED_ACTIONS_INVALID');
+  return [...new Set([action,...required])];
+}
+
 async function git(workspace,args,signal,input=''){
   const result=await runWorkspaceGit(args,{cwd:workspace,signal,input,timeoutMs:15000,maxBytes:4096});
   check(result.code===0,'PROJECT_SKILL_GIT_REQUIRED');return result.stdout;
@@ -84,11 +91,11 @@ async function committedSkill(workspace,revision,name,signal){
   return {name,sha256:digest(bytes),bytes:bytes.length,text};
 }
 
-export async function loadProjectSkillInput({workspace,projectSkills,action,signal,expectedRevision=null}){
-  check(PROJECT_SKILL_ACTIONS.includes(action),'PROJECT_SKILL_ACTION_INVALID');
-  const selected=normalizeProjectSkills(projectSkills),names=selected[action]??[];
+export async function loadProjectSkillInput({workspace,projectSkills,action,requiredActions,signal,expectedRevision=null}){
+  const selectedActions=projectSkillActions(action,requiredActions),selected=normalizeProjectSkills(projectSkills);
+  const names=[...new Set(selectedActions.flatMap(selectedAction=>selected[selectedAction]))];
   const configSha256=digest(selected);
-  if(!names.length)return {receipt:{version:1,selection:'operator_action_config',action,configSha256,sourceRevision:null,skills:[],totalBytes:0},section:''};
+  if(!names.length)return {receipt:{version:1,selection:'operator_action_config',action,selectedActions,configSha256,sourceRevision:null,skills:[],totalBytes:0},section:''};
   const sourceRevision=await head(workspace,signal);
   check(expectedRevision===null||sourceRevision===expectedRevision,'PROJECT_SKILL_REVISION_CHANGED');
   const skills=[];let totalBytes=0;
@@ -97,10 +104,10 @@ export async function loadProjectSkillInput({workspace,projectSkills,action,sign
     totalBytes+=skill.bytes;check(totalBytes<=MAX_PROJECT_SKILL_TOTAL_BYTES,'PROJECT_SKILL_TOTAL_LIMIT');skills.push(skill);
   }
   check(await head(workspace,signal)===sourceRevision,'PROJECT_SKILL_REVISION_CHANGED');
-  const packet={selection:'operator_action_config',authority:'method_only',action,sourceRevision,skills};
+  const packet={selection:'operator_action_config',authority:'method_only',action,selectedActions,sourceRevision,skills};
   const section='\nPROJECT_SKILLS\n'+JSON.stringify(packet);
   check(Buffer.byteLength(section,'utf8')<=MAX_RENDERED_BYTES,'PROJECT_SKILL_INPUT_LIMIT');
-  const receipt={version:1,selection:packet.selection,action,configSha256,sourceRevision,skills:skills.map(({name,sha256,bytes})=>({name,sha256,bytes})),totalBytes};
+  const receipt={version:1,selection:packet.selection,action,selectedActions,configSha256,sourceRevision,skills:skills.map(({name,sha256,bytes})=>({name,sha256,bytes})),totalBytes};
   return {receipt,section};
 }
 

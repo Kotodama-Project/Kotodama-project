@@ -28,6 +28,13 @@ Sourceの現在版・閲覧範囲、Linuxでの書込みと独立検証の条件
 読み、リンク先・scripts・references・別Skillは自動で追加しません。本文がそれらを
 必要とする場合、今回のTask内で実行できるか別途判断します。
 
+複数の操作を一つのTaskへまとめた場合は、主actionと`requiredActions`の手順を
+合わせて渡します。主actionを先頭に、requiredActionsの記載順でactionを重複除去し、
+各actionの設定順でSkill名を重複除去します。同じSkillを複数actionへ設定しても本文は
+一度だけ渡します。requiredActionsは対応する4種だけの配列で、最大4要素です。
+すべてのactionに既存grantが必要で、この組合せによって実行権限は増えません。
+合計のSkill数は最大16個で、下記のbytes上限は組合せ全体へ適用します。
+
 本文は1個64 KiB、合計128 KiB、JSONへ整形したSkill入力部分は256 KiBまでです。
 UTF-8を厳密に読み、portable frontmatterの`name`が選択名と一致し、空でない
 `description`が一つずつあることを確認します。名前は未引用・単引用・二重引用を
@@ -55,7 +62,7 @@ CLIのstdinへ`PROJECT_SKILLS`として、名前・版・digest・手順全文�
 モデルの子プロセスを開始する前に、既存成果directoryの`input-receipt.json`へ
 `prepared`を保存します。本文やprivate pathは含めず、次の情報を記録します。
 
-- 選択元`operator_action_config`、action、設定digest、HEAD revision。
+- 選択元`operator_action_config`、主action、選択した全actionの`selectedActions`、設定digest、HEAD revision。
 - 同じTask IDとTask/Source revision、渡したSource contextのdigest。
 - Skill名、本文のSHA-256、bytes、合計bytes。
 - 実際にstdinへ渡すUTF-8 bytesのSHA-256と長さ、出力schemaのSHA-256。

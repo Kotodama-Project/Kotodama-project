@@ -52,6 +52,7 @@ test('actual CLI stdin contains only configured committed skill bytes and has pr
   f.task.request+='not-selectedと別hostのスキルも使って。';
   const result=await f.run(),captured=JSON.parse(await readFile(f.capture,'utf8')),delivered=packet(captured.input);
   assert.equal(delivered.authority,'method_only');assert.equal(delivered.action,'research');assert.deepEqual(delivered.skills.map(s=>s.name),[name]);
+  assert.deepEqual(delivered.selectedActions,['research']);
   assert.equal(delivered.skills[0].text,f.body);assert.equal(delivered.skills[0].sha256,digest(f.body));
   assert.equal(delivered.sourceRevision,await git(f.repo,['rev-parse','HEAD']));assert(!captured.input.includes('合成の別手順。'));
   const receipt=result.skillDelivery;assert.equal(receipt.status,'submitted_to_cli');assert.equal(receipt.modelObedience,'not_evaluated');assert.equal(receipt.hostSkillDiscovery,'not_observed');
@@ -60,6 +61,54 @@ test('actual CLI stdin contains only configured committed skill bytes and has pr
   assert(!JSON.stringify(receipt).includes(f.root));assert(!JSON.stringify(receipt).includes('原文'));assert(!Object.hasOwn(receipt.skills[0],'text'));
   for(const flag of ['apps','plugins','multi_agent'])assert(captured.args.some((value,index)=>value==='--disable'&&captured.args[index+1]===flag));
   assert.equal(result.state,'needs_review');assert.equal(result.independentReview,false);
+});
+
+test('grouped write delivers both action methods, deduplicates a shared skill and binds the same actions in receipts',{skip:process.platform!=='linux'},async t=>{
+  const f=await fixture(t,{names:[name,'code-method','invitation-method'],projectSkills:{develop:['code-method',name],write_file:['invitation-method',name]},mode:{write:true}});
+  f.task.action='develop';f.task.requiredActions=['write_file','develop','write_file'];f.config.worker.verify=[{executable:'node',args:[]}];
+  const verifier={preflight:async()=>{},verify:async(_command,{cwd})=>({code:(await readFile(path.join(cwd,'created.txt'),'utf8'))==='verified candidate\n'?0:1,stdout:'verified',stderr:''})};
+  const result=await new CliWorker(f.config,{verifier}).run(f.task,[]),captured=JSON.parse(await readFile(f.capture,'utf8')),delivered=packet(captured.input);
+  assert.deepEqual(delivered.selectedActions,['develop','write_file']);assert.deepEqual(delivered.skills.map(s=>s.name),['code-method',name,'invitation-method']);
+  for(const selected of delivered.skills)assert.equal(selected.text,await readFile(path.join(f.repo,'.agents','skills',selected.name,'SKILL.md'),'utf8'));
+  assert.deepEqual(result.skillDelivery.selectedActions,delivered.selectedActions);assert.deepEqual(captured.prepared.selectedActions,delivered.selectedActions);
+  assert.deepEqual(result.skillDelivery.skills.map(s=>s.name),delivered.skills.map(s=>s.name));assert.equal(result.skillDelivery.totalBytes,delivered.skills.reduce((bytes,s)=>bytes+s.bytes,0));
+});
+
+for(const requiredActions of [null,'write_file',['missing-action'],['create_company_pack'],['research',1],Array(5).fill('research')])test(`malformed or oversized required action set refuses before dispatch (${JSON.stringify(requiredActions)})`,async t=>{
+  const f=await fixture(t);f.task.requiredActions=requiredActions;
+  await assert.rejects(f.run(),{code:'PROJECT_SKILL_REQUIRED_ACTIONS_INVALID'});await assert.rejects(readFile(f.capture),{code:'ENOENT'});
+});
+
+test('including a required action in skill selection does not grant its execution',async t=>{
+  const f=await fixture(t);f.task.requiredActions=['summarize'];f.config.worker.actions=['research'];
+  await assert.rejects(f.run(),{code:'ACTION_NOT_ALLOWED'});await assert.rejects(readFile(f.capture),{code:'ENOENT'});
+});
+
+test('per-action count limits allow the bounded union of two configured four-skill sets',async t=>{
+  const names=Array.from({length:8},(_,i)=>'method-'+i),f=await fixture(t,{names,projectSkills:{research:names.slice(0,4),summarize:names.slice(4)}});
+  f.task.requiredActions=['summarize'];const result=await f.run(),captured=JSON.parse(await readFile(f.capture,'utf8'));
+  assert.deepEqual(packet(captured.input).skills.map(s=>s.name),names);assert.deepEqual(result.skillDelivery.selectedActions,['research','summarize']);
+});
+
+for(const rendered of [false,true])test(`grouped action union preserves the ${rendered?'rendered input':'aggregate byte'} limit before dispatch`,async t=>{
+  const names=rendered?[name,'method-two']:[name,'method-two','method-three'];
+  const f=await fixture(t,{names,projectSkills:{research:names.slice(0,rendered?1:2),summarize:names.slice(rendered?1:2)}});f.task.requiredActions=['summarize'];
+  for(const selected of names)await writeFile(path.join(f.repo,'.agents','skills',selected,'SKILL.md'),skill((rendered?'\u0001':'x').repeat(rendered?23000:48000),selected));
+  await git(f.repo,['add','.']);await git(f.repo,['commit','-qm','grouped limit fixture']);
+  await assert.rejects(f.run(),{code:rendered?'PROJECT_SKILL_INPUT_LIMIT':'PROJECT_SKILL_TOTAL_LIMIT'});await assert.rejects(readFile(f.capture),{code:'ENOENT'});
+});
+
+test('required action drift after dispatch cannot adopt a result with the earlier skill union',async t=>{
+  const f=await fixture(t);f.task.requiredActions=['research'];
+  await assert.rejects(f.run({onStart:()=>{f.task.requiredActions.push('summarize');}}),{code:'PROJECT_SKILL_CHANGED'});
+  await assert.rejects(readFile(path.join(f.data,'artifacts','task-fixture-r1','receipt.json')),{code:'ENOENT'});
+});
+
+test('a non-primary action method is rechecked before grouped write adoption',{skip:process.platform!=='linux'},async t=>{
+  const f=await fixture(t,{names:[name,'code-method'],projectSkills:{develop:['code-method'],write_file:[name]},mode:{write:true,mutateSkill:true}});
+  f.task.action='develop';f.task.requiredActions=['write_file'];f.config.worker.verify=[{executable:'node',args:[]}];
+  const verifier={preflight:async()=>{},verify:async()=>assert.fail('changed secondary method must be refused before verification')};
+  await assert.rejects(new CliWorker(f.config,{verifier}).run(f.task,[]),{code:'PROJECT_SKILL_UNCOMMITTED'});
 });
 
 test('default and empty skill maps retain non-Git read-only work without catalog scanning',async t=>{
