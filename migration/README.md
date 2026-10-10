@@ -1,5 +1,9 @@
 # Migration directory
 
+namespace/CLIの移行前には[読み取り専用consumer inventory](../docs/NAMESPACE-CONSUMER-INVENTORY.md)で
+固定sourceの構文候補をprivateに保存できます。出力は未採用の調査資料であり、下の移行台帳へ
+自動追記せず、cutoverやprivate側の実装を承認しません。
+
 このディレクトリには、次の 2 種類のファイルを置きます。
 
 - 公開移行台帳 `public-migration-ledger.v1.jsonl`。契約は
