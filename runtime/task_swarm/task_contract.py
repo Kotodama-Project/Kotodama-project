@@ -7,6 +7,7 @@ import re
 from typing import Any, Mapping
 
 from .protocol import SwarmError, canonical, digest, integer, validate_binding
+from .task_planning import objective_criteria, validate_objective
 
 
 WORK_JOBS = ("facts", "counterpoints", "options")
@@ -38,9 +39,13 @@ def text(value: Any, limit: int, code: str) -> None:
         raise SwarmError(code, "text must be valid UTF-8") from exc
 
 
-def validate_input(payload: Mapping[str, Any], binding: Mapping[str, Any], *, now: float) -> dict:
-    shape(payload, {"version", "task_id", "revision", "request", "acceptance", "sources"}, "TASK_INPUT_INVALID")
-    require(type(payload["version"]) is int and payload["version"] == 1, "TASK_INPUT_INVALID")
+def validate_input(payload: Mapping[str, Any], binding: Mapping[str, Any], *, now: float,
+                   allow_expired_objective: bool = False) -> dict:
+    require(isinstance(payload, dict), "TASK_INPUT_INVALID")
+    version = payload.get("version")
+    require(type(version) is int and version in (1, 2), "TASK_INPUT_INVALID")
+    shape(payload, {"version", "task_id", "revision", "request", "acceptance", "sources"} |
+          ({"objective"} if version == 2 else set()), "TASK_INPUT_INVALID")
     require(isinstance(payload["task_id"], str) and re.fullmatch(
         r"task-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", payload["task_id"]) is not None, "TASK_ID_INVALID")
     integer(payload["revision"], "Task revision", maximum=2**53-1)
@@ -74,20 +79,26 @@ def validate_input(payload: Mapping[str, Any], binding: Mapping[str, Any], *, no
     require(current["context_digest"] == digest(payload), "TASK_CONTEXT_MISMATCH")
     require(current["capability_ref"] == "ref/capability/swarm_research", "TASK_CAPABILITY_MISMATCH")
     require(current["expires_at"] - now <= 1260, "TASK_DEADLINE_TOO_LONG")
+    if version == 2:
+        validate_objective(payload, current, now=now, allow_expired=allow_expired_objective)
     return json.loads(raw)
 
 
 def criteria(payload: dict) -> dict[str, str]:
-    return {**BASE_CRITERIA, **{f"U{i+1}": value for i, value in enumerate(payload["acceptance"])}}
+    return {**BASE_CRITERIA, **{f"U{i+1}": value for i, value in enumerate(payload["acceptance"])},
+            **(objective_criteria(payload) if payload["version"] == 2 else {})}
 
 
-def make_plan(payload: dict, binding: Mapping[str, Any], *, now: float) -> dict:
-    payload = validate_input(payload, binding, now=now)
+def make_plan(payload: dict, binding: Mapping[str, Any], *, now: float,
+              allow_expired_objective: bool = False) -> dict:
+    payload = validate_input(payload, binding, now=now, allow_expired_objective=allow_expired_objective)
     current = validate_binding(binding, now=now)
     # Task ID/revision is the stable retry identity; immutable binding and input
     # digests are compared by the existing SwarmState before any repeat claim.
     run_id = "task-run-" + digest([payload["task_id"], payload["revision"]])[:32]
-    deadline = current["expires_at"]
+    budget = {"attempt_budget": 6, "concurrency": 3, "verifier_reserve": 1, "deadline": current["expires_at"]}
+    if payload["version"] == 2:
+        budget.update(payload["objective"]["budget"])
     jobs = [{"job_id": name, "kind": "work", "dependencies": [], "exclusive_keys": [],
              "payload_ref": "ref/task-input/" + name,
              "payload_digest": digest({"perspective": name, "payload": payload})}
@@ -96,7 +107,7 @@ def make_plan(payload: dict, binding: Mapping[str, Any], *, now: float) -> dict:
                  "exclusive_keys": [], "payload_ref": "ref/task-input/review",
                  "payload_digest": digest({"payload": payload, "criteria": criteria(payload)})})
     return {"run_id": run_id, "task_id": payload["task_id"], "binding_digest": digest(current),
-            "budget": {"attempt_budget": 6, "concurrency": 3, "verifier_reserve": 1, "deadline": deadline}, "jobs": jobs}
+            "budget": budget, "jobs": jobs}
 
 
 def validate_report(value: dict, job_id: str, payload: dict) -> dict:
