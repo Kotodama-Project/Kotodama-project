@@ -5,6 +5,7 @@ import {verifyArtifacts} from './worker.mjs';
 import {AnalysisAdmission} from './analysis-admission.mjs';
 import {decideInteraction,identifiedOperator} from './interaction-policy.mjs';
 import {InteractionState} from './interaction-state.mjs';
+import {projectSkillsDigest} from './project-skill-input.mjs';
 
 export class Pipeline {
   constructor({store,owner=store,config,policy=()=>config,readPolicy=async()=>policy(),analyzer,worker,authorize=async()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onTaskQueued=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
@@ -164,6 +165,7 @@ export class Pipeline {
     check(!this.closing&&!this.draining,'RUNTIME_STOPPING');
     check(source.provider==='discord'&&current.discord.operators.includes(source.actorId),'OPERATOR_REQUIRED');
     check(current.worker.workspace===this.config.worker.workspace&&current.owner.kind===this.config.owner.kind,'WORKSPACE_BINDING_CHANGED');
+    check(projectSkillsDigest(current.worker.projectSkills)===projectSkillsDigest(this.config.worker.projectSkills),'PROJECT_SKILL_CONFIG_CHANGED');
     const granted=new Set(current.worker.actions);
     for(const action of actions)check(granted.has(action),'ACTION_NOT_ALLOWED');
     if(actions.includes('create_company_pack'))check(current.owner.kind==='local'&&this.owner===this.store,'COMPANY_PACK_LOCAL_OWNER_REQUIRED');
