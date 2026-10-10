@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Discord workerの明示project Skills入力と配達receipt、仕事の判断状態CLI、要求整理・根拠再利用・訂正・成果検証のローカル評価を追加。入力の配達とモデル・利用者の受入は分け、既存Task/Decision ownerと公開境界を維持する（#352）。
+
 - 知識source CLIにGoal/KGI/initiativeの検索filterとConcept/節の限定読取を追加。出典digest・元行範囲・候補状態を表示し、続きは同じsnapshotへ束縛する。大規模索引と配布CLI接続は後続（#325〜#328）。
 
 - Context Gatewayのv3 policyで、Access applicationに束縛したtenant、review目的、同意の期限・撤回・出典参照を検査。v1/v2 storeは保全し、暗黙に移行しない（#6）。
