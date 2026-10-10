@@ -142,8 +142,11 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
     _, owner_input_sha = read_json(Path(owner_path), 1024*1024, with_digest=True)
     payload = read_json(Path(payload_path), 256*1024)
     binding = owner.read_task(payload.get("task_id"))
-    payload = validate_input(payload, binding, now=clock())
-    plan = make_plan(payload, binding, now=clock())
+    # A supplied receipt anchor requests readback only. This path cannot create
+    # a run and still requires a current owner, exact input and intact artifacts.
+    replay_only = expected_receipt_sha256 is not None
+    payload = validate_input(payload, binding, now=clock(), allow_expired_objective=replay_only)
+    plan = make_plan(payload, binding, now=clock(), allow_expired_objective=replay_only)
     root = safe_directory(owner.storage()["root"])
     require(Path(binding["active_home"]).is_absolute() and Path(binding["active_home"]).resolve() == root, "RUN_HOME_MISMATCH")
     actors = {job: "worker-"+job for job in WORK_JOBS}
@@ -161,7 +164,7 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
         require(digest(current) == expected, "STALE_BINDING")
         for actor, initial in actor_bindings.items():
             require(owner.read_binding(binding["task_id"], actor) == initial, "STALE_ACTOR")
-        require(clock() < plan["budget"]["deadline"], "DEADLINE_EXPIRED")
+        require(replay_only or clock() < plan["budget"]["deadline"], "DEADLINE_EXPIRED")
         require(owner.storage()["root"] == root and safe_directory(root) == root, "RUN_STORAGE_CHANGED")
         require(read_json(Path(owner_path), 1024*1024, with_digest=True)[1] == owner_input_sha, "OWNER_INPUT_CHANGED")
     guard()
