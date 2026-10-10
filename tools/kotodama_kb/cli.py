@@ -11,6 +11,7 @@ from .retrieve import *  # noqa: F401,F403
 from .audit import *  # noqa: F401,F403
 from .verdicts import *  # noqa: F401,F403
 from .inspect import inspect_concept, inspection_markdown
+from .index import build_index, query_index, verify_index
 
 def _print_issues(issues: Iterable[Issue]) -> None:
     for issue in issues:
@@ -60,6 +61,13 @@ def _parser() -> argparse.ArgumentParser:
     query_parser.add_argument("--goal", action="append", default=[])
     query_parser.add_argument("--kgi", action="append", default=[])
     query_parser.add_argument("--initiative", action="append", default=[])
+    query_parser.add_argument("--index", type=Path, help="explicit disposable SQLite cache; stale caches are refused")
+
+    index_parser = subparsers.add_parser("index", help="build or verify an optional local candidate index")
+    _add_common_root(index_parser)
+    index_parser.add_argument("--database", type=Path, required=True)
+    index_parser.add_argument("--check", action="store_true", help="verify without changing the cache")
+    index_parser.add_argument("--json", action="store_true")
 
     show_parser = subparsers.add_parser("show", help="read one current Concept or ATX section")
     _add_common_root(show_parser)
@@ -165,13 +173,20 @@ def _execute(args: argparse.Namespace, bundle: Bundle, as_of: dt.datetime) -> in
                 return 1
         return 0
 
+    if args.command == "index":
+        report = (verify_index if args.check else build_index)(bundle, args.database)
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            print(f"index={report['backend']} generation={report['source_digest']} "
+                  f"changed={report['changed']} removed={report['removed']}")
+        return 0
+
     if args.command == "query":
         if args.limit < 1 or args.limit > 100:
             print("ERROR: --limit must be between 1 and 100", file=sys.stderr)
             return 2
-        results = query_bundle(
-            bundle,
-            args.query,
+        filters = dict(
             limit=args.limit,
             type_filter=args.type,
             tag_filter=args.tag,
@@ -180,6 +195,11 @@ def _execute(args: argparse.Namespace, bundle: Bundle, as_of: dt.datetime) -> in
             kgis=args.kgi,
             initiatives=args.initiative,
         )
+        index_report = None
+        if args.index is not None:
+            results, index_report = query_index(bundle, args.index, args.query, **filters)
+        else:
+            results = query_bundle(bundle, args.query, **filters)
         if args.json:
             rows = [
                 {
@@ -200,8 +220,11 @@ def _execute(args: argparse.Namespace, bundle: Bundle, as_of: dt.datetime) -> in
                               "as_of": bundle.as_of.isoformat().replace("+00:00", "Z"),
                               "filters": {"goals": sorted(set(args.goal)), "kgis": sorted(set(args.kgi)),
                                           "initiatives": sorted(set(args.initiative))},
-                              "results": rows}, ensure_ascii=False, indent=2))
+                              "results": rows,
+                              **({"index": index_report} if index_report else {})}, ensure_ascii=False, indent=2))
         else:
+            if index_report:
+                print(f"index={index_report['mode']} candidates={index_report['candidate_count']}")
             for index, result in enumerate(results, start=1):
                 concept = result.concept
                 print(f"{index}. {concept.metadata.get('title')} [{concept.concept_id}] score={result.score:.2f}")
