@@ -31,6 +31,9 @@ def query_bundle(
     type_filter: str | None = None,
     tag_filter: str | None = None,
     include_stale: bool = False,
+    goals: Sequence[str] = (),
+    kgis: Sequence[str] = (),
+    initiatives: Sequence[str] = (),
 ) -> tuple[SearchResult, ...]:
     _require_valid_bundle(bundle)
     if not 1 <= limit <= 100:
@@ -39,9 +42,18 @@ def query_bundle(
     if not normalized_query:
         raise KnowledgeBaseError("query must not be empty")
     tokens = [token for token in re.findall(r"[\w-]+", normalized_query) if token]
+    references = {"goal_refs": set(goals), "kgi_refs": set(kgis),
+                  "initiative_refs": set(initiatives)}
+    for key, requested in references.items():
+        known = {ref for concept in bundle.concepts for ref in concept.extension.get(key, [])}
+        if requested - known:
+            raise KnowledgeBaseError("QUERY_REFERENCE_UNKNOWN")
     results: list[SearchResult] = []
     for concept in bundle.concepts:
         extension = concept.extension
+        if any(requested and not requested.intersection(extension.get(key, []))
+               for key, requested in references.items()):
+            continue
         agent_use = extension.get("agent_use", {})
         if not agent_use.get("discoverable", False):
             continue
