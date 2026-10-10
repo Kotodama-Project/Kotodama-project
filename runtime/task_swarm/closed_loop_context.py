@@ -85,13 +85,11 @@ def derive_child_view(parent_payload, job_id, selected_spans, *, plan_digest,
     return json.loads(encoded)
 
 
-def validate_report_in_view(report, view, payload, *, allowed_jobs=WORK_JOBS):
-    """Validate a report against the parent and its exact delivered span view.
+def validate_child_view(view, payload, *, job_id, plan_digest, previous_critic_digest):
+    """Rebuild a view and match its caller-pinned job and plan identity.
 
-    The coordinator must compare this view with its stored dispatch binding;
-    this function cannot authenticate a caller-supplied plan or critic digest.
-    An evidence span must fit within one delivered span, including for inference
-    and unknown claims. It cannot bridge separately delivered pieces of text.
+    The caller must separately bind these bytes to the stored dispatch. A
+    self-consistent projection alone does not prove what a worker received.
     """
     shape(view, _VIEW_KEYS, "CLOSED_LOOP_VIEW_INVALID")
     require(isinstance(view["spans"], list) and len(view["spans"]) <= MAX_VIEW_SPANS,
@@ -109,6 +107,23 @@ def validate_report_in_view(report, view, payload, *, allowed_jobs=WORK_JOBS):
                                  plan_digest=view["plan_digest"],
                                  previous_critic_digest=view["previous_critic_digest"])
     require(canonical(view) == canonical(expected), "CLOSED_LOOP_VIEW_MISMATCH")
+    require(view["job_id"] == job_id and view["plan_digest"] == plan_digest
+            and view["previous_critic_digest"] == previous_critic_digest,
+            "CLOSED_LOOP_VIEW_BINDING")
+    return expected
+
+
+def validate_report_in_view(report, view, payload, *, allowed_jobs=WORK_JOBS):
+    """Validate a report against the parent and its exact delivered span view.
+
+    The coordinator must compare this view with its stored dispatch binding;
+    this function cannot authenticate a caller-supplied plan or critic digest.
+    An evidence span must fit within one delivered span, including for inference
+    and unknown claims. It cannot bridge separately delivered pieces of text.
+    """
+    shape(view, _VIEW_KEYS, "CLOSED_LOOP_VIEW_INVALID")
+    validate_child_view(view, payload, job_id=view["job_id"], plan_digest=view["plan_digest"],
+                        previous_critic_digest=view["previous_critic_digest"])
     checked = validate_report(report, view["job_id"], payload, allowed_jobs=allowed_jobs)
     for claim in checked["claims"]:
         for evidence in claim["evidence"]:

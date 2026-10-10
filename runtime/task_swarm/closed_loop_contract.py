@@ -5,11 +5,13 @@ finite parallel frontier followed by a critic, and at most one repair frontier.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 
-from .protocol import canonical, digest
-from .task_contract import require, shape, text
+from .closed_loop_context import validate_child_view
+from .protocol import canonical, digest, digest_ref
+from .task_contract import require, shape, text, validate_report
 from .task_planning import _Sources, objective_criteria
 
 
@@ -66,8 +68,116 @@ def validate_plan(value, payload, *, gap=None):
     return json.loads(canonical(value))
 
 
+def _planned_reports(reports, expected_jobs, round_index):
+    require(type(round_index) is int and round_index in (0, 1), "LOOP_CRITIC_STALE")
+    require(isinstance(expected_jobs, (list, tuple, set, frozenset))
+            and 1 <= len(expected_jobs) <= 6, "LOOP_REPORT_SET")
+    require(all(isinstance(job, str) and re.fullmatch(r"r[01]-[a-z][a-z0-9_-]{0,55}", job)
+                and job not in {"r0-critic", "r1-critic"} for job in expected_jobs), "LOOP_REPORT_SET")
+    jobs = set(expected_jobs)
+    require(len(jobs) == len(expected_jobs) and isinstance(reports, dict)
+            and set(reports) == jobs, "LOOP_REPORT_SET")
+    first = {job for job in jobs if job.startswith("r0-")}
+    repair = jobs - first
+    require(1 <= len(first) <= 3 and (1 <= len(repair) <= 3 if round_index else not repair),
+            "LOOP_REPORT_SET")
+    return first, repair
+
+
+def _critic_dispatch(payload, reports, view, plan_digest, round_index,
+                     dispatched_input, dispatched_input_digest, previous, round_plan_digest):
+    digest_ref(dispatched_input_digest)
+    require(isinstance(dispatched_input, dict) and digest(dispatched_input) == dispatched_input_digest,
+            "LOOP_CRITIC_DISPATCH_MISMATCH")
+    job = f"r{round_index}-critic"
+    require(dispatched_input.get("role") == "critic" and dispatched_input.get("job_id") == job
+            and type(dispatched_input.get("round")) is int and dispatched_input["round"] == round_index
+            and dispatched_input.get("round_plan_digest") == round_plan_digest
+            and canonical(dispatched_input.get("criteria")) == canonical(loop_criteria(payload))
+            and canonical(dispatched_input.get("view")) == canonical(view)
+            and canonical(dispatched_input.get("reports")) == canonical(reports)
+            and dispatched_input.get("report_digests") == {k: digest(v) for k, v in reports.items()},
+            "LOOP_CRITIC_DISPATCH_MISMATCH")
+    template = {k: v for k, v in dispatched_input.items()
+                if k not in {"template_digest", "reports", "report_digests"}}
+    require(dispatched_input.get("template_digest") == digest(template), "LOOP_CRITIC_DISPATCH_MISMATCH")
+    validate_child_view(view, payload, job_id=job, plan_digest=plan_digest,
+                        previous_critic_digest=previous)
+
+
+def _prior_repair(payload, reports, plan_digest, initial_execution_plan_digest,
+                  first_jobs, repair_jobs, prior_review, admission):
+    require(prior_review is not None and admission is not None, "LOOP_REPAIR_BINDING_REQUIRED")
+    shape(prior_review, {"response", "dispatched_input", "dispatched_input_digest"}, "LOOP_REPAIR_BINDING")
+    shape(admission, {"round", "initial_plan_digest", "critic_job_id", "critic_result_digest",
+                      "proposal_digest", "jobs"}, "LOOP_REPAIR_BINDING")
+    response, previous = prior_review["response"], prior_review["dispatched_input"]
+    shape(response, {"result", "receipt"}, "LOOP_REPAIR_BINDING")
+    require(isinstance(previous, dict) and isinstance(response["receipt"], dict)
+            and response["receipt"].get("input_digest") == prior_review["dispatched_input_digest"],
+            "LOOP_REPAIR_BINDING")
+    prior = validate_critic(response["result"], payload, previous.get("reports"),
+        view=previous.get("view"), plan_digest=plan_digest, round_index=0,
+        initial_execution_plan_digest=initial_execution_plan_digest,
+        expected_jobs=first_jobs, dispatched_input=previous,
+        dispatched_input_digest=prior_review["dispatched_input_digest"])
+    # Execution artifacts use write_json's canonical JSON plus one LF. This is
+    # the stored result-artifact hash, not the canonical object/input digest.
+    previous_digest = hashlib.sha256((canonical(response) + "\n").encode("utf-8")).hexdigest()
+    gap = verified_gap(prior, critic_job_id="r0-critic", critic_result_digest=previous_digest)
+    require(gap is not None and type(admission["round"]) is int and admission["round"] == 1
+            and admission["critic_job_id"] == "r0-critic"
+            and admission["critic_result_digest"] == previous_digest
+            and admission["initial_plan_digest"] == initial_execution_plan_digest, "LOOP_REPAIR_BINDING")
+    digest_ref(admission["initial_plan_digest"])
+    digest_ref(admission["proposal_digest"])
+    jobs = admission["jobs"]
+    require(isinstance(jobs, list) and len(jobs) == len(repair_jobs) + 1, "LOOP_REPAIR_BINDING")
+    for job in jobs:
+        shape(job, {"job_id", "kind", "dependencies", "exclusive_keys", "payload_ref", "payload_digest"},
+              "LOOP_REPAIR_BINDING")
+        require(isinstance(job["job_id"], str) and isinstance(job["kind"], str)
+                and isinstance(job["dependencies"], list)
+                and all(isinstance(dependency, str) for dependency in job["dependencies"]),
+                "LOOP_REPAIR_BINDING")
+    work = [job for job in jobs if job["kind"] == "work"]
+    review = [job for job in jobs if job["kind"] == "review"]
+    require(len(work) == len(repair_jobs) and {job["job_id"] for job in work} == repair_jobs
+            and len(review) == 1 and review[0]["job_id"] == "r1-critic"
+            and isinstance(review[0]["dependencies"], list)
+            and len(review[0]["dependencies"]) == len(first_jobs | repair_jobs)
+            and set(review[0]["dependencies"]) == first_jobs | repair_jobs, "LOOP_REPAIR_BINDING")
+    require(all(canonical(reports[job]) == canonical(previous["reports"][job]) for job in first_jobs),
+            "LOOP_PRIOR_REPORT_CHANGED")
+    return set(gap["failed_criteria"]), previous_digest, admission["proposal_digest"]
+
+
 def validate_critic(value, payload, reports, *, view, plan_digest, round_index,
-                    repaired_criteria=(), repair_jobs=()):
+                    initial_execution_plan_digest, expected_jobs, dispatched_input, dispatched_input_digest,
+                    prior_review=None, repair_admission=None):
+    """Validate all planned reports against a stored critic dispatch.
+
+    Expected jobs and dispatch digests come from the coordinator's immutable
+    plan/accepted extension and saved dispatch map, never from ``reports``.
+    ``plan_digest`` binds the supplied objective plan; the separate execution
+    plan digest binds the owner/budget/job ledger used to admit the repair.
+    Round one revalidates the prior review and derives every failed criterion;
+    callers cannot disable repair checks with an empty or incomplete set.
+    This checks evidence consistency, not actor authority or filesystem origin.
+    """
+    digest_ref(plan_digest)
+    digest_ref(initial_execution_plan_digest)
+    first_jobs, repair_jobs = _planned_reports(reports, expected_jobs, round_index)
+    repaired_criteria, previous, round_plan = set(), None, plan_digest
+    if round_index:
+        repaired_criteria, previous, round_plan = _prior_repair(payload, reports, plan_digest, initial_execution_plan_digest,
+            first_jobs, repair_jobs, prior_review, repair_admission)
+    else:
+        require(prior_review is None and repair_admission is None, "LOOP_REPAIR_BINDING")
+    _critic_dispatch(payload, reports, view, plan_digest, round_index, dispatched_input,
+                     dispatched_input_digest, previous, round_plan)
+    for job, report in reports.items():
+        validate_report(report, job, payload, allowed_jobs=expected_jobs)
     shape(value, {"parent_input_digest", "plan_digest", "round", "report_digests", "validations"},
           "LOOP_CRITIC_INVALID")
     require(value["parent_input_digest"] == digest(payload) and value["plan_digest"] == plan_digest
