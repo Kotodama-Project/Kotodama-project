@@ -110,8 +110,8 @@ def make_plan(payload: dict, binding: Mapping[str, Any], *, now: float,
             "budget": budget, "jobs": jobs}
 
 
-def validate_report(value: dict, job_id: str, payload: dict) -> dict:
-    require(job_id in WORK_JOBS, "REPORT_JOB_INVALID")
+def validate_report(value: dict, job_id: str, payload: dict, *, allowed_jobs=WORK_JOBS) -> dict:
+    require(job_id in allowed_jobs, "REPORT_JOB_INVALID")
     shape(value, {"job_id", "summary", "claims", "conflicts"}, "REPORT_INVALID")
     require(value["job_id"] == job_id, "REPORT_JOB_MISMATCH")
     text(value["summary"], 6000, "REPORT_SUMMARY_INVALID")
