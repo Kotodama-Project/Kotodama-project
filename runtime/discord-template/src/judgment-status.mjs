@@ -43,6 +43,7 @@ function actionStatus(action,start,current,drift,now){
   if(['write_file','develop','create_company_pack','swarm_research'].includes(action)&&process.platform!=='linux')reasons.push('LINUX_HOST_REQUIRED');
   if(['write_file','develop'].includes(action)&&(!start.worker.verification||!start.worker.verify.length))reasons.push('WRITE_VERIFICATION_REQUIRED');
   if(action==='create_company_pack'){
+    if(!start.worker.verification)reasons.push('VERIFICATION_ISOLATION_REQUIRED');
     if(!current.worker.companyPack)reasons.push('COMPANY_PACK_NOT_CONFIGURED');
     else if(Date.parse(current.worker.companyPack.authorityExpiresAt)<=now)reasons.push('COMPANY_PACK_AUTHORITY_EXPIRED');
     if(digest(current.worker.companyPack??null)!==digest(start.worker.companyPack??null))reasons.push('COMPANY_PACK_BINDING_CHANGED');

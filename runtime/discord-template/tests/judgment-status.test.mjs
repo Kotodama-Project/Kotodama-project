@@ -69,6 +69,26 @@ test('grant removal, startup configuration drift and authority expiry report blo
   report=await f.reader.read({actor});assert(report.effective.actions.find(a=>a.action==='create_company_pack').reasons.includes('COMPANY_PACK_AUTHORITY_EXPIRED'));
 });
 
+test('Company Pack grant and fresh authority remain blocked without startup verification isolation',async t=>{
+  const f=await fixture(t);f.config.worker.actions.push('create_company_pack');
+  f.config.worker.companyPack={authorityExpiresAt:'2030-01-02T00:00:00Z'};f.current=structuredClone(f.config);
+  assert.deepEqual(f.config.worker.verify,[]);assert.equal(f.config.worker.verification,undefined);
+  const report=await f.reader.read({actor}),action=report.effective.actions.find(a=>a.action==='create_company_pack');
+  assert.equal(action.configured,true);assert.equal(action.runningWorkerConfigured,true);assert.equal(action.eligibility,'blocked');
+  assert(action.reasons.includes('VERIFICATION_ISOLATION_REQUIRED'));assert(!action.reasons.includes('COMPANY_PACK_AUTHORITY_EXPIRED'));
+});
+
+test('Company Pack built-in verification does not require custom worker.verify commands',async t=>{
+  const f=await fixture(t);f.config.worker.actions.push('create_company_pack');
+  f.config.worker.companyPack={authorityExpiresAt:'2030-01-02T00:00:00Z'};
+  f.config.worker.verification={kind:'docker',image:'sha256:'+'a'.repeat(64)};f.current=structuredClone(f.config);
+  assert.deepEqual(f.config.worker.verify,[]);
+  const report=await f.reader.read({actor}),action=report.effective.actions.find(a=>a.action==='create_company_pack');
+  assert(!action.reasons.includes('VERIFICATION_ISOLATION_REQUIRED'));assert(!action.reasons.includes('WRITE_VERIFICATION_REQUIRED'));
+  assert.equal(action.eligibility,process.platform==='linux'?'scope_check_required':'blocked');
+  assert.equal(report.effective.technicalPreflight,'not_run');assert.equal(report.effective.executionAuthorized,false);
+});
+
 test('remote owner is unobserved and never reads the local task mirror or invokes the remote owner',async t=>{
   const f=await fixture(t);f.task();f.config.owner={kind:'remote'};f.current.owner={kind:'remote'};f.reader.owner={tasks:()=>{assert.fail('remote call');}};
   const report=await f.reader.read({actor});assert.equal(report.tasks.reason,'REMOTE_OWNER_UNOBSERVED');assert.deepEqual(report.tasks.items,[]);assert(report.effective.actions.every(a=>a.eligibility==='blocked'));
