@@ -33,6 +33,7 @@ class KnowledgeBaseTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.bundle = KB.load_bundle(ROOT, as_of=AS_OF)
+        cls.fixture_input_paths = tuple(path for path, _ in cls.bundle.input_bindings)
 
     def test_bundle_is_okf_and_profile_valid(self) -> None:
         errors = [issue for issue in self.bundle.issues if issue.level == "error"]
@@ -602,8 +603,8 @@ class KnowledgeBaseTests(unittest.TestCase):
     def _context(bundle, budget=12):
         return KB.select_context(bundle, goals=["OUT-INTENT"], kgis=[], initiatives=[], tags=[], max_concepts=budget)
 
-    @staticmethod
-    def _minimal_copy(temporary: Path) -> Path:
+    @classmethod
+    def _minimal_copy(cls, temporary: Path) -> Path:
         root = temporary / "repo"
         shutil.copytree(ROOT / "knowledge", root / "knowledge")
         (root / "schemas").mkdir(parents=True)
@@ -616,7 +617,13 @@ class KnowledgeBaseTests(unittest.TestCase):
 
         # Use the actual admitted public source bytes, not fabricated stand-ins
         # for old excluded policy documents which mask missing-source failures.
-        for relative, _ in KB.load_bundle(ROOT, as_of=AS_OF).input_bindings:
+        input_paths = getattr(cls, "fixture_input_paths", None)
+        if input_paths is None:
+            # Other test modules call this helper without setUpClass.
+            input_paths = tuple(
+                path for path, _ in KB.load_bundle(ROOT, as_of=AS_OF).input_bindings
+            )
+        for relative in input_paths:
             path = root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             if not path.exists():
