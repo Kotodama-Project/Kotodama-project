@@ -12,7 +12,8 @@
     "account_locator": {"$ref": "#/$defs/nullable_digest"},
     "zone_locator": {"$ref": "#/$defs/nullable_digest"},
     "private_receipt_sha256": {"$ref": "#/$defs/nullable_digest"},
-    "method": {"const": "GET"},
+    "method": {"enum": ["GET", "DASHBOARD_UI"]},
+    "zone_state": {"enum": ["SELECTED_REPORTED", "NO_ZONE_REPORTED", "UNKNOWN"]},
     "services": {
       "type": "object", "additionalProperties": false,
       "required": ["workers", "pages", "tunnels", "access", "dns", "r2", "ai_gateway", "billing"],
@@ -27,6 +28,7 @@
       "type": "object", "additionalProperties": false, "required": ["name", "entitlement_sha256"],
       "properties": {
         "name": {"enum": ["FREE", "PAID", "ENTERPRISE", "UNKNOWN"]},
+        "scope": {"const": "WORKERS"},
         "entitlement_sha256": {"$ref": "#/$defs/nullable_digest"}
       }
     },
@@ -34,6 +36,7 @@
       "type": "object", "additionalProperties": false, "required": ["state", "currency", "monthly_ceiling", "decision_sha256"],
       "properties": {
         "state": {"enum": ["REPORTED_DECISION", "UNKNOWN"]},
+        "scope": {"enum": ["ACCOUNT_TOTAL", "ADDITIONAL_PROJECT_SPEND"]},
         "currency": {"enum": ["USD", "JPY", null]},
         "monthly_ceiling": {"type": ["number", "null"], "minimum": 0, "maximum": 1000000000},
         "decision_sha256": {"$ref": "#/$defs/nullable_digest"}
