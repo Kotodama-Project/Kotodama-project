@@ -269,12 +269,19 @@ operation.execute(operation.read_json(pathlib.Path(sys.argv[2])), pathlib.Path(s
             ("capability", "work_order_ref", "work-order:unrelated", "CAPABILITY_REFERENCE_MISMATCH"),
         ]
         originals = {"task": self.task, "work_order": self.work_order, "capability": self.capability}
-        for name, field, value, code in cases:
+        case_names = (
+            "waiting-task", "completed-task", "closed-task", "wrong-task-owner",
+            "wrong-action-scope", "out-of-scope-write", "inactive-work-order",
+            "wrong-work-order-action", "wrong-candidate-revision", "wrong-output-root",
+            "wrong-task-revision", "expired-work-order", "wrong-capability-owner",
+            "extra-capability-action", "expired-capability", "wrong-work-order-reference",
+        )
+        for case_index, (name, field, value, code) in enumerate(cases):
             modified = copy.deepcopy(originals[name])
             modified[field] = value
             self.binding["records"][name] = self.save_record(name, modified)
             self.save_binding()
-            with self.subTest(name=name, field=field, value=value):
+            with self.subTest(case=case_names[case_index], name=name, field=field):
                 self.assert_refused(code=code)
                 self.assertFalse(self.operation.exists())
             self.binding["records"][name] = self.save_record(name, originals[name])

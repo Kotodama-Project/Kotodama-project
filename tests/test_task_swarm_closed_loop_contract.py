@@ -196,12 +196,12 @@ class ClosedLoopCriticContractTests(unittest.TestCase):
             dispatched_input=self.input, dispatched_input_digest=digest(self.input)))
 
     def test_current_dispatch_must_contain_the_exact_report_set_and_template(self):
-        for change in (lambda value: value["reports"].pop("r0-b"),
+        for case_index, change in enumerate((lambda value: value["reports"].pop("r0-b"),
                        lambda value: value.update(template_digest="a" * 64),
                        lambda value: value.update(job_id="r0-other"),
                        lambda value: value.update(round=True),
-                       lambda value: value.update(round_plan_digest="a" * 64)):
-            with self.subTest(change=change):
+                       lambda value: value.update(round_plan_digest="a" * 64))):
+            with self.subTest(change=("missing-report", "template-digest", "job-id", "round-type", "round-plan-digest")[case_index]):
                 delivered = copy.deepcopy(self.input)
                 change(delivered)
                 self.refuses("LOOP_CRITIC_DISPATCH_MISMATCH", lambda: self.check(
