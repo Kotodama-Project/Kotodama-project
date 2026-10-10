@@ -87,7 +87,7 @@ class A019MigrationBatchTests(unittest.TestCase):
                         self.assertEqual(result["admission_status"], "BLOCKED")
                         self.assertTrue(any("metadata differs" in error for error in result["errors"]))
 
-        for key in VALIDATOR.MANIFEST_KEYS:
+        for key in sorted(VALIDATOR.MANIFEST_KEYS):
             with self.subTest(missing_manifest_key=key):
                 temporary, root = self._fixture()
                 with temporary:
@@ -453,8 +453,8 @@ class A019MigrationBatchTests(unittest.TestCase):
                 "source_path", "unlisted/source.json"
             ),
         )
-        for mutate in mutations:
-            with self.subTest(mutation=mutate):
+        for case_index, mutate in enumerate(mutations):
+            with self.subTest(mutation=('duplicate-entry', 'source-mode', 'source-blob', 'source-path')[case_index]):
                 temporary, root = self._fixture()
                 with temporary:
                     manifest = self._manifest(root)
@@ -917,8 +917,8 @@ class A019MigrationBatchTests(unittest.TestCase):
             lambda schema: schema.__setitem__("$schema", []),
             lambda schema: schema.__setitem__("properties", []),
         )
-        for mutate in mutations:
-            with self.subTest(mutation=mutate):
+        for case_index, mutate in enumerate(mutations):
+            with self.subTest(mutation=('id-type', 'schema-type', 'properties-type')[case_index]):
                 temporary, root = self._fixture()
                 with temporary:
                     schema_path = root / "schemas" / "task-contract.schema.json"
@@ -969,8 +969,8 @@ class A019MigrationBatchTests(unittest.TestCase):
                 "license_and_provenance", "PASS"
             ),
         )
-        for mutate in mutations:
-            with self.subTest(mutation=mutate):
+        for case_index, mutate in enumerate(mutations):
+            with self.subTest(mutation=('derived-scope', 'destination-blob', 'admission-gate')[case_index]):
                 temporary, root = self._fixture()
                 with temporary:
                     manifest = self._manifest(root)

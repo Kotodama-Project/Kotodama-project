@@ -3234,7 +3234,7 @@ class SessionConversationLedgerTests(unittest.TestCase):
             valid_report = ledger.validate_ledger(_rechain(valid_records))
             self.assertEqual("LEDGER_VALID", valid_report["result"], valid_report)
 
-            for wrong_kind in set(expected.values()) - {expected_kind}:
+            for wrong_kind in sorted(set(expected.values()) - {expected_kind}):
                 invalid_records = copy.deepcopy(valid_records)
                 invalid_records[-1]["event"]["invalidation_kind"] = wrong_kind
                 invalid_report = ledger.validate_ledger(_rechain(invalid_records))

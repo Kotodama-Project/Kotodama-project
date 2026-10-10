@@ -544,8 +544,8 @@ class A022MigrationBatchTests(unittest.TestCase):
             ),
         )
 
-        for mutate in mutations:
-            with self.subTest(mutation=mutate):
+        for case_index, mutate in enumerate(mutations):
+            with self.subTest(mutation=('duplicate-entry', 'source-mode', 'source-blob', 'source-path')[case_index]):
                 temporary, root = self._fixture()
                 with temporary:
                     manifest = self._manifest(root)

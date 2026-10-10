@@ -237,7 +237,7 @@ class CreateCompanyPackCliTests(unittest.TestCase):
             parent = Path(temporary) / "work"
             parent.mkdir()
             for index, options in enumerate(option_sets):
-                with self.subTest(options=options):
+                with self.subTest(option=options[0]):
                     target = parent / f"partial-{index}"
                     result = self.run_creator("partial-company", target, *options)
 
