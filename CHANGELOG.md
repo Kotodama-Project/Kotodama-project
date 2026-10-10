@@ -107,6 +107,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- 開発branchからmainへPRを付け替えた場合にもDependency reviewを起動する。既存の必須check、検査対象、脆弱性の拒否基準は維持する。
+
 - mainのpushで検証runが作られなかった場合に、同じRepository validationを手動起動できる入口を追加。必須チェック・全検査・read-only権限を維持し、対象head SHAと結果の読戻しを文書化。
 
 - Discordの複合依頼を現行grantで全件検査し、全Taskの再認可が完了するまで実行・受付通知を始めない。失敗したqueued revisionを比較付きで取消し、不明な後始末は新しい受付を止める（#146前半）。
