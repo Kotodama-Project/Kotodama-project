@@ -2,6 +2,7 @@ import {check,digest} from './common.mjs';
 import {WORKER_ACTIONS} from './capability-lanes.mjs';
 import {lumaEventSchema} from './dots.mjs';
 import {awaitWithSignal,deadlineScope} from './http-limits.mjs';
+import {projectSkillsDigest} from './project-skill-input.mjs';
 
 const LIMIT=20,MAX_BINDINGS=32;
 const policies=new Set(['never','untrusted','on-request','on-failure']);
@@ -26,10 +27,11 @@ export function configuredToolApproval(adapter){
 }
 
 function driftFields(start,current){
-  return ['dataDir','owner','discordInstallation','workspace','workerAdapter','verification','channelWorkspaces','analyzer'].filter(field=>{
+  return ['dataDir','owner','discordInstallation','workspace','workerAdapter','verification','channelWorkspaces','analyzer','projectSkills'].filter(field=>{
     const select=c=>({dataDir:c.dataDir,owner:c.owner,discordInstallation:[c.installation,c.discord.guildId,c.discord.applicationId],workspace:c.worker.workspace,
       workerAdapter:[c.worker.executable,c.worker.args,c.worker.model,c.worker.codexHome,c.worker.ignoreUserConfig,c.worker.fallback],
-      verification:[c.worker.verification,c.worker.verify],channelWorkspaces:c.worker.channelWorkspaces,analyzer:c.analyzer})[field]??null;
+      verification:[c.worker.verification,c.worker.verify],channelWorkspaces:c.worker.channelWorkspaces,analyzer:c.analyzer,
+      projectSkills:projectSkillsDigest(c.worker.projectSkills)})[field]??null;
     return digest(select(start))!==digest(select(current));
   });
 }
