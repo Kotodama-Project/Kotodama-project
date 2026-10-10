@@ -22,6 +22,7 @@ import {RemoteOwner} from './remote-owner.mjs';
 import {startBridge} from './bridge.mjs';
 import {awaitWithSignal,deadlineScope,readHttpBody,sendHttpJson} from './http-limits.mjs';
 import {DotsBridge} from './dots.mjs';
+import {JudgmentStatusReader} from './judgment-status.mjs';
 import {atomicJson,atomicText,check,uid,errorCode,redact,Refused,digest} from './common.mjs';
 import {consumeBootstrapBinding,registerRuntimeModule} from './source-bootstrap.mjs';
 registerRuntimeModule(startRuntime,import.meta.url);
@@ -60,6 +61,10 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   catch(error){if(owner.kind==='remote')await owner.close();store.releaseHost(ownerId);store.close();stopDebug();throw error;}
   const workspaceAuthorize=async(task,purpose='execute',options)=>{await authorize(task,purpose,options);if(purpose==='execute')channelWorker?.scope(store.source(task.source_key,task.actor));};
   const pipeline=new Pipeline({store,owner,config,policy:()=>current,readPolicy:async()=>{current=await loadConfig(filename);return current;},analyzer:selectedAnalyzer,worker:selectedWorker,authorize:workspaceAuthorize,authorizeAnalysis,onTask:async task=>{if(discord)await discord.deliver(task);},onTaskQueued:async(task,options)=>{if(discord)await discord.acknowledgeTask(task,options);},onReply:async reply=>{if(discord)await discord.reply(reply);},onVoiceAction:async action=>{if(discord)await discord.voiceAction(action);},onError:code=>log({event:'operation_failed',code})});
+  const judgment=new JudgmentStatusReader({config,store,owner,dots:()=>dots,authorize:task=>authorize(task,'read_result'),
+    readPolicy:async()=>{current=await loadConfig(filename);return current;},assertActive:()=>check(!closing&&store.lock()?.owner===ownerId,'RUNTIME_STOPPING'),
+    accessEpoch:()=>discord?.accessGeneration??null,
+    track:work=>{controlOperations.add(work);const settled=()=>controlOperations.delete(work);work.then(settled,settled);}});
   try{
     if(config.dots.enabled){
       const refreshDotsPolicy=async source=>{
@@ -109,6 +114,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         controlReads.delete(scope);scope.dispose();scope=null;
         let result;
         if(input.action==='tasks')result=await pipeline.tasks(input.actor);
+        else if(input.action==='judgment')result=await judgment.read({actor:input.actor,taskId:input.taskId});
         else if(input.action==='result')result=await pipeline.result(input.taskId,input.actor);
         else if(input.action==='stop'){await pipeline.stop(input.taskId,input.actor);result={state:'stop_requested'};}
         else if(input.action==='resume')result=await pipeline.resume(input.taskId,input.actor);
@@ -180,7 +186,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     closePromise=(async()=>{
       // Keep the store and host lock if a dispatched import has an uncertain drain.
       await bridge?.drain();await rotation?.close();await discord?.close();await archive?.close();await channelWorker?.close();await pipeline.close();
-      await Promise.allSettled([...controlOperations]);await stopped;await accessMonitor.drain({pending:policyWork?[policyWork]:[]});if(owner.kind==='remote')await owner.close();
+      await judgment.drain();await Promise.allSettled([...controlOperations]);await stopped;await accessMonitor.drain({pending:policyWork?[policyWork]:[]});if(owner.kind==='remote')await owner.close();
       store.releaseHost(ownerId);store.close();clearInterval(shutdownKeepAlive);log({event:'runtime_stopped',ownerId});stopDebug();
     })().catch(error=>{closePromise=null;if(errorCode(error).endsWith('_DRAIN_UNCERTAIN'))shutdownKeepAlive??=setInterval(()=>{},1000);throw error;});
     return closePromise;
