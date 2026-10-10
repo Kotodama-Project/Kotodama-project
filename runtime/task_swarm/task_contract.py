@@ -39,7 +39,8 @@ def text(value: Any, limit: int, code: str) -> None:
         raise SwarmError(code, "text must be valid UTF-8") from exc
 
 
-def validate_input(payload: Mapping[str, Any], binding: Mapping[str, Any], *, now: float) -> dict:
+def validate_input(payload: Mapping[str, Any], binding: Mapping[str, Any], *, now: float,
+                   allow_expired_objective: bool = False) -> dict:
     require(isinstance(payload, dict), "TASK_INPUT_INVALID")
     version = payload.get("version")
     require(type(version) is int and version in (1, 2), "TASK_INPUT_INVALID")
@@ -79,7 +80,7 @@ def validate_input(payload: Mapping[str, Any], binding: Mapping[str, Any], *, no
     require(current["capability_ref"] == "ref/capability/swarm_research", "TASK_CAPABILITY_MISMATCH")
     require(current["expires_at"] - now <= 1260, "TASK_DEADLINE_TOO_LONG")
     if version == 2:
-        validate_objective(payload, current, now=now)
+        validate_objective(payload, current, now=now, allow_expired=allow_expired_objective)
     return json.loads(raw)
 
 
@@ -88,8 +89,9 @@ def criteria(payload: dict) -> dict[str, str]:
             **(objective_criteria(payload) if payload["version"] == 2 else {})}
 
 
-def make_plan(payload: dict, binding: Mapping[str, Any], *, now: float) -> dict:
-    payload = validate_input(payload, binding, now=now)
+def make_plan(payload: dict, binding: Mapping[str, Any], *, now: float,
+              allow_expired_objective: bool = False) -> dict:
+    payload = validate_input(payload, binding, now=now, allow_expired_objective=allow_expired_objective)
     current = validate_binding(binding, now=now)
     # Task ID/revision is the stable retry identity; immutable binding and input
     # digests are compared by the existing SwarmState before any repeat claim.

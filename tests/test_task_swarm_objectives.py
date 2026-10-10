@@ -236,3 +236,52 @@ def test_objective_deadline_stops_actual_executor_before_receipt(tmp_path):
         execute_task(owner, file, Backend(), clock=lambda: current_time[0])
     assert raised.value.code in {"RUN_CANCELLED", "DEADLINE_EXPIRED"}
     assert not list(root.glob("task-run-*/receipt.json"))
+
+
+def test_finished_receipt_replay_survives_objective_deadline_without_dispatch(tmp_path):
+    _, owner, file, _ = owner_files(tmp_path)
+    first = execute_task(owner, file, SyntheticTaskBackend(), clock=lambda: 1000)
+    class NoDispatch(SyntheticTaskBackend):
+        def produce(self, *args, **kwargs):
+            pytest.fail("receipt replay must not dispatch a worker")
+        def review(self, *args, **kwargs):
+            pytest.fail("receipt replay must not dispatch a reviewer")
+    repeated = execute_task(owner, file, NoDispatch(), clock=lambda: 1150,
+                            expected_receipt_sha256=first["receipt_sha256"])
+    assert repeated["duplicate"] and repeated["receipt"] == first["receipt"]
+
+
+@pytest.mark.parametrize("anchored,code", [(False, "OBJECTIVE_DEADLINE_INVALID"),
+                                          (True, "RUN_REPLAY_MISSING")])
+def test_expired_objective_cannot_create_a_run_even_with_replay_anchor(tmp_path, anchored, code):
+    _, owner, file, root = owner_files(tmp_path)
+    with pytest.raises(SwarmError) as raised:
+        execute_task(owner, file, SyntheticTaskBackend(), clock=lambda: 1150,
+                     expected_receipt_sha256="a"*64 if anchored else None)
+    assert raised.value.code == code
+    assert not list(root.iterdir())
+
+
+@pytest.mark.parametrize("mode,code", [("owner_expired", "EXPIRED_BINDING"),
+                                      ("revoked", "INACTIVE_TASK"),
+                                      ("cancelled", "RUN_CANCELLED"),
+                                      ("wrong_anchor", "RUN_REPLAY_ANCHOR_MISMATCH"),
+                                      ("changed_artifact", "RUN_ARTIFACT_CHANGED")])
+def test_late_replay_still_requires_live_owner_and_exact_saved_evidence(tmp_path, mode, code):
+    _, owner, file, root = owner_files(tmp_path)
+    first = execute_task(owner, file, SyntheticTaskBackend(), clock=lambda: 1000)
+    event = threading.Event()
+    now = 1201 if mode == "owner_expired" else 1150
+    if mode == "revoked":
+        document = json.loads(owner.read_text(encoding="utf-8"))
+        document["binding"]["status"] = "cancelled"
+        owner.write_text(json.dumps(document), encoding="utf-8")
+    if mode == "cancelled":
+        event.set()
+    if mode == "changed_artifact":
+        result = next(root.glob("task-run-*/result.json"))
+        result.write_bytes(result.read_bytes()+b" ")
+    with pytest.raises(SwarmError) as raised:
+        execute_task(owner, file, SyntheticTaskBackend(), clock=lambda: now, cancel_event=event,
+                     expected_receipt_sha256="a"*64 if mode == "wrong_anchor" else first["receipt_sha256"])
+    assert raised.value.code == code

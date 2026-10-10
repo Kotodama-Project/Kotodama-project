@@ -78,7 +78,9 @@ version 2で指定した試行数と期限は既定値を狭めるだけで、gr
 利用者固有の停止条件や金額・token予算の実測制御は、この版に含めません。
 
 同じTask ID/revisionでは同じrun IDです。入力や目的を変えて過去の成功を使い回せず、
-元のreceipt hashを伴う同一入力だけを再読します。現在の訂正を採用する際のTask revision更新は
+元のreceipt hashを伴う同一入力だけを再読します。完了後の再読はobjectiveの実行期限を
+過ぎても可能ですが、owner自体の有効期限・取消・入力とartifactの照合は維持します。
+再読を指定して未作成runを実行することはできません。現在の訂正を採用する際のTask revision更新は
 既存ownerが行います。runnerはTask更新やCASの代行をしません。
 全条件がpassedでも結果は`needs_review`であり、ownerの成果採用、実利用受入、
 PromotionやCurrent Truthの変更を意味しません。

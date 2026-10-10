@@ -60,7 +60,7 @@ class _Sources:
         return result
 
 
-def validate_objective(payload, binding, *, now):
+def validate_objective(payload, binding, *, now, allow_expired=False):
     """Check v2 data against the input and current Task binding only."""
     objective = payload["objective"]
     _shape(objective, OBJECTIVE_KEYS, "OBJECTIVE_INVALID")
@@ -104,7 +104,8 @@ def validate_objective(payload, binding, *, now):
     _shape(budget, {"attempt_budget", "deadline"}, "OBJECTIVE_BUDGET_INVALID")
     integer(budget["attempt_budget"], "objective attempt budget", minimum=4, maximum=6)
     deadline = finite(budget["deadline"], "objective deadline")
-    _require(now < deadline <= binding["expires_at"], "OBJECTIVE_DEADLINE_INVALID")
+    _require(0 < deadline <= binding["expires_at"] and (allow_expired or now < deadline),
+             "OBJECTIVE_DEADLINE_INVALID")
     _require(objective["stop_conditions"] == STOP_CONDITIONS, "OBJECTIVE_STOP_INVALID")
     _require(objective["rollback"] == "not_applicable_read_only", "OBJECTIVE_ROLLBACK_INVALID")
 
