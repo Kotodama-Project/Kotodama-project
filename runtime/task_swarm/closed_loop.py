@@ -70,9 +70,16 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     require(isinstance(cancellation, threading.Event), "RUN_CANCELLATION_INVALID")
     binding_digest = protocol.digest(binding)
     deadline = payload["objective"]["budget"]["deadline"]
+    failures = []
+    failure_lock = threading.Lock()
 
     def guard():
-        require(not cancellation.is_set(), "RUN_CANCELLED")
+        with failure_lock:
+            failure = failures[0] if failures else None
+            cancelled = cancellation.is_set()
+        if failure is not None:
+            raise protocol.SwarmError(*failure)
+        require(not cancelled, "RUN_CANCELLED")
         require(protocol.digest(owner.read_task(binding["task_id"])) == binding_digest, "STALE_BINDING")
         require(all(owner.read_binding(binding["task_id"], actor) == original
                     for actor, original in actor_bindings.items()), "STALE_ACTOR")
@@ -199,12 +206,27 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         while not done.wait(.1):
             try:
                 guard()
-            except Exception:
-                cancellation.set()
+            except Exception as exc:
+                with failure_lock:
+                    if not failures and not cancellation.is_set():
+                        if isinstance(exc, protocol.SwarmError):
+                            failures.append((exc.code, exc.detail))
+                        else:
+                            failures.append(("BINDING_UNAVAILABLE",
+                                             "Task owner binding could not be validated"))
+                    cancellation.set()
                 return
 
     watcher = threading.Thread(target=monitor, name="loop-owner-watch", daemon=True)
     watcher.start()
+
+    def fail_preserving_error(lease, error, fallback):
+        try:
+            state.fail(lease["token"], getattr(error, "code", fallback), retryable=False)
+        except Exception:
+            # A revoked owner can refuse cleanup too. Keep the operation's
+            # original failure and leave its attempt for explicit recovery.
+            pass
 
     def invoke(lease, delivered, actor, *, critic=False):
         nonlocal context_bytes
@@ -241,7 +263,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 invocations.add(identity)
             return value
         except Exception as exc:
-            state.fail(lease["token"], getattr(exc, "code", "loop backend failed"), retryable=False)
+            fail_preserving_error(lease, exc, "loop backend failed")
             raise
 
     def report(lease, value):
@@ -289,7 +311,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                     checked = validate_report_in_view(value["result"], delivered["view"], payload,
                                                       allowed_jobs=current_jobs)
                 except Exception as exc:
-                    state.fail(lease["token"], getattr(exc, "code", "loop report invalid"), retryable=False)
+                    fail_preserving_error(lease, exc, "loop report invalid")
                     raise
                 sha = report(lease, value)
                 return job_id, checked, sha
@@ -328,7 +350,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                     dispatched_input_digest=dispatches[critic_id]["delivered_input_digest"],
                     prior_review=prior_review, repair_admission=admission)
             except Exception as exc:
-                state.fail(lease["token"], getattr(exc, "code", "loop critic invalid"), retryable=False)
+                fail_preserving_error(lease, exc, "loop critic invalid")
                 raise
             critic_sha = report(lease, reviewed)
             verify_artifacts()
@@ -418,6 +440,18 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
             raise
         return {"candidate": candidate, "learning_candidate": learning, "receipt": receipt,
                 "receipt_sha256": receipt_sha, "duplicate": False}
+    except Exception as exc:
+        with failure_lock:
+            failure = failures[0] if failures else None
+        if failure is not None:
+            if isinstance(exc, protocol.SwarmError):
+                cancelled = exc.code == "RUN_CANCELLED"
+            else:
+                from .codex import BackendError
+                cancelled = isinstance(exc, BackendError) and exc.code == "cancelled"
+            if cancelled:
+                raise protocol.SwarmError(*failure) from exc
+        raise
     finally:
         done.set()
         watcher.join(timeout=1)
