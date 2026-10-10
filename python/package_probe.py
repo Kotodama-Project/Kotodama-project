@@ -45,7 +45,7 @@ for invalid in ({1: "value"}, {"nested": {None: "value"}}, (1, 2), "\ud800", cyc
         else:
             raise AssertionError("non-JSON input was silently coerced")
 modules = list(pkgutil.iter_modules(swarm.__path__, swarm.__name__ + "."))
-assert len(modules) == 17
+assert len(modules) == 19
 for module in modules:
     importlib.import_module(module.name)
 # Exercise both input versions from the installed namespace. Import enumeration
@@ -86,6 +86,15 @@ binding["context_digest"] = core.digest(request)
 assert validate_input(request, binding, now=1000) == request
 assert make_plan(request, binding, now=1000)["budget"]["deadline"] == 1100
 assert {"O1", "Q1"} <= criteria(request).keys()
+from kotodama_core.task_swarm.closed_loop_context import derive_child_view
+from kotodama_core.task_swarm.closed_loop_contract import loop_criteria, validate_plan
+loop_plan = {"version": 1, "parent_input_digest": core.digest(request), "jobs": [
+    {"job_id": "inspect", "purpose": "Inspect the current supplied request.",
+     "criterion_ids": list(loop_criteria(request)), "selected_spans": [span(current, current_request)]}]}
+assert validate_plan(loop_plan, request) == loop_plan
+view = derive_child_view(request, "r0-inspect", loop_plan["jobs"][0]["selected_spans"],
+                         plan_digest=core.digest(loop_plan))
+assert view["parent_input_digest"] == core.digest(request) and view["request"] == current_request
 try:
     validate_input(request, binding, now=1150)
 except core.SwarmError as error:

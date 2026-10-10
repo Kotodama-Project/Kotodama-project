@@ -17,6 +17,7 @@ Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なと�
 | 選んだ手順を同じ仕事へ届ける | [Project Skillsの配達](../runtime/discord-template/docs/SKILL-DELIVERY.md) | 操作ごとの明示設定とcommit版をCLI入力へ束縛し、複数操作の手順を漏らさず、配達証拠と成果の要件充足を分ける |
 | 話す・録音する・仕事を止める操作を分ける | [Voice](OVERVIEW.md#voice--最初に価値を体感する入口)、[Discord runtime](DISCORD-RUNTIME.md)（main） | 呼びかけ、長時間・複数人、切断復帰、音質、負荷、背景の仕事の継続を同じ実経路で確かめる |
 | 小さな成果を検証して学習へ戻す | [5-minute tour](FIVE-MINUTE-TOUR.md)、[Runtime](../runtime/README.md)、[Business Loop](OVERVIEW.md#ai-business-loop) | テスト件数だけでなく成果の有用性、失敗、rollbackと次の改善を確認する |
+| Skillsを要求から成果へ結ぶ | [Skillsの入力と成果評価](SKILL-WORKFLOW-EVALUATION.md) | 選択した本文の実入力と、質問・根拠・訂正・成果の受入を分けて確認し、合意と検証を既存ownerへ返す |
 | 手元の環境で再現・停止・復旧できる | [Installation lifecycle](INSTALLATION-LIFECYCLE.md)、[Runtime](../runtime/README.md) | 対象profileでinstall、実行、停止、backup/restoreを検証する。構成検査を実稼働としない |
 | 稼働中のruntimeと候補のbytesを照合する | [Discord runtimeのsource照合](../runtime/discord-template/docs/OPERATIONS.md#稼働中のソースと候補の照合)、[#157](https://github.com/Kotodama-Project/Kotodama-project/issues/157) | 認証済みinstanceの起動時digestを候補・diskと比べる。許可されたlive切替・rollbackの読み戻しとPB-G4の受入は別途必要 |
 | 参加者と事業に価値を返す | [Community / Office](OVERVIEW.md#discord-の中に会社を作る)、[Business Loop](OVERVIEW.md#ai-business-loop) | 参加・相談・通報・復旧の体験と、顧客需要や費用を含む成果を実測する |
