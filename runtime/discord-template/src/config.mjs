@@ -3,6 +3,7 @@ import {z} from 'zod';
 import {readJson, check, inside} from './common.mjs';
 import {immutableImage} from './verification.mjs';
 import {DEFAULT_ANALYSIS_LIMITS} from './analysis-admission.mjs';
+import {DEFAULT_TASK_LIMITS} from './task-admission.mjs';
 import {isTimeZone} from './time-zone.mjs';
 import {WORKER_ACTIONS,DEFAULT_WORKER_ACTIONS} from './capability-lanes.mjs';
 
@@ -11,6 +12,7 @@ const envName=z.string().regex(/^[A-Z_][A-Z0-9_]*$/);
 const commandBase = z.object({executable:z.string().min(1),args:z.array(z.string()).default([]),model:z.string().optional(),codexHome:z.string().min(1).optional(),ignoreUserConfig:z.boolean().default(true),timeoutSeconds:z.number().int().min(5).max(3600).default(300)}).strict();
 const command=commandBase.extend({model:z.string().default('gpt-5.6-luna'),fallback:commandBase.extend({model:z.string().min(1)}).optional()});
 const analysisLimitsConfig=z.object({maxConcurrent:z.number().int().min(1).max(16),maxQueued:z.number().int().min(0).max(256),maxPerRoom:z.number().int().min(1).max(16),maxPerActor:z.number().int().min(1).max(16),maxDailyAnalyses:z.number().int().min(0).max(1000000),maxTotalAnalyses:z.number().int().min(0).max(10000000)}).partial().strict().transform(value=>({...DEFAULT_ANALYSIS_LIMITS,...value})).prefault({});
+const taskLimitsConfig=z.object({maxConcurrentReadOnly:z.number().int().min(1).max(4),maxQueued:z.number().int().min(0).max(256),maxQueuedBytes:z.number().int().min(0).max(1048576),maxInputBytes:z.number().int().min(1024).max(8388608),maxResultBytes:z.number().int().min(1024).max(67108864)}).partial().strict().transform(value=>({...DEFAULT_TASK_LIMITS,...value})).prefault({});
 const analyzerContext={limits:analysisLimitsConfig,maxContextSources:z.number().int().min(1).max(30).default(12),maxContextChars:z.number().int().min(1000).max(120000).default(24000),maxTaskContextItems:z.number().int().min(0).max(10).default(5),maxTaskContextChars:z.number().int().min(0).max(40000).default(12000)};
 const analyzerConfig=z.union([
   command.extend({kind:z.literal('codex_cli').default('codex_cli'),...analyzerContext}),
@@ -37,6 +39,7 @@ export const Config = z.object({
   notifications:z.object({taskProgress:z.object({enabled:z.boolean().default(false),minIntervalSeconds:z.number().int().min(30).max(3600).default(30),maxUpdates:z.number().int().min(1).max(6).default(6)}).strict().prefault({}),quietHours:z.object({enabled:z.boolean().default(false),startHour:z.number().int().min(0).max(23).default(22),endHour:z.number().int().min(0).max(23).default(9),timeZone:z.string().min(1).max(100).refine(isTimeZone,{message:'TIME_ZONE_INVALID'}).default('Asia/Tokyo')}).strict().prefault({})}).strict().prefault({}),
   analyzer:analyzerConfig.prefault({kind:'codex_cli',executable:'codex',args:[],model:'gpt-5.6-luna',timeoutSeconds:120}),
   worker:command.extend({workspace:z.string(),actions:z.array(z.enum(WORKER_ACTIONS)).default([...DEFAULT_WORKER_ACTIONS]),
+    taskLimits:taskLimitsConfig,
     swarm:z.object({pythonExecutable:z.string().min(1).default('python3'),codexExecutable:z.string().min(1).default('codex'),codexHome:z.string().min(1).optional(),maxDailyTasks:z.number().int().min(0).max(100).default(0),ownerRef:z.string().regex(/^ref\/[A-Za-z0-9][A-Za-z0-9._/@-]{1,180}$/),authorityRef:z.string().regex(/^ref\/[A-Za-z0-9][A-Za-z0-9._/@-]{1,180}$/),authorityExpiresAt:z.string().datetime({offset:true}),timeoutSeconds:z.number().int().min(20).max(1260).default(1260)}).strict().optional(),
     companyPack:z.object({pythonExecutable:z.string().min(1).default('python3'),outputRoot:z.string().min(1),ownerRef:z.string().regex(/^ref\/[A-Za-z0-9][A-Za-z0-9._/@-]{1,180}$/),workOrderRef:z.string().regex(/^work-order:[A-Za-z0-9][A-Za-z0-9._/-]{1,127}$/),capabilityRef:z.string().regex(/^capability:[A-Za-z0-9][A-Za-z0-9._/-]{1,127}$/),retentionPolicyRef:z.string().min(1).max(200),authorityExpiresAt:z.string().datetime({offset:true})}).strict().optional(),
     channelWorkspaces:z.object({channelIds:z.array(id).min(1).max(8),maxAgeSeconds:z.number().int().min(60).max(1800).default(1800),generation:z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/).default('initial')}).strict().optional(),
