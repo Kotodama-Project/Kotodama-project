@@ -78,6 +78,42 @@ class ProviderInventoryTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), raw)
             self.assertEqual([item.name for item in Path(temporary).iterdir()], ["input.json"])
 
+    def dashboard(self):
+        value = copy.deepcopy(self.receipt)
+        value.update(method="DASHBOARD_UI", zone_state="NO_ZONE_REPORTED", zone_locator=None)
+        for row in value["services"].values():
+            row.update(status="UNAVAILABLE", http_status=None, resource_count=None, response_sha256="sha256:"+"a"*64)
+        value["services"]["billing"].update(status="OBSERVED", resource_count=2)
+        value["plan"] = dict(name="FREE", scope="WORKERS", entitlement_sha256="sha256:"+"b"*64)
+        value["budget"] = dict(state="REPORTED_DECISION", scope="ADDITIONAL_PROJECT_SPEND", currency="JPY", monthly_ceiling=0, decision_sha256="sha256:"+"c"*64)
+        return value
+
+    def test_dashboard_preserves_absent_zone_and_additional_budget_without_inventing_http(self):
+        value = self.dashboard()
+        result = checker.validate(value)
+        self.assertEqual(result["observation_surface"], "DASHBOARD_UI")
+        self.assertEqual(result["reported_zone_state"], "NO_ZONE_REPORTED")
+        self.assertEqual(result["reported_budget_scope"], "ADDITIONAL_PROJECT_SPEND")
+        self.assertNotIn("zone", result["unresolved"])
+        self.assertIn("dns", result["unresolved"])
+        self.assertFalse(result["observations_reverified"])
+        self.assertFalse(result["budget_approved"])
+
+    def test_dashboard_refuses_fabricated_http_missing_scope_and_contradictory_zone(self):
+        for mutate in (
+            lambda row: row["services"]["billing"].update(http_status=200),
+            lambda row: row["plan"].pop("scope"),
+            lambda row: row["budget"].pop("scope"),
+            lambda row: row.update(zone_locator="sha256:"+"a"*64),
+            lambda row: row.update(zone_state="SELECTED_REPORTED"),
+            lambda row: row.update(zone_state="UNKNOWN", zone_locator="sha256:"+"a"*64),
+            lambda row: row["services"]["access"].update(resource_count=0),
+            lambda row: row["services"]["access"].update(response_sha256=None),
+        ):
+            value = self.dashboard(); mutate(value)
+            with self.assertRaises(ValueError):
+                checker.validate(value)
+
 
 if __name__ == "__main__":
     unittest.main()
