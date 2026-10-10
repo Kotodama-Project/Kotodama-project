@@ -12,6 +12,7 @@ import copy
 import json
 import secrets
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -959,7 +960,18 @@ class SwarmState:
         result_digest: str,
         verification_ref: str,
         owner_ref: str,
+        *,
+        cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
+        if cancel_event is not None and not isinstance(cancel_event, threading.Event):
+            raise protocol.SwarmError("RUN_CANCELLATION_INVALID", "cancel_event must be an Event")
+
+        def eligible(run):
+            if cancel_event is not None and cancel_event.is_set():
+                raise protocol.SwarmError("RUN_CANCELLED", "run was cancelled")
+            if self._now() >= float(run["deadline"]):
+                raise protocol.SwarmError("DEADLINE_EXPIRED", "run deadline has elapsed")
+
         run_id = protocol.ref(run_id, "run id")
         job_id = protocol.ref(job_id, "job id")
         result_digest = protocol.digest_ref(result_digest, "result digest")
@@ -971,6 +983,7 @@ class SwarmState:
         try:
             now = self._now()
             run = self._get_run(conn, run_id)
+            eligible(run)
             owner = self._run_owner(run, now, prefetched)
             if owner_ref != owner["owner_ref"]:
                 raise protocol.SwarmError("WRONG_OWNER", "acceptance caller is not the current owner")
@@ -993,6 +1006,7 @@ class SwarmState:
                     raise protocol.SwarmError("IDENTITY_CONFLICT", "worker cannot accept its own report")
                 if job["accepted_digest"] != result_digest or job["verification_ref"] != verification_ref:
                     raise protocol.SwarmError("RESULT_MISMATCH", "job is already accepted with another result")
+                eligible(run)
                 ok = True
                 return {
                     "run_id": run_id,
@@ -1026,6 +1040,10 @@ class SwarmState:
                    WHERE run_id = ? AND job_id = ? AND state = 'reported'""",
                 (result_digest, verification_ref, owner_ref, now, run_id, job_id),
             )
+            # The final eligibility observation is inside BEGIN IMMEDIATE;
+            # rejection rolls back both writes. A later external Event change
+            # cannot be atomic with SQLite and does not undo this acceptance.
+            eligible(run)
             ok = True
             return {
                 "run_id": run_id,
