@@ -226,6 +226,7 @@ Linuxでの同じTask→Python swarm→fixture verifier→成果readbackをCIで
 ```sh
 node bin/kotodama.mjs request --actor YOUR_USER_ID --action research --text "この資料の未決事項を整理して"
 node bin/kotodama.mjs tasks --actor YOUR_USER_ID
+node bin/kotodama.mjs judgment --actor YOUR_USER_ID
 node bin/kotodama.mjs import-discord --actor YOUR_USER_ID --limit 10000
 node bin/kotodama.mjs export --actor YOUR_USER_ID --output ./meeting.md
 node bin/kotodama.mjs import-luma --actor YOUR_USER_ID --file ./guests.csv
@@ -240,6 +241,9 @@ node bin/kotodama.mjs browser read --tab 0 --json
 - [Task owner接続契約](docs/TASK-OWNER.md)
 - [構成・権限・出典](docs/ARCHITECTURE.md)
 - [起動・停止・復旧](docs/OPERATIONS.md)
+
+仕事のgrant、独立review待ち、人間承認、Codex tool approvalの観測範囲は
+[判断と許可の現在地](docs/JUDGMENT-STATUS.md)で確認できます。
 
 ## 開発と公開
 
