@@ -12,6 +12,7 @@ Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なと�
 | 日本語の原文、話者、時刻、訂正を保持する | [Voice](OVERVIEW.md#voice--最初に価値を体感する入口)、[Session / Conversation ledger](SESSION-CONVERSATION-LEDGER.md) | 文字起こし断片を確定した意図とせず、原文と後続訂正へ戻れる |
 | 意図を同じ仕事と成果へ結ぶ | [Task / Session契約](SESSION-CONVERSATION-LEDGER.md)、[Review Workflow](REVIEW-WORKFLOW.md)、[Company Pack](STARTER-WALKTHROUGH.md) | Source、Intent、Decision、Work、Verification、Promotionを区別し、選択した一つのTask ownerへ戻す |
 | 初回の許可範囲で自律的に進める | [Agent entrypoint](../AGENTS.md)、[Security](../SECURITY.md)、[自動改善ループ](IMPROVEMENT-LOOP.md) | 同じ許可を聞き直さず、期限・取消・対象は再確認する。ログインの本人操作は人が行う |
+| 仕事の許可と判断待ちを確認する | [判断状態CLI](../runtime/discord-template/docs/JUDGMENT-STATUS.md) | 現在のgrant、独立review、人間承認と未観測を分け、読取で実行・承認を作らない |
 | 必要な文脈を小さく渡す | [Context](OVERVIEW.md#context-platform--会社の共有記憶)、[Dots plugin](../runtime/discord-template/dots-plugin/README.md)、[通信benchmark](LUNA-TASK-SWARM.md) | 全文・訂正・根拠を落とさず、cursorを終端まで読み、アクセス不可や古い資料を再注入しない |
 | 選んだ手順を同じ仕事へ届ける | [Project Skillsの配達](../runtime/discord-template/docs/SKILL-DELIVERY.md) | 操作ごとの明示設定とcommit版をCLI入力へ束縛し、複数操作の手順を漏らさず、配達証拠と成果の要件充足を分ける |
 | 話す・録音する・仕事を止める操作を分ける | [Voice](OVERVIEW.md#voice--最初に価値を体感する入口)、[Discord runtime](DISCORD-RUNTIME.md)（main） | 呼びかけ、長時間・複数人、切断復帰、音質、負荷、背景の仕事の継続を同じ実経路で確かめる |
