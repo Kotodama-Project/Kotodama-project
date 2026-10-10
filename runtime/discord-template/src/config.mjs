@@ -6,9 +6,12 @@ import {DEFAULT_ANALYSIS_LIMITS} from './analysis-admission.mjs';
 import {DEFAULT_TASK_LIMITS} from './task-admission.mjs';
 import {isTimeZone} from './time-zone.mjs';
 import {WORKER_ACTIONS,DEFAULT_WORKER_ACTIONS} from './capability-lanes.mjs';
+import {PROJECT_SKILL_ACTIONS,PROJECT_SKILL_NAME,MAX_PROJECT_SKILLS} from './project-skill-input.mjs';
 
 const id = z.string().regex(/^\d{5,24}$/);
 const envName=z.string().regex(/^[A-Z_][A-Z0-9_]*$/);
+const projectSkillNames=z.array(z.string().min(1).max(64).regex(PROJECT_SKILL_NAME)).max(MAX_PROJECT_SKILLS).refine(names=>new Set(names).size===names.length,{message:'PROJECT_SKILL_DUPLICATE'});
+const projectSkills=z.object(Object.fromEntries(PROJECT_SKILL_ACTIONS.map(action=>[action,projectSkillNames.optional()]))).strict();
 const commandBase = z.object({executable:z.string().min(1),args:z.array(z.string()).default([]),model:z.string().optional(),codexHome:z.string().min(1).optional(),ignoreUserConfig:z.boolean().default(true),timeoutSeconds:z.number().int().min(5).max(3600).default(300)}).strict();
 const command=commandBase.extend({model:z.string().default('gpt-5.6-luna'),fallback:commandBase.extend({model:z.string().min(1)}).optional()});
 const analysisLimitsConfig=z.object({maxConcurrent:z.number().int().min(1).max(16),maxQueued:z.number().int().min(0).max(256),maxPerRoom:z.number().int().min(1).max(16),maxPerActor:z.number().int().min(1).max(16),maxDailyAnalyses:z.number().int().min(0).max(1000000),maxTotalAnalyses:z.number().int().min(0).max(10000000)}).partial().strict().transform(value=>({...DEFAULT_ANALYSIS_LIMITS,...value})).prefault({});
@@ -40,6 +43,7 @@ export const Config = z.object({
   analyzer:analyzerConfig.prefault({kind:'codex_cli',executable:'codex',args:[],model:'gpt-5.6-luna',timeoutSeconds:120}),
   worker:command.extend({workspace:z.string(),actions:z.array(z.enum(WORKER_ACTIONS)).default([...DEFAULT_WORKER_ACTIONS]),
     taskLimits:taskLimitsConfig,
+    projectSkills:projectSkills.optional(),
     swarm:z.object({pythonExecutable:z.string().min(1).default('python3'),codexExecutable:z.string().min(1).default('codex'),codexHome:z.string().min(1).optional(),maxDailyTasks:z.number().int().min(0).max(100).default(0),ownerRef:z.string().regex(/^ref\/[A-Za-z0-9][A-Za-z0-9._/@-]{1,180}$/),authorityRef:z.string().regex(/^ref\/[A-Za-z0-9][A-Za-z0-9._/@-]{1,180}$/),authorityExpiresAt:z.string().datetime({offset:true}),timeoutSeconds:z.number().int().min(20).max(1260).default(1260)}).strict().optional(),
     companyPack:z.object({pythonExecutable:z.string().min(1).default('python3'),outputRoot:z.string().min(1),ownerRef:z.string().regex(/^ref\/[A-Za-z0-9][A-Za-z0-9._/@-]{1,180}$/),workOrderRef:z.string().regex(/^work-order:[A-Za-z0-9][A-Za-z0-9._/-]{1,127}$/),capabilityRef:z.string().regex(/^capability:[A-Za-z0-9][A-Za-z0-9._/-]{1,127}$/),retentionPolicyRef:z.string().min(1).max(200),authorityExpiresAt:z.string().datetime({offset:true})}).strict().optional(),
     channelWorkspaces:z.object({channelIds:z.array(id).min(1).max(8),maxAgeSeconds:z.number().int().min(60).max(1800).default(1800),generation:z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/).default('initial')}).strict().optional(),

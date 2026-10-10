@@ -75,6 +75,7 @@ def safe_environment(state: Path) -> dict[str, str]:
                COREPACK_HOME=str(state / "corepack-cache"), COREPACK_ENABLE_DOWNLOAD_PROMPT="0",
                COREPACK_DEFAULT_TO_LATEST="0", COREPACK_ENABLE_AUTO_PIN="0",
                npm_config_userconfig=str(state / "empty.npmrc"), npm_config_registry="https://registry.npmjs.org/",
+               pnpm_config_store_dir=str(state / "pnpm-store"),
                PIP_CONFIG_FILE=os.devnull, PIP_DISABLE_PIP_VERSION_CHECK="1", PIP_NO_INPUT="1",
                PIP_DEFAULT_TIMEOUT="15", PYTHONUTF8="1", PYTHONDONTWRITEBYTECODE="1", CI="true")
     return env
@@ -184,7 +185,7 @@ def prepare(root: Path, *, hook: bool = False) -> dict[str, object]:
             raise Unavailable("pnpm version")
         launcher = state / "bin" / "pnpm"
         launcher.write_text("#!/bin/sh\n" +
-                            "\n".join(f"export {key}={shlex.quote(env[key])}" for key in ("COREPACK_HOME", "COREPACK_ENABLE_DOWNLOAD_PROMPT", "COREPACK_DEFAULT_TO_LATEST", "COREPACK_ENABLE_AUTO_PIN")) +
+                            "\n".join(f"export {key}={shlex.quote(env[key])}" for key in ("COREPACK_HOME", "COREPACK_ENABLE_DOWNLOAD_PROMPT", "COREPACK_DEFAULT_TO_LATEST", "COREPACK_ENABLE_AUTO_PIN", "pnpm_config_store_dir")) +
                             f"\nexec {shlex.quote(node)} {shlex.quote(str(corepack))} {shlex.quote(manager)} \"$@\"\n", encoding="utf-8")
         launcher.chmod(0o700)
         venv = state / "venv"
@@ -209,7 +210,7 @@ def prepare(root: Path, *, hook: bool = False) -> dict[str, object]:
                 run([sys.executable, "-m", "venv", str(venv)], cwd=root, env=env)
             run([str(python), "-m", "pip", "install", "--require-hashes", "--retries", "1", "--cache-dir", str(state / "cache/pip"), "--index-url", "https://pypi.org/simple", *[arg for name in LOCKS for arg in ("-r", name)]], cwd=root, env=env)
             stage = "Discord frozen dependencies (registry.npmjs.org)"
-            run([str(launcher), "install", "--frozen-lockfile", "--ignore-scripts", "--store-dir", str(state / "pnpm-store")], cwd=root / "runtime/discord-template", env=env)
+            run([str(launcher), "install", "--frozen-lockfile", "--ignore-scripts"], cwd=root / "runtime/discord-template", env=env)
             run([str(python), "-m", "pip", "check"], cwd=root, env=env, timeout=30)
             run([node, "-e", NODE_DEPENDENCY_PROBE], cwd=root / "runtime/discord-template", env=env, timeout=30)
             stamp.write_text(json.dumps({"fingerprint": signature}) + "\n", encoding="utf-8")
