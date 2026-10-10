@@ -323,7 +323,12 @@ def _parse_datetime(value: str, *, field: str, path: str) -> dt.datetime:
         raise KnowledgeBaseError(f"{path}: {field} is not an ISO 8601 datetime") from exc
     if parsed.tzinfo is None:
         raise KnowledgeBaseError(f"{path}: {field} must contain an explicit UTC offset")
-    return parsed.astimezone(dt.timezone.utc)
+    try:
+        return parsed.astimezone(dt.timezone.utc)
+    except OverflowError as exc:
+        raise KnowledgeBaseError(
+            f"DATETIME_UTC_OUT_OF_RANGE: {path}: {field} cannot be represented in UTC"
+        ) from exc
 
 
 def _parse_as_of(value: str | None) -> dt.datetime:
