@@ -214,6 +214,61 @@ class KnowledgeSessionTests(unittest.TestCase):
             self.assertFalse(self.request(instance, ["show", "project/goal"], at=None)["ok"])
         self.assertEqual([mock.call(None), mock.call(None)], clock.call_args_list)
 
+    def test_utc_overflow_request_does_not_stop_stdio(self):
+        for value in ("9999-12-31T23:59:59-23:59", "0001-01-01T00:00:00+23:59"):
+            with self.subTest(value=value):
+                requests = [
+                    {"id": "overflow", "args": ["query", "KGI", "--as-of", value]},
+                    {"id": "valid", "args": ["query", "KGI", "--as-of", AS_OF]},
+                ]
+                completed = subprocess.run(
+                    [sys.executable, "-B", str(ROOT / "tools/knowledge_session.py"),
+                     "--root", str(ROOT), "--max-requests", "2"],
+                    input="".join(json.dumps(request) + "\n" for request in requests),
+                    text=True, capture_output=True, check=False, timeout=30)
+                self.assertEqual(0, completed.returncode, completed.stderr)
+                self.assertEqual("", completed.stderr)
+                responses = [json.loads(line) for line in completed.stdout.splitlines()]
+                self.assertEqual(2, len(responses))
+                self.assertEqual({"id": "overflow", "ok": False, "exit_code": 2,
+                                  "error": "DATETIME_UTC_OUT_OF_RANGE"}, responses[0])
+                self.assertLessEqual(len(completed.stdout.splitlines()[0].encode("utf-8")),
+                                     session.MAX_RESPONSE_BYTES)
+                self.assertEqual("valid", responses[1]["id"])
+                self.assertTrue(responses[1]["ok"], responses[1])
+                self.assertTrue(responses[1]["result"]["results"])
+
+    def test_datetime_utc_range_keeps_valid_boundary_instants(self):
+        cases = {
+            "0001-01-01T00:00:00Z": "0001-01-01T00:00:00+00:00",
+            "0001-01-01T23:59:00+23:59": "0001-01-01T00:00:00+00:00",
+            "9999-12-31T00:00:00-23:59": "9999-12-31T23:59:00+00:00",
+            "9999-12-31T23:59:59.999999Z": "9999-12-31T23:59:59.999999+00:00",
+        }
+        for value, expected in cases.items():
+            with self.subTest(value=value):
+                self.assertEqual(expected, cli._parse_as_of(value).isoformat())
+
+    def test_one_shot_and_metadata_share_utc_overflow_refusal(self):
+        for value in ("9999-12-31T23:59:59-23:59", "0001-01-01T00:00:00+23:59",
+                      "9999-12-31T23:59:59.999999-00:01", "0001-01-01T23:58:59.999999+23:59"):
+            with self.subTest(value=value):
+                output, error = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                    code = cli.main(["query", "KGI", "--root", str(ROOT), "--as-of", value, "--json"])
+                self.assertEqual(2, code)
+                self.assertEqual("", output.getvalue())
+                self.assertIn("DATETIME_UTC_OUT_OF_RANGE", error.getvalue())
+                self.assertNotIn("Traceback", error.getvalue())
+        root = self.fixture()
+        path = root / "knowledge/project/goal.md"
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            "stale_after: 2026-12-07T00:00:00Z", "stale_after: 9999-12-31T23:59:59-23:59"),
+            encoding="utf-8")
+        bundle = cli.load_bundle(root, as_of=cli._parse_as_of(AS_OF))
+        self.assertTrue(any(issue.code == "STALE_AFTER" and "DATETIME_UTC_OUT_OF_RANGE" in issue.message
+                            for issue in bundle.issues))
+
     def test_unknown_goal_and_read_write_commands_are_explicit_errors(self):
         instance = session.KnowledgeSession(ROOT)
         unknown = self.request(instance, ["query", "KGI", "--goal", "UNDEFINED"])
