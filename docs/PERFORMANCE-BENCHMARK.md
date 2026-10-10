@@ -40,7 +40,11 @@ RSSはLinux/macOSでchild自身がfixture/validation後に観測したhigh-water
 
 一つの失敗で後続を止め、未実行数を埋めない。終了コードは0=全sample PASS、1=sample失敗、
 2=引数/同意/入力読取の拒否。childのraw stderrや不正JSONをreportへ反射しない。
-code/inputが途中で変わった比較はFAILとし、成功percentileを出さない。
+code/inputが途中で変わった比較は`CODE_OR_INPUT_CHANGED`、同じ入力で結果digestだけが
+異なる場合は`RESULT_CHANGED`とし、成功percentileを出さない。後者は入力digestを保持する。
+試行開始後のI/O失敗は`BENCHMARK_IO_FAILED`で停止し、既済の試行とwall timeを残す。
+コードの再確認ができないため、その場合も成功percentileを出さない。
+最初のコード読取に失敗して試行を開始できない場合は、終了コード2の拒否となる。
 
 ## 比較と残る範囲
 

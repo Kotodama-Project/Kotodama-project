@@ -76,3 +76,7 @@ Task契約を持つcheckoutでは、そのresolver / records / events / restart 
 [Task swarm run契約](TASK-SWARM-RUN.md)、実行基盤とownerの境界は
 [Luna Task swarm](LUNA-TASK-SWARM.md)を参照します（#286）。Discordの明示入口と
 同じTaskへの返却は実装済みで、専用ログイン・live利用枠・実モデル/依頼者の受入は残ります。
+
+性能の比較は[固定fixtureの性能計測CLI](PERFORMANCE-BENCHMARK.md)を入口とし、
+`tools/performance_benchmark.py`でwall time・peak RSSと入力/結果の同一性を確認します。
+既存swarm-shortの合成検証であり、knowledge/voice・実モデル品質・本番性能の受入ではありません。

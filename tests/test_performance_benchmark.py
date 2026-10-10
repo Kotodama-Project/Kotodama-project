@@ -21,8 +21,17 @@ def successful():
             "code_digest": "a" * 64, "input_digest": "b" * 64, "result_digest": "c" * 64,
             "model_called": False, "peak_rss_bytes": 12345, "peak_rss_missing": None, "sqlite_version": "test",
             "verification": {"status": "PASS", "profile": "short", "records": 32,
+                             "source_pages": 4, "source_utf8_bytes": 6550, "max_payload_bytes": 1840,
+                             "payload_limit_bytes": 16384, "boundary_payload_bytes": 16286,
+                             "retained_messages": 1000, "admission_vm_steps_before": 1000,
+                             "admission_vm_steps_retained": 1100, "replay_vm_steps_retained": 180,
+                             "correction_utf8_bytes": 1600, "correction_pages_sent": 1,
                              "fidelity_verified": True, "restart_replay_verified": True,
-                             "source_drift_verified": True, "backpressure_verified": True}}
+                             "revocation_verified": True, "source_drift_verified": True,
+                             "backpressure_verified": True,
+                             "scheduler": {"jobs": 5, "attempts": 5, "snapshot_history_selects": 1,
+                                           "snapshot_attempt_selects": 3, "waiting_owner_verified": True,
+                                           "independent_reviewer_verified": True}}}
 
 
 class PerformanceBenchmarkTests(unittest.TestCase):
@@ -93,6 +102,92 @@ class PerformanceBenchmarkTests(unittest.TestCase):
         self.assertEqual(report["summary"]["wall_ms_successful"]["p95"], 20)
         self.assertEqual(report["missing"]["rss"], "UNSUPPORTED_PLATFORM")
         self.assertEqual(report["summary"]["peak_rss_bytes"]["samples"], 0)
+
+    def test_every_fixture_verification_flag_is_required(self):
+        fields = ["fidelity_verified", "restart_replay_verified", "revocation_verified",
+                  "source_drift_verified", "backpressure_verified", "scheduler.waiting_owner_verified",
+                  "scheduler.independent_reviewer_verified"]
+        for field in fields:
+            for damage in ("missing", False, "true"):
+                broken = successful()
+                target = broken["verification"]
+                parts = field.split(".")
+                for part in parts[:-1]:
+                    target = target[part]
+                if damage == "missing":
+                    target.pop(parts[-1])
+                else:
+                    target[parts[-1]] = damage
+                with self.subTest(field=field, damage=damage), self.assertRaisesRegex(
+                        runner.BenchmarkError, "FIXTURE_VERIFICATION_MISSING"):
+                    runner._worker_result(json.dumps(broken), 0, "a" * 64)
+
+    def test_fixture_work_and_payload_contract_cannot_be_shortened(self):
+        changes = [("source_pages", 3), ("retained_messages", 0), ("correction_pages_sent", 2),
+                   ("source_utf8_bytes", 0), ("max_payload_bytes", 16385),
+                   ("boundary_payload_bytes", 16000), ("correction_utf8_bytes", 6551),
+                   ("admission_vm_steps_before", -1), ("admission_vm_steps_retained", 4001),
+                   ("replay_vm_steps_retained", True), ("scheduler", None),
+                   ("scheduler.jobs", 0), ("scheduler.jobs", True), ("scheduler.attempts", 4),
+                   ("scheduler.snapshot_history_selects", 0), ("scheduler.snapshot_attempt_selects", 99)]
+        for field, value in changes:
+            broken = successful()
+            target = broken["verification"]
+            parts = field.split(".")
+            for part in parts[:-1]:
+                target = target[part]
+            target[parts[-1]] = value
+            with self.subTest(field=field), self.assertRaisesRegex(
+                    runner.BenchmarkError, "FIXTURE_VERIFICATION_MISSING"):
+                runner._worker_result(json.dumps(broken), 0, "a" * 64)
+
+    def test_post_attempt_snapshot_io_failure_preserves_partial_cli_report(self):
+        for completed in (1, 2):
+            pinned = {"digest": "a" * 64}
+            snapshots = [pinned] * completed + [OSError("private-path-not-for-output")]
+            result = {**successful(), "wall_ms": 10, "exit_code": 0}
+            with self.subTest(completed=completed), patch.object(runner, "code_snapshot", side_effect=snapshots), \
+                 patch.object(runner, "launch", return_value=result) as launch, \
+                 contextlib.redirect_stdout(io.StringIO()) as out:
+                exit_code = runner.main(["--allow-local-fixture", "--samples", "2", "--warmups", "1"])
+            report = json.loads(out.getvalue())
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(report["status"], "FAIL")
+            self.assertEqual(report["code"], "BENCHMARK_IO_FAILED")
+            self.assertEqual(len(report["attempts"]), completed)
+            self.assertEqual(report["attempts"][-1]["wall_ms"], 10)
+            self.assertEqual(report["scope"]["samples_completed"], completed - 1)
+            self.assertEqual(launch.call_count, completed)
+            self.assertIsNone(report["summary"]["wall_ms_successful"])
+            self.assertIsNone(report["summary"]["peak_rss_bytes"])
+            self.assertIsNone(report["input_digest"])
+            self.assertNotIn("private-path", out.getvalue())
+
+    def test_result_only_drift_retains_input_identity_and_is_classified_separately(self):
+        result = {**successful(), "wall_ms": 10, "exit_code": 0}
+        changed = {**result, "result_digest": "d" * 64}
+        with patch.object(runner, "launch", side_effect=[result, changed]):
+            report = runner.run_benchmark(samples=2, warmups=0)
+        self.assertEqual(report["status"], "FAIL")
+        self.assertEqual(report["code"], "RESULT_CHANGED")
+        self.assertEqual(report["input_digest"], "b" * 64)
+        self.assertIsNone(report["summary"]["wall_ms_successful"])
+        self.assertIsNone(report["summary"]["peak_rss_bytes"])
+
+    def test_launch_io_failure_retains_completed_and_failed_attempts(self):
+        for completed in (0, 1):
+            result = {**successful(), "wall_ms": 10, "exit_code": 0}
+            with self.subTest(completed=completed), patch.object(
+                    runner, "launch", side_effect=[result] * completed + [OSError("private-path-not-for-output")]):
+                report = runner.run_benchmark(samples=3, warmups=0)
+            self.assertEqual(report["code"], "BENCHMARK_IO_FAILED")
+            self.assertEqual(report["status"], "FAIL")
+            self.assertEqual(len(report["attempts"]), completed + 1)
+            self.assertEqual(report["attempts"][-1]["status"], "FAIL")
+            self.assertGreaterEqual(report["attempts"][-1]["wall_ms"], 0)
+            self.assertEqual(report["summary"]["wall_ms_all_samples"]["samples"], completed + 1)
+            self.assertIsNone(report["summary"]["wall_ms_successful"])
+            self.assertNotIn("private-path", json.dumps(report))
 
     def test_timeout_preserves_failed_duration_and_does_not_pad_samples(self):
         failed = {"status": "TIMEOUT", "code": "SAMPLE_TIMEOUT", "wall_ms": 12, "exit_code": None}
@@ -176,9 +271,12 @@ class PerformanceBenchmarkTests(unittest.TestCase):
                          "objective": "fixed objective", "pages": ["generation-1"]}))
 
     def test_real_cli_runs_fresh_local_fixtures_and_exposes_reproducibility(self):
+        samples, warmups, attempt_timeout = 2, 1, 30
+        outer_timeout = (samples + warmups) * attempt_timeout + 30
         result = subprocess.run([sys.executable, "-B", str(ROOT / "tools/performance_benchmark.py"),
-                                 "--allow-local-fixture", "--samples", "2", "--warmups", "1"],
-                                cwd=ROOT, capture_output=True, text=True, timeout=60)
+                                 "--allow-local-fixture", "--samples", str(samples), "--warmups", str(warmups),
+                                 "--timeout-seconds", str(attempt_timeout)],
+                                cwd=ROOT, capture_output=True, text=True, timeout=outer_timeout)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         value = json.loads(result.stdout)
         self.assertEqual(value["status"], "PASS")
