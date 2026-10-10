@@ -1,5 +1,7 @@
 # Task workerの読取範囲
 
+長いrolloutの読み取り、入力上限とメモリ計測は、[rolloutを逐次読み取る](TASK-SWARM-ROLLOUT.md)を参照してください。
+
 #160 / #286のworkerは、渡されたTaskとSourceだけで報告を作ります。read-onlyという
 設定だけでは、host上の他のファイルを読めないことを意味しません。このhelperはLinuxの
 native Codex CLIを二層のpermission profileで実行するための前提を検査します。
