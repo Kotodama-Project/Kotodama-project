@@ -4,7 +4,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import sys
 
-import pytest
+try:
+    import pytest
+except ModuleNotFoundError:
+    import unittest
+    raise unittest.SkipTest("runs in the required Task swarm pytest job")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "runtime"))
 from task_swarm.protocol import SwarmError, digest, validate_binding
