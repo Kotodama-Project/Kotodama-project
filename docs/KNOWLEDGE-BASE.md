@@ -7,6 +7,10 @@ Kotodama のナレッジベースは、リポジトリ内外の正本を置き�
 
 入口は [`knowledge/index.md`](../knowledge/index.md) です。形式は Open Knowledge Format（OKF）v0.2 の Markdown＋YAML frontmatter を採用し、その上に Kotodama 固有の安全・運用プロファイルを追加しています。
 
+目的参照で検索し、一つのConceptや必要な節だけ読む手順は
+[小単位の知識CLI](KNOWLEDGE-CLI.md)にあります。source CLIの実装と、大規模索引・
+配布入口・目的変数・改善ループの後続受入を分けて示します。
+
 公式仕様は[GoogleCloudPlatform Knowledge CatalogのOKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/82a483de8a381f1ed25b9dfe1dc5622622afff55/okf/SPEC.md)です。
 参照revisionは`82a483de8a381f1ed25b9dfe1dc5622622afff55`。§5のtimestampは明示offset付きISO 8601日時、
 §11の必須conformanceはfrontmatter・非空type・reserved構造です。#128判断4に従い、既存Conceptの

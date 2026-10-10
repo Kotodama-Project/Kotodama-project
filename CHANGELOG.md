@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- 知識source CLIにGoal/KGI/initiativeの検索filterとConcept/節の限定読取を追加。出典digest・元行範囲・候補状態を表示し、続きは同じsnapshotへ束縛する。大規模索引と配布CLI接続は後続（#325〜#328）。
+
 - Context Gatewayのv3 policyで、Access applicationに束縛したtenant、review目的、同意の期限・撤回・出典参照を検査。v1/v2 storeは保全し、暗黙に移行しない（#6）。
 
 - Cloudflareのprovider棚卸しに、件数・状態・digestだけのreceipt契約、読み取り専用validator、GET／private保存runbookを追加。実account／zoneの本人性、plan・費用の受入は別途必要（#3）。
