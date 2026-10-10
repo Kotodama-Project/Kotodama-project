@@ -26,8 +26,11 @@ blocker, or copy raw private conversation and credentials into a new session.
    baseline/HEAD digests, completed checks, current status, and unknowns.
    Done when: the handoff names one exact restart fixed point.
 2. Separate `done`, `partial`, `blocked`, and `not started`; attach paths,
-   line ranges, logs, or URLs rather than broad claims.
-   Done when: every work item has one explicit lifecycle status and evidence.
+   line ranges, logs, or URLs rather than broad claims. Preserve confirmed
+   terms, decision reasons, acceptance-to-result links, and any later
+   correction. Reference their existing owner instead of copying a second
+   ledger. Done when: every item has a lifecycle status and evidence, and the
+   next session can resume without asking settled questions again.
 3. State the next safe action, its stop conditions, expiry, rollback locator,
    and the evidence tier it can reach.
    Done when: one bounded next action and all stop conditions are recorded.
