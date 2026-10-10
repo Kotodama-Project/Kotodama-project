@@ -51,7 +51,7 @@ export function createArchiveSink({archiveRoot,ffmpeg='ffmpeg',authorize,timeout
     const metadata={sessionId:b.sessionId,guildId:b.guildId,channelId:b.channelId,channelName:b.channelName??b.channelId,startedAt:new Date(b.startedAtMs).toISOString(),endedAt,participants:b.speakerIds.map(userId=>({userId,name:userId,joinedAt:new Date(b.startedAtMs).toISOString()})),rotationIntervalSeconds:endFrame/48000,timeline:{alignment:'session_start_silence_padded',sampleRateHz:48000,source:'per_speaker_and_mixed'},sourceRef:b.sourceRef,retention:{schemaVersion:'kotodama.voice-retention/v2',rawAudioDays:30,transcriptDays:null,derivedTextDays:null,policyRef:b.retentionPolicyRef},sourceChunks};
     await jsonFile(path.join(staging,'speakers.json'),speakers);await jsonFile(path.join(staging,'metadata.json'),metadata);
     // Legacy retention consumes artifact_manifest only; this is NOT a transfer grant.
-    await jsonFile(path.join(staging,'.ct202-local-grant-'+b.sessionId+'.json'),{schemaVersion:'kotodama.archive-retention-manifest/v1',authorityGranted:false,artifact_manifest:files});
+    await jsonFile(path.join(staging,'.archive-retention-grant-'+b.sessionId+'.json'),{schemaVersion:'kotodama.archive-retention-manifest/v1',authorityGranted:false,artifact_manifest:files});
     const receipt={sessionId:b.sessionId,archiveRef:dir,idempotencyKey,bindingDigest:digest(b),files};await jsonFile(path.join(staging,'archive-receipt.json'),receipt);
     if(process.platform!=='win32'){const fd=await open(staging,'r');try{await fd.sync();}finally{await fd.close();}}
     permitted(authorize,b,'persist');await rename(staging,dir);

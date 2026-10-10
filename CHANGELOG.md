@@ -6,6 +6,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ## [Unreleased]
 
+- Archive retention markerを中立名にする候補。manifest内容を維持し、旧識別子を大文字・小文字とも検査する。private readerの先行配備と保持ownerの残存対象確認がmerge条件。
+
 ### Added
 
 - Context Gatewayのv3 policyで、Access applicationに束縛したtenant、review目的、同意の期限・撤回・出典参照を検査。v1/v2 storeは保全し、暗黙に移行しない（#6）。
