@@ -537,7 +537,6 @@ class SwarmState:
         protocol.ref(extension["critic_job_id"], "critic job")
         if not isinstance(extension["jobs"], list) or not 2 <= len(extension["jobs"]) <= 4:
             raise protocol.SwarmError("INVALID_PLAN", "repair needs one to three work jobs and one critic")
-        encoded = protocol.canonical(extension)
         prefetched = self._prefetch_owner(self._now(), run_id=run_id)
         conn, ok = self._transaction(), False
         try:
@@ -547,6 +546,19 @@ class SwarmState:
             initial = self._plan_from_run(run)
             if protocol.digest(initial) != extension["initial_plan_digest"]:
                 raise protocol.SwarmError("ROUND_CONFLICT", "initial plan changed")
+            combined = dict(initial, jobs=initial["jobs"] + extension["jobs"])
+            normalized = self._normalize_plan(combined, now, owner)
+            new_jobs = normalized["jobs"][len(initial["jobs"]):]
+            new_work = [job for job in new_jobs if job["kind"] == "work"]
+            new_reviews = [job for job in new_jobs if job["kind"] == "review"]
+            previous_work = {job["job_id"] for job in initial["jobs"] if job["kind"] == "work"}
+            if (not new_work or len(new_reviews) != 1 or any(job["dependencies"] for job in new_work)
+                    or set(new_reviews[0]["dependencies"]) != previous_work | {job["job_id"] for job in new_work}):
+                raise protocol.SwarmError("INVALID_PLAN", "repair requires work and one independent critic")
+            # The persisted manifest describes the same normalized rows that
+            # will be scheduled. Equivalent dependency/key ordering is an
+            # idempotent replay, including after the round has finished.
+            encoded = protocol.canonical(dict(extension, jobs=new_jobs))
             previous = conn.execute("SELECT extension_json FROM run_extensions WHERE run_id=?", (run_id,)).fetchone()
             if previous is not None:
                 if previous[0] != encoded:
@@ -568,19 +580,10 @@ class SwarmState:
                     or proof is None or proof["outcome"] != "candidate"
                     or proof["result_digest"] != extension["critic_result_digest"]):
                 raise protocol.SwarmError("ROUND_CRITIC_REQUIRED", "repair needs the reported critic artifact")
-            previous_work = {job["job_id"] for job in initial["jobs"] if job["kind"] == "work"}
             previous_reviews = [job for job in initial["jobs"] if job["kind"] == "review"]
             if (len(previous_reviews) != 1 or previous_reviews[0]["job_id"] != extension["critic_job_id"]
                     or set(previous_reviews[0]["dependencies"]) != previous_work):
                 raise protocol.SwarmError("ROUND_CRITIC_REQUIRED", "repair follows the terminal initial critic")
-            combined = dict(initial, jobs=initial["jobs"] + extension["jobs"])
-            normalized = self._normalize_plan(combined, now, owner)
-            new_jobs = normalized["jobs"][len(initial["jobs"]):]
-            new_work = [job for job in new_jobs if job["kind"] == "work"]
-            new_reviews = [job for job in new_jobs if job["kind"] == "review"]
-            if (not new_work or len(new_reviews) != 1 or any(job["dependencies"] for job in new_work)
-                    or set(new_reviews[0]["dependencies"]) != previous_work | {job["job_id"] for job in new_work}):
-                raise protocol.SwarmError("INVALID_PLAN", "repair requires work and one independent critic")
             used = conn.execute("SELECT COUNT(*) FROM attempts WHERE run_id=?", (run_id,)).fetchone()[0]
             remaining_work, _ = self._work_remaining(conn, run)
             if (used + len(new_jobs) > int(run["attempt_budget"])
@@ -651,10 +654,19 @@ class SwarmState:
         plan = json.loads(run["plan_json"])
         reserve = plan["budget"].get("verifier_reserve", min(int(run["attempt_budget"]),
             sum(job["kind"] == "review" for job in plan["jobs"])))
-        used = conn.execute("""SELECT COUNT(*) FROM attempts a JOIN jobs j
-            ON a.run_id=j.run_id AND a.job_id=j.job_id WHERE a.run_id=? AND j.kind='work'""",
+        used, work_used = conn.execute("""SELECT COUNT(*), COALESCE(SUM(j.kind='work'), 0)
+            FROM attempts a JOIN jobs j ON a.run_id=j.run_id AND a.job_id=j.job_id
+            WHERE a.run_id=?""", (run["run_id"],)).fetchone()
+        pending_reviews = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE run_id=? AND kind='review' AND state='pending'",
             (run["run_id"],)).fetchone()[0]
-        return max(0, int(run["attempt_budget"]) - reserve - used), reserve
+        # Preserve the initial declared review budget, while also reserving
+        # an actual remaining attempt for each pending review (including a
+        # newly admitted repair critic). Completed/retried reviews have
+        # already spent the global budget and cannot be ignored here.
+        remaining = min(int(run["attempt_budget"]) - reserve - work_used,
+                        int(run["attempt_budget"]) - used - pending_reviews)
+        return max(0, remaining), reserve
 
     @staticmethod
     def _dependency_map(conn: sqlite3.Connection, run_id: str) -> dict[str, sqlite3.Row]:

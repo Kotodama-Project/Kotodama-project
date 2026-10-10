@@ -16,23 +16,73 @@ def job(name, kind="work", dependencies=()):
             "exclusive_keys": [], "payload_ref": "ref/payload/"+name, "payload_digest": "a"*64}
 
 
-def setup_state(tmp_path, *, budget=6):
+def setup_state(tmp_path, *, budget=6, work_count=2):
     owner = {"task_id": "task-fixture", "revision": 1, "context_digest": "a"*64,
              "owner_ref": "owner", "active_home": "fixture", "authority_ref": "authority",
              "capability_ref": "research", "expires_at": 2000, "status": "active"}
     now = [1000]
     state = SwarmState(tmp_path/"execution.sqlite", lambda _: copy.deepcopy(owner), clock=lambda: now[0])
+    work_ids = ["r0-a", "r0-b", "r0-c"][:work_count]
     plan = state.create_run({"run_id": "run-fixture", "task_id": owner["task_id"], "binding_digest": digest(validate_binding(owner, now=now[0])),
         "budget": {"attempt_budget": budget, "concurrency": 2, "deadline": 1500, "verifier_reserve": 1},
-        "jobs": [job("r0-a"), job("r0-b"), job("r0-critic", "review", ["r0-a", "r0-b"])]})
-    for actor, expected in [("worker-a", "r0-a"), ("worker-b", "r0-b"), ("critic", "r0-critic")]:
+        "jobs": [*[job(name) for name in work_ids], job("r0-critic", "review", work_ids)]})
+    assignments = [("worker-" + name, name) for name in work_ids] + [("critic", "r0-critic")]
+    for actor, expected in assignments:
         lease = state.claim(plan["run_id"], actor)
         assert lease["job_id"] == expected
         state.report(lease["token"], "ref/result/"+expected, "b"*64, "candidate", "ref/runtime/"+expected)
     extension = {"round": 1, "initial_plan_digest": digest(plan), "critic_job_id": "r0-critic",
         "critic_result_digest": "b"*64, "proposal_digest": "c"*64,
-        "jobs": [job("r1-repair"), job("r1-critic", "review", ["r0-a", "r0-b", "r1-repair"])]}
+        "jobs": [job("r1-repair"), job("r1-critic", "review", [*work_ids, "r1-repair"])]}
     return state, plan, extension, owner, now
+
+
+@pytest.mark.parametrize("budget,retry_allowed", [(6, False), (7, True)])
+def test_repair_retry_preserves_an_attempt_for_the_pending_critic(tmp_path, budget, retry_allowed):
+    state, plan, extension, owner, now = setup_state(tmp_path, budget=budget, work_count=3)
+    state.extend_run(plan["run_id"], extension)
+    lease = state.claim(plan["run_id"], "repair-worker")
+    assert lease["job_id"] == "r1-repair"
+    state.fail(lease["token"], "transient fixture failure", retryable=True)
+    restarted = SwarmState(tmp_path / "execution.sqlite", lambda _: owner, clock=lambda: now[0])
+    before = restarted.snapshot(plan["run_id"])
+    assert before["budget"]["remaining_work_attempts"] == int(retry_allowed)
+    retry = restarted.claim(plan["run_id"], "repair-worker")
+    if retry_allowed:
+        assert retry["job_id"] == "r1-repair"
+        restarted.report(retry["token"], "repair-result", "d" * 64, "candidate", "repair-runtime")
+        review = restarted.claim(plan["run_id"], "independent-critic")
+        assert review["job_id"] == "r1-critic"
+        restarted.report(review["token"], "review-result", "e" * 64, "candidate", "review-runtime")
+        assert restarted.snapshot(plan["run_id"])["budget"]["attempts_used"] == budget
+    else:
+        assert retry is None
+        after = restarted.snapshot(plan["run_id"])
+        assert after["budget"]["attempts_used"] == 5
+        assert after["budget"]["remaining_attempts"] == 1
+        assert after["jobs"]["r1-critic"]["state"] == "pending"
+        assert after["jobs"]["r1-critic"]["attempt_count"] == 0
+
+
+def test_extension_persists_normalized_jobs_and_replays_semantic_list_order(tmp_path):
+    state, plan, extension, owner, now = setup_state(tmp_path)
+    extension["jobs"][0]["exclusive_keys"] = ["resource-z", "resource-a"]
+    extension["jobs"][1]["dependencies"].reverse()
+    normalized = copy.deepcopy(extension)
+    for value in normalized["jobs"]:
+        value["dependencies"].sort()
+        value["exclusive_keys"].sort()
+    assert state.extend_run(plan["run_id"], extension) == normalized
+    assert state.extension(plan["run_id"]) == normalized
+    snapshot = state.snapshot(plan["run_id"])
+    for value in normalized["jobs"]:
+        assert snapshot["jobs"][value["job_id"]]["dependencies"] == value["dependencies"]
+        assert snapshot["jobs"][value["job_id"]]["exclusive_keys"] == value["exclusive_keys"]
+    restarted = SwarmState(tmp_path / "execution.sqlite", lambda _: owner, clock=lambda: now[0])
+    assert restarted.extend_run(plan["run_id"], normalized) == normalized
+    assert restarted.extend_run(plan["run_id"], extension) == normalized
+    assert restarted.snapshot(plan["run_id"])["budget"]["attempts_used"] == 3
+    assert len(restarted.snapshot(plan["run_id"])["jobs"]) == 5
 
 
 def test_concurrent_same_round_is_idempotent_and_budget_is_not_refilled(tmp_path):
