@@ -18,6 +18,13 @@
 | 読取前の消失 | 従来どおりその候補を読めなかったものとして扱う |
 | exact-record 再検証 | 呼出し元が保持する bytes を読み、path を開き直さない |
 
+Windows では descriptor と path の stat が同じファイルにも異なる ctime を
+返す場合があるため、時刻は各 API の読取前後の snapshot 同士を比較します。
+descriptor と path のファイル identity は読取前後とも一致を要求します。読取 handle は
+置換・削除を共有可能として開き、変更を黙認せず `runtime_rollout_changed` にします。
+取消・上限超過などで読取が失敗した場合は、その元のエラーを保持します。
+途中で generator を閉じる場合も、成功側と同様に変更を確認します。
+
 16 MiB は既存 Task runner の rollout 再検証上限と合わせています。
 これまで初回解決だけが巨大な履歴を読み終え、後段で拒否され得た状態を、
 初回解決でも明示的に拒否します。stdout 上限の変更ではありません。

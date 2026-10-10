@@ -127,14 +127,14 @@ def test_a_rollout_changed_during_streaming_cannot_publish_a_receipt(tmp_path, m
 
 def test_disappearance_before_open_preserves_missing_receipt_result(tmp_path, monkeypatch):
     path = fixture(tmp_path)
-    original = Path.open
+    original = codex._open_runtime_rollout
 
-    def open_file(self, *args, **kwargs):
-        if self == path and args == ("rb",):
+    def open_file(candidate):
+        if candidate == path:
             raise FileNotFoundError("synthetic disappearance")
-        return original(self, *args, **kwargs)
+        return original(candidate)
 
-    monkeypatch.setattr(Path, "open", open_file)
+    monkeypatch.setattr(codex, "_open_runtime_rollout", open_file)
     assert resolve(tmp_path) is None
 
 
@@ -209,7 +209,7 @@ def test_oversized_real_file_is_refused_before_any_payload_read(tmp_path, monkey
     path = tmp_path / f"rollout-{THREAD}.jsonl"
     with path.open("wb") as out:
         out.truncate(100 * 1024 * 1024)
-    original = Path.open
+    original = codex._open_runtime_rollout
 
     class NoPayloadRead:
         def __init__(self, file):
@@ -223,11 +223,177 @@ def test_oversized_real_file_is_refused_before_any_payload_read(tmp_path, monkey
         def readline(self, *args):
             pytest.fail("oversized rollout payload must not be read")
 
-    def opened(self, *args, **kwargs):
-        file = original(self, *args, **kwargs)
-        return NoPayloadRead(file) if self == path else file
+    def opened(candidate):
+        file = original(candidate)
+        return NoPayloadRead(file) if candidate == path else file
 
-    monkeypatch.setattr(Path, "open", opened)
+    monkeypatch.setattr(codex, "_open_runtime_rollout", opened)
     with pytest.raises(codex._RuntimeResolutionError) as raised:
         resolve(tmp_path)
     assert raised.value.code == "runtime_rollout_limit"
+
+
+@pytest.mark.parametrize("descriptor_changes", [False, True])
+def test_descriptor_and_named_metadata_use_separate_baselines(tmp_path, monkeypatch, descriptor_changes):
+    from types import SimpleNamespace
+
+    fixture(tmp_path)
+    original = codex.os.fstat
+    calls = 0
+
+    def descriptor_stat(fd):
+        nonlocal calls
+        calls += 1
+        info = original(fd)
+        # Windows fstat can report change time while stat reports birth time:
+        # both descriptor observations differ from Path.stat but are stable
+        # unless a change is explicitly injected into the second observation.
+        return SimpleNamespace(st_dev=info.st_dev, st_ino=info.st_ino,
+                               st_size=info.st_size, st_ctime_ns=info.st_ctime_ns + 100,
+                               st_mtime_ns=info.st_mtime_ns + (1 if descriptor_changes and calls > 1 else 0))
+
+    monkeypatch.setattr(codex.os, "fstat", descriptor_stat)
+    if descriptor_changes:
+        with pytest.raises(codex._RuntimeResolutionError) as raised:
+            resolve(tmp_path)
+        assert raised.value.code == "runtime_rollout_changed"
+    else:
+        assert resolve(tmp_path)["completed_at"] == 42
+
+
+def test_opened_descriptor_must_match_the_observed_named_file(tmp_path, monkeypatch):
+    path = fixture(tmp_path, b"named file A\n")
+    other = tmp_path / "other.jsonl"
+    other.write_bytes(b"opened file B\n")
+    monkeypatch.setattr(codex, "_open_runtime_rollout", lambda _: other.open("rb"))
+    with pytest.raises(codex._RuntimeResolutionError) as raised:
+        list(codex._runtime_lines(path))
+    assert raised.value.code == "runtime_rollout_changed"
+
+
+@pytest.mark.parametrize("failure", ["cancelled", "runtime_rollout_limit"])
+def test_concurrent_mutation_does_not_replace_the_original_read_failure(tmp_path, monkeypatch, failure):
+    path = fixture(tmp_path, b"{}\n")
+    monkeypatch.setattr(codex, "MAX_RUNTIME_ROLLOUT_BYTES", 32)
+    calls = 0
+    cancelled = codex.BackendError("cancelled", "synthetic cancellation", retryable=False)
+
+    def mutate():
+        nonlocal calls
+        calls += 1
+        assert calls == 1
+        if failure == "cancelled":
+            path.unlink()
+            raise cancelled
+        path.write_bytes(b" " * 33)
+
+    exception = codex.BackendError if failure == "cancelled" else codex._RuntimeResolutionError
+    with pytest.raises(exception) as raised:
+        list(codex._runtime_lines(path, check_cancelled=mutate))
+    assert raised.value.code == failure
+    if failure == "cancelled":
+        assert raised.value is cancelled
+
+
+def test_early_generator_close_still_checks_for_mutation(tmp_path):
+    path = fixture(tmp_path, b"{}\n{}\n")
+    lines = codex._runtime_lines(path)
+    assert next(lines) == "{}"
+    path.unlink()
+    with pytest.raises(codex._RuntimeResolutionError) as raised:
+        lines.close()
+    assert raised.value.code == "runtime_rollout_changed"
+
+
+def test_named_metadata_change_is_not_hidden_by_stable_descriptor(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    fixture(tmp_path)
+    original = codex.os.fstat
+    first = None
+
+    def stable_descriptor(fd):
+        nonlocal first
+        if first is None:
+            info = original(fd)
+            first = SimpleNamespace(st_dev=info.st_dev, st_ino=info.st_ino,
+                                    st_size=info.st_size, st_ctime_ns=info.st_ctime_ns,
+                                    st_mtime_ns=info.st_mtime_ns)
+        return first
+
+    monkeypatch.setattr(codex.os, "fstat", stable_descriptor)
+    original_loads = codex.json.loads
+    changed = False
+
+    def update(value, *args, **kwargs):
+        nonlocal changed
+        parsed = original_loads(value, *args, **kwargs)
+        if not changed:
+            changed = True
+            path = tmp_path / f"rollout-{THREAD}.jsonl"
+            info = path.stat()
+            os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns + 1_000_000))
+        return parsed
+
+    monkeypatch.setattr(codex.json, "loads", update)
+    with pytest.raises(codex._RuntimeResolutionError) as raised:
+        resolve(tmp_path)
+    assert raised.value.code == "runtime_rollout_changed"
+
+
+@pytest.mark.parametrize("failure", [None, "invalid", "crt", "stream"])
+def test_windows_rollout_opener_shares_delete_and_transfers_handle_ownership(tmp_path, monkeypatch, failure):
+    import ctypes
+    from ctypes import wintypes
+    from types import SimpleNamespace
+
+    path = tmp_path / "fixture.jsonl"
+    calls, closed = [], []
+    native_handle = 0x123456789ABC
+
+    class NativeCall:
+        def __init__(self, function):
+            self.function = function
+        def __call__(self, *args):
+            return self.function(*args)
+
+    def create(*args):
+        calls.append(args)
+        return wintypes.HANDLE(-1).value if failure == "invalid" else native_handle
+
+    kernel = SimpleNamespace(CreateFileW=NativeCall(create),
+                             CloseHandle=NativeCall(lambda handle: closed.append(("native", handle))))
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *args, **kwargs: kernel, raising=False)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 5, raising=False)
+    monkeypatch.setattr(ctypes, "WinError", lambda error: OSError(error, "synthetic Windows failure"), raising=False)
+
+    def transfer(handle, flags):
+        assert handle == native_handle and flags == 0x8000
+        if failure == "crt":
+            raise OSError("synthetic transfer failure")
+        return 7
+
+    monkeypatch.setitem(sys.modules, "msvcrt", SimpleNamespace(open_osfhandle=transfer))
+    stream = object()
+
+    def open_stream(fd, mode):
+        assert (fd, mode) == (7, "rb")
+        if failure == "stream":
+            raise OSError("synthetic stream failure")
+        return stream
+
+    monkeypatch.setattr(codex, "os", SimpleNamespace(name="nt", O_RDONLY=0, O_BINARY=0x8000,
+                        fdopen=open_stream, close=lambda fd: closed.append(("crt", fd))))
+    if failure:
+        with pytest.raises(OSError) as raised:
+            codex._open_runtime_rollout(path)
+        if failure == "invalid":
+            assert raised.value.errno == 5 and closed == []
+        else:
+            assert closed == [("native", native_handle)] if failure == "crt" else closed == [("crt", 7)]
+    else:
+        assert codex._open_runtime_rollout(path) is stream
+        assert closed == []
+    assert calls == [(str(path), 0x80000000, 0x1 | 0x2 | 0x4, None, 3, 0x80, None)]
+    assert kernel.CreateFileW.restype is wintypes.HANDLE
+    assert kernel.CreateFileW.argtypes[-1] is wintypes.HANDLE

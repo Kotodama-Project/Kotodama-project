@@ -401,6 +401,39 @@ def _runtime_roots(explicit: Path | None) -> list[Path]:
     return unique
 
 
+def _open_runtime_rollout(path: Path) -> Any:
+    """Open a rollout for bounded reads while allowing observed replacement."""
+    if os.name != "nt":
+        return path.open("rb")
+    # The CRT opener denies deletion on Windows. Sharing delete lets the same
+    # path/descriptor checks detect a concurrent rename/unlink on both systems.
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    create = kernel.CreateFileW
+    create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                       wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+    create.restype = wintypes.HANDLE
+    close = kernel.CloseHandle
+    close.argtypes = (wintypes.HANDLE,)
+    close.restype = wintypes.BOOL
+    handle = create(str(path), 0x80000000, 0x1 | 0x2 | 0x4, None, 3, 0x80, None)
+    if handle == wintypes.HANDLE(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+    except BaseException:
+        close(handle)
+        raise
+    try:
+        return os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)
+        raise
+
+
 def _runtime_lines(path: Path, exact_bytes: bytes | None = None,
                    check_cancelled: Callable[[], None] | None = None) -> Iterable[str]:
     """Read one bounded rollout without retaining its decoded history or line list."""
@@ -409,11 +442,15 @@ def _runtime_lines(path: Path, exact_bytes: bytes | None = None,
 
     if exact_bytes is not None and len(exact_bytes) > MAX_RUNTIME_ROLLOUT_BYTES:
         raise _RuntimeResolutionError("runtime_rollout_limit", "runtime rollout exceeds the read limit")
-    with (io.BytesIO(exact_bytes) if exact_bytes is not None else path.open("rb")) as source:
+    named_before = path.stat() if exact_bytes is None else None
+    with (io.BytesIO(exact_bytes) if exact_bytes is not None else _open_runtime_rollout(path)) as source:
         before = os.fstat(source.fileno()) if exact_bytes is None else None
         if before is not None and before.st_size > MAX_RUNTIME_ROLLOUT_BYTES:
             raise _RuntimeResolutionError("runtime_rollout_limit", "runtime rollout exceeds the read limit")
+        if before is not None and (before.st_dev, before.st_ino) != (named_before.st_dev, named_before.st_ino):
+            raise _RuntimeResolutionError("runtime_rollout_changed", "runtime rollout changed while opening")
         consumed = 0
+        read_failed = False
         try:
             while True:
                 if check_cancelled is not None:
@@ -430,13 +467,22 @@ def _runtime_lines(path: Path, exact_bytes: bytes | None = None,
                     if check_cancelled is not None:
                         check_cancelled()
                     yield line
+        except BaseException as exc:
+            # Preserve cancellation, limits and read failures even if the file
+            # also changes. An intentional early close still checks mutation.
+            read_failed = not isinstance(exc, GeneratorExit)
+            raise
         finally:
-            if before is not None:
+            if before is not None and not read_failed:
                 try:
                     after, named = os.fstat(source.fileno()), path.stat()
                 except OSError as exc:
                     raise _RuntimeResolutionError("runtime_rollout_changed", "runtime rollout changed while reading") from exc
-                if fingerprint(before) != fingerprint(after) or fingerprint(before) != fingerprint(named):
+                # Windows stat reports birth time as ctime while fstat can
+                # report change time. Compare timestamps within each API and
+                # retain cross-API identity to bind the stream to its path.
+                if (fingerprint(before) != fingerprint(after) or fingerprint(named_before) != fingerprint(named)
+                        or (after.st_dev, after.st_ino) != (named.st_dev, named.st_ino)):
                     raise _RuntimeResolutionError("runtime_rollout_changed", "runtime rollout changed while reading")
 
 
