@@ -101,6 +101,14 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--candidate", type=Path, required=True)
         if operation != "verify":
             command.add_argument("--input", type=Path, required=True)
+        else:
+            command.add_argument("--input", type=Path, help="admitted input, required for a learning candidate")
+        if operation == "compile":
+            command.add_argument("--learning-origin", type=Path,
+                                 help="explicit one-claim origin JSON; produces an unadmitted candidate")
+        else:
+            command.add_argument("--learning-decision-digest",
+                                 help="current existing-owner decision for a learning candidate")
         if operation == "simulate":
             command.add_argument("--simulation", type=Path, required=True,
                                  help="explicit local work/critic JSON; never calls a provider")

@@ -25,7 +25,9 @@ def _candidate(args):
     # The producer bounds canonical JSON; allow the CLI's one-byte LF frame.
     value = read_json(args.candidate, MAX_INPUT_BYTES + 1)
     shape(value, {"payload", "supplied_plan", "seed_digest", "source_checks",
-                  "context_projection", "diagnostics"}, "TASK_CONTEXT_CANDIDATE_INVALID")
+                  "context_projection", "diagnostics"}
+          | ({"learning"} if isinstance(value, dict) and "learning" in value else set()),
+          "TASK_CONTEXT_CANDIDATE_INVALID")
     projection = value["context_projection"]
     require(isinstance(projection, dict) and isinstance(projection.get("as_of"), str),
             "TASK_CONTEXT_CANDIDATE_INVALID")
@@ -34,18 +36,41 @@ def _candidate(args):
 
 def _execute(args, bundle, candidate):
     if args.operation == "compile":
+        if getattr(args, "learning_origin", None) is not None:
+            from .task_input_learning import compile_task_learning_input
+            origin = read_json(args.learning_origin, 32768)
+            shape(origin, {"origin_owner", "origin_input", "origin_anchor", "claim_index"},
+                  "TASK_LEARNING_ORIGIN_INVALID")
+            return compile_task_learning_input(bundle, read_json(args.input, MAX_INPUT_BYTES),
+                                               args.owner, **origin), 0
         return compile_task_input(bundle, read_json(args.input, MAX_INPUT_BYTES), args.owner), 0
+    learning = "learning" in candidate
+    decision = getattr(args, "learning_decision_digest", None)
+    require(learning == (decision is not None), "TASK_LEARNING_DECISION_REQUIRED")
     if args.operation == "verify":
-        payload = verify_task_input(bundle, candidate, args.owner)
-        return {"status": "binding_verified", "task_id": payload["task_id"],
+        if learning:
+            from .task_input_learning import verify_task_learning_input
+            require(getattr(args, "input", None) is not None, "TASK_LEARNING_INPUT_REQUIRED")
+            payload = verify_task_learning_input(bundle, candidate, args.owner, args.input,
+                                                decision_digest=decision)
+        else:
+            require(getattr(args, "input", None) is None, "TASK_LEARNING_CANDIDATE_REQUIRED")
+            payload = verify_task_input(bundle, candidate, args.owner)
+        return {"status": "binding_and_learning_verified" if learning else "binding_verified", "task_id": payload["task_id"],
                 "revision": payload["revision"], "payload_digest": digest(payload)}, 0
     scenario = read_json(args.simulation, 1024 * 1024)
     backend = ScriptedSimulation(scenario)
     repair = scenario["repair_plan"]
-    result = execute_task_input(bundle, candidate, args.owner, args.input, backend,
+    execute = execute_task_input
+    options = {}
+    if learning:
+        from .task_input_learning import execute_task_learning_input
+        execute = execute_task_learning_input
+        options["decision_digest"] = decision
+    result = execute(bundle, candidate, args.owner, args.input, backend,
         worker_actors=args.worker, critic_actor=args.critic,
         repair_planner=(lambda _gap: copy.deepcopy(repair)) if repair is not None else None,
-        expected_receipt_sha256=args.receipt_sha256)
+        expected_receipt_sha256=args.receipt_sha256, **options)
     return result, 0 if result["receipt"]["review_passed"] else 3
 
 
