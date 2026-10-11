@@ -191,6 +191,16 @@ def _knowledge_inputs(bundle_root: Path) -> tuple[Path, ...]:
     return paths
 
 
+def _relative_input_path(path: Path, root: Path, root_parts: tuple[str, ...]) -> str:
+    # An exact component prefix has the same lexical result as relative_to,
+    # without constructing every ancestor of a deeply nested absolute path.
+    # Keep pathlib's semantics for other anchors/casing and empty roots ('.').
+    parts = path.parts
+    if type(path) is type(root) and root_parts and parts[:len(root_parts)] == root_parts:
+        return "/".join(parts[len(root_parts):]) or "."
+    return path.relative_to(root).as_posix()
+
+
 def _capture_inputs(root: Path, paths: Iterable[Path]) -> tuple[tuple[str, str], ...]:
     # Path ordering case-folds on Windows. Hash the same path order on every OS.
     selected = sorted(set(paths), key=lambda path: path.as_posix())
@@ -198,10 +208,11 @@ def _capture_inputs(root: Path, paths: Iterable[Path]) -> tuple[tuple[str, str],
         raise KnowledgeBaseError("INPUT_FILE_BUDGET")
     total = 0
     bindings = []
+    root_parts = root.parts
     for path in selected:
         try:
-            relative = path.relative_to(root).as_posix()
-            path.resolve().relative_to(root)
+            relative = _relative_input_path(path, root, root_parts)
+            _relative_input_path(path.resolve(), root, root_parts)
         except (ValueError, OSError) as exc:
             raise KnowledgeBaseError("INPUT_OUTSIDE_REPOSITORY") from exc
         raw = _read_bytes(path)
