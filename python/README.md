@@ -18,6 +18,9 @@ MCP／process機能には`swarm` extraと既存のhash付き依存lockが必要�
 別のpeer用Pythonを指定した場合も、serverはこのartifactの実ファイルから起動します。
 peer側には従来どおりpeer依存だけを入れ、同じcore distributionの重複installを要求しません。
 `tools/task_swarm.py`のdemoやrepoのexamplesは配布APIに含めません。
+`python -m kotodama_core.task_swarm.closed_loop --help`で、既存ownerへ束縛する
+閉ループの実験入口を確認できます。現在は明示local simulationのみで、実provider・
+planner生成・knowledge採用は未接続です。詳細は`docs/TASK-SWARM-CLOSED-LOOP.md`を参照してください。
 
 `0.2.0.dev0`は開発候補です。1.0前の破壊変更はminor版を上げ、patch版は互換修正のみとします。
 1.0以降はSemVerに従います。experimental APIのconsumerは版だけでなくartifact SHA-256と
