@@ -111,7 +111,7 @@ for(const failure of [false,true])test(`shutdown retains a pending policy read a
   runtime=await startRuntime(file,{offline:true,log:()=>{}});runtime.dots.lastPrunedAt=0;
   const previousPolicy=runtime.pipeline.policy(),originalRead=fsPromises.readFile,originalDrain=AccessMonitor.prototype.drain;let intercepted=false,prunes=0;
   t.mock.method(runtime.dots,'prune',()=>{prunes++;assert(runtime.store.db.isOpen);});
-  t.mock.method(fsPromises,'readFile',async function(filename,...args){if(filename===file&&!intercepted){intercepted=true;entered();await gate;if(failure)throw Error('synthetic read failure');}return originalRead.call(this,filename,...args);});syncBuiltinESMExports();
+  t.mock.method(fsPromises,'readFile',async function(filename,...args){if(filename===file&&!intercepted){intercepted=true;const result=await originalRead.call(this,filename,...args);entered();await gate;if(failure)throw Error('synthetic read failure');return result;}return originalRead.call(this,filename,...args);});syncBuiltinESMExports();
   t.mock.method(AccessMonitor.prototype,'drain',function(options){return originalDrain.call(this,{...options,timeoutMs:20});});
   await ready;await assert.rejects(runtime.close(),{code:'POLICY_DRAIN_UNCERTAIN'});
   assert.equal(runtime.store.db.isOpen,true);assert.equal(runtime.store.lock().pid,process.pid);assert.equal(prunes,0);
