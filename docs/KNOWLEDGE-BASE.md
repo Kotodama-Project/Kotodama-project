@@ -11,6 +11,8 @@ Kotodama のナレッジベースは、リポジトリ内外の正本を置き�
 [小単位の知識CLI](KNOWLEDGE-CLI.md)にあります。source CLIの実装と、大規模索引・
 配布入口・目的変数・改善ループの後続受入を分けて示します。
 
+同じ知識を繰り返し照会する場合は、出典を毎回検査する[反復読取CLI](KNOWLEDGE-SESSION.md)を使えます。
+
 公式仕様は[GoogleCloudPlatform Knowledge CatalogのOKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/82a483de8a381f1ed25b9dfe1dc5622622afff55/okf/SPEC.md)です。
 参照revisionは`82a483de8a381f1ed25b9dfe1dc5622622afff55`。§5のtimestampは明示offset付きISO 8601日時、
 §11の必須conformanceはfrontmatter・非空type・reserved構造です。#128判断4に従い、既存Conceptの
