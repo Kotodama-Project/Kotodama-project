@@ -4,6 +4,8 @@
 既存ownerに束縛されたversion 1入力から、[Task v2](TASK-OBJECTIVE-CONTRACT.md)候補と
 [既存closed loop](TASK-SWARM-CLOSED-LOOP.md)の有限planを作ります。source checkoutの知識CLIからも使えます。
 Task作成・owner更新・Node接続は含みません。
+[#361](https://github.com/Kotodama-Project/Kotodama-project/issues/361)の初期plannerは、
+明示した根Requirementから必要な仕事を導く追加のopt-inです。
 
 ## 候補生成とownerによる受入
 
@@ -22,6 +24,8 @@ Task ID/revision、全入力digest、現在Sourceを検査します。seedの通
 束縛は `tests/test_knowledge_task_input.py` の `setup` にあります。宣言の必須fieldは
 `owner_ref`、`intent`、`references`、`max_concepts`、`catalog_bindings`、`hierarchy`、
 `jobs`、`constraints`、`unknowns`、`budget`です。参照・span・予算の形はTask v2を再利用します。
+宣言version 2では`jobs`を受け付けず、代わりに一つの`root_requirement_id`を必須とします。
+宣言の版とruntime Taskの版は別です。従来の宣言version 1とTask schemaは変更しません。
 
 返り値は`payload`、`supplied_plan`、`seed_digest`、`source_checks`、`context_projection`、
 `diagnostics`です。ownerが**明示的に**新しい全payload digestとsource_checksを受け入れるまでは
@@ -81,16 +85,62 @@ producerはそこからUnicode spanを計算し、祖先の制約を全子のman
 callerが候補の制約だけを削っても再導出に一致せず拒否されます。何を必須とするかはownerの宣言で、
 本文の意味を自動分類したり、未宣言の制約がないと証明したりする機能ではありません。
 
+## 根Requirementから有限の仕事を導く
+
+宣言version 2の到達可能な各Requirementでは、`task_context`に次の`frontier`を追加します。
+`hierarchy`で列挙した現在文書の中だけを参照します。
+
+```yaml
+frontier:
+  kind: all_of
+  children: [REQ-LATENCY, REQ-RSS]
+  requires: []
+```
+
+`atomic`は空のchildrenを持つ一つの仕事、`all_of`は列挙した子がすべて必要な要件です。
+root/中間/leafのすべてで`kind`・`children`・`requires`を必須とし、`requires`が非空なら拒否します。
+独立性を推論したり、依存する仕事を独立として実行したりしません。`children`は要件分解の辺で、
+文書の`parent_ref`や仕事の実行順序とは別です。通常テンプレートや宣言version 1へは適用しません。
+
+根からの閉包を検査し、循環、未知の子、同じ子の重複、最大2辺を超える経路、未使用文書を拒否します。
+先に短い経路をたどった共有nodeも、長い経路の深さを省略しません。同じ現在Requirementのatomic leafは
+一つの仕事へまとめます。別文書の重複IDは拒否します。文書祖先と全到達Requirementの制約は
+Task全体の条件として全子へ送り、相反する宣言も片方を捨てません。branchごとの制約の意味は追加しません。
+
+全体acceptanceは根が先、残りの到達RequirementはID順、各文書内は宣言順です。同一Source/revision/span
+だけを初出位置へまとめ、起点nodeの集合を残します。同文でも異なるSource/spanなら別条件です。
+この順序が元seedのacceptanceと一致しなければ拒否し、seedを書き換えません。`A_i`は起点から到達する
+leafの仕事へ割り当て、起点が複数なら和集合を使います。`R/S/U/I`とTask全体の`O_i/Q_i`は全仕事共通です。
+全条件の本文、原意、全文訂正、根と必要な中間の原文は実子入力にも残します。
+
+生成job IDは安定Requirement IDから決め、purposeはそのleafの現在needとします。呼出者はjobsや
+担当条件を手で列挙しません。`diagnostics.frontier`に分解辺、leafとjobの対応、各条件のSource spanと
+起点/担当leaf、元予算と初期必要attempt数を返します。ここで示す初期実行後の余裕は未実行時の計算値で、
+実runの残予算ではありません。実行済みattemptは既存coordinatorが同じrunで管理します。
+
+このsliceが保証するのは、明示分解からの入力配布・計画と全reportの収集です。現行critic validatorは
+個々の`A_i`のpassed evidenceが担当leafを参照することまでは強制しません。担当割当だけで要件の意味的達成を
+保証したとは扱いません。条件ごとの全担当証拠の強制は[#362](https://github.com/Kotodama-Project/Kotodama-project/issues/362)です。
+テストの独立criticは与えた数値からp95/RSS欠測を計算し、echoや別leafの値を
+失敗にする限定fixtureです。任意の実モデルの誤判定を検出する証明ではありません。
+
 ## 上限と検証範囲
 
-既存の10 Sources（過去revisionを含む）、各12,000文字、全入力256 KiB、20条件、
+既存の10 Sources（過去revisionを含む）、各12,000文字、全入力256 KiB、各配列の条件20件、
 子選択32 spans、最大3 work jobs、4〜6 attemptsを増やしません。収まらない必須文脈は拒否します。
+acceptance・constraints・unknowns・referencesはそれぞれの上限で、全criteriaの合計20件ではありません。
+実行する仕事数は指定した有効worker数と元予算にも収まる必要があります。3leafに2workerなら、
+切り詰めやworkerの自動追加を行わず、dispatch前に拒否します。
 同じTaskの訂正は既存ownerがrevisionを更新します。compilerが改訂や予算補充を行うことはありません。
 
 テストには、実公開catalogの6文書＋1要件＋親＋原文/訂正で10 Sourcesとなる実coordinator例と、
 11 Sourcesとなる2要件版の拒否があります。別の小さな**合成catalog**では2要件を同時に送り、
 同じowner pathでN→N+1訂正、旧入力拒否、全子の原文/訂正保持、B固有span更新、criticとreceiptを確認します。
 これらは全公開階層の実用化、実モデルの品質やproviderへの配信、会社のCurrent Truthを証明しません。
+宣言version 2のテストでは、atomic/2leaf/共有leafによる実入力とdispatch数の違い、
+全経路の制約とSource spanの起点、3workerと元4attemptでの3leaf、2worker時の拒否を扱います。
+同Taskの訂正ではA固有needを保持してBを更新しますが、旧完成reportを新revisionへ再利用する機能はありません。
+全文訂正によって全子入力のdigestが変わることを維持します。
 
 外部履歴を独立に検証していないため`history=input_only_unverified`を保ちます。
 既存のLineageContextGateを使ったと偽装しません。Plan階層type、自動階層探索、複数親、実Node/Discord入口、

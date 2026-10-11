@@ -69,11 +69,13 @@ def _declaration(seed):
     require(len(found) == 1, "TASK_CONTEXT_DECLARATION_REQUIRED")
     value = found[0]
     _bounded_tree(value)
+    require(isinstance(value, dict) and type(value.get("version")) is int
+            and value["version"] in (1, 2), "TASK_CONTEXT_DECLARATION_INVALID")
     shape(value, {"kind", "version", "owner_ref", "intent", "references", "max_concepts",
-                  "catalog_bindings", "hierarchy", "jobs", "constraints", "unknowns", "budget"},
+                  "catalog_bindings", "hierarchy", "constraints", "unknowns", "budget"}
+                 | ({"jobs"} if value["version"] == 1 else {"root_requirement_id"}),
           "TASK_CONTEXT_DECLARATION_INVALID")
-    require(value["kind"] == "kotodama.task-context-request" and type(value["version"]) is int
-            and value["version"] == 1, "TASK_CONTEXT_DECLARATION_INVALID")
+    require(value["kind"] == "kotodama.task-context-request", "TASK_CONTEXT_DECLARATION_INVALID")
     return value
 
 
@@ -147,7 +149,7 @@ def _live_context(projection, now):
         for item in projection["concepts"]), "TASK_CONTEXT_EXPIRED")
 
 
-def _hierarchy(bundle, seed, entries):
+def _hierarchy(bundle, seed, entries, *, planning=False):
     require(isinstance(entries, list) and 1 <= len(entries) <= 8, "TASK_CONTEXT_HIERARCHY_LIMIT")
     nodes, checks, paths = {}, {}, set()
     for entry in entries:
@@ -172,6 +174,8 @@ def _hierarchy(bundle, seed, entries):
                 "TASK_CONTEXT_HIERARCHY_INVALID")
         fields = meta.get("task_context")
         expected = {"constraints", "need", "acceptance"} if kind == "requirement" else {"constraints"}
+        if planning and kind == "requirement":
+            expected = expected | {"frontier"}
         shape(fields, expected, "TASK_CONTEXT_FIELDS_REQUIRED")
         require(isinstance(fields["constraints"], list) and len(fields["constraints"]) <= 20,
                 "TASK_CONTEXT_STATEMENT_INVALID")
@@ -185,6 +189,8 @@ def _hierarchy(bundle, seed, entries):
             need = _span(source, fields["need"], start=body_start)
         nodes[identifier] = {"kind": kind, "parent": meta.get("parent_ref"),
                              "constraints": constraints, "acceptance": acceptance, "need": need}
+        if planning and kind == "requirement":
+            nodes[identifier].update(frontier=fields["frontier"], source=source)
         require(_read_bytes(path) == expected_bytes, "TASK_CONTEXT_SOURCE_CHANGED")
         checks[str(path)] = hashlib.sha256(expected_bytes).hexdigest()
     for node in nodes.values():
@@ -217,30 +223,38 @@ def _build(bundle, seed, binding, *, now, allow_expired=False):
         identities.add(identity)
         require(source["text"] == concept.document.raw, "TASK_CONTEXT_SOURCE_CHANGED")
         catalog_sources[concept_id] = source
-    nodes, checks = _hierarchy(bundle, seed, declaration["hierarchy"])
+    planning = declaration["version"] == 2
+    nodes, checks = _hierarchy(bundle, seed, declaration["hierarchy"], planning=planning)
     catalog_spans = [{"source_key": source["key"], "source_revision": source["revision"],
                       "start": 0, "end": len(source["text"])} for source in catalog_sources.values()]
-    require(isinstance(declaration["jobs"], list) and 1 <= len(declaration["jobs"]) <= 3,
-            "TASK_CONTEXT_JOB_LIMIT")
-    covered, constraints, acceptance, jobs = set(), list(declaration["constraints"]), [], []
-    for job in declaration["jobs"]:
-        shape(job, {"requirement_id", "job_id"}, "TASK_CONTEXT_JOB_INVALID")
-        identifier = job["requirement_id"]
-        require(isinstance(identifier, str) and identifier in nodes
-                and nodes[identifier]["kind"] == "requirement" and identifier not in covered,
-                "TASK_CONTEXT_REQUIREMENT_INVALID")
-        node, ancestors = nodes[identifier], []
-        while identifier is not None:
-            require(identifier not in ancestors, "TASK_CONTEXT_PARENT_CYCLE")
-            ancestors.append(identifier)
-            if identifier not in covered:
-                constraints.extend(nodes[identifier]["constraints"])
-                covered.add(identifier)
-            identifier = nodes[identifier]["parent"]
-        acceptance.extend(node["acceptance"])
-        jobs.append({"job_id": job["job_id"], "purpose": _Sources(seed).span(node["need"]),
-                     "selected_spans": [*catalog_spans, node["need"], *node["acceptance"], *node["constraints"]]})
-    require(covered == set(nodes), "TASK_CONTEXT_UNUSED_HIERARCHY")
+    work = None
+    if planning:
+        from .task_frontier import frontier_work
+        work = frontier_work(seed, nodes, declaration["root_requirement_id"],
+                             declaration["constraints"], catalog_spans)
+        constraints, acceptance, jobs = work["constraints"], work["acceptance"], work["jobs"]
+    else:
+        require(isinstance(declaration["jobs"], list) and 1 <= len(declaration["jobs"]) <= 3,
+                "TASK_CONTEXT_JOB_LIMIT")
+        covered, constraints, acceptance, jobs = set(), list(declaration["constraints"]), [], []
+        for job in declaration["jobs"]:
+            shape(job, {"requirement_id", "job_id"}, "TASK_CONTEXT_JOB_INVALID")
+            identifier = job["requirement_id"]
+            require(isinstance(identifier, str) and identifier in nodes
+                    and nodes[identifier]["kind"] == "requirement" and identifier not in covered,
+                    "TASK_CONTEXT_REQUIREMENT_INVALID")
+            node, ancestors = nodes[identifier], []
+            while identifier is not None:
+                require(identifier not in ancestors, "TASK_CONTEXT_PARENT_CYCLE")
+                ancestors.append(identifier)
+                if identifier not in covered:
+                    constraints.extend(nodes[identifier]["constraints"])
+                    covered.add(identifier)
+                identifier = nodes[identifier]["parent"]
+            acceptance.extend(node["acceptance"])
+            jobs.append({"job_id": job["job_id"], "purpose": _Sources(seed).span(node["need"]),
+                         "selected_spans": [*catalog_spans, node["need"], *node["acceptance"], *node["constraints"]]})
+        require(covered == set(nodes), "TASK_CONTEXT_UNUSED_HIERARCHY")
     require(_Sources(seed).spans(acceptance) == seed["acceptance"], "TASK_CONTEXT_ACCEPTANCE_MISMATCH")
     references = []
     for field, kind in (("goals", "goal"), ("kgis", "kgi"), ("initiatives", "initiative")):
@@ -266,8 +280,10 @@ def _build(bundle, seed, binding, *, now, allow_expired=False):
                 for item in projection["concepts"] if item["stale_after"] is not None]
     require(not expiries or payload["objective"]["budget"]["deadline"] <= min(expiries),
             "TASK_CONTEXT_DEADLINE_EXCEEDS_CONTEXT")
-    for job in jobs:
-        job["criterion_ids"] = list(loop_criteria(payload))
+    for index, job in enumerate(jobs):
+        job["criterion_ids"] = [key for key in loop_criteria(payload)
+                                if work is None or key not in work["assignments"]
+                                or work["leaves"][index] in work["assignments"][key]]
     plan = validate_plan({"version": 1, "parent_input_digest": digest(payload), "jobs": jobs}, payload)
     all_spans = {tuple(span[key] for key in ("source_key", "source_revision", "start", "end")): span
                  for job in jobs for span in job["selected_spans"]}
@@ -277,13 +293,23 @@ def _build(bundle, seed, binding, *, now, allow_expired=False):
     _assert_current(bundle)
     require(all(hashlib.sha256(_read_bytes(Path(path))).hexdigest() == sha for path, sha in checks.items()),
             "TASK_CONTEXT_SOURCE_CHANGED")
+    diagnostics = {"status": "candidate_requires_owner_binding", "hierarchy": "owner_declared_candidate",
+                   "history": "input_only_unverified", "catalog_adoption": "candidate",
+                   "omitted_optional_concepts": list(selection.omitted_ids),
+                   "provider_delivery_verified": False}
+    if work is not None:
+        diagnostics["frontier"] = work["diagnostic"]
+        diagnostics["frontier"]["budget"] = {
+            "work_cap": 3, "initial_work_count": len(jobs),
+            "initial_attempts_required": len(jobs) + 1,
+            "original_attempt_budget": payload["objective"]["budget"]["attempt_budget"],
+            "attempts_after_initial_if_no_retry": (
+                payload["objective"]["budget"]["attempt_budget"] - len(jobs) - 1),
+            "runtime_remaining_attempts": None,
+        }
     return _copy({"payload": payload, "supplied_plan": plan, "seed_digest": digest(seed),
         "source_checks": [{"path": path, "sha256": sha} for path, sha in sorted(checks.items())],
-        "context_projection": projection, "diagnostics": {
-            "status": "candidate_requires_owner_binding", "hierarchy": "owner_declared_candidate",
-            "history": "input_only_unverified", "catalog_adoption": "candidate",
-            "omitted_optional_concepts": list(selection.omitted_ids),
-            "provider_delivery_verified": False}})
+        "context_projection": projection, "diagnostics": diagnostics})
 
 
 def compile_task_input(bundle, seed_payload, owner_path, *, clock=time.time):
