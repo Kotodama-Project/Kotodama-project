@@ -16,6 +16,9 @@ export class Store {
       CREATE TABLE IF NOT EXISTS intent_versions(id TEXT NOT NULL, revision INTEGER NOT NULL, body TEXT NOT NULL, PRIMARY KEY(id,revision));
       CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY, request_key TEXT UNIQUE NOT NULL, source_key TEXT NOT NULL, source_revision INTEGER NOT NULL, room TEXT NOT NULL, actor TEXT NOT NULL, revision INTEGER NOT NULL, state TEXT NOT NULL, body TEXT NOT NULL, result TEXT);
       CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT, type TEXT NOT NULL, at TEXT NOT NULL, body TEXT NOT NULL);
+      -- Select a bounded diagnostic time window without scanning retained history.
+      -- seq is already the implicit rowid in this index; reports still order by seq.
+      CREATE INDEX IF NOT EXISTS events_diagnostic_window ON events(type,at);
       CREATE INDEX IF NOT EXISTS interaction_event_scope ON events(json_extract(body,'$.room'),json_extract(body,'$.actor'),seq DESC) WHERE type IN ('interaction.clarification_asked','interaction.clarification_closed');
       CREATE TABLE IF NOT EXISTS deliveries(key TEXT PRIMARY KEY, digest TEXT NOT NULL, state TEXT NOT NULL, message_id TEXT);
       CREATE TABLE IF NOT EXISTS usage(day TEXT PRIMARY KEY, reserved_ms INTEGER NOT NULL);
