@@ -48,10 +48,10 @@ def setup_loop(tmp_path, *, budget=6, jobs=2):
          "criterion_ids": expected, "selected_spans": [span(measure, "speed=42"), span(measure, "memory=8")]}]}
     if jobs > 1:
         plan["jobs"].append({"job_id": "uncertainty", "purpose": "Compare measured facts with explicit unknowns.",
-            "criterion_ids": ["U", "I", "Q1"], "selected_spans": [span(measure, "speed=42")]})
+            "criterion_ids": [key for key in expected if not key.startswith("A")], "selected_spans": [span(measure, "speed=42")]})
     if jobs > 2:
         plan["jobs"].append({"job_id": "constraints", "purpose": "Check the read-only constraint.",
-            "criterion_ids": ["O1"], "selected_spans": [span(measure, "speed=42")]})
+            "criterion_ids": [key for key in expected if not key.startswith("A")], "selected_spans": [span(measure, "speed=42")]})
     return owner, file, document, payload, plan, actors, measure
 
 
@@ -90,8 +90,9 @@ class MeasuredBackend:
             failed = key in {"R", "A1"} and memory is None
             target = memory if key in {"R", "A1"} and memory else speed
             validations.append({"criterion_id": key, "status": "failed" if failed else "passed",
-                "evidence": [] if failed else ([{"job_id": job, "claim_index": 0} for job in reports]
-                    if key == "I" else [{"job_id": target, "claim_index": 0}]),
+                "evidence": [] if failed else [{"job_id": job, "claim_index": 0}
+                    for job in delivered.get("required_evidence_jobs", {}).get(key,
+                        list(reports) if key == "I" else [target])],
                 "gap_reason": "The memory observation is missing." if failed else None,
                 "source_spans": [memory_span] if failed else []})
         result = {"parent_input_digest": digest(self.payload),
@@ -197,7 +198,7 @@ def test_repair_cannot_fake_success_using_only_old_evidence(tmp_path):
                     validation["evidence"] = [{"job_id": "r0-speed", "claim_index": 0}]
             return result
     backend = Backend(setup[3], setup[6])
-    with pytest.raises(SwarmError, match="LOOP_REPAIR_EVIDENCE_REQUIRED"):
+    with pytest.raises(SwarmError, match="LOOP_CRITIC_ASSIGNMENT"):
         execute(setup, backend)
     assert not list((setup[0].parent/"operations").glob("*/receipt.json"))
     with pytest.raises(SwarmError, match="RUN_RECOVERY_REQUIRED"):
@@ -336,7 +337,7 @@ def test_comparison_criterion_must_reference_every_report(tmp_path):
             next(v for v in result["result"]["validations"] if v["criterion_id"] == "I")["evidence"] = [
                 {"job_id": "r0-speed", "claim_index": 0}]
             return result
-    with pytest.raises(SwarmError, match="LOOP_COMPARISON_REQUIRED"):
+    with pytest.raises(SwarmError, match="LOOP_CRITIC_ASSIGNMENT"):
         execute(setup, Backend(setup[3], setup[6]))
 
 

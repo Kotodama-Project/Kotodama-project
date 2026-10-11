@@ -81,7 +81,7 @@ def test_receipt_staging_rechecks_eligibility_before_publication(tmp_path, monke
 
     def write(path, value):
         sha = original(path, value)
-        if value.get("coordinator") == "closed_loop_v1":
+        if value.get("coordinator") in {"closed_loop_v1", "closed_loop_v2"}:
             if stop == "cancel":
                 event.set()
             elif stop == "deadline":
@@ -188,7 +188,7 @@ def test_staged_receipt_tampering_is_refused_without_publication(tmp_path, monke
 
     def write(path, value):
         sha = original(path, value)
-        if value.get("coordinator") == "closed_loop_v1":
+        if value.get("coordinator") in {"closed_loop_v1", "closed_loop_v2"}:
             Path(path).write_bytes(b"{}\n")
         return sha
 

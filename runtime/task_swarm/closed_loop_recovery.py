@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 from . import protocol
-from .closed_loop_contract import integration_candidate, learning_candidate, validate_critic, validate_plan, verified_gap
+from .closed_loop_contract import integration_candidate, learning_candidate, validate_critic, validate_plan, verified_gap, evidence_version
 from .closed_loop_context import validate_report_in_view
 from .task_contract import require
 from .task_runner import read_json, safe_directory, write_json
@@ -87,6 +87,8 @@ def terminal_evidence(directory, payload, record, state):
     require(protocol.canonical(snapshot["plan"]) == protocol.canonical(plan)
             and protocol.canonical(snapshot.get("extension")) == protocol.canonical(admission)
             and set(snapshot["jobs"]) == set(scheduled), "FINALIZATION_PLAN_CONFLICT")
+    version = evidence_version(plan, values["r0-critic-template.json"])
+    require(type(record.get("version")) is int and record["version"] == version, "LOOP_EVIDENCE_POLICY")
     for job, expected in scheduled.items():
         current = snapshot["jobs"][job]
         require(all(protocol.canonical(current[key]) == protocol.canonical(value) for key, value in expected.items())
@@ -147,7 +149,11 @@ def terminal_evidence(directory, payload, record, state):
                 expected_jobs=tuple(j for j, item in scheduled.items()
                     if item["kind"] == "work" and (index or j.startswith("r0-"))),
                 dispatched_input=delivered, dispatched_input_digest=observed["delivered_input_digest"],
-                prior_review=prior, repair_admission=admission if index else None)
+                prior_review=prior, repair_admission=admission if index else None,
+                initial_specification=specification, initial_runtime_plan=plan,
+                initial_template=values["r0-critic-template.json"],
+                work_inputs={j: values[j+"-input.json"] for j, item in scheduled.items() if item["kind"] == "work"},
+                repair_specification=proposal if index else None)
             critic_sha = record["artifact_sha256"][job + "-result.json"]
             prior = {"response": response, "dispatched_input": delivered,
                      "dispatched_input_digest": observed["delivered_input_digest"]}
@@ -163,7 +169,8 @@ def terminal_evidence(directory, payload, record, state):
 
 def make_checkpoint(directory, payload, state, metadata, *, artifact_sha256, dispatches,
                     rounds, stop_reason, context_bytes, observed_elapsed_seconds):
-    record = {"version": 1, **metadata, "artifact_sha256": dict(artifact_sha256),
+    version = evidence_version(read_json(directory/"plan.json"), read_json(directory/"r0-critic-template.json"))
+    record = {"version": version, **metadata, "artifact_sha256": dict(artifact_sha256),
               "dispatches": dict(dispatches), "rounds": rounds, "stop_reason": stop_reason,
               "context_bytes": context_bytes, "observed_elapsed_seconds": observed_elapsed_seconds}
     candidate, learning, accepts, critic_sha, _ = terminal_evidence(directory, payload, record, state)
@@ -220,7 +227,7 @@ def finalize(directory, payload, state, metadata, *, guard, reuse_owner=None, ca
         artifacts[name] = hashlib.sha256(raw).hexdigest()
         artifact_bytes += len(raw)
     require(artifact_bytes <= MAX_ARTIFACT_BYTES, "LOOP_ARTIFACT_BUDGET")
-    receipt = {"version": 1, "coordinator": "closed_loop_v1", **{key: record[key] for key in (
+    receipt = {"version": record["version"], "coordinator": f"closed_loop_v{record['version']}", **{key: record[key] for key in (
         "run_id", "binding_digest", "owner_input_sha256", "parent_input_digest", "initial_plan_digest",
         "worker_actors", "critic_actor")}, "synthetic": True, "model_runtime_verified": False,
         "task_state_changed": False, "review_passed": learning is not None, "rounds": record["rounds"],

@@ -110,7 +110,12 @@ def _origin(owner_path, payload_path, anchor, *, clock):
                 if spec["kind"] == "work" and (round_index or job.startswith("r0-"))),
             dispatched_input=delivered,
             dispatched_input_digest=receipt["dispatches"][job]["delivered_input_digest"],
-            prior_review=prior_review, repair_admission=admission if round_index else None)
+            prior_review=prior_review, repair_admission=admission if round_index else None,
+            initial_specification=specification, initial_runtime_plan=runtime_plan,
+            initial_template=read_json(directory/"r0-critic-template.json"),
+            work_inputs={j: read_json(directory/(j+"-input.json")) for j, spec in scheduled.items()
+                         if spec["kind"] == "work"},
+            repair_specification=read_json(directory/"repair-proposal.json") if round_index else None)
         prior_review = {"response": response, "dispatched_input": delivered,
                         "dispatched_input_digest": receipt["dispatches"][job]["delivered_input_digest"]}
     expected = integration_candidate(payload, reports, critic, critic_sha,

@@ -164,3 +164,34 @@ workerの完了順によらず、criticへ渡す報告、後続context、統合c
 bytesが一致します。経過時間などを含む実行receipt全体の一致は要求しません。
 完了receiptの再読では、全artifactと保存されたexecution snapshotも照合します。
 候補がpassedでもownerのTask、knowledge、Current Truthを書き換えません。
+
+## 担当ごとの証拠契約
+
+新規runは証拠契約2を初回dispatch前に固定します。`r0-critic-template.json`の
+`evidence_contract_version: 2`と`required_evidence_jobs`はruntime planのpayload digestに入り、
+既存execution DBのplan/jobへ束縛されます。criticが返した担当表やreceiptの版だけで
+契約を選びません。新規runを旧契約へ下げるオプションはありません。
+
+各条件の初期担当は、変更不能なsupplied planの`criterion_ids`から導きます。
+passedは担当の**全job**のclaim参照を必要とし、担当外・重複・一部だけの参照を拒否します。
+failed/blocked/not_runでも、与えた参照を担当外へ向けることはできません。
+R/S/U/I/O/Qは全初期jobに割当てます。任意のsupplied planでは宣言した割当の一致を保証し、
+rootの条件が全leafに展開された保証は、別のSource検査済み初期plannerに依存します。
+自然文や同じ文章だけから階層を推測しません。
+
+修復jobの影響先は、実際にadmitされたrepair planの失敗条件を担当した初期leafの和集合です。
+修復後は、そのleafと重なる条件に元のreportと修復reportの両方を要求します。
+以前passedだった共通条件も再評価し、Iは全reportを引き続き要求します。
+共通条件の修復は全leafへ波及する保守的な規則で、旧reportの自動置換ではありません。
+実際のworker入力も初期/修復planから再構成し、保存入力とruntime payload digestに照合します。
+
+契約2のreceiptは`version: 2` / `coordinator: closed_loop_v2`、checkpointは`version: 2`です。
+normal、最終処理の復旧、外部anchorでの再読、学びの元run検査で同じ規則を使います。
+保存済みの契約1は、DBに束縛された旧templateを根拠にそのまま読みます。
+完了済みv1はcheckpoint導入前・導入後の両方を保持し、新checkpointを後付けしません。
+未完v1は有効なterminal checkpointがある場合だけ従来どおり明示復旧でき、
+checkpointなしからの再dispatchや版の書換えは行いません。
+
+表の追加分も既存512 KiB入力・2 MiB artifact予算に含みます。最大64条件・6reportの
+関係を扱い、新しいhistory scanやcacheは追加しません。全担当を引用したことは、主張の真偽、
+モデル品質、owner採用、Current Truthや閉ループ全体の完成を意味しません。
