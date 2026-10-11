@@ -20,7 +20,10 @@ peer側には従来どおりpeer依存だけを入れ、同じcore distribution�
 `tools/task_swarm.py`のdemoやrepoのexamplesは配布APIに含めません。
 `python -m kotodama_core.task_swarm.closed_loop --help`で、既存ownerへ束縛する
 閉ループの実験入口を確認できます。現在は明示local simulationのみで、実provider・
-planner生成・knowledge採用は未接続です。詳細は`docs/TASK-SWARM-CLOSED-LOOP.md`を参照してください。
+planner生成は未接続です。詳細は`docs/TASK-SWARM-CLOSED-LOOP.md`を参照してください。
+`python -m kotodama_core.task_swarm.learning_reuse --help`は、一つの学びを独立reviewと
+既存owner判断を経て次のTaskへ渡す限定入口です。会社のCurrent Truthへ昇格せず、
+実providerも呼びません。入力と判断は`docs/TASK-LEARNING-REUSE.md`を参照してください。
 
 `0.2.0.dev0`は開発候補です。1.0前の破壊変更はminor版を上げ、patch版は互換修正のみとします。
 1.0以降はSemVerに従います。experimental APIのconsumerは版だけでなくartifact SHA-256と

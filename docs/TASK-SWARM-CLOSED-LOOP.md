@@ -12,7 +12,7 @@
 
 | 機能 | この版の動作 |
 |---|---|
-| 目的と分解 | callerが与える1〜3件のworkと1件のcriticからなる有限DAG。目的、担当基準、資料spanはjobごとに指定 |
+| 目的と分解 | callerが与える1〜3件の並行workと1件のcritic。目的、担当基準、資料spanはjobごとに指定 |
 | 子の文脈 | 元の依頼・訂正履歴・goal参照・制約・未知・受入条件を必須で保持し、指定した資料spanだけを追加 |
 | 並行実行 | 既存`OwnerFile`と`SwarmState.claim/report/accept`を使用。別のTask台帳を作らない |
 | 独立批判 | workerと異なる既存actor、重複しないinvocation、実際に渡した入力digest、全報告digestと全基準を照合 |
@@ -22,7 +22,9 @@
 | 予算・再開 | 同じTask/revision・run ID・SQLite内で消費を集計。完了後は外部receipt hashによる再読のみ。未完runは復旧判断を要求 |
 
 plan生成器、再帰的な分解、途中work間の依存を持つ多段DAG、実provider、金額・token予算、
-knowledge採用→次のfresh session入力への接続は未実装です。今は明示したlocal simulationのみを
+複数の学びの検索・採用と再帰的な改善は未実装です。
+[一つの学びを次のTaskへ渡す限定経路](TASK-LEARNING-REUSE.md)は、別の独立reviewとowner判断を要求します。
+今は明示したlocal simulationのみを
 受け付けます。合成のpassedは実モデルの品質改善や本番運用の受入を証明しません。
 この変更は既存の固定3worker runner、Discord入口、Taskの完了処理を切り替えません。
 
