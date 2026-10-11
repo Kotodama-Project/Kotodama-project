@@ -32,6 +32,8 @@ Discordのテキスト・音声 → 出典と版 → 意図・ToDo → 明示依
 
 Discord再生はLive出力と別の世代・閲覧許可・source revisionに束縛します。利用者の発話開始、権限変更、mode変更、queue overflowではplayerと未再生PCMを先に破棄します。Liveには停止指示を送りますが、そのACKを再生停止の証明には使いません。音声会話終了はLiveセッションだけを閉じ、既に許可されたTaskは取り消しません。
 
+返答のtokenはLive送信前に既存のcommand IDへ結び付けます。停止命令は停止前の返答tokenと出力世代を保持し、拒否通知はその不変の対応を内部callbackへ渡します。古い返答の拒否が新しい返答を破棄することを防ぎ、現在の返答への拒否と対応不明のエラーは停止します。追加情報は通信payloadへ送らず、既存のACK・拒否・接続終了でcommand記録を解放します。120msの送信待機自体や音声protocolの世代識別はこの対応付けで変更しません。
+
 
 ## Capability lanes
 

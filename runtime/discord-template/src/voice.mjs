@@ -18,6 +18,15 @@ function audible(pcm){for(let i=0;i<pcm.length;i+=2)if(Math.abs(pcm.readInt16LE(
 const MAX_COMMAND_REJECTIONS=3;
 // Provider-supplied codes are kept only when they are short identifiers.
 const diagnosticCode=value=>typeof value==='string'&&/^[A-Za-z0-9_.:-]{1,64}$/.test(value)?value:null;
+function rejectionAffectsReply(reply,command){
+  const bound=command&&typeof command==='object'&&!Array.isArray(command)&&
+    ['session.commentary.append','session.instructions.append'].includes(command.commandType)&&
+    Number.isSafeInteger(command.replyToken)&&command.replyToken>0&&
+    (command.outputGeneration===null||(Number.isSafeInteger(command.outputGeneration)&&command.outputGeneration>=0));
+  // Missing correlation keeps the existing conservative failure behavior.
+  // A matching token is enough before respond() has returned its generation.
+  return !bound||(command.commandType==='session.commentary.append'&&command.replyToken===reply.generation);
+}
 const escaped=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 export function addressed(text,config){return config.voice.wakeWords.some(word=>new RegExp(`(?:^|[、,。.!！?？\\s])${escaped(word)}(?:[、,。.!！?？\\s]|$|(?:あ|ねえ|えっと)?(?:こんにちは|こんばんは|おはよう|聞こえ|きこえ|教えて|おしえて|お願い|調べて|確認して|どう思う))`,'i').test(text));}
 
@@ -121,12 +130,12 @@ export class VoiceRoom {
     };
     s.turns=new TranscriptTurns({onTurn:emit,onError:e=>this.onError(errorCode(e))});s.readers=this.audience().filter(actor=>this.allowed(actor));if(cfg.voice.naturalConversation)s.conversationActive=true;
     s.provider=this.providerFactory({mode:s.mode,naturalConversation:cfg.voice.naturalConversation,onContext:async query=>{check(this.current(s)&&this.policy().discord.operators.includes(actor),'SOURCE_ACCESS_DENIED');if(this.audience().some(id=>id!==actor))return {status:'individual_conversation_required'};const result=await readProjectContext(cfg.worker.workspace,query);check(this.current(s)&&this.policy().discord.operators.includes(actor)&&this.audience().every(id=>id===actor),'SOURCE_ACCESS_DENIED');s.readers=[actor];if(this.reply?.naturalSession===s)this.reply.readers=s.readers;return result;},onStatus:async()=>{check(this.current(s),'VOICE_SESSION_SUPERSEDED');return {scope:'current_installation',recordingEnabled:Boolean(this.archive),recordingHealthy:!this.archiveFailure,configuredAgent:cfg.agentBinding??null,...this.control.status()};},onPark:()=>{void this.endSession(s,{reason:'provider_park'}).catch(e=>this.onError(errorCode(e)));},onEvent:(type,data)=>{if(type==='native.response.usage')this.store.event('voice.native_usage',data);else if(type==='session.command.rejected')this.diagnose('voice.provider_command_rejected',{voiceSession:s.id,commandType:diagnosticCode(data?.commandType),code:diagnosticCode(data?.code)});},model:cfg.voice.assistModel,initialHistory,apiKey:process.env[cfg.voice.apiKeyEnv],onFragment:f=>{if(cfg.voice.transcriptSource!=='local')s.turns.fragment(f);},onCompleted:t=>{if(cfg.voice.transcriptSource!=='local')emit({...t,revision:++s.revision});},
-      onAudio:(pcm,sessionId,outputGeneration)=>this.receiveReplyAudio(s,pcm,sessionId,outputGeneration),onDelegation:d=>s.delegations.push(d),onUsage:usage=>{s.providerUsageSeconds=usage.seconds;if(usage.final||usage.seconds-s.lastUsageRecorded>=5){s.lastUsageRecorded=usage.seconds;this.store.event('voice.usage_snapshot',{voiceSession:s.id,seconds:usage.seconds,contextUsageRatio:usage.contextUsageRatio,final:usage.final});}},onError:code=>{
+      onAudio:(pcm,sessionId,outputGeneration)=>this.receiveReplyAudio(s,pcm,sessionId,outputGeneration),onDelegation:d=>s.delegations.push(d),onUsage:usage=>{s.providerUsageSeconds=usage.seconds;if(usage.final||usage.seconds-s.lastUsageRecorded>=5){s.lastUsageRecorded=usage.seconds;this.store.event('voice.usage_snapshot',{voiceSession:s.id,seconds:usage.seconds,contextUsageRatio:usage.contextUsageRatio,final:usage.final});}},onError:(code,command)=>{
       if(s.stopped||s.epoch!==this.epoch||this.sessions.get(actor)!==s)return;
       // A rejected command does not close the Live transport. Keep the
       // conversation so the next follow-up is still answered; only stop a
       // requested reply of this session that may now never produce audio.
-      if(code==='VOICE_PROVIDER_COMMAND_REJECTED'&&s.provider.active&&++s.commandRejections<MAX_COMMAND_REJECTIONS){this.onError(code);if(this.reply?.provider===s.provider&&!this.reply.naturalSession)void this.stopSpeech({interruptProvider:false});return;}
+      if(code==='VOICE_PROVIDER_COMMAND_REJECTED'&&s.provider.active&&++s.commandRejections<MAX_COMMAND_REJECTIONS){this.onError(code);if(this.reply?.provider===s.provider&&!this.reply.naturalSession&&rejectionAffectsReply(this.reply,command))void this.stopSpeech({interruptProvider:false});return;}
       if(!this.providerError(code))void this.endSession(s,{drain:false,reason:'provider_error',code});
     }});
     this.sessions.set(actor,s);
@@ -271,12 +280,12 @@ export class VoiceRoom {
     const cfg=this.policy(),stream=new Readable({read(){}});const reply={generation,epoch,bindings,readers,stream,accessExpires:Date.now()+2000,...(outputSession?{proactiveSession:outputSession}:{})};
     if(!this.canPlay(reply)){stream.destroy();skipped('audience_check');return;}
     reply.provider=s.provider;reply.sessionId=s.provider.sessionId;this.reply=reply;reply.refreshAccess=async()=>{if(reply.checkingAccess||this.reply!==reply)return;reply.checkingAccess=true;try{const actors=await authorizeAudience(this.audience());if(this.reply===reply){reply.readers=actors;reply.accessExpires=Date.now()+2000;}}catch{if(this.reply===reply)await this.stopSpeech();}finally{reply.checkingAccess=false;}};reply.accessTimer=setInterval(reply.refreshAccess,500);reply.accessTimer.unref();
-    try{const sent=await s.provider.respond(text);reply.outputGeneration=sent.outputGeneration;}catch(e){if(this.reply===reply)await this.stopSpeech();throw e;}
+    try{const sent=await s.provider.respond(text,{replyToken:reply.generation});reply.outputGeneration=sent.outputGeneration;}catch(e){if(this.reply===reply)await this.stopSpeech();throw e;}
     if(this.reply!==reply||!this.canPlay(reply)){stream.destroy();skipped('superseded_after_request');return;}
     reply.prefillTimer=setTimeout(()=>{if(reply.stream.readableLength)this.startReplyPlayback(reply);},cfg.voice.outputPrefillMs);reply.prefillTimer.unref();
     reply.timer=setTimeout(()=>this.stopSpeech(),cfg.voice.replySeconds*1000);reply.timer.unref();
   }
-  async stopSpeech({invalidate=true,interruptProvider=true}={}){const old=this.reply;this.reply=null;if(invalidate)this.generation++;this.player.stop(true);if(old){clearInterval(old.accessTimer);clearTimeout(old.prefillTimer);clearTimeout(old.silenceTimer);clearTimeout(old.timer);old.stream.destroy();if(interruptProvider)old.provider.interrupt?.();if(old.proactiveSession)this.proactive.finish(old.proactiveSession);}}
+  async stopSpeech({invalidate=true,interruptProvider=true}={}){const old=this.reply;this.reply=null;if(invalidate)this.generation++;this.player.stop(true);if(old){clearInterval(old.accessTimer);clearTimeout(old.prefillTimer);clearTimeout(old.silenceTimer);clearTimeout(old.timer);old.stream.destroy();if(interruptProvider)old.provider.interrupt?.({replyToken:old.generation,outputGeneration:old.outputGeneration??null});if(old.proactiveSession)this.proactive.finish(old.proactiveSession);}}
   async applyModelAction(action,source){
     check(['stop_speech','end_conversation'].includes(action)&&source?.metadata?.kind==='voice','VOICE_ACTION_INVALID');if(source.metadata.voiceEpoch!==this.epoch||!source.actorId)return;
     const currentSession=this.sessions.get(source.actorId);if(!currentSession||currentSession.id!==source.metadata.sessionId)return;
