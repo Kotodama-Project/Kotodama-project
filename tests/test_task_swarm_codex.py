@@ -221,6 +221,8 @@ def _fake_codex(tmp_path: Path) -> Path:
                     sys.stdout.write(chunk)
                 sys.stdout.flush()
                 time.sleep(10)
+            # The parent captures process identity before delivering stdin.
+            sys.stdin.read()
             answer = os.environ.get("FAKE_ANSWER", "ok")
             output.write_text(json.dumps({"job": "fixture", "answer": answer}), encoding="utf-8")
             thread = "11111111-1111-4111-8111-111111111111"
@@ -281,6 +283,27 @@ def test_runtime_requires_observed_cwd_and_matching_output(tmp_path, monkeypatch
     with pytest.raises(BackendError) as raised:
         CodexBackend(fake, session_root=sessions).invoke("fixture", SCHEMA, tmp_path / "attempt", timeout=2)
     assert raised.value.code == code
+
+
+def test_runtime_output_mismatch_survives_delayed_process_observation(tmp_path, monkeypatch):
+    fake = _fake_codex(tmp_path)
+    sessions = tmp_path / "sessions"
+    monkeypatch.setenv("FIXTURE_SESSIONS", str(sessions))
+    monkeypatch.setenv("FAKE_MODE", "wrong_output")
+    observe = codex._process_created
+
+    def delayed_observation(process):
+        # Model an early exit before the parent's process-identity lookup.
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+        return observe(process)
+
+    monkeypatch.setattr(codex, "_process_created", delayed_observation)
+    with pytest.raises(BackendError) as raised:
+        CodexBackend(fake, session_root=sessions).invoke("fixture", SCHEMA, tmp_path / "attempt", timeout=5)
+    assert raised.value.code == "runtime_output_mismatch"
 
 
 def test_default_runtime_root_uses_current_codex_home(tmp_path, monkeypatch):

@@ -2,6 +2,12 @@
 
 この文書は実装候補の受入境界です。ローカル試験で実サービスの成功を代用しません。
 
+## 継続する音声返答（#147）
+
+同じLive接続の返答AをBへ置き換えた後、Aの停止・commentary命令への遅い拒否がBを破棄しないことを、実際のVoiceRoom・VoiceProviderと合成SDKで検査します。送信中の同期拒否は現在の返答を止め、既知IDのeventとwrapperの一組は両順序で一度だけ数えます。現在の返答への拒否、識別できないエラー、連続拒否の上限、出典の版・参加者の取消・古い接続の検査は維持します。
+
+これは内部の命令と返答の対応付けの試験です。IDのないwrapperが先着した場合は従来どおり停止します。同じIDの三度目以降の配送や、世代情報のない遅い音声を識別する保証は追加しません。実マイクでの連続応答・聞き取り・割り込み時間は**未受入**で、[実音声の受入手順](REAL-VOICE-ACCEPTANCE.md)による確認を残します。
+
 ## native UIの訂正（#151）
 
 button/select/modalから、元のSource keyの新版と同じTask IDの新版へ戻すlocal owner実装です。SDKのpayload検査とSQLite/Pipelineの合成試験で、text/voiceの訂正、音声の後続SourceとUIの連続履歴、CAS、別人、古いUI、二重送信、現在grant、送信直前のSource変更、関連処理の終了不明、共有Sourceによる他Task成果の保持、空modalの即時応答とsubmitの先行defer、手動訂正のASR区別・archive置換防止、remote拒否を検査します。原文と訂正metadataを保存し、UI専用の正本は作りません。
