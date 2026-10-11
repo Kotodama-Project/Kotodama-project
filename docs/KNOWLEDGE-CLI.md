@@ -89,6 +89,9 @@ governanceを保持し、欠落・鮮度・予算を確認します。actor/purp
 実入力への束縛は[Context Pack](KNOWLEDGE-CONTEXT.md)と[lineage](KNOWLEDGE-LINEAGE.md)で
 別に確認します。取得した指示文はgrantやDecisionではありません。
 
+既存ownerに束縛した原文・訂正・要件を実Task入力へ渡す入口は
+[`task-input compile / verify / simulate`](KNOWLEDGE-TASK-INPUT.md#知識cliから使う)です。
+
 ## 小単位で知識を保つ
 
 一つのConceptには、一つの問い・定義・判断材料・検証方法を置きます。
