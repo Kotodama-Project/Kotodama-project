@@ -80,6 +80,8 @@ node tools/codex-login.mjs --config .kotodama/config.json
 
 ## 5. 接続を確認する
 
+別の人・別の環境で導入を試す場合は、先に[クリーン導入の依頼・記録様式](ACCEPTANCE.md#クリーン導入の依頼と記録155)を用意します。ローカルの `doctor` までで止めても記録でき、実接続をしていない項目は未実施のままにします。
+
 
 ```sh
 node --env-file=.kotodama/secrets/discord.env tools/discord-setup.mjs verify --app YOUR_NEW_APPLICATION_ID --guild YOUR_GUILD_ID --output .kotodama/discord-setup-receipt.json
