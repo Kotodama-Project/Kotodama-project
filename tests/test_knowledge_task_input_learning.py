@@ -473,7 +473,7 @@ class TaskInputLearningTests(unittest.TestCase):
                 decision_digest=digest(decision), clock=lambda: STAMP)
 
     def test_required_source_checks_and_late_kb_change_prevent_publication(self):
-        from runtime.task_swarm import closed_loop as loop
+        from runtime.task_swarm import closed_loop_recovery as loop
         case = make_case(self.root)
         candidate = compile_learning(case)
         _, decision = admit_learning(case, candidate)
