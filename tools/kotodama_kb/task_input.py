@@ -289,6 +289,7 @@ def _build(bundle, seed, binding, *, now, allow_expired=False):
 def compile_task_input(bundle, seed_payload, owner_path, *, clock=time.time):
     """Compile an owner-bound v1 seed without modifying its binding or files."""
     seed = _copy(seed_payload)
+    require(isinstance(seed, dict), "TASK_CONTEXT_V1_SEED_REQUIRED")
     require(seed.get("version") == 1, "TASK_CONTEXT_V1_SEED_REQUIRED")
     owner = OwnerFile(owner_path, clock=clock)
     binding = owner.read_task()

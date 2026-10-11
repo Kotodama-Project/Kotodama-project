@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "tools"))
 from tests.test_knowledge_task_input import CONSTRAINT, admit, change_declaration, reseal_seed, setup
 from runtime.task_swarm.closed_loop_contract import loop_criteria
-from runtime.task_swarm.protocol import digest
+from runtime.task_swarm.protocol import SwarmError, canonical, digest
 
 ENTRY = ROOT / "tools/knowledge_base.py"
 
@@ -213,6 +213,43 @@ class TaskInputCliTests(unittest.TestCase):
         self.assertEqual(2, result.returncode)
         self.assertEqual("", result.stdout)
         self.assertIn("--simulation", result.stderr)
+
+    def test_non_object_compile_inputs_return_typed_json_without_side_effects(self):
+        _, owner, file = prepare(self.root)
+        malformed = self.root / "non-object-input.json"
+        for label, value in (("number", 42), ("list", []), ("null", None),
+                             ("false", False), ("string", "request")):
+            with self.subTest(kind=label):
+                malformed.write_bytes((canonical(value) + "\n").encode("utf-8"))
+                before = {path.relative_to(self.root): path.read_bytes()
+                          for path in self.root.rglob("*") if path.is_file()}
+                result = subprocess.run([sys.executable, "-I", "-B", str(ENTRY),
+                    "task-input", "compile", "--root", str(self.root), "--owner", str(owner),
+                    "--input", str(malformed)], cwd=self.cwd, capture_output=True, timeout=30)
+                self.assertEqual(2, result.returncode, result.stderr.decode("utf-8"))
+                self.assertEqual(b"", result.stdout)
+                expected = {"error": "TASK_CONTEXT_V1_SEED_REQUIRED",
+                            "message": "Task run contract refused"}
+                self.assertEqual((canonical(expected) + "\n").encode("utf-8"), result.stderr)
+                self.assertEqual(before, {path.relative_to(self.root): path.read_bytes()
+                                         for path in self.root.rglob("*") if path.is_file()})
+                self.assertEqual([], list(owner.parent.glob("task-run-*")))
+
+    def test_direct_producer_refuses_non_object_seeds_before_owner_access(self):
+        from kotodama_kb.load import load_bundle
+        from kotodama_kb.task_input import compile_task_input
+        _, owner, file = prepare(self.root)
+        bundle = load_bundle(self.root)
+        before = owner.read_bytes(), file.read_bytes()
+        for label, value in (("number", 42), ("list", []), ("null", None),
+                             ("false", False), ("string", "request")):
+            with self.subTest(kind=label), \
+                 mock.patch("kotodama_kb.task_input.OwnerFile") as owner_reader:
+                with self.assertRaises(SwarmError) as caught:
+                    compile_task_input(bundle, value, owner)
+                self.assertEqual("TASK_CONTEXT_V1_SEED_REQUIRED", caught.exception.code)
+                owner_reader.assert_not_called()
+                self.assertEqual(before, (owner.read_bytes(), file.read_bytes()))
 
     def test_historical_audit_cannot_waive_context_expiry_or_shorten_owner_budget(self):
         seed, owner, file = prepare(self.root)
