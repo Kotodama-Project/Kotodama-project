@@ -90,11 +90,31 @@ def _parser() -> argparse.ArgumentParser:
     readiness_parser.add_argument("--required-concept", action="append", default=None,
                                   help="Concept that this declared scope must include (repeatable)")
     readiness_parser.add_argument("--format", choices=("json", "markdown"), default="json")
+
+    task_parser = subparsers.add_parser("task-input", help="compile, verify or simulate an existing owner's Task input")
+    operations = task_parser.add_subparsers(dest="operation", required=True)
+    for operation in ("compile", "verify", "simulate"):
+        command = operations.add_parser(operation)
+        _add_common_root(command)
+        command.add_argument("--owner", type=Path, required=True)
+        if operation != "compile":
+            command.add_argument("--candidate", type=Path, required=True)
+        if operation != "verify":
+            command.add_argument("--input", type=Path, required=True)
+        if operation == "simulate":
+            command.add_argument("--simulation", type=Path, required=True,
+                                 help="explicit local work/critic JSON; never calls a provider")
+            command.add_argument("--worker", action="append", required=True)
+            command.add_argument("--critic", default="verifier")
+            command.add_argument("--receipt-sha256", help="external anchor for completed replay")
     return parser
 
 
 def _run(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "task-input":
+        from .task_input_cli import run
+        return run(args)
     try:
         as_of = _parse_as_of(args.as_of)
         bundle = load_bundle(args.root, as_of=as_of)
