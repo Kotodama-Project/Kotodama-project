@@ -376,7 +376,7 @@ class TaskContextTests(unittest.TestCase):
         self.assertEqual(STAMP + 1, candidate["payload"]["objective"]["budget"]["deadline"])
 
     def test_context_expiry_before_integration_cannot_accept_or_publish(self):
-        import runtime.task_swarm.closed_loop as loop
+        import runtime.task_swarm.closed_loop_recovery as loop
         from runtime.task_swarm.state import SwarmState
         setup(self.root, jobs=1)
         for path in (self.root / "knowledge/synthetic").glob("*.md"):

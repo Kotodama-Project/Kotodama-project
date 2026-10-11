@@ -8,17 +8,14 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import copy
-import hashlib
-import json
-import os
 from pathlib import Path
 import threading
 import time
 
 from . import protocol
-from .closed_loop_contract import (integration_candidate, learning_candidate, loop_criteria,
-                                   span_identity, validate_critic, validate_plan, verified_gap)
+from .closed_loop_contract import (loop_criteria, span_identity, validate_critic, validate_plan, verified_gap)
 from .closed_loop_context import derive_child_view, validate_report_in_view
+from .closed_loop_recovery import finalize, make_checkpoint, operation_lock
 from .owner_file import OwnerFile
 from .state import SwarmState
 from .task_contract import require, shape, validate_input
@@ -32,21 +29,41 @@ MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
 def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                         worker_actors, critic_actor="verifier", repair_planner=None,
                         cancel_event=None, clock=time.time, expected_receipt_sha256=None,
-                        reuse_context=None):
+                        reuse_context=None, resume_finalization=False):
     """Execute a supplied parallel frontier and one verified-gap repair in one run.
 
     ``repair_planner(gap)`` is a pure local data transform, called outside any
     database lock. Provider-backed planning is not supported by this entrypoint.
-    A completed run supports anchored readback; an interrupted run requires
-    recovery rather than silently re-dispatching work or renewing the budget.
+    A completed run supports anchored readback. Explicit terminal checkpoint
+    resume never re-dispatches work or renews the budget; earlier interruptions
+    require recovery outside this entrypoint.
     """
     started = time.monotonic()
     require(getattr(backend, "synthetic", False) is True, "LOOP_SIMULATION_REQUIRED")
+    require(type(resume_finalization) is bool and not (resume_finalization and expected_receipt_sha256 is not None),
+            "FINALIZATION_OPTIONS_INVALID")
     replay_only = expected_receipt_sha256 is not None
     owner_path, payload_path = Path(owner_path), Path(payload_path)
     owner = OwnerFile(owner_path, clock=clock)
     _, owner_sha = read_json(owner_path, 1024 * 1024, with_digest=True)
     has_reuse_grant = "learning_reuse" in read_json(owner_path, 1024 * 1024)
+    if resume_finalization:
+        # Recover only the stored bounded configuration. Actual current owner,
+        # source and reuse decision validation below remains mandatory.
+        original = read_json(payload_path, 256 * 1024)
+        original = validate_input(original, owner.read_task(original.get("task_id")), now=clock())
+        resume_id = "task-run-" + protocol.digest([original["task_id"], original["revision"]])[:32]
+        resume_dir = owner.storage()["root"] / resume_id
+        require(resume_dir.is_dir(), "RUN_RECOVERY_REQUIRED")
+        resume_dir = safe_directory(resume_dir)
+        require((resume_dir / "execution.sqlite").is_file(), "RUN_RECOVERY_REQUIRED")
+        resume_state = SwarmState(resume_dir / "execution.sqlite", owner.read_task, clock=clock)
+        checkpoint = resume_state.finalization(resume_id)
+        require(checkpoint is not None, "RUN_RECOVERY_REQUIRED")
+        saved_context = checkpoint["checkpoint"]["reuse_context"]
+        require(reuse_context is None or protocol.canonical(reuse_context) == protocol.canonical(saved_context),
+                "RUN_CONTEXT_REPLAY_CONFLICT")
+        reuse_context = saved_context
     require(has_reuse_grant == (reuse_context is not None), "LOOP_REUSE_CONTEXT_REQUIRED")
     reuse_owner, context_binding, decision_digest = None, None, None
     if reuse_context is not None:
@@ -111,9 +128,25 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     # Changing the plan cannot sidestep this directory and refill its budget.
     run_id = "task-run-" + protocol.digest([payload["task_id"], payload["revision"]])[:32]
     directory = root / run_id
+    def finalization_metadata(runtime_plan):
+        return {"run_id": run_id, "binding_digest": binding_digest, "owner_ref": binding["owner_ref"],
+                "owner_input_sha256": owner_sha, "parent_input_digest": parent_digest,
+                "initial_plan_digest": initial_digest, "initial_execution_plan_digest": protocol.digest(runtime_plan),
+                "worker_actors": actors, "critic_actor": critic_actor,
+                "actor_binding_digests": {k: protocol.digest(v) for k, v in actor_bindings.items()},
+                "reuse_context": reuse_context, "context_binding_digest": protocol.digest(context_binding)}
+
     guard()
     if directory.exists():
         safe_directory(directory)
+        if resume_finalization:
+            with operation_lock(directory):
+                require(not (directory / "receipt.json").exists(), "RUN_REPLAY_ANCHOR_REQUIRED")
+                guard()
+                state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
+                result = finalize(directory, payload, state, finalization_metadata(read_json(directory / "plan.json")),
+                                  guard=guard, reuse_owner=reuse_owner, cancel_event=cancellation)
+                return {**result, "recovered_finalization": True}
         require((directory / "receipt.json").is_file(), "RUN_RECOVERY_REQUIRED")
         require(isinstance(expected_receipt_sha256, str) and len(expected_receipt_sha256) == 64,
                 "RUN_REPLAY_ANCHOR_REQUIRED")
@@ -140,6 +173,12 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 "RUN_REPLAY_CONFLICT")
         require(checked.get("context-binding.json") == context_binding, "RUN_CONTEXT_REPLAY_CONFLICT")
         state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
+        if "finalization_checkpoint_digest" in receipt:
+            finalization = state.finalization(run_id)
+            require(finalization is not None
+                    and finalization["checkpoint_digest"] == receipt["finalization_checkpoint_digest"]
+                    and protocol.canonical(finalization["receipt"]) == protocol.canonical(receipt),
+                    "FINALIZATION_CONFLICT")
         snapshot = state.snapshot(run_id)
         require(protocol.canonical(snapshot) == protocol.canonical(checked["execution.json"]),
                 "RUN_EXECUTION_CHANGED")
@@ -149,6 +188,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         return {"candidate": checked["candidate.json"], "learning_candidate": checked.get("learning.json"),
                 "receipt": receipt, "receipt_sha256": sha, "duplicate": True}
     require(expected_receipt_sha256 is None, "RUN_REPLAY_MISSING")
+    require(not resume_finalization, "RUN_RECOVERY_REQUIRED")
     # A structurally valid per-job selection can exceed the critic's union.
     # Refuse before claiming this Task/revision's directory, so a corrected
     # initial plan can still run without resetting any admitted run or budget.
@@ -301,26 +341,6 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                      "candidate", "ref/loop/receipt/" + lease["job_id"])
         return sha
 
-    def verify_dispatches(snapshot):
-        require(set(dispatches) == set(snapshot["jobs"]), "LOOP_DISPATCH_COVERAGE")
-        for job, scheduled in snapshot["jobs"].items():
-            actual = read_json(directory/(job+"-input.json"))
-            response = read_json(directory/(job+"-result.json"))
-            observed = dispatches[job]
-            require(observed == {"declared_input_ref": scheduled["payload_ref"],
-                    "declared_input_digest": scheduled["payload_digest"],
-                    "delivered_input_digest": protocol.digest(actual)}, "LOOP_DISPATCH_INPUT_MISMATCH")
-            require(response["receipt"]["input_digest"] == observed["delivered_input_digest"],
-                    "LOOP_INPUT_RECEIPT_MISMATCH")
-            if scheduled["kind"] == "review":
-                template = read_json(directory/(job+"-template.json"))
-                require(protocol.digest(template) == observed["declared_input_digest"] == actual["template_digest"]
-                        and {k: v for k, v in actual.items() if k not in {"template_digest", "reports", "report_digests"}} == template,
-                        "LOOP_DISPATCH_TEMPLATE_MISMATCH")
-            else:
-                require(observed["declared_input_digest"] == observed["delivered_input_digest"],
-                        "LOOP_DISPATCH_INPUT_MISMATCH")
-
     prior_review, stop_reason, final_critic, critic_sha = None, "review_complete", None, None
     try:
         for round_index in range(2):
@@ -418,59 +438,14 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
             save("extension.json", extension)
             specification = proposal
         require(final_critic is not None and critic_sha is not None, "LOOP_REVIEW_REQUIRED")
-        candidate = integration_candidate(payload, all_reports, final_critic, critic_sha, stop_reason=stop_reason)
-        if reuse_owner is not None:
-            reuse_owner.validate_candidate(candidate)
-        save("candidate.json", candidate)
-        learning = None
-        passed = candidate["status"] == "needs_owner_review"
-        if passed:
-            learning = learning_candidate(candidate)
-            save("learning.json", learning)
-            cited_jobs = {ref["job_id"] for item in final_critic["validations"] for ref in item["evidence"]}
-            for job in sorted(cited_jobs):
-                guard()
-                verify_artifacts()
-                state.accept(run_id, job, report_jobs[job]["artifact_digest"],
-                             "ref/loop/verification/" + critic_sha, binding["owner_ref"],
-                             cancel_event=cancellation)
-            guard()
-            state.accept(run_id, f"r{final_critic['round']}-critic", critic_sha,
-                         "ref/loop/verification/" + critic_sha, binding["owner_ref"],
-                         cancel_event=cancellation)
-        snapshot = state.snapshot(run_id)
-        verify_dispatches(snapshot)
-        save("execution.json", snapshot)
-        receipt = {"version": 1, "coordinator": "closed_loop_v1", "run_id": run_id, "binding_digest": binding_digest,
-                   "owner_input_sha256": owner_sha, "parent_input_digest": parent_digest,
-                   "initial_plan_digest": initial_digest, "worker_actors": actors, "critic_actor": critic_actor,
-                   "synthetic": True, "model_runtime_verified": False, "task_state_changed": False,
-                   "review_passed": passed, "rounds": final_critic["round"] + 1,
-                   "budget": snapshot["budget"], "context_bytes": context_bytes,
-                   "artifact_bytes": artifact_bytes, "elapsed_seconds": time.monotonic() - started,
-                   "dispatches": dispatches, "artifact_sha256": dict(artifacts)}
-        guard()
-        verify_artifacts()
-        # Staging is not completion. Recheck after all receipt I/O, then publish
-        # by one same-directory rename. Once published, return its anchor
-        # without a later stop check that could orphan the completed receipt.
-        pending = directory / ".receipt-pending.json"
-        try:
-            receipt_sha = write_json(pending, receipt)
+        with operation_lock(directory):
             guard()
             verify_artifacts()
-            require(read_json(pending, with_digest=True) == (receipt, receipt_sha),
-                    "RUN_OUTPUT_READBACK")
-            guard()
-            os.replace(pending, directory / "receipt.json")
-        except Exception:
-            try:
-                pending.unlink(missing_ok=True)
-            except OSError:
-                pass  # Preserve the refusal; no completed receipt was returned.
-            raise
-        return {"candidate": candidate, "learning_candidate": learning, "receipt": receipt,
-                "receipt_sha256": receipt_sha, "duplicate": False}
+            metadata = finalization_metadata(plan)
+            make_checkpoint(directory, payload, state, metadata, artifact_sha256=artifacts,
+                dispatches=dispatches, rounds=final_critic["round"] + 1, stop_reason=stop_reason,
+                context_bytes=context_bytes, observed_elapsed_seconds=time.monotonic() - started)
+            return finalize(directory, payload, state, metadata, guard=guard, reuse_owner=reuse_owner, cancel_event=cancellation)
     except Exception as exc:
         with failure_lock:
             failure = failures[0] if failures else None
@@ -520,20 +495,34 @@ def main(argv=None):
     parser.add_argument("--owner", required=True, type=Path)
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--plan", required=True, type=Path)
-    parser.add_argument("--simulation", required=True, type=Path,
+    parser.add_argument("--simulation", type=Path,
                         help="Explicit JSON work/critic responses and optional repair plan; never calls a provider")
     parser.add_argument("--worker", required=True, action="append", help="Existing owner actor; repeat for parallel jobs")
     parser.add_argument("--critic", default="verifier")
     parser.add_argument("--receipt-sha256", help="Read back an already completed run using this external anchor")
+    parser.add_argument("--resume-finalization", action="store_true",
+                        help="Finish a verified terminal checkpoint without calling any worker or critic")
     args = parser.parse_args(argv)
     try:
-        scenario = read_json(args.simulation, 1024 * 1024)
-        backend = ScriptedSimulation(scenario)
-        repair = scenario["repair_plan"]
+        if args.resume_finalization:
+            class NoDispatch:
+                synthetic = True
+
+                def produce(self, *_args, **_kwargs):
+                    raise protocol.SwarmError("FINALIZATION_DISPATCH_FORBIDDEN", "recovery cannot dispatch")
+
+                review = produce
+
+            backend, repair = NoDispatch(), None
+        else:
+            require(args.simulation is not None, "LOOP_SIMULATION_REQUIRED")
+            scenario = read_json(args.simulation, 1024 * 1024)
+            backend = ScriptedSimulation(scenario)
+            repair = scenario["repair_plan"]
         result = execute_closed_loop(args.owner, args.input, read_json(args.plan, 256 * 1024), backend,
             worker_actors=args.worker, critic_actor=args.critic,
             repair_planner=(lambda _gap: copy.deepcopy(repair)) if repair is not None else None,
-            expected_receipt_sha256=args.receipt_sha256)
+            expected_receipt_sha256=args.receipt_sha256, resume_finalization=args.resume_finalization)
         print(protocol.canonical(result))
         return 0
     except protocol.SwarmError as exc:

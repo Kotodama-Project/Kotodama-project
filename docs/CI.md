@@ -133,7 +133,7 @@ pnpm check
 ### 件数と検証範囲
 
 全体の unittest と専用 pytest は役割が異なります。共通 lock には pytest / MCP SDK を
-追加せず、pytest 専用の3 modules は必須 Task swarm job へ委譲します。委譲の
+追加せず、pytest 専用の modules は必須 Task swarm job へ委譲します。委譲の
 `ModuleSkipped` も unittest の件数に含まれるため、集計件数だけを成功した実ケース数や
 運用品質として扱いません。各結果の実行・skip・対象集合を記録します。
 

@@ -19,7 +19,7 @@
 | 修正 | `failed`の実行済みcriticからのみ最大1回。criticに渡された不足spanと失敗基準だけを次planへ渡す |
 | 統合 | 最終criticが参照するclaimと報告間のconflictを、出典付きの`integrated_candidate`へ決定的に集約 |
 | 学習 | 全基準passedの場合だけ`learning_candidate`を作る。`unadopted`かつ`next_context_eligible=false` |
-| 予算・再開 | 同じTask/revision・run ID・SQLite内で消費を集計。完了後は外部receipt hashによる再読のみ。未完runは復旧判断を要求 |
+| 予算・再開 | 同じTask/revision・run ID・SQLite内で消費を集計。完了後は外部receipt hashによる再読。保存済みterminal checkpointからは再配送せず確定処理だけを再開 |
 
 plan生成器、再帰的な分解、途中work間の依存を持つ多段DAG、実provider、金額・token予算、
 複数の学びの検索・採用と再帰的な改善は未実装です。
@@ -100,6 +100,37 @@ stdoutは統合候補とreceiptを含みます。実本文を含むため、priv
 期待値に置き換えません。未完run、artifact改変、owner変更、期限超過、新しいplanでの再実行は拒否します。
 ownerが有効な間の完了済み再読だけは、objectiveの実行期限後も許します。
 
+## terminal checkpointからの限定再開
+
+全workと最終criticの報告を保存・検証した後、同じ`execution.sqlite`へterminal checkpointを
+固定します。以後はplan extensionを追加できません。checkpointは元入力、plan、actor、
+実配送入力、報告、critic、統合・学習候補と、accept対象のjob/token/epochを束縛します。
+各acceptはjob・attempt・checkpointの進捗を同じSQLite transactionで更新し、取消や期限で
+拒否したtransactionは3者ともrollbackします。
+
+この境界以後のprocess終了では、同じowner、入力、plan、actorを指定して
+`resume_finalization=True`で確定処理だけを明示再開できます。CLIでは次のように
+`--resume-finalization`を渡し、simulationを指定しません。
+
+```sh
+python -m kotodama_core.task_swarm.closed_loop \
+  --owner PRIVATE_OWNER_JSON --input PRIVATE_TASK_INPUT \
+  --plan PRIVATE_FINITE_PLAN --resume-finalization \
+  --worker worker-a --worker worker-b --critic verifier
+```
+
+再開は現在のowner/source/actor/learning採用判断・取消・実行期限を再検査し、保存された
+同じtoken/epochだけをacceptします。backend、critic、repair plannerを呼ばず、試行予算を
+追加消費しません。未報告lease、未完work、checkpointのないrunは再配送しません。
+OSがprocess終了時に解放する非待機lockを使い、並行finalizerは有限に拒否します。
+電源断やfilesystem/SQLiteの耐久性全体、lease更新、未知のrunの自動復旧は保証しません。
+
+receiptのcanonical bytesはDBへ固定し、既存の未公開stageはJSON内容が等しくても
+bytesが異なれば拒否します。DB・成果・stageの不一致を上書き修復しません。
+新receiptはcheckpoint digestを持ち、再読時もDBの固定bytesと照合します。
+旧writerが作ったcheckpoint項目のないreceiptは、従来の外部hashとartifact検証で再読できます。
+receiptの経過秒はcheckpoint以前の観測範囲を明記し、中断後の時間を推測しません。
+
 ## 停止と証跡
 
 全試行数は元の4〜6件、並行数は指定actor数の最大3件、critic予約1件です。
@@ -125,7 +156,8 @@ receiptは未公開の同一directory内ファイルへ書込み・fsync・再�
 確定した後は、追加のguardで戻り値を失わせず同じbytesのSHA-256を返します。取消などが
 最後の検査後に変わることは、確定済みreceiptのanchor返却を撤回しません。callerはこのanchorを
 外部で保持します。process kill、電源断、DBとfilesystemとcallerへの返却の完全な原子性、
-未完runの自動復旧はこの境界の保証に含めません。
+未完workの自動復旧はこの境界の保証に含めません。上記の明示再開は、保存済みterminal
+checkpointと有効な現在資格がある場合に限ります。
 
 workerの完了順によらず、criticへ渡す報告、後続context、統合conflictはjob ID順に組み立てます。
 各report内のclaim/conflict順は保持します。同じ検証済み報告とcritic結果からは統合・学習候補の

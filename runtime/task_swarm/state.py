@@ -149,6 +149,13 @@ class SwarmState:
             extension_json TEXT NOT NULL,
             FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE RESTRICT
         );
+        CREATE TABLE IF NOT EXISTS run_finalizations (
+            run_id TEXT PRIMARY KEY,
+            checkpoint_json TEXT NOT NULL,
+            progress_json TEXT NOT NULL,
+            receipt_json TEXT,
+            FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE RESTRICT
+        );
         """
         for retry in range(6):
             conn: sqlite3.Connection | None = None
@@ -566,6 +573,8 @@ class SwarmState:
                     raise protocol.SwarmError("ROUND_CONFLICT", "repair round is already bound")
                 ok = True
                 return json.loads(previous[0])
+            if conn.execute("SELECT 1 FROM run_finalizations WHERE run_id=?", (run_id,)).fetchone():
+                raise protocol.SwarmError("FINALIZATION_SEALED", "terminal run cannot admit another round")
             if now >= float(run["deadline"]):
                 raise protocol.SwarmError("ROUND_BUDGET", "run deadline elapsed")
             if conn.execute("SELECT 1 FROM jobs WHERE run_id=? AND state='leased'", (run_id,)).fetchone():
@@ -613,6 +622,122 @@ class SwarmState:
             return json.loads(row[0]) if row else None
         finally:
             conn.close()
+
+    @staticmethod
+    def _finalization_evidence(conn, run_id):
+        """Raw execution rows, including every timestamp and attempt identity.
+
+        Unlike snapshot(), this never recomputes pending jobs. Finalization
+        may only advance the expressly listed accepts in this same database.
+        """
+        extension = conn.execute("SELECT extension_json FROM run_extensions WHERE run_id=?", (run_id,)).fetchone()
+        return {"run": dict(SwarmState._get_run(conn, run_id)),
+                "jobs": [dict(row) for row in conn.execute("SELECT * FROM jobs WHERE run_id=? ORDER BY job_id", (run_id,))],
+                "attempts": [dict(row) for row in conn.execute("SELECT * FROM attempts WHERE run_id=? ORDER BY job_id,attempt", (run_id,))],
+                "extension": extension[0] if extension else None}
+
+    @staticmethod
+    def _checked_finalization(conn, run_id):
+        row = conn.execute("SELECT * FROM run_finalizations WHERE run_id=?", (run_id,)).fetchone()
+        if row is not None and protocol.canonical(SwarmState._finalization_evidence(conn, run_id)) != row["progress_json"]:
+            raise protocol.SwarmError("FINALIZATION_STATE_CHANGED", "execution changed outside finalization")
+        return row
+
+    def finalization_evidence_digest(self, run_id: str) -> str:
+        """Capture a read-only CAS token; no leases or Task records change."""
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN")
+            return protocol.digest(self._finalization_evidence(conn, run_id))
+        finally:
+            conn.close()
+
+    def prepare_finalization(self, run_id: str, checkpoint: Mapping[str, Any]) -> dict[str, Any]:
+        """Freeze a fully reported terminal run, never grant new execution."""
+        run_id = protocol.ref(run_id, "run id")
+        if not isinstance(checkpoint, Mapping):
+            raise protocol.SwarmError("FINALIZATION_INVALID", "checkpoint must be an object")
+        encoded = protocol.canonical(checkpoint)
+        if len(encoded.encode("utf-8")) > 262144:
+            raise protocol.SwarmError("FINALIZATION_INVALID", "checkpoint is too large")
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
+        conn, ok = self._transaction(), False
+        try:
+            run = self._get_run(conn, run_id)
+            owner = self._run_owner(run, self._now(), prefetched)
+            previous = self._checked_finalization(conn, run_id)
+            if previous is not None:
+                if previous["checkpoint_json"] != encoded:
+                    raise protocol.SwarmError("FINALIZATION_CONFLICT", "terminal checkpoint is immutable")
+                ok = True
+                return json.loads(encoded)
+            evidence = self._finalization_evidence(conn, run_id)
+            if self._now() >= float(run["deadline"]):
+                raise protocol.SwarmError("DEADLINE_EXPIRED", "incomplete run has expired")
+            if (checkpoint.get("run_id") != run_id or checkpoint.get("binding_digest") != run["binding_digest"]
+                    or checkpoint.get("owner_ref") != owner["owner_ref"]
+                    or checkpoint.get("state_digest") != protocol.digest(evidence)):
+                raise protocol.SwarmError("FINALIZATION_STATE_CHANGED", "checkpoint CAS does not match this execution")
+            jobs, attempts = evidence["jobs"], evidence["attempts"]
+            if (not jobs or len(jobs) != len(attempts)
+                    or any(job["state"] != "reported" for job in jobs)
+                    or any(a["state"] != "reported" or a["outcome"] != "candidate" or not a["identity_json"] for a in attempts)):
+                raise protocol.SwarmError("FINALIZATION_UNSETTLED", "every job needs exactly one identified report")
+            accepts = checkpoint.get("accepts")
+            results = {a["job_id"]: a["result_digest"] for a in attempts}
+            if not isinstance(accepts, dict) or any(results.get(job) != result for job, result in accepts.items()):
+                raise protocol.SwarmError("FINALIZATION_INVALID", "accepted results must be current reports")
+            protocol.ref(checkpoint.get("verification_ref"), "verification reference")
+            conn.execute("INSERT INTO run_finalizations(run_id,checkpoint_json,progress_json) VALUES (?,?,?)",
+                         (run_id, encoded, protocol.canonical(evidence)))
+            ok = True
+            return json.loads(encoded)
+        finally:
+            self._finish(conn, ok)
+
+    def finalization(self, run_id: str) -> dict[str, Any] | None:
+        """Read the checkpoint only if its exact durable progress still matches."""
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
+        conn, ok = self._transaction(), False
+        try:
+            run = self._get_run(conn, run_id)
+            self._run_owner(run, self._now(), prefetched)
+            row = self._checked_finalization(conn, run_id)
+            ok = True
+            if row is None:
+                return None
+            checkpoint = json.loads(row["checkpoint_json"])
+            receipt = json.loads(row["receipt_json"]) if row["receipt_json"] is not None else None
+            return {"checkpoint": checkpoint, "checkpoint_digest": protocol.digest(checkpoint), "receipt": receipt}
+        finally:
+            self._finish(conn, ok)
+
+    def pin_final_receipt(self, run_id: str, checkpoint_digest: str, receipt: Mapping[str, Any]) -> dict[str, Any]:
+        """Pin the complete receipt preimage before any receipt file is written."""
+        encoded = protocol.canonical(receipt)
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
+        conn, ok = self._transaction(), False
+        try:
+            run = self._get_run(conn, run_id)
+            self._run_owner(run, self._now(), prefetched)
+            row = self._checked_finalization(conn, run_id)
+            if row is None or protocol.digest(json.loads(row["checkpoint_json"])) != checkpoint_digest:
+                raise protocol.SwarmError("FINALIZATION_CONFLICT", "checkpoint changed")
+            checkpoint = json.loads(row["checkpoint_json"])
+            if (self._now() >= float(run["deadline"]) or receipt.get("run_id") != run_id
+                    or receipt.get("binding_digest") != run["binding_digest"]
+                    or receipt.get("finalization_checkpoint_digest") != checkpoint_digest):
+                raise protocol.SwarmError("FINALIZATION_CONFLICT", "receipt scope is not current")
+            accepted = {r["job_id"] for r in conn.execute("SELECT job_id FROM jobs WHERE run_id=? AND state='accepted'", (run_id,))}
+            if accepted != set(checkpoint["accepts"]):
+                raise protocol.SwarmError("FINALIZATION_UNSETTLED", "verified acceptance is incomplete")
+            if row["receipt_json"] is not None and row["receipt_json"] != encoded:
+                raise protocol.SwarmError("FINALIZATION_CONFLICT", "receipt preimage is immutable")
+            conn.execute("UPDATE run_finalizations SET receipt_json=? WHERE run_id=?", (encoded, run_id))
+            ok = True
+            return json.loads(encoded)
+        finally:
+            self._finish(conn, ok)
 
     # ------------------------------------------------------------------
     # Claims and attempt lifecycle
@@ -987,6 +1112,15 @@ class SwarmState:
             owner = self._run_owner(run, now, prefetched)
             if owner_ref != owner["owner_ref"]:
                 raise protocol.SwarmError("WRONG_OWNER", "acceptance caller is not the current owner")
+            finalization = self._checked_finalization(conn, run_id)
+            if finalization is not None:
+                checkpoint = json.loads(finalization["checkpoint_json"])
+                if now >= float(run["deadline"]):
+                    raise protocol.SwarmError("DEADLINE_EXPIRED", "incomplete run has expired")
+                if (checkpoint["accepts"].get(job_id) != result_digest
+                        or checkpoint["verification_ref"] != verification_ref
+                        or checkpoint["owner_ref"] != owner_ref):
+                    raise protocol.SwarmError("FINALIZATION_CONFLICT", "acceptance is outside the terminal proof")
             job = conn.execute(
                 "SELECT * FROM jobs WHERE run_id = ? AND job_id = ?", (run_id, job_id)
             ).fetchone()
@@ -1040,6 +1174,9 @@ class SwarmState:
                    WHERE run_id = ? AND job_id = ? AND state = 'reported'""",
                 (result_digest, verification_ref, owner_ref, now, run_id, job_id),
             )
+            if finalization is not None:
+                conn.execute("UPDATE run_finalizations SET progress_json=? WHERE run_id=?",
+                             (protocol.canonical(self._finalization_evidence(conn, run_id)), run_id))
             # The final eligibility observation is inside BEGIN IMMEDIATE;
             # rejection rolls back both writes. A later external Event change
             # cannot be atomic with SQLite and does not undo this acceptance.

@@ -14,7 +14,7 @@ except ModuleNotFoundError:
     raise unittest.SkipTest("runs in the required Task swarm pytest job")
 
 from test_task_swarm_closed_loop import MeasuredBackend, setup_loop
-from task_swarm import closed_loop as coordinator
+from task_swarm import closed_loop as coordinator, closed_loop_recovery as publication
 from task_swarm.protocol import SwarmError, canonical, digest
 from task_swarm.state import SwarmState
 
@@ -77,7 +77,7 @@ def test_opposite_completion_order_has_identical_candidate_and_learning_bytes(tm
 def test_receipt_staging_rechecks_eligibility_before_publication(tmp_path, monkeypatch, stop):
     setup = complete_setup(tmp_path)
     event, now = threading.Event(), [1000]
-    original = coordinator.write_json
+    original = publication.write_json
 
     def write(path, value):
         sha = original(path, value)
@@ -92,7 +92,7 @@ def test_receipt_staging_rechecks_eligibility_before_publication(tmp_path, monke
                 setup[0].write_bytes(json.dumps(changed).encode())
         return sha
 
-    monkeypatch.setattr(coordinator, "write_json", write)
+    monkeypatch.setattr(publication, "write_json", write)
     with pytest.raises(SwarmError):
         run(setup, event=event, clock=lambda: now[0])
     assert not (directory(setup) / "receipt.json").exists()
@@ -102,7 +102,7 @@ def test_receipt_staging_rechecks_eligibility_before_publication(tmp_path, monke
 def test_receipt_commit_returns_anchor_despite_later_stop(tmp_path, monkeypatch, stop):
     setup = complete_setup(tmp_path)
     event, now = threading.Event(), [1000]
-    original_write, original_replace = coordinator.write_json, os.replace
+    original_write, original_replace = publication.write_json, os.replace
 
     def later_stop():
         if stop == "cancel":
@@ -126,7 +126,7 @@ def test_receipt_commit_returns_anchor_despite_later_stop(tmp_path, monkeypatch,
             later_stop()
         return result
 
-    monkeypatch.setattr(coordinator, "write_json", write)
+    monkeypatch.setattr(publication, "write_json", write)
     monkeypatch.setattr(os, "replace", replace)
     result = run(setup, event=event, clock=lambda: now[0])
     raw = (directory(setup) / "receipt.json").read_bytes()
@@ -184,7 +184,7 @@ def test_exactly_32_unique_spans_and_duplicate_across_jobs_are_admitted(tmp_path
 
 def test_staged_receipt_tampering_is_refused_without_publication(tmp_path, monkeypatch):
     setup = complete_setup(tmp_path)
-    original = coordinator.write_json
+    original = publication.write_json
 
     def write(path, value):
         sha = original(path, value)
@@ -192,7 +192,7 @@ def test_staged_receipt_tampering_is_refused_without_publication(tmp_path, monke
             Path(path).write_bytes(b"{}\n")
         return sha
 
-    monkeypatch.setattr(coordinator, "write_json", write)
+    monkeypatch.setattr(publication, "write_json", write)
     with pytest.raises(SwarmError, match="RUN_OUTPUT_READBACK"):
         run(setup)
     assert not (directory(setup) / "receipt.json").exists()
