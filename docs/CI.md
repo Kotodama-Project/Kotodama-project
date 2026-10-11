@@ -1,5 +1,7 @@
 # CI と必須チェック
 
+固定fixtureの実行時間・メモリ・欠測を比較する手順は、[性能計測CLI](PERFORMANCE-BENCHMARK.md)を参照してください。
+
 公開リポジトリの GitHub Actions と、main の branch protection が要求するチェックの一覧です。CI の PASS は local / static な証拠であり、install、deploy、provider 接続、Promotion、Current Truth、Final Human GO を意味しません。
 
 ## Workflow 一覧
