@@ -96,3 +96,64 @@ callerが候補の制約だけを削っても再導出に一致せず拒否さ�
 既存のLineageContextGateを使ったと偽装しません。Plan階層type、自動階層探索、複数親、実Node/Discord入口、
 配布済みCLI、未完runの復旧は後続です。このAPIとCLIはrepositoryのtoolsとして使い、
 runtime wheelへKBの逆依存を追加しません。
+
+## 一件の学びを現在のTask入力へ接続する
+
+`task-input`は、[既存の学習再利用](TASK-LEARNING-REUSE.md)で選んだ一件を明示的に追加できます。
+Goal・原意・訂正・祖先制約から導出した同じB Taskの各workへproposal全文を渡します。
+既存のAの外部receipt anchor、独立review、B ownerの判断を再利用し、検索器やmemory DBは追加しません。
+
+`--learning-origin`のJSONは次の4項目です。Aは既存の完了Task、Bは既存ownerに束縛された
+v1 seedです。同一owner_ref・同一目的を要求し、Bを作成したりownerを書き換えたりしません。
+
+```json
+{
+  "origin_owner": "/path/to/A-owner.json",
+  "origin_input": "/path/to/A-input.json",
+  "origin_anchor": "EXTERNALLY_RETAINED_A_RECEIPT_SHA256",
+  "claim_index": 0
+}
+```
+
+```sh
+python -B tools/knowledge_base.py task-input compile --root KNOWLEDGE_ROOT --owner B_OWNER --input B_SEED --learning-origin ORIGIN_JSON
+```
+
+出力は未承認candidateです。元の`seed_digest`を保持し、学びを加える前のpayload / plan digestを
+`diagnostics.learning`へ記録します。新しいpayload / planのdigestは候補として明示し、旧ownerの承認とは扱いません。
+既存の手順でcandidate.payloadをB_INPUTへ保存し、B ownerの入力とsource checks、
+`learning_reuse` grantを束縛した後、既存`learning_reuse review/decide`で判断を記録します。
+review用contextのproposalとoriginはcandidate.learning、targetは同じB owner / B_INPUTです。
+
+```sh
+python -B tools/knowledge_base.py task-input verify --root KNOWLEDGE_ROOT --owner B_OWNER --candidate CANDIDATE_JSON --input B_INPUT --learning-decision-digest DECISION_SHA256
+python -B tools/knowledge_base.py task-input simulate --root KNOWLEDGE_ROOT --owner B_OWNER --candidate CANDIDATE_JSON --input B_INPUT --simulation SCENARIO_JSON --worker worker-a --worker worker-b --learning-decision-digest DECISION_SHA256
+```
+
+verifyは最終B入力を実ownerで検証し、元のKB候補と一件の追加を再導出して完全一致を要求します。
+現在のA証拠・B grant・独立review・判断headを再読します。simulateは既存coordinatorを使い、
+保存した全work / critic入力、引用、判断digestをreceiptへ束縛します。前提を飛ばす成功callbackはありません。
+完了済み再読には既存どおり外部`--receipt-sha256`が必要です。KB期限、grant、取消の検査は免除しません。
+
+| 検査境界 | 担当 |
+|---|---|
+| compile | 実ownerのseedを検証し、Aをanchorから再検証。Aの読取後に元seedを再検証 |
+| verify | 最終B入力・KB再導出、現在のReuseOwner、KB再導出、現在のReuseOwnerの順に照合 |
+| 各work / critic呼出し前後 | adapterがKB再導出、既存coordinatorのguardがowner・全source checks・A・判断headを照合 |
+| claim / report / accept / receipt / replay | 既存coordinatorのguardが同じ実owner・A・判断を再検証。保存済みの成功をキャッシュしない |
+| 完了済みreplayの返却直前 | backendを呼ばずTask期限を免除する再読でも、adapterが現在時刻でConcept期限を再確認 |
+
+本公開v1にはcheckpointとfinalization recoveryは未実装です。
+上の検査境界は、現在のcoordinatorに存在する経路の受入です。
+
+最終B ownerにはcandidateの全`source_checks`の束縛が必要です。削除したcheckをcandidate側の自己申告で
+補うことはできません。選択Conceptの最短期限を既存Task deadlineが越えない条件も維持するため、
+backendのreturn後から最終receiptまでのKB変更・期限切れも既存guardで拒否します。
+
+原意・訂正・参照・制約・未知・受入・停止条件が変わると、既存のpurpose比較が旧学びを拒否します。
+Source、actor、判断headの変更や失効、10 Sources / 32 spans / 256KiB等の予算超過も拒否し、
+祖先を削ったり期限を短縮したりして成功にしません。通常candidateとquery/show/contextの動作は維持します。
+これは一件の明示選択を実入力へ接続するlocal simulationです。自動検索、連鎖的学習、
+具体8階層の確定、実モデルの理解、Desktop導入、会社のCurrent Truthはこの受入に含めません。
+検証した受入は独立leafのplan version 1です。`requires`を含むplan version 2の依存実行との組合せは
+この受入で実証しておらず、追加の対応保証をしません。元のplan検証と予算制限はそのまま適用されます。
