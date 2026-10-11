@@ -9,6 +9,8 @@ local runtime metadata by its stdout thread UUID and a completed turn.
 from __future__ import annotations
 
 import json
+import io
+from contextlib import closing
 import hashlib
 import math
 import os
@@ -42,6 +44,8 @@ APPROVAL_POLICY = "never"
 MAX_TIMEOUT = 3600.0
 MAX_STDOUT_BYTES = 16 * 1024 * 1024
 MAX_STDERR_BYTES = 1024 * 1024
+# Independent from subprocess output: replay already admits at most 16 MiB.
+MAX_RUNTIME_ROLLOUT_BYTES = 16 * 1024 * 1024
 _READ_TOOLS = frozenset({"peer_list", "peer_receive", "peer_status"})
 
 
@@ -397,8 +401,94 @@ def _runtime_roots(explicit: Path | None) -> list[Path]:
     return unique
 
 
+def _open_runtime_rollout(path: Path) -> Any:
+    """Open a rollout for bounded reads while allowing observed replacement."""
+    if os.name != "nt":
+        return path.open("rb")
+    # The CRT opener denies deletion on Windows. Sharing delete lets the same
+    # path/descriptor checks detect a concurrent rename/unlink on both systems.
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    create = kernel.CreateFileW
+    create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                       wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+    create.restype = wintypes.HANDLE
+    close = kernel.CloseHandle
+    close.argtypes = (wintypes.HANDLE,)
+    close.restype = wintypes.BOOL
+    handle = create(str(path), 0x80000000, 0x1 | 0x2 | 0x4, None, 3, 0x80, None)
+    if handle == wintypes.HANDLE(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+    except BaseException:
+        close(handle)
+        raise
+    try:
+        return os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _runtime_lines(path: Path, exact_bytes: bytes | None = None,
+                   check_cancelled: Callable[[], None] | None = None) -> Iterable[str]:
+    """Read one bounded rollout without retaining its decoded history or line list."""
+    def fingerprint(info: os.stat_result) -> tuple[int, ...]:
+        return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+    if exact_bytes is not None and len(exact_bytes) > MAX_RUNTIME_ROLLOUT_BYTES:
+        raise _RuntimeResolutionError("runtime_rollout_limit", "runtime rollout exceeds the read limit")
+    named_before = path.stat() if exact_bytes is None else None
+    with (io.BytesIO(exact_bytes) if exact_bytes is not None else _open_runtime_rollout(path)) as source:
+        before = os.fstat(source.fileno()) if exact_bytes is None else None
+        if before is not None and before.st_size > MAX_RUNTIME_ROLLOUT_BYTES:
+            raise _RuntimeResolutionError("runtime_rollout_limit", "runtime rollout exceeds the read limit")
+        if before is not None and (before.st_dev, before.st_ino) != (named_before.st_dev, named_before.st_ino):
+            raise _RuntimeResolutionError("runtime_rollout_changed", "runtime rollout changed while opening")
+        consumed = 0
+        read_failed = False
+        try:
+            while True:
+                if check_cancelled is not None:
+                    check_cancelled()
+                raw = source.readline(MAX_RUNTIME_ROLLOUT_BYTES - consumed + 1)
+                consumed += len(raw)
+                if consumed > MAX_RUNTIME_ROLLOUT_BYTES:
+                    raise _RuntimeResolutionError("runtime_rollout_limit", "runtime rollout exceeds the read limit")
+                if not raw:
+                    break
+                # Match read_text(errors="replace").splitlines(), including CR,
+                # Unicode line separators, malformed UTF-8 and a final partial line.
+                for line in raw.decode("utf-8", errors="replace").splitlines():
+                    if check_cancelled is not None:
+                        check_cancelled()
+                    yield line
+        except BaseException as exc:
+            # Preserve cancellation, limits and read failures even if the file
+            # also changes. An intentional early close still checks mutation.
+            read_failed = not isinstance(exc, GeneratorExit)
+            raise
+        finally:
+            if before is not None and not read_failed:
+                try:
+                    after, named = os.fstat(source.fileno()), path.stat()
+                except OSError as exc:
+                    raise _RuntimeResolutionError("runtime_rollout_changed", "runtime rollout changed while reading") from exc
+                # Windows stat reports birth time as ctime while fstat can
+                # report change time. Compare timestamps within each API and
+                # retain cross-API identity to bind the stream to its path.
+                if (fingerprint(before) != fingerprint(after) or fingerprint(named_before) != fingerprint(named)
+                        or (after.st_dev, after.st_ino) != (named.st_dev, named.st_ino)):
+                    raise _RuntimeResolutionError("runtime_rollout_changed", "runtime rollout changed while reading")
+
+
 def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | None, expected_cwd: Path,
-                     started_unix: float | None = None, *, exact_record: tuple[Path, bytes] | None = None) -> dict[str, Any] | None:
+                     started_unix: float | None = None, *, exact_record: tuple[Path, bytes] | None = None,
+                     check_cancelled: Callable[[], None] | None = None) -> dict[str, Any] | None:
     if not isinstance(thread_id, str) or _ID_RE.fullmatch(thread_id) is None:
         raise _RuntimeResolutionError("runtime_thread_invalid", "stdout thread identity is invalid")
     candidates: list[Path] = []
@@ -434,56 +524,56 @@ def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | N
         file_failures: set[str] = set()
         file_cwds: dict[str, str] = {}
         try:
-            lines = (exact_record[1].decode("utf-8", errors="replace") if exact_record is not None else
-                     path.read_text(encoding="utf-8", errors="replace")).splitlines()
+            with closing(_runtime_lines(path, exact_record[1] if exact_record is not None else None,
+                                        check_cancelled)) as lines:
+                for line in lines:
+                    try:
+                        record = json.loads(line)
+                    except (TypeError, ValueError):
+                        continue
+                    if not isinstance(record, Mapping):
+                        continue
+                    outer, payload = _outer_payload(record)
+                    record_type = str(outer.get("type", "")).lower()
+                    identity = payload.get("id") or payload.get("session_id")
+                    if record_type == "session_meta" and isinstance(identity, str) and identity:
+                        session_identity = identity
+                        if isinstance(payload.get("cwd"), str):
+                            session_cwd = payload["cwd"]
+                        stamp = payload.get("timestamp") or outer.get("timestamp")
+                        if isinstance(stamp, str):
+                            try:
+                                parsed_stamp = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                                if parsed_stamp.tzinfo is not None:
+                                    session_started = parsed_stamp.timestamp()
+                            except (ValueError, OverflowError):
+                                pass
+                        if identity != thread_id:
+                            mismatch = True
+                            break
+                    event_thread = payload.get("thread_id") or outer.get("thread_id")
+                    if isinstance(event_thread, str) and event_thread != thread_id:
+                        mismatch = True
+                        break
+                    event_turn = payload.get("turn_id") or outer.get("turn_id")
+                    if not isinstance(event_turn, str) or not event_turn:
+                        continue
+                    if record_type == "turn_context":
+                        file_contexts[event_turn] = payload
+                        for key in ("cwd", "working_directory", "workdir", "runtime_cwd"):
+                            value = payload.get(key)
+                            if isinstance(value, str) and value:
+                                file_cwds[event_turn] = value
+                                break
+                    event_kind = str(payload.get("type", "")).lower()
+                    if record_type in {"event_msg", "event.message"} and event_kind in {"task_complete", "turn.completed", "turn_complete"}:
+                        file_completions[event_turn] = payload
+                    elif record_type in {"turn.completed", "turn_complete"}:
+                        file_completions[event_turn] = payload
+                    elif record_type in {"event_msg", "event.message"} and event_kind in {"task_failed", "turn_failed", "turn.failed", "turn_error"}:
+                        file_failures.add(event_turn)
         except OSError:
             continue
-        for line in lines:
-            try:
-                record = json.loads(line)
-            except (TypeError, ValueError):
-                continue
-            if not isinstance(record, Mapping):
-                continue
-            outer, payload = _outer_payload(record)
-            record_type = str(outer.get("type", "")).lower()
-            identity = payload.get("id") or payload.get("session_id")
-            if record_type == "session_meta" and isinstance(identity, str) and identity:
-                session_identity = identity
-                if isinstance(payload.get("cwd"), str):
-                    session_cwd = payload["cwd"]
-                stamp = payload.get("timestamp") or outer.get("timestamp")
-                if isinstance(stamp, str):
-                    try:
-                        parsed_stamp = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-                        if parsed_stamp.tzinfo is not None:
-                            session_started = parsed_stamp.timestamp()
-                    except (ValueError, OverflowError):
-                        pass
-                if identity != thread_id:
-                    mismatch = True
-                    break
-            event_thread = payload.get("thread_id") or outer.get("thread_id")
-            if isinstance(event_thread, str) and event_thread != thread_id:
-                mismatch = True
-                break
-            event_turn = payload.get("turn_id") or outer.get("turn_id")
-            if not isinstance(event_turn, str) or not event_turn:
-                continue
-            if record_type == "turn_context":
-                file_contexts[event_turn] = payload
-                for key in ("cwd", "working_directory", "workdir", "runtime_cwd"):
-                    value = payload.get(key)
-                    if isinstance(value, str) and value:
-                        file_cwds[event_turn] = value
-                        break
-            event_kind = str(payload.get("type", "")).lower()
-            if record_type in {"event_msg", "event.message"} and event_kind in {"task_complete", "turn.completed", "turn_complete"}:
-                file_completions[event_turn] = payload
-            elif record_type in {"turn.completed", "turn_complete"}:
-                file_completions[event_turn] = payload
-            elif record_type in {"event_msg", "event.message"} and event_kind in {"task_failed", "turn_failed", "turn.failed", "turn_error"}:
-                file_failures.add(event_turn)
         if mismatch:
             continue
         if session_identity != thread_id:
@@ -1039,7 +1129,8 @@ class CodexBackend:
             if not thread_id:
                 raise BackendError("completion_identity_missing", "stdout did not identify a thread UUID", retryable=True)
             try:
-                runtime = _runtime_receipt(thread_id, stdout_turn, execution_sessions, execution_cwd, started_unix)
+                runtime = _runtime_receipt(thread_id, stdout_turn, execution_sessions, execution_cwd, started_unix,
+                                           check_cancelled=check_cancelled)
             except _RuntimeResolutionError as exc:
                 raise BackendError(exc.code, str(exc), retryable=False) from exc
             if runtime is None:
