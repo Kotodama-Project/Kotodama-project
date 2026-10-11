@@ -142,8 +142,11 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
     _, owner_input_sha = read_json(Path(owner_path), 1024*1024, with_digest=True)
     payload = read_json(Path(payload_path), 256*1024)
     binding = owner.read_task(payload.get("task_id"))
-    payload = validate_input(payload, binding, now=clock())
-    plan = make_plan(payload, binding, now=clock())
+    # A supplied receipt anchor requests readback only. This path cannot create
+    # a run and still requires a current owner, exact input and intact artifacts.
+    replay_only = expected_receipt_sha256 is not None
+    payload = validate_input(payload, binding, now=clock(), allow_expired_objective=replay_only)
+    plan = make_plan(payload, binding, now=clock(), allow_expired_objective=replay_only)
     root = safe_directory(owner.storage()["root"])
     require(Path(binding["active_home"]).is_absolute() and Path(binding["active_home"]).resolve() == root, "RUN_HOME_MISMATCH")
     actors = {job: "worker-"+job for job in WORK_JOBS}
@@ -154,14 +157,21 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
         require(actor_binding["actor_status"] == "active" and actor_binding["capability_ref"] == binding["capability_ref"], "RUN_ACTOR_SCOPE_INVALID")
     cancellation = cancel_event if cancel_event is not None else threading.Event()
     require(isinstance(cancellation, threading.Event), "RUN_CANCELLATION_INVALID")
+    failures = []
+    failure_lock = threading.Lock()
     expected = digest(binding)
     def guard():
-        require(not cancellation.is_set(), "RUN_CANCELLED")
+        with failure_lock:
+            failure = failures[0] if failures else None
+            cancelled = cancellation.is_set()
+        if failure is not None:
+            raise SwarmError(*failure)
+        require(not cancelled, "RUN_CANCELLED")
         current = owner.read_task(binding["task_id"])
         require(digest(current) == expected, "STALE_BINDING")
         for actor, initial in actor_bindings.items():
             require(owner.read_binding(binding["task_id"], actor) == initial, "STALE_ACTOR")
-        require(clock() < plan["budget"]["deadline"], "DEADLINE_EXPIRED")
+        require(replay_only or clock() < plan["budget"]["deadline"], "DEADLINE_EXPIRED")
         require(owner.storage()["root"] == root and safe_directory(root) == root, "RUN_STORAGE_CHANGED")
         require(read_json(Path(owner_path), 1024*1024, with_digest=True)[1] == owner_input_sha, "OWNER_INPUT_CHANGED")
     guard()
@@ -194,14 +204,21 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
     state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
     state.create_run(plan)
     done = threading.Event()
-    failures = []
     def monitor():
         while not done.wait(.1):
             try:
                 guard()
             except Exception as exc:
-                failures.append(getattr(exc, "code", "BINDING_UNAVAILABLE"))
-                cancellation.set()
+                with failure_lock:
+                    if not failures and not cancellation.is_set():
+                        if isinstance(exc, SwarmError):
+                            failures.append((exc.code, exc.detail))
+                        else:
+                            failures.append((
+                                "BINDING_UNAVAILABLE",
+                                "Task owner binding could not be validated",
+                            ))
+                    cancellation.set()
                 return
     watcher = threading.Thread(target=monitor, name="swarm-owner-watch", daemon=True)
     watcher.start()
@@ -287,6 +304,19 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
         receipt_sha = write_json(directory / "receipt.json", receipt)
         guard()
         return {"result":result, "receipt":receipt, "receipt_sha256":receipt_sha, "duplicate":False}
+    except Exception as exc:
+        with failure_lock:
+            failure = failures[0] if failures else None
+        if failure is not None:
+            if isinstance(exc, SwarmError):
+                cancelled = exc.code == "RUN_CANCELLED"
+            else:
+                # Preserve the normal/replay path's lazy backend import.
+                from .codex import BackendError
+                cancelled = isinstance(exc, BackendError) and exc.code == "cancelled"
+            if cancelled:
+                raise SwarmError(*failure) from exc
+        raise
     finally:
         done.set()
         watcher.join(timeout=1)

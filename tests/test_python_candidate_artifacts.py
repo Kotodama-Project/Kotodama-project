@@ -10,6 +10,11 @@ from tools import build_python_candidate as builder
 
 
 class PythonCandidateArtifactsTests(unittest.TestCase):
+    def test_packaging_allowlist_covers_current_public_swarm_modules(self):
+        modules = {path.stem for path in (builder.ROOT / "runtime/task_swarm").glob("*.py")}
+        self.assertEqual(builder.MODULES, modules)
+        self.assertTrue({"runtime/task_swarm/" + name + ".py" for name in modules} <= builder.SOURCE_PATHS)
+
     def test_builder_and_lock_drift_are_refused_against_the_recorded_commit(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

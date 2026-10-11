@@ -22,6 +22,8 @@ import {RemoteOwner} from './remote-owner.mjs';
 import {startBridge} from './bridge.mjs';
 import {awaitWithSignal,deadlineScope,readHttpBody,sendHttpJson} from './http-limits.mjs';
 import {DotsBridge} from './dots.mjs';
+import {JudgmentStatusReader} from './judgment-status.mjs';
+import {projectSkillsDigest} from './project-skill-input.mjs';
 import {atomicJson,atomicText,check,uid,errorCode,redact,Refused,digest} from './common.mjs';
 import {consumeBootstrapBinding,registerRuntimeModule} from './source-bootstrap.mjs';
 registerRuntimeModule(startRuntime,import.meta.url);
@@ -52,7 +54,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     for(const scope of controlReads)scope.abort(new Refused('RUNTIME_STOPPING'));
     control.closeIdleConnections();return controlClosed;
   };
-  const authorize=async(task,purpose='execute',{monitor=false}={})=>{const c=await loadConfig(filename);current=c;check(!monitor||!closing,'RUNTIME_STOPPING');check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(task.action==='create_company_pack'){check(c.dataDir===config.dataDir,'COMPANY_PACK_BINDING_CHANGED');if(purpose==='execute'){check(c.worker.companyPack&&digest(c.worker.companyPack)===digest(config.worker.companyPack)&&digest(c.worker.verification??null)===digest(config.worker.verification??null),'COMPANY_PACK_BINDING_CHANGED');check(Date.parse(c.worker.companyPack.authorityExpiresAt)>Date.now(),'COMPANY_PACK_AUTHORITY_EXPIRED');}}if(task.action==='swarm_research'){check(c.dataDir===config.dataDir,'SWARM_BINDING_CHANGED');for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.metadata?.kind==='voice'){const speaker=source.metadata.inputAccountId??source.actorId;check(typeof speaker==='string'&&!store.voiceOptedOut(source.guildId,source.channelId,speaker),'SWARM_VOICE_SCOPE_REVOKED');}}if(purpose==='execute'){check(c.worker.swarm&&digest(c.worker.swarm)===digest(config.worker.swarm),'SWARM_BINDING_CHANGED');check(Date.parse(c.worker.swarm.authorityExpiresAt)>Date.now(),'SWARM_AUTHORITY_EXPIRED');}}if(discord&&!offline){const channels=[];for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.provider==='discord')channels.push(source.channelId);}const access=await discord.actorAccess(task.actor,channels,{cached:monitor});check(!monitor||!closing,'RUNTIME_STOPPING');check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
+  const authorize=async(task,purpose='execute',{monitor=false}={})=>{const c=await loadConfig(filename);current=c;if(purpose==='execute')check(projectSkillsDigest(c.worker.projectSkills)===projectSkillsDigest(config.worker.projectSkills),'PROJECT_SKILL_CONFIG_CHANGED');check(!monitor||!closing,'RUNTIME_STOPPING');check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(task.action==='create_company_pack'){check(c.dataDir===config.dataDir,'COMPANY_PACK_BINDING_CHANGED');if(purpose==='execute'){check(c.worker.companyPack&&digest(c.worker.companyPack)===digest(config.worker.companyPack)&&digest(c.worker.verification??null)===digest(config.worker.verification??null),'COMPANY_PACK_BINDING_CHANGED');check(Date.parse(c.worker.companyPack.authorityExpiresAt)>Date.now(),'COMPANY_PACK_AUTHORITY_EXPIRED');}}if(task.action==='swarm_research'){check(c.dataDir===config.dataDir,'SWARM_BINDING_CHANGED');for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.metadata?.kind==='voice'){const speaker=source.metadata.inputAccountId??source.actorId;check(typeof speaker==='string'&&!store.voiceOptedOut(source.guildId,source.channelId,speaker),'SWARM_VOICE_SCOPE_REVOKED');}}if(purpose==='execute'){check(c.worker.swarm&&digest(c.worker.swarm)===digest(config.worker.swarm),'SWARM_BINDING_CHANGED');check(Date.parse(c.worker.swarm.authorityExpiresAt)>Date.now(),'SWARM_AUTHORITY_EXPIRED');}}if(discord&&!offline){const channels=[];for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.provider==='discord')channels.push(source.channelId);}const access=await discord.actorAccess(task.actor,channels,{cached:monitor});check(!monitor||!closing,'RUNTIME_STOPPING');check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
   const authorizeAnalysis=createAnalysisAuthorizer({readConfig:()=>loadConfig(filename),config,onPolicy:value=>{current=value;},voice:source=>voice?.forSource?voice.forSource(source):voice,discord:()=>discord,owner,offline});
   const selectedAnalyzer=analyzer??(config.analyzer.kind==='responses'?new ResponsesAnalyzer(config):new CliAnalyzer(config));
   let selectedWorker;
@@ -60,6 +62,10 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   catch(error){if(owner.kind==='remote')await owner.close();store.releaseHost(ownerId);store.close();stopDebug();throw error;}
   const workspaceAuthorize=async(task,purpose='execute',options)=>{await authorize(task,purpose,options);if(purpose==='execute')channelWorker?.scope(store.source(task.source_key,task.actor));};
   const pipeline=new Pipeline({store,owner,config,policy:()=>current,readPolicy:async()=>{current=await loadConfig(filename);return current;},analyzer:selectedAnalyzer,worker:selectedWorker,authorize:workspaceAuthorize,authorizeAnalysis,onTask:async task=>{if(discord)await discord.deliver(task);},onTaskQueued:async(task,options)=>{if(discord)await discord.acknowledgeTask(task,options);},onReply:async reply=>{if(discord)await discord.reply(reply);},onVoiceAction:async action=>{if(discord)await discord.voiceAction(action);},onError:code=>log({event:'operation_failed',code})});
+  const judgment=new JudgmentStatusReader({config,store,owner,dots:()=>dots,authorize:task=>authorize(task,'read_result'),
+    readPolicy:async()=>{current=await loadConfig(filename);return current;},assertActive:()=>check(!closing&&store.lock()?.owner===ownerId,'RUNTIME_STOPPING'),
+    accessEpoch:()=>discord?.accessGeneration??null,
+    track:work=>{controlOperations.add(work);const settled=()=>controlOperations.delete(work);work.then(settled,settled);}});
   try{
     if(config.dots.enabled){
       const refreshDotsPolicy=async source=>{
@@ -109,6 +115,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         controlReads.delete(scope);scope.dispose();scope=null;
         let result;
         if(input.action==='tasks')result=await pipeline.tasks(input.actor);
+        else if(input.action==='judgment')result=await judgment.read({actor:input.actor,taskId:input.taskId});
         else if(input.action==='result')result=await pipeline.result(input.taskId,input.actor);
         else if(input.action==='stop'){await pipeline.stop(input.taskId,input.actor);result={state:'stop_requested'};}
         else if(input.action==='resume')result=await pipeline.resume(input.taskId,input.actor);
@@ -180,7 +187,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     closePromise=(async()=>{
       // Keep the store and host lock if a dispatched import has an uncertain drain.
       await bridge?.drain();await rotation?.close();await discord?.close();await archive?.close();await channelWorker?.close();await pipeline.close();
-      await Promise.allSettled([...controlOperations]);await stopped;await accessMonitor.drain({pending:policyWork?[policyWork]:[]});if(owner.kind==='remote')await owner.close();
+      await judgment.drain();await Promise.allSettled([...controlOperations]);await stopped;await accessMonitor.drain({pending:policyWork?[policyWork]:[]});if(owner.kind==='remote')await owner.close();
       store.releaseHost(ownerId);store.close();clearInterval(shutdownKeepAlive);log({event:'runtime_stopped',ownerId});stopDebug();
     })().catch(error=>{closePromise=null;if(errorCode(error).endsWith('_DRAIN_UNCERTAIN'))shutdownKeepAlive??=setInterval(()=>{},1000);throw error;});
     return closePromise;

@@ -24,21 +24,31 @@ private source bodies, credentials, or personal identifiers into notes.
 ## Procedure
 
 1. State the question, date window, allowed sources, and excluded actions.
-   Done when: the research boundary is answerable and time-bounded.
+   Read existing claim/source references first. Reuse evidence whose revision,
+   access scope, and freshness still cover the question; recheck changed or
+   unsupported claims. Done when: the boundary is answerable and time-bounded,
+   and each reused source has a stated freshness basis.
 2. Prefer official documentation, source code, standards, and the selected
    repository's current bytes. Record URL/path, revision, accessed time, and
    content digest for each claim. Done when: every factual claim has provenance.
 3. Label `FACT`, `INFERENCE`, `PROPOSAL`, and `UNKNOWN`; record contradictions
    and stale-source risk instead of averaging them away. Done when: conflicting
    evidence and freshness gaps remain visible.
-4. End with the smallest local next step and the evidence tier it can reach.
-   Done when: the recommendation cannot imply an unauthorized external effect.
+4. Return the claim-to-source mapping and recommendation for the existing
+   knowledge or work owner, including gaps and superseded claims. Persist it
+   only within the invocation's already authorized apply scope; a plan returns
+   the candidate and owner reference without writing. End with the
+   smallest local next step and the evidence tier it can reach. Done when: a
+   later reader can recover the evidence without redoing the investigation,
+   and the recommendation cannot imply an unauthorized external effect.
 
 ## Completion
 
 Return a claim table and content-free receipt with source references,
 `MODEL_UNVERIFIED` when runtime identity is unavailable, and
-`evidence_tier=LOCAL`. No external mutation is part of completion.
+`evidence_tier=LOCAL`, mode, and the actual `changed` value. Plans report
+`changed=false`; permitted owner writes include their evidence reference.
+No external mutation is part of completion.
 
 ## Recovery
 

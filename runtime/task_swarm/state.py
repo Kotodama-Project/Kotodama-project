@@ -12,6 +12,7 @@ import copy
 import json
 import secrets
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -143,6 +144,11 @@ class SwarmState:
         CREATE INDEX IF NOT EXISTS attempts_running ON attempts(run_id, state);
         CREATE INDEX IF NOT EXISTS jobs_leased ON jobs(run_id, exclusive_keys_json)
             WHERE state = 'leased';
+        CREATE TABLE IF NOT EXISTS run_extensions (
+            run_id TEXT PRIMARY KEY,
+            extension_json TEXT NOT NULL,
+            FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE RESTRICT
+        );
         """
         for retry in range(6):
             conn: sqlite3.Connection | None = None
@@ -515,6 +521,99 @@ class SwarmState:
         finally:
             self._finish(conn, ok)
 
+    def extend_run(self, run_id: str, extension: Mapping[str, Any]) -> dict[str, Any]:
+        """Append one owner-bound repair frontier without renewing its budget.
+
+        The coordinator validates the critic's artifact before this CAS. The
+        initial plan stays immutable; extension and new jobs commit together.
+        This is execution history in the same database, never another Task.
+        """
+        run_id = protocol.ref(run_id, "run id")
+        self._closed(extension, {"round", "initial_plan_digest", "critic_job_id",
+                                 "critic_result_digest", "proposal_digest", "jobs"}, "extension")
+        if type(extension["round"]) is not int or extension["round"] != 1:
+            raise protocol.SwarmError("ROUND_LIMIT", "only one corrective round is admitted")
+        for key in ("initial_plan_digest", "critic_result_digest", "proposal_digest"):
+            protocol.digest_ref(extension[key], key)
+        protocol.ref(extension["critic_job_id"], "critic job")
+        if not isinstance(extension["jobs"], list) or not 2 <= len(extension["jobs"]) <= 4:
+            raise protocol.SwarmError("INVALID_PLAN", "repair needs one to three work jobs and one critic")
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
+        conn, ok = self._transaction(), False
+        try:
+            now = self._now()
+            run = self._get_run(conn, run_id)
+            owner = self._run_owner(run, now, prefetched)
+            initial = self._plan_from_run(run)
+            if protocol.digest(initial) != extension["initial_plan_digest"]:
+                raise protocol.SwarmError("ROUND_CONFLICT", "initial plan changed")
+            combined = dict(initial, jobs=initial["jobs"] + extension["jobs"])
+            normalized = self._normalize_plan(combined, now, owner)
+            new_jobs = normalized["jobs"][len(initial["jobs"]):]
+            new_work = [job for job in new_jobs if job["kind"] == "work"]
+            new_reviews = [job for job in new_jobs if job["kind"] == "review"]
+            previous_work = {job["job_id"] for job in initial["jobs"] if job["kind"] == "work"}
+            if (not new_work or len(new_reviews) != 1 or any(job["dependencies"] for job in new_work)
+                    or set(new_reviews[0]["dependencies"]) != previous_work | {job["job_id"] for job in new_work}):
+                raise protocol.SwarmError("INVALID_PLAN", "repair requires work and one independent critic")
+            # The persisted manifest describes the same normalized rows that
+            # will be scheduled. Equivalent dependency/key ordering is an
+            # idempotent replay, including after the round has finished.
+            encoded = protocol.canonical(dict(extension, jobs=new_jobs))
+            previous = conn.execute("SELECT extension_json FROM run_extensions WHERE run_id=?", (run_id,)).fetchone()
+            if previous is not None:
+                if previous[0] != encoded:
+                    raise protocol.SwarmError("ROUND_CONFLICT", "repair round is already bound")
+                ok = True
+                return json.loads(previous[0])
+            if now >= float(run["deadline"]):
+                raise protocol.SwarmError("ROUND_BUDGET", "run deadline elapsed")
+            if conn.execute("SELECT 1 FROM jobs WHERE run_id=? AND state='leased'", (run_id,)).fetchone():
+                raise protocol.SwarmError("ROUND_BUSY", "outstanding work must settle first")
+            if conn.execute("SELECT 1 FROM jobs WHERE run_id=? AND state NOT IN ('reported','accepted')",
+                            (run_id,)).fetchone():
+                raise protocol.SwarmError("ROUND_UNSETTLED", "every initial job must have a settled report")
+            critic = conn.execute("SELECT * FROM jobs WHERE run_id=? AND job_id=?",
+                                  (run_id, extension["critic_job_id"])).fetchone()
+            proof = conn.execute("SELECT * FROM attempts WHERE run_id=? AND job_id=? ORDER BY attempt DESC LIMIT 1",
+                                 (run_id, extension["critic_job_id"])).fetchone()
+            if (critic is None or critic["kind"] != "review" or critic["state"] != "reported"
+                    or proof is None or proof["outcome"] != "candidate"
+                    or proof["result_digest"] != extension["critic_result_digest"]):
+                raise protocol.SwarmError("ROUND_CRITIC_REQUIRED", "repair needs the reported critic artifact")
+            previous_reviews = [job for job in initial["jobs"] if job["kind"] == "review"]
+            if (len(previous_reviews) != 1 or previous_reviews[0]["job_id"] != extension["critic_job_id"]
+                    or set(previous_reviews[0]["dependencies"]) != previous_work):
+                raise protocol.SwarmError("ROUND_CRITIC_REQUIRED", "repair follows the terminal initial critic")
+            used = conn.execute("SELECT COUNT(*) FROM attempts WHERE run_id=?", (run_id,)).fetchone()[0]
+            remaining_work, _ = self._work_remaining(conn, run)
+            if (used + len(new_jobs) > int(run["attempt_budget"])
+                    or sum(j["kind"] == "work" for j in new_jobs) > remaining_work):
+                raise protocol.SwarmError("ROUND_BUDGET", "repair exceeds the original total budget")
+            for job in new_jobs:
+                conn.execute("""INSERT INTO jobs
+                    (run_id,job_id,kind,dependencies_json,exclusive_keys_json,payload_ref,payload_digest)
+                    VALUES (?,?,?,?,?,?,?)""", (run_id, job["job_id"], job["kind"],
+                    protocol.canonical(job["dependencies"]), protocol.canonical(job["exclusive_keys"]),
+                    job["payload_ref"], job["payload_digest"]))
+            conn.execute("INSERT INTO run_extensions VALUES (?,?)", (run_id, encoded))
+            ok = True
+            return json.loads(encoded)
+        except sqlite3.Error as exc:
+            raise protocol.SwarmError("STATE_WRITE_FAILED", "unable to append repair round") from exc
+        finally:
+            self._finish(conn, ok)
+
+    def extension(self, run_id: str) -> dict[str, Any] | None:
+        """Read the persisted repair manifest; this does not admit work."""
+        run_id = protocol.ref(run_id, "run id")
+        conn = self._connect()
+        try:
+            row = conn.execute("SELECT extension_json FROM run_extensions WHERE run_id=?", (run_id,)).fetchone()
+            return json.loads(row[0]) if row else None
+        finally:
+            conn.close()
+
     # ------------------------------------------------------------------
     # Claims and attempt lifecycle
     # ------------------------------------------------------------------
@@ -556,10 +655,19 @@ class SwarmState:
         plan = json.loads(run["plan_json"])
         reserve = plan["budget"].get("verifier_reserve", min(int(run["attempt_budget"]),
             sum(job["kind"] == "review" for job in plan["jobs"])))
-        used = conn.execute("""SELECT COUNT(*) FROM attempts a JOIN jobs j
-            ON a.run_id=j.run_id AND a.job_id=j.job_id WHERE a.run_id=? AND j.kind='work'""",
+        used, work_used = conn.execute("""SELECT COUNT(*), COALESCE(SUM(j.kind='work'), 0)
+            FROM attempts a JOIN jobs j ON a.run_id=j.run_id AND a.job_id=j.job_id
+            WHERE a.run_id=?""", (run["run_id"],)).fetchone()
+        pending_reviews = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE run_id=? AND kind='review' AND state='pending'",
             (run["run_id"],)).fetchone()[0]
-        return max(0, int(run["attempt_budget"]) - reserve - used), reserve
+        # Preserve the initial declared review budget, while also reserving
+        # an actual remaining attempt for each pending review (including a
+        # newly admitted repair critic). Completed/retried reviews have
+        # already spent the global budget and cannot be ignored here.
+        remaining = min(int(run["attempt_budget"]) - reserve - work_used,
+                        int(run["attempt_budget"]) - used - pending_reviews)
+        return max(0, remaining), reserve
 
     @staticmethod
     def _dependency_map(conn: sqlite3.Connection, run_id: str) -> dict[str, sqlite3.Row]:
@@ -852,7 +960,18 @@ class SwarmState:
         result_digest: str,
         verification_ref: str,
         owner_ref: str,
+        *,
+        cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
+        if cancel_event is not None and not isinstance(cancel_event, threading.Event):
+            raise protocol.SwarmError("RUN_CANCELLATION_INVALID", "cancel_event must be an Event")
+
+        def eligible(run):
+            if cancel_event is not None and cancel_event.is_set():
+                raise protocol.SwarmError("RUN_CANCELLED", "run was cancelled")
+            if self._now() >= float(run["deadline"]):
+                raise protocol.SwarmError("DEADLINE_EXPIRED", "run deadline has elapsed")
+
         run_id = protocol.ref(run_id, "run id")
         job_id = protocol.ref(job_id, "job id")
         result_digest = protocol.digest_ref(result_digest, "result digest")
@@ -864,6 +983,7 @@ class SwarmState:
         try:
             now = self._now()
             run = self._get_run(conn, run_id)
+            eligible(run)
             owner = self._run_owner(run, now, prefetched)
             if owner_ref != owner["owner_ref"]:
                 raise protocol.SwarmError("WRONG_OWNER", "acceptance caller is not the current owner")
@@ -886,6 +1006,7 @@ class SwarmState:
                     raise protocol.SwarmError("IDENTITY_CONFLICT", "worker cannot accept its own report")
                 if job["accepted_digest"] != result_digest or job["verification_ref"] != verification_ref:
                     raise protocol.SwarmError("RESULT_MISMATCH", "job is already accepted with another result")
+                eligible(run)
                 ok = True
                 return {
                     "run_id": run_id,
@@ -919,6 +1040,10 @@ class SwarmState:
                    WHERE run_id = ? AND job_id = ? AND state = 'reported'""",
                 (result_digest, verification_ref, owner_ref, now, run_id, job_id),
             )
+            # The final eligibility observation is inside BEGIN IMMEDIATE;
+            # rejection rolls back both writes. A later external Event change
+            # cannot be atomic with SQLite and does not undo this acceptance.
+            eligible(run)
             ok = True
             return {
                 "run_id": run_id,
@@ -1236,6 +1361,9 @@ class SwarmState:
                 "run_state": run_state,
                 "reasons": reasons,
             }
+            extension = conn.execute("SELECT extension_json FROM run_extensions WHERE run_id = ?", (run_id,)).fetchone()
+            if extension is not None:
+                result["extension"] = json.loads(extension[0])
             ok = True
             return result
         finally:
