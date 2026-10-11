@@ -5,6 +5,9 @@
 [#327](https://github.com/Kotodama-Project/Kotodama-project/issues/327)の最初の実装範囲です。
 Markdown検索からの自動解決、Discordでの生成、履歴の独立検証は未接続です。
 
+明示したcatalog・要件・祖先制約から候補を作る限定APIは
+[知識からTask入力へのproducer](KNOWLEDGE-TASK-INPUT.md)を参照してください。
+
 狙いは[元の意図](OWNER-INTENT-COMPANY-AGI.md)を保持したまま、最新の依頼・制約・
 未知をworkerと独立verifierへ渡すことです。Taskの正本、承認、権限発行、成果の採用は
 既存ownerのままです。入力を検査しただけで依頼の達成や`KGI-INTENT`達成とはしません。
