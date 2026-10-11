@@ -244,7 +244,7 @@ def integration_candidate(payload, reports, critic, critic_digest, *, stop_reaso
             "parent_input_digest": digest(payload), "final_critic_digest": critic_digest,
             "claims": [{"job_id": job, "claim_index": index, "claim": reports[job]["claims"][index]}
                        for job, index in sorted(refs)],
-            "conflicts": [{"job_id": job, "text": conflict} for job, report in reports.items()
+            "conflicts": [{"job_id": job, "text": conflict} for job, report in sorted(reports.items())
                           for conflict in report["conflicts"]],
             "validations": critic["validations"], "stop_reason": stop_reason,
             "owner_accepted": False, "model_runtime_verified": False}
