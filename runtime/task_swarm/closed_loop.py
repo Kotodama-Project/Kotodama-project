@@ -13,9 +13,10 @@ import threading
 import time
 
 from . import protocol
-from .closed_loop_contract import (loop_criteria, span_identity, validate_critic, validate_plan, verified_gap)
+from .closed_loop_contract import (loop_criteria, span_identity, validate_critic, validate_plan, verified_gap,
+                                   evidence_version, required_evidence_jobs, work_input)
 from .closed_loop_context import derive_child_view, validate_report_in_view
-from .closed_loop_recovery import finalize, make_checkpoint, operation_lock
+from .closed_loop_recovery import finalize, make_checkpoint, operation_lock, terminal_evidence
 from .owner_file import OwnerFile
 from .state import SwarmState
 from .task_contract import require, shape, validate_input
@@ -84,6 +85,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     payload = validate_input(payload, binding, now=clock(), allow_expired_objective=replay_only)
     require(payload["version"] == 2, "LOOP_OBJECTIVE_REQUIRED")
     specification = validate_plan(supplied_plan, payload)
+    initial_specification = specification
     initial_digest, parent_digest = protocol.digest(specification), protocol.digest(payload)
     root = safe_directory(owner.storage()["root"])
     require(Path(binding["active_home"]).is_absolute()
@@ -153,7 +155,6 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         protocol.digest_ref(expected_receipt_sha256, "receipt anchor")
         receipt, sha = read_json(directory / "receipt.json", with_digest=True)
         require(sha == expected_receipt_sha256, "RUN_REPLAY_ANCHOR_MISMATCH")
-        require(receipt.get("coordinator") == "closed_loop_v1", "RUN_REPLAY_CONFLICT")
         require(receipt["binding_digest"] == binding_digest and receipt["owner_input_sha256"] == owner_sha
                 and receipt["parent_input_digest"] == parent_digest
                 and receipt["initial_plan_digest"] == initial_digest
@@ -173,6 +174,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 "RUN_REPLAY_CONFLICT")
         require(checked.get("context-binding.json") == context_binding, "RUN_CONTEXT_REPLAY_CONFLICT")
         state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
+        finalization = None
         if "finalization_checkpoint_digest" in receipt:
             finalization = state.finalization(run_id)
             require(finalization is not None
@@ -182,6 +184,16 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         snapshot = state.snapshot(run_id)
         require(protocol.canonical(snapshot) == protocol.canonical(checked["execution.json"]),
                 "RUN_EXECUTION_CHANGED")
+        require(protocol.canonical(snapshot["plan"]) == protocol.canonical(checked["plan.json"]),
+                "FINALIZATION_PLAN_CONFLICT")
+        version = evidence_version(checked["plan.json"], checked["r0-critic-template.json"])
+        require(type(receipt.get("version")) is int and receipt["version"] == version
+                and receipt.get("coordinator") == f"closed_loop_v{version}", "LOOP_EVIDENCE_POLICY")
+        if version == 2:
+            require(finalization is not None, "LOOP_EVIDENCE_POLICY")
+            candidate, learning, _, _, _ = terminal_evidence(directory, payload, finalization["checkpoint"], state)
+            require(candidate == checked["candidate.json"] and learning == checked.get("learning.json"),
+                    "FINALIZATION_CONFLICT")
         guard()
         if reuse_owner is not None:
             reuse_owner.validate_candidate(checked["candidate.json"])
@@ -194,6 +206,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     # initial plan can still run without resetting any admitted run or budget.
     require(len({span_identity(span) for job in specification["jobs"]
                  for span in job["selected_spans"]}) <= 32, "LOOP_CONTEXT_LIMIT")
+    required_evidence_jobs(payload, initial_specification)
     directory.mkdir(mode=0o700)
     artifacts, artifact_bytes, context_bytes = {}, 0, 0
     save_lock = threading.Lock()
@@ -228,12 +241,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         selected = []
         for number, job in enumerate(sorted(spec["jobs"], key=lambda j: j["job_id"])):
             job_id = f"r{index}-" + job["job_id"]
-            view = derive_child_view(payload, job_id, job["selected_spans"],
-                                     plan_digest=initial_digest, previous_critic_digest=previous)
-            delivered = {"role": "work", "job_id": job_id, "round": index,
-                         "round_plan_digest": round_digest, "purpose": job["purpose"],
-                         "criterion_ids": job["criterion_ids"],
-                         "criteria": {k: criteria[k] for k in job["criterion_ids"]}, "view": view}
+            delivered = work_input(payload, job, index, initial_digest,
+                                   round_plan_digest=round_digest, previous=previous)
             work_inputs[job_id], job_actors[job_id] = delivered, actors[number]
             runtime_jobs.append({"job_id": job_id, "kind": "work", "dependencies": [], "exclusive_keys": [],
                                  "payload_ref": "ref/loop/input/" + job_id,
@@ -250,6 +259,10 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                         "round_plan_digest": round_digest, "criteria": criteria,
                         "view": derive_child_view(payload, critic_id, list(unique.values()),
                             plan_digest=initial_digest, previous_critic_digest=previous)}
+        gap = verified_gap(prior_review["response"]["result"], critic_job_id="r0-critic",
+                           critic_result_digest=previous) if index else None
+        critic_input.update(evidence_contract_version=2, required_evidence_jobs=required_evidence_jobs(
+            payload, initial_specification, spec if index else None, gap=gap))
         save(critic_id + "-template.json", critic_input)
         runtime_jobs.append({"job_id": critic_id, "kind": "review",
                              "dependencies": sorted([*all_reports, *work_inputs]), "exclusive_keys": [],
@@ -395,7 +408,12 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                     expected_jobs=tuple(job["job_id"] for job in planned if job["kind"] == "work"),
                     dispatched_input=read_json(directory/(critic_id+"-input.json")),
                     dispatched_input_digest=dispatches[critic_id]["delivered_input_digest"],
-                    prior_review=prior_review, repair_admission=admission)
+                    prior_review=prior_review, repair_admission=admission,
+                    initial_specification=initial_specification, initial_runtime_plan=plan,
+                    initial_template=read_json(directory/"r0-critic-template.json"),
+                    work_inputs={job["job_id"]: read_json(directory/(job["job_id"]+"-input.json"))
+                                 for job in planned if job["kind"] == "work"},
+                    repair_specification=specification if round_index else None)
                 if reuse_owner is not None:
                     reuse_owner.validate_review(final_critic, all_reports)
             except Exception as exc:

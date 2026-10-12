@@ -9,7 +9,7 @@ import hashlib
 import json
 import re
 
-from .closed_loop_context import validate_child_view
+from .closed_loop_context import derive_child_view, validate_child_view
 from .protocol import canonical, digest, digest_ref
 from .task_contract import require, shape, text, validate_report
 from .task_planning import _Sources, objective_criteria
@@ -68,6 +68,78 @@ def validate_plan(value, payload, *, gap=None):
     return json.loads(canonical(value))
 
 
+def work_input(payload, job, round_index, initial_digest, *, round_plan_digest, previous=None):
+    """One construction for execution and evidence readback; no implicit lookup."""
+    job_id = f"r{round_index}-" + job["job_id"]
+    return {"role": "work", "job_id": job_id, "round": round_index,
+            "round_plan_digest": round_plan_digest, "purpose": job["purpose"],
+            "criterion_ids": job["criterion_ids"],
+            "criteria": {key: loop_criteria(payload)[key] for key in job["criterion_ids"]},
+            "view": derive_child_view(payload, job_id, job["selected_spans"],
+                plan_digest=initial_digest, previous_critic_digest=previous)}
+
+
+def evidence_version(runtime_plan, initial_template):
+    """Read policy only after binding the template to the immutable runtime plan.
+
+    Callers must first compare runtime_plan with the existing DB snapshot. This
+    pure helper cannot authenticate a filesystem or grant owner authority.
+    """
+    require(isinstance(runtime_plan, dict) and isinstance(initial_template, dict), "LOOP_EVIDENCE_POLICY")
+    jobs = runtime_plan.get("jobs")
+    require(isinstance(jobs, list) and all(isinstance(job, dict) for job in jobs), "LOOP_EVIDENCE_POLICY")
+    critics = [job for job in jobs if job.get("job_id") == "r0-critic"]
+    require(len(critics) == 1 and critics[0].get("kind") == "review"
+            and critics[0].get("payload_digest") == digest(initial_template), "LOOP_EVIDENCE_POLICY")
+    version = initial_template.get("evidence_contract_version", 1)
+    require(type(version) is int and version in (1, 2), "LOOP_EVIDENCE_POLICY")
+    require((version == 2) == ("required_evidence_jobs" in initial_template)
+            and (version == 2 or "evidence_contract_version" not in initial_template), "LOOP_EVIDENCE_POLICY")
+    keys = {"role", "job_id", "round", "round_plan_digest", "criteria", "view"}
+    shape(initial_template, keys | ({"evidence_contract_version", "required_evidence_jobs"} if version == 2 else set()),
+          "LOOP_EVIDENCE_POLICY")
+    require(initial_template["role"] == "critic" and initial_template["job_id"] == "r0-critic"
+            and type(initial_template["round"]) is int and initial_template["round"] == 0,
+            "LOOP_EVIDENCE_POLICY")
+    return version
+
+
+def required_evidence_jobs(payload, initial_specification, repair_specification=None, *, gap=None):
+    """Derive all assigned leaves and admitted repair influence, never a result mapping.
+
+    A direct plan supplies assignments only. Source/root all_of completeness is
+    established by the separate source-bound initial planner, not inferred here.
+    """
+    initial = validate_plan(initial_specification, payload)
+    leaves = {key: {"r0-" + job["job_id"] for job in initial["jobs"] if key in job["criterion_ids"]}
+              for key in loop_criteria(payload)}
+    all_leaves = {"r0-" + job["job_id"] for job in initial["jobs"]}
+    common = {key for key in leaves if key in {"R", "S", "U", "I"} or key.startswith(("O", "Q"))}
+    require(all(leaves[key] == all_leaves for key in common), "LOOP_COMMON_CRITERIA_COVERAGE")
+    result = {key: set(value) for key, value in leaves.items()}
+    if repair_specification is not None:
+        require(gap is not None, "LOOP_REPAIR_BINDING_REQUIRED")
+        repair = validate_plan(repair_specification, payload, gap=gap)
+        for job in repair["jobs"]:
+            affected = set().union(*(leaves[key] for key in job["criterion_ids"]))
+            for key in result:
+                if affected.intersection(leaves[key]):
+                    result[key].add("r1-" + job["job_id"])
+    return {key: sorted(value) for key, value in result.items()}
+
+
+def _check_work_inputs(payload, initial, repair, inputs, scheduled, initial_digest, previous):
+    require(isinstance(inputs, dict), "LOOP_WORK_BINDING")
+    for index, spec in enumerate([initial] + ([repair] if repair is not None else [])):
+        for job in spec["jobs"]:
+            expected = work_input(payload, job, index, initial_digest, round_plan_digest=digest(spec),
+                                  previous=previous if index else None)
+            name = expected["job_id"]
+            require(name in inputs and name in scheduled and canonical(inputs[name]) == canonical(expected)
+                    and scheduled[name]["kind"] == "work"
+                    and scheduled[name]["payload_digest"] == digest(expected), "LOOP_WORK_BINDING")
+
+
 def _planned_reports(reports, expected_jobs, round_index):
     require(type(round_index) is int and round_index in (0, 1), "LOOP_CRITIC_STALE")
     require(isinstance(expected_jobs, (list, tuple, set, frozenset))
@@ -106,7 +178,7 @@ def _critic_dispatch(payload, reports, view, plan_digest, round_index,
 
 
 def _prior_repair(payload, reports, plan_digest, initial_execution_plan_digest,
-                  first_jobs, repair_jobs, prior_review, admission):
+                  first_jobs, repair_jobs, prior_review, admission, policy):
     require(prior_review is not None and admission is not None, "LOOP_REPAIR_BINDING_REQUIRED")
     shape(prior_review, {"response", "dispatched_input", "dispatched_input_digest"}, "LOOP_REPAIR_BINDING")
     shape(admission, {"round", "initial_plan_digest", "critic_job_id", "critic_result_digest",
@@ -120,7 +192,7 @@ def _prior_repair(payload, reports, plan_digest, initial_execution_plan_digest,
         view=previous.get("view"), plan_digest=plan_digest, round_index=0,
         initial_execution_plan_digest=initial_execution_plan_digest,
         expected_jobs=first_jobs, dispatched_input=previous,
-        dispatched_input_digest=prior_review["dispatched_input_digest"])
+        dispatched_input_digest=prior_review["dispatched_input_digest"], **policy)
     # Execution artifacts use write_json's canonical JSON plus one LF. This is
     # the stored result-artifact hash, not the canonical object/input digest.
     previous_digest = hashlib.sha256((canonical(response) + "\n").encode("utf-8")).hexdigest()
@@ -154,7 +226,8 @@ def _prior_repair(payload, reports, plan_digest, initial_execution_plan_digest,
 
 def validate_critic(value, payload, reports, *, view, plan_digest, round_index,
                     initial_execution_plan_digest, expected_jobs, dispatched_input, dispatched_input_digest,
-                    prior_review=None, repair_admission=None):
+                    initial_specification, initial_runtime_plan, initial_template, work_inputs,
+                    repair_specification=None, prior_review=None, repair_admission=None):
     """Validate all planned reports against a stored critic dispatch.
 
     Expected jobs and dispatch digests come from the coordinator's immutable
@@ -168,12 +241,49 @@ def validate_critic(value, payload, reports, *, view, plan_digest, round_index,
     digest_ref(plan_digest)
     digest_ref(initial_execution_plan_digest)
     first_jobs, repair_jobs = _planned_reports(reports, expected_jobs, round_index)
+    require(digest(initial_runtime_plan) == initial_execution_plan_digest, "LOOP_EVIDENCE_POLICY")
+    version = evidence_version(initial_runtime_plan, initial_template)
+    policy = dict(initial_specification=initial_specification, initial_runtime_plan=initial_runtime_plan,
+                  initial_template=initial_template, work_inputs=work_inputs)
+    require(isinstance(dispatched_input, dict), "LOOP_CRITIC_DISPATCH_MISMATCH")
+    required = None
     repaired_criteria, previous, round_plan = set(), None, plan_digest
     if round_index:
         repaired_criteria, previous, round_plan = _prior_repair(payload, reports, plan_digest, initial_execution_plan_digest,
-            first_jobs, repair_jobs, prior_review, repair_admission)
+            first_jobs, repair_jobs, prior_review, repair_admission, policy)
     else:
-        require(prior_review is None and repair_admission is None, "LOOP_REPAIR_BINDING")
+        require(prior_review is None and repair_admission is None and repair_specification is None,
+                "LOOP_REPAIR_BINDING")
+    if version == 2:
+        initial = validate_plan(initial_specification, payload)
+        require(digest(initial) == plan_digest
+                and {"r0-" + job["job_id"] for job in initial["jobs"]} == first_jobs, "LOOP_WORK_BINDING")
+        gap = verified_gap(prior_review["response"]["result"], critic_job_id="r0-critic",
+                           critic_result_digest=previous) if round_index else None
+        if round_index:
+            require(repair_specification is not None and digest(repair_specification) == round_plan,
+                    "LOOP_REPAIR_BINDING")
+            repair_specification = validate_plan(repair_specification, payload, gap=gap)
+            require({"r1-" + job["job_id"] for job in repair_specification["jobs"]} == repair_jobs,
+                    "LOOP_WORK_BINDING")
+        required = required_evidence_jobs(payload, initial, repair_specification if round_index else None, gap=gap)
+        scheduled = {job["job_id"]: job for job in [*initial_runtime_plan["jobs"],
+                     *(repair_admission["jobs"] if round_index else [])]}
+        require({j for j, item in scheduled.items() if item["kind"] == "work"} == first_jobs | repair_jobs,
+                "LOOP_WORK_BINDING")
+        current_template = {key: value for key, value in dispatched_input.items()
+                            if key not in {"template_digest", "reports", "report_digests"}}
+        shape(current_template, set(initial_template), "LOOP_EVIDENCE_POLICY")
+        require(scheduled[f"r{round_index}-critic"]["payload_digest"] == digest(current_template),
+                "LOOP_EVIDENCE_POLICY")
+        _check_work_inputs(payload, initial, repair_specification if round_index else None,
+                           work_inputs, scheduled, plan_digest, previous)
+        require(dispatched_input.get("evidence_contract_version") == 2
+                and canonical(dispatched_input.get("required_evidence_jobs")) == canonical(required),
+                "LOOP_EVIDENCE_POLICY")
+    else:
+        require("evidence_contract_version" not in dispatched_input
+                and "required_evidence_jobs" not in dispatched_input, "LOOP_EVIDENCE_POLICY")
     _critic_dispatch(payload, reports, view, plan_digest, round_index, dispatched_input,
                      dispatched_input_digest, previous, round_plan)
     for job, report in reports.items():
@@ -201,6 +311,13 @@ def validate_critic(value, payload, reports, *, view, plan_digest, round_index,
             job, index = ref["job_id"], ref["claim_index"]
             require(isinstance(job, str) and job in reports and type(index) is int
                     and 0 <= index < len(reports[job]["claims"]), "LOOP_CRITIC_EVIDENCE")
+        if required is not None:
+            pairs = [(ref["job_id"], ref["claim_index"]) for ref in refs]
+            referenced = {ref["job_id"] for ref in refs}
+            require(len(pairs) == len(set(pairs)) and referenced <= set(required[name]),
+                    "LOOP_CRITIC_ASSIGNMENT")
+            if status == "passed":
+                require(referenced == set(required[name]), "LOOP_CRITIC_ASSIGNMENT")
         spans = item["source_spans"]
         require(isinstance(spans, list) and len(spans) <= 32, "LOOP_CRITIC_GAP")
         for span in spans:

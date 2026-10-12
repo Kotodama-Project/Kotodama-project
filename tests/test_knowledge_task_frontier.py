@@ -1,7 +1,7 @@
 """Source-declared initial work, real owner admission and computed fixture reports.
 
-This fixture checks #361 distribution, plans and complete reports. Enforcing
-every criterion's assigned-leaf evidence in the runtime belongs to #362.
+This fixture checks #361 distribution, plans and computed reports. The runtime
+enforces every criterion's assigned-leaf evidence under contract 2.
 """
 from __future__ import annotations
 
@@ -137,14 +137,14 @@ class ComputingBackend:
         reports = delivered["reports"]
         passed = set(expected) == set(reports) and all(
             report["claims"][0]["text"] == expected[key] for key, report in reports.items())
-        refs = [{"job_id": key, "claim_index": 0} for key in reports]
         record = next(row for row in delivered["view"]["spans"] if row["text"].startswith("[REQ-"))
         gap = {key: record[key] for key in ("source_key", "source_revision", "start", "end")}
         return {"result": {"parent_input_digest": delivered["view"]["parent_input_digest"],
                 "plan_digest": delivered["view"]["plan_digest"], "round": delivered["round"],
                 "report_digests": delivered["report_digests"], "validations": [
                     {"criterion_id": key, "status": "passed" if passed else "failed",
-                     "evidence": refs if passed else [],
+                     "evidence": [{"job_id": job, "claim_index": 0}
+                         for job in delivered["required_evidence_jobs"][key]] if passed else [],
                      "gap_reason": None if passed else "Current source calculations do not match these reports.",
                      "source_spans": [] if passed else [gap]} for key in delivered["criteria"]]},
                 "receipt": {"actor_ref": actor_ref, "invocation_ref": "synthetic-" + delivered["job_id"],
@@ -271,6 +271,27 @@ class TaskFrontierTests(unittest.TestCase):
                 self.assertEqual("unresolved", result["candidate"]["status"])
                 with sqlite3.connect(owner.parent / result["receipt"]["run_id"] / "execution.sqlite") as db:
                     self.assertEqual(0, db.execute("SELECT count(*) FROM jobs WHERE state='accepted'").fetchone()[0])
+
+    def test_correct_computations_cannot_bypass_assigned_leaf_evidence(self):
+        bundle, candidate, owner, file, _ = self.compile(graph(two=True))
+        admit(candidate, owner, file)
+
+        class WrongAssignment(ComputingBackend):
+            def review(self, delivered, *args, **kwargs):
+                value = super().review(delivered, *args, **kwargs)
+                assigned = set(delivered["required_evidence_jobs"]["A2"])
+                unrelated = next(job for job in delivered["reports"] if job not in assigned)
+                criterion = next(row for row in value["result"]["validations"] if row["criterion_id"] == "A2")
+                assert criterion["status"] == "passed"  # independent computations were correct
+                criterion["evidence"] = [{"job_id": unrelated, "claim_index": 0}]
+                return value
+
+        backend = WrongAssignment()
+        with self.assertRaisesRegex(SwarmError, "LOOP_CRITIC_ASSIGNMENT"):
+            execute_task_input(bundle, candidate, owner, file, backend,
+                worker_actors=["worker-a", "worker-b"], clock=lambda: STAMP)
+        self.assertEqual(3, len(backend.inputs))
+        self.assertEqual([], list(owner.parent.glob("task-run-*/receipt.json")))
 
     def test_real_owner_source_expiry_actor_and_tampering_refuse(self):
         bundle, candidate, owner, file, _ = self.compile(graph(two=True))

@@ -55,10 +55,14 @@ class ClosedLoopCriticContractTests(unittest.TestCase):
                         for job in ("r0-a", "r0-b")}
         self.input = dispatched(self.payload, self.reports)
         self.value = review(self.payload, self.reports)
+        self.runtime_plan = {"jobs": [{**scheduled("r0-critic", "review"), "payload_digest": self.input["template_digest"]}]}
         self.options = {"view": self.input["view"], "plan_digest": PLAN, "round_index": 0,
-                        "initial_execution_plan_digest": "a" * 64,
+                        "initial_execution_plan_digest": digest(self.runtime_plan),
                         "expected_jobs": tuple(self.reports), "dispatched_input": self.input,
-                        "dispatched_input_digest": digest(self.input)}
+                        "dispatched_input_digest": digest(self.input),
+                        "initial_specification": None, "initial_runtime_plan": self.runtime_plan,
+                        "initial_template": {k: v for k, v in self.input.items()
+                            if k not in {"template_digest", "reports", "report_digests"}}, "work_inputs": {}}
 
     def check(self, value=None, reports=None, **changes):
         options = {**self.options, **changes}
@@ -76,7 +80,7 @@ class ClosedLoopCriticContractTests(unittest.TestCase):
             "actor_ref": "verifier", "invocation_ref": "prior-review", "synthetic": True}}
         self.prior = {"response": response, "dispatched_input": copy.deepcopy(self.input),
                       "dispatched_input_digest": digest(self.input)}
-        self.admission = {"round": 1, "initial_plan_digest": "a" * 64,
+        self.admission = {"round": 1, "initial_plan_digest": digest(self.runtime_plan),
             "critic_job_id": "r0-critic", "critic_result_digest": artifact_digest(response),
             "proposal_digest": "e" * 64, "jobs": [scheduled("r1-repair"),
                 scheduled("r1-critic", "review", [*self.reports, "r1-repair"])]}
