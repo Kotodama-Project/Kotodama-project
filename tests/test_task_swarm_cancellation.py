@@ -6,6 +6,7 @@ adapter must also hold the finalization OS lock and check receipt publication.
 from __future__ import annotations
 
 import copy
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -61,7 +62,7 @@ class SwarmCancellationTests(unittest.TestCase):
 
     def rows(self):
         # Cancellation adds its own row; these execution rows must not change.
-        with sqlite3.connect(self.db) as conn:
+        with closing(sqlite3.connect(self.db)) as conn, conn:
             return {table: list(conn.execute("SELECT * FROM " + table + " ORDER BY 1,2"))
                     for table in ("runs", "jobs", "attempts", "run_extensions", "run_finalizations")}
 
@@ -305,7 +306,7 @@ class SwarmCancellationTests(unittest.TestCase):
 
     def test_cancellation_insert_failure_rolls_back_without_partial_record(self):
         before = self.rows()
-        with sqlite3.connect(self.db) as conn:
+        with closing(sqlite3.connect(self.db)) as conn, conn:
             conn.execute("CREATE TRIGGER refuse_cancel BEFORE INSERT ON run_cancellations "
                          "BEGIN SELECT RAISE(ABORT, 'controlled insert refusal'); END")
         with self.assertRaises(SwarmError) as caught:
@@ -314,7 +315,7 @@ class SwarmCancellationTests(unittest.TestCase):
         self.assertIsInstance(caught.exception.__cause__, sqlite3.IntegrityError)
         self.assertIsNone(self.reopen().cancellation("run-cancel"))
         self.assertEqual(self.rows(), before)
-        with sqlite3.connect(self.db) as conn:
+        with closing(sqlite3.connect(self.db)) as conn, conn:
             conn.execute("DROP TRIGGER refuse_cancel")
         self.assertEqual(self.cancel()["requested_at"], 1000)
         self.assertEqual(self.rows(), before)
@@ -334,7 +335,7 @@ class SwarmCancellationTests(unittest.TestCase):
         self.assertEqual(self.state.snapshot("run-cancel")["running"], 1)
 
     def test_cancelled_snapshot_does_not_recompute_pending_dependents(self):
-        with sqlite3.connect(self.db) as conn:
+        with closing(sqlite3.connect(self.db)) as conn, conn:
             conn.execute("UPDATE jobs SET state='failed' WHERE job_id='a-work'")
         self.cancel()
         before = self.rows()
@@ -378,7 +379,7 @@ class SwarmCancellationTests(unittest.TestCase):
                    canonical({**original, "unexpected": True})]
         for encoded in corrupt:
             with self.subTest(encoded=encoded):
-                with sqlite3.connect(self.db) as conn:
+                with closing(sqlite3.connect(self.db)) as conn, conn:
                     conn.execute("UPDATE run_cancellations SET cancellation_json=?", (encoded,))
                 before = self.rows()
                 self.assert_error("CORRUPT_STATE", lambda: self.state.cancellation("run-cancel"))
