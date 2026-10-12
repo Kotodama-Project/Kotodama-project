@@ -13,6 +13,24 @@ Kotodama detects intent in conversation, voice, issues, and documents, confirms 
 
 The 2026-09-30 [OpenAI alignment direction](docs/OPENAI-ALIGNMENT.md) makes Dots the first candidate for everyday interaction and ongoing work. Kotodama keeps knowledge, permissions, corrections, Tasks, and verification with their existing governed owners. Cloudflare edge and official Cloudflare OS remain candidates for connectivity and dedicated views; live integration and deployment require validation.
 
+The target is the whole loop across organizational/design/Project documents and goals, memory, decomposition, parallel work, independent verification, integration, learning and replanning. Preserve original intent, corrections and inherited constraints; document or worker counts are not completion.
+
+The 2026-10-12 [Project-centered agent hub direction (#385)](https://github.com/Kotodama-Project/Kotodama-project/issues/385) connects people, agents, sources, Tasks, decisions, results and learning through one Project and its existing owners. GUI, natural-language and CLI operations, parent/child/peer collaboration and versioned profiles are directions. [Design PR #386](https://github.com/Kotodama-Project/Kotodama-project/pull/386) is unmerged; the Project service, dynamic agent creation, live external integrations and optimization engine are unimplemented.
+
+## Current work and resumption (2026-10-12)
+
+The checked public source is main [`c63e632`](https://github.com/Kotodama-Project/Kotodama-project/commit/c63e63291cd561c0ed2764b311935bd4f90b14a3). Main includes the canonical 50-Concept OKF catalog, bounded retrieval/context, typed goal and corrected-Source Task inputs, critic evidence, checkpoint recovery and persistent cancellation. [PR #383](https://github.com/Kotodama-Project/Kotodama-project/pull/383) is merged and [#363](https://github.com/Kotodama-Project/Kotodama-project/issues/363) is completed. Ordinary Task admission from [PR #346](https://github.com/Kotodama-Project/Kotodama-project/pull/346) already bounds queue/concurrency and preserves writer exclusion and settlement; its default width is 1.
+
+These are separate remaining stages:
+
+1. [PR #384 / #365](https://github.com/Kotodama-Project/Kotodama-project/pull/384): public correction `0381f26` has a Windows stat-API compatibility failure. Publish and independently verify the additional file-ID fix, then pass fresh required CI before adoption.
+2. [#366](https://github.com/Kotodama-Project/Kotodama-project/issues/366): compose that fix with A→B dependency execution; correct the remaining long-ID assumptions in scheduler extension and claim readback.
+3. [#375](https://github.com/Kotodama-Project/Kotodama-project/issues/375), [#327](https://github.com/Kotodama-Project/Kotodama-project/issues/327), [#347](https://github.com/Kotodama-Project/Kotodama-project/issues/347): fix the final owner/actor-change race in the process-executor candidate, connect the existing normal/learning verification adapters to the product CLI, and verify actual stdin and all readers. New hierarchy execution-mode support remains unfinished.
+4. [#330](https://github.com/Kotodama-Project/Kotodama-project/issues/330), [#331](https://github.com/Kotodama-Project/Kotodama-project/issues/331), [#326](https://github.com/Kotodama-Project/Kotodama-project/issues/326), [#349](https://github.com/Kotodama-Project/Kotodama-project/issues/349): same-load speed/RSS/quality/cost comparisons; no unmeasured speed claim or default switch.
+5. [#385](https://github.com/Kotodama-Project/Kotodama-project/issues/385), [#328](https://github.com/Kotodama-Project/Kotodama-project/issues/328), [#350](https://github.com/Kotodama-Project/Kotodama-project/issues/350): existing-owner Project views, common operations and continuous improvement, with model/user/production acceptance separate from local fixtures.
+
+The [preview branch](https://github.com/Kotodama-Project/Kotodama-project/tree/preview/closed-loop-candidates-20261012) exposes staged hierarchy, dependency, input-inspection, recorded-input, dormant-executor and optional test-runner code. It is not main adoption and excludes the later PR384 corrections and B1/C. Read the Japanese README's current-work table and each existing Issue's latest evidence before continuing. No new Task ledger, spending, deployment, provider activation or public access is authorized by these documents.
+
 You choose how to use it:
 
 - **Run work**: Company Packs and the review chain trace a request through Work Order, Verification Receipt, and Promotion.
@@ -39,7 +57,7 @@ On Windows PowerShell, use `python` instead of `python3`. A success prints one l
 | Session / conversation ledger | schema and validator | | runtime ingestion |
 | Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | | 15-minute rotation, Voice-to-Verified-Handoff, GrillU, the rest of the [GPT-Live adoption policy](docs/GPT-LIVE-ADOPTION.md) (#142 to #146) |
 | Agent swarm / autonomy | bounded Task execution, Luna Task swarm, swarm and route-binding contracts (#34), migration-ledger schema and read-only verifier (#35; synthetic fixture only), [agent-lifecycle contract](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md) (#36; schema, read-only verifier, synthetic fixture) | real registry and runtime/continuity acceptance | Goal Completion Loop after a human GO |
-| Knowledge / Context | | OKF v0.2 knowledge bundle (#48, #61, #59, chosen as the canonical line), control plane (#49 line) | Context Gateway, TiDB evaluation |
+| Knowledge / Context | canonical OKF Markdown, catalog/graph, bounded retrieval/context, typed goal/Source/frontier inputs and owner-bound learning candidates | hierarchy integration, process-executor/product CLI and large-corpus evaluation | Context Gateway and continuous improvement |
 | Runtime | Compose / Proxmox lifecycle contracts, Cloudflare candidates | | deployment on Cloudflare edge and the official Cloudflare OS |
 
 [STATUS.md](STATUS.md) is the source for the current state. This page is a projection, not a Human Decision or Current Truth.

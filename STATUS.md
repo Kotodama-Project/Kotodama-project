@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-10-07
+Updated: 2026-10-12
 
 現在の公開面の状態表です。過去の documentation revision（R91〜R179）の履歴は
 [docs/HISTORY.md](docs/HISTORY.md) に移し、この文書は現在地だけを示します。
@@ -9,6 +9,22 @@ GitHub の [milestones](https://github.com/Kotodama-Project/Kotodama-project/mil
 
 Repository entries describe the source in this revision. They do not refresh
 or promote the separately scoped runtime/deployment evidence below.
+
+## Current source and open integration work
+
+Source check: public main `c63e63291cd561c0ed2764b311935bd4f90b14a3` on 2026-10-12. The current source includes canonical OKF/typed Task input and corrected Source bindings, all-assignment critic evidence, checkpoint recovery and durable cancellation. PR #383 is merged; Issue #363 is completed after its own adopted-main checks. This is bounded source/fixture acceptance, not model, user, production or whole eight-layer acceptance.
+
+Ordinary Task admission from PR #346 is already adopted: default width 1, finite queue, actor/room fairness, writer barrier and settlement-based slot release. CPU/RSS/provider cost admission and full same-load width1/2/4 measurement remain #330 work; repository-test parallel qualification remains #331 work.
+
+| Candidate / owner | Actual state and remaining gate |
+|---|---|
+| [PR #384 / #365](https://github.com/Kotodama-Project/Kotodama-project/pull/384) | Open public head `0381f26b28ac632ad30174d4ca3ab643b416edca`. Long-ID and missing-DB inspection findings are resolved. Windows CI rejects stable files because path stat and descriptor stat differ. Additional file-ID correction is a frozen candidate; actual new public head and Windows/required CI are not verified. No main adoption |
+| [Preview snapshot](https://github.com/Kotodama-Project/Kotodama-project/tree/preview/closed-loop-candidates-20261012) | Staged hierarchy/dependency/input-inspection/recorded-input/dormant-executor/test-runner source, separate from main. Excludes later PR384 corrections and B1/C; not an accepted executable integration |
+| [#366](https://github.com/Kotodama-Project/Kotodama-project/issues/366) | Future dependency carry has an actual long-B-ID refusal in scheduler extension. A partial correction is saved; the claim-readback old-ID gate and Windows composition remain unfinished |
+| [#375 / #327 / #347](https://github.com/Kotodama-Project/Kotodama-project/issues/375) | Process-executor candidate and fresh packages exist. Original actor epoch/invocation mismatch is corrected in a new candidate, but final-guard owner mutation is still reproduced. Product CLI/adapters and hierarchy's new mode remain unintegrated; independent package identity is not CODE approval |
+| [#385 / PR #386](https://github.com/Kotodama-Project/Kotodama-project/issues/385) | Project-centered intent/design are public in an open draft PR, not main. Project service/common operations, dynamic role creation, live external agent connection and optimization engine are unimplemented |
+
+Resume #365, then #366 and #375/#327/#347; follow with #330/#331/#326/#349 measurements, then #385 and the #328/#350 outcome loop. Keep existing Issue acceptance, Task owners and public/private source boundaries. The README projects this status; no new progress ledger is created. The older runtime/deployment results below retain their own original scope and are not refreshed by this update.
 
 | Surface | Status |
 |---|---|
@@ -24,7 +40,7 @@ or promote the separately scoped runtime/deployment evidence below.
 | [Session / conversation event ledger](docs/SESSION-CONVERSATION-LEDGER.md) | Schema/validator plus local Discord `ledger-export`, encrypted Source/event payload and readback, opaque same-Task correlation, synthetic Python validation; real-data export and operational retention/backup remain unverified |
 | Agent swarm and autonomous delegation after a human GO | [Luna Task swarm](docs/LUNA-TASK-SWARM.md) (#67 with the #85 repairs) is on `main` as a bounded local runtime: owner-bound plans, budgets, acknowledged peer messages, and an independent verifier, exercised by the offline fixture on Linux and Windows in the required check; a prior live synthetic fixture pass at `7df1aea` is recorded in [#159](https://github.com/Kotodama-Project/Kotodama-project/issues/159#issuecomment-5852532538); current-revision live acceptance is not established. The swarm and route-binding contract candidates from #34 are on `main` as schemas, read-only validators, and tests that start no agent; the [adoption candidate](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md#luna-task-swarm-との対応) maps the swarm contract to this runtime (both have their own rows below). The public migration ledger contract from #35 is included as a schema, read-only verifier, tests, and synthetic fixture, with a mapping to this runtime; the ledger is not populated and migration execution remains unverified. The [agent lifecycle contract](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md) from #36 includes a schema, read-only verifier, negative tests, and a synthetic fixture; the real registry is absent and runtime/continuity remain unverified ([#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30)). The repository's own [improvement loop](docs/IMPROVEMENT-LOOP.md) defines how agents select, verify, merge, and revert one change at a time |
 | [Git Steward coordination core](runtime/git-steward/README.md) | Included local candidate from #179: work-cell reservations, lease/epoch fences, independent review and a SQLite journal, covered by the Linux regression launcher and path-scoped Node CI on Linux/Windows; no model call, Git/GitHub/provider write or deployment. [Design](docs/GIT-STEWARD-AND-WORK-CELLS.md) and [business rehearsal](docs/BUSINESS-REHEARSAL.md) cover synthetic corrections and restart with temporary Git/SQLite/processes; live admission, executors and provider integration remain unverified |
-| [Public knowledge base (OKF)](docs/KNOWLEDGE-BASE.md) | Included canonical #48 foundation, #61 verdict/readiness repair and #59 knowledge source/context repair: ten draft public concepts including a current-source catch-up procedure, snapshot-bound optional local source pins, deterministic catalog/graph, lexical query and bounded context. Stale concepts stay out of delivery candidates and required context takes priority. OKF conformance, producer checks and decision readiness stay separate. Independent concept verification is absent; actor/purpose authority stays unresolved. Delivered-input binding and the old #49 train remain separate in [#30](https://github.com/Kotodama-Project/Kotodama-project/issues/30) |
+| [Public knowledge base (OKF)](docs/KNOWLEDGE-BASE.md) | Canonical OKF Markdown, deterministic catalog/graph, lexical query, bounded context, typed Goal/KGI/INIT and corrected-Source input binding through the existing Task owner. The checked catalog contains 50 Concepts. Stale concepts stay out of delivery candidates and required context takes priority. Owner-bound learning candidates keep current-decision/revocation checks. Independent concept quality, model/user outcome, large-corpus performance and full hierarchy/executor integration remain separate acceptance; no new grant or Goal/Task owner is issued |
 | Slack / Teams / Salesforce adapters | [Synthetic Slack/Teams event contract](docs/SURFACE-ENVELOPE.md) with signature-mechanism and same-thread scope checks (#70), plus a [synthetic relationship catalog](docs/RELATIONSHIP-CATALOG.md) with revision/ACL filtering and selected-field Salesforce fixture mapping (#77). Real connectors remain unconnected |
 | Compose / Proxmox lifecycle contract | Published and locally validated |
 | [Cloudflare edge preview candidate](runtime/cloudflare-edge/README.md) | Merged source candidate via #18; content-free validation only, no version upload or deployment established |
