@@ -2,7 +2,7 @@
 
 The injectable backend is currently restricted to explicit local simulations.
 The same claim/report/verify/accept path handles every frontier and its critic;
-no provider, generated planner, Task authority or knowledge adoption is added.
+No provider, Task authority or knowledge adoption is added.
 """
 from __future__ import annotations
 
@@ -16,8 +16,9 @@ from . import protocol
 from .closed_loop_contract import (loop_criteria, span_identity, validate_critic, validate_plan, verified_gap,
                                    evidence_version, required_evidence_jobs, work_input)
 from .closed_loop_context import derive_child_view, validate_report_in_view
+from .repair_planning import make_impact, derive_repair
 from .closed_loop_cancellation import cancel_closed_loop
-from .closed_loop_recovery import finalize, make_checkpoint, operation_lock, terminal_evidence
+from .closed_loop_recovery import finalize, make_checkpoint, operation_lock, terminal_evidence, read_artifact
 from .owner_file import OwnerFile
 from .state import SwarmState
 from .task_contract import require, shape, validate_input
@@ -34,8 +35,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                         reuse_context=None, resume_finalization=False):
     """Execute a supplied parallel frontier and one verified-gap repair in one run.
 
-    ``repair_planner(gap)`` is a pure local data transform, called outside any
-    database lock. Provider-backed planning is not supported by this entrypoint.
+    The assigned-leaf repair is derived locally. An optional pure callback may
+    propose the identical plan, but cannot override its scope or select legacy mode.
     A completed run supports anchored readback. Explicit terminal checkpoint
     resume never re-dispatches work or renews the budget; earlier interruptions
     require recovery outside this entrypoint.
@@ -175,7 +176,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         for name, expected_sha in artifacts.items():
             require(isinstance(name, str) and Path(name).name == name and name.endswith(".json"),
                     "RUN_RECEIPT_INVALID")
-            value, actual = read_json(directory / name, with_digest=True)
+            value, actual = read_artifact(directory / name, with_digest=True)
             require(actual == expected_sha, "RUN_ARTIFACT_CHANGED")
             checked[name] = value
         require(checked["input.json"] == payload and checked["specification.json"] == specification,
@@ -234,13 +235,14 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         with save_lock:
             expected = list(artifacts.items())
         for name, sha in expected:
-            require(read_json(directory / name, with_digest=True)[1] == sha, "RUN_ARTIFACT_CHANGED")
+            require(read_artifact(directory / name, with_digest=True)[1] == sha, "RUN_ARTIFACT_CHANGED")
 
     save("input.json", payload)
     save("specification.json", specification)
     if context_binding is not None:
         save("context-binding.json", context_binding)
     all_reports, report_jobs, invocations, dispatches = {}, {}, set(), {}
+    impact, impact_sha = None, None
     criteria = loop_criteria(payload)
 
     def frontier(spec, index, previous=None):
@@ -269,6 +271,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                             plan_digest=initial_digest, previous_critic_digest=previous)}
         gap = verified_gap(prior_review["response"]["result"], critic_job_id="r0-critic",
                            critic_result_digest=previous) if index else None
+        critic_input.update(repair_planning_contract=1, repair_impact_sha256=impact_sha if index else None)
         critic_input.update(evidence_contract_version=2, required_evidence_jobs=required_evidence_jobs(
             payload, initial_specification, spec if index else None, gap=gap))
         save(critic_id + "-template.json", critic_input)
@@ -422,7 +425,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                     initial_template=read_json(directory/"r0-critic-template.json"),
                     work_inputs={job["job_id"]: read_json(directory/(job["job_id"]+"-input.json"))
                                  for job in planned if job["kind"] == "work"},
-                    repair_specification=specification if round_index else None)
+                    repair_specification=specification if round_index else None,
+                    repair_impact=impact if round_index else None, execution_snapshot=state.snapshot(run_id))
                 if reuse_owner is not None:
                     reuse_owner.validate_review(final_critic, all_reports)
             except Exception as exc:
@@ -437,24 +441,22 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
             if gap is None or round_index == 1:
                 stop_reason = "review_complete" if all(v["status"] == "passed" for v in final_critic["validations"]) else "unresolved_review"
                 break
-            if repair_planner is None:
-                stop_reason = "repair_plan_required"
-                break
             guard()
-            # Pure supplied planning runs without a SQLite write lock. Recheck
-            # owner, deadline, evidence and budget before admitting its result.
-            proposal = validate_plan(repair_planner(copy.deepcopy(gap)), payload, gap=gap)
-            guard()
-            signatures = lambda p: {protocol.canonical({k: v for k, v in j.items() if k != "job_id"}) for j in p["jobs"]}
-            if signatures(proposal).issubset(signatures(specification)):
-                stop_reason = "unchanged_repair_plan"
-                break
+            proposal, _ = derive_repair(payload, initial_specification, gap)
+            if repair_planner is not None:
+                supplied = validate_plan(repair_planner(copy.deepcopy(gap)), payload, gap=gap)
+                guard()
+                require(protocol.canonical(supplied) == protocol.canonical(proposal), "LOOP_REPAIR_PROPOSAL_MISMATCH")
             require(len(proposal["jobs"]) <= len(actors), "LOOP_ACTORS_INVALID")
-            save("repair-proposal.json", proposal)
             snapshot = state.snapshot(run_id)
             if snapshot["budget"]["remaining_attempts"] < len(proposal["jobs"]) + 1:
                 stop_reason = "attempt_budget_exhausted"
                 break
+            proposal, impact = make_impact(payload, initial_specification, plan, prior_review,
+                {job["job_id"]: read_json(directory/(job["job_id"]+"-input.json"))
+                 for job in plan["jobs"] if job["kind"] == "work"}, snapshot)
+            save("repair-proposal.json", proposal)
+            impact_sha = save("repair-impact.json", impact)
             work_inputs, critic_input, jobs, job_actors = frontier(proposal, 1, critic_sha)
             verify_artifacts()
             extension = {"round": 1, "initial_plan_digest": protocol.digest(plan),

@@ -115,7 +115,10 @@ def _origin(owner_path, payload_path, anchor, *, clock):
             initial_template=read_json(directory/"r0-critic-template.json"),
             work_inputs={j: read_json(directory/(j+"-input.json")) for j, spec in scheduled.items()
                          if spec["kind"] == "work"},
-            repair_specification=read_json(directory/"repair-proposal.json") if round_index else None)
+            repair_specification=read_json(directory/"repair-proposal.json") if round_index else None,
+            repair_impact=read_json(directory/"repair-impact.json") if round_index and
+                "repair-impact.json" in receipt["artifact_sha256"] else None,
+            execution_snapshot=SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock).snapshot(run_id))
         prior_review = {"response": response, "dispatched_input": delivered,
                         "dispatched_input_digest": receipt["dispatches"][job]["delivered_input_digest"]}
     expected = integration_candidate(payload, reports, critic, critic_sha,

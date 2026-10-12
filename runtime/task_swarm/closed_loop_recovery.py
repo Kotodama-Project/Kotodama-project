@@ -17,6 +17,8 @@ from .task_contract import require
 from .task_runner import read_json, safe_directory, write_json
 
 
+from .repair_planning import profile
+
 MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
 
 
@@ -53,6 +55,14 @@ def operation_lock(directory):
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
+def read_artifact(path, *, with_digest=False):
+    """A missing or unreadable saved artifact is a rejected historical record."""
+    try:
+        return read_json(path, with_digest=with_digest)
+    except OSError as exc:
+        raise protocol.SwarmError("RUN_ARTIFACT_CHANGED", "saved artifact is unavailable") from exc
+
+
 def checked_artifacts(directory, artifacts):
     """Read only a bounded explicit manifest, never scan unrelated history."""
     require(isinstance(artifacts, dict) and 3 <= len(artifacts) <= 32, "FINALIZATION_ARTIFACT_INVALID")
@@ -62,10 +72,13 @@ def checked_artifacts(directory, artifacts):
         require(isinstance(name, str) and Path(name).name == name and name.endswith(".json"),
                 "FINALIZATION_ARTIFACT_INVALID")
         protocol.digest_ref(expected, "artifact digest")
-        value, actual = read_json(directory / name, with_digest=True)
+        value, actual = read_artifact(directory / name, with_digest=True)
         require(actual == expected, "RUN_ARTIFACT_CHANGED")
         values[name] = value
-        total += (directory / name).stat().st_size
+        try:
+            total += (directory / name).stat().st_size
+        except OSError as exc:
+            raise protocol.SwarmError("RUN_ARTIFACT_CHANGED", "saved artifact is unavailable") from exc
         require(total <= MAX_ARTIFACT_BYTES, "LOOP_ARTIFACT_BUDGET")
     return values, total
 
@@ -89,6 +102,8 @@ def terminal_evidence(directory, payload, record, state):
             and protocol.canonical(snapshot.get("extension")) == protocol.canonical(admission)
             and set(snapshot["jobs"]) == set(scheduled), "FINALIZATION_PLAN_CONFLICT")
     version = evidence_version(plan, values["r0-critic-template.json"])
+    if profile(values["r0-critic-template.json"]):
+        require(("repair-impact.json" in values) == (admission is not None), "LOOP_REPAIR_IMPACT_REQUIRED")
     require(type(record.get("version")) is int and record["version"] == version, "LOOP_EVIDENCE_POLICY")
     for job, expected in scheduled.items():
         current = snapshot["jobs"][job]
@@ -154,7 +169,8 @@ def terminal_evidence(directory, payload, record, state):
                 initial_specification=specification, initial_runtime_plan=plan,
                 initial_template=values["r0-critic-template.json"],
                 work_inputs={j: values[j+"-input.json"] for j, item in scheduled.items() if item["kind"] == "work"},
-                repair_specification=proposal if index else None)
+                repair_specification=proposal if index else None,
+                repair_impact=values.get("repair-impact.json") if index else None, execution_snapshot=snapshot)
             critic_sha = record["artifact_sha256"][job + "-result.json"]
             prior = {"response": response, "dispatched_input": delivered,
                      "dispatched_input_digest": observed["delivered_input_digest"]}

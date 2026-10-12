@@ -21,11 +21,11 @@ from task_swarm.owner_file import OwnerFile
 from task_swarm.protocol import SwarmError, canonical, digest
 from task_swarm.state import SwarmState
 from task_swarm.task_runner import read_json
-from test_task_swarm_closed_loop import MeasuredBackend, repair_for, setup_loop
+from test_task_swarm_closed_loop import MeasuredBackend, setup_loop
 
 
 def setup_case(tmp_path, *, unresolved=False):
-    setup = setup_loop(tmp_path)
+    setup = setup_loop(tmp_path, budget=4 if unresolved else 6)
     owner, payload_file, _, payload, plan, actors, measure = setup
     config = {"owner": str(owner), "input": str(payload_file), "plan": plan,
               "actors": actors, "measure": measure, "unresolved": unresolved}
@@ -152,7 +152,6 @@ def _child(tmp_path, mode, now, anchor):
     try:
         completed = execute_closed_loop(config["owner"], config["input"], config["plan"], backend,
             worker_actors=config["actors"], clock=lambda: now,
-            repair_planner=None if config["unresolved"] else repair_for(payload),
             expected_receipt_sha256=anchor, resume_finalization=mode in {"resume", "hold"},
             reuse_context=None if mode in {"resume", "hold"} else config.get("reuse_context"))
         (tmp_path / "result.json").write_text(canonical(completed), encoding="utf-8")
@@ -214,7 +213,7 @@ def test_failed_critic_remains_unresolved_without_learning(tmp_path):
     assert child(tmp_path, "resume").returncode == 0
     output = result(tmp_path)
     assert output["candidate"]["status"] == "unresolved"
-    assert output["candidate"]["stop_reason"] == "repair_plan_required"
+    assert output["candidate"]["stop_reason"] == "attempt_budget_exhausted"
     assert output["learning_candidate"] is None
     assert output["receipt"]["budget"]["attempts_used"] == 3
     assert snapshot(config)["counts"]["accepted"] == 0
@@ -262,7 +261,7 @@ def test_changed_evidence_and_progress_are_never_repaired_implicitly(tmp_path, c
     assert child(tmp_path, "accept" if change == "accepted_at" else "checkpoint").returncode == 73
     path = directory(config)
     if change in {"input", "report", "template", "extension"}:
-        target = {"input": "r1-memory-input.json", "report": "r1-memory-result.json",
+        target = {"input": "r1-repair-speed-input.json", "report": "r1-repair-speed-result.json",
                   "template": "r1-critic-template.json", "extension": "extension.json"}[change]
         original = (path / target).read_bytes()
         (path / target).write_bytes(original + b" ")
