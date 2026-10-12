@@ -16,6 +16,7 @@ from . import protocol
 from .closed_loop_contract import (loop_criteria, span_identity, validate_critic, validate_plan, verified_gap,
                                    evidence_version, required_evidence_jobs, work_input)
 from .closed_loop_context import derive_child_view, validate_report_in_view
+from .closed_loop_cancellation import cancel_closed_loop
 from .closed_loop_recovery import finalize, make_checkpoint, operation_lock, terminal_evidence
 from .owner_file import OwnerFile
 from .state import SwarmState
@@ -107,10 +108,13 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     require(isinstance(cancellation, threading.Event), "RUN_CANCELLATION_INVALID")
     binding_digest = protocol.digest(binding)
     deadline = payload["objective"]["budget"]["deadline"]
+    state = None
     failures = []
     failure_lock = threading.Lock()
 
     def guard():
+        if state is not None:
+            require(state.cancellation(run_id) is None, "RUN_CANCELLED")
         with failure_lock:
             failure = failures[0] if failures else None
             cancelled = cancellation.is_set()
@@ -130,6 +134,10 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     # Changing the plan cannot sidestep this directory and refill its budget.
     run_id = "task-run-" + protocol.digest([payload["task_id"], payload["revision"]])[:32]
     directory = root / run_id
+    if directory.is_dir():
+        safe_directory(directory)
+        if (directory / "execution.sqlite").is_file():
+            state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
     def finalization_metadata(runtime_plan):
         return {"run_id": run_id, "binding_digest": binding_digest, "owner_ref": binding["owner_ref"],
                 "owner_input_sha256": owner_sha, "parent_input_digest": parent_digest,
@@ -327,6 +335,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 "declared_input_digest": lease["payload_digest"],
                 "delivered_input_digest": protocol.digest(delivered)}
         save(lease["job_id"] + "-input.json", delivered)
+        guard()
         method = backend.review if critic else backend.produce
         try:
             value = method(copy.deepcopy(delivered), directory / (lease["job_id"] + "-attempt"),
@@ -474,7 +483,14 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 from .codex import BackendError
                 cancelled = isinstance(exc, BackendError) and exc.code == "cancelled"
             if cancelled:
-                raise protocol.SwarmError(*failure) from exc
+                # A later durable cancellation still wins over this monitor's
+                # earlier refusal. Failed readback cannot authorize translation.
+                try:
+                    cause_applies = state.cancellation(run_id) is None
+                except Exception:
+                    cause_applies = False
+                if cause_applies:
+                    raise protocol.SwarmError(*failure) from exc
         raise
     finally:
         done.set()

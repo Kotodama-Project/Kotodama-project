@@ -45,7 +45,7 @@ for invalid in ({1: "value"}, {"nested": {None: "value"}}, (1, 2), "\ud800", cyc
         else:
             raise AssertionError("non-JSON input was silently coerced")
 modules = list(pkgutil.iter_modules(swarm.__path__, swarm.__name__ + "."))
-assert len(modules) == 22
+assert len(modules) == 23
 for module in modules:
     importlib.import_module(module.name)
 # Exercise both input versions from the installed namespace. Import enumeration
@@ -87,7 +87,9 @@ assert validate_input(request, binding, now=1000) == request
 assert make_plan(request, binding, now=1000)["budget"]["deadline"] == 1100
 assert {"O1", "Q1"} <= criteria(request).keys()
 from kotodama_core.task_swarm.closed_loop_context import derive_child_view
-from kotodama_core.task_swarm.closed_loop_contract import loop_criteria, validate_plan
+from kotodama_core.task_swarm.closed_loop import cancel_closed_loop
+assert callable(cancel_closed_loop)
+from kotodama_core.task_swarm.closed_loop_contract import loop_criteria, validate_plan, work_input, required_evidence_jobs
 loop_plan = {"version": 1, "parent_input_digest": core.digest(request), "jobs": [
     {"job_id": "inspect", "purpose": "Inspect the current supplied request.",
      "criterion_ids": list(loop_criteria(request)), "selected_spans": [span(current, current_request)]}]}
@@ -95,6 +97,50 @@ assert validate_plan(loop_plan, request) == loop_plan
 view = derive_child_view(request, "r0-inspect", loop_plan["jobs"][0]["selected_spans"],
                          plan_digest=core.digest(loop_plan))
 assert view["parent_input_digest"] == core.digest(request) and view["request"] == current_request
+from kotodama_core.task_swarm.owner_file import OwnerFile
+from kotodama_core.task_swarm.state import SwarmState
+with tempfile.TemporaryDirectory() as temporary:
+    # Exercise the installed adapter against the same existing owner/run. This
+    # is state-only setup, not evidence of a provider or worker execution.
+    root = Path(temporary) / "operations"
+    root.mkdir()
+    payload_path, owner_path = Path(temporary) / "input.json", Path(temporary) / "owner.json"
+    payload_path.write_bytes(core.canonical(request).encode("utf-8"))
+    task_binding = {**binding, "active_home": str(root)}
+    owner_path.write_bytes(core.canonical({"binding": task_binding,
+        "actors": {"worker": {"epoch": 1, "invocation_ref": "installed-worker",
+            "actor_status": "active", "capability_ref": binding["capability_ref"], "peers": []}},
+        "allowed_actions": [], "source_checks": [{"path": str(payload_path),
+            "sha256": hashlib.sha256(payload_path.read_bytes()).hexdigest()}],
+        "storage": {"root": str(root), "mailbox": str(root / "mailbox"),
+                    "payloads": str(root / "payloads")}}).encode("utf-8"))
+    run_id = "task-run-" + core.digest([request["task_id"], request["revision"]])[:32]
+    directory = root / run_id
+    directory.mkdir()
+    for name, value in {"input.json": request, "specification.json": loop_plan}.items():
+        (directory / name).write_bytes(core.canonical(value).encode("utf-8"))
+    owner = OwnerFile(owner_path, clock=lambda: 1000)
+    state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=lambda: 1000)
+    work = work_input(request, loop_plan["jobs"][0], 0, core.digest(loop_plan),
+                      round_plan_digest=core.digest(loop_plan))
+    template = {"role": "critic", "job_id": "r0-critic", "round": 0,
+        "round_plan_digest": core.digest(loop_plan), "criteria": loop_criteria(request),
+        "view": derive_child_view(request, "r0-critic", loop_plan["jobs"][0]["selected_spans"],
+                                  plan_digest=core.digest(loop_plan)),
+        "evidence_contract_version": 2, "required_evidence_jobs": required_evidence_jobs(request, loop_plan)}
+    (directory / "r0-critic-template.json").write_bytes(core.canonical(template).encode("utf-8"))
+    execution_plan = state.create_run({"run_id": run_id, "task_id": request["task_id"],
+        "binding_digest": core.digest(owner.read_task()),
+        "budget": {"attempt_budget": 4, "concurrency": 1, "deadline": 1100},
+        "jobs": [{"job_id": "r0-inspect", "kind": "work", "dependencies": [],
+            "exclusive_keys": [], "payload_ref": "ref/installed/input", "payload_digest": core.digest(work)},
+            {"job_id": "r0-critic", "kind": "review", "dependencies": ["r0-inspect"],
+            "exclusive_keys": [], "payload_ref": "ref/installed/template", "payload_digest": core.digest(template)}]})
+    (directory / "plan.json").write_bytes(core.canonical(execution_plan).encode("utf-8"))
+    cancelled = cancel_closed_loop(owner_path, payload_path, clock=lambda: 1000)
+    assert cancelled == cancel_closed_loop(owner_path, payload_path, clock=lambda: 1150)
+    assert state.snapshot(run_id)["run_state"] == "cancelled"
+    assert not (directory / "receipt.json").exists()
 try:
     validate_input(request, binding, now=1150)
 except core.SwarmError as error:

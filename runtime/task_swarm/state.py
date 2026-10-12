@@ -31,6 +31,8 @@ _JOB_KEYS = {
     "payload_digest",
 }
 _OUTCOMES = {"candidate", "needs_data", "identity_conflict"}
+_CANCELLATION_KEYS = {"version", "run_id", "binding_digest", "initial_execution_plan_digest",
+                      "owner_ref", "requested_at"}
 _LEASE_MAX = 86_400.0
 _PER_JOB_LIMIT_MAX = 1_000
 
@@ -154,6 +156,11 @@ class SwarmState:
             checkpoint_json TEXT NOT NULL,
             progress_json TEXT NOT NULL,
             receipt_json TEXT,
+            FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE RESTRICT
+        );
+        CREATE TABLE IF NOT EXISTS run_cancellations (
+            run_id TEXT PRIMARY KEY,
+            cancellation_json TEXT NOT NULL,
             FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE RESTRICT
         );
         """
@@ -409,6 +416,95 @@ class SwarmState:
         return row
 
     @staticmethod
+    def _cancellation_record(conn: sqlite3.Connection, run: sqlite3.Row) -> dict[str, Any] | None:
+        row = conn.execute("SELECT cancellation_json FROM run_cancellations WHERE run_id = ?",
+                           (run["run_id"],)).fetchone()
+        if row is None:
+            return None
+        try:
+            raw = row["cancellation_json"]
+            if not isinstance(raw, str) or len(raw.encode("utf-8")) > 4096:
+                raise ValueError("cancellation record exceeds its bound")
+            record = json.loads(raw)
+            if (not isinstance(record, dict) or set(record) != _CANCELLATION_KEYS
+                    or type(record["version"]) is not int or record["version"] != 1
+                    or record["run_id"] != run["run_id"]
+                    or record["binding_digest"] != run["binding_digest"]
+                    or record["initial_execution_plan_digest"] != protocol.digest(SwarmState._plan_from_run(run))
+                    or type(record["requested_at"]) not in (int, float)):
+                raise ValueError("cancellation record does not match its run")
+            protocol.ref(record["owner_ref"], "cancellation owner")
+            protocol.finite(record["requested_at"], "cancellation time")
+        except (ValueError, TypeError, KeyError, OverflowError, protocol.SwarmError) as exc:
+            raise protocol.SwarmError("CORRUPT_STATE", "stored cancellation is invalid") from exc
+        return record
+
+    @staticmethod
+    def _require_not_cancelled(conn: sqlite3.Connection, run: sqlite3.Row) -> None:
+        if SwarmState._cancellation_record(conn, run) is not None:
+            raise protocol.SwarmError("RUN_CANCELLED", "run was durably cancelled")
+
+    def cancellation(self, run_id: str) -> dict[str, Any] | None:
+        """Read a bounded cancellation record without granting execution.
+
+        Status remains readable after owner expiry. Execution paths must still
+        perform their current owner, source and deadline checks.
+        """
+        run_id = protocol.ref(run_id, "run id")
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN")
+            return self._cancellation_record(conn, self._get_run(conn, run_id))
+        finally:
+            conn.close()
+
+    def _record_cancellation(self, run_id: str, *, expected_binding_digest: str,
+                             expected_initial_execution_plan_digest: str,
+                             owner_ref: str) -> dict[str, Any]:
+        """Internal database step, NOT a public cancellation acknowledgement.
+
+        The owner adapter must hold the shared finalization OS lock, recheck
+        current input/source and the absence of a published receipt, then call
+        this method. Only that adapter may acknowledge cancellation; this
+        database-only helper cannot serialize the filesystem publication cut.
+        """
+        run_id = protocol.ref(run_id, "run id")
+        expected_binding_digest = protocol.digest_ref(expected_binding_digest, "binding digest")
+        expected_initial_execution_plan_digest = protocol.digest_ref(
+            expected_initial_execution_plan_digest, "initial execution plan digest")
+        owner_ref = protocol.ref(owner_ref, "cancellation owner")
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
+        conn, ok = self._transaction(), False
+        try:
+            now = self._now()
+            run = self._get_run(conn, run_id)
+            owner = self._run_owner(run, now, prefetched)
+            if owner_ref != owner["owner_ref"]:
+                raise protocol.SwarmError("WRONG_OWNER", "cancellation caller is not the current owner")
+            if (expected_binding_digest != run["binding_digest"]
+                    or expected_initial_execution_plan_digest != protocol.digest(self._plan_from_run(run))):
+                raise protocol.SwarmError("CANCELLATION_CONFLICT", "cancellation does not match the existing run")
+            previous = self._cancellation_record(conn, run)
+            if previous is not None:
+                if previous["owner_ref"] != owner_ref:
+                    raise protocol.SwarmError("CANCELLATION_CONFLICT", "cancellation owner cannot change")
+                ok = True
+                return previous
+            if now >= float(run["deadline"]):
+                raise protocol.SwarmError("DEADLINE_EXPIRED", "incomplete run has expired")
+            record = {"version": 1, "run_id": run_id, "binding_digest": expected_binding_digest,
+                      "initial_execution_plan_digest": expected_initial_execution_plan_digest,
+                      "owner_ref": owner_ref, "requested_at": now}
+            conn.execute("INSERT INTO run_cancellations(run_id,cancellation_json) VALUES (?,?)",
+                         (run_id, protocol.canonical(record)))
+            ok = True
+            return record
+        except sqlite3.Error as exc:
+            raise protocol.SwarmError("STATE_WRITE_FAILED", "unable to persist cancellation") from exc
+        finally:
+            self._finish(conn, ok)
+
+    @staticmethod
     def _decode_list(raw: Any, name: str) -> list[str]:
         try:
             value = json.loads(raw)
@@ -483,6 +579,7 @@ class SwarmState:
                 "SELECT * FROM runs WHERE run_id = ?", (normalized["run_id"],)
             ).fetchone()
             if existing is not None:
+                self._require_not_cancelled(conn, existing)
                 if existing["plan_json"] != plan_json:
                     raise protocol.SwarmError("RUN_IMMUTABLE", "run id is already bound to another plan")
                 ok = True
@@ -550,6 +647,7 @@ class SwarmState:
         try:
             now = self._now()
             run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
             owner = self._run_owner(run, now, prefetched)
             initial = self._plan_from_run(run)
             if protocol.digest(initial) != extension["initial_plan_digest"]:
@@ -664,6 +762,7 @@ class SwarmState:
         conn, ok = self._transaction(), False
         try:
             run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
             owner = self._run_owner(run, self._now(), prefetched)
             previous = self._checked_finalization(conn, run_id)
             if previous is not None:
@@ -701,6 +800,7 @@ class SwarmState:
         conn, ok = self._transaction(), False
         try:
             run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
             self._run_owner(run, self._now(), prefetched)
             row = self._checked_finalization(conn, run_id)
             ok = True
@@ -719,6 +819,7 @@ class SwarmState:
         conn, ok = self._transaction(), False
         try:
             run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
             self._run_owner(run, self._now(), prefetched)
             row = self._checked_finalization(conn, run_id)
             if row is None or protocol.digest(json.loads(row["checkpoint_json"])) != checkpoint_digest:
@@ -872,6 +973,7 @@ class SwarmState:
         try:
             now = self._now()
             run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
             self._run_owner(run, now, prefetched)
             deadline, attempt_budget, concurrency = self._run_values(run)
             if now >= deadline:
@@ -975,6 +1077,9 @@ class SwarmState:
         if attempt["state"] != "leased":
             raise protocol.SwarmError("STALE_ATTEMPT", "attempt token is no longer current")
         run = self._get_run(conn, str(attempt["run_id"]))
+        # Even expired-token cleanup must not release an unconfirmed worker's
+        # permit after cancellation. fail() shares this transaction boundary.
+        self._require_not_cancelled(conn, run)
         expired = now >= float(run["deadline"]) or now >= float(attempt["lease_until"])
         # Giving up an expired lease only downgrades state, so the current
         # token holder may still do it; everything else needs a live lease.
@@ -1008,6 +1113,8 @@ class SwarmState:
         try:
             now = self._now()
             attempt = self._attempt_for_token(conn, token)
+            run = self._get_run(conn, str(attempt["run_id"]))
+            self._require_not_cancelled(conn, run)
             if attempt["state"] != "leased":
                 if attempt["identity_json"] is not None:
                     try:
@@ -1018,7 +1125,6 @@ class SwarmState:
                         ok = True
                         return copy.deepcopy(normalized)
                 raise protocol.SwarmError("STALE_ATTEMPT", "attempt token is no longer current")
-            run = self._get_run(conn, str(attempt["run_id"]))
             self._run_owner(run, now, prefetched)
             if now >= float(run["deadline"]):
                 raise protocol.SwarmError("DEADLINE_EXPIRED", "run deadline has elapsed")
@@ -1108,6 +1214,7 @@ class SwarmState:
         try:
             now = self._now()
             run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
             eligible(run)
             owner = self._run_owner(run, now, prefetched)
             if owner_ref != owner["owner_ref"]:
@@ -1262,6 +1369,7 @@ class SwarmState:
         # missing/unknown identity is deliberately never treated as dead.
         conn = self._connect()
         try:
+            self._require_not_cancelled(conn, self._get_run(conn, run_id))
             rows = conn.execute(
                 "SELECT * FROM attempts WHERE run_id = ? AND state = 'leased' AND lease_until <= ?",
                 (run_id, now),
@@ -1296,6 +1404,7 @@ class SwarmState:
         conn = self._transaction()
         ok = False
         try:
+            self._require_not_cancelled(conn, self._get_run(conn, run_id))
             for token, decision in decisions:
                 if decision == "dead":
                     changed = conn.execute(
@@ -1386,8 +1495,10 @@ class SwarmState:
         ok = False
         try:
             run = self._get_run(conn, run_id)
-            self._recompute_blocks(conn, run_id)
-            run = self._get_run(conn, run_id)
+            cancellation = self._cancellation_record(conn, run)
+            if cancellation is None:
+                self._recompute_blocks(conn, run_id)
+                run = self._get_run(conn, run_id)
             plan = self._plan_from_run(run)
             work_remaining, reserve = self._work_remaining(conn, run)
             jobs = self._dependency_map(conn, run_id)
@@ -1458,7 +1569,10 @@ class SwarmState:
                 attempts_used,
                 work_remaining,
             )
-            if counts["reported"] and not claimable and counts["running"] == 0:
+            if cancellation is not None:
+                run_state = "cancelled"
+                reasons.append("run durably cancelled; outstanding leases are not confirmed stopped")
+            elif counts["reported"] and not claimable and counts["running"] == 0:
                 run_state = "waiting_owner"
             elif counts["pending"] and (
                 attempts_used >= int(run["attempt_budget"]) or now >= float(run["deadline"])
@@ -1501,6 +1615,8 @@ class SwarmState:
             extension = conn.execute("SELECT extension_json FROM run_extensions WHERE run_id = ?", (run_id,)).fetchone()
             if extension is not None:
                 result["extension"] = json.loads(extension[0])
+            if cancellation is not None:
+                result["cancellation"] = cancellation
             ok = True
             return result
         finally:

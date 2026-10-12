@@ -150,11 +150,14 @@ run期限を検査し、拒否時はそのjobとattemptの更新をrollbackし�
 SQLite外のEventや時計とcommitを一つの原子操作にはできず、最後の検査後の変更は次の操作で
 検出します。これは硬いprocess時間制限の保証ではなく、provider接続の受入は別途必要です。
 CLIのsimulationは固定JSONを返します。
+`cancel_event`は呼出し内の停止信号で、永続的な取消記録ではありません。一般的なbackend失敗や
+このEventの変化だけでは、ownerの明示取消を記録しません。
 
 receiptは未公開の同一directory内ファイルへ書込み・fsync・再読し、owner/source/取消/期限と
 全artifactを再検査してからrenameで`receipt.json`へ確定します。その最後の資格検査を通過して
-確定した後は、追加のguardで戻り値を失わせず同じbytesのSHA-256を返します。取消などが
-最後の検査後に変わることは、確定済みreceiptのanchor返却を撤回しません。callerはこのanchorを
+確定した後は、追加のguardで戻り値を失わせず同じbytesのSHA-256を返します。一時停止信号や失効が
+最後の検査後に変わることは、確定済みreceiptのanchor返却を撤回しません。明示的な永続取消は
+同じOS lockで順序づけ、finalizerがlockを持つ間は受理せず`FINALIZATION_BUSY`を返します。callerはこのanchorを
 外部で保持します。process kill、電源断、DBとfilesystemとcallerへの返却の完全な原子性、
 未完workの自動復旧はこの境界の保証に含めません。上記の明示再開は、保存済みterminal
 checkpointと有効な現在資格がある場合に限ります。
@@ -164,6 +167,40 @@ workerの完了順によらず、criticへ渡す報告、後続context、統合c
 bytesが一致します。経過時間などを含む実行receipt全体の一致は要求しません。
 完了receiptの再読では、全artifactと保存されたexecution snapshotも照合します。
 候補がpassedでもownerのTask、knowledge、Current Truthを書き換えません。
+
+## 同じrunの明示取消
+
+API-onlyの`closed_loop.cancel_closed_loop(owner_path, payload_path)`は、既存Task/revisionの
+runだけを取り消します。新しいrunやTaskを作らず、owner入力、Source、保存入力、初期planを
+照合し、finalizerと同じOS lockを取ってから同じSQLite DBへ取消をcommitします。
+`closed_loop_cancellation`が実装本体で、CLI、Node queue、provider停止操作は追加しません。
+
+```python
+from kotodama_core.task_swarm.closed_loop import cancel_closed_loop
+
+cancellation = cancel_closed_loop(owner_path, payload_path)
+```
+
+返却値は`version/run_id/binding_digest/initial_execution_plan_digest/owner_ref/requested_at`です。
+`initial_execution_plan_digest`は保存された初期runtime planのhashで、supplied planの
+`initial_plan_digest`とは区別します。同一要求の再送は最初の記録を返し、run期限後でも
+現在ownerが有効なら読めます。期限後の新規取消、owner失効、変更されたSourceや入力は拒否します。
+receiptのentryが既にあれば`RUN_CANCELLATION_RECEIPT_PRESENT`で拒否します。壊れたreceiptも
+上書きせず拒否し、その存在を成功と認定しません。完成済みrunは従来のanchor再読を使います。
+
+取消commit後は通常入口、fresh processのresume、monitor、各実行guard、stateの変更操作が
+`RUN_CANCELLED`で止まります。monitorはbackendのEventへ停止を通知しますが、callbackの強制終了や
+外部ACKは保証しません。取消commitより前のclaimはin-flightとして保持します。直前guardと物理的な
+backend呼出しは原子的ではなく、既claimの呼出しが必ず0回になるとは保証しません。
+未知のidentity、lease、attempt、予算とreserveはそのまま残し、取消を
+理由にpendingへ戻したりpermitを解放したりしません。取消後のstatus snapshotは`cancelled`と
+取消記録を返し、jobを更新しません。backendや検証の元例外は、拒否されたcleanupで置き換えません。
+永続取消は既に記録したmonitor理由より優先します。一般エラーや`stop_unconfirmed`を別の取消へ
+変換せず、取消状態を再読できない場合も元の実行例外を保持します。
+
+取消の解除API、checkpoint前の自動復旧、外部実行のexactly-once保証は含みません。
+`tests/test_task_swarm_closed_loop_cancellation.py`で実process中断後の取消・fresh process拒否、
+元の入力と履歴の保持、finalizerとの排他、stage保存後の拒否、一時停止との区別を確認します。
 
 ## 担当ごとの証拠契約
 
