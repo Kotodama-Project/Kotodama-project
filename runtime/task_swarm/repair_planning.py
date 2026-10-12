@@ -40,7 +40,7 @@ def derive_repair(payload, initial, gap):
     require(failed and set(records) == failed and len(records) == len(gap["validations"]),
             "LOOP_REPAIR_BINDING")
     jobs, assignments, covered, selected = [], [], set(), set()
-    for original in sorted(initial["jobs"], key=lambda job: job["job_id"]):
+    for ordinal, original in enumerate(sorted(initial["jobs"], key=lambda job: job["job_id"])):
         assigned = sorted(failed.intersection(original["criterion_ids"]))
         if not assigned:
             continue
@@ -48,7 +48,8 @@ def derive_repair(payload, initial, gap):
         require(spans, "LOOP_REPAIR_SCOPE")
         selected.update(spans)
         covered.update(assigned)
-        job_id = "repair-" + original["job_id"]
+        # Initial IDs start with a letter; ordinals occupy a disjoint namespace.
+        job_id = "repair-" + (original["job_id"] if len(original["job_id"]) <= 49 else str(ordinal))
         detail = [{"criterion_id": key, "gap_reason": records[key]["gap_reason"],
                    "evidence": records[key]["evidence"]} for key in assigned]
         jobs.append({"job_id": job_id,
@@ -116,13 +117,99 @@ def make_impact(payload, initial, runtime_plan, prior, work_inputs, snapshot):
     return proposal, impact
 
 
+
+def _inspection_cut(database, destination):
+    """Copy a bounded physical cut using only reads of original DB/WAL/SHM."""
+    import os
+    import stat
+    from contextlib import ExitStack
+    limit = 8 * 1024 * 1024
+    paths = [database, database.with_name(database.name + "-wal"),
+             database.with_name(database.name + "-shm")]
+    def identity(metadata):
+        return (metadata.st_dev, metadata.st_ino, metadata.st_mode, metadata.st_size,
+                metadata.st_mtime_ns, metadata.st_ctime_ns)
+    fingerprint = []
+    with ExitStack() as stack:
+        streams, before = [], []
+        for index, path in enumerate(paths):
+            try:
+                metadata = path.lstat()
+            except FileNotFoundError:
+                require(index != 0, "LOOP_REPAIR_STATE")
+                before.append(None); streams.append(None)
+                continue
+            require(stat.S_ISREG(metadata.st_mode), "LOOP_REPAIR_STATE")
+            stream = stack.enter_context(path.open("rb"))
+            require(identity(os.fstat(stream.fileno())) == identity(metadata), "RUN_ARTIFACT_CHANGED")
+            before.append(metadata); streams.append(stream)
+        require(sum(item.st_size for item in before if item is not None) <= limit,
+                "LOOP_REPAIR_STATE")
+        consumed = 0
+        for index, (path, stream, metadata) in enumerate(zip(paths, streams, before)):
+            if stream is None:
+                fingerprint.append(None)
+                continue
+            checksum = hashlib.sha256()
+            output = (stack.enter_context((destination / path.name).open("xb"))
+                      if index != 2 else None)
+            count = 0
+            while True:
+                block = stream.read(64 * 1024)
+                if not block:
+                    break
+                count += len(block); consumed += len(block)
+                require(consumed <= limit, "LOOP_REPAIR_STATE")
+                checksum.update(block)
+                if output is not None:
+                    output.write(block)
+            require(count == metadata.st_size and identity(os.fstat(stream.fileno())) == identity(metadata),
+                    "RUN_ARTIFACT_CHANGED")
+            fingerprint.append((identity(metadata), checksum.hexdigest()))
+        for path, metadata in zip(paths, before):
+            try:
+                current = path.lstat()
+            except FileNotFoundError:
+                current = None
+            require((None if current is None else identity(current))
+                    == (None if metadata is None else identity(metadata)), "RUN_ARTIFACT_CHANGED")
+    return fingerprint
+
+
+def _inspection_state(database, owner, clock):
+    """Validate the copied original schema before any scheduler initializer."""
+    import sqlite3
+    from contextlib import closing
+    required = {
+        "runs": "run_id task_id binding_digest plan_json attempt_budget concurrency deadline created_at",
+        "jobs": "run_id job_id kind dependencies_json exclusive_keys_json payload_ref payload_digest state reason accepted_digest verification_ref accepted_owner_ref accepted_at",
+        "attempts": "token run_id job_id attempt epoch worker_ref state lease_until identity_json result_ref result_digest outcome runtime_receipt_ref reason retryable per_job_limit created_at updated_at",
+        "run_extensions": "run_id extension_json",
+        "run_finalizations": "run_id checkpoint_json progress_json receipt_json",
+        "run_cancellations": "run_id cancellation_json",
+    }
+    try:
+        with database.open("rb") as stream:
+            require(stream.read(16) == b"SQLite format 3\x00", "LOOP_REPAIR_STATE")
+        # The copy's own SHM may be rebuilt. immutable=1 would omit committed WAL.
+        with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as conn:
+            require(conn.execute("PRAGMA quick_check").fetchall() == [("ok",)], "LOOP_REPAIR_STATE")
+            for table, columns in required.items():
+                actual = {row[1] for row in conn.execute("PRAGMA table_info(" + table + ")")}
+                require(set(columns.split()) <= actual, "LOOP_REPAIR_STATE")
+    except sqlite3.Error as error:
+        from .protocol import SwarmError
+        raise SwarmError("LOOP_REPAIR_STATE", "saved execution state is invalid") from error
+    from .state import SwarmState
+    return SwarmState(database, owner.read_task, clock=clock)
+
 def inspect_repair(owner_path, payload_path, *, clock=None):
     """Read a saved, current r0 review; return a proposal without admitting it."""
     from pathlib import Path
     import time
     from .closed_loop_contract import evidence_version
     from .owner_file import OwnerFile
-    from .state import SwarmState
+    from tempfile import TemporaryDirectory
     from .task_contract import validate_input
     from .task_runner import read_json, safe_directory
     clock = clock or time.time
@@ -140,43 +227,58 @@ def inspect_repair(owner_path, payload_path, *, clock=None):
     require(read_json(directory/"input.json") == payload, "RUN_REPLAY_CONFLICT")
     initial = read_json(directory/"specification.json")
     plan = read_json(directory/"plan.json")
-    state = SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock)
-    finalization = state.finalization(run_id)
-    if finalization is not None:
-        checkpoint = finalization["checkpoint"]
-        require(checkpoint["reuse_context"] is None
-                and checkpoint["context_binding_digest"] == digest(None)
-                and "context-binding.json" not in checkpoint["artifact_sha256"],
-                "LOOP_REUSE_INSPECTION_UNSUPPORTED")
-    snapshot = state.snapshot(run_id)
-    require(state.cancellation(run_id) is None, "RUN_CANCELLED")
-    require(plan["binding_digest"] == digest(binding) and plan["run_id"] == run_id,
-            "LOOP_REPAIR_STATE")
-    template = read_json(directory/"r0-critic-template.json")
-    require(canonical(snapshot["plan"]) == canonical(plan), "LOOP_REPAIR_STATE")
-    evidence_version(plan, template)
-    require(profile(template) == 1, "LOOP_REPAIR_PROFILE")
-    require(all(snapshot["jobs"][job["job_id"]]["state"] in {"reported", "accepted"}
-                for job in plan["jobs"]), "LOOP_REPAIR_STATE")
-    response = read_json(directory/"r0-critic-result.json")
-    delivered = read_json(directory/"r0-critic-input.json")
-    inputs = {}
-    for job in plan["jobs"]:
-        name = job["job_id"]
-        value, sha = read_json(directory/(name+"-result.json"), with_digest=True)
-        require(snapshot["jobs"][name]["current_attempt"]["result_digest"] == sha,
-                "RUN_ARTIFACT_CHANGED")
-        if job["kind"] == "work":
-            require(value["result"] == delivered["reports"][name], "LOOP_PRIOR_REPORT_CHANGED")
-            inputs[name] = read_json(directory/(name+"-input.json"))
-    result = make_impact(payload, initial, plan, {"response": response, "dispatched_input": delivered,
-                        "dispatched_input_digest": digest(delivered)}, inputs, snapshot)
-    require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
-            and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
-            "STALE_BINDING")
-    validate_input(payload, binding, now=clock())
-    require(state.cancellation(run_id) is None, "RUN_CANCELLED")
-    return {"proposal": result[0], "impact": result[1], "admitted": False}
+    with TemporaryDirectory(prefix="kotodama-repair-inspect-") as private:
+        cut = _inspection_cut(directory/"execution.sqlite", Path(private))
+        state = _inspection_state(Path(private)/"execution.sqlite", owner, clock)
+        finalization = state.finalization(run_id)
+        if finalization is not None:
+            checkpoint = finalization["checkpoint"]
+            require(checkpoint["reuse_context"] is None
+                    and checkpoint["context_binding_digest"] == digest(None)
+                    and "context-binding.json" not in checkpoint["artifact_sha256"],
+                    "LOOP_REUSE_INSPECTION_UNSUPPORTED")
+        snapshot = state.snapshot(run_id)
+        require(state.cancellation(run_id) is None, "RUN_CANCELLED")
+        require(plan["binding_digest"] == digest(binding) and plan["run_id"] == run_id,
+                "LOOP_REPAIR_STATE")
+        template = read_json(directory/"r0-critic-template.json")
+        require(canonical(snapshot["plan"]) == canonical(plan), "LOOP_REPAIR_STATE")
+        evidence_version(plan, template)
+        require(profile(template) == 1, "LOOP_REPAIR_PROFILE")
+        require(all(snapshot["jobs"][job["job_id"]]["state"] in {"reported", "accepted"}
+                    for job in plan["jobs"]), "LOOP_REPAIR_STATE")
+        response = read_json(directory/"r0-critic-result.json")
+        delivered = read_json(directory/"r0-critic-input.json")
+        inputs = {}
+        for job in plan["jobs"]:
+            name = job["job_id"]
+            value, sha = read_json(directory/(name+"-result.json"), with_digest=True)
+            require(snapshot["jobs"][name]["current_attempt"]["result_digest"] == sha,
+                    "RUN_ARTIFACT_CHANGED")
+            if job["kind"] == "work":
+                require(value["result"] == delivered["reports"][name], "LOOP_PRIOR_REPORT_CHANGED")
+                inputs[name] = read_json(directory/(name+"-input.json"))
+        result = make_impact(payload, initial, plan, {"response": response, "dispatched_input": delivered,
+                            "dispatched_input_digest": digest(delivered)}, inputs, snapshot)
+        require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
+                and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
+                "STALE_BINDING")
+        validate_input(payload, binding, now=clock())
+        with TemporaryDirectory(prefix="kotodama-repair-recheck-") as fresh:
+            current = _inspection_cut(directory/"execution.sqlite", Path(fresh))
+            live = _inspection_state(Path(fresh)/"execution.sqlite", owner, clock)
+            require(live.cancellation(run_id) is None, "RUN_CANCELLED")
+            live.snapshot(run_id)
+            require(current == cut, "RUN_ARTIFACT_CHANGED")
+            # A writer or cancellation during the fresh read is also a changed cut.
+            with TemporaryDirectory(prefix="kotodama-repair-final-") as final:
+                require(_inspection_cut(directory/"execution.sqlite", Path(final)) == cut,
+                        "RUN_ARTIFACT_CHANGED")
+        require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
+                and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
+                "STALE_BINDING")
+        validate_input(payload, binding, now=clock())
+        return {"proposal": result[0], "impact": result[1], "admitted": False}
 
 
 def main(argv=None):
