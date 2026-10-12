@@ -72,6 +72,7 @@ def checked_artifacts(directory, artifacts):
 
 def terminal_evidence(directory, payload, record, state):
     """Revalidate actual delivered inputs, every report and each critic."""
+    require(state.cancellation(record["run_id"]) is None, "RUN_CANCELLED")
     values, total = checked_artifacts(directory, record["artifact_sha256"])
     require({"input.json", "specification.json", "plan.json"} <= values.keys(), "FINALIZATION_ARTIFACT_INVALID")
     require(protocol.canonical(values["input.json"]) == protocol.canonical(payload), "RUN_REPLAY_CONFLICT")
