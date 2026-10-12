@@ -1,9 +1,10 @@
 """Local Codex subprocess backend for one bounded Task swarm attempt.
 
 The backend starts one explicitly supplied executable with a fixed read-only
-worker policy, captures only redacted artifacts below a fresh attempt
-directory, and refuses completion until the child process can be connected to
-local runtime metadata by its stdout thread UUID and a completed turn.
+worker policy, captures redacted artifacts below a fresh attempt directory
+(plus exact private input when explicitly requested), and refuses completion
+until the child process can be connected to local runtime metadata by its
+stdout thread UUID and a completed turn.
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ MAX_STDOUT_BYTES = 16 * 1024 * 1024
 MAX_STDERR_BYTES = 1024 * 1024
 # Independent from subprocess output: replay already admits at most 16 MiB.
 MAX_RUNTIME_ROLLOUT_BYTES = 16 * 1024 * 1024
+MAX_RECORDED_INPUT_BYTES = 256 * 1024
 _READ_TOOLS = frozenset({"peer_list", "peer_receive", "peer_status"})
 
 
@@ -306,8 +308,8 @@ def _prepare_attempt(attempt_dir: str | os.PathLike[str]) -> Path:
     return run
 
 
-def _paths(run: Path) -> dict[str, Path]:
-    return {
+def _paths(run: Path, *, record_input: bool = False) -> dict[str, Path]:
+    paths = {
         "attempt_dir": run,
         "schema": run / "schema.json",
         "events": run / "stdout-events.jsonl",
@@ -319,6 +321,9 @@ def _paths(run: Path) -> dict[str, Path]:
         "diagnostics": run / "diagnostics.json",
         "command": run / "command.json",
     }
+    if record_input:
+        paths["input"] = run / "input.txt"
+    return paths
 
 
 def _public_paths(paths: Mapping[str, Path]) -> dict[str, str]:
@@ -793,7 +798,15 @@ def _artifact_digests(paths: Mapping[str, Path]) -> dict[str, str]:
         if name in {"receipt", "diagnostics"} or not path.is_file():
             continue
         try:
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            if name == "input":
+                from .task_runner import read_bytes
+                try:
+                    raw = read_bytes(path, MAX_RECORDED_INPUT_BYTES)
+                except SwarmError:
+                    continue
+            else:
+                raw = path.read_bytes()
+            digest = hashlib.sha256(raw).hexdigest()
         except OSError:
             continue
         result[name] = digest
@@ -983,13 +996,18 @@ class CodexBackend:
         cancel_event: threading.Event | None = None,
         confidential: bool = False,
         task_codex_home: str | os.PathLike[str] | None = None,
+        record_input: bool = False,
     ) -> dict[str, Any]:
+        if type(record_input) is not bool:
+            raise BackendError("stdin_record_invalid", "record_input must be boolean", retryable=False)
         if not isinstance(prompt, str):
             raise BackendError("prompt_invalid", "prompt must be text", retryable=False)
         try:
             prompt_bytes = prompt.encode("utf-8")
         except UnicodeError as exc:
             raise BackendError("prompt_invalid", "prompt must be valid UTF-8 text", retryable=False) from exc
+        if record_input and len(prompt_bytes) > MAX_RECORDED_INPUT_BYTES:
+            raise BackendError("prompt_input_limit", "recorded input exceeded its byte limit", retryable=False)
         try:
             timeout_value = float(timeout)
         except (TypeError, ValueError) as exc:
@@ -1009,7 +1027,7 @@ class CodexBackend:
             raise BackendError("policy_invalid", "confidential must be boolean", retryable=False)
         schema_object = _load_schema(schema)
         run_dir = _prepare_attempt(attempt_dir)
-        paths = _paths(run_dir)
+        paths = _paths(run_dir, record_input=record_input)
         started_unix = time.time()
         diagnostics: dict[str, Any] = {
             "status": "started",
@@ -1031,10 +1049,26 @@ class CodexBackend:
         exit_code: int | None = None
         peer_cfg: dict[str, Any] | None = None
         input_writer: threading.Thread | None = None
+        writer_error: Exception | None = None
+        input_sha = hashlib.sha256(prompt_bytes).hexdigest() if record_input else None
         scope = None
         execution_cwd = run_dir
         execution_sessions = self.session_root
         execution_env = None
+
+        def check_recorded_input() -> None:
+            if not record_input:
+                return
+            # Reuse the existing descriptor-pinned artifact reader only for
+            # this opt-in path; default transport imports and reads are intact.
+            from .task_runner import read_bytes
+            check_cancelled()
+            try:
+                raw = read_bytes(paths["input"], MAX_RECORDED_INPUT_BYTES)
+            except (OSError, SwarmError) as exc:
+                raise BackendError("stdin_record_failed", "recorded input could not be reopened", retryable=False) from exc
+            if raw != prompt_bytes:
+                raise BackendError("stdin_record_changed", "recorded input differs from submitted bytes", retryable=False)
 
         def failed(error: BackendError) -> BackendError:
             if process is not None and pid is not None and created_at is not None and process.poll() is None:
@@ -1047,6 +1081,14 @@ class CodexBackend:
             return error
 
         try:
+            if record_input:
+                try:
+                    run_dir.chmod(0o700)
+                    _atomic_write(paths["input"], prompt_bytes)
+                    paths["input"].chmod(0o600)
+                except OSError as exc:
+                    raise BackendError("stdin_record_failed", "input could not be recorded", retryable=False) from exc
+                check_recorded_input()
             _write_json(paths["schema"], schema_object)
             if peer is not None:
                 peer_cfg = _peer_config(peer, authorize_peer_writes=authorize_peer_writes)
@@ -1122,15 +1164,23 @@ class CodexBackend:
                     raise BackendError("process_callback", "process ownership callback failed", retryable=True) from exc
             check_cancelled()
             def feed_prompt() -> None:
+                nonlocal writer_error
                 try:
-                    process.stdin.write(prompt_bytes)
-                except (BrokenPipeError, OSError, ValueError):
-                    pass  # the exit status and output decide the outcome
+                    written = process.stdin.write(prompt_bytes)
+                    if record_input:
+                        if type(written) is not int or written != len(prompt_bytes):
+                            raise ValueError("the input write was incomplete")
+                        process.stdin.flush()
+                except (BrokenPipeError, OSError, ValueError) as exc:
+                    if record_input:
+                        writer_error = exc
+                    # Default execution retains its output/exit-based contract.
                 finally:
                     try:
                         process.stdin.close()
-                    except (OSError, ValueError):
-                        pass
+                    except (OSError, ValueError) as exc:
+                        if record_input and writer_error is None:
+                            writer_error = exc
             # A child that never reads stdin must not hide cancellation/timeout
             # behind a full pipe. Termination releases this owned writer.
             input_writer = threading.Thread(target=feed_prompt, name="swarm-prompt-writer", daemon=True)
@@ -1160,8 +1210,12 @@ class CodexBackend:
                 time.sleep(0.05)
             check_cancelled()
             input_writer.join(timeout=2.0)
+            if record_input:
+                check_cancelled()
             if input_writer.is_alive():
                 raise BackendError("stdin_unconfirmed", "the input writer did not finish after child exit", retryable=False)
+            if record_input and writer_error is not None:
+                raise BackendError("stdin_write_failed", "the input pipe write did not complete", retryable=False) from writer_error
             stdout = _read_spool(stdout_spool, MAX_STDOUT_BYTES)
             stderr = _read_spool(stderr_spool, MAX_STDERR_BYTES)
             if os.fstat(stdout_spool.fileno()).st_size > MAX_STDOUT_BYTES or os.fstat(stderr_spool.fileno()).st_size > MAX_STDERR_BYTES:
@@ -1250,6 +1304,9 @@ class CodexBackend:
                 "permission_profile_sha256": (hashlib.sha256(_json_dump(runtime["permission_profile"]).encode("utf-8")).hexdigest()
                                                if scope is not None else None),
             }
+            if record_input:
+                receipt["stdin_submission"] = {"version": 1, "encoding": "utf-8", "bytes": len(prompt_bytes),
+                    "sha256": input_sha, "writer_status": "pipe_write_completed"}
             redacted_result = _redact(result)
             check_cancelled()
             _write_json(paths["result"], redacted_result)
@@ -1260,7 +1317,13 @@ class CodexBackend:
             _write_events(paths["events"], stdout, records)
             _atomic_write(paths["stderr"], _safe_text(stderr).encode("utf-8"))
             _scrub_last_message(paths["last_message"])
+            if record_input:
+                check_recorded_input()
             receipt["artifact_digests"] = _artifact_digests(paths)
+            if record_input:
+                if receipt["artifact_digests"].get("input") != input_sha:
+                    raise BackendError("stdin_record_failed", "recorded input digest was unavailable or changed", retryable=False)
+                check_recorded_input()
             check_cancelled()
             _write_json(paths["receipt"], receipt)
             diagnostics.update({"status": "completed", "thread_id": thread_id, "turn_id": runtime["turn_id"], "finished_at": _utc_iso(finished)})
@@ -1328,7 +1391,11 @@ class CodexBackend:
                     except (OSError, UnicodeError, json.JSONDecodeError):
                         receipt_document = {}
                     if isinstance(receipt_document, dict):
-                        receipt_document["artifact_digests"] = artifact_digests
+                        receipt_document["artifact_digests"] = dict(artifact_digests)
+                        if record_input:
+                            # A later input change must remain a mismatch, not
+                            # be rebound to new bytes by defensive final writes.
+                            receipt_document["artifact_digests"]["input"] = input_sha
                         _write_json(paths["receipt"], receipt_document)
                 diagnostics["artifact_digests"] = artifact_digests
                 diagnostics.setdefault("finished_at", _utc_iso())
@@ -1353,6 +1420,7 @@ def invoke(
     cancel_event: threading.Event | None = None,
     confidential: bool = False,
     task_codex_home: str | os.PathLike[str] | None = None,
+    record_input: bool = False,
 ) -> dict[str, Any]:
     return CodexBackend(executable, session_root=session_root).invoke(
         prompt,
@@ -1367,6 +1435,7 @@ def invoke(
         cancel_event=cancel_event,
         confidential=confidential,
         task_codex_home=task_codex_home,
+        record_input=record_input,
     )
 
 

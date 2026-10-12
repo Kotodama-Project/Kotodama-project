@@ -92,6 +92,12 @@ governanceを保持し、欠落・鮮度・予算を確認します。actor/purp
 既存ownerに束縛した原文・訂正・要件を実Task入力へ渡す入口は
 [`task-input compile / verify / simulate`](KNOWLEDGE-TASK-INPUT.md#知識cliから使う)です。
 
+現在Sourceの複数親候補とanchorを指定した保存normal runtime Planを読むsource専用入口は
+[`tools/hierarchy_trace.py`](../tools/hierarchy_trace.py)と[読み取り専用の案内](KNOWLEDGE-HIERARCHY-TRACE.md#独立cli)です。
+実ownerの現在Sourceと保存artifactを照合し、元の行/span・制約・訂正を候補として返します。
+`0 dispatch`で、producerへの配布bridgeとinstalled wheel CLIは未接続です。
+保存Planの整合性を現在の実行許可や組織Planの採用へ読み替えません。
+
 ## 小単位で知識を保つ
 
 一つのConceptには、一つの問い・定義・判断材料・検証方法を置きます。

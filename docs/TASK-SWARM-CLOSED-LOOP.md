@@ -232,3 +232,93 @@ checkpointなしからの再dispatchや版の書換えは行いません。
 表の追加分も既存512 KiB入力・2 MiB artifact予算に含みます。最大64条件・6reportの
 関係を扱い、新しいhistory scanやcacheは追加しません。全担当を引用したことは、主張の真偽、
 モデル品質、owner採用、Current Truthや閉ループ全体の完成を意味しません。
+
+## 検証済みgapからの部分修正（#365）
+
+新規runは、初期planの条件割当と実criticから修正対象を決定します。
+失敗条件を担当するleafだけに1つずつ修正jobを作り、元のreportは保持します。
+独立側のworkerを再実行せず、最終criticは保持側を含めて全担当証拠を再検証します。
+共有条件を担当する修正は、関係する全leafの条件にも寄与するため、
+一方の修正証拠だけでは合格しません。修正は最大1回、元のattempt/期限/ownerの範囲です。
+対象・spanを予算に合わせて間引くことはせず、入らなければ停止します。
+
+最初のcritic templateに`repair_planning_contract: 1`を固定し、
+既存DB内の初期planのdigestへ束縛します。修正時の`repair-impact.json`には、
+実gap、初期担当、修正対象、保持report、修正前のattempt identityと残予算を記録し、
+修正criticのtemplateにそのfile hashを固定します。復旧・anchor再読・学習originも
+同じ根拠を再構築します。修正後の残予算を修正前の値と比較してはいけません。
+markerやimpactの欠落を旧方式へ戻す理由にしません。真正な旧v1/v2は保存された契約で
+読み、旧runへこのmarkerを後付けしません。任意callbackは候補の提供だけができ、
+決定的な修正planと一致しない提案は受理されません。
+
+現在の保存済みgapから、実行せず提案を調べる入口:
+
+```sh
+python -m kotodama_core.task_swarm.repair_planning --owner owner.json --input input.json
+```
+
+source checkoutではmodule prefixを`task_swarm`として、既存のruntime import経路を使います。
+この入口は既存owner/Source/初期planを読み直し、`admitted: false`のproposal/impactを返します。
+初期criticが未報告、取消済み、期限切れ、gapなし、または必要な保存証拠が欠ける場合は拒否します。
+learning grant、保存済みcontext binding、checkpoint、またはDB release certificateが束縛したrelease-progressにlearning contextが残るrunのstandalone inspectionは、
+現在のlearning decisionを読む入口がないため`LOOP_REUSE_INSPECTION_UNSUPPORTED`で拒否します。
+profile2ではcheckpoint前でもrelease-progressのSHAを既存DB証跡に照合し、learning context/bindingの残存を拒否します。progressの欠落・改変も拒否します。
+旧記録にgrant・保存binding・checkpoint・DB release証跡のいずれも残らない場合のlearning現在性は保証しません。
+learningの通常実行・anchor再読・terminal resumeは既存の現在decision検査を使います。
+新規実行は既存のclosed-loop simulation入口から自動plannerへ接続します。
+未知leaseやcheckpoint前の一般的な再開は許可しません。
+
+二度以上の修正と、Source訂正を跨ぐ完了jobの再利用は未対応です。実行依存の対応範囲は以下の二葉 A→B に限ります。
+構造上の証拠検査とlocal simulationの結果を、実providerの成果や全体loop完成とは扱いません。
+
+
+## 受理済み A に依存する B（#366）
+
+Source producer→candidate 検証→実行の入口では、owner が束縛した Source の `frontier.requires` から一つの依存を再導出し、ちょうど二つの atomic leaf を扱います。低水準の `execute_closed_loop` は既存 v1 と同様に呼出側の明示 plan を実行します。raw specification v2 だけでは Source 由来を証明せず、その保証は producer と candidate 検証を通した入口に限ります。独立 frontier は従来の specification v1、A→B は specification v2 です。分岐、合流、循環、別 Task、三葉以上の依存 graph は拒否します。owner と Task input v2 の契約は変わりません。元 Source、訂正履歴、root 条件、各 leaf の criterion 割当は両方の worker と critic に保たれます。
+
+新規 A→B run は dispatch 前に execution contract 3 と descriptor の digest を SQLite の不変 plan に固定します。A、prerequisite critic、B、global critic の四呼出しを最低単位とし、上限 4–6 attempts は同じ run 台帳で数えます。prerequisite critic は A・B・owner と異なる actor です。A 専有の A_i を全て検査し、全 claim が元 Source に supported、conflict がなく、全 gate が passed の時だけ A を scoped accept します。root/shared/I 条件の最終検査は global critic に残ります。前段の unknown/failed は不変 blocked evidence となり、A は未受理、B/global critic は pending のままです。完了 receipt や learning は作らず、CLI は exit 3 を返します。
+
+hash の循環を避けるため、Source/view/gate だけから prerequisite core を作り、descriptor は core digest、envelope は core と descriptor digest、DB job は envelope 全体の digest を束縛します。reader は各段を元 input/plan から再導出します。B の入力には元 Source と別の `prerequisite` lane として A の report/result hash/release certificate を渡します。元 Source を生成 claim で置換しません。B の inference も実 Source 引用を要し、global critic は全担当 leaf の証拠と、各 B の実入力 digest・prerequisite lane を受け取って再検査します。synthetic fixture は A の値変更が B の計算値を変え、別計算の critic が確かめます。これは実モデルの意味品質の保証ではありません。
+
+A の受理と release stage の保存は既存 SQLite transaction で一緒に確定します。state の B claim は A の accepted 行と一致する release を要求し、単独の `accept(A)` では開きません。operation lock は確認・保存・claim の間だけで、backend 呼出し中は保持しません。取消 Event と期限は transaction の最後にも観測し、失敗なら A と stage を共に rollback します。外部 Event の変化と SQLite commit の完全な同時性は保証しません。
+
+`--resume-finalization` は従来の終端復旧に加え、release 保存済みで B が pending・試行数 0 の場合だけ、明示した `--simulation` から B/global critic を継続できます。A と prerequisite critic を再実行せず、token/epoch/予算をリセットしません。release 前、B の lease/不明な実行結果、改変された proof、二重実行は拒否します。blocked の再読は呼出し 0 で同じ evidence を返します。stage が壊れていても既存 owner の durable cancellation は利用できます。
+
+B 専有条件だけの失敗は repair profile 2 により一度だけ修復できます（合計六呼出し）。repair B にも同じ accepted A と release が必要です。A/shared 条件の失敗は unresolved のまま止め、古い B を残して A だけを修復することはありません。checkpoint/receipt v3 は preaccepted A の result/ref/owner/時刻を、残りの acceptance と分けて固定し、finalization CAS に raw stage を含めます。終端の最後の資格確認→receipt 公開→同じ anchor 返却は従来の境界を維持します。
+
+旧 writer の完了 v1（checkpoint 前・後）、未完 checkpoint v1、evidence v2/profile1 の修復済み・終端未公開・取消済み run は明示した旧形式の reader を維持します。新 run で legacy へ下げる opt-out はありません。core package の allowlist は新しい三 helper を含み、provider を呼ばない配布検証を行います。Task owner 更新、knowledge 自動採用、一般 DAG、実 provider、性能 SLO はこの slice の対象外です。
+
+## 有限の資料取得を伴うAPI検証（#350）
+
+`tests/test_task_swarm_material_acquisition.py`は、Source-frontierの宣言v2から
+実coordinatorへ接続する検証です。既存ownerが、2つのローカルCSVのpath・body hash・
+byte数と読取上限をTaskの制約として明示し、両fileを現在の`source_checks`へ束縛します。
+compileや実行が読取scope・Source・owner判断を追加することはありません。
+合成catalogとfixtureの明示採用を使い、既存runtime・producer・schemaは変更しません。
+
+workerと独立criticは別processで、保存した実入力と同じUTF-8 bytesをstdinから受け取ります。
+数値のCSV本文はworker入力へ入れません。最初のworker AはDocAを実際に読み、worker Bは
+DocBを未取得のunknownとして報告します。共通R/root A1はこの正直な部分報告を明示的に
+許し、数値の完了条件A2/A3は各leafに残します。criticは両資料を別のparserと計算で
+検証し、A3だけを不合格にします。修復はDocBだけを読み、DocAの入力・結果・attempt行を
+修復中に保持します。最終criticは保持reportを含め、共通条件と全担当証拠を再検証します。
+
+DocAの合計5とDocBの差額13/23を2つのdatasetから求め、実結果の変化を確認します。
+固定答え、needのecho、別資料の計算、担当外reportの参照は受理しません。
+取得したhash/byte数は保存reportのclaimにも含めます。ownerの鮮度検査、workerの資料取得、
+criticのoracle読取は別々に記録するため、ownerが本文を読んだことをworkerの取得とは数えません。
+
+正例は同じTask/revisionと元のattempt予算6で、初期worker2・critic1・修復worker1・
+最終critic1の計5attemptを使います。予算4では修復をdispatchせず、既存契約どおり
+unresolved receiptを返し、learning candidateを作りません。全件完了を共通R/root A1にも
+要求する対照ではR/A1/A3が不合格になり、両leafへの修復を予算に合わせて間引きません。
+
+実取得後のSource変更・明示取消・actor失効・Task期限/Concept TTL跨ぎは公開を拒否します。
+取消後のnormal/terminal resumeは新しいworkerを呼びません。Concept期限は、Task期限を
+免除した単独verifyでも拒否します。同じownerをrevision N+1へ明示訂正すると、旧Nの
+anchor再読を拒否し、新しい全childへ原意・訂正・祖先制約が届きます。
+
+この検証の「未取得」は、最初から存在しownerが読取を認めた資料をworkerがまだ取得して
+いない状態です。未知の外部資料の発見、汎用fetcher、製品CLIの`ScriptedSimulation`からの
+資料取得、provider/modelの品質、任意文書の意味検証、閉ループ全体の完成を実証しません。
+取得直後・ACK前のguardを確認し、取消前に開始したprocessの物理停止は保証しません。

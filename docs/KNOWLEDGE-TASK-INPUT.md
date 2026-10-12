@@ -69,6 +69,35 @@ canonicalな候補JSONにはその1 byteの改行を許します。
 
 ## 候補階層と文脈
 
+### 通常候補の参照をinspectする
+
+ownerが全payloadを受け入れた通常候補から、Goal/KGI/INITの実Concept・Source版/span・原意と
+訂正・制約・未知・受入への参照を、JSONまたはMarkdownで読み取れます。source checkout専用です。
+
+```sh
+python -B tools/knowledge_base.py task-input inspect --root KNOWLEDGE_ROOT --owner OWNER_JSON --candidate CANDIDATE_JSON
+python -B tools/knowledge_base.py task-input inspect --root KNOWLEDGE_ROOT --owner OWNER_JSON --candidate CANDIDATE_JSON --format markdown
+```
+
+既存normal verifierで再導出したpayloadと実Bundleから表示を作り、candidateのdiagnosticsや
+context_projectionを権限・採用の表示根拠にしません。Source revisionはTask入力の版、spanはUnicode
+文字offsetで、外部Goal ownerのcurrent revisionやUTF-8 byte offsetとは別です。表のConcept pathを
+`show CONCEPT_ID --root KNOWLEDGE_ROOT --json`で読み、原文spanとSHAへ戻れます。全文は追加dumpしません。
+
+表示を完全serializeしてから、実clockでnormal verifierを再実行し、candidateとownerの原file SHAを
+bounded readerで再照合し、最後に現在Sourceを検査します。Source訂正・削除・rename、同size/mtimeでの
+変更、期限切れ、owner/candidateの途中変更は成功の断片をstdoutへ出さずtyped refusalで拒否します。
+出力は末尾LF一つを含めUTF-8 256KiB以内で、上限超過時に必須情報を切り捨てません。
+
+これはDBを開かず、dispatch・Task/owner更新・新grantを行わない参照案内です。exit0も実行許可や成果受入
+ではありません。actor実行許可とlearning decisionはNOT_EVALUATED、external Goal revision/adoption/accessは
+UNRESOLVED、decision_readinessはNEEDS_RESOLUTIONです。外部採用ownerの保存先・current read contractは別の未解決です。
+
+learning candidateや`--learning-origin`/`--learning-decision-digest`は、学習verifierに入る前に
+`TASK_INPUT_INSPECT_LEARNING_UNSUPPORTED`で拒否します。inspectの`--input`も未対応として拒否します。
+既存learning verifyはorigin replay/SwarmState初期化・DDLへ到達するため、DB0のinspectへ流用しません。
+その既存compile/verify/simulate経路は変更しません。wheel/installed CLI、外部モデル、全8階層の受入は別です。
+
 `catalog_context` は既存のtyped strategy検査と`select_context`を使います。明示されたINIT、
 KGI、Goalの順で最も狭いfilterを使い、必須文脈の欠落と要求された定義の省略を拒否します。
 省略した任意Conceptはdiagnosticsと既存context projectionへ残します。候補の採用状態は変えません。
@@ -76,7 +105,7 @@ Conceptごとに元Markdownと一致する現在Sourceが必要です。異な�
 
 `hierarchy` は現在Markdownのpathとowner Source key/revisionの対応です。各文書の
 `template_kind`は`project`、`phase`、`requirement`、`status`は`draft`に限定します。
-`id`と`parent_ref`を読み、project→任意phase→requirementの明示関係だけを使います。
+既定は`id`と単数の`parent_ref`を読み、project→任意phase→requirementの明示関係だけを使います。
 依存linkやpathの深さから親を推定しません。未解決親、重複、未使用の文書、placeholderは拒否します。
 
 frontmatterの`task_context.constraints`に、必須制約の本文を明示します。requirementはさらに
@@ -84,6 +113,57 @@ frontmatterの`task_context.constraints`に、必須制約の本文を明示し�
 producerはそこからUnicode spanを計算し、祖先の制約を全子のmandatory条件へ入れます。
 callerが候補の制約だけを削っても再導出に一致せず拒否されます。何を必須とするかはownerの宣言で、
 本文の意味を自動分類したり、未宣言の制約がないと証明したりする機能ではありません。
+
+## 明示した複数親を実Task入力へ渡す
+
+[#372](https://github.com/Kotodama-Project/Kotodama-project/issues/372)の限定bridgeは、
+現在Sourceのfrontmatterに`parent_refs`を明示した場合だけ
+[既存の有限reader](KNOWLEDGE-HIERARCHY-TRACE.md)を遅延読込します。
+Sourceには既存の安定IDを列挙し、producer宣言の`hierarchy`にも各現在文書を列挙します。
+
+```yaml
+template_kind: requirement
+id: REQ-MEASUREMENT
+status: draft
+parent_refs: [PROJECT-A, PROJECT-B]
+```
+
+この例に`task_context`のneed・acceptance・constraintsと、一意な本文が必要です。
+`parent_ref`との併記、未知ID、重複親、同じkindの親、未使用文書は拒否します。
+既定の単数親APIは維持し、Project・任意Phase・Requirementに限り最大8 nodes、
+各2 parents、経路2 edges、全16 edgesを検査します。両Projectの制約は同じ文でも
+別Source/spanとして全work・criticのmandatory条件へ送ります。共有祖先は同じSource/spanを一度だけ送ります。
+readerの行番号・hash等のmetadataをTask schemaへ混ぜず、元の4項目のspanを使います。
+
+`diagnostics.structural_parents`は現在Sourceに書かれた親の辺・元span・reverse refsです。
+候補文書の事実を示すだけで、Task owner・組織Plan・採用判断を追加しません。
+構造の親、`all_of.children`による要件分解、`requires`による実行依存は別の辺です。
+このbridgeはreaderの保存Plan検査を実行せず、既存producerから実coordinatorへ渡します。
+actor・Task revision・全現在Source・Concept期限・critic・取消・最終receiptの検査は既存経路のままです。
+最終公開前の不適格化はanchorを拒否し、公開のcutoff後は同じexact anchorを返します。
+その後の再読は現在owner/source/期限を再検査します。
+
+同じownerのN→N+1訂正では、原意と置換全文を**同じSource keyの別revision**へ束縛します。
+旧行はNの保存inputから完全にコピーし、最新のProject Sourceに宣言を一つ置きます。
+旧本文を現在ファイルへ再適用したり、外部履歴を検証済みにしたりしません。
+`history=input_only_unverified`と、ownerによる新payload/digest/source_checksの明示受入を維持します。
+
+| 固定fixture | 初期Source数 | 旧行を保持した訂正後 |
+|---|---:|---:|
+| 合成4Concept・独立3Requirement・2Project | 9 | 10 |
+| 合成4Concept・根と2leaf・2Project | 9 | 10 |
+| 合成4Concept・根と3leaf・2Project | 10 | 11なので拒否 |
+| 公開6Concept・1Requirement・2Project | 9 | 10 |
+
+合成3workersと独立criticの実子processでは、stdin bytes、保存input、dispatch digest、
+receiptを照合します。criticはSource数値から別途計算し、echo・誤計算・担当証拠の欠落を拒否します。
+公開6Conceptで3独立Requirementを同時に置く11Source候補も拒否します。
+配列20条件と子選択32 spansは別の上限で、既存10 Sources・256KiB等を拡大しません。
+
+入口はこのrepositoryのsource CLIです。readerはruntime wheelの公開coreに追加しません。
+helperが欠けたcheckoutでは新分岐だけ`TASK_CONTEXT_HIERARCHY_UNSUPPORTED`でdispatch前に拒否し、
+単数親と通常queryのimportは保ちます。無関係なimport例外をこの拒否へ変換しません。
+実provider、installed CLI、組織Planや全8階層、複数親と学習再利用の組合せの追加受入はこの検証に含めません。
 
 ## 根Requirementから有限の仕事を導く
 
@@ -98,9 +178,11 @@ frontier:
 ```
 
 `atomic`は空のchildrenを持つ一つの仕事、`all_of`は列挙した子がすべて必要な要件です。
-root/中間/leafのすべてで`kind`・`children`・`requires`を必須とし、`requires`が非空なら拒否します。
+root/中間/leafのすべてで`kind`・`children`・`requires`を必須とします。
+初期の独立仕事は`requires: []`です。現行の[#366](https://github.com/Kotodama-Project/Kotodama-project/issues/366)経路は、
+2leafの間の明示した1依存だけを既存prerequisite reviewへ渡します。それ以上は拒否し、
 独立性を推論したり、依存する仕事を独立として実行したりしません。`children`は要件分解の辺で、
-文書の`parent_ref`や仕事の実行順序とは別です。通常テンプレートや宣言version 1へは適用しません。
+文書の構造上の親や仕事の実行順序とは別です。通常テンプレートや宣言version 1へは適用しません。
 
 根からの閉包を検査し、循環、未知の子、同じ子の重複、最大2辺を超える経路、未使用文書を拒否します。
 先に短い経路をたどった共有nodeも、長い経路の深さを省略しません。同じ現在Requirementのatomic leafは
@@ -118,9 +200,9 @@ leafの仕事へ割り当て、起点が複数なら和集合を使います。`
 起点/担当leaf、元予算と初期必要attempt数を返します。ここで示す初期実行後の余裕は未実行時の計算値で、
 実runの残予算ではありません。実行済みattemptは既存coordinatorが同じrunで管理します。
 
-このsliceが保証するのは、明示分解からの入力配布・計画と全reportの収集です。現行critic validatorは
-個々の`A_i`のpassed evidenceが担当leafを参照することまでは強制しません。担当割当だけで要件の意味的達成を
-保証したとは扱いません。条件ごとの全担当証拠の強制は[#362](https://github.com/Kotodama-Project/Kotodama-project/issues/362)です。
+このsliceが保証するのは、明示分解からの入力配布・計画と全reportの収集です。現行の
+[#362](https://github.com/Kotodama-Project/Kotodama-project/issues/362) validatorは、個々の`A_i`に割り当てた
+全leafのpassed evidenceと実work入力を照合します。担当割当だけで要件の意味的達成を保証したとは扱いません。
 テストの独立criticは与えた数値からp95/RSS欠測を計算し、echoや別leafの値を
 失敗にする限定fixtureです。任意の実モデルの誤判定を検出する証明ではありません。
 
@@ -143,8 +225,9 @@ acceptance・constraints・unknowns・referencesはそれぞれの上限で、�
 全文訂正によって全子入力のdigestが変わることを維持します。
 
 外部履歴を独立に検証していないため`history=input_only_unverified`を保ちます。
-既存のLineageContextGateを使ったと偽装しません。Plan階層type、自動階層探索、複数親、実Node/Discord入口、
-配布済みCLI、未完runの復旧は後続です。このAPIとCLIはrepositoryのtoolsとして使い、
+既存のLineageContextGateを使ったと偽装しません。組織Plan階層type、自動階層探索、実Node/Discord入口、
+配布済みCLIの受入は後続です。未完runの復旧は現coordinatorの別の受入を参照し、
+本bridgeの証拠をその代用にしません。このAPIとCLIはrepositoryのtoolsとして使い、
 runtime wheelへKBの逆依存を追加しません。
 
 ## 一件の学びを現在のTask入力へ接続する
@@ -193,8 +276,8 @@ verifyは最終B入力を実ownerで検証し、元のKB候補と一件の追加
 | claim / report / accept / receipt / replay | 既存coordinatorのguardが同じ実owner・A・判断を再検証。保存済みの成功をキャッシュしない |
 | 完了済みreplayの返却直前 | backendを呼ばずTask期限を免除する再読でも、adapterが現在時刻でConcept期限を再確認 |
 
-本公開v1にはcheckpointとfinalization recoveryは未実装です。
-上の検査境界は、現在のcoordinatorに存在する経路の受入です。
+一件学習adapterの初期公開v1受入にはcheckpointとfinalization recoveryを含めていません。
+現在のcoordinatorの追加経路を、その初期証拠だけで受入済みとは扱いません。
 
 最終B ownerにはcandidateの全`source_checks`の束縛が必要です。削除したcheckをcandidate側の自己申告で
 補うことはできません。選択Conceptの最短期限を既存Task deadlineが越えない条件も維持するため、

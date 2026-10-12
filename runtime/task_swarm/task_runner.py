@@ -62,26 +62,71 @@ def read_json(filename: Path, maximum=2*1024*1024, *, with_digest=False):
     return (value, hashlib.sha256(raw).hexdigest()) if with_digest else value
 
 
-def verify_runtime(value, attempt, *, freeze=False):
+def _validate_expected_input(expected_input):
+    from .codex import MAX_RECORDED_INPUT_BYTES
+    require(type(expected_input) is bytes and len(expected_input) <= MAX_RECORDED_INPUT_BYTES,
+            "RUN_RUNTIME_INPUT_INVALID")
+    try:
+        expected_input.decode("utf-8")
+    except UnicodeError as exc:
+        raise SwarmError("RUN_RUNTIME_INPUT_INVALID", "expected input must be UTF-8 bytes") from exc
+
+
+def _verify_recorded_input(receipt, paths, expected_input):
+    """Verify parent recording and pipe-write proof, never child consumption."""
+    from .codex import MAX_RECORDED_INPUT_BYTES
+    _validate_expected_input(expected_input)
+    marker = receipt.get("stdin_submission")
+    require(isinstance(marker, dict) and set(marker) == {"version", "encoding", "bytes", "sha256", "writer_status"},
+            "RUN_RUNTIME_INPUT_REQUIRED")
+    require(type(marker["version"]) is int and marker["version"] == 1
+            and type(marker["bytes"]) is int and marker["bytes"] == len(expected_input)
+            and marker["encoding"] == "utf-8" and marker["writer_status"] == "pipe_write_completed",
+            "RUN_RUNTIME_INPUT_INVALID")
+    sha = hashlib.sha256(expected_input).hexdigest()
+    artifacts = receipt.get("artifact_digests")
+    require(isinstance(artifacts, dict) and marker["sha256"] == sha and artifacts.get("input") == sha
+            and "input" in paths, "RUN_RUNTIME_INPUT_CHANGED")
+    try:
+        raw = read_bytes(paths["input"], MAX_RECORDED_INPUT_BYTES)
+    except (OSError, SwarmError) as exc:
+        raise SwarmError("RUN_RUNTIME_INPUT_CHANGED", "recorded runtime input could not be reopened") from exc
+    require(raw == expected_input, "RUN_RUNTIME_INPUT_CHANGED")
+
+
+def verify_runtime(value, attempt, *, freeze=False, expected_input=None):
     """Reopen nested runtime evidence before publication, acceptance and replay."""
     from datetime import datetime
-    from .codex import _paths, _event_identity, _runtime_receipt, _redact, _result_from_message, _json_dump, MODEL, EFFORT
+    from .codex import (_paths, _event_identity, _runtime_receipt, _redact,
+                        _result_from_message, _json_dump, MODEL, EFFORT, MAX_RECORDED_INPUT_BYTES)
     from .confidential import require_observed_profile, runtime_paths
+    record_input = expected_input is not None
+    if record_input:
+        _validate_expected_input(expected_input)
+        require(isinstance(value, dict) and isinstance(value.get("receipt"), dict)
+                and isinstance(value.get("paths"), dict)
+                and isinstance(value["paths"].get("attempt_dir"), str), "RUN_RUNTIME_INPUT_INVALID")
     receipt, supplied = value["receipt"], value["paths"]
     base = safe_directory(attempt)
     actual_attempt = Path(supplied["attempt_dir"])
     require(actual_attempt.parent == base and actual_attempt.name.startswith("attempt-"), "RUN_RUNTIME_PATH_CHANGED")
-    paths = _paths(safe_directory(actual_attempt))
+    paths = _paths(safe_directory(actual_attempt), record_input=record_input)
     work = safe_directory(actual_attempt/"work")
     require(supplied == {key:str(path) for key,path in paths.items()}, "RUN_RUNTIME_PATH_CHANGED")
     saved_receipt, receipt_sha = read_json(paths["receipt"], with_digest=True)
     require(saved_receipt == receipt and (freeze or value.get("runtime_receipt_sha256") == receipt_sha),
             "RUN_RUNTIME_RECEIPT_CHANGED")
     required = {"schema", "command", "process", "events", "stderr", "last_message", "result"}
+    if record_input:
+        required.add("input")
+        require(isinstance(receipt.get("artifact_digests"), dict), "RUN_RUNTIME_INPUT_INVALID")
     require(set(receipt.get("artifact_digests", {})) == required, "RUN_RUNTIME_RECEIPT_INVALID")
     for key in required:
-        require(hashlib.sha256(read_bytes(paths[key], 16*1024*1024)).hexdigest() == receipt["artifact_digests"][key],
+        limit = MAX_RECORDED_INPUT_BYTES if key == "input" else 16*1024*1024
+        require(hashlib.sha256(read_bytes(paths[key], limit)).hexdigest() == receipt["artifact_digests"][key],
                 "RUN_RUNTIME_ARTIFACT_CHANGED")
+    if record_input:
+        _verify_recorded_input(receipt, paths, expected_input)
     require(read_json(paths["result"]) == value["result"], "RUN_RUNTIME_RESULT_CHANGED")
     require(receipt.get("permission_probe") == {"kind":"task_synthetic_permission_probe_v1",
             "outer_read_denied":True,"inner_metadata_read_denied":True,"model_called":False}, "RUN_RUNTIME_POLICY_MISSING")
@@ -111,6 +156,8 @@ def verify_runtime(value, attempt, *, freeze=False):
     require(receipt.get("permission_profile_sha256") == hashlib.sha256(_json_dump(runtime["permission_profile"]).encode("utf-8")).hexdigest(),
             "RUN_RUNTIME_POLICY_CHANGED")
     require(read_bytes(rollout,16*1024*1024) == raw, "RUN_RUNTIME_ROLLOUT_CHANGED")
+    if record_input:
+        _verify_recorded_input(receipt, paths, expected_input)
     if freeze:
         value["runtime_rollout_sha256"] = sha
         value["runtime_receipt_sha256"] = receipt_sha

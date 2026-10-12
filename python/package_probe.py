@@ -45,7 +45,7 @@ for invalid in ({1: "value"}, {"nested": {None: "value"}}, (1, 2), "\ud800", cyc
         else:
             raise AssertionError("non-JSON input was silently coerced")
 modules = list(pkgutil.iter_modules(swarm.__path__, swarm.__name__ + "."))
-assert len(modules) == 23
+assert len(modules) == 28
 for module in modules:
     importlib.import_module(module.name)
 # Exercise both input versions from the installed namespace. Import enumeration
@@ -86,6 +86,9 @@ binding["context_digest"] = core.digest(request)
 assert validate_input(request, binding, now=1000) == request
 assert make_plan(request, binding, now=1000)["budget"]["deadline"] == 1100
 assert {"O1", "Q1"} <= criteria(request).keys()
+from kotodama_core.task_swarm.repair_planning import derive_repair, make_impact, profile
+assert callable(derive_repair) and callable(make_impact)
+assert profile({}) is None
 from kotodama_core.task_swarm.closed_loop_context import derive_child_view
 from kotodama_core.task_swarm.closed_loop import cancel_closed_loop
 assert callable(cancel_closed_loop)
@@ -97,6 +100,28 @@ assert validate_plan(loop_plan, request) == loop_plan
 view = derive_child_view(request, "r0-inspect", loop_plan["jobs"][0]["selected_spans"],
                          plan_digest=core.digest(loop_plan))
 assert view["parent_input_digest"] == core.digest(request) and view["request"] == current_request
+from kotodama_core.task_swarm.loop_executor import derive_executor_policy, loop_request, loop_schema
+import copy
+primitive = copy.deepcopy(request)
+declaration = {"kind": "task_loop_executor", "version": 1, "mode": "local_executable_fixture",
+    "prompt_contract_version": 1, "visibility": "fixture_declared_material_observation",
+    "executable": {"path": "fixture.py", "sha256": "0" * 64, "bytes": 1}, "materials": []}
+policy_text = core.canonical(declaration)
+primitive["sources"][-1]["text"] += "\n" + policy_text
+primitive["sources"][-1]["sha256"] = hashlib.sha256(primitive["sources"][-1]["text"].encode()).hexdigest()
+policy_span = span(primitive["sources"][-1], policy_text)
+primitive["objective"]["constraints"].append(policy_span)
+primitive_plan = {"version": 1, "parent_input_digest": core.digest(primitive), "jobs": [
+    {"job_id": "inspect", "purpose": "Primitive only", "criterion_ids": list(loop_criteria(primitive)),
+     "selected_spans": [span(primitive["sources"][-1], current_request)]}]}
+from kotodama_core.task_swarm.closed_loop_contract import work_input
+with tempfile.TemporaryDirectory() as primitive_root:
+    policy = derive_executor_policy(primitive, primitive_plan, policy_span, owner_base=primitive_root)
+    delivered = work_input(primitive, primitive_plan["jobs"][0], 0, core.digest(primitive_plan), round_plan_digest=core.digest(primitive_plan))
+    dispatch = {"run_id": "task-run-" + core.digest([primitive["task_id"], primitive["revision"]])[:32],
+                "job_id": "r0-inspect", "actor_ref": "worker", "attempt": 1, "epoch": 1}
+    assert json.loads(loop_request(policy, delivered, dispatch))["materials"] == []
+    assert loop_schema(delivered)["properties"]["job_id"]["const"] == "r0-inspect"
 from kotodama_core.task_swarm.owner_file import OwnerFile
 from kotodama_core.task_swarm.state import SwarmState
 with tempfile.TemporaryDirectory() as temporary:

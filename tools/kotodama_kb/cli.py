@@ -91,8 +91,17 @@ def _parser() -> argparse.ArgumentParser:
                                   help="Concept that this declared scope must include (repeatable)")
     readiness_parser.add_argument("--format", choices=("json", "markdown"), default="json")
 
-    task_parser = subparsers.add_parser("task-input", help="compile, verify or simulate an existing owner's Task input")
+    task_parser = subparsers.add_parser("task-input", help="compile, verify, inspect or simulate an existing owner's Task input")
     operations = task_parser.add_subparsers(dest="operation", required=True)
+    inspection = operations.add_parser("inspect", help="inspect normal Task references without executing or opening a database")
+    _add_common_root(inspection)
+    inspection.add_argument("--owner", type=Path, required=True)
+    inspection.add_argument("--candidate", type=Path, required=True)
+    inspection.add_argument("--format", choices=("json", "markdown"), default="json")
+    # Parse these explicitly so unsupported learning cannot enter its verifier.
+    inspection.add_argument("--input", type=Path, help="unsupported by read-only inspection")
+    inspection.add_argument("--learning-origin", type=Path, help="unsupported by read-only inspection")
+    inspection.add_argument("--learning-decision-digest", help="unsupported by read-only inspection")
     for operation in ("compile", "verify", "simulate"):
         command = operations.add_parser(operation)
         _add_common_root(command)

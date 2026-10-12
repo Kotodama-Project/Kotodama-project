@@ -67,6 +67,14 @@ def _origin(owner_path, payload_path, anchor, *, clock):
     # Hash readback alone is insufficient: revalidate actual report evidence and
     # every independent critic against the exact saved delivered views.
     runtime_plan = read_json(directory / "plan.json")
+    if runtime_plan.get("execution_contract_version") == 3:
+        from .closed_loop_recovery import terminal_evidence
+        state = SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock)
+        finalization = state.finalization(run_id)
+        require(finalization is not None, "REUSE_ORIGIN_PLAN_MISMATCH")
+        expected, learning, _, _, _ = terminal_evidence(directory, payload, finalization["checkpoint"], state)
+        require(expected == replay["candidate"] and learning == replay["learning_candidate"], "REUSE_ORIGIN_CANDIDATE_MISMATCH")
+        return owner, payload, receipt, expected, directory
     admission = read_json(directory / "extension.json") if "extension.json" in receipt["artifact_sha256"] else None
     scheduled = {job["job_id"]: job for job in [*runtime_plan["jobs"],
                  *(admission["jobs"] if admission else [])]}
@@ -115,7 +123,10 @@ def _origin(owner_path, payload_path, anchor, *, clock):
             initial_template=read_json(directory/"r0-critic-template.json"),
             work_inputs={j: read_json(directory/(j+"-input.json")) for j, spec in scheduled.items()
                          if spec["kind"] == "work"},
-            repair_specification=read_json(directory/"repair-proposal.json") if round_index else None)
+            repair_specification=read_json(directory/"repair-proposal.json") if round_index else None,
+            repair_impact=read_json(directory/"repair-impact.json") if round_index and
+                "repair-impact.json" in receipt["artifact_sha256"] else None,
+            execution_snapshot=SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock).snapshot(run_id))
         prior_review = {"response": response, "dispatched_input": delivered,
                         "dispatched_input_digest": receipt["dispatches"][job]["delivered_input_digest"]}
     expected = integration_candidate(payload, reports, critic, critic_sha,
