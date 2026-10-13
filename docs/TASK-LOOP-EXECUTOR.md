@@ -62,6 +62,9 @@ proof検査をまたいでsnapshotを使い回しません。保存readerはproo
 独立した読取として残し、proof後のTask・actorには別の新規snapshotを使います。
 各呼出し・monitorの次の検査ではSourceとownerを再読し、最後のowner原bytes照合、
 取消・objective期限・actor状態とepochの確認も維持します。
+学習元readerの内部clock参照も、現在の参照先が組込clockである間だけこの経路を使います。
+Task・actor・storageを読むたびに参照先と標準readerを確認し、途中で独自clockやoverrideに
+変わった場合はcallbackを呼ぶ前に新しい逐次読取へ戻します。その検査内では再共有しません。
 独自clock、subclass、class/instanceのreader overrideは従来の逐次読取を使い、
 callbackや既存hookを省略しません。公開`read_task`/`read_binding`/`storage`も従来どおり
 毎回再読します。TTLやfenceを越えるcacheは追加しません。

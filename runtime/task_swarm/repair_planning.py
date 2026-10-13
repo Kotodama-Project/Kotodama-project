@@ -242,6 +242,7 @@ def _inspection_cut(database, destination, *, observe_shm=True):
 
 def _inspection_state(database, owner, clock, *, dependency=False, legacy_optional=()):
     """Validate the copied original schema before any scheduler initializer."""
+    import math
     import sqlite3
     from contextlib import closing
     required = {
@@ -266,6 +267,15 @@ def _inspection_state(database, owner, clock, *, dependency=False, legacy_option
                 if not actual and table in legacy_optional:
                     continue
                 require(set(columns.split()) <= actual, "LOOP_REPAIR_STATE")
+            # Table names/columns alone do not enforce the writer's scalar
+            # contract. A copied table may lack NOT NULL/type constraints.
+            # Reject bad stored values before snapshot() converts them.
+            for budget, concurrency, deadline, created in conn.execute(
+                    "SELECT attempt_budget, concurrency, deadline, created_at FROM runs"):
+                require(type(budget) is int and 0 <= budget <= 1000
+                        and type(concurrency) is int and 1 <= concurrency <= 40
+                        and all(type(value) in (int, float) and math.isfinite(value) and value >= 0
+                                for value in (deadline, created)), "LOOP_REPAIR_STATE")
     except sqlite3.Error as error:
         from .protocol import SwarmError
         raise SwarmError("LOOP_REPAIR_STATE", "saved execution state is invalid") from error

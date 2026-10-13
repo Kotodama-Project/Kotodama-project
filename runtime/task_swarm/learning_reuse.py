@@ -16,7 +16,7 @@ import time
 from .closed_loop import execute_closed_loop, _execute_closed_loop
 from .closed_loop_context import validate_report_in_view
 from .closed_loop_contract import integration_candidate, learning_candidate, validate_critic
-from .owner_file import OwnerFile
+from .owner_file import OwnerFile, _ForwardClock
 from .protocol import SwarmError, canonical, digest, digest_ref, integer, ref
 from .task_contract import require, shape, validate_input
 from .task_planning import _Sources
@@ -236,7 +236,7 @@ class ReuseOwner:
         self._allow_expired_objective = allow_expired_objective
         # Forward clock changes, including historical-read tests and expiry
         # transitions, to every retained current owner and DB reader.
-        current_clock = lambda: self.clock()
+        current_clock = _ForwardClock(self)
         origin, self._verified_origin = _read_origin(origin_owner, origin_input, anchor, clock=current_clock, retain=True)
         _, _, self.receipt, _, self.directory = origin
         self._expected_proposal = canonical(_proposal(origin, anchor, self.proposal["claim_index"]))
