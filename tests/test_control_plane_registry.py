@@ -16,8 +16,13 @@ from audit_control_plane import build_report, inventory, path_matches
 
 class ControlPlaneRegistryTest(unittest.TestCase):
     def test_repository_indexes_pass_the_unchanged_coverage_gate(self):
-        report = build_report(ROOT, date(2026, 10, 7))
+        # The live checkout evolves; a historical fixture date would falsely
+        # classify a legitimate STATUS update as future evidence. Never derive
+        # the evaluation day from the evidence being checked.
+        as_of = date.today()
+        report = build_report(ROOT, as_of)
         self.assertEqual("PASS", report["status"], report["findings"])
+        self.assertEqual(as_of.isoformat(), report["as_of"])
         self.assertGreaterEqual(report["summary"]["classification_coverage"], .98)
         self.assertEqual(7, report["summary"]["registered_agent_count"])
         self.assertEqual(0, report["summary"]["active_agent_count"])
@@ -76,13 +81,18 @@ class ControlPlaneRegistryTest(unittest.TestCase):
         self.assertEqual("knowledge/profile.yaml", paths["knowledge_operations"])
 
     def test_old_review_date_stays_visible_and_warning_exit_is_explicit(self):
-        result = subprocess.run([sys.executable,str(ROOT/"tools/audit_control_plane.py"),"--root",str(ROOT),"--as-of","2026-10-07","--fail-on","warning"],capture_output=True,timeout=30)
+        as_of = date.today()
+        result = subprocess.run([sys.executable,str(ROOT/"tools/audit_control_plane.py"),"--root",str(ROOT),"--as-of",as_of.isoformat(),"--fail-on","warning"],capture_output=True,timeout=30)
         self.assertEqual(1,result.returncode)
         report = json.loads(result.stdout)
-        self.assertEqual("PASS",report["status"])
-        stale = [f for f in report["findings"] if f["code"]=="stale-canonical-source"]
-        self.assertTrue(stale)
-        self.assertTrue(all(f["evidence"]["observed_date"]=="2026-09-07" for f in stale))
+        self.assertEqual("PASS",report["status"],report["findings"])
+        # Other canonical sources can age too; the inherited agent review
+        # remains visible without requiring all warnings to share its date.
+        stale = [f for f in report["findings"] if f["code"]=="stale-canonical-source"
+                 and f["source"]=="governance/agent-registry.json"]
+        self.assertEqual(1, len(stale))
+        self.assertEqual("warning", stale[0]["severity"])
+        self.assertEqual({"observed_date": "2026-09-07", "as_of": as_of.isoformat()}, stale[0]["evidence"])
 
 
 if __name__ == "__main__":
