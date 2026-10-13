@@ -62,14 +62,21 @@ export class ProjectHub{
       validateSource(ref);const current=this.store.source(ref.key,actor);
       const row=this.store.statement('SELECT body FROM source_versions WHERE key=? AND revision=?').get(ref.key,ref.revision);check(row,'PROJECT_SOURCE_VERSION_UNAVAILABLE');
       const original=JSON.parse(row.body);
+      this.sourceConsent(original);this.sourceConsent(current);
       check(original.key===ref.key&&original.revision===ref.revision&&original.final&&!original.withdrawn&&original.readers?.includes(actor),'SOURCE_ACCESS_DENIED');
       check(original.actorId===actor&&current.actorId===actor,'PROJECT_SOURCE_ACTOR_MISMATCH');
       check(original.provider==='discord'&&original.guildId===this.config.discord.guildId&&room(original)===room(current)&&(!expectedRoom||room(original)===expectedRoom),'PROJECT_SOURCE_SCOPE_MISMATCH');
       return {ref,current,original};
     });
   }
+  sourceConsent(source){
+    if(source.metadata?.kind==='voice'){
+      const speaker=source.metadata.inputAccountId??source.actorId;
+      check(typeof speaker==='string'&&!this.store.voiceOptedOut(source.guildId,source.channelId,speaker),'PROJECT_VOICE_SCOPE_REVOKED');
+    }
+  }
   sourceScope(sources,policy){
-    const allowed=config=>new Set([...config.discord.textChannelIds,config.discord.resultChannelId]);
+    const allowed=config=>new Set([...config.discord.textChannelIds,config.discord.resultChannelId,config.discord.voiceChannelId,...(config.voicePool?.rooms??[]).map(room=>room.channelId)].filter(Boolean));
     for(const {current} of sources)check(allowed(this.config).has(current.channelId)&&allowed(policy).has(current.channelId),'PROJECT_SOURCE_SCOPE_MISMATCH');
   }
   response(version,current,sources,{replay=false,write=false}={}){
@@ -99,7 +106,7 @@ export class ProjectHub{
     const refs=unique([...(current?.sources??[]),...(saved?.sources??[]),...(input.source?[input.source]:[])]);
     const observed=this.sources(refs,input.actor,current?.room),epoch=this.accessEpoch();this.sourceScope(observed,policy);
     if(input.source&&!prior)check(observed.find(s=>sourceReference(s.ref)===sourceReference(input.source)).current.revision===input.source.revision,'SOURCE_CHANGED');
-    for(const {current:source} of [...new Map(observed.map(s=>[s.ref.key,s])).values()]){
+    for(const {current:source} of [...new Map(observed.map(s=>[room(s.current),s])).values()]){
       guard();await this.authorizeSource(source,input.actor,{signal});guard();
     }
     const final=await this.readConfig();guard(final);this.sourceScope(observed,final);check(this.accessEpoch()===epoch,'PROJECT_ACCESS_CHANGED');
