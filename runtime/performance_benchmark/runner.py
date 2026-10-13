@@ -220,7 +220,9 @@ class Parser(argparse.ArgumentParser):
 def main(argv=None):
     parser = Parser(description=__doc__)
     parser.add_argument("--allow-local-fixture", action="store_true")
-    parser.add_argument("--fixture", choices=["swarm-short"], default="swarm-short")
+    parser.add_argument("--fixture", choices=["swarm-short", "task-admission"], default="swarm-short")
+    parser.add_argument("--width", type=int, choices=[1, 2, 4])
+    parser.add_argument("--workload", choices=["wait", "cpu"])
     parser.add_argument("--samples", type=int, default=5)
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--timeout-seconds", type=int, default=30)
@@ -228,7 +230,15 @@ def main(argv=None):
         args = parser.parse_args(argv)
         if not args.allow_local_fixture:
             raise BenchmarkError("LOCAL_FIXTURE_REQUIRED")
-        report = run_benchmark(samples=args.samples, warmups=args.warmups, timeout_seconds=args.timeout_seconds)
+        if args.fixture == "task-admission":
+            from performance_benchmark.task_admission import run_benchmark as run_tasks
+            report = run_tasks(samples=args.samples, warmups=args.warmups,
+                               timeout_seconds=args.timeout_seconds,
+                               width=args.width or 1, workload=args.workload or "wait")
+        else:
+            if args.width is not None or args.workload is not None:
+                raise BenchmarkError("ARGUMENTS_INVALID")
+            report = run_benchmark(samples=args.samples, warmups=args.warmups, timeout_seconds=args.timeout_seconds)
         print(json.dumps(report, sort_keys=True, ensure_ascii=False, allow_nan=False))
         return 0 if report["status"] == "PASS" else 1
     except (BenchmarkError, OSError) as exc:
