@@ -25,7 +25,7 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 
 組織・設計・Project の文書階層と、目標・記憶・分解・並行実行・独立検証・統合・学習・再計画をつなぐ仕組み全体が対象です。各仕事へ原意・訂正・上位制約を保ち、同じ課題を繰り返さず、品質・時間・メモリ・費用・人の手間を改善します。文書や固定 worker の数を、全体の完成とは扱いません。
 
-[Owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) に、Project を目的・要件・人・agent・資料・Task・判断・成果・学習のハブにする方向を保持しています。必要な役割が親子・横で協働し、GUI・自然言語・CLI から同じ仕事を扱う設計です。最初の [Project 参照 CLI](docs/PROJECT-HUB-VIEW.md) は `main` にあり、既存 Task の参照と訂正候補を確認できます。Project の保存・共通操作・動的割当・実外部接続は [#385](https://github.com/Kotodama-Project/Kotodama-project/issues/385) で進めています。
+[Owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) に、Project を目的・要件・人・agent・資料・Task・判断・成果・学習のハブにする方向を保持しています。必要な役割が親子・横で協働し、GUI・自然言語・CLI から同じ仕事を扱う設計です。[Project 参照 CLI](docs/PROJECT-HUB-VIEW.md) と、原依頼・訂正履歴を保持する[既存 local owner の保存・訂正](runtime/discord-template/docs/PROJECTS.md)は `main` にあります。保存操作は既定無効です。Dots・GUI との共通操作、Task の関連付け、動的割当・実外部接続は [#385](https://github.com/Kotodama-Project/Kotodama-project/issues/385) で進めています。
 
 2026-09-30の方針として、[OpenAI Dotsを日常の入口と継続作業の第一候補](docs/OPENAI-ALIGNMENT.md)にします。Kotodamaは会社の知識・権限・訂正・Task・検証証拠を既存の各正本へ返します。Cloudflare edgeと公式Cloudflare OSは接続・専用画面の候補として維持し、実接続と配備は検証して決めます。
 
@@ -39,7 +39,7 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 
 ## 現在地
 
-この版には、OKF Markdown の知識検索・限定 context、原意と訂正を束縛する Task 入力、独立 critic、永続取消、必要な leaf だけの一回修復、検証済み A から B への二葉の依存実行、Project の read-only view があります。修復は同じ Task・予算を保ち、終端 checkpoint 後の復旧で仕事を再実行しません。
+この版には、OKF Markdown の知識検索・限定 context、原意と訂正を束縛する Task 入力、独立 critic、永続取消、必要な leaf だけの一回修復、検証済み A から B への二葉の依存実行、Project の read-only view と限定 local 保存・訂正があります。修復は同じ Task・予算を保ち、終端 checkpoint 後の復旧で仕事を再実行しません。
 
 採用済みの版、実行器 CLI・学習・階層 reader の候補、性能測定と優先 Issue は [STATUS の現在地](STATUS.md#current-source-and-open-integration-work) に集約しています。次の担当はそこから各 Issue の最新 head・証拠・残る受入を確認してください。全8階層、実モデル・利用者成果、常駐運用は引き続き受入が必要です。
 
@@ -53,7 +53,7 @@ checkout の Python 3.12 から使います。検索は現在の小さな Markdo
 | 目的と Source を既存 Task に束縛する | `python -B tools/knowledge_base.py task-input --help` | [compile / verify / simulate](docs/KNOWLEDGE-TASK-INPUT.md) |
 | Project と既存 Task の対応を読む | `python -B tools/project_hub.py --help` | [view / inspect-change](docs/PROJECT-HUB-VIEW.md) |
 
-Project CLI は参照と訂正候補の検査までです。Task 作成・更新・dispatch は行いません。検索品質・大規模性能や自律改善の全体受入は、これらの CLI の存在だけでは成立しません。
+Python の Project CLI は参照と訂正候補の検査までです。既定無効の local owner 共通操作は Project の create/read/inspect/correct を扱い、保存した Project の `task_refs` は空です。Task 作成・更新・dispatch は行いません。検索品質・大規模性能や自律改善の全体受入は、これらの入口の存在だけでは成立しません。
 
 ## 使い方を選ぶ
 
@@ -65,7 +65,7 @@ Project CLI は参照と訂正候補の検査までです。Task 作成・更新
 | 会社の runtime を配備する | Compose minimum / Proxmox segmented の lifecycle contract と validator（live receipt なし）。Cloudflare edge と公式 Cloudflare OS の候補（未 upload、未 deploy） | [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)、[Cloudflare OS](docs/CLOUDFLARE-OS-ADOPTION.md) |
 | agent swarm に調査を任せる | 明示slashから同じTaskの3worker・別verifier・成果readbackへ接続。既定無効、Linux限定。移行台帳とlifecycle registryの実運用は別の未完事項 | [Task swarm run](docs/TASK-SWARM-RUN.md)、[実行基盤](docs/LUNA-TASK-SWARM.md)、[swarm契約](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) |
 | 知識基盤と目的入力を使う | canonical OKF Markdown、catalog/graph、出典・鮮度の検査、字句検索、限定context、型付き目的と原意・訂正を既存Taskへ束縛する compile/verify/simulate。内容の独立検証・実モデル品質・大規模性能は別の受入 | [Knowledge base](docs/KNOWLEDGE-BASE.md)、[Task input](docs/KNOWLEDGE-TASK-INPUT.md)、[公開知識の入口](knowledge/index.md) |
-| Project と既存 Task を確認する | Project 情報契約、既存 owner に束縛した Task 参照 view、訂正候補と影響の検査。保存・共通操作は後続 | [Project view](docs/PROJECT-HUB-VIEW.md) |
+| Project と既存 Task を確認する | Project 情報契約、既存 owner に束縛した Task 参照 view、訂正候補と影響の検査。local owner の保存・訂正は既定無効の共通操作から使う | [Project view](docs/PROJECT-HUB-VIEW.md)、[保存・訂正](runtime/discord-template/docs/PROJECTS.md) |
 
 ## 今 `main` にあるもの、候補、方向
 
@@ -76,7 +76,7 @@ Project CLI は参照と訂正候補の検査までです。Task 作成・更新
 | Discord / Voice | `runtime/discord-template` | | 15 分 rotation、Voice-to-Verified-Handoff、GrillU、[GPT-Live の採用方針](docs/GPT-LIVE-ADOPTION.md)の残り（#142〜#146） |
 | Agent swarm / 自律実行 | 限定 Task 実行、Luna Task swarm、agent swarm・route binding の契約（#34）、移行台帳の契約（#35）、agent lifecycle の契約（#36） | 実 registry と runtime/continuity 受入 | 「OK」後の Goal Completion Loop、reversible delegation |
 | 知識・Context | canonical OKF bundle、read-only検索/context、型付きTask目的・Source/frontier・learning候補の既存owner接続 | 階層統合、実executor入力・製品CLI、大規模検索評価 | Context Gateway、継続改善 |
-| Project | 最小情報契約、既存 Task の read-only view、訂正候補検査 | 保存・GUI/NL 共通操作 | 目的に応じた協働・最適化 |
+| Project | 最小情報契約、既存 Task の read-only view、原依頼と訂正履歴を既存 SQLite に保持する local 保存（既定無効） | [Dots 共通操作 #395](https://github.com/Kotodama-Project/Kotodama-project/pull/395)、GUI・Task の関連付け | 目的に応じた協働・最適化 |
 | Runtime | Compose / Proxmox contract、Cloudflare candidate | | Cloudflare edge と公式 Cloudflare OS を基盤にした配備 |
 | 組織・事業 | | | Resident Clone、Agent Foundry、AI Business Loop |
 
