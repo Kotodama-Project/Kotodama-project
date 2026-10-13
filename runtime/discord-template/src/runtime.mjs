@@ -24,6 +24,7 @@ import {awaitWithSignal,deadlineScope,readHttpBody,sendHttpJson} from './http-li
 import {DotsBridge} from './dots.mjs';
 import {JudgmentStatusReader} from './judgment-status.mjs';
 import {ProjectHub} from './project-hub.mjs';
+import {shape} from './project-contract.mjs';
 import {projectSkillsDigest} from './project-skill-input.mjs';
 import {atomicJson,atomicText,check,uid,errorCode,redact,Refused,digest} from './common.mjs';
 import {consumeBootstrapBinding,registerRuntimeModule} from './source-bootstrap.mjs';
@@ -132,20 +133,37 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         if(input.action==='tasks')result=await pipeline.tasks(input.actor);
         else if(input.action==='judgment')result=await judgment.read({actor:input.actor,taskId:input.taskId});
         else if(input.action==='project'){
-          const {action,surface,...operation}=input;
+          const {action,surface,approval_id,...operation}=input;
           check(surface===undefined||surface==='dots','PROJECT_SURFACE_INVALID');
           // A surface marker can only add restrictions to the operator grant.
           // Keep the original call's scope through authorization and commit.
           const assertScope=surface==='dots'?policy=>{
             check(config.dots.enabled&&policy.dots.enabled,'DOTS_DISABLED');
             check(config.dots.actorId===input.actor&&policy.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
+            check(config.dots.projectOperations?.includes(operation.operation)&&policy.dots.projectOperations?.includes(operation.operation),'PROJECT_OPERATION_NOT_ALLOWED');
           }:()=>{};
           scope=deadlineScope(8000,'PROJECT_OPERATION_TIMEOUT');controlReads.add(scope);
           const operationScope=scope;
           disconnect=()=>{if(!res.writableFinished)operationScope.abort(new Refused('HTTP_CLIENT_DISCONNECTED'));};
           req.once('aborted',disconnect);res.once('close',disconnect);
           if(req.aborted||res.destroyed)disconnect();
-          const work=projects.handle(operation,{signal:scope.signal,assertScope});
+          const signal=scope.signal;
+          const work=(async()=>{
+            if(['prepare','read_approval'].includes(operation.operation)){
+              check(surface==='dots'&&dots&&config.dots.actorId===input.actor&&current.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
+              if(operation.operation==='prepare'){
+                check(approval_id===undefined,'PROJECT_REQUEST_INVALID');shape(operation,['actor','operation','id','revision','candidate'],'PROJECT_REQUEST_INVALID');
+                return dots.prepareProject(operation.id,operation.revision,operation.candidate,{signal});
+              }
+              shape(operation,['actor','operation'],'PROJECT_REQUEST_INVALID');return dots.readProjectDraft(approval_id,{signal});
+            }
+            let assertApproval=()=>{};
+            if(surface==='dots'&&['create','correct'].includes(operation.operation)){
+              check(dots,'DOTS_DISABLED');assertScope(current);
+              assertApproval=await dots.authorizeProjectWrite(approval_id,operation,{signal});
+            }else check(approval_id===undefined,'PROJECT_REQUEST_INVALID');
+            return projects.handle(operation,{signal,assertScope:policy=>{assertScope(policy);assertApproval(policy);}});
+          })();
           // Keep SQLite/host ownership until the real authorization work settles,
           // even if its response timed out. The hub rechecks abort before commit.
           controlOperations.add(work);const settled=()=>controlOperations.delete(work);work.then(settled,settled);
