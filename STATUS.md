@@ -26,6 +26,8 @@ Ordinary Task admission from PR #346 is already adopted: default width 1, finite
 
 Resume #365, then #366 and #375/#327/#347; follow with #330/#331/#326/#349 measurements, then #385 and the #328/#350 outcome loop. Keep existing Issue acceptance, Task owners and public/private source boundaries. The README projects this status; no new progress ledger is created. The older runtime/deployment results below retain their own original scope and are not refreshed by this update.
 
+## Current public surfaces
+
 | Surface | Status |
 |---|---|
 | Public repository | Published preview |

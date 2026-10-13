@@ -7,6 +7,19 @@ Kotodama is a local-first Company OS that turns conversation into auditable inte
 > [!IMPORTANT]
 > このリポジトリは **Incomplete Public Preview** です。公開しているのは Company Pack の schema・validator・review chain、runtime と evidence の候補、Discord runtime の候補です。Public Beta の受付、Discord 招待、公開 Voice Bot は提供していません。公開面の既定は `NO_GO_UNPUBLISHED` で、validator や CI の PASS は install、deploy、provider 接続、Promotion、Current Truth、Final Human GO を意味しません。最新の境界は [STATUS.md](STATUS.md)、未完了の gate は [ROADMAP.md](ROADMAP.md) にあります。
 
+## 5 分で試す
+
+Git と Python 3.12 だけで、Company Pack の review chain（13 steps）を一時 workspace で完走させます。外部接続、credential、runtime は不要です。
+
+```bash
+git clone https://github.com/Kotodama-Project/Kotodama-project.git
+cd Kotodama-project
+python3 -S -B tools/smoke_company_pack_review_chain.py
+```
+
+Windows の PowerShell では `python3` の代わりに `python` を使います。成功すると `"status": "PASS"` と `"public_beta": "NO_GO_UNPUBLISHED"` を含む一行 JSON が返り、`claims` はすべて `false` です。読み方と次の一歩は [5-minute tour](docs/FIVE-MINUTE-TOUR.md) にあります。
+
+
 ## 何を作っているか
 
 会話・音声・Issue・文書から意図を検知し、足りない要件だけを確認して仕事へ分解し、成果と検証証拠を残して採用を判断し、会社の知識へ戻す。この鎖を短絡しないまま速く回すための部品を、Evidence Chain、Company Pack、Context Platform、AI Workforce、そして Cloudflare edge と公式 Cloudflare OS を基盤として作っています。
@@ -46,18 +59,6 @@ Kotodama is a local-first Company OS that turns conversation into auditable inte
 5. **#385 と #328 / #350**：既存 owner 上の Project 統合 view・共通操作と継続改善へつなぐ。実モデル・利用者・本番の受入を local/synthetic の結果と分ける。
 
 各候補は追加費用・provider 接続・配備・公開設定を有効化しません。README は案内であり、新しい Task 台帳や採用判断の正本ではありません。
-
-## 5 分で試す
-
-Git と Python 3.12 だけで、Company Pack の review chain（13 steps）を一時 workspace で完走させます。外部接続、credential、runtime は不要です。
-
-```bash
-git clone https://github.com/Kotodama-Project/Kotodama-project.git
-cd Kotodama-project
-python3 -S -B tools/smoke_company_pack_review_chain.py
-```
-
-Windows の PowerShell では `python3` の代わりに `python` を使います。成功すると `"status": "PASS"` と `"public_beta": "NO_GO_UNPUBLISHED"` を含む一行 JSON が返り、`claims` はすべて `false` です。読み方と次の一歩は [5-minute tour](docs/FIVE-MINUTE-TOUR.md) にあります。
 
 ## 使い方を選ぶ
 

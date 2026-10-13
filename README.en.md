@@ -7,6 +7,19 @@ The Japanese [README.md](README.md) is the canonical entry point. This page is a
 > [!IMPORTANT]
 > This repository is an **Incomplete Public Preview**. It publishes the Company Pack schemas, validators, and review chain, runtime and evidence candidates, and a Discord runtime candidate. Public Beta signup, a public Discord invite, and a public Voice Bot are not offered. The public boundary stays `NO_GO_UNPUBLISHED`: a validator or CI PASS never means install, deployment, provider connection, Promotion, Current Truth, or Final Human GO. See [STATUS.md](STATUS.md) and [ROADMAP.md](ROADMAP.md).
 
+## Try it in five minutes
+
+Git and Python 3.12 are enough. The command runs the thirteen-step Company Pack review chain in a temporary workspace with no network, credential, or runtime.
+
+```bash
+git clone https://github.com/Kotodama-Project/Kotodama-project.git
+cd Kotodama-project
+python3 -S -B tools/smoke_company_pack_review_chain.py
+```
+
+On Windows PowerShell, use `python` instead of `python3`. A success prints one line of JSON with `"status": "PASS"` and `"public_beta": "NO_GO_UNPUBLISHED"`; every value under `claims` is `false`. The [5-minute tour](docs/FIVE-MINUTE-TOUR.md) explains the report and the bounded next choices.
+
+
 ## What is being built
 
 Kotodama detects intent in conversation, voice, issues, and documents, confirms only the requirements that are missing, decomposes the work, keeps results and verification evidence, lets an authority decide adoption, and returns the learning to the company. The parts are the Evidence Chain, Company Packs, a Context Platform, an AI workforce, and a deployment foundation on Cloudflare edge plus the official Cloudflare OS.
@@ -36,18 +49,6 @@ You choose how to use it:
 - **Run work**: Company Packs and the review chain trace a request through Work Order, Verification Receipt, and Promotion.
 - **Say "OK" and let agents proceed**: within a permission granted once, an agent swarm researches, implements, and verifies on its own and returns to a human only when judgment or authority is missing. This is the design direction; `main` contains bounded Task execution and the [Luna Task swarm](docs/LUNA-TASK-SWARM.md), exercised with an offline fixture (a prior revision has a recorded live fixture pass; current-revision live acceptance remains unverified).
 - **Spend time in a voice channel**: choose a mode such as relaxing, thinking together, or working only when needed. Small talk is never turned into work or extra permission by itself.
-
-## Try it in five minutes
-
-Git and Python 3.12 are enough. The command runs the thirteen-step Company Pack review chain in a temporary workspace with no network, credential, or runtime.
-
-```bash
-git clone https://github.com/Kotodama-Project/Kotodama-project.git
-cd Kotodama-project
-python3 -S -B tools/smoke_company_pack_review_chain.py
-```
-
-On Windows PowerShell, use `python` instead of `python3`. A success prints one line of JSON with `"status": "PASS"` and `"public_beta": "NO_GO_UNPUBLISHED"`; every value under `claims` is `false`. The [5-minute tour](docs/FIVE-MINUTE-TOUR.md) explains the report and the bounded next choices.
 
 ## What works today
 

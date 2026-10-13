@@ -131,6 +131,50 @@ class ControlPlaneTest(unittest.TestCase):
                 else: (self.root/"freshness.md").write_text("Updated: 2026-10-07\n",encoding="utf-8")
                 self.assertEqual("REFUSED",self.report()["status"])
 
+    def test_updated_date_uses_evaluation_day_and_preserves_sla_and_evidence(self):
+        family = self.knowledge["fact_families"][0]
+        family["canonical_path"] = "freshness.md"
+        family["freshness"] = {"mode": "date_line", "prefix": "Updated:",
+                               "max_age_days": 14, "severity": "warning"}
+        evidence = self.root / "freshness.md"
+        original = b"Updated: 2026-10-12\n"
+        evidence.write_bytes(original)
+        self.flush()
+        # The same bytes are future on Oct 7, fresh through the inclusive
+        # 14-day SLA, and stale thereafter. No evidence date is rewritten.
+        cases = ((date(2026, 10, 7), "REFUSED", "freshness-check-failed"),
+                 (date(2026, 10, 12), "PASS", None),
+                 (date(2026, 10, 26), "PASS", None),
+                 (date(2026, 10, 27), "PASS", "stale-canonical-source"))
+        for as_of, status, code in cases:
+            with self.subTest(as_of=as_of):
+                report = audit.build_report(self.root, as_of)
+                self.assertEqual(status, report["status"], report["findings"])
+                findings = [f for f in report["findings"] if f.get("source") == "freshness.md"]
+                self.assertEqual([] if code is None else [code], [f["code"] for f in findings])
+                self.assertEqual(int(code == "stale-canonical-source"), report["summary"]["stale_fact_family_count"])
+                if code == "stale-canonical-source":
+                    self.assertEqual("warning", findings[0]["severity"])
+                    self.assertEqual({"observed_date": "2026-10-12", "as_of": "2026-10-27"},
+                                     findings[0]["evidence"])
+                elif code == "freshness-check-failed":
+                    self.assertEqual("error", findings[0]["severity"])
+                self.assertFalse(any(report["claims"].values()))
+                self.assertEqual(original, evidence.read_bytes())
+
+    def test_missing_and_invalid_updated_dates_are_refused(self):
+        family = self.knowledge["fact_families"][0]
+        family["canonical_path"] = "freshness.md"
+        family["freshness"] = {"mode": "date_line", "prefix": "Updated:",
+                               "max_age_days": 14, "severity": "warning"}
+        for content in ("No update date\n", "Updated: invalid\n", "Updated: 2026-02-30\n"):
+            with self.subTest(content=content):
+                (self.root / "freshness.md").write_text(content, encoding="utf-8")
+                report = self.report()
+                self.assertEqual("REFUSED", report["status"])
+                self.assertTrue(any(f["code"] == "freshness-check-failed" and f["severity"] == "error"
+                                    and f.get("source") == "freshness.md" for f in report["findings"]))
+
     def test_contradictory_allowed_and_forbidden_outputs_are_refused(self):
         self.policy["autonomy_boundaries"]["automatic_outputs_allowed"].append("runtime_deployment")
         self.assertEqual("REFUSED",self.report()["status"])
