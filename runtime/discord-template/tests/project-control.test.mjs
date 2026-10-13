@@ -76,3 +76,18 @@ test('Project request rejects extra authority fields and an unconfigured install
   await assert.rejects(g.command({...g.create,source:{...g.source,revision:2}}));
   assert.equal(g.runtime.store.statement("SELECT count(*) AS n FROM events WHERE type='project.created'").get().n,0);
 });
+
+test('control accepts full Unicode and escaped Project briefs while bounding all commands',async t=>{
+  const f=await fixture(t);
+  for(const [index,unit] of ['🌱','\u0001'].entries()){
+    const large={outcome:unit.repeat(4000)};
+    for(const field of ['in_scope','out_of_scope','constraints','acceptance','unknowns'])large[field]=Array.from({length:20},(_,i)=>String.fromCharCode(65+i)+unit.repeat(999));
+    assert.ok(Buffer.byteLength(JSON.stringify(large))>400000);
+    const saved=await f.command({...f.create,request_id:`large-${index}`,brief:large});
+    assert.deepEqual(saved.project.brief,large);
+    assert.deepEqual((await f.command({operation:'read',project_id:saved.project.project_id})).project.brief,large);
+  }
+  await assert.rejects(controlCommand(f.config,{action:'tasks',actor,padding:'x'.repeat(200000)}),/CONTROL_BODY_LIMIT/);
+  await assert.rejects(f.command({...f.create,padding:'x'.repeat(750000)}),/CONTROL_BODY_LIMIT/);
+  assert.equal(f.runtime.store.statement('SELECT count(*) AS n FROM projects').get().n,2);
+});

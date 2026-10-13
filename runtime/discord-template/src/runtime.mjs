@@ -122,8 +122,10 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,...(channelWorker?{channelWorkspaces:channelWorker.status()}:{}),taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status(),source});return;}
         check(req.method==='POST'&&req.url==='/v1/command','ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');check(controlOperations.size<8,'CONTROL_BUSY');
         scope=deadlineScope(10000,'CONTROL_BODY_TIMEOUT');controlReads.add(scope);
-        const body=await readHttpBody(req,{maxBytes:200000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});
-        const input=JSON.parse(body.toString('utf8'));current=await awaitWithSignal(loadConfig(filename),scope.signal);check(!closing,'RUNTIME_STOPPING');check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
+        // The Project contract can encode over 600 KB with JSON escapes. Keep
+        // the bounded authenticated reader and the earlier limit for other commands.
+        const body=await readHttpBody(req,{maxBytes:750000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});
+        const input=JSON.parse(body.toString('utf8'));check(input?.action==='project'||body.length<=200000,'CONTROL_BODY_LIMIT');current=await awaitWithSignal(loadConfig(filename),scope.signal);check(!closing,'RUNTIME_STOPPING');check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
         controlReads.delete(scope);scope.dispose();scope=null;
         let result;
         if(input.action==='tasks')result=await pipeline.tasks(input.actor);

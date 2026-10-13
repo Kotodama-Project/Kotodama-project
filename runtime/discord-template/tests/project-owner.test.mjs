@@ -91,6 +91,43 @@ test('current access cannot grant access to a historical source revision',async 
   await assert.rejects(f.create({source:hidden}),/SOURCE_ACCESS_DENIED/);assert.equal(count(f.store,'projects'),0);
 });
 
+test('voice and pooled rooms remain scoped and explicit opt-out blocks every Project operation',async t=>{
+  for(const pooled of [false,true]){
+    const f=await fixture(t),channelId=pooled?'pool-room':'voice-room';
+    if(pooled)f.config.voicePool={rooms:[{channelId}]};else f.config.discord.voiceChannelId=channelId;
+    f.policy=structuredClone(f.config);
+    const source=f.ingest('spoken',{channelId,metadata:{kind:'voice',inputAccountId:other}}),created=await f.create({source});
+    const input=change(created,source),{request_id,...inspection}=input;
+    // A current text revision must not bypass the original voice dependency.
+    f.store.ingest({...f.store.source(source.key,actor),revision:2,metadata:{kind:'text'}});
+    f.store.recordConsent({guild:'guild',channel:channelId,actor:other,notice:'fixture',granted:false,interactionId:'100000000000000101'});
+    for(const command of [read(created.project),{...inspection,operation:'inspect'},input])await assert.rejects(f.hub.handle(command),/PROJECT_VOICE_SCOPE_REVOKED/);
+    await assert.rejects(f.create({source}),/PROJECT_VOICE_SCOPE_REVOKED/);
+    assert.equal(count(f.store,'project_versions'),1);
+  }
+});
+
+test('voice opt-out during authorization and removal of a configured room prevent saving',async t=>{
+  const f=await fixture(t);f.config.discord.voiceChannelId='voice-room';f.policy=structuredClone(f.config);
+  const source=f.ingest('spoken',{channelId:'voice-room',metadata:{kind:'voice'}});
+  f.authorize=async()=>{f.store.recordConsent({guild:'guild',channel:'voice-room',actor,notice:'fixture',granted:false,interactionId:'100000000000000102'});};
+  await assert.rejects(f.create({source}),/PROJECT_VOICE_SCOPE_REVOKED/);assert.equal(count(f.store,'projects'),0);
+  f.store.recordConsent({guild:'guild',channel:'voice-room',actor,notice:'fixture',granted:true,interactionId:'100000000000000103'});
+  f.authorize=async()=>{delete f.policy.discord.voiceChannelId;};
+  await assert.rejects(f.create({source}),/PROJECT_SOURCE_SCOPE_MISMATCH/);assert.equal(count(f.store,'projects'),0);
+});
+
+test('a Project with 32 source dependencies authorizes its actor and room only once per operation',async t=>{
+  const f=await fixture(t);let calls=0;f.authorize=async()=>{calls++;};let current=await f.create();
+  for(let i=1;i<32;i++){
+    calls=0;current=await f.hub.handle(change(current,f.ingest(`correction-${i}`),{request_id:`correct-${i}`,brief:brief({outcome:`成果 ${i}`})}));
+    assert.equal(calls,1);
+  }
+  calls=0;assert.equal((await f.hub.handle(read(current.project))).source_refs.length,32);assert.equal(calls,1);
+  f.store.ingest({...f.store.source(f.source.key,actor),revision:2,withdrawn:true});
+  await assert.rejects(f.hub.handle(read(current.project)),/SOURCE_ACCESS_DENIED/);
+});
+
 test('original and every inherited correction remain access dependencies',async t=>{
   const f=await fixture(t),initial=await f.create(),source=f.ingest('correction'),corrected=await f.hub.handle(change(initial,source));
   const newer=await f.hub.handle(change(corrected,f.ingest('later'),{request_id:'correct-2',brief:brief({outcome:'後の成果'})}));

@@ -25,6 +25,11 @@ Projectの所有者と一致する必要があります。公開HTTP endpointを
 
 すべてに`actor`を含めます。`source`はそのinstallationに既に保存されたDiscord Sourceの参照です。
 現在の確定版と閲覧権限を確認し、未登録の本文や任意ファイルパスから自動取込しません。
+対象は設定済みtext/result channelとvoice room（voice poolを含む）です。音声Sourceは
+元版と現在版の発話者の明示opt-outを毎回確認し、途中の取消も保存前に拒否します。
+同じactor・roomのDiscord閲覧権限は操作ごとに一度照合し、各Sourceの版と閲覧範囲は個別に検査します。
+control入力はProjectに限り750,000 bytesまでとし、他のcommandは200,000 bytesまでです。
+契約内のUnicode・JSON escapeを切り捨てず扱います。
 書込みの`request_id`は呼出側で保持します。応答が不明なときも同じ内容・同じIDで照会し、
 新しいIDによる重複作成を避けます。同一IDの異内容は拒否します。
 
