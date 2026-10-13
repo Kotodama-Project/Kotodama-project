@@ -36,6 +36,12 @@ def fixture(now=1000):
 
 
 class ProjectHubTests(unittest.TestCase):
+    def test_import_with_runtime_already_behind_tools(self):
+        code = "import sys; sys.path[:0] = " + repr([str(ROOT / "tools"), str(ROOT / "runtime")])
+        code += "; import project_hub; assert callable(project_hub.project_view)"
+        run = subprocess.run([sys.executable, "-B", "-c", code], capture_output=True, text=True)
+        self.assertEqual(0, run.returncode, run.stderr)
+
     def test_final_reread_distinguishes_boolean_from_integer_revision(self):
         project, _, _ = fixture()
         project["task_refs"] = []

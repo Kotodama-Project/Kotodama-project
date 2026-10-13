@@ -15,8 +15,9 @@ from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 for directory in (ROOT / "tools", ROOT / "runtime"):
-    if str(directory) not in sys.path:
-        sys.path.insert(0, str(directory))
+    # Put the runtime package before tools/task_swarm.py even when another
+    # caller has already added runtime later in sys.path.
+    sys.path.insert(0, str(directory))
 
 from project_agent_status import InputError, bounded, load_json
 from task_swarm.owner_file import OwnerFile
