@@ -35,6 +35,8 @@ This revision includes OKF Markdown retrieval and bounded context, Task inputs b
 
 Explicit `local_executable_fixture` mode lets the knowledge CLI or installed core run local child processes declared by the existing owner. The two-document fixture verifies five calls, including a separate critic process, that retain DocA's result and repair only DocB. Learning-origin semantic verification is reused within one invocation, while every guard checks current execution evidence, owner bindings and the learning decision.
 
+[Learning proposal readback](docs/TASK-LEARNING-REUSE.md) uses a validated private copy without creating or repairing the original execution DB/WAL/SHM. Missing or corrupt state and missing required current-schema tables produce typed refusals; verified legacy-writer formats remain readable. Current owner, Source, cancellation and final evidence checks still apply.
+
 [STATUS](STATUS.md#current-source-and-open-integration-work) owns this revision's source capabilities, adoption status, remaining hierarchy/readback work, performance observations and prioritized Issues. Follow each linked Issue's latest evidence before resuming. Whole eight-layer operation, actual model/user outcomes and continuous production operation remain unaccepted.
 
 ## Knowledge, Task and Project CLI entrypoints
@@ -65,7 +67,7 @@ You choose how to use the product:
 | Session / conversation ledger | schema and validator | | runtime ingestion |
 | Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | | 15-minute rotation, Voice-to-Verified-Handoff, GrillU, the rest of the [GPT-Live adoption policy](docs/GPT-LIVE-ADOPTION.md) (#142 to #146) |
 | Agent swarm / autonomy | bounded Task execution, Luna Task swarm, swarm and route-binding contracts (#34), migration-ledger schema and read-only verifier (#35; synthetic fixture only), [agent-lifecycle contract](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md) (#36; schema, read-only verifier, synthetic fixture) | real registry and runtime/continuity acceptance | Goal Completion Loop after a human GO |
-| Knowledge / Context | canonical OKF Markdown, catalog/graph, bounded retrieval/context, typed goal/Source/frontier inputs and owner-bound learning candidates; explicit local-executor CLI, current evidence checks and learning-origin verification reuse within an invocation | hierarchy integration, non-creating readback of a missing DB and large-corpus evaluation | Context Gateway and continuous improvement |
+| Knowledge / Context | canonical OKF Markdown, catalog/graph, bounded retrieval/context, typed goal/Source/frontier inputs and owner-bound learning candidates; explicit local-executor CLI, current evidence checks, learning-origin verification reuse within an invocation and proposal readback without creating or repairing the original DB | hierarchy integration and large-corpus evaluation | Context Gateway and continuous improvement |
 | Project | minimal information contract, existing Task read-only view and correction proposal checks | persistence and GUI/natural-language shared operations | configurable collaboration and optimization |
 | Runtime | Compose / Proxmox lifecycle contracts, Cloudflare candidates | | deployment on Cloudflare edge and the official Cloudflare OS |
 

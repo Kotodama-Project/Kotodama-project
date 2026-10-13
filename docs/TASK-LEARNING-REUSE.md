@@ -61,6 +61,14 @@ source checkoutでは`PYTHONPATH=runtime`と`task_swarm.learning_reuse`を使い
 `prepare --input B_INPUT --proposal PROPOSAL_JSON`は未承認の投影入力をstdoutへ返します。
 本文を含むため、その出力は元資料と同じ閲覧範囲で扱います。
 
+`propose`とPythonの`propose_learning`は元の`execution.sqlite`を作成・修復しません。
+元DBとWALを合計8 MiB以内のprivate copyへ読み、既存のanchored replayで検証します。
+SHMはcopy側だけで再構築します。欠落・不正DBや現行形式の必須schema欠損は型付きで拒否し、
+元DB/WAL/SHMを変更しません。真正旧形式は外部anchor、保存plan、templateとreceipt形式を照合し、
+当時まだ存在しなかったtableだけをcopy内で補います。proposal構築後も現在のowner・Source・
+元DB/非空WAL・全artifact・実childのproofを再確認し、新dispatchを行いません。
+この読取経路と、明示review・owner判断による既存DBへの証拠保存は別の操作です（#392）。
+
 既存ownerがBの入力とgrantを束縛した後、context JSONを用意します。
 項目は`origin_owner`、`origin_input`、`anchor`、`target_owner`、`target_input`、`proposal`のみです。
 最後の`proposal`にはファイル名でなくproposal objectを入れます。

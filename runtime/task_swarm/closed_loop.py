@@ -43,6 +43,21 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     resume never re-dispatches work or renews the budget; earlier interruptions
     require recovery outside this entrypoint.
     """
+    return _execute_closed_loop(owner_path, payload_path, supplied_plan, backend,
+        worker_actors=worker_actors, critic_actor=critic_actor, repair_planner=repair_planner,
+        cancel_event=cancel_event, clock=clock, expected_receipt_sha256=expected_receipt_sha256,
+        reuse_context=reuse_context, resume_finalization=resume_finalization)
+
+
+def _execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
+                         worker_actors, critic_actor="verifier", repair_planner=None,
+                         cancel_event=None, clock=time.time, expected_receipt_sha256=None,
+                         reuse_context=None, resume_finalization=False,
+                         readback_state=None, readback_guard=None):
+    # A proposal reader may supply a validated private DB copy. Execution and
+    # explicit recovery always use the original scheduler and its write path.
+    require(readback_state is None or (expected_receipt_sha256 is not None
+            and not resume_finalization and callable(readback_guard)), "FINALIZATION_OPTIONS_INVALID")
     started = time.monotonic()
     from .task_backend import TaskBackend
     from .loop_executor import MODE, check_current_executor_policy, executor_version, loop_schema, verify_loop_response
@@ -150,6 +165,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         require(not cancelled, "RUN_CANCELLED")
 
     def guard():
+        if readback_guard is not None:
+            readback_guard()
         check_cancellation()
         require(protocol.digest(owner.read_task(binding["task_id"])) == binding_digest, "STALE_BINDING")
         require(all(owner.read_binding(binding["task_id"], actor) == original
@@ -171,6 +188,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
             require(all(owner.read_binding(binding["task_id"], actor) == original
                         for actor, original in actor_bindings.items()), "STALE_ACTOR")
             require(read_json(owner_path, 1024 * 1024, with_digest=True)[1] == owner_sha, "OWNER_INPUT_CHANGED")
+        if readback_guard is not None:
+            readback_guard()
 
     # The Task/revision fixes the run identity, not the supplied plan or attempt.
     # Changing the plan cannot sidestep this directory and refill its budget.
@@ -180,7 +199,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     if directory.is_dir():
         safe_directory(directory)
         if (directory / "execution.sqlite").is_file():
-            state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
+            state = readback_state or SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
             stored_plan = read_artifact(directory/"plan.json")
             require(state.snapshot(run_id)["plan"] == stored_plan, "RUN_REPLAY_CONFLICT")
             stored_executor = executor_version(stored_plan, read_artifact(directory/"r0-critic-template.json"))
@@ -257,7 +276,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         require(checked["input.json"] == payload and checked["specification.json"] == specification,
                 "RUN_REPLAY_CONFLICT")
         require(checked.get("context-binding.json") == context_binding, "RUN_CONTEXT_REPLAY_CONFLICT")
-        state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
+        state = readback_state or SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
         finalization = None
         if "finalization_checkpoint_digest" in receipt:
             finalization = state.finalization(run_id)

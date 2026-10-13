@@ -167,14 +167,15 @@ def _stream_identity(stream):
     return information.volume, bytes(information.identifier)
 
 
-def _inspection_cut(database, destination):
+def _inspection_cut(database, destination, *, observe_shm=True):
     """Copy a bounded physical cut using only reads of original DB/WAL/SHM."""
     import os
     import stat
     from contextlib import ExitStack
     limit = 8 * 1024 * 1024
-    paths = [database, database.with_name(database.name + "-wal"),
-             database.with_name(database.name + "-shm")]
+    paths = [database, database.with_name(database.name + "-wal")]
+    if observe_shm:
+        paths.append(database.with_name(database.name + "-shm"))
     def identity(metadata):
         return (metadata.st_dev, metadata.st_ino, metadata.st_mode, metadata.st_size,
                 metadata.st_mtime_ns, metadata.st_ctime_ns)
@@ -239,7 +240,7 @@ def _inspection_cut(database, destination):
     return fingerprint
 
 
-def _inspection_state(database, owner, clock, *, dependency=False):
+def _inspection_state(database, owner, clock, *, dependency=False, legacy_optional=()):
     """Validate the copied original schema before any scheduler initializer."""
     import sqlite3
     from contextlib import closing
@@ -253,6 +254,7 @@ def _inspection_state(database, owner, clock, *, dependency=False):
     }
     if dependency:
         required["run_dependency_stages"] = "run_id stage_json"
+    require(set(legacy_optional) <= {"run_finalizations", "run_cancellations"}, "LOOP_REPAIR_STATE")
     try:
         with database.open("rb") as stream:
             require(stream.read(16) == b"SQLite format 3\x00", "LOOP_REPAIR_STATE")
@@ -261,6 +263,8 @@ def _inspection_state(database, owner, clock, *, dependency=False):
             require(conn.execute("PRAGMA quick_check").fetchall() == [("ok",)], "LOOP_REPAIR_STATE")
             for table, columns in required.items():
                 actual = {row[1] for row in conn.execute("PRAGMA table_info(" + table + ")")}
+                if not actual and table in legacy_optional:
+                    continue
                 require(set(columns.split()) <= actual, "LOOP_REPAIR_STATE")
     except sqlite3.Error as error:
         from .protocol import SwarmError

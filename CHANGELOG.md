@@ -113,6 +113,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- 学習proposalの読取が欠落DBや必須tableを作成・修復する問題を修正。元DB/WALをprivate copyで検証し、真正旧形式の互換と、返却直前の取消・owner・Source・実child証拠の再確認を維持する（#392）。
+
 - 開発branchからmainへPRを付け替えた場合にもDependency reviewを起動する。既存の必須check、検査対象、脆弱性の拒否基準は維持する。
 
 - mainのpushで検証runが作られなかった場合に、同じRepository validationを手動起動できる入口を追加。必須チェック・全検査・read-only権限を維持し、対象head SHAと結果の読戻しを文書化。
