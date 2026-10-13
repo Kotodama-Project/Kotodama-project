@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import gc
 import hashlib
 import io
 import json
@@ -13,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from unittest import mock
+import weakref
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -172,8 +174,64 @@ class KnowledgeSessionTests(unittest.TestCase):
             return result
         with mock.patch.object(foundation, "_capture_inputs", side_effect=observe):
             self.assertTrue(self.request(instance, ["query", "KGI"])["ok"])
-        self.assertGreaterEqual(len(captured), 2)
+        self.assertEqual(3, len(captured))
         self.assertTrue(all(bindings == self.bundle.input_bindings for bindings in captured))
+
+    def test_freshness_reuses_only_unchanged_concepts_in_both_time_directions(self):
+        current = self.bundle
+        for value in (AS_OF, LATER, AS_OF):
+            updated = session._at_time(current, cli._parse_as_of(value))
+            for before, after in zip(current.concepts, updated.concepts):
+                with self.subTest(time=value, concept=before.concept_id):
+                    self.assertIs(before.document, after.document)
+                    if before.is_stale == after.is_stale:
+                        self.assertIs(before, after)
+                    else:
+                        self.assertIsNot(before, after)
+            current = updated
+
+    def test_reload_or_refusal_drops_the_previous_generation(self):
+        for invalid in (False, True):
+            with self.subTest(invalid=invalid):
+                root = self.fixture()
+                instance = session.KnowledgeSession(root)
+                self.assertTrue(self.request(instance, ["query", "KGI"])["ok"])
+                bundle_ref = weakref.ref(instance._bundle)
+                concept_ref = weakref.ref(instance._bundle.concepts[0])
+                if invalid:
+                    (root / "README.md").unlink()
+                else:
+                    path = root / "knowledge/project/goal.md"
+                    path.write_bytes(path.read_bytes() + b"\nNew generation.\n")
+                response = self.request(instance, ["query", "KGI"])
+                self.assertEqual(not invalid, response["ok"])
+                gc.collect()
+                self.assertIsNone(bundle_ref())
+                self.assertIsNone(concept_ref())
+                if invalid:
+                    self.assertIsNone(instance._bundle)
+
+    def test_query_change_after_serialization_refuses_and_drops_generation(self):
+        root = self.fixture()
+        instance = session.KnowledgeSession(root)
+        self.assertTrue(self.request(instance, ["query", "KGI"])["ok"])
+        bundle_ref = weakref.ref(instance._bundle)
+        concept_ref = weakref.ref(instance._bundle.concepts[0])
+        path = root / "knowledge/project/goal.md"
+        original = json.dumps
+        def change_after_encoding(value, *args, **kwargs):
+            encoded = original(value, *args, **kwargs)
+            if isinstance(value, dict) and value.get("ok") is True:
+                path.write_bytes(path.read_bytes() + b"\nChanged after query serialization.\n")
+            return encoded
+        with mock.patch.object(session.json, "dumps", change_after_encoding):
+            response = self.request(instance, ["query", "KGI"])
+        self.assertEqual("SOURCE_CHANGED_RELOAD_REQUIRED", response["error"])
+        self.assertNotIn("result", response)
+        self.assertIsNone(instance._bundle)
+        gc.collect()
+        self.assertIsNone(bundle_ref())
+        self.assertIsNone(concept_ref())
 
     def test_revocation_and_non_discoverability_apply_on_next_request(self):
         for change in ("revoke", "hide"):
