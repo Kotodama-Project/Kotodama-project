@@ -109,13 +109,8 @@ def _reject_symlink_components(path: Path, *, stop: Path | None = None, field: s
     components: list[Path] = []
     while True:
         components.append(current)
-        if resolved_stop is not None:
-            try:
-                current.relative_to(resolved_stop)
-                if current == resolved_stop:
-                    break
-            except ValueError:
-                pass
+        if resolved_stop is not None and current == resolved_stop:
+            break
         if current.parent == current:
             break
         current = current.parent
