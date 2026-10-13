@@ -57,6 +57,30 @@ def test_genuine_old_writer_plan_matches_schema_and_current_reader(tmp_path):
     assert state.create_run(record["plan"]) == record["plan"]
 
 
+@pytest.mark.parametrize("job_id,kind", [
+    ("aaa-extra-work", "work"), ("aaa-extra-review", "review"),
+    ("r1-repair-b", "work"),
+])
+def test_initial_dependency_plan_refuses_every_noninitial_job(tmp_path, job_id, kind):
+    import sqlite3
+    from contextlib import closing
+    state, original, _ = state_fixture(tmp_path)
+    plan = copy.deepcopy(original)
+    plan["run_id"] = "extra-job-run"
+    plan["jobs"].append({"job_id": job_id, "kind": kind, "dependencies": [],
+                         "exclusive_keys": [], "payload_ref": "ref/extra", "payload_digest": "f" * 64})
+    try:
+        state.create_run(plan)
+    except SwarmError as error:
+        assert error.code == "LOOP_DEPENDENCY_PLAN"
+    else:
+        lease = state.claim(plan["run_id"], "worker-extra")
+        pytest.fail(f"unadmitted initial job accepted; first claim: {lease['job_id']}")
+    with closing(sqlite3.connect(state.db_path)) as db:
+        assert db.execute("SELECT count(*) FROM runs WHERE run_id=?", (plan["run_id"],)).fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM jobs WHERE run_id=?", (plan["run_id"],)).fetchone()[0] == 0
+
+
 @pytest.mark.parametrize("change", [
     {"execution_contract_version": None}, {"dependency_descriptor_sha256": None},
     {"execution_contract_version": True}, {"execution_contract_version": "3"},

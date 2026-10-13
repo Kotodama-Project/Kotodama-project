@@ -3,6 +3,8 @@ import copy
 import hashlib
 import json
 from pathlib import Path
+import sqlite3
+from contextlib import closing
 
 try:
     import pytest
@@ -110,6 +112,75 @@ def test_blocked_retries_do_not_dispatch_or_create_receipt(tmp_path):
     assert execute(setup,backend)==first
     assert execute(setup,backend,resume_finalization=True)==first
     assert len(backend.inputs)==2
+
+
+@pytest.mark.parametrize("change,code", [
+    ("shape", "LOOP_PREREQUISITE_REVIEW"),
+    ("digest", "LOOP_PREREQUISITE_REVIEW"),
+    ("gate", "LOOP_PREREQUISITE_GATE"),
+])
+def test_invalid_prerequisite_settles_its_attempt_without_later_dispatch(tmp_path, change, code):
+    setup = setup_dependency(tmp_path)
+    class Backend(Calculation):
+        def review(self, delivered, *args, **kwargs):
+            value = super().review(delivered, *args, **kwargs)
+            if "core" in delivered:
+                if change == "shape": value["result"] = []
+                elif change == "digest": value["result"]["report_sha256"] = "e" * 64
+                else: value["result"]["validations"] = []
+            return value
+    backend = Backend(setup[3], setup[6])
+    with pytest.raises(SwarmError, match=code):
+        execute(setup, backend)
+    directory = next((setup[0].parent / "operations").glob("task-run-*"))
+    with closing(sqlite3.connect(directory / "execution.sqlite")) as db:
+        assert db.execute("SELECT state, reason, retryable FROM attempts WHERE job_id='r0-prerequisite'").fetchone() == ("failed", code, 0)
+        assert db.execute("SELECT state, reason FROM jobs WHERE job_id='r0-prerequisite'").fetchone() == ("failed", code)
+        assert db.execute("SELECT count(*) FROM attempts").fetchone()[0] == 2
+        assert db.execute("SELECT count(*) FROM attempts WHERE state='leased'").fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM run_dependency_stages").fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM jobs WHERE state='accepted'").fetchone()[0] == 0
+    assert len(backend.inputs) == 2 and not (directory / "receipt.json").exists()
+    with pytest.raises(SwarmError, match="RUN_RECOVERY_REQUIRED"):
+        execute(setup, backend)
+    assert len(backend.inputs) == 2
+
+
+def test_prerequisite_validation_failure_survives_cleanup_refusal(tmp_path, monkeypatch):
+    from task_swarm.state import SwarmState
+    setup, calls = setup_dependency(tmp_path), []
+    class Backend(Calculation):
+        def review(self, delivered, *args, **kwargs):
+            value = super().review(delivered, *args, **kwargs)
+            if "core" in delivered: value["result"]["validations"] = []
+            return value
+    def cleanup_refused(self, token, reason, **kwargs):
+        calls.append((reason, kwargs))
+        raise SwarmError("STATE_WRITE_FAILED", "cleanup unavailable")
+    monkeypatch.setattr(SwarmState, "fail", cleanup_refused)
+    backend = Backend(setup[3], setup[6])
+    with pytest.raises(SwarmError, match="LOOP_PREREQUISITE_GATE"):
+        execute(setup, backend)
+    assert calls == [("LOOP_PREREQUISITE_GATE", {"retryable": False})]
+    assert len(backend.inputs) == 2
+
+
+@pytest.mark.parametrize("now", [1000, 1101])
+def test_blocked_stage_never_accepts_a_receipt_anchor(tmp_path, now):
+    from task_swarm.closed_loop import execute_closed_loop
+    setup = setup_dependency(tmp_path)
+    backend = Calculation(setup[3], setup[6], blocked=True)
+    first = execute(setup, backend)
+    assert first["receipt"] is None and first["learning_candidate"] is None
+    with pytest.raises(SwarmError, match="RUN_REPLAY_MISSING"):
+        execute_closed_loop(setup[0], setup[1], setup[4], backend, worker_actors=setup[5],
+                            clock=lambda: now, expected_receipt_sha256="a" * 64)
+    if now > setup[3]["objective"]["budget"]["deadline"]:
+        with pytest.raises(SwarmError):
+            execute_closed_loop(setup[0], setup[1], setup[4], backend,
+                                worker_actors=setup[5], clock=lambda: now)
+    assert execute(setup, backend) == first
+    assert len(backend.inputs) == 2
 
 
 def test_b_local_repair_uses_same_a_and_six_calls(tmp_path):

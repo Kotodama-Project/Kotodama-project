@@ -115,7 +115,7 @@ def test_source_edge_reaches_real_b_with_changed_arithmetic(tmp_path,corrected,e
 
 
 @pytest.mark.parametrize("blocked",[False,True])
-def test_source_cli_in_separate_process_preserves_owner_and_exit_contract(tmp_path,blocked):
+def test_source_cli_in_separate_process_preserves_owner_and_exit_contract(tmp_path,blocked,monkeypatch):
     import hashlib
     import json
     import subprocess
@@ -160,7 +160,20 @@ def test_source_cli_in_separate_process_preserves_owner_and_exit_contract(tmp_pa
     view=derive_child_view(payload,"r0-critic",[span for job in jobs.values() for span in job["selected_spans"]],plan_digest=digest(plan))
     review=backend.review({"view":view,"reports":reports,"report_digests":{key:digest(value) for key,value in reports.items()},
         "required_evidence_jobs":required_evidence_jobs(payload,plan)},cwd,actor_ref="verifier")["result"]
-    scenario={"work":reports,"critics":{"prerequisite":prerequisite,"0":review},"repair_plan":None}
+    scenario={"work":reports,"critics":{"0":review},"repair_plan":None}
+    from document_contract_helpers import fenced_blocks
+    root=Path(__file__).resolve().parents[1]
+    document=root/"docs/TASK-SWARM-CLOSED-LOOP.md"
+    examples=[block for block in fenced_blocks(document.read_text(encoding="utf-8"),"python")
+        if "def prerequisite_response(" in block]
+    assert len(examples)==1
+    monkeypatch.syspath_prepend(str(root/"runtime"))
+    namespace={}
+    exec(compile(examples[0],str(document),"exec"),namespace)
+    documented=namespace["prerequisite_response"](payload,plan,scenario,
+        ["worker-a","worker-b"],prerequisite["validations"])
+    assert documented==prerequisite
+    scenario["critics"]["prerequisite"]=documented
     simulation=tmp_path/"simulation.json";simulation.write_bytes(canonical(scenario).encode())
     before=owner.read_bytes()
     args=("--candidate",path,"--input",file,"--simulation",simulation,"--worker","worker-a","--worker","worker-b")

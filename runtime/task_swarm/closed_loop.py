@@ -176,6 +176,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 dependency_stage, progress, saved_values = verify_release(directory, payload, specification,
                     saved_plan, state, finalization_metadata(saved_plan))
                 if dependency_stage["status"] == "blocked":
+                    require(expected_receipt_sha256 is None, "RUN_REPLAY_MISSING")
                     return blocked_result(dependency_stage)
                 require(stage_resume and resume_finalization, "RUN_RECOVERY_REQUIRED")
                 b_row = state.snapshot(run_id)["jobs"][dependency_descriptor["b_job_id"]]
@@ -472,7 +473,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                     if job_id == dependency_descriptor["a_job_id"]:
                         dependency_stage = release_prerequisite(directory, payload, initial_specification, plan,
                             state, finalization_metadata(plan), artifacts, dispatches, lambda: context_bytes,
-                            guard=guard, invoke=invoke, report=report, save=save, actor=critic_actor, clock=clock,
+                            guard=guard, invoke=invoke, report=report, fail=fail_preserving_error,
+                            save=save, actor=critic_actor, clock=clock,
                             cancel_event=cancellation)
                         if dependency_stage["status"] == "blocked":
                             return blocked_result(dependency_stage)

@@ -25,9 +25,15 @@ schema・正本への参照・分類・権限境界に限定されます。polic
 候補であり、cron、agent、provider操作を自動設定しません。
 
 ```sh
-python tools/audit_control_plane.py --root . --as-of 2026-10-06 --format json
+python tools/audit_control_plane.py --root . --format json
 python -m unittest tests.test_control_plane -v
 ```
+
+現在のcheckoutは既定の実行日で評価します。`--as-of YYYY-MM-DD` は、その日付に
+対応するsnapshotや合成fixtureの再現用です。評価日より後の `Updated:` / `reviewed_at`
+はエラーで拒否し、欠落・不正な日付も拒否します。SLA当日は許容し、翌日から元の日付を
+保持した鮮度警告を出します。PASSのために証拠の日付を繰り上げたり、証拠から評価日を
+逆算したりしません。文書の更新日は、runtime/deploymentや人のreviewの再検証ではありません。
 
 入力は `governance/knowledge-registry.json`、`governance/agent-registry.json`、
 `governance/audit-policy.json` と対応schemaです。JSONは256KiB、列挙は20,000 entryに

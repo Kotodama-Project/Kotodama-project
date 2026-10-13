@@ -9,7 +9,7 @@ from .dependency_contract import (REVIEW_ID, attempt_proof, check_descriptor, de
 
 
 def release(directory, payload, spec, plan, state, metadata, artifacts, dispatches, context_bytes,
-            *, guard, invoke, report, save, actor, clock, cancel_event):
+            *, guard, invoke, report, fail, save, actor, clock, cancel_event):
     desc, template = descriptor(payload, spec)
     a, b = desc["a_job_id"], desc["b_job_id"]
     response, sha = read_json(directory / (a + "-result.json"), with_digest=True)
@@ -18,7 +18,11 @@ def release(directory, payload, spec, plan, state, metadata, artifacts, dispatch
     lease = state.claim(plan["run_id"], actor)
     require(lease is not None and lease["job_id"] == REVIEW_ID, "RUN_REVIEW_MISSING")
     result = invoke(lease, delivered, actor, critic=True)
-    passed = validate_prerequisite(result["result"], payload, spec, delivered, response["result"], sha)
+    try:
+        passed = validate_prerequisite(result["result"], payload, spec, delivered, response["result"], sha)
+    except Exception as exc:
+        fail(lease, exc, "loop prerequisite invalid")
+        raise
     report(lease, result)
     progress = {"metadata": metadata, "artifacts": dict(artifacts),
                 "dispatches": dict(dispatches), "context_bytes": context_bytes()}

@@ -599,6 +599,8 @@ class SwarmState:
         task_id = protocol.ref(plan["task_id"], "task id")
         owner = self._owner_binding(task_id, now)
         normalized = self._normalize_plan(plan, now, owner)
+        if normalized.get("execution_contract_version") == 3 and len(normalized["jobs"]) != 4:
+            raise protocol.SwarmError("LOOP_DEPENDENCY_PLAN", "initial dependency run requires exactly four jobs")
         plan_json = protocol.canonical(normalized)
 
         conn = self._transaction()
