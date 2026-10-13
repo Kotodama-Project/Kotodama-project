@@ -1,6 +1,6 @@
 """Bounded closed-loop coordinator over the existing owner and SwarmState.
 
-The injectable backend is currently restricted to explicit local simulations.
+The backend accepts explicit local simulations or the declared local fixture.
 The same claim/report/verify/accept path handles every frontier and its critic;
 No provider, Task authority or knowledge adoption is added.
 """
@@ -44,7 +44,11 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     require recovery outside this entrypoint.
     """
     started = time.monotonic()
-    require(getattr(backend, "synthetic", False) is True, "LOOP_SIMULATION_REQUIRED")
+    from .task_backend import TaskBackend
+    from .loop_executor import MODE, check_current_executor_policy, executor_version, loop_schema, verify_loop_response
+    from .loop_executor_runtime import ExecutorEvidence, owner_binding, select_executor_policy
+    local_executor = isinstance(backend, TaskBackend) and backend.loop_mode == MODE
+    require(local_executor or getattr(backend, "synthetic", False) is True, "LOOP_SIMULATION_REQUIRED")
     require(type(resume_finalization) is bool and not (resume_finalization and expected_receipt_sha256 is not None),
             "FINALIZATION_OPTIONS_INVALID")
     stage_resume = False
@@ -125,12 +129,17 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     cancellation = cancel_event if cancel_event is not None else threading.Event()
     require(isinstance(cancellation, threading.Event), "RUN_CANCELLATION_INVALID")
     binding_digest = protocol.digest(binding)
+    executor_policy = select_executor_policy(payload, initial_specification, owner_path) if local_executor else None
+    executor_owner = owner_binding(owner_sha, actors, critic_actor, actor_bindings)
+    if local_executor:
+        require(Path(backend.codex.executable).resolve() == Path(executor_policy["executable"]["path"]),
+                "LOOP_EXECUTOR_POLICY_CHANGED")
     deadline = payload["objective"]["budget"]["deadline"]
     state = None
     failures = []
     failure_lock = threading.Lock()
 
-    def guard():
+    def check_cancellation():
         if state is not None:
             require(state.cancellation(run_id) is None, "RUN_CANCELLED")
         with failure_lock:
@@ -139,23 +148,54 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         if failure is not None:
             raise protocol.SwarmError(*failure)
         require(not cancelled, "RUN_CANCELLED")
+
+    def guard():
+        check_cancellation()
         require(protocol.digest(owner.read_task(binding["task_id"])) == binding_digest, "STALE_BINDING")
         require(all(owner.read_binding(binding["task_id"], actor) == original
                     for actor, original in actor_bindings.items()), "STALE_ACTOR")
         require(replay_only or clock() < deadline, "DEADLINE_EXPIRED")
         require(owner.storage()["root"] == root and safe_directory(root) == root, "RUN_STORAGE_CHANGED")
         require(read_json(owner_path, 1024 * 1024, with_digest=True)[1] == owner_sha, "OWNER_INPUT_CHANGED")
+        if executor_policy is not None:
+            check_current_executor_policy(executor_policy, payload, initial_specification,
+                owner_path=owner_path, owner_document=read_json(owner_path, 1024 * 1024))
         if reuse_owner is not None:
             reuse_owner.current(decision_digest)
+        if executor_policy is not None:
+            check_cancellation()
+            executor_evidence.check()
+            # Re-read authority after the final policy callback and source I/O.
+            require(replay_only or clock() < deadline, "DEADLINE_EXPIRED")
+            require(protocol.digest(owner.read_task(binding["task_id"])) == binding_digest, "STALE_BINDING")
+            require(all(owner.read_binding(binding["task_id"], actor) == original
+                        for actor, original in actor_bindings.items()), "STALE_ACTOR")
+            require(read_json(owner_path, 1024 * 1024, with_digest=True)[1] == owner_sha, "OWNER_INPUT_CHANGED")
 
     # The Task/revision fixes the run identity, not the supplied plan or attempt.
     # Changing the plan cannot sidestep this directory and refill its budget.
     run_id = "task-run-" + protocol.digest([payload["task_id"], payload["revision"]])[:32]
     directory = root / run_id
+    executor_evidence = ExecutorEvidence(directory)
     if directory.is_dir():
         safe_directory(directory)
         if (directory / "execution.sqlite").is_file():
             state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
+            stored_plan = read_artifact(directory/"plan.json")
+            require(state.snapshot(run_id)["plan"] == stored_plan, "RUN_REPLAY_CONFLICT")
+            stored_executor = executor_version(stored_plan, read_artifact(directory/"r0-critic-template.json"))
+            require(not local_executor or stored_executor is not None, "LOOP_EXECUTOR_MODE_UNSUPPORTED")
+            if stored_executor is not None:
+                require(local_executor or replay_only or resume_finalization, "LOOP_EXECUTOR_MODE_UNSUPPORTED")
+                from .loop_executor_runtime import saved_executor
+                saved = saved_executor(directory, payload, stored_plan, state)
+                require(executor_policy is None or executor_policy == saved.policy, "LOOP_EXECUTOR_POLICY_CHANGED")
+                executor_policy = saved.policy
+                for job, row in saved.snapshot["jobs"].items():
+                    if row["state"] in {"reported", "accepted"}:
+                        saved.verify(job, read_artifact(directory/(job+"-input.json")),
+                                     read_artifact(directory/(job+"-result.json")))
+                executor_evidence = saved.evidence
     def finalization_metadata(runtime_plan):
         return {"run_id": run_id, "binding_digest": binding_digest, "owner_ref": binding["owner_ref"],
                 "owner_input_sha256": owner_sha, "parent_input_digest": parent_digest,
@@ -189,7 +229,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 guard()
                 state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
                 result = finalize(directory, payload, state, finalization_metadata(read_json(directory / "plan.json")),
-                                  guard=guard, reuse_owner=reuse_owner, cancel_event=cancellation)
+                                  guard=guard, reuse_owner=reuse_owner, cancel_event=cancellation,
+                                  executor_evidence=executor_evidence if executor_policy is not None else None)
                 return {**result, "recovered_finalization": True}
         require((directory / "receipt.json").is_file(), "RUN_RECOVERY_REQUIRED")
         require(isinstance(expected_receipt_sha256, str) and len(expected_receipt_sha256) == 64,
@@ -237,9 +278,13 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
             candidate, learning, _, _, _ = terminal_evidence(directory, payload, finalization["checkpoint"], state)
             require(candidate == checked["candidate.json"] and learning == checked.get("learning.json"),
                     "FINALIZATION_CONFLICT")
-        guard()
+            if executor_policy is not None:
+                executor_evidence.pin_artifacts(artifacts)
+                for job in snapshot["jobs"]:
+                    executor_evidence.pin_runtime(checked[job+"-result.json"]["receipt"]["runtime"])
         if reuse_owner is not None:
             reuse_owner.validate_candidate(checked["candidate.json"])
+        guard()
         return {"candidate": checked["candidate.json"], "learning_candidate": checked.get("learning.json"),
                 "receipt": receipt, "receipt_sha256": sha, "duplicate": True}
     require(expected_receipt_sha256 is None, "RUN_REPLAY_MISSING")
@@ -269,6 +314,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
             require(artifact_bytes + size <= MAX_ARTIFACT_BYTES, "LOOP_ARTIFACT_BUDGET")
             sha = write_json(directory / name, value)
             artifacts[name] = sha
+            if executor_policy is not None:
+                executor_evidence.pin_artifacts({name: sha})
             artifact_bytes += size
         return sha
 
@@ -281,6 +328,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
 
     save("input.json", payload)
     save("specification.json", specification)
+    if executor_policy is not None:
+        save("executor-policy.json", executor_policy)
     if context_binding is not None:
         save("context-binding.json", context_binding)
     all_reports, report_jobs, invocations, dispatches = {}, {}, set(), {}
@@ -336,6 +385,9 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
         critic_input.update(repair_planning_contract=2 if dependency else 1, repair_impact_sha256=impact_sha if index else None)
         critic_input.update(evidence_contract_version=2, required_evidence_jobs=required_evidence_jobs(
             payload, initial_specification, spec if index else None, gap=gap))
+        if executor_policy is not None:
+            critic_input.update(executor_contract_version=1, executor_policy_sha256=protocol.digest(executor_policy),
+                                executor_owner_binding=executor_owner)
         save(critic_id + "-template.json", critic_input)
         runtime_jobs.append({"job_id": critic_id, "kind": "review",
                              "dependencies": sorted(set(all_reports) | set(work_inputs)), "exclusive_keys": [],
@@ -403,14 +455,35 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 "delivered_input_digest": protocol.digest(delivered)}
         save(lease["job_id"] + "-input.json", delivered)
         guard()
-        method = backend.review if critic else backend.produce
+        method = (backend.review_loop if critic else backend.produce_loop) if local_executor else (backend.review if critic else backend.produce)
+        process_failure = []
+        def on_process(pid, created_at):
+            try:
+                guard()
+                state.attach_identity(lease["token"], {"kind": "process", "pid": pid, "created_at": created_at})
+                guard()
+            except Exception as exc:
+                process_failure.append(exc)
+                raise
+        dispatch_identity = {"run_id": run_id, "job_id": lease["job_id"], "actor_ref": actor,
+                             "attempt": lease["attempt"], "epoch": lease["epoch"]}
+        options = {"policy": executor_policy, "dispatch_identity": dispatch_identity,
+                   "on_process": on_process} if local_executor else {}
         try:
             value = method(copy.deepcopy(delivered), directory / (lease["job_id"] + "-attempt"),
-                           actor_ref=actor, timeout=min(360, deadline-clock()), cancel_event=cancellation)
+                           actor_ref=actor, timeout=min(360, deadline-clock()), cancel_event=cancellation, **options)
             guard()
             shape(value, {"result", "receipt"}, "LOOP_BACKEND_INVALID")
             receipt = value["receipt"]
-            shape(receipt, {"actor_ref", "invocation_ref", "input_digest", "synthetic"}, "LOOP_RECEIPT_INVALID")
+            if local_executor:
+                attempt = state.snapshot(run_id)["jobs"][lease["job_id"]]["current_attempt"]
+                verify_loop_response(value, policy=executor_policy, delivered=delivered,
+                    dispatch_identity=dispatch_identity, expected_attempt=attempt, expected_schema=loop_schema(delivered),
+                    current_guard=guard, attempt_directory=directory/(lease["job_id"]+"-attempt"), freeze=True)
+                executor_evidence.pin_runtime(value["receipt"]["runtime"])
+                guard()
+            else:
+                shape(receipt, {"actor_ref", "invocation_ref", "input_digest", "synthetic"}, "LOOP_RECEIPT_INVALID")
             require(receipt["actor_ref"] == actor and receipt["input_digest"] == protocol.digest(delivered)
                     and receipt["synthetic"] is True, "LOOP_INPUT_RECEIPT_MISMATCH")
             identity = protocol.ref(receipt["invocation_ref"], "invocation reference")
@@ -419,13 +492,16 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
                 invocations.add(identity)
             return value
         except Exception as exc:
+            if process_failure:
+                exc = process_failure[0]
             fail_preserving_error(lease, exc, "loop backend failed")
-            raise
+            raise exc
 
     def report(lease, value):
         guard()
         sha = save(lease["job_id"] + "-result.json", value)
-        state.attach_identity(lease["token"], {"kind": "native", "thread_id": value["receipt"]["invocation_ref"]})
+        if not local_executor:
+            state.attach_identity(lease["token"], {"kind": "native", "thread_id": value["receipt"]["invocation_ref"]})
         state.report(lease["token"], "ref/loop/result/" + lease["job_id"], sha,
                      "candidate", "ref/loop/receipt/" + lease["job_id"])
         return sha
@@ -577,7 +653,8 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
             make_checkpoint(directory, payload, state, metadata, artifact_sha256=artifacts,
                 dispatches=dispatches, rounds=final_critic["round"] + 1, stop_reason=stop_reason,
                 context_bytes=context_bytes, observed_elapsed_seconds=time.monotonic() - started)
-            return finalize(directory, payload, state, metadata, guard=guard, reuse_owner=reuse_owner, cancel_event=cancellation)
+            return finalize(directory, payload, state, metadata, guard=guard, reuse_owner=reuse_owner,
+                            cancel_event=cancellation, executor_evidence=executor_evidence if executor_policy is not None else None)
     except Exception as exc:
         with failure_lock:
             failure = failures[0] if failures else None

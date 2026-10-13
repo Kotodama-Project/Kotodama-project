@@ -6,6 +6,7 @@ consistency, never an organization Plan or a current execution authorization.
 from __future__ import annotations
 
 import datetime as dt
+from contextlib import ExitStack
 import hashlib
 import json
 from pathlib import Path, PureWindowsPath
@@ -241,8 +242,9 @@ def _contains(view, span):
                and record["start"] <= span["start"] < span["end"] <= record["end"] for record in view["spans"])
 
 
-def _saved_plan(owner, payload, binding, owner_sha, reference, required_spans, check_deadline):
-    """Inspect one completed normal round. Never open its execution database."""
+def _saved_plan(owner, payload, binding, owner_sha, reference, required_spans, check_deadline,
+                resources, current_sources):
+    """Inspect one completed run; legacy synthetic proof stays file-only."""
     shape(reference, {"kind", "id", "revision", "mandatory", "receipt_sha256"}, "HIERARCHY_REFERENCE_INVALID")
     expected_id = "task-run-" + digest([payload["task_id"], payload["revision"]])[:32]
     require(reference["id"] == expected_id and type(reference["revision"]) is int
@@ -257,8 +259,6 @@ def _saved_plan(owner, payload, binding, owner_sha, reference, required_spans, c
     require(isinstance(receipt, dict) and receipt.get("run_id") == expected_id
             and receipt.get("binding_digest") == digest(binding) and receipt.get("owner_input_sha256") == owner_sha
             and receipt.get("parent_input_digest") == digest(payload), "RUN_REPLAY_CONFLICT")
-    require(type(receipt.get("rounds")) is int and receipt["rounds"] == 1,
-            "HIERARCHY_REPAIR_UNRESOLVED")
     require(receipt.get("synthetic") is True and receipt.get("model_runtime_verified") is False
             and receipt.get("task_state_changed") is False, "HIERARCHY_PROOF_SCOPE")
     manifest = receipt.get("artifact_sha256")
@@ -280,6 +280,14 @@ def _saved_plan(owner, payload, binding, owner_sha, reference, required_spans, c
             "LOOP_ARTIFACT_BUDGET")
     require({"input.json", "specification.json", "plan.json", "execution.json", "candidate.json",
              "r0-critic-template.json"} <= values.keys(), "RUN_RECEIPT_INVALID")
+    template = values["r0-critic-template.json"]
+    if isinstance(template, dict) and any(key.startswith("executor_") for key in template):
+        from .hierarchy_execution import saved_executor_plan
+        proof, actors, final_guard = saved_executor_plan(owner, payload, binding, owner_sha,
+            directory, receipt, sha, values, required_spans, check_deadline, resources, current_sources)
+        return proof, checks, actors, final_guard
+    require(type(receipt.get("rounds")) is int and receipt["rounds"] == 1,
+            "HIERARCHY_REPAIR_UNRESOLVED")
     require("context-binding.json" not in values and "extension.json" not in values,
             "HIERARCHY_CURRENT_DECISION_UNRESOLVED")
     require(_exact(values["input.json"], payload), "RUN_REPLAY_CONFLICT")
@@ -389,7 +397,7 @@ def _saved_plan(owner, payload, binding, owner_sha, reference, required_spans, c
         "receipt_sha256": sha, "specification_digest": initial_digest, "execution_plan_digest": digest(runtime),
         "dispatches": delivered_proofs, "live_execution_state": "not_observed",
         "current_cancellation": "not_observed", "current_decision": "not_observed",
-        "learning_artifact": "candidate_only" if "learning.json" in values else "absent"}, checks, actor_bindings
+        "learning_artifact": "candidate_only" if "learning.json" in values else "absent"}, checks, actor_bindings, None
 
 
 def trace_current_refs(bundle, input_payload, owner_path, request, *, clock=time.time, with_bytes=False):
@@ -398,6 +406,12 @@ def trace_current_refs(bundle, input_payload, owner_path, request, *, clock=time
     The bundle and input are supplied snapshots; bytes, current owner and real
     clock are checked again before returning. This API makes no writes.
     """
+    with ExitStack() as resources:
+        return _trace_current_refs(bundle, input_payload, owner_path, request,
+                                   clock=clock, with_bytes=with_bytes, resources=resources)
+
+
+def _trace_current_refs(bundle, input_payload, owner_path, request, *, clock, with_bytes, resources):
     started = time.monotonic()
     require(type(with_bytes) is bool, "HIERARCHY_REQUEST_INVALID")
     def deadline():
@@ -412,7 +426,13 @@ def trace_current_refs(bundle, input_payload, owner_path, request, *, clock=time
     owner_document, owner_sha = read_json(owner_path, 1024 * 1024, with_digest=True)
     owner = OwnerFile(owner_path, clock=clock)
     binding = owner.read_task(payload.get("task_id"))
-    payload = validate_input(payload, binding, now=clock())
+    # Defer only the execution-budget expiry while an explicit receipt is being
+    # authenticated. The completed executor branch must verify it before the
+    # final check may use historical-read semantics; other paths keep the old
+    # current-input deadline requirement.
+    history_reference = any(isinstance(ref, dict) and ref.get("kind") == "runtime_plan"
+                            and isinstance(ref.get("receipt_sha256"), str) for ref in references)
+    payload = validate_input(payload, binding, now=clock(), allow_expired_objective=history_reference)
     _require_valid_bundle(bundle)
     _assert_current(bundle)
     declared = {str((owner_path.parent / item["path"]).resolve()): item["sha256"]
@@ -427,7 +447,16 @@ def trace_current_refs(bundle, input_payload, owner_path, request, *, clock=time
     require(all(declared.get(str(path.resolve())) == sha for path, sha in checks.items()),
             "HIERARCHY_OWNER_CHECKS_REQUIRED")
     catalogs = _concepts(bundle, payload, clock())
-    resolved, unresolved, actor_bindings, seen = [], [], {}, set()
+    resolved, unresolved, actor_bindings, seen, final_guards = [], [], {}, set(), []
+    def current_sources(*, allow_expired_objective=False):
+        _assert_current(bundle)
+        require(all(hashlib.sha256(read_bytes(path)).hexdigest() == sha for path, sha in checks.items()),
+                "HIERARCHY_SOURCE_CHANGED")
+        _concepts(bundle, payload, clock())
+        validate_input(payload, owner.read_task(payload["task_id"]), now=clock(),
+                       allow_expired_objective=allow_expired_objective)
+        _assert_current(bundle)
+        deadline()
     if "learning_reuse" in owner_document:
         unresolved.append({"kind": "learning_reuse", "reason": "CURRENT_DECISION_NOT_OBSERVED", "mandatory": True})
     else:
@@ -459,11 +488,13 @@ def trace_current_refs(bundle, input_payload, owner_path, request, *, clock=time
             resolved.append({"kind": kind, "id": identifier, "entity_revision": binding["revision"],
                 "revision_scope": "task_owner", "status": "current_owner_input_bound"})
         elif kind == "runtime_plan" and "learning_reuse" not in owner_document:
-            proof, artifact_checks, actors = _saved_plan(owner, payload, binding, owner_sha, reference,
-                                                        required_spans, deadline)
+            proof, artifact_checks, actors, final_guard = _saved_plan(owner, payload, binding, owner_sha, reference,
+                required_spans, deadline, resources, current_sources)
             checks.update(artifact_checks)
             actor_bindings.update(actors)
             resolved.append(proof)
+            if final_guard is not None:
+                final_guards.append(final_guard)
         else:
             unresolved.append({"kind": kind, "id": identifier, "revision": reference["revision"],
                 "reason": "CURRENT_DECISION_NOT_OBSERVED" if kind == "runtime_plan" else "OWNER_OR_KIND_UNRESOLVED",
@@ -482,7 +513,8 @@ def trace_current_refs(bundle, input_payload, owner_path, request, *, clock=time
         "request_digest": digest(request), "nodes": [nodes[key] for key in sorted(nodes)],
         "edges": edges, "closure": closure, "reverse_refs": reverse, "catalog_bindings": catalogs,
         "resolved_references": resolved, "unresolved": unresolved, "context_candidate": context,
-        "authority": "projection_only", "live_execution_state": "not_observed", "dispatch_performed": False,
+        "authority": "projection_only", "live_execution_state": "completed_cut_checked" if final_guards else "not_observed",
+        "dispatch_performed": False,
         "organization_plan_resolved": False, "current_learning_decision": "not_observed"}
     result["trace_digest"] = digest(result)
     require(len(canonical(result).encode("utf-8")) <= MAX_INPUT_BYTES, "HIERARCHY_OUTPUT_LIMIT")
@@ -493,11 +525,11 @@ def trace_current_refs(bundle, input_payload, owner_path, request, *, clock=time
     require(read_json(owner_path, 1024 * 1024, with_digest=True)[1] == owner_sha, "OWNER_INPUT_CHANGED")
     require(all(owner.read_binding(payload["task_id"], actor) == original for actor, original in actor_bindings.items()),
             "STALE_ACTOR")
-    _assert_current(bundle)
-    require(all(hashlib.sha256(read_bytes(path)).hexdigest() == sha for path, sha in checks.items()),
-            "HIERARCHY_SOURCE_CHANGED")
-    _concepts(bundle, payload, clock())
-    validate_input(payload, owner.read_task(payload["task_id"]), now=clock())
-    _assert_current(bundle)
-    deadline()
+    current_sources(allow_expired_objective=bool(final_guards))
+    # The frame is already complete. The shared executor fence performs current
+    # policy/Source and live-cut callbacks before its last proof/actor/owner
+    # comparison; no further Source read or serialization follows that fence.
+    for guard in final_guards:
+        guard()
+    require(time.monotonic() - started < QUERY_SECONDS, "HIERARCHY_QUERY_TIMEOUT")
     return (result, frame) if with_bytes else result

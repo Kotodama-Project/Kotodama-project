@@ -67,7 +67,8 @@ def _origin(owner_path, payload_path, anchor, *, clock):
     # Hash readback alone is insufficient: revalidate actual report evidence and
     # every independent critic against the exact saved delivered views.
     runtime_plan = read_json(directory / "plan.json")
-    if runtime_plan.get("execution_contract_version") == 3:
+    from .loop_executor import executor_version
+    if runtime_plan.get("execution_contract_version") == 3 or executor_version(runtime_plan, read_json(directory/"r0-critic-template.json")):
         from .closed_loop_recovery import terminal_evidence
         state = SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock)
         finalization = state.finalization(run_id)

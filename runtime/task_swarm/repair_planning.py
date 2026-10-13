@@ -317,11 +317,36 @@ def inspect_repair(owner_path, payload_path, *, clock=None):
                     "LOOP_REUSE_INSPECTION_UNSUPPORTED")
         snapshot = state.snapshot(run_id)
         require(state.cancellation(run_id) is None, "RUN_CANCELLED")
+        def current_guard():
+            # A saved executor reads an owned DB copy. Its final policy callback
+            # must be followed by a fresh cut of the live DB, before proof and
+            # actor/owner fences run. No SQLite connection opens the original.
+            require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
+                    and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
+                    "STALE_BINDING")
+            validate_input(payload, binding, now=clock())
+            with TemporaryDirectory(prefix="kotodama-repair-recheck-") as fresh:
+                current = _inspection_cut(directory/"execution.sqlite", Path(fresh))
+                live = _inspection_state(Path(fresh)/"execution.sqlite", owner, clock,
+                                         dependency=plan.get("execution_contract_version") == 3)
+                require(live.cancellation(run_id) is None, "RUN_CANCELLED")
+                live.snapshot(run_id)
+                require(current == cut, "RUN_ARTIFACT_CHANGED")
+                with TemporaryDirectory(prefix="kotodama-repair-final-") as final:
+                    require(_inspection_cut(directory/"execution.sqlite", Path(final)) == cut,
+                            "RUN_ARTIFACT_CHANGED")
+            require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
+                    and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
+                    "STALE_BINDING")
+            validate_input(payload, binding, now=clock())
+
         require(plan["binding_digest"] == digest(binding) and plan["run_id"] == run_id,
                 "LOOP_REPAIR_STATE")
         template = read_json(directory/"r0-critic-template.json")
         require(canonical(snapshot["plan"]) == canonical(plan), "LOOP_REPAIR_STATE")
         evidence_version(plan, template)
+        from .loop_executor_runtime import saved_executor
+        executor = saved_executor(directory, payload, plan, state, current_guard=current_guard)
         require(profile(template) in (1, 2), "LOOP_REPAIR_PROFILE")
         require(all(snapshot["jobs"][job["job_id"]]["state"] in {"reported", "accepted"}
                     for job in plan["jobs"]), "LOOP_REPAIR_STATE")
@@ -333,30 +358,17 @@ def inspect_repair(owner_path, payload_path, *, clock=None):
             value, sha = read_json(directory/(name+"-result.json"), with_digest=True)
             require(snapshot["jobs"][name]["current_attempt"]["result_digest"] == sha,
                     "RUN_ARTIFACT_CHANGED")
+            if executor is not None:
+                executor.verify(name, read_json(directory/(name+"-input.json")), value)
             if job["kind"] == "work":
                 require(value["result"] == delivered["reports"][name], "LOOP_PRIOR_REPORT_CHANGED")
                 inputs[name] = read_json(directory/(name+"-input.json"))
         result = make_impact(payload, initial, plan, {"response": response, "dispatched_input": delivered,
                             "dispatched_input_digest": digest(delivered)}, inputs, snapshot)
-        require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
-                and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
-                "STALE_BINDING")
-        validate_input(payload, binding, now=clock())
-        with TemporaryDirectory(prefix="kotodama-repair-recheck-") as fresh:
-            current = _inspection_cut(directory/"execution.sqlite", Path(fresh))
-            live = _inspection_state(Path(fresh)/"execution.sqlite", owner, clock,
-                                     dependency=plan.get("execution_contract_version") == 3)
-            require(live.cancellation(run_id) is None, "RUN_CANCELLED")
-            live.snapshot(run_id)
-            require(current == cut, "RUN_ARTIFACT_CHANGED")
-            # A writer or cancellation during the fresh read is also a changed cut.
-            with TemporaryDirectory(prefix="kotodama-repair-final-") as final:
-                require(_inspection_cut(directory/"execution.sqlite", Path(final)) == cut,
-                        "RUN_ARTIFACT_CHANGED")
-        require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
-                and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
-                "STALE_BINDING")
-        validate_input(payload, binding, now=clock())
+        if executor is None:
+            current_guard()
+        else:
+            executor.current()
         return {"proposal": result[0], "impact": result[1], "admitted": False}
 
 

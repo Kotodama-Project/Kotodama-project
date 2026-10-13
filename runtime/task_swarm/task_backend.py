@@ -8,9 +8,34 @@ from .task_schemas import report_schema, review_schema
 class TaskBackend:
     synthetic = False
 
-    def __init__(self, executable, *, task_codex_home, session_root=None):
+    def __init__(self, executable, *, task_codex_home=None, session_root=None, loop_mode=None):
+        from .loop_executor import MODE
+        from .task_contract import require
+        require(loop_mode in (None, MODE), "LOOP_EXECUTOR_MODE_UNSUPPORTED")
+        require(loop_mode is None or (task_codex_home is None and session_root is None), "LOOP_EXECUTOR_RUNTIME_SCOPE")
         self.codex = CodexBackend(executable, session_root=session_root)
         self.task_codex_home = task_codex_home
+        self.loop_mode = loop_mode
+
+    def produce_loop(self, delivered, directory, *, policy, dispatch_identity, actor_ref,
+                     timeout, cancel_event, on_process):
+        """Explicit local fixture transport; this does not select a native profile."""
+        import hashlib
+        from pathlib import Path
+        from .loop_executor import MODE, loop_request, loop_schema
+        from .task_contract import require
+        require(self.loop_mode == MODE and actor_ref == dispatch_identity["actor_ref"], "LOOP_EXECUTOR_MODE_UNSUPPORTED")
+        require(Path(self.codex.executable).resolve() == Path(policy["executable"]["path"]), "LOOP_EXECUTOR_POLICY_CHANGED")
+        prompt = loop_request(policy, delivered, dispatch_identity)
+        runtime = CodexBackend(self.codex.executable, session_root=Path(directory)/"sessions").invoke(
+            prompt.decode("utf-8"), loop_schema(delivered), directory, timeout=timeout,
+            cancel_event=cancel_event, on_process=on_process, record_input=True)
+        return {"result": runtime["result"], "receipt": {"actor_ref": actor_ref,
+            "invocation_ref": runtime["receipt"]["thread_id"], "input_digest": digest(delivered),
+            "synthetic": True, "executor_contract_version": 1, "executor_policy_sha256": digest(policy),
+            "prompt_contract_version": 1, "prompt_sha256": hashlib.sha256(prompt).hexdigest(), "runtime": runtime}}
+
+    review_loop = produce_loop
 
     def produce(self, job, payload, directory, *, timeout, cancel_event, on_process):
         prompt = (

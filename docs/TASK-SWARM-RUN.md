@@ -2,7 +2,8 @@
 
 原意・訂正・目的と制約をTask入力へ渡す形式は、[Taskの目的契約](TASK-OBJECTIVE-CONTRACT.md)を参照してください。
 同じTaskで批判から最大1回の修正・再検証・統合候補までつなぐ実験入口は、
-[閉ループの最初の実装](TASK-SWARM-CLOSED-LOOP.md)にあります。現在は明示local simulationに限定しています。
+[閉ループの最初の実装](TASK-SWARM-CLOSED-LOOP.md)にあります。
+明示local fixtureのlow-level実行と保存証拠は[Task loop executor](TASK-LOOP-EXECUTOR.md)を参照します。
 
 #160の採用判断と#286の実装を、既存local Task ownerへ接続するための契約です。
 入力・出力契約に加え、既存ownerへ束縛したPOSIXのtask-run入口を備えます。
@@ -24,9 +25,10 @@ digestと `stdin_submission.writer_status=pipe_write_completed` を残します�
 生成後の入力artifact改変もこの再読で拒否します。
 markerがあるだけで旧readerや別modeへ自動採用しません。
 これは親の保存とpipe書込み完了の証拠であり、子の読取・モデルの理解・資料取得の
-証明ではありません。製品CLIのfrontier実行modeと全保存readerへの接続は
+証明ではありません。local fixtureは実stdinとprocessを保存readerへ接続します。
+製品CLIのfrontier実行modeとhierarchyへの接続は
 [#375](https://github.com/Kotodama-Project/Kotodama-project/issues/375)の後続で、
-現在の閉ループは明示local simulationのままです。`NO_GO_UNPUBLISHED` を維持します。
+CLIの閉ループ入口は明示local simulationのままです。`NO_GO_UNPUBLISHED` を維持します。
 
 ## Task入力と固定plan
 

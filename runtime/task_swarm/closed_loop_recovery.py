@@ -101,6 +101,8 @@ def terminal_evidence(directory, payload, record, state):
     require(protocol.canonical(snapshot["plan"]) == protocol.canonical(plan)
             and protocol.canonical(snapshot.get("extension")) == protocol.canonical(admission)
             and set(snapshot["jobs"]) == set(scheduled), "FINALIZATION_PLAN_CONFLICT")
+    from .loop_executor_runtime import saved_executor
+    executor = saved_executor(directory, payload, plan, state, record)
     from .dependency_contract import execution_version, REVIEW_ID
     evidence = evidence_version(plan, values["r0-critic-template.json"])
     version = execution_version(plan) or evidence
@@ -131,8 +133,10 @@ def terminal_evidence(directory, payload, record, state):
                 and attempt["result_ref"] == "ref/loop/result/" + job
                 and attempt["runtime_receipt_ref"] == "ref/loop/receipt/" + job
                 and attempt["worker_ref"] == proof["actor_ref"]
-                and attempt["identity"] == {"kind": "native", "thread_id": proof["invocation_ref"]},
+                and (executor is not None or attempt["identity"] == {"kind": "native", "thread_id": proof["invocation_ref"]}),
                 "FINALIZATION_STATE_CHANGED")
+        if executor is not None:
+            executor.verify(job, values[job + "-input.json"], values[job + "-result.json"])
     rounds = 2 if admission else 1
     require(set(record["dispatches"]) == set(scheduled), "LOOP_DISPATCH_COVERAGE")
     require(record["rounds"] == rounds, "FINALIZATION_ROUND_CONFLICT")
@@ -222,6 +226,8 @@ def terminal_evidence(directory, payload, record, state):
         accepts[f"r{rounds-1}-critic"] = critic_sha
         if stage:
             accepts[REVIEW_ID] = record["artifact_sha256"][REVIEW_ID + "-result.json"]
+    if executor is not None:
+        executor.current()
     return candidate, learning, accepts, critic_sha, total
 
 
@@ -244,7 +250,7 @@ def make_checkpoint(directory, payload, state, metadata, *, artifact_sha256, dis
     return state.prepare_finalization(record["run_id"], record)
 
 
-def finalize(directory, payload, state, metadata, *, guard, reuse_owner=None, cancel_event=None):
+def finalize(directory, payload, state, metadata, *, guard, reuse_owner=None, cancel_event=None, executor_evidence=None):
     """Finish exactly the checkpointed accepts/outputs. Caller holds OS lock."""
     guard()
     stored = state.finalization(metadata["run_id"])
@@ -318,6 +324,8 @@ def finalize(directory, payload, state, metadata, *, guard, reuse_owner=None, ca
         if not (directory / name).exists():
             write_json(directory / name, value)
         require(read_json(directory / name, with_digest=True)[1] == artifacts[name], "FINALIZATION_OUTPUT_CONFLICT")
+        if executor_evidence is not None:
+            executor_evidence.pin_artifacts({name: artifacts[name]})
     guard()
     checked_artifacts(directory, artifacts)
     state.finalization(record["run_id"])
@@ -338,6 +346,8 @@ def finalize(directory, payload, state, metadata, *, guard, reuse_owner=None, ca
         expected_sha = hashlib.sha256((protocol.canonical(receipt) + "\n").encode("utf-8")).hexdigest()
         require(read_json(pending, with_digest=True) == (receipt, expected_sha)
                 and receipt_sha == expected_sha, "RUN_OUTPUT_READBACK")
+        if executor_evidence is not None:
+            executor_evidence.pin_receipt(pending.name, receipt_sha)
         guard()
         # This publication cutoff has no post-rename guard: return the exact
         # anchor even if a stop arrives after the final eligibility observation.

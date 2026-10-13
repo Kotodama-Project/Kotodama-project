@@ -1,9 +1,10 @@
-# Task loop executorのdormant primitive
+# Task loop executorの有限local実行
 
 Refs #375。会話から意図・仕事・成果へつなぐため、有限local fixtureの
-Source宣言、実入力とprocess/rollout証拠の共通型を用意します。
-現在のloop admission、TaskBackend、CLI、stateは変更しません。
-`NO_GO_UNPUBLISHED`。このprimitiveだけで新executorを実行できません。
+Source宣言、実入力とprocess/rollout証拠を既存Taskの閉ループへ接続します。
+`TaskBackend(..., loop_mode="local_executable_fixture")`を明示したlow-level APIで
+normal/repair・依存release・terminal/resume/replay・learning originを検証します。
+製品CLIのfactoryとhierarchyの新mode対応は後続です。`NO_GO_UNPUBLISHED`。
 
 `runtime/task_swarm/loop_executor.py` のpolicy/request/schema関数はpureです。
 既存Task v2とsupplied planをcallerが検証し、objective.constraintsの現在spanから
@@ -29,7 +30,8 @@ DocAの専用laneからDocBを外してもinput全体からdescriptorが消え�
 `verify_loop_response` はcallerが認証したdispatch/attemptとcurrent guardを必要とします。
 新外receiptは9keys。nested runtimeは初回freezeの3keysから検証後5keysへ固定し、
 再読は既存SHAを更新して成功化しません。process pid/created_atとthread/turnは別です。
-DBにstdin前のprocess identityをcommitするwriterはまだ接続していません。
+writerは既存Codex transportの`on_process`でpid/created_atを既存DBへcommitし、
+ownerを再確認してからstdinを渡します。実processをnative thread identityで上書きしません。
 
 technical verifierはraw input、pipe-write marker、8 artifact digests、schema、command、
 process、thread/turn、job固有sessionsのrollout/resultと最後のcurrent bytesを再読します。
@@ -38,8 +40,29 @@ native permission/profile証明をtechnical receiptへ付けたものは拒否�
 fixtureのLuna/max labelは実model/providerの利用・品質を証明しません。
 親input hashとOS pipe書込み完了は子のconsumption/model理解ではありません。
 
-既存native `verify_runtime` のdefault7/strict8とTaskBackend.synthetic=Falseは不変です。
-現在loopのnon-synthetic拒否も維持します。B1のwriter/全saved readersへのatomic接続、
-hierarchy saved-only認証、Cの製品CLI・資料取得/独立critic/有限repair・予算不足の受入は未完。
-取消に成果proof不足を新たな受付条件として足す接続も、このprimitiveでは行いません。
-既存owner/Source認証の拒否境界は変更しません。
+初期critic templateのdigestを既存DBのplanへ束縛し、executor policy digestと
+owner原bytesのSHA-256、選択worker/criticと現在actor bindingのdigestを保持します。
+metadataを持たないrepair inspectionもこの同じbindingを使います。
+`loop_executor_runtime.py`は各保存readerでpolicy・実stdin・process・rolloutを再読し、
+検証済みの保存文書と8 artifacts・raw receipt・rolloutのSHAを有限集合として保持します。
+最後のpolicy検査後にそのbytesを再読し、actor epoch/invocationとowner原bytesを再照合します。
+同じ確認をwriterの公開直前と保存readerで使い、policy callback中の証拠・actor変更を
+旧proposalやlearningを返す前に拒否します。再読の中でpolicy検査を再帰実行しません。
+finalizerが書くcandidate/learning/executionと公開前のstaged receiptもこの集合へ追加し、
+既存receiptの再読はDBに固定したreceiptのbytesと照合します。
+active inspectionはafter-policyのcurrent guardで現在deadlineも検査します。
+read-only DB copyのlive cancellation/cut確認も、このguardから最終bytes確認の前に行えます。
+historical replayのobjective期限許容は維持し、owner/actorの有効期限は引き続き検査します。
+Source検査とguardは観測境界であり、外部writerの将来の変更を禁止するlockではありません。
+
+既存native `verify_runtime` のdefault7/strict8とTaskBackend.synthetic=Falseは維持します。
+明示local mode以外のnative backendをこのloopへ入れません。fixture receiptのsyntheticは
+ローカル技術検証を表し、model/providerの品質・費用・本番受入を表しません。
+取消は成果proofやexecutor-policy保存fileの存在を追加条件にせず、既存owner/Sourceから
+受け付けます。元attempt/deadline・取消・未知ACKの再dispatch拒否も維持します。
+
+実fixtureの2資料は(5, unknown)から(5, 13)/(5, 23)へ5 callsで改善し、DocBだけを修復します。
+budget 4は3 callsでunresolved/no learning、正anchor再読とterminal resumeは追加child 0です。
+独立criticは実資料を別processで再計算し、固定13を別datasetの正解として扱いません。
+製品CLI・通常/learning adapter・hierarchyから同じmodeを呼ぶ受入、および実モデルと
+利用者成果は#375の残件です。

@@ -22,6 +22,7 @@ from .task_planning import SPAN_KEYS, _Sources
 
 MODE = "local_executable_fixture"
 EXECUTOR_FIELDS = {"executor_contract_version", "executor_policy_sha256"}
+EXECUTOR_TEMPLATE_FIELDS = EXECUTOR_FIELDS | {"executor_owner_binding"}
 MAX_POLICY_BYTES = 4096
 MAX_PROOF_BYTES = 2 * 1024 * 1024
 _DECLARATION = {"kind", "version", "mode", "prompt_contract_version", "visibility", "executable", "materials"}
@@ -217,16 +218,16 @@ def executor_version(runtime_plan, initial_template):
     critics = [j for j in runtime_plan.get("jobs", []) if isinstance(j, dict) and j.get("job_id") == "r0-critic"]
     require(len(critics) == 1 and critics[0].get("kind") == "review"
             and critics[0].get("payload_digest") == digest(initial_template), "LOOP_EXECUTOR_POLICY")
-    fields = EXECUTOR_FIELDS.intersection(initial_template)
+    fields = EXECUTOR_TEMPLATE_FIELDS.intersection(initial_template)
     if not fields:
         evidence_version(runtime_plan, initial_template)
         return None
-    require(fields == EXECUTOR_FIELDS and type(initial_template["executor_contract_version"]) is int
+    require(fields in (EXECUTOR_FIELDS, EXECUTOR_TEMPLATE_FIELDS) and type(initial_template["executor_contract_version"]) is int
             and initial_template["executor_contract_version"] == 1, "LOOP_EXECUTOR_VERSION")
     digest_ref(initial_template["executor_policy_sha256"])
     # Check the unchanged underlying policy against a derived copy only. The
     # original template digest was authenticated above; no DB value is edited.
-    base = {k:v for k,v in initial_template.items() if k not in EXECUTOR_FIELDS}
+    base = {k:v for k,v in initial_template.items() if k not in EXECUTOR_TEMPLATE_FIELDS}
     derived = copy.deepcopy(runtime_plan)
     next(j for j in derived["jobs"] if j["job_id"] == "r0-critic")["payload_digest"] = digest(base)
     require(evidence_version(derived, base) == 2, "LOOP_EXECUTOR_VERSION")
@@ -308,9 +309,9 @@ def loop_schema(delivered):
             and all(isinstance(c, str) for c in criteria) and isinstance(reports, dict)
             and 1 <= len(reports) <= 6, "LOOP_EXECUTOR_SCHEMA")
     require(len(set(criteria)) == len(criteria), "LOOP_EXECUTOR_SCHEMA")
-    evidence = obj({"job_id": {"type": "string", "enum": list(reports)},
+    evidence = obj({"job_id": {"type": "string", "enum": sorted(reports)},
                     "claim_index": {"type": "integer", "minimum": 0, "maximum": 29}})
-    row = {"criterion_id": {"type": "string", "enum": criteria},
+    row = {"criterion_id": {"type": "string", "enum": sorted(criteria)},
            "status": {"type": "string", "enum": ["passed", "failed", "unknown"] if pre else ["passed", "failed", "blocked", "not_run"]},
            "evidence": {"type": "array", "items": evidence, "maxItems": 30}}
     if not pre:

@@ -45,7 +45,7 @@ for invalid in ({1: "value"}, {"nested": {None: "value"}}, (1, 2), "\ud800", cyc
         else:
             raise AssertionError("non-JSON input was silently coerced")
 modules = list(pkgutil.iter_modules(swarm.__path__, swarm.__name__ + "."))
-assert len(modules) == 28
+assert len(modules) == 29
 for module in modules:
     importlib.import_module(module.name)
 # Exercise both input versions from the installed namespace. Import enumeration
