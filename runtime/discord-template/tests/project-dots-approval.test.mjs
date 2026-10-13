@@ -123,3 +123,28 @@ test('MCP cancellation reaches the invocation signal, outside the model-controll
   const controller=new AbortController(),work=client.callTool({name:'project_read',arguments:{project_id:'ref/project/unused'}},undefined,{signal:controller.signal});
   const refused=assert.rejects(work);await started.promise;controller.abort();await refused;await aborted.promise;
 });
+
+test('official stdio MCP cancellation reaches pending owner authorization without saving a Project',async t=>{
+  const f=await fixture(t),r=await f.request('sdk-cancel'),draft=await f.prepare(r);
+  assert.match((await f.confirm(draft)).content,/Project保存を許可/);
+  const controller=new AbortController();let enter,release,observeAbort;
+  const started=new Promise(resolve=>{enter=resolve;}),held=new Promise(resolve=>{release=resolve;}),aborted=new Promise(resolve=>{observeAbort=resolve;});
+  f.runtime.projects.authorizeSource=async(_source,_actor,{signal})=>{
+    signal.addEventListener('abort',()=>observeAbort(signal.reason),{once:true});enter();await held;
+  };
+  const {operation,...payload}=r.candidate;
+  const call=f.client.callTool({name:'project_create',arguments:{...payload,approval_id:draft.id}},undefined,{signal:controller.signal});
+  const rejected=assert.rejects(call,/SDK_CALL_CANCELLED/);
+  try{
+    await started;controller.abort(new Error('SDK_CALL_CANCELLED'));await rejected;
+    // A timeout is not proof of cancellation propagation: require the server's
+    // actual socket-disconnect reason before releasing the raw authorization.
+    const reason=await aborted;assert.equal(reason.code,'HTTP_CLIENT_DISCONNECTED');
+  }finally{release();}
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.count(),0);
+  assert.equal(f.runtime.store.db.prepare('SELECT count(*) AS n FROM project_requests').get().n,0);
+  assert.equal(f.runtime.store.db.prepare("SELECT count(*) AS n FROM events WHERE type='project.created'").get().n,0);
+  assert.equal((await f.call('project_read_change',{approval_id:draft.id})).state,'approved');
+  assert.equal(f.runtime.store.tasks(actor).length,0);
+});
