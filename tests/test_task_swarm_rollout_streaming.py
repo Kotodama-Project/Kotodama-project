@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 import os
 from pathlib import Path
 import sys
+import weakref
 
 try:
     import pytest
@@ -442,3 +444,131 @@ def test_windows_rollout_opener_shares_delete_and_transfers_handle_ownership(tmp
     assert calls == [(str(path), 0x80000000, 0x1 | 0x2 | 0x4, None, 3, 0x80, None)]
     assert kernel.CreateFileW.restype is wintypes.HANDLE
     assert kernel.CreateFileW.argtypes[-1] is wintypes.HANDLE
+
+
+@pytest.mark.parametrize("exact", [False, True])
+@pytest.mark.parametrize("selected_first", [False, True])
+def test_known_turn_does_not_retain_dense_other_turn_payloads(tmp_path, monkeypatch, exact, selected_first):
+    selected = records(tmp_path)
+    others = []
+    for number in range(256):
+        turn = f"33333333-3333-4333-8333-{number:012d}"
+        context, completion = records(tmp_path, turn=turn)[1:]
+        context["payload"]["history"] = "別の履歴" * 128
+        completion["payload"]["last_agent_message"] = "other completion " * 128
+        others.extend((context, completion))
+    rows = selected + others if selected_first else selected[:1] + others + selected[1:]
+    raw = encode(rows)
+    path = fixture(tmp_path, raw)
+    original = codex.json.loads
+    live, observed = {}, {"created": 0, "peak": 0}
+
+    class TrackedPayload(dict):
+        __slots__ = ("__weakref__",)
+
+    def tracked(line):
+        row = original(line)
+        payload = row.get("payload") if isinstance(row, dict) else None
+        if isinstance(payload, dict) and payload.get("turn_id") not in (None, TURN):
+            payload = TrackedPayload(payload)
+            row["payload"] = payload
+            identity = id(payload)
+            live[identity] = weakref.ref(payload, lambda _, identity=identity: live.pop(identity, None))
+            observed["created"] += 1
+            observed["peak"] = max(observed["peak"], len(live))
+        return row
+
+    monkeypatch.setattr(codex.json, "loads", tracked)
+    result = resolve(tmp_path, **({"exact_record": (path, raw)} if exact else {}))
+    assert result["turn_id"] == TURN and result["completed_output"] == '{"answer":"日本語😀"}'
+    assert observed["created"] == 512  # Every nonselected record was still parsed.
+    assert observed["peak"] <= 2  # Current decoder result and the preceding loop payload.
+    assert live == {}
+
+
+@pytest.mark.parametrize("identity", ["event_thread", "session_meta"])
+def test_nonselected_turn_identity_after_selected_completion_is_still_checked(tmp_path, identity):
+    rows = records(tmp_path)
+    if identity == "event_thread":
+        rows.append({"type": "turn_context", "payload": {"turn_id": OTHER_TURN,
+                     "thread_id": "44444444-4444-4444-8444-444444444444"}})
+    else:
+        rows.append({"type": "session_meta", "payload": {"turn_id": OTHER_TURN,
+                     "id": "44444444-4444-4444-8444-444444444444"}})
+    fixture(tmp_path, encode(rows))
+    with pytest.raises(codex._RuntimeResolutionError) as raised:
+        resolve(tmp_path)
+    assert raised.value.code == "runtime_thread_mismatch"
+
+
+@pytest.mark.parametrize("mode", ["append", "cancel", "stale_session"])
+def test_nonselected_tail_cannot_bypass_final_checks(tmp_path, monkeypatch, mode):
+    rows = records(tmp_path)
+    if mode == "stale_session":
+        rows[0]["payload"]["timestamp"] = "2020-01-01T00:00:00Z"
+    tail = records(tmp_path, turn=OTHER_TURN)[1:]
+    path = fixture(tmp_path, encode(rows + tail))
+    original = codex.json.loads
+    seen_tail = False
+
+    def decode(line):
+        nonlocal seen_tail
+        row = original(line)
+        if row.get("payload", {}).get("turn_id") == OTHER_TURN and not seen_tail:
+            seen_tail = True
+            if mode == "append":
+                with path.open("ab") as stream:
+                    stream.write(b"\n{}\n")
+        return row
+
+    def cancelled():
+        if mode == "cancel" and seen_tail:
+            raise codex.BackendError("cancelled", "synthetic owner cancellation", retryable=False)
+
+    monkeypatch.setattr(codex.json, "loads", decode)
+    options = {"check_cancelled": cancelled}
+    if mode == "stale_session":
+        options["started_unix"] = datetime.fromisoformat("2026-10-10T00:00:00+00:00").timestamp()
+    with pytest.raises((codex._RuntimeResolutionError, codex.BackendError)) as raised:
+        resolve(tmp_path, **options)
+    assert seen_tail
+    assert raised.value.code == {"append": "runtime_rollout_changed", "cancel": "cancelled",
+                                 "stale_session": "runtime_not_fresh"}[mode]
+
+
+@pytest.mark.parametrize("change", ["cwd", "timestamp"])
+def test_nonselected_session_metadata_still_updates_binding(tmp_path, change):
+    rows = records(tmp_path)
+    metadata = dict(rows[0]["payload"], turn_id=OTHER_TURN)
+    metadata[change] = str(tmp_path / "other-work") if change == "cwd" else "2020-01-01T00:00:00Z"
+    rows.append({"type": "session_meta", "payload": metadata})
+    fixture(tmp_path, encode(rows))
+    with pytest.raises(codex._RuntimeResolutionError) as raised:
+        resolve(tmp_path, started_unix=datetime.fromisoformat("2026-10-10T00:00:00+00:00").timestamp())
+    assert raised.value.code == {"cwd": "runtime_cwd_invalid", "timestamp": "runtime_not_fresh"}[change]
+
+
+def test_known_turn_keeps_later_correction_failure_cwd_and_first_valid_path(tmp_path):
+    first = fixture(tmp_path, encode(records(tmp_path)[:1]))
+    middle = records(tmp_path)
+    middle[1]["payload"]["cwd"] = str(tmp_path / "old-work")
+    (tmp_path / f"m-{THREAD}.jsonl").write_bytes(encode(middle))
+    later = records(tmp_path)
+    later[1]["payload"].update(effort="last-context", cwd=str(tmp_path))
+    without_cwd = {"type": "turn_context", "payload": {"turn_id": TURN, "model": codex.MODEL,
+                   "effort": "corrected-context", "sandbox_policy": {"type": "read-only"}}}
+    failure = {"type": "event_msg", "payload": {"type": "turn_failed", "turn_id": TURN}}
+    correction = {"type": "event_msg", "payload": {"type": "turn_complete", "turn_id": TURN,
+                  "completed_at": 99, "last_agent_message": '{"answer":"訂正😀"}'}}
+    later += [without_cwd, failure, correction] + records(tmp_path, turn=OTHER_TURN)[1:]
+    (tmp_path / f"z-{THREAD}.jsonl").write_bytes(encode(later))
+    # Sort order, not creation order, owns the first valid receipt path.
+    first.rename(tmp_path / f"a-{THREAD}.jsonl")
+    result = resolve(tmp_path)
+    assert result["runtime_receipt_path"] == str(tmp_path / f"a-{THREAD}.jsonl")
+    assert result["effort"] == "corrected-context" and result["runtime_cwd"] == str(tmp_path)
+    assert result["completed_at"] == 99 and result["completed_output"] == '{"answer":"訂正😀"}'
+    assert result["turn_failed"] is True
+    with pytest.raises(codex._RuntimeResolutionError) as raised:
+        codex._runtime_receipt(THREAD, None, tmp_path, tmp_path)
+    assert raised.value.code == "runtime_turn_ambiguous"
