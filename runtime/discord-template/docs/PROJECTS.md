@@ -22,6 +22,9 @@ Projectの所有者と一致する必要があります。公開HTTP endpointを
 | `read` | `project_id` | 保存済みbriefと現在のrevision/digest、出典参照 |
 | `inspect` | `project_id`, `expected_revision`, `base_digest`, `source`, `reason`, `brief` | 変更箇所、削除される制約・受入条件。保存しない |
 | `correct` | inspectの入力と`request_id` | 原依頼参照を保った新revisionと訂正event |
+| `link_task` | `project_id`, `expected_revision`, `base_digest`, `source`, `reason`, `request_id`, `task_id`, `expected_task_revision` | 同じownerの既存Taskを版付きで関連付ける |
+| `unlink_task` | link_taskの入力から`expected_task_revision`を除く | 参照を外す。Task自体は取消・削除しない |
+| `read_task` | `project_id`, `task_id` | 関連付けたTaskの現在状態と照合結果、成果の報告済みメタデータ |
 
 すべてに`actor`を含めます。`source`はそのinstallationに既に保存されたDiscord Sourceの参照です。
 現在の確定版と閲覧権限を確認し、未登録の本文や任意ファイルパスから自動取込しません。
@@ -48,7 +51,7 @@ const result = await controlCommand(config, {
 
 ## 情報と履歴
 
-briefは[Project v1](../../../docs/PROJECT-HUB-VIEW.md)と同じ
+briefは[Project情報契約](../../../docs/PROJECT-HUB-VIEW.md)と同じ
 `outcome`, `in_scope`, `out_of_scope`, `constraints`, `acceptance`, `unknowns`です。
 文字数はUnicode code pointで検査し、上限超過を切り捨てません。
 空配列は記録がない状態で、実行可能や該当なしを意味しません。
@@ -78,17 +81,38 @@ installationの設定済みtext/result channel・voice room内でそのactorが�
 Dotsから送った処理は`surface: "dots"`で接続元を固定し、Dotsの無効化・actor変更を
 保存直前にも確認します。このmarkerはoperatorの権限に制約を加え、権限を増やしません。
 
+## 既存Taskとの関連付け
+
+利用する場合だけ`projects.operations`へ`link_task`、`unlink_task`、`read_task`を加えます。
+新規Projectはv1・空の参照で作成し、最初の関連付け時に新revisionをv2へ進めます。
+v2のlocal参照は`{adapter: "discord_local_task_v1", task_id, revision}`です。
+swarm入力の`context_digest`とは区別し、TaskのSQLite本文digestを代用しません。
+参照はProject snapshot・digest・既存訂正履歴に保持し、別のTask台帳を作りません。
+最大50参照、Task IDは重複不可です。再関連付けには現在のTask版を明示します。
+
+TaskとProjectのactor・room・選択済みownerが一致し、Taskの元Sourceと現在の文脈Sourceも
+閲覧可能である必要があります。元版・現在版の音声opt-outと、認可中のcontext変更も確認します。
+Taskの同じrevision内で担当・context・結果が変わる場合があるため、状態照会ごとに再読します。
+Projectの通常readは記録済み参照だけを返し、Task本文・現在状態をまとめて複製しません。
+
+`read_task`は`current_task_revision`、`owner_state`、`resolution`を返します。
+参照版が古ければ`revision_changed`、Sourceが変われば`source_changed`と表示し、
+新しい成果を自動採用しません。成果メタデータは版とSourceが一致する`needs_review`に限り
+件数・検査の報告状態を返します。本文・絶対パスは返さず、`artifact_readback: "not_run"`、
+`completion: "not_observed"`を維持します。確認待ちを完了と呼びません。
+再起動時のTask状態は既存Storeの回復処理に従い、Projectから再実行しません。
+
 ## 実装範囲と次の接続
 
-この版はactor所有のProject briefだけを扱い、`task_refs`は空です。
-Task参照の追加、成果・担当・完了の集約、共有参加者、Projectの取消・削除、
-動的役割生成、GUI操作、実Dotアカウントによる受入、provider実接続は後続です。
-既存TaskのSQLite本文digestを、swarm入力の`context_digest`へ流用しません。
+既存[Requirements GadgetのProject表示と候補検査](../../codex-task-bridge/README.md)は
+同じlocal ownerへ接続します。GUIは参照と変更候補の検査までで、保存やTask実行を行いません。
+成果の内容readback・要件ごとの充足・完了集約、共有参加者、Projectの取消・削除、
+動的役割生成、実Dotアカウントによる受入、provider実接続は後続です。
 
 既存Requirements Gadgetの`objective`と`deliverable`は別の情報です。
 Projectの`outcome`へ自動要約したり、件数・文字数を切り捨てて移したりしません。
 GUIとagentのadapterはこの共通操作を呼び、別の保存先やTask ownerを作らない方針です。
 
-検証は`tests/project-owner.test.mjs`と`tests/project-control.test.mjs`で、
+検証は`tests/project-owner.test.mjs`、`tests/project-control.test.mjs`、`tests/project-task.test.mjs`で、
 合成Source、実SQLite、実loopback HTTP、再起動、再送、旧版、取消された権限を扱います。
 実Discord・実モデル・Public Betaの受入とは別です。

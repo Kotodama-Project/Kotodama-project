@@ -5,6 +5,9 @@
 外からは一つのKotodama agentとして接し、内部では仕事に必要な役割を組み立てる。
 この文書は要求と実装順を定義するもので、接続済みサービス、稼働するハブ、Task台帳ではない。
 最初の限定実装は[Project情報契約とread-only view](PROJECT-HUB-VIEW.md)を参照する。
+保存・訂正・既存Task参照は[local owner](../runtime/discord-template/docs/PROJECTS.md)、
+GUIの表示・候補検査は[共通bridge](../runtime/codex-task-bridge/README.md)へ追加している。
+以下の設計目標と、各componentに記載した実装・未検証の範囲を区別する。
 
 ## 継続作業の入口
 
@@ -168,7 +171,8 @@ agentのgraphや細かな実行記録は、必要なときに開ける詳細表�
 
 最初の実装sliceは、この情報契約を既存Project/Task参照へ対応付け、read-only統合viewと
 変更候補の検査を作る。その後、同一の操作をGUIと会話から扱う縦断実装へ進む。
-GUI、永続Project service、最適化engineはこの文書では未実装。
+この設計文書自体は実装ではない。local Project保存・GUI候補検査の現在の範囲は冒頭のcomponent文書、
+続く動的割当・実サービス受入・最適化engineの担当と再開点は作業Issueを参照する。
 
 ## 通信方式の選択
 
