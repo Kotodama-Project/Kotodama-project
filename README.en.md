@@ -37,7 +37,9 @@ Explicit `local_executable_fixture` mode lets the knowledge CLI or installed cor
 
 [Learning proposal readback](docs/TASK-LEARNING-REUSE.md) uses a validated private copy without creating or repairing the original execution DB/WAL/SHM. Missing or corrupt state and missing required current-schema tables produce typed refusals; verified legacy-writer formats remain readable. Current owner, Source, cancellation and final evidence checks still apply.
 
-[STATUS](STATUS.md#current-source-and-open-integration-work) owns this revision's source capabilities, adoption status, remaining hierarchy/readback work, performance observations and prioritized Issues. Follow each linked Issue's latest evidence before resuming. Whole eight-layer operation, actual model/user outcomes and continuous production operation remain unaccepted.
+The [hierarchy CLI](docs/KNOWLEDGE-HIERARCHY-TRACE.md) follows multiple parents and shared references across Project, optional Phase and Requirement declarations using stable IDs and current Source. Parent constraints and corrections remain in the existing Task input. It reads current owner-bound Tasks, receipt-anchored execution Plans and saved local worker/critic inputs, results and the code retained for each execution. Required organization or architecture references without a resolved current owner, and unobserved learning decisions, leave the context `BLOCKED`.
+
+[STATUS](STATUS.md#current-source-and-open-integration-work) owns this revision's source capabilities, adoption status, remaining owner connections, performance observations and prioritized Issues. Follow each linked Issue's latest evidence before resuming. Whole eight-layer operation, actual model/user outcomes and continuous production operation remain unaccepted.
 
 ## Knowledge, Task and Project CLI entrypoints
 
@@ -50,6 +52,7 @@ Use Python 3.12 from the checkout. Follow the linked guides for dependencies and
 | Execute a local fixture from admitted input | `python -B tools/knowledge_base.py task-input execute --help` | [Owner, input and explicit mode](docs/KNOWLEDGE-TASK-INPUT.md#知識cliから使う) |
 | Use the same bounded execution in installed core | `python -I -m kotodama_core.task_swarm.closed_loop --help` | [Local executor](docs/TASK-LOOP-EXECUTOR.md), [building the package candidate](python/README.md#ビルドと確認) |
 | Inspect a Project and existing Task bindings | `python -B tools/project_hub.py --help` | [view / inspect-change](docs/PROJECT-HUB-VIEW.md) |
+| Trace current parent constraints, Tasks and saved execution | `python -B tools/hierarchy_trace.py --help` | [Hierarchy and execution trace](docs/KNOWLEDGE-HIERARCHY-TRACE.md) |
 
 Execution requires input and workers bound to the existing owner plus `--executor-mode local_executable_fixture`. Learning reuse also requires a current decision. The Project CLI reads references and validates proposed corrections; it does not create, update or dispatch Tasks. These entrypoints do not establish large-corpus performance or acceptance of the complete improvement loop.
 
@@ -67,7 +70,7 @@ You choose how to use the product:
 | Session / conversation ledger | schema and validator | | runtime ingestion |
 | Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | | 15-minute rotation, Voice-to-Verified-Handoff, GrillU, the rest of the [GPT-Live adoption policy](docs/GPT-LIVE-ADOPTION.md) (#142 to #146) |
 | Agent swarm / autonomy | bounded Task execution, Luna Task swarm, swarm and route-binding contracts (#34), migration-ledger schema and read-only verifier (#35; synthetic fixture only), [agent-lifecycle contract](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md) (#36; schema, read-only verifier, synthetic fixture) | real registry and runtime/continuity acceptance | Goal Completion Loop after a human GO |
-| Knowledge / Context | canonical OKF Markdown, catalog/graph, bounded retrieval/context, typed goal/Source/frontier inputs and owner-bound learning candidates; explicit local-executor CLI, current evidence checks, learning-origin verification reuse within an invocation and proposal readback without creating or repairing the original DB | hierarchy integration and large-corpus evaluation | Context Gateway and continuous improvement |
+| Knowledge / Context | canonical OKF Markdown, catalog/graph, bounded retrieval/context, typed goal/Source/frontier inputs and owner-bound learning candidates; explicit local-executor CLI, current evidence checks, learning-origin verification reuse within an invocation, proposal readback without creating or repairing the original DB, and bounded multiple-parent hierarchy and saved-execution trace | owner connections across all eight layers and large-corpus evaluation | Context Gateway and continuous improvement |
 | Project | minimal information contract, existing Task read-only view and correction proposal checks | persistence and GUI/natural-language shared operations | configurable collaboration and optimization |
 | Runtime | Compose / Proxmox lifecycle contracts, Cloudflare candidates | | deployment on Cloudflare edge and the official Cloudflare OS |
 
