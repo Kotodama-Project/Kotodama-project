@@ -7,20 +7,6 @@ Kotodama is a local-first Company OS that turns conversation into auditable inte
 > [!IMPORTANT]
 > このリポジトリは **Incomplete Public Preview** です。公開しているのは Company Pack の schema・validator・review chain、runtime と evidence の候補、Discord runtime の候補です。Public Beta の受付、Discord 招待、公開 Voice Bot は提供していません。公開面の既定は `NO_GO_UNPUBLISHED` で、validator や CI の PASS は install、deploy、provider 接続、Promotion、Current Truth、Final Human GO を意味しません。最新の境界は [STATUS.md](STATUS.md)、未完了の gate は [ROADMAP.md](ROADMAP.md) にあります。
 
-## 何を作っているか
-
-会話・音声・Issue・文書から意図を検知し、足りない要件だけを確認して仕事へ分解し、成果と検証証拠を残して採用を判断し、会社の知識へ戻す。この鎖を短絡しないまま速く回すための部品を、Evidence Chain、Company Pack、Context Platform、AI Workforce、そして Cloudflare edge と公式 Cloudflare OS を基盤として作っています。
-
-2026-09-30の方針として、[OpenAI Dotsを日常の入口と継続作業の第一候補](docs/OPENAI-ALIGNMENT.md)にします。Kotodamaは会社の知識・権限・訂正・Task・検証証拠を既存の各正本へ返します。Cloudflare edgeと公式Cloudflare OSは接続・専用画面の候補として維持し、実接続と配備は検証して決めます。
-
-同じ製品の中で、利用の場面を選べます。
-
-- **仕事を進める**: Company Pack と review chain で、依頼を Work Order、Verification Receipt、Promotion まで辿る。
-- **「OK」の後は agent に任せる**: 明示した調査依頼を、同じTaskの3workerと独立reviewへつなぐ [Task swarm](docs/TASK-SWARM-RUN.md) を備えます。既定無効で、Linuxの専用実行領域を使います。合成の一連動作を検証済みで、実モデル・実Discordの受入は残っています。
-- **Voice channel で過ごす**: 楽しく過ごす、一緒に考える、必要なときだけ仕事を進める、のモードを選ぶ。雑談を勝手に仕事や追加の権限へ変えません。
-
-設計の全文は [docs/OVERVIEW.md](docs/OVERVIEW.md)、方向と現在地の対応は [docs/PRODUCT-DIRECTION.md](docs/PRODUCT-DIRECTION.md) と [docs/PROJECT-MAP.md](docs/PROJECT-MAP.md) にあります。
-
 ## 5 分で試す
 
 Git と Python 3.12 だけで、Company Pack の review chain（13 steps）を一時 workspace で完走させます。外部接続、credential、runtime は不要です。
@@ -33,6 +19,42 @@ python3 -S -B tools/smoke_company_pack_review_chain.py
 
 Windows の PowerShell では `python3` の代わりに `python` を使います。成功すると `"status": "PASS"` と `"public_beta": "NO_GO_UNPUBLISHED"` を含む一行 JSON が返り、`claims` はすべて `false` です。読み方と次の一歩は [5-minute tour](docs/FIVE-MINUTE-TOUR.md) にあります。
 
+## 何を作っているか
+
+会話・音声・Issue・文書から意図を検知し、足りない要件だけを確認して仕事へ分解し、成果と検証証拠を残して採用を判断し、会社の知識へ戻す。この鎖を短絡しないまま速く回すための部品を、Evidence Chain、Company Pack、Context Platform、AI Workforce、そして Cloudflare edge と公式 Cloudflare OS を基盤として作っています。
+
+組織・設計・Project の文書階層と、目標・記憶・分解・並行実行・独立検証・統合・学習・再計画をつなぐ仕組み全体が対象です。各仕事へ原意・訂正・上位制約を保ち、同じ課題を繰り返さず、品質・時間・メモリ・費用・人の手間を改善します。文書や固定 worker の数を、全体の完成とは扱いません。
+
+[Owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) に、Project を目的・要件・人・agent・資料・Task・判断・成果・学習のハブにする方向を保持しています。必要な役割が親子・横で協働し、GUI・自然言語・CLI から同じ仕事を扱う設計です。最初の [Project 参照 CLI](docs/PROJECT-HUB-VIEW.md) は `main` にあり、既存 Task の参照と訂正候補を確認できます。Project の保存・共通操作・動的割当・実外部接続は [#385](https://github.com/Kotodama-Project/Kotodama-project/issues/385) で進めています。
+
+2026-09-30の方針として、[OpenAI Dotsを日常の入口と継続作業の第一候補](docs/OPENAI-ALIGNMENT.md)にします。Kotodamaは会社の知識・権限・訂正・Task・検証証拠を既存の各正本へ返します。Cloudflare edgeと公式Cloudflare OSは接続・専用画面の候補として維持し、実接続と配備は検証して決めます。
+
+同じ製品の中で、利用の場面を選べます。
+
+- **仕事を進める**: Company Pack と review chain で、依頼を Work Order、Verification Receipt、Promotion まで辿る。
+- **「OK」の後は agent に任せる**: 明示した調査依頼を、同じTaskの3workerと独立reviewへつなぐ [Task swarm](docs/TASK-SWARM-RUN.md) を備えます。既定無効で、Linuxの専用実行領域を使います。合成の一連動作を検証済みで、実モデル・実Discordの受入は残っています。
+- **Voice channel で過ごす**: 楽しく過ごす、一緒に考える、必要なときだけ仕事を進める、のモードを選ぶ。雑談を勝手に仕事や追加の権限へ変えません。
+
+設計の全文は [docs/OVERVIEW.md](docs/OVERVIEW.md)、方向と現在地の対応は [docs/PRODUCT-DIRECTION.md](docs/PRODUCT-DIRECTION.md) と [docs/PROJECT-MAP.md](docs/PROJECT-MAP.md) にあります。
+
+## 現在地
+
+`main` には、OKF Markdown の知識検索・限定 context、原意と訂正を束縛する Task 入力、独立 critic、永続取消、必要な leaf だけの一回修復、Project の read-only view があります。修復は同じ Task・予算を保ち、終端 checkpoint 後の復旧で仕事を再実行しません。
+
+採用済みの版、A→B 依存実行・実行器 CLI・学習・階層 reader の候補、性能測定と優先 Issue は [STATUS の現在地](STATUS.md#current-source-and-open-integration-work) に集約しています。次の担当はそこから各 Issue の最新 head・証拠・残る受入を確認してください。全8階層、実モデル・利用者成果、常駐運用は引き続き受入が必要です。
+
+## 知識・目的・Project を CLI で確認する
+
+checkout の Python 3.12 から使います。検索は現在の小さな Markdown 単位で出典・鮮度を返します。Task と Project の入力・依存準備はリンク先の手順を参照してください。
+
+| 目的 | 入口 | 契約・手順 |
+|---|---|---|
+| 知識を探す | `python -B tools/knowledge_base.py query --root . "意図 KGI"` | [検索と限定 context](docs/KNOWLEDGE-BASE.md) |
+| 目的と Source を既存 Task に束縛する | `python -B tools/knowledge_base.py task-input --help` | [compile / verify / simulate](docs/KNOWLEDGE-TASK-INPUT.md) |
+| Project と既存 Task の対応を読む | `python -B tools/project_hub.py --help` | [view / inspect-change](docs/PROJECT-HUB-VIEW.md) |
+
+Project CLI は参照と訂正候補の検査までです。Task 作成・更新・dispatch は行いません。検索品質・大規模性能や自律改善の全体受入は、これらの CLI の存在だけでは成立しません。
+
 ## 使い方を選ぶ
 
 | やりたいこと | 今日 `main` でできること | 入口 |
@@ -42,7 +64,8 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 | 既存 Task に結び付けて Company Pack を実生成し、確認・訂正する | `tools/run_company_pack_task.py` と local review gateway | [Task-bound execution](docs/COMPANY-PACK-TASK-EXECUTION.md)、[Gateway](runtime/local-review-gateway/README.md) |
 | 会社の runtime を配備する | Compose minimum / Proxmox segmented の lifecycle contract と validator（live receipt なし）。Cloudflare edge と公式 Cloudflare OS の候補（未 upload、未 deploy） | [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)、[Cloudflare OS](docs/CLOUDFLARE-OS-ADOPTION.md) |
 | agent swarm に調査を任せる | 明示slashから同じTaskの3worker・別verifier・成果readbackへ接続。既定無効、Linux限定。移行台帳とlifecycle registryの実運用は別の未完事項 | [Task swarm run](docs/TASK-SWARM-RUN.md)、[実行基盤](docs/LUNA-TASK-SWARM.md)、[swarm契約](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) |
-| 知識基盤を使う | #48・#61 系の公開 knowledge projection。9つのConcept、出典・鮮度の検査、字句検索、限定context、判断ready度の監査。内容の独立検証と実agent入力への接続は未成立 | [Knowledge base](docs/KNOWLEDGE-BASE.md)、[公開知識の入口](knowledge/index.md) |
+| 知識基盤と目的入力を使う | canonical OKF Markdown、catalog/graph、出典・鮮度の検査、字句検索、限定context、型付き目的と原意・訂正を既存Taskへ束縛する compile/verify/simulate。内容の独立検証・実モデル品質・大規模性能は別の受入 | [Knowledge base](docs/KNOWLEDGE-BASE.md)、[Task input](docs/KNOWLEDGE-TASK-INPUT.md)、[公開知識の入口](knowledge/index.md) |
+| Project と既存 Task を確認する | Project 情報契約、既存 owner に束縛した Task 参照 view、訂正候補と影響の検査。保存・共通操作は後続 | [Project view](docs/PROJECT-HUB-VIEW.md) |
 
 ## 今 `main` にあるもの、候補、方向
 
@@ -52,7 +75,8 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 | Session / conversation ledger | schema と validator | | runtime への取込 |
 | Discord / Voice | `runtime/discord-template` | | 15 分 rotation、Voice-to-Verified-Handoff、GrillU、[GPT-Live の採用方針](docs/GPT-LIVE-ADOPTION.md)の残り（#142〜#146） |
 | Agent swarm / 自律実行 | 限定 Task 実行、Luna Task swarm、agent swarm・route binding の契約（#34）、移行台帳の契約（#35）、agent lifecycle の契約（#36） | 実 registry と runtime/continuity 受入 | 「OK」後の Goal Completion Loop、reversible delegation |
-| 知識・Context | #48・#61 系の公開 OKF bundle と read-only CLI | #59 の実入力束縛、control plane の残件 | Context Gateway、TiDB 評価 |
+| 知識・Context | canonical OKF bundle、read-only検索/context、型付きTask目的・Source/frontier・learning候補の既存owner接続 | 階層統合、実executor入力・製品CLI、大規模検索評価 | Context Gateway、継続改善 |
+| Project | 最小情報契約、既存 Task の read-only view、訂正候補検査 | 保存・GUI/NL 共通操作 | 目的に応じた協働・最適化 |
 | Runtime | Compose / Proxmox contract、Cloudflare candidate | | Cloudflare edge と公式 Cloudflare OS を基盤にした配備 |
 | 組織・事業 | | | Resident Clone、Agent Foundry、AI Business Loop |
 
