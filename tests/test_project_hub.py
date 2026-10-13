@@ -1,6 +1,8 @@
 """Project observations preserve existing owner bindings and never apply edits."""
 import copy
+import contextlib
 import hashlib
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -8,6 +10,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -33,6 +36,16 @@ def fixture(now=1000):
 
 
 class ProjectHubTests(unittest.TestCase):
+    def test_final_reread_distinguishes_boolean_from_integer_revision(self):
+        project, _, _ = fixture()
+        project["task_refs"] = []
+        changed = {**project, "revision": True}
+        output = io.StringIO()
+        with patch.object(hub, "load_json", side_effect=[project, changed]), contextlib.redirect_stdout(output):
+            status = hub.main(["view", "--project", "fixture.json"])
+        self.assertEqual(1, status)
+        self.assertEqual("PROJECT_CHANGED_DURING_READ", json.loads(output.getvalue())["reason_code"])
+
     def test_view_retains_intent_and_references_without_creating_completion(self):
         project, binding, payload = fixture()
         before = copy.deepcopy((project, binding, payload))

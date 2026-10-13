@@ -176,9 +176,9 @@ def main(argv: list[str] | None = None) -> int:
 
             result = project_view(project, resolve, now=time.time())
         # Detect observed edits of either caller-selected input during the read.
-        require(load_json(args.project) == project, "PROJECT_CHANGED_DURING_READ")
+        require(digest(load_json(args.project)) == digest(project), "PROJECT_CHANGED_DURING_READ")
         if args.proposal is not None:
-            require(load_json(args.proposal) == result["proposal"], "PROJECT_CHANGED_DURING_READ")
+            require(digest(load_json(args.proposal)) == result["proposal_digest"], "PROJECT_CHANGED_DURING_READ")
         print(json.dumps(result, ensure_ascii=False, allow_nan=False))
         return 0
     except (SwarmError, InputError, OSError) as exc:
