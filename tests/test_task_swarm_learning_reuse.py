@@ -21,7 +21,7 @@ from task_swarm.closed_loop import execute_closed_loop
 from task_swarm.closed_loop_contract import loop_criteria
 from task_swarm.learning_reuse import ReuseOwner, learning_source, propose_learning, purpose_digest, with_learning_source
 from task_swarm.protocol import SwarmError, digest
-from test_task_swarm_closed_loop import MeasuredBackend, execute, repair_for, setup_loop
+from test_task_swarm_closed_loop import MeasuredBackend, execute, setup_loop
 from test_task_swarm_objectives import span
 
 
@@ -44,7 +44,7 @@ def setup_reuse(tmp_path, *, now=1000, observation=8, grant_lifetime=100):
     save(origin[0], origin[2])
     origin[4]["parent_input_digest"] = digest(origin[3])
     completed = execute_closed_loop(origin[0], origin[1], origin[4], MeasuredBackend(origin[3], origin[6]),
-        worker_actors=origin[5], repair_planner=repair_for(origin[3]), clock=lambda: now)
+        worker_actors=origin[5], clock=lambda: now)
     index = next(i for i, item in enumerate(completed["candidate"]["claims"])
                  if item["claim"]["text"] == f"memory={observation}")
     proposal = propose_learning(origin[0], origin[1], completed["receipt_sha256"], index, clock=lambda: now)
@@ -182,7 +182,7 @@ def test_two_processes_reuse_actual_claim_through_real_owner_and_coordinator(tmp
     source = learning_source(arguments["proposal"])
     assert any(s["text"] == source["text"] and s["start"] == 0 and s["end"] == len(source["text"])
                for s in delivered["view"]["spans"])
-    assert arguments["proposal"]["selected"]["job_id"] == "r1-memory"
+    assert arguments["proposal"]["selected"]["job_id"] == "r1-repair-speed"
     assert "UNSELECTED_SENTINEL" not in json.dumps(delivered)
 
     # A separate synthetic control Task has the same purpose and budget, but
@@ -211,7 +211,10 @@ def test_two_processes_reuse_actual_claim_through_real_owner_and_coordinator(tmp
     assert purpose_digest(no_learning) == purpose_digest(payload)
     assert no_learning["objective"]["budget"] == payload["objective"]["budget"]
     assert negative["receipt"]["review_passed"] is False and negative["learning_candidate"] is None
-    assert negative["receipt"]["budget"]["attempts_used"] == result["receipt"]["budget"]["attempts_used"] == 2
+    # Same four-attempt budget: without adopted evidence the automatic repair
+    # also fails; the learned input succeeds without needing that extra round.
+    assert result["receipt"]["budget"]["attempts_used"] == 2
+    assert negative["receipt"]["budget"]["attempts_used"] == 4
     control_run = root/negative["receipt"]["run_id"]
     worker = json.loads((control_run/"r0-apply-memory-result.json").read_text())["result"]
     assert worker["claims"][0]["status"] == "unknown"

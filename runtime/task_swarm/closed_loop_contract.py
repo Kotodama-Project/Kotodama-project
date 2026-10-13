@@ -13,6 +13,7 @@ from .closed_loop_context import derive_child_view, validate_child_view
 from .protocol import canonical, digest, digest_ref
 from .task_contract import require, shape, text, validate_report
 from .task_planning import _Sources, objective_criteria
+from .repair_planning import PROFILE_FIELDS, profile, make_impact, file_sha
 
 
 def loop_criteria(payload):
@@ -96,7 +97,10 @@ def evidence_version(runtime_plan, initial_template):
     require((version == 2) == ("required_evidence_jobs" in initial_template)
             and (version == 2 or "evidence_contract_version" not in initial_template), "LOOP_EVIDENCE_POLICY")
     keys = {"role", "job_id", "round", "round_plan_digest", "criteria", "view"}
-    shape(initial_template, keys | ({"evidence_contract_version", "required_evidence_jobs"} if version == 2 else set()),
+    planning = profile(initial_template)
+    require(planning is None or (version == 2 and initial_template["repair_impact_sha256"] is None),
+            "LOOP_REPAIR_PROFILE")
+    shape(initial_template, keys | (PROFILE_FIELDS if planning else set()) | ({"evidence_contract_version", "required_evidence_jobs"} if version == 2 else set()),
           "LOOP_EVIDENCE_POLICY")
     require(initial_template["role"] == "critic" and initial_template["job_id"] == "r0-critic"
             and type(initial_template["round"]) is int and initial_template["round"] == 0,
@@ -227,7 +231,8 @@ def _prior_repair(payload, reports, plan_digest, initial_execution_plan_digest,
 def validate_critic(value, payload, reports, *, view, plan_digest, round_index,
                     initial_execution_plan_digest, expected_jobs, dispatched_input, dispatched_input_digest,
                     initial_specification, initial_runtime_plan, initial_template, work_inputs,
-                    repair_specification=None, prior_review=None, repair_admission=None):
+                    repair_specification=None, prior_review=None, repair_admission=None,
+                    repair_impact=None, execution_snapshot=None):
     """Validate all planned reports against a stored critic dispatch.
 
     Expected jobs and dispatch digests come from the coordinator's immutable
@@ -281,6 +286,18 @@ def validate_critic(value, payload, reports, *, view, plan_digest, round_index,
         require(dispatched_input.get("evidence_contract_version") == 2
                 and canonical(dispatched_input.get("required_evidence_jobs")) == canonical(required),
                 "LOOP_EVIDENCE_POLICY")
+        planning = profile(initial_template)
+        require(profile(current_template) == planning, "LOOP_REPAIR_PROFILE")
+        if planning:
+            expected_sha = None
+            if round_index:
+                require(repair_impact is not None and execution_snapshot is not None, "LOOP_REPAIR_IMPACT_REQUIRED")
+                proposed, expected_impact = make_impact(payload, initial, initial_runtime_plan,
+                                                       prior_review, work_inputs, execution_snapshot)
+                require(canonical(proposed) == canonical(repair_specification)
+                        and canonical(expected_impact) == canonical(repair_impact), "LOOP_REPAIR_IMPACT_MISMATCH")
+                expected_sha = file_sha(expected_impact)
+            require(current_template.get("repair_impact_sha256") == expected_sha, "LOOP_REPAIR_IMPACT_MISMATCH")
     else:
         require("evidence_contract_version" not in dispatched_input
                 and "required_evidence_jobs" not in dispatched_input, "LOOP_EVIDENCE_POLICY")

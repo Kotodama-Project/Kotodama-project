@@ -232,3 +232,40 @@ checkpointなしからの再dispatchや版の書換えは行いません。
 表の追加分も既存512 KiB入力・2 MiB artifact予算に含みます。最大64条件・6reportの
 関係を扱い、新しいhistory scanやcacheは追加しません。全担当を引用したことは、主張の真偽、
 モデル品質、owner採用、Current Truthや閉ループ全体の完成を意味しません。
+
+## 検証済みgapからの部分修正（#365）
+
+新規runは、初期planの条件割当と実criticから修正対象を決定します。
+失敗条件を担当するleafだけに1つずつ修正jobを作り、元のreportは保持します。
+独立側のworkerを再実行せず、最終criticは保持側を含めて全担当証拠を再検証します。
+共有条件を担当する修正は、関係する全leafの条件にも寄与するため、
+一方の修正証拠だけでは合格しません。修正は最大1回、元のattempt/期限/ownerの範囲です。
+対象・spanを予算に合わせて間引くことはせず、入らなければ停止します。
+
+最初のcritic templateに`repair_planning_contract: 1`を固定し、
+既存DB内の初期planのdigestへ束縛します。修正時の`repair-impact.json`には、
+実gap、初期担当、修正対象、保持report、修正前のattempt identityと残予算を記録し、
+修正criticのtemplateにそのfile hashを固定します。復旧・anchor再読・学習originも
+同じ根拠を再構築します。修正後の残予算を修正前の値と比較してはいけません。
+markerやimpactの欠落を旧方式へ戻す理由にしません。真正な旧v1/v2は保存された契約で
+読み、旧runへこのmarkerを後付けしません。任意callbackは候補の提供だけができ、
+決定的な修正planと一致しない提案は受理されません。
+
+現在の保存済みgapから、実行せず提案を調べる入口:
+
+```sh
+python -m kotodama_core.task_swarm.repair_planning --owner owner.json --input input.json
+```
+
+source checkoutではmodule prefixを`task_swarm`として、既存のruntime import経路を使います。
+この入口は既存owner/Source/初期planを読み直し、`admitted: false`のproposal/impactを返します。
+初期criticが未報告、取消済み、期限切れ、gapなし、または必要な保存証拠が欠ける場合は拒否します。
+learning grant、保存済みcontext binding、またはcheckpointにlearning contextが残るrunのstandalone inspectionは、
+現在のlearning decisionを読む入口がないため`LOOP_REUSE_INSPECTION_UNSUPPORTED`で拒否します。
+checkpoint前は既存のgrantと保存bindingを判定に使い、両者を外した記録のlearning現在性は保証しません。
+learningの通常実行・anchor再読・terminal resumeは既存の現在decision検査を使います。
+新規実行は既存のclosed-loop simulation入口から自動plannerへ接続します。
+未知leaseやcheckpoint前の一般的な再開は許可しません。
+
+実行依存、二度以上の修正、Source訂正を跨ぐ完了jobの再利用は未対応です。
+構造上の証拠検査とlocal simulationの結果を、実providerの成果や全体loop完成とは扱いません。

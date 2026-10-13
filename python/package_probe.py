@@ -45,7 +45,7 @@ for invalid in ({1: "value"}, {"nested": {None: "value"}}, (1, 2), "\ud800", cyc
         else:
             raise AssertionError("non-JSON input was silently coerced")
 modules = list(pkgutil.iter_modules(swarm.__path__, swarm.__name__ + "."))
-assert len(modules) == 23
+assert len(modules) == 24
 for module in modules:
     importlib.import_module(module.name)
 # Exercise both input versions from the installed namespace. Import enumeration
@@ -86,6 +86,9 @@ binding["context_digest"] = core.digest(request)
 assert validate_input(request, binding, now=1000) == request
 assert make_plan(request, binding, now=1000)["budget"]["deadline"] == 1100
 assert {"O1", "Q1"} <= criteria(request).keys()
+from kotodama_core.task_swarm.repair_planning import derive_repair, make_impact, profile
+assert callable(derive_repair) and callable(make_impact)
+assert profile({}) is None
 from kotodama_core.task_swarm.closed_loop_context import derive_child_view
 from kotodama_core.task_swarm.closed_loop import cancel_closed_loop
 assert callable(cancel_closed_loop)
