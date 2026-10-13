@@ -20,6 +20,7 @@ Run ``python -S -B tools/lint_docs.py`` from the repository root.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -48,15 +49,16 @@ def tracked_markdown(root: Path) -> list[Path]:
     names: list[str] = []
     try:
         completed = subprocess.run(
-            ["git", "ls-files", "--", "*.md", "**/*.md"],
+            ["git", "ls-files", "-z", "--", "*.md", "**/*.md"],
             cwd=root,
             capture_output=True,
-            text=True,
             check=False,
             timeout=60,
         )
         if completed.returncode == 0:
-            names = [line for line in completed.stdout.splitlines() if line.strip()]
+            # Git may quote Unicode or control characters without -z. Split
+            # raw path records before filesystem decoding, not on text lines.
+            names = [os.fsdecode(name) for name in completed.stdout.split(b"\0") if name]
     except (OSError, subprocess.SubprocessError):
         names = []
     files = [root / name for name in names] if names else sorted(root.rglob("*.md"))
