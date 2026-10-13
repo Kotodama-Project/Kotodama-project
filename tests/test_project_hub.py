@@ -36,6 +36,98 @@ def fixture(now=1000):
 
 
 class ProjectHubTests(unittest.TestCase):
+    def test_project_v2_local_association_is_unresolved_without_calling_swarm_resolver(self):
+        project, binding, _ = fixture()
+        project["version"] = 2
+        local = {"adapter": "discord_local_task_v1", "task_id": binding["task_id"], "revision": 2}
+        project["task_refs"] = [local]
+        before = copy.deepcopy(project)
+
+        def unexpected_resolver(_):
+            self.fail("Local Task associations must not invoke the swarm resolver")
+
+        result = hub.project_view(project, unexpected_resolver, now=1000)
+        self.assertEqual(before, result["project"])
+        self.assertEqual(before, project)
+        self.assertEqual(hub.digest(project), result["project_digest"])
+        self.assertEqual(1, result["unresolved_count"])
+        self.assertEqual({**local, "resolution": "unresolved",
+                          "reason_code": "PROJECT_TASK_ADAPTER_UNSUPPORTED"}, result["tasks"][0])
+        self.assertFalse(result["execution_authorized"])
+        candidate = hub.inspect_change(project, self.proposal(project))
+        self.assertEqual([local], candidate["impact_task_refs"])
+        self.assertEqual(hub.digest(project), candidate["base_digest"])
+        self.assertFalse(candidate["applied"])
+        self.assertEqual(before, project)
+
+    def test_project_v2_references_require_exact_adapter_shapes_and_unique_task_ids(self):
+        project, binding, _ = fixture()
+        swarm = {"adapter": "swarm_execution_v1", **project["task_refs"][0]}
+        local = {"adapter": "discord_local_task_v1", "task_id": binding["task_id"], "revision": 2}
+        for task in (local, swarm):
+            valid = {**project, "version": 2, "task_refs": [task]}
+            self.assertEqual(valid, hub.validate_project(valid))
+        invalid_refs = [[{**local, "adapter": "unknown"}], [{**local, "adapter": []}],
+                        [{key: value for key, value in local.items() if key != "adapter"}],
+                        [{**local, "owner_ref": binding["owner_ref"]}],
+                        [{**local, "context_digest": binding["context_digest"]}],
+                        [{key: value for key, value in swarm.items() if key != "context_digest"}],
+                        [{**swarm, "extra": "ignored"}], [{**local, "revision": True}],
+                        [{**local, "task_id": "not-a-task"}], [local, swarm]]
+        for refs in invalid_refs:
+            with self.subTest(refs=refs), self.assertRaises(hub.SwarmError):
+                hub.validate_project({**project, "version": 2, "task_refs": refs})
+        for version in (1, True, 3):
+            with self.subTest(version=version), self.assertRaises(hub.SwarmError):
+                hub.validate_project({**project, "version": version, "task_refs": [local]})
+
+    def test_cli_refuses_local_task_file_selection_before_constructing_owner(self):
+        project, binding, _ = fixture()
+        project.update(version=2, task_refs=[{"adapter": "discord_local_task_v1",
+                                            "task_id": binding["task_id"], "revision": 2}])
+        output = io.StringIO()
+        with patch.object(hub, "load_json", return_value=project) as load, \
+                patch.object(hub, "OwnerFile") as owner, contextlib.redirect_stdout(output):
+            status = hub.main(["view", "--project", "fixture.json", "--task", binding["task_id"],
+                               "not-a-swarm-owner.json", "not-a-swarm-input.json"])
+        self.assertEqual(1, status)
+        self.assertEqual("PROJECT_TASK_ADAPTER_UNSUPPORTED", json.loads(output.getvalue())["reason_code"])
+        owner.assert_not_called()
+        load.assert_called_once_with(Path("fixture.json"))
+
+    def test_cli_project_v2_mixed_refs_resolve_only_selected_swarm_owner(self):
+        project, binding, payload = fixture(time.time())
+        project["version"] = 2
+        swarm = {"adapter": "swarm_execution_v1", **project["task_refs"][0]}
+        local = {"adapter": "discord_local_task_v1",
+                 "task_id": "task-00000000-0000-4000-8000-000000000002", "revision": 1}
+        project["task_refs"] = [local, swarm]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            owner = {"binding": binding, "actors": {"reader": {"epoch": 1,
+                     "invocation_ref": "ref/invocation/reader", "actor_status": "active",
+                     "capability_ref": "ref/capability/read", "peers": []}},
+                     "storage": {"root": str(root / "storage"), "mailbox": "mailbox.sqlite", "payloads": "payloads"},
+                     "source_checks": [], "allowed_actions": []}
+            for name, value in (("project", project), ("input", payload), ("owner", owner)):
+                (root / f"{name}.json").write_text(json.dumps(value), encoding="utf-8")
+            before = {p.name: p.read_bytes() for p in root.iterdir()}
+            run = subprocess.run([sys.executable, "-B", str(ROOT / "tools/project_hub.py"), "view",
+                                  "--project", str(root / "project.json"), "--task", payload["task_id"],
+                                  str(root / "owner.json"), str(root / "input.json")],
+                                 capture_output=True, text=True, check=True)
+            result = json.loads(run.stdout)
+            self.assertEqual(project, result["project"])
+            self.assertEqual(1, result["unresolved_count"])
+            self.assertEqual("PROJECT_TASK_ADAPTER_UNSUPPORTED", result["tasks"][0]["reason_code"])
+            self.assertEqual("resolved", result["tasks"][1]["resolution"])
+            self.assertEqual("swarm_execution_v1", result["tasks"][1]["adapter"])
+            self.assertEqual(payload["request"], result["tasks"][1]["request"])
+            self.assertEqual(before, {p.name: p.read_bytes() for p in root.iterdir()})
+            self.assertEqual("", run.stderr)
+        candidate = hub.inspect_change(project, self.proposal(project))
+        self.assertEqual([local, swarm], candidate["impact_task_refs"])
+
     def test_import_with_runtime_already_behind_tools(self):
         code = "import sys; sys.path[:0] = " + repr([str(ROOT / "tools"), str(ROOT / "runtime")])
         code += "; import project_hub; assert callable(project_hub.project_view)"
