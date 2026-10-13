@@ -16,7 +16,7 @@ runの`headSha`が確認対象のSHAと一致し、全jobが完了したこと�
 |---|---|---|---|---|---|
 | Repository validation（job: Repository checks → **Trusted repository validation**） | `.github/workflows/repository-validation.yml` | PR、main への push、手動 | checks は最大 25 分、集約は全依存の終了後 | **必須**（集約が成功を要求） | Discord・swarm と並列に tracked credential hygiene、README の one-command smoke、runtime candidate validator、actionlint、hash-locked pip install、immutable workflow reference check、`python -m unittest discover -s tests`（docs lint を含む）、`git diff --check` と clean tree。Trusted job は全3経路の成功を確認 |
 | Repository validation（job: **test (ubuntu-latest)**・**test (windows-latest)**） | `.github/workflows/repository-validation.yml` | PR、main への push、手動 | 2〜3 分 | **必須**（`Trusted repository validation` も成功を要求） | `runtime/discord-template` の `pnpm test` と `pnpm check`。Linux は固定 digest の Docker image で検証隔離の実 probe を行う |
-| Task swarm validation（job: swarm / validate (ubuntu-22.04)・(windows-latest)） | `.github/workflows/task-swarm.yml` | 必須チェックから `workflow_call`、手動 | 最大20分 | **必須**（`Trusted repository validation` が成功を要求） | hash固定依存、全Task swarm pytest、offline demo、benchmark。工程別の有限観測を保存。Linuxは固定native CLIの合成permission probeも実行し、model/APIは呼ばない。ubuntu-latestではbwrap uid mapが拒否されたため、host policyを変更せず22.04を明示 |
+| Task swarm validation（Linux 1 shard・Windows 4 shards → Complete Task swarm coverage） | `.github/workflows/task-swarm.yml` | 必須チェックから `workflow_call`、手動 | 各実行最大20分、集約最大5分 | **必須**（`Trusted repository validation` が全shardと集約の成功を要求） | hash固定依存、全Task swarm pytest、各OSで1回のoffline demoとbenchmark。全件一覧・工程結果・分割の過不足を検査。Linuxは固定native CLIの合成permission probeも実行し、model/APIは呼ばない。ubuntu-latestではbwrap uid mapが拒否されたため22.04を明示 |
 | Git Steward validation（job: Git Steward (ubuntu-latest)・(windows-latest)） | `.github/workflows/git-steward-validation.yml` | Git Steward・Python launcher・このworkflowの変更を含むPR、mainへのpush | 最大5分 | 任意 | Node 24でcoordinatorと業務演習の59 Node testsを実行。依存install、全Python suite、provider操作は含まない |
 | Cloudflare candidate validation | `.github/workflows/cloudflare-candidate-validation.yml` | PR、main への push | 1〜2 分 | 任意 | Cloudflare edge / 公式 Cloudflare OS 候補の content-free validator |
 | Cloudflare edge preview candidate | `.github/workflows/cloudflare-edge-preview.yml` | 手動（workflow_dispatch） | 未実行 | 任意 | environment `cloudflare-preview`（required reviewers、self review 禁止）での preview upload 候補。必要な secret が揃っておらず、これまで一度も実行されていません |
@@ -33,7 +33,7 @@ runの`headSha`が確認対象のSHAと一致し、全jobが完了したこと�
 [#396](https://github.com/Kotodama-Project/Kotodama-project/issues/396) は
 [#331](https://github.com/Kotodama-Project/Kotodama-project/issues/331) の観測部分です。
 既存の pytest command、`python_files=test_task_swarm_*.py`、Linux/Windows、依存 lock、
-demo、benchmark、20分上限、必須 gate を維持します。並列化や性能閾値は追加しません。
+demo、benchmark、20分上限、必須 gate を維持します。このobserver自身は並列化や性能閾値を追加しません。
 pytest の最終 durations/JUnit だけでは中断前の集合を残せないため、明示した小さい
 `tools.pytest_ci_observer` plugin が pytest の通知を保存します。
 
@@ -70,6 +70,30 @@ python -B tools/pytest_ci_observer.py PATH_TO_OBSERVATION_DIRECTORY
 全費用は未測定です。工程時間にも hook の費用が入り得ます。CPU、peak RSS、queue 時間は
 unknown とし、単発の fixture や OS 間の所要差を高速化の受入・SLO に転用しません。
 次の最適化は同じ固定 source/environment の実行・skip・subtest 集合を照合して評価します。
+
+## Windows の全件分割と集約
+
+Windowsでは全件実行が20分で中断したため、CIに限って4個の独立jobへ分割します。
+Linuxは1個です。製品の実行並列度、テスト、skip条件、依存lock、20分上限は変更しません。
+各jobは同じ `python -m pytest -q -p no:cacheprovider -o 'python_files=test_task_swarm_*.py' tests`
+で全件をcollectionし、明示した `tools.pytest_ci_shards` が全件一覧の0始まりの順番を
+shard数で割った余りで担当を選びます。同名のnodeidも別occurrenceとして保持し、
+担当内の順序は維持します。各OSのshard 0は、selectorもobserverも載せない別の
+collect-only実行で独立した全件一覧を記録します。追加の `-k` 等の絞り込みは拒否します。
+
+従来のobserverは担当分の各工程をそのまま記録します。別の有限sidecarは全件一覧、
+担当occurrence、source・lock・selectorのdigest、run/attemptとOSを束縛します。
+全jobの後に集約が、現在のcheckoutに対してLinux 1個・Windows 4個の成果物を照合し、
+独立一覧との一致、全件が各OSで一度ずつ実行されたこと、pytestと各jobの成功を要求します。
+欠落・重複・別source・別run・途中終了・失敗を成功にしません。既存のskipやsubtestは
+工程記録へ残ります。demoとbenchmarkは各OSのshard 0で1回ずつ必須実行し、その成功も
+集約に束縛します。`Trusted repository validation` はこの集約を含むswarm全体に依存します。
+
+artifactは `task-swarm-shard-OS-INDEX-RUN-ATTEMPT` で7日間保存します。
+`reference/`（shard 0）、`partition/`、`observation/`、`completion.json`を分け、
+各sidecarは最大2 MiB、全件一覧は最大5,000 occurrencesです。observerの容量は従来どおりです。
+欠測時は公開consoleをpartial evidenceとして扱います。分割による実際の所要は現在headの
+hosted実行で確認し、過去の工程時間の割当計算を新しい実行時間や速度SLOとは呼びません。
 
 ## Release の SBOM と provenance を確認する
 
