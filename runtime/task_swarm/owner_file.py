@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 import re
 import time
-from types import BuiltinFunctionType
+from types import BuiltinFunctionType, GetSetDescriptorType
 from typing import Any, Callable, Mapping
 
 from .protocol import (
@@ -266,7 +266,7 @@ class OwnerFile:
         snapshot = self._snapshot()
         return self._binding(snapshot, task_id, actor_ref)
 
-    def _binding(self, snapshot: OwnerSnapshot, task_id: str, actor_ref: str) -> dict[str, Any]:
+    def _binding(self, snapshot: OwnerSnapshot, task_id: str, actor_ref: str, *, _clock=None) -> dict[str, Any]:
         if snapshot.task["task_id"] != task_id:
             _error("WRONG_TASK", "owner binding belongs to another Task")
         actor = _text(actor_ref, "actor_ref", maximum=256)
@@ -290,7 +290,8 @@ class OwnerFile:
             # accepted work remains receivable after its sender becomes idle.
             # The invoking adapter separately requires its own actor to be
             # active before any tool call.
-            return validate_binding(combined, now=float(self.clock()), actor=actor, require_active_actor=False)
+            return validate_binding(combined, now=float((self.clock if _clock is None else _clock)()),
+                                    actor=actor, require_active_actor=False)
         except SwarmError as exc:
             raise OwnerFileError(exc.code, exc.detail) from exc
 
@@ -351,35 +352,85 @@ class OwnerFile:
         return dict(self._snapshot().storage)
 
 
+class _ForwardClock:
+    """Internal live clock link; never captures a successful clock result."""
+
+    __slots__ = ("_source",)
+
+    def __init__(self, source) -> None:
+        self._source = source
+
+    def __call__(self):
+        return self._source.clock()
+
+
+_FORWARD_CLOCK_TYPE = _ForwardClock
+_FORWARD_CLOCK_CALL = _ForwardClock.__call__
+_FORWARD_CLOCK_SOURCE = _ForwardClock._source
+
+
+class _CurrentReadChanged(Exception):
+    """Resume the original reader before invoking a nonstandard clock."""
+
+
 class _OwnerCurrentRead:
     """One internal fence's snapshot; never stored on the owner or reused."""
 
     def __init__(self, owner: OwnerFile) -> None:
         self.owner = owner
         self.snapshot = owner._snapshot()
+        self._sequential = False
 
-    def read_task(self, task_id: str | None = None) -> dict[str, Any]:
+    def _clock(self):
+        clock = None if self._sequential else _current_clock(self.owner)
+        if clock is None:
+            # A changed clock/reader cannot revive this fence's old snapshot,
+            # even if the caller later restores the builtin clock.
+            self._sequential = True
+            raise _CurrentReadChanged
+        return clock
+
+    def _time(self):
+        return self._clock()()
+
+    def _task(self, task_id: str | None = None) -> dict[str, Any]:
         # Keep expiry current even if a lease ends while this fence runs.
         try:
-            task = validate_binding(self.snapshot.task, now=_BUILTIN_TIME(), actor=None)
+            task = validate_binding(self.snapshot.task, now=self._time(), actor=None)
         except SwarmError as exc:
             raise OwnerFileError(exc.code, exc.detail) from exc
         if task_id is not None and task["task_id"] != task_id:
             _error("WRONG_TASK", "owner binding belongs to another Task")
         return task
 
+    def read_task(self, task_id: str | None = None) -> dict[str, Any]:
+        try:
+            return self._task(task_id)
+        except _CurrentReadChanged:
+            return self.owner.read_task(task_id)
+
     def read_binding(self, task_id: str, actor_ref: str) -> dict[str, Any]:
-        self.read_task(task_id)
-        # Validate each actor only when the caller reaches it. Its task/actor
-        # comparisons must retain their original short-circuit refusal order.
-        return self.owner._binding(self.snapshot, task_id, actor_ref)
+        try:
+            self._task(task_id)
+            self._clock()
+            # Check the live clock again at the actor's expiry check. A custom
+            # callback must run only through a new complete public read. Pin
+            # the original method so a late override never receives old bytes.
+            return _CURRENT_READ_METHODS["_binding"](
+                self.owner, self.snapshot, task_id, actor_ref, _clock=self._time)
+        except _CurrentReadChanged:
+            return self.owner.read_binding(task_id, actor_ref)
 
     def storage(self) -> dict[str, Path]:
-        self.read_task()
-        return dict(self.snapshot.storage)
+        try:
+            self._task()
+            return dict(self.snapshot.storage)
+        except _CurrentReadChanged:
+            return self.owner.storage()
 
 
 _OWNER_FILE_TYPE = OwnerFile
+_OWNER_NAMESPACE = vars(OwnerFile)["__dict__"]
 _CURRENT_READ_METHODS = {
     name: getattr(OwnerFile, name)
     for name in ("read_task", "read_binding", "storage", "_snapshot", "_read_json",
@@ -387,18 +438,62 @@ _CURRENT_READ_METHODS = {
 }
 
 
+def _current_clock(owner: OwnerFile):
+    """Inspect only standard attribute lookups; never call an opaque clock."""
+    if (type(owner) is not _OWNER_FILE_TYPE or type(_BUILTIN_TIME) is not BuiltinFunctionType
+            or time.time is not _BUILTIN_TIME):
+        return None
+    owner_classes = [vars(base) for base in _OWNER_FILE_TYPE.__mro__]
+    owner_class = owner_classes[0]
+    if (next(cls["__getattribute__"] for cls in owner_classes if "__getattribute__" in cls)
+                is not object.__getattribute__
+            or owner_class.get("__dict__") is not _OWNER_NAMESPACE
+            or any("clock" in cls for cls in owner_classes)):
+        return None
+    # Inspect the original namespace directly. A late attribute/descriptor
+    # override must not execute a callback against this fence's old snapshot.
+    namespace = _OWNER_NAMESPACE.__get__(owner, _OWNER_FILE_TYPE)
+    if (type(namespace) is not dict
+            or any(name in namespace or owner_class.get(name) is not original
+                   for name, original in _CURRENT_READ_METHODS.items())):
+        return None
+    clock = namespace.get("clock")
+    if (type(clock) is _FORWARD_CLOCK_TYPE
+            and vars(_FORWARD_CLOCK_TYPE).get("__call__") is _FORWARD_CLOCK_CALL
+            and vars(_FORWARD_CLOCK_TYPE).get("_source") is _FORWARD_CLOCK_SOURCE
+            and next(vars(base)["__getattribute__"] for base in _FORWARD_CLOCK_TYPE.__mro__
+                     if "__getattribute__" in vars(base))
+                is object.__getattribute__):
+        source = _FORWARD_CLOCK_SOURCE.__get__(clock, _FORWARD_CLOCK_TYPE)
+        source_type = type(source)
+        if type(source_type) is not type:
+            return None
+        source_classes = [vars(base) for base in source_type.__mro__]
+        if (next(cls["__getattribute__"] for cls in source_classes if "__getattribute__" in cls)
+                    is not object.__getattribute__
+                or any("clock" in cls or ("__dict__" in cls
+                       and type(cls["__dict__"]) is not GetSetDescriptorType) for cls in source_classes)):
+            return None
+        descriptor = next((cls["__dict__"] for cls in source_classes if "__dict__" in cls), None)
+        if descriptor is None or descriptor.__objclass__ not in source_type.__mro__:
+            return None
+        namespace = descriptor.__get__(source, source_type)
+        if type(namespace) is not dict:
+            return None
+        clock = namespace.get("clock")
+    return _BUILTIN_TIME if clock is _BUILTIN_TIME else None
+
+
 def _current_read(owner: OwnerFile) -> OwnerFile | _OwnerCurrentRead:
     """Share one fresh read only for the standard, callback-free owner reader.
 
-    Custom clocks, subclasses and reader overrides retain the original public
-    calls. In particular a clock or hook may mutate Source bytes between actors.
+    The internal forwarding link is eligible only while its current clock is
+    the real builtin. Custom clocks, subclasses and reader overrides retain
+    public reads; a clock may mutate Source bytes between actors. Each reader
+    access rechecks eligibility without changing the shared owner or clock.
     Callers create a new reader after every policy/proof/reuse callback fence.
     """
-    if (type(owner) is not _OWNER_FILE_TYPE or not isinstance(_BUILTIN_TIME, BuiltinFunctionType)
-            or owner.clock is not _BUILTIN_TIME
-            or time.time is not _BUILTIN_TIME
-            or any(name in vars(owner) or getattr(_OWNER_FILE_TYPE, name) is not original
-                   for name, original in _CURRENT_READ_METHODS.items())):
+    if _current_clock(owner) is None:
         return owner
     return _OwnerCurrentRead(owner)
 

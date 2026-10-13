@@ -13,10 +13,10 @@ from pathlib import Path
 import sqlite3
 import time
 
-from .closed_loop import execute_closed_loop
+from .closed_loop import execute_closed_loop, _execute_closed_loop
 from .closed_loop_context import validate_report_in_view
 from .closed_loop_contract import integration_candidate, learning_candidate, validate_critic
-from .owner_file import OwnerFile
+from .owner_file import OwnerFile, _ForwardClock
 from .protocol import SwarmError, canonical, digest, digest_ref, integer, ref
 from .task_contract import require, shape, validate_input
 from .task_planning import _Sources
@@ -52,7 +52,7 @@ def _origin(owner_path, payload_path, anchor, *, clock):
     return _read_origin(owner_path, payload_path, anchor, clock=clock)[0]
 
 
-def _read_origin(owner_path, payload_path, anchor, *, clock, retain=False):
+def _read_origin(owner_path, payload_path, anchor, *, clock, retain=False, _consume=None):
     digest_ref(anchor, "origin receipt anchor")
     owner = OwnerFile(owner_path, clock=clock)
     payload, input_sha = read_json(Path(payload_path), 256 * 1024, with_digest=True)
@@ -66,15 +66,31 @@ def _read_origin(owner_path, payload_path, anchor, *, clock, retain=False):
     require("context-binding.json" not in receipt["artifact_sha256"], "REUSE_NESTED_ORIGIN_UNSUPPORTED")
     specification = read_json(directory / "specification.json")
     runtime_plan = read_json(directory / "plan.json")
+    if not retain:
+        from .learning_origin import ReadOnlyOrigin
+        with ReadOnlyOrigin(owner, payload_path, input_sha, payload, receipt, anchor, directory, clock) as readback:
+            origin, _ = _origin_evidence(owner_path, payload_path, anchor, owner, payload, input_sha,
+                receipt, specification, runtime_plan, directory, clock=clock, readback=readback)
+            result = _consume(origin) if _consume is not None else origin
+            readback.current()
+            return result, None
+    return _origin_evidence(owner_path, payload_path, anchor, owner, payload, input_sha,
+        receipt, specification, runtime_plan, directory, clock=clock, retain=True)
+
+
+def _origin_evidence(owner_path, payload_path, anchor, owner, payload, input_sha,
+                     receipt, specification, runtime_plan, directory, *, clock, retain=False, readback=None):
+    run_id = "task-run-" + digest([payload["task_id"], payload["revision"]])[:32]
     from .loop_executor import executor_version
     local = executor_version(runtime_plan, read_json(directory/"r0-critic-template.json")) is not None
     # Observe the completed DB before any legacy scheduler initializer could
     # create a missing database or repair missing schema.
     cut = SwarmState.completed_evidence_cut_at(directory/"execution.sqlite", run_id) if retain and local else None
-    state = SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock) if local else None
-    replay = execute_closed_loop(owner_path, payload_path, specification, _NoDispatch(),
+    state = readback.state if readback else (SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock) if local else None)
+    replay = _execute_closed_loop(owner_path, payload_path, specification, _NoDispatch(),
         worker_actors=receipt["worker_actors"], critic_actor=receipt["critic_actor"],
-        expected_receipt_sha256=anchor, clock=clock)
+        expected_receipt_sha256=anchor, clock=clock,
+        readback_state=state if readback else None, readback_guard=readback.check if readback else None)
     require(replay["receipt"]["review_passed"] is True and replay["learning_candidate"] is not None,
             "REUSE_ORIGIN_NOT_REVIEWED")
     # Hash readback alone is insufficient: revalidate actual report evidence and
@@ -85,6 +101,8 @@ def _read_origin(owner_path, payload_path, anchor, *, clock, retain=False):
         finalization = state.finalization(run_id)
         require(finalization is not None, "REUSE_ORIGIN_PLAN_MISMATCH")
         terminal, executor = _verified_terminal_evidence(directory, payload, finalization["checkpoint"], state)
+        if readback is not None:
+            readback.executor = executor
         expected, learning, _, _, _ = terminal
         require(expected == replay["candidate"] and learning == replay["learning_candidate"], "REUSE_ORIGIN_CANDIDATE_MISMATCH")
         verified = None
@@ -143,7 +161,7 @@ def _read_origin(owner_path, payload_path, anchor, *, clock, retain=False):
             repair_specification=read_json(directory/"repair-proposal.json") if round_index else None,
             repair_impact=read_json(directory/"repair-impact.json") if round_index and
                 "repair-impact.json" in receipt["artifact_sha256"] else None,
-            execution_snapshot=SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock).snapshot(run_id))
+            execution_snapshot=(state or SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock)).snapshot(run_id))
         prior_review = {"response": response, "dispatched_input": delivered,
                         "dispatched_input_digest": receipt["dispatches"][job]["delivered_input_digest"]}
     expected = integration_candidate(payload, reports, critic, critic_sha,
@@ -156,7 +174,8 @@ def _read_origin(owner_path, payload_path, anchor, *, clock, retain=False):
 
 def propose_learning(owner_path, payload_path, anchor, claim_index, *, clock=time.time):
     """Read one externally anchored result. This operation makes no decision."""
-    return _proposal(_origin(owner_path, payload_path, anchor, clock=clock), anchor, claim_index)
+    return _read_origin(owner_path, payload_path, anchor, clock=clock,
+                        _consume=lambda origin: _proposal(origin, anchor, claim_index))[0]
 
 
 def _proposal(origin, anchor, claim_index):
@@ -217,7 +236,7 @@ class ReuseOwner:
         self._allow_expired_objective = allow_expired_objective
         # Forward clock changes, including historical-read tests and expiry
         # transitions, to every retained current owner and DB reader.
-        current_clock = lambda: self.clock()
+        current_clock = _ForwardClock(self)
         origin, self._verified_origin = _read_origin(origin_owner, origin_input, anchor, clock=current_clock, retain=True)
         _, _, self.receipt, _, self.directory = origin
         self._expected_proposal = canonical(_proposal(origin, anchor, self.proposal["claim_index"]))

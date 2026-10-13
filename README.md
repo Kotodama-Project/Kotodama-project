@@ -43,6 +43,8 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 
 `local_executable_fixture` を明示すると、知識 CLI またはインストールした core から、既存 owner が指定したローカル子プロセスを実行できます。二資料の fixture では、別プロセスの独立 critic を含む5回の呼出しで DocA の結果を保持し、DocB だけを修復する経路を検証しています。学習元の意味検証は一回の呼出し内で再利用し、各検査では現在の実行証拠・owner・学習判断を確認します。 Windows の作業ディレクトリ検証と、現在性を保った検査内の重複読取削減も含みます。
 
+[学習提案の読戻し](docs/TASK-LEARNING-REUSE.md) は、検証した私有コピーを使い、元の実行 DB/WAL/SHM を生成・修復しません。欠落・破損・現行形式の必須 schema 欠落は型付きで拒否し、確認済みの旧 writer 形式は読み戻せます。現在の owner・Source・実行 policy・期限・取消と、応答直前の証拠確認を維持します。
+
 この版の source 能力、採用状況、階層 reader などの残件、性能測定と優先 Issue は [STATUS の現在地](STATUS.md#current-source-and-open-integration-work) に集約しています。次の担当はそこから各 Issue の最新 head・証拠・残る受入を確認してください。全8階層、実モデル・利用者成果、常駐運用は引き続き受入が必要です。
 
 ## 知識・目的・Project を CLI で確認する
@@ -79,7 +81,7 @@ checkout の Python 3.12 から使います。検索は現在の小さな Markdo
 | Session / conversation ledger | schema・validator、[local ledger-export/readback](docs/SESSION-CONVERSATION-LEDGER.md)（合成検証） | | 実データの取込・保持・運用 |
 | Discord / Voice | `runtime/discord-template` | | 15 分 rotation、Voice-to-Verified-Handoff、GrillU、[GPT-Live の採用方針](docs/GPT-LIVE-ADOPTION.md)の残り（#142〜#146） |
 | Agent swarm / 自律実行 | 限定 Task 実行、Luna Task swarm、agent swarm・route binding の契約（#34）、移行台帳の契約（#35）、agent lifecycle の契約（#36） | 実 registry と runtime/continuity 受入 | 「OK」後の Goal Completion Loop、reversible delegation |
-| 知識・Context | canonical OKF bundle、read-only検索/context、型付きTask目的・Source/frontier・learning候補の既存owner接続、明示 local executor の CLI と現在証拠の検査、呼出し内の学習元検証再利用 | 階層統合、欠落DBの副作用なし再読、大規模検索評価 | Context Gateway、継続改善 |
+| 知識・Context | canonical OKF bundle、read-only検索/context、型付きTask目的・Source/frontier・learning候補の既存owner接続、明示 local executor の CLI と現在証拠の検査、呼出し内の学習元検証再利用、元DBを生成・修復しない学習提案の読戻し | 階層統合、大規模検索評価 | Context Gateway、継続改善 |
 | Project | 最小情報契約、既存 Task の read-only view、原依頼と訂正履歴を既存 SQLite に保持する local 保存（既定無効） | [Dots 共通操作 #395](https://github.com/Kotodama-Project/Kotodama-project/pull/395)、GUI・Task の関連付け | 目的に応じた協働・最適化 |
 | Runtime | Compose / Proxmox contract、Cloudflare candidate | | Cloudflare edge と公式 Cloudflare OS を基盤にした配備 |
 | 組織・事業 | | | Resident Clone、Agent Foundry、AI Business Loop |
