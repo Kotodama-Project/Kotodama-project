@@ -91,9 +91,9 @@ def _parser() -> argparse.ArgumentParser:
                                   help="Concept that this declared scope must include (repeatable)")
     readiness_parser.add_argument("--format", choices=("json", "markdown"), default="json")
 
-    task_parser = subparsers.add_parser("task-input", help="compile, verify or simulate an existing owner's Task input")
+    task_parser = subparsers.add_parser("task-input", help="compile, verify, simulate or explicitly execute an existing owner's Task input")
     operations = task_parser.add_subparsers(dest="operation", required=True)
-    for operation in ("compile", "verify", "simulate"):
+    for operation in ("compile", "verify", "simulate", "execute"):
         command = operations.add_parser(operation)
         _add_common_root(command)
         command.add_argument("--owner", type=Path, required=True)
@@ -109,9 +109,14 @@ def _parser() -> argparse.ArgumentParser:
         else:
             command.add_argument("--learning-decision-digest",
                                  help="current existing-owner decision for a learning candidate")
-        if operation == "simulate":
-            command.add_argument("--simulation", type=Path, required=True,
-                                 help="explicit local work/critic JSON; never calls a provider")
+        if operation in ("simulate", "execute"):
+            if operation == "simulate":
+                command.add_argument("--simulation", type=Path, required=True,
+                                     help="explicit local work/critic JSON; never calls a provider")
+            else:
+                command.add_argument("--executor-mode", required=True, choices=("local_executable_fixture",),
+                                     help="run only the existing owner's declared local fixture executable")
+                command.add_argument("--resume-finalization", action="store_true")
             command.add_argument("--worker", action="append", required=True)
             command.add_argument("--critic", default="verifier")
             command.add_argument("--receipt-sha256", help="external anchor for completed replay")

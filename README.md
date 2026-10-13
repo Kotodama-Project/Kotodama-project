@@ -41,7 +41,9 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 
 この版には、OKF Markdown の知識検索・限定 context、原意と訂正を束縛する Task 入力、独立 critic、永続取消、必要な leaf だけの一回修復、検証済み A から B への二葉の依存実行、Project の read-only view と限定 local 保存・訂正があります。修復は同じ Task・予算を保ち、終端 checkpoint 後の復旧で仕事を再実行しません。
 
-採用済みの版、実行器 CLI・学習・階層 reader の候補、性能測定と優先 Issue は [STATUS の現在地](STATUS.md#current-source-and-open-integration-work) に集約しています。次の担当はそこから各 Issue の最新 head・証拠・残る受入を確認してください。全8階層、実モデル・利用者成果、常駐運用は引き続き受入が必要です。
+`local_executable_fixture` を明示すると、知識 CLI またはインストールした core から、既存 owner が指定したローカル子プロセスを実行できます。二資料の fixture では、別プロセスの独立 critic を含む5回の呼出しで DocA の結果を保持し、DocB だけを修復する経路を検証しています。学習元の意味検証は一回の呼出し内で再利用し、各検査では現在の実行証拠・owner・学習判断を確認します。 Windows の作業ディレクトリ検証と、現在性を保った検査内の重複読取削減も含みます。
+
+この版の source 能力、採用状況、階層 reader などの残件、性能測定と優先 Issue は [STATUS の現在地](STATUS.md#current-source-and-open-integration-work) に集約しています。次の担当はそこから各 Issue の最新 head・証拠・残る受入を確認してください。全8階層、実モデル・利用者成果、常駐運用は引き続き受入が必要です。
 
 ## 知識・目的・Project を CLI で確認する
 
@@ -50,32 +52,34 @@ checkout の Python 3.12 から使います。検索は現在の小さな Markdo
 | 目的 | 入口 | 契約・手順 |
 |---|---|---|
 | 知識を探す | `python -B tools/knowledge_base.py query --root . "意図 KGI"` | [検索と限定 context](docs/KNOWLEDGE-BASE.md) |
-| 目的と Source を既存 Task に束縛する | `python -B tools/knowledge_base.py task-input --help` | [compile / verify / simulate](docs/KNOWLEDGE-TASK-INPUT.md) |
+| 目的と Source を既存 Task に束縛する | `python -B tools/knowledge_base.py task-input --help` | [compile / verify / simulate / execute](docs/KNOWLEDGE-TASK-INPUT.md) |
+| 受入済み入力から local fixture を実行する | `python -B tools/knowledge_base.py task-input execute --help` | [owner・入力・明示 mode の準備](docs/KNOWLEDGE-TASK-INPUT.md#知識cliから使う) |
+| インストールした core で同じ有限実行を使う | `python -I -m kotodama_core.task_swarm.closed_loop --help` | [local executor](docs/TASK-LOOP-EXECUTOR.md)、[配布候補のビルド](python/README.md#ビルドと確認) |
 | Project と既存 Task の対応を読む | `python -B tools/project_hub.py --help` | [view / inspect-change](docs/PROJECT-HUB-VIEW.md) |
 
-Python の Project CLI は参照と訂正候補の検査までです。既定無効の local owner 共通操作は Project の create/read/inspect/correct を扱い、保存した Project の `task_refs` は空です。Task 作成・更新・dispatch は行いません。検索品質・大規模性能や自律改善の全体受入は、これらの入口の存在だけでは成立しません。
+実行には既存 owner に束縛した入力・worker と `--executor-mode local_executable_fixture` が必要です。学習の再利用には現在の採否判断も必要です。Python の Project CLI は参照と訂正候補の検査までです。既定無効の local owner 共通操作は Project の create/read/inspect/correct を扱い、保存した Project の `task_refs` は空です。Task 作成・更新・dispatch は行いません。検索品質・大規模性能や自律改善の全体受入は、これらの入口の存在だけでは成立しません。
 
 ## 使い方を選ぶ
 
-| やりたいこと | 今日 `main` でできること | 入口 |
+| やりたいこと | この版で使える範囲 | 入口 |
 |---|---|---|
 | Company Pack を自分の会社の候補として編集し検査する | initializer、customization checker、validator、Catalog、Review Bundle（read-only / candidate-only） | [Starter Walkthrough](docs/STARTER-WALKTHROUGH.md)、[CLI Reference](docs/COMPANY-PACK-CLI-REFERENCE.md) |
 | Discord / Voice で使う | `runtime/discord-template`。Node 24、Discord Bot、モデル接続が前提。local ASR と Live 会話、限定 Task worker、エージェント用チャンネルからの即時着手。書込みの仕事は Linux と Docker での検証が必要。実マイクの連続応答、2 人 30 分の会話、別設定での再現は未受入 | [Discord runtime](docs/DISCORD-RUNTIME.md) |
 | 既存 Task に結び付けて Company Pack を実生成し、確認・訂正する | `tools/run_company_pack_task.py` と local review gateway | [Task-bound execution](docs/COMPANY-PACK-TASK-EXECUTION.md)、[Gateway](runtime/local-review-gateway/README.md) |
 | 会社の runtime を配備する | Compose minimum / Proxmox segmented の lifecycle contract と validator（live receipt なし）。Cloudflare edge と公式 Cloudflare OS の候補（未 upload、未 deploy） | [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)、[Cloudflare OS](docs/CLOUDFLARE-OS-ADOPTION.md) |
 | agent swarm に調査を任せる | 明示slashから同じTaskの3worker・別verifier・成果readbackへ接続。既定無効、Linux限定。移行台帳とlifecycle registryの実運用は別の未完事項 | [Task swarm run](docs/TASK-SWARM-RUN.md)、[実行基盤](docs/LUNA-TASK-SWARM.md)、[swarm契約](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) |
-| 知識基盤と目的入力を使う | canonical OKF Markdown、catalog/graph、出典・鮮度の検査、字句検索、限定context、型付き目的と原意・訂正を既存Taskへ束縛する compile/verify/simulate。内容の独立検証・実モデル品質・大規模性能は別の受入 | [Knowledge base](docs/KNOWLEDGE-BASE.md)、[Task input](docs/KNOWLEDGE-TASK-INPUT.md)、[公開知識の入口](knowledge/index.md) |
+| 知識基盤と目的入力を使う | canonical OKF Markdown、catalog/graph、出典・鮮度の検査、字句検索、限定context、型付き目的と原意・訂正を既存Taskへ束縛する compile/verify/simulate/execute。明示した local fixture の子プロセス・独立 critic・部分修復と学習を同じTaskへ接続。内容の独立検証・実モデル品質・大規模性能は別の受入 | [Knowledge base](docs/KNOWLEDGE-BASE.md)、[Task input](docs/KNOWLEDGE-TASK-INPUT.md)、[local executor](docs/TASK-LOOP-EXECUTOR.md)、[公開知識の入口](knowledge/index.md) |
 | Project と既存 Task を確認する | Project 情報契約、既存 owner に束縛した Task 参照 view、訂正候補と影響の検査。local owner の保存・訂正は既定無効の共通操作から使う | [Project view](docs/PROJECT-HUB-VIEW.md)、[保存・訂正](runtime/discord-template/docs/PROJECTS.md) |
 
-## 今 `main` にあるもの、候補、方向
+## この版に含むもの、候補、方向
 
-| 面 | `main` | 候補（未統合） | 方向 |
+| 面 | この版の source | 候補（未統合） | 方向 |
 |---|---|---|---|
 | Company Pack / Evidence Chain | 9 Blocks、9 Records、3 MOCs の starter、schema と validator、review chain、smoke | | lane ごとの Promotion policy |
 | Session / conversation ledger | schema・validator、[local ledger-export/readback](docs/SESSION-CONVERSATION-LEDGER.md)（合成検証） | | 実データの取込・保持・運用 |
 | Discord / Voice | `runtime/discord-template` | | 15 分 rotation、Voice-to-Verified-Handoff、GrillU、[GPT-Live の採用方針](docs/GPT-LIVE-ADOPTION.md)の残り（#142〜#146） |
 | Agent swarm / 自律実行 | 限定 Task 実行、Luna Task swarm、agent swarm・route binding の契約（#34）、移行台帳の契約（#35）、agent lifecycle の契約（#36） | 実 registry と runtime/continuity 受入 | 「OK」後の Goal Completion Loop、reversible delegation |
-| 知識・Context | canonical OKF bundle、read-only検索/context、型付きTask目的・Source/frontier・learning候補の既存owner接続 | 階層統合、実executor入力・製品CLI、大規模検索評価 | Context Gateway、継続改善 |
+| 知識・Context | canonical OKF bundle、read-only検索/context、型付きTask目的・Source/frontier・learning候補の既存owner接続、明示 local executor の CLI と現在証拠の検査、呼出し内の学習元検証再利用 | 階層統合、欠落DBの副作用なし再読、大規模検索評価 | Context Gateway、継続改善 |
 | Project | 最小情報契約、既存 Task の read-only view、原依頼と訂正履歴を既存 SQLite に保持する local 保存（既定無効） | [Dots 共通操作 #395](https://github.com/Kotodama-Project/Kotodama-project/pull/395)、GUI・Task の関連付け | 目的に応じた協働・最適化 |
 | Runtime | Compose / Proxmox contract、Cloudflare candidate | | Cloudflare edge と公式 Cloudflare OS を基盤にした配備 |
 | 組織・事業 | | | Resident Clone、Agent Foundry、AI Business Loop |

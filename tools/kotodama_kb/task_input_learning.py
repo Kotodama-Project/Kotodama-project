@@ -108,8 +108,8 @@ def _verify_projection(bundle, candidate, owner_path, payload_path, *, clock, al
     seed["sources"] = [row for row in payload["sources"] if row["key"] != source["key"]]
     base = _build(bundle, seed, binding, now=clock(), allow_expired=allow_expired)
     require(_compose(base, candidate["learning"]) == candidate, "TASK_CONTEXT_CANDIDATE_CHANGED")
-    document = read_json(Path(owner_path))
-    declared = {str((Path(owner_path).parent / item["path"]).resolve()): item["sha256"]
+    document = read_json(owner.path)
+    declared = {str((owner.path.parent / item["path"]).resolve()): item["sha256"]
                 for item in document["source_checks"]}
     require(all(declared.get(str(Path(item["path"]).resolve())) == item["sha256"]
                 for item in candidate["source_checks"]), "TASK_CONTEXT_OWNER_CHECKS_REQUIRED")
@@ -159,24 +159,10 @@ def execute_task_learning_input(bundle, candidate, owner_path, payload_path, bac
     verify_task_learning_input(bundle, candidate, owner_path, payload_path,
         decision_digest=decision_digest, clock=clock, allow_expired=allow_expired)
 
-    class CheckedBackend:
-        synthetic = getattr(backend, "synthetic", False)
-
-        def produce(self, *args, **kwargs):
-            guard()
-            result = backend.produce(*args, **kwargs)
-            guard()
-            return result
-
-        def review(self, *args, **kwargs):
-            guard()
-            result = backend.review(*args, **kwargs)
-            guard()
-            return result
-
+    from runtime.task_swarm.task_backend import checked_backend
     learning = candidate["learning"]
     context = {key: learning[key] for key in ("origin_owner", "origin_input", "anchor", "proposal")}
-    result = execute_closed_loop(owner_path, payload_path, candidate["supplied_plan"], CheckedBackend(),
+    result = execute_closed_loop(owner_path, payload_path, candidate["supplied_plan"], checked_backend(backend, guard),
         worker_actors=worker_actors, clock=clock,
         reuse_context={**context, "decision_digest": decision_digest}, **options)
     if result.get("duplicate"):

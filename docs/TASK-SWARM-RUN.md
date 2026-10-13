@@ -2,7 +2,8 @@
 
 原意・訂正・目的と制約をTask入力へ渡す形式は、[Taskの目的契約](TASK-OBJECTIVE-CONTRACT.md)を参照してください。
 同じTaskで批判から最大1回の修正・再検証・統合候補までつなぐ実験入口は、
-[閉ループの最初の実装](TASK-SWARM-CLOSED-LOOP.md)にあります。現在は明示local simulationに限定しています。
+[閉ループの最初の実装](TASK-SWARM-CLOSED-LOOP.md)にあります。
+明示local fixtureのAPI・製品CLIと保存証拠は[Task loop executor](TASK-LOOP-EXECUTOR.md)を参照します。
 
 #160の採用判断と#286の実装を、既存local Task ownerへ接続するための契約です。
 入力・出力契約に加え、既存ownerへ束縛したPOSIXのtask-run入口を備えます。
@@ -10,6 +11,24 @@ controllerはTaskとgrantを作成・変更しません。Discord接続は同じ
 明示slashから結果readbackまでの合成E2Eを検証しています。実利用の受入は残ります。
 
 実行時の[Task workerの読取範囲](TASK-SWARM-ISOLATION.md)は別helperで制限します。
+
+## 任意指定のstdin記録
+
+既存Codex transportの `invoke(record_input=True)` は、元promptのUTF-8 bytesを
+private attemptの `input.txt` へ保存します。上限256 KiB、入力artifactを含む8種の
+digestと `stdin_submission.writer_status=pipe_write_completed` を残します。
+部分write・flush/close失敗を拒否し、成功receipt生成前に保存inputを再検査します。
+既定Falseの7 artifactと固定Task CLIはこの指定を自動的に使いません。
+
+`verify_runtime(..., expected_input=raw_bytes)` は、保存inputを期待するbytesと
+完全一致で再読し、既存process/rollout/native profileの検査も維持します。
+生成後の入力artifact改変もこの再読で拒否します。
+markerがあるだけで旧readerや別modeへ自動採用しません。
+これは親の保存とpipe書込み完了の証拠であり、子の読取・モデルの理解・資料取得の
+証明ではありません。local fixtureは実stdinとprocessを保存readerへ接続します。
+sourceの `task-input execute --executor-mode local_executable_fixture` とinstalled moduleは
+現在ownerの明示policyを要求します。hierarchyの新mode対応と実providerの受入は別段階です。
+`NO_GO_UNPUBLISHED` を維持します。
 
 ## Task入力と固定plan
 

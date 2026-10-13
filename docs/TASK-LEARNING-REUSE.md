@@ -90,6 +90,15 @@ dispatch前と報告の利用前に取消・grant・owner・資料を再確認�
 objective deadline後も再読できますが、新dispatch・review・判断は期限後に受け付けません。
 失効・取消・改訂後の旧証拠による利用は拒否します。
 
+local executor の完了済み A は、一回の `ReuseOwner` 呼出し内で全 job の意味検証結果を
+保持します。各 guard は現在の policy・Source・owner・actor・生の proof/receipt/input、
+attempt/session の保存先、診断ファイルの読取可否と元の byte 上限を再確認します。
+DB は A の run/job/attempt/extension/stage/checkpoint/receipt だけを有限の読取 snapshot で
+照合し、取消と最新の review/判断を読むため、正当な判断の追加で実行証拠全体を無効化しません。
+最後の policy 照合後にも現在の判断・DB・proof・owner を確認します。成功結果や期限付きの
+共有 cache は持たず、別の呼出しでは意味検証からやり直します。historical readback で許される
+元 objective の期限経過と、現在の owner/grant/actor/判断の失効は区別します。
+
 ## 確認すること
 
 `tests/test_task_swarm_learning_reuse.py`は実coordinatorとSQLiteを使い、Aから別processのBへ

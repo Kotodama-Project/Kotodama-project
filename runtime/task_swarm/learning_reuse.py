@@ -6,9 +6,11 @@ It never promotes Company truth or modifies Task records, grants, or KB state.
 from __future__ import annotations
 
 import copy
+from contextlib import closing
 import hashlib
 import json
 from pathlib import Path
+import sqlite3
 import time
 
 from .closed_loop import execute_closed_loop
@@ -47,9 +49,13 @@ def purpose_digest(payload):
 
 
 def _origin(owner_path, payload_path, anchor, *, clock):
+    return _read_origin(owner_path, payload_path, anchor, clock=clock)[0]
+
+
+def _read_origin(owner_path, payload_path, anchor, *, clock, retain=False):
     digest_ref(anchor, "origin receipt anchor")
     owner = OwnerFile(owner_path, clock=clock)
-    payload = read_json(Path(payload_path), 256 * 1024)
+    payload, input_sha = read_json(Path(payload_path), 256 * 1024, with_digest=True)
     binding = owner.read_task(payload.get("task_id"))
     payload = validate_input(payload, binding, now=clock(), allow_expired_objective=True)
     require(payload["version"] == 2, "REUSE_OBJECTIVE_REQUIRED")
@@ -59,6 +65,13 @@ def _origin(owner_path, payload_path, anchor, *, clock):
     require(actual == anchor, "REUSE_ORIGIN_ANCHOR_MISMATCH")
     require("context-binding.json" not in receipt["artifact_sha256"], "REUSE_NESTED_ORIGIN_UNSUPPORTED")
     specification = read_json(directory / "specification.json")
+    runtime_plan = read_json(directory / "plan.json")
+    from .loop_executor import executor_version
+    local = executor_version(runtime_plan, read_json(directory/"r0-critic-template.json")) is not None
+    # Observe the completed DB before any legacy scheduler initializer could
+    # create a missing database or repair missing schema.
+    cut = SwarmState.completed_evidence_cut_at(directory/"execution.sqlite", run_id) if retain and local else None
+    state = SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock) if local else None
     replay = execute_closed_loop(owner_path, payload_path, specification, _NoDispatch(),
         worker_actors=receipt["worker_actors"], critic_actor=receipt["critic_actor"],
         expected_receipt_sha256=anchor, clock=clock)
@@ -66,15 +79,19 @@ def _origin(owner_path, payload_path, anchor, *, clock):
             "REUSE_ORIGIN_NOT_REVIEWED")
     # Hash readback alone is insufficient: revalidate actual report evidence and
     # every independent critic against the exact saved delivered views.
-    runtime_plan = read_json(directory / "plan.json")
-    if runtime_plan.get("execution_contract_version") == 3:
-        from .closed_loop_recovery import terminal_evidence
-        state = SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock)
+    if runtime_plan.get("execution_contract_version") == 3 or local:
+        from .closed_loop_recovery import _verified_terminal_evidence
+        state = state or SwarmState(directory/"execution.sqlite", owner.read_task, clock=clock)
         finalization = state.finalization(run_id)
         require(finalization is not None, "REUSE_ORIGIN_PLAN_MISMATCH")
-        expected, learning, _, _, _ = terminal_evidence(directory, payload, finalization["checkpoint"], state)
+        terminal, executor = _verified_terminal_evidence(directory, payload, finalization["checkpoint"], state)
+        expected, learning, _, _, _ = terminal
         require(expected == replay["candidate"] and learning == replay["learning_candidate"], "REUSE_ORIGIN_CANDIDATE_MISMATCH")
-        return owner, payload, receipt, expected, directory
+        verified = None
+        if cut is not None:
+            from .learning_origin import VerifiedOrigin
+            verified = VerifiedOrigin(executor, cut, payload_path, input_sha)
+        return (owner, payload, receipt, expected, directory), verified
     admission = read_json(directory / "extension.json") if "extension.json" in receipt["artifact_sha256"] else None
     scheduled = {job["job_id"]: job for job in [*runtime_plan["jobs"],
                  *(admission["jobs"] if admission else [])]}
@@ -134,12 +151,16 @@ def _origin(owner_path, payload_path, anchor, *, clock):
     require(canonical(expected) == canonical(replay["candidate"])
             and canonical(learning_candidate(expected)) == canonical(replay["learning_candidate"]),
             "REUSE_ORIGIN_CANDIDATE_MISMATCH")
-    return owner, payload, receipt, expected, directory
+    return (owner, payload, receipt, expected, directory), None
 
 
 def propose_learning(owner_path, payload_path, anchor, claim_index, *, clock=time.time):
     """Read one externally anchored result. This operation makes no decision."""
-    owner, payload, receipt, candidate, directory = _origin(owner_path, payload_path, anchor, clock=clock)
+    return _proposal(_origin(owner_path, payload_path, anchor, clock=clock), anchor, claim_index)
+
+
+def _proposal(origin, anchor, claim_index):
+    owner, payload, receipt, candidate, directory = origin
     integer(claim_index, "claim index", minimum=0, maximum=len(candidate["claims"]) - 1)
     selected = candidate["claims"][claim_index]
     require(selected["claim"]["status"] == "supported", "REUSE_SUPPORTED_CLAIM_REQUIRED")
@@ -189,16 +210,21 @@ class ReuseOwner:
 
     def __init__(self, origin_owner, origin_input, anchor, target_owner, target_input,
                  proposal, *, clock=time.time, allow_expired_objective=False):
-        self.origin_owner, self.origin_input = Path(origin_owner), Path(origin_input)
-        self.anchor, self.target_owner, self.target_input = anchor, Path(target_owner), Path(target_input)
+        self.origin_owner, self.origin_input = OwnerFile(origin_owner).path, Path(origin_input)
+        self.anchor, self.target_owner, self.target_input = anchor, OwnerFile(target_owner).path, Path(target_input)
         self.proposal, self.clock = copy.deepcopy(proposal), clock
         require(type(allow_expired_objective) is bool, "REUSE_READBACK_INVALID")
         self._allow_expired_objective = allow_expired_objective
-        _, _, self.receipt, _, self.directory = _origin(origin_owner, origin_input, anchor, clock=clock)
+        # Forward clock changes, including historical-read tests and expiry
+        # transitions, to every retained current owner and DB reader.
+        current_clock = lambda: self.clock()
+        origin, self._verified_origin = _read_origin(origin_owner, origin_input, anchor, clock=current_clock, retain=True)
+        _, _, self.receipt, _, self.directory = origin
+        self._expected_proposal = canonical(_proposal(origin, anchor, self.proposal["claim_index"]))
         self.state = SwarmState(self.directory / "execution.sqlite",
-                                OwnerFile(origin_owner, clock=clock).read_task, clock=clock)
-        self._scope()
-        with self.state._connect() as db:
+                                OwnerFile(origin_owner, clock=current_clock).read_task, clock=current_clock)
+        self._checked_scope(lambda scope: scope)
+        with closing(self.state._connect()) as db, db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS learning_reuse_reviews (
                   review_ref TEXT PRIMARY KEY, command_digest TEXT NOT NULL,
@@ -209,9 +235,10 @@ class ReuseOwner:
             """)
 
     def _scope(self, *, allow_expired_objective=None):
-        expected = propose_learning(self.origin_owner, self.origin_input, self.anchor,
-                                    self.proposal["claim_index"], clock=self.clock)
-        require(canonical(expected) == canonical(self.proposal), "REUSE_PROPOSAL_CHANGED")
+        expected = self._expected_proposal if self._verified_origin is not None else canonical(
+            propose_learning(self.origin_owner, self.origin_input, self.anchor,
+                             self.proposal["claim_index"], clock=self.clock))
+        require(expected == canonical(self.proposal), "REUSE_PROPOSAL_CHANGED")
         owner = OwnerFile(self.target_owner, clock=self.clock)
         payload = read_json(self.target_input, 256 * 1024)
         binding = owner.read_task(payload.get("task_id"))
@@ -241,6 +268,13 @@ class ReuseOwner:
                 and reviewer["actor_ref"] not in {*self.proposal["producer_refs"], binding["owner_ref"]},
                 "REUSE_REVIEWER_NOT_INDEPENDENT")
         return owner, payload, binding, grant, reviewer
+
+    def _checked_scope(self, read, **options):
+        if self._verified_origin is None:
+            return read(self._scope(**options))
+        result = []
+        self._verified_origin.current(lambda: result.append(read(self._scope(**options))))
+        return result[0]
 
     @staticmethod
     def _row(row):
@@ -272,14 +306,14 @@ class ReuseOwner:
         require(outcome in {"allow", "reject"} and isinstance(reason, str) and 0 < len(reason) <= 1000,
                 "REUSE_REVIEW_INVALID")
         fingerprint = self._authority_fingerprint()
-        _, payload, binding, grant, reviewer = self._scope(allow_expired_objective=False)
+        _, payload, binding, grant, reviewer = self._checked_scope(lambda scope: scope, allow_expired_objective=False)
         require(reviewer_ref == grant["reviewer_ref"], "REUSE_REVIEWER_NOT_AUTHORIZED")
         command = {"review_ref": review_ref, "proposal_digest": digest(self.proposal),
             "target_task_id": payload["task_id"], "target_revision": payload["revision"],
             "target_binding_digest": digest(binding), "grant_digest": digest(grant),
             "reviewer_binding_digest": digest(reviewer), "reviewer_ref": reviewer_ref,
             "outcome": outcome, "reason": reason}
-        with self.state._connect() as db:
+        with closing(self.state._connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             require(self._authority_fingerprint() == fingerprint, "REUSE_AUTHORITY_CHANGED")
             old = db.execute("SELECT * FROM learning_reuse_reviews WHERE review_ref=?", (review_ref,)).fetchone()
@@ -301,10 +335,10 @@ class ReuseOwner:
         integer(expected_generation, "expected generation", minimum=0, maximum=8)
         ref(idempotency_key, "idempotency key")
         fingerprint = self._authority_fingerprint()
-        _, payload, binding, grant, reviewer = self._scope(allow_expired_objective=False)
+        _, payload, binding, grant, reviewer = self._checked_scope(lambda scope: scope, allow_expired_objective=False)
         require(decision_actor == binding["owner_ref"] and decision_actor != self.proposal["producer_ref"],
                 "REUSE_DECISION_NOT_OWNER")
-        with self.state._connect() as db:
+        with closing(self.state._connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             require(self._authority_fingerprint() == fingerprint, "REUSE_AUTHORITY_CHANGED")
             review = self._row(db.execute("SELECT * FROM learning_reuse_reviews WHERE review_ref=?", (review_ref,)).fetchone())
@@ -340,25 +374,35 @@ class ReuseOwner:
     def current(self, expected_decision_digest):
         digest_ref(expected_decision_digest, "decision digest")
         fingerprint = self._authority_fingerprint()
-        _, payload, binding, grant, reviewer = self._scope()
-        with self.state._connect() as db:
-            decision = self._row(self._head(db))
-            require(digest(decision) == expected_decision_digest, "REUSE_DECISION_STALE")
-            require(decision["outcome"] == "allow", "REUSE_NOT_ALLOWED")
-            require(decision["target_task_id"] == payload["task_id"]
-                    and decision["target_revision"] == payload["revision"]
-                    and decision["target_binding_digest"] == digest(binding)
-                    and decision["proposal_digest"] == digest(self.proposal)
-                    and decision["grant_digest"] == digest(grant)
-                    and self.clock() < decision["expires_at"], "REUSE_DECISION_STALE")
-            rows = db.execute("SELECT * FROM learning_reuse_reviews WHERE document_digest=?",
-                              (decision["review_digest"],)).fetchall()
-            require(len(rows) == 1, "REUSE_EVIDENCE_MISSING")
-            review = self._row(rows[0])
-            require(review["outcome"] == "allow"
-                    and review["reviewer_binding_digest"] == digest(reviewer), "REUSE_REVIEW_STALE")
-            require(self._authority_fingerprint() == fingerprint, "REUSE_AUTHORITY_CHANGED")
-        return decision
+        def read_current(scope):
+            _, payload, binding, grant, reviewer = scope
+            with closing(sqlite3.connect(Path(self.state.db_path).absolute().as_uri() + "?mode=ro",
+                                         uri=True, isolation_level=None, timeout=5.0)) as db:
+                db.row_factory = sqlite3.Row
+                db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 2 * 1024 * 1024)
+                db.execute("PRAGMA query_only=ON")
+                db.execute("BEGIN")
+                decision = self._row(self._head(db))
+                require(digest(decision) == expected_decision_digest, "REUSE_DECISION_STALE")
+                require(decision["outcome"] == "allow", "REUSE_NOT_ALLOWED")
+                require(decision["target_task_id"] == payload["task_id"]
+                        and decision["target_revision"] == payload["revision"]
+                        and decision["target_binding_digest"] == digest(binding)
+                        and decision["proposal_digest"] == digest(self.proposal)
+                        and decision["grant_digest"] == digest(grant)
+                        and self.clock() < decision["expires_at"], "REUSE_DECISION_STALE")
+                rows = db.execute("SELECT * FROM learning_reuse_reviews WHERE document_digest=? LIMIT 2",
+                                  (decision["review_digest"],)).fetchall()
+                require(len(rows) == 1, "REUSE_EVIDENCE_MISSING")
+                review = self._row(rows[0])
+                require(review["outcome"] == "allow"
+                        and review["reviewer_binding_digest"] == digest(reviewer), "REUSE_REVIEW_STALE")
+                require(self._authority_fingerprint() == fingerprint, "REUSE_AUTHORITY_CHANGED")
+            return decision
+        try:
+            return self._checked_scope(read_current)
+        except sqlite3.Error as exc:
+            raise SwarmError("REUSE_EVIDENCE_MISSING", "current reuse evidence is unreadable") from exc
 
     def execute(self, expected_decision_digest, plan, backend, *, worker_actors,
                 critic_actor="verifier", repair_planner=None, expected_receipt_sha256=None):

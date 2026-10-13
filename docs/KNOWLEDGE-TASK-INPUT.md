@@ -32,7 +32,8 @@ Task ID/revision、全入力digest、現在Sourceを検査します。seedの通
 実行できません。producerは既存bindingのdigestを差し替えず、ownerファイルへ書き込みません。
 `verify_task_input` は候補を再導出して比較し、現在ownerがそのv2入力を束縛していることを要求します。
 
-`execute_task_input` は明示的な合成backendだけを扱う既存coordinatorへ接続します。
+`execute_task_input` は明示的な合成backend、またはownerが宣言した
+[`local_executable_fixture`](TASK-LOOP-EXECUTOR.md)を既存coordinatorへ接続します。
 各backend呼出しの前後に、catalog/schema/profile・階層文書の現在bytesと実ownerを再検査します。
 選択Conceptの期限は古い`as_of`でなく実clockで再確認し、完成receiptの再読でも免除しません。
 ownerが宣言するTask期限は、期限を持つ選択Conceptの最短期限以下である必要があります。
@@ -46,11 +47,12 @@ catalog文書の全文を実子入力へ送り、独立criticとreceiptの入力
 python -B tools/knowledge_base.py task-input compile --root KNOWLEDGE_ROOT --owner OWNER_JSON --input V1_INPUT
 python -B tools/knowledge_base.py task-input verify --root KNOWLEDGE_ROOT --owner OWNER_JSON --candidate CANDIDATE_JSON
 python -B tools/knowledge_base.py task-input simulate --root KNOWLEDGE_ROOT --owner OWNER_JSON --candidate CANDIDATE_JSON --input V2_INPUT --simulation SCENARIO_JSON --worker worker-a --worker worker-b
+python -B tools/knowledge_base.py task-input execute --root KNOWLEDGE_ROOT --owner OWNER_JSON --candidate CANDIDATE_JSON --input V2_INPUT --executor-mode local_executable_fixture --worker worker-a --worker worker-b
 ```
 
 `compile`は候補全体を一つのJSONとしてstdoutへ返します。保存先と元入力は別にし、
 既存ownerが候補の`payload`の全digest・全source_checksを明示的に受け入れてから、
-`verify`または`simulate`へ進みます。CLIはowner・Task・入力ファイルを書き換えません。
+`verify`、`simulate`、`execute`へ進みます。CLIはowner・Task・入力ファイルを書き換えません。
 `verify`はTask ID/revisionと`payload_digest`を返します。採用やモデル品質の判定ではありません。
 
 `simulate`は[既存scenario形式](TASK-SWARM-CLOSED-LOOP.md#実行入口)の明示ファイルが必須です。
@@ -58,6 +60,15 @@ python -B tools/knowledge_base.py task-input simulate --root KNOWLEDGE_ROOT --ow
 実providerは呼ばず、元ownerの同じTask/revision・累積予算・入力・critic検査を使います。
 stdoutに統合候補とreceiptを返し、実行証跡は既存ownerのstorageへ保存します。
 完成済みrunの再読には、先の応答から別途保存した`--receipt-sha256`を渡します。
+
+`execute`は明示したmodeと現在ownerのSource宣言からPython fixtureを選びます。
+任意の実行pathをCLI引数で渡す入口はなく、exe・素材の現在bytesとownerのsource_checksが
+一致する必要があります。normal/learning双方でTaskBackendの型とloopメソッドを保持し、
+各呼出しの前後に既存KB検証を行います。学習付き候補には通常どおり現在の
+`--learning-decision-digest`が必要です。有限repair・累積予算・原入力・独立criticを同じ
+coordinatorで検査し、不合格receiptはexit3、既知の契約拒否はexit2です。
+再読の`--receipt-sha256`と既存checkpointの`--resume-finalization`も明示して使います。
+実行証拠はlocal fixtureの技術検証であり、provider利用や文書の採用を表しません。
 
 終了値は候補生成・束縛確認・passedなsimulationが0、criticの未解決が3、入力や束縛の拒否が2です。
 拒否はstderrへJSONを返し、stdoutに成功の断片を出しません。引数不足は通常のCLI usageで拒否します。
