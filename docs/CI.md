@@ -16,7 +16,7 @@ runの`headSha`が確認対象のSHAと一致し、全jobが完了したこと�
 |---|---|---|---|---|---|
 | Repository validation（job: Repository checks → **Trusted repository validation**） | `.github/workflows/repository-validation.yml` | PR、main への push、手動 | checks は最大 25 分、集約は全依存の終了後 | **必須**（集約が成功を要求） | Discord・swarm と並列に tracked credential hygiene、README の one-command smoke、runtime candidate validator、actionlint、hash-locked pip install、immutable workflow reference check、`python -m unittest discover -s tests`（docs lint を含む）、`git diff --check` と clean tree。Trusted job は全3経路の成功を確認 |
 | Repository validation（job: **test (ubuntu-latest)**・**test (windows-latest)**） | `.github/workflows/repository-validation.yml` | PR、main への push、手動 | 2〜3 分 | **必須**（`Trusted repository validation` も成功を要求） | `runtime/discord-template` の `pnpm test` と `pnpm check`。Linux は固定 digest の Docker image で検証隔離の実 probe を行う |
-| Task swarm validation（job: swarm / validate (ubuntu-22.04)・(windows-latest)） | `.github/workflows/task-swarm.yml` | 必須チェックから `workflow_call`、手動 | 2〜5 分 | **必須**（`Trusted repository validation` が成功を要求） | hash固定依存、全Task swarm pytest、offline demo。Linuxは固定native CLIの合成permission probeも実行し、model/APIは呼ばない。ubuntu-latestではbwrap uid mapが拒否されたため、host policyを変更せず22.04を明示 |
+| Task swarm validation（job: swarm / validate (ubuntu-22.04)・(windows-latest)） | `.github/workflows/task-swarm.yml` | 必須チェックから `workflow_call`、手動 | 最大20分 | **必須**（`Trusted repository validation` が成功を要求） | hash固定依存、全Task swarm pytest、offline demo、benchmark。工程別の有限観測を保存。Linuxは固定native CLIの合成permission probeも実行し、model/APIは呼ばない。ubuntu-latestではbwrap uid mapが拒否されたため、host policyを変更せず22.04を明示 |
 | Git Steward validation（job: Git Steward (ubuntu-latest)・(windows-latest)） | `.github/workflows/git-steward-validation.yml` | Git Steward・Python launcher・このworkflowの変更を含むPR、mainへのpush | 最大5分 | 任意 | Node 24でcoordinatorと業務演習の59 Node testsを実行。依存install、全Python suite、provider操作は含まない |
 | Cloudflare candidate validation | `.github/workflows/cloudflare-candidate-validation.yml` | PR、main への push | 1〜2 分 | 任意 | Cloudflare edge / 公式 Cloudflare OS 候補の content-free validator |
 | Cloudflare edge preview candidate | `.github/workflows/cloudflare-edge-preview.yml` | 手動（workflow_dispatch） | 未実行 | 任意 | environment `cloudflare-preview`（required reviewers、self review 禁止）での preview upload 候補。必要な secret が揃っておらず、これまで一度も実行されていません |
@@ -27,6 +27,49 @@ runの`headSha`が確認対象のSHAと一致し、全jobが完了したこと�
 必須チェックは `Trusted repository validation`、`test (ubuntu-latest)`、`test (windows-latest)`、`Dependency review` の 4 件で、`strict: true`（PR branch が main に追いついていること）です。`Trusted repository validation` は並列実行した Repository checks、Discord matrix、呼び出した Task swarm matrix の全3経路に依存し、一つでも failure / skipped / cancelled / 未実行なら成功しません。matrix 待ち後に全Python検査を始める直列依存を除き、3経路を並列に開始できる構成です。実際の全体所要はrunnerの待機時間を含め、短縮幅は更新headのhosted CIで測ります。Discord は各 OS で 1 回だけ実行します（従来の直接起動と reusable 呼出しによる 4 jobs から 2 jobs へ削減）。必須チェック名と検証内容は維持します。`gh api repos/Kotodama-Project/Kotodama-project/branches/main/protection` で読み戻せます。
 
 全Python検査の進行中に15分の上限でcancelした[hosted実行](https://github.com/Kotodama-Project/Kotodama-project/actions/runs/37198502503/job/111425839551)を受け、Repository checksの上限を25分にします。検査を減らさずrunnerの所要差に余裕を持たせ、成功の条件は維持します。軽いTrusted集約jobは15分の上限を保持します。
+
+## Task swarm の有限観測
+
+[#396](https://github.com/Kotodama-Project/Kotodama-project/issues/396) は
+[#331](https://github.com/Kotodama-Project/Kotodama-project/issues/331) の観測部分です。
+既存の pytest command、`python_files=test_task_swarm_*.py`、Linux/Windows、依存 lock、
+demo、benchmark、20分上限、必須 gate を維持します。並列化や性能閾値は追加しません。
+pytest の最終 durations/JUnit だけでは中断前の集合を残せないため、明示した小さい
+`tools.pytest_ci_observer` plugin が pytest の通知を保存します。
+
+`events.jsonl` は collection 順序と重複 occurrence、各 test/工程の開始、
+setup/call/teardown の duration・outcome、skip/xfail 理由、成功を含む subtest を記録します。
+subtest の message/parameters は固定 pytest が表示する値であり、任意 object の意味的に
+安定した ID を作るものではありません。総件数だけで実行同値を主張しません。
+先頭には run/job/attempt、PR head と実 checkout/merge SHA、lock/observer SHA、Python・OS・
+runner image と主要 package version を記録し、host 名や環境変数全体は保存しません。
+
+生イベントは毎回 file へ書き、同じ JSON を `KOTODAMA_PYTEST_EVENT ` 行として
+Actions console へ flush します。test が工程内で停止しても、その直前までの記録を
+`gh run view RUN_ID --log` から参照できます。`always()` の artifact upload は失敗・取消時も
+私有 runner temp の成果物を7日間保存する設定です。job の強制終了や runner 消失で upload
+自体が実行されなかった場合は、既に届いた console が partial evidence です。
+GitHub の log 欠測・切断も完全な観測とは呼びません。通常の pytest 出力は従来どおり
+Actions log に残り、この adapter は test stdout/stderr の追加 spool を作りません。
+
+stream と追加 console はそれぞれ最大16 MiB、1 event は64 KiB、最大20,000 events、
+最終文書は8 KiBです。容量超過は記録を不完全にし、残りの test や元の exit code を
+変更しません。pytest 成功後の独立した完全性検査が、最終文書の欠落、partial、切断、
+digest/collection/工程結果の不一致を拒否するので、欠測した観測で必須 gate は成功しません。
+`final.json` の `complete` は観測集合の完結であり、test の合否は別の `pytest_exit_code` です。
+signal handler を追加せず、pytest の失敗・中断コードと外部 terminate をそのまま伝えます。
+
+保存済み artifact の確認は Task swarm の固定依存環境で実行します。
+
+```text
+python -B tools/pytest_ci_observer.py PATH_TO_OBSERVATION_DIRECTORY
+```
+
+`observer_hook_seconds_before_final_write` は metadata 取得と event の encoding/write/flush
+内の経過時間だけです。import、最終書込、検査、upload、観測による test への影響を含む
+全費用は未測定です。工程時間にも hook の費用が入り得ます。CPU、peak RSS、queue 時間は
+unknown とし、単発の fixture や OS 間の所要差を高速化の受入・SLO に転用しません。
+次の最適化は同じ固定 source/environment の実行・skip・subtest 集合を照合して評価します。
 
 ## Release の SBOM と provenance を確認する
 

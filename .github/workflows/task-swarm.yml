@@ -43,7 +43,22 @@ jobs:
           binary="$(find tests/fixtures/codex-sandbox/node_modules/.pnpm -path '*/vendor/x86_64-unknown-linux-musl/bin/codex' -type f)"
           test -n "$binary" && test "$(printf '%s\n' "$binary" | wc -l)" -eq 1
           printf 'KOTODAMA_TEST_CODEX_SANDBOX=%s/%s\n' "$GITHUB_WORKSPACE" "$binary" >> "$GITHUB_ENV"
-      - run: python -m pytest -q -p no:cacheprovider -o 'python_files=test_task_swarm_*.py' tests
+      - name: Run the complete Task swarm tests with bounded observations
+        env:
+          PYTEST_PLUGINS: tools.pytest_ci_observer
+          KOTODAMA_CI_OBSERVATION_DIR: ${{ runner.temp }}/task-swarm-observation
+          KOTODAMA_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python -m pytest -q -p no:cacheprovider -o 'python_files=test_task_swarm_*.py' tests
+      - name: Require complete pytest observation after success
+        run: python -B tools/pytest_ci_observer.py "${{ runner.temp }}/task-swarm-observation"
       - run: python tools/task_swarm.py demo --root work/ci-offline-demo --allow-local-fixture
       - name: Benchmark long context, corrections, restart and retained history
         run: python -B tools/task_swarm_benchmark.py --allow-local-fixture --output work/ci-swarm-benchmark.json --github-summary
+      - name: Preserve complete or partial pytest observations
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: task-swarm-observation-${{ matrix.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/task-swarm-observation
+          if-no-files-found: error
+          retention-days: 7
