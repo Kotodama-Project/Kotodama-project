@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 import re
 import time
+from types import BuiltinFunctionType
 from typing import Any, Callable, Mapping
 
 from .protocol import (
@@ -37,6 +38,7 @@ _ACTOR_STATES = frozenset({"active", "idle", "closed", "revoked"})
 _MAX_ACTORS = 256
 _MAX_PEERS = 256
 _MAX_PATH = 4096
+_BUILTIN_TIME = time.time
 
 
 class OwnerFileError(SwarmError):
@@ -262,6 +264,9 @@ class OwnerFile:
 
     def read_binding(self, task_id: str, actor_ref: str) -> dict[str, Any]:
         snapshot = self._snapshot()
+        return self._binding(snapshot, task_id, actor_ref)
+
+    def _binding(self, snapshot: OwnerSnapshot, task_id: str, actor_ref: str) -> dict[str, Any]:
         if snapshot.task["task_id"] != task_id:
             _error("WRONG_TASK", "owner binding belongs to another Task")
         actor = _text(actor_ref, "actor_ref", maximum=256)
@@ -344,6 +349,58 @@ class OwnerFile:
         """Return the current exact storage paths after all integrity checks."""
 
         return dict(self._snapshot().storage)
+
+
+class _OwnerCurrentRead:
+    """One internal fence's snapshot; never stored on the owner or reused."""
+
+    def __init__(self, owner: OwnerFile) -> None:
+        self.owner = owner
+        self.snapshot = owner._snapshot()
+
+    def read_task(self, task_id: str | None = None) -> dict[str, Any]:
+        # Keep expiry current even if a lease ends while this fence runs.
+        try:
+            task = validate_binding(self.snapshot.task, now=_BUILTIN_TIME(), actor=None)
+        except SwarmError as exc:
+            raise OwnerFileError(exc.code, exc.detail) from exc
+        if task_id is not None and task["task_id"] != task_id:
+            _error("WRONG_TASK", "owner binding belongs to another Task")
+        return task
+
+    def read_binding(self, task_id: str, actor_ref: str) -> dict[str, Any]:
+        self.read_task(task_id)
+        # Validate each actor only when the caller reaches it. Its task/actor
+        # comparisons must retain their original short-circuit refusal order.
+        return self.owner._binding(self.snapshot, task_id, actor_ref)
+
+    def storage(self) -> dict[str, Path]:
+        self.read_task()
+        return dict(self.snapshot.storage)
+
+
+_OWNER_FILE_TYPE = OwnerFile
+_CURRENT_READ_METHODS = {
+    name: getattr(OwnerFile, name)
+    for name in ("read_task", "read_binding", "storage", "_snapshot", "_read_json",
+                 "_source_checks", "_storage", "_binding")
+}
+
+
+def _current_read(owner: OwnerFile) -> OwnerFile | _OwnerCurrentRead:
+    """Share one fresh read only for the standard, callback-free owner reader.
+
+    Custom clocks, subclasses and reader overrides retain the original public
+    calls. In particular a clock or hook may mutate Source bytes between actors.
+    Callers create a new reader after every policy/proof/reuse callback fence.
+    """
+    if (type(owner) is not _OWNER_FILE_TYPE or not isinstance(_BUILTIN_TIME, BuiltinFunctionType)
+            or owner.clock is not _BUILTIN_TIME
+            or time.time is not _BUILTIN_TIME
+            or any(name in vars(owner) or getattr(_OWNER_FILE_TYPE, name) is not original
+                   for name, original in _CURRENT_READ_METHODS.items())):
+        return owner
+    return _OwnerCurrentRead(owner)
 
 
 __all__ = ["OwnerFile", "OwnerFileError", "OwnerSnapshot"]
