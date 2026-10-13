@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,writeFile,readFile,mkdir,cp,link,symlink} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile,readFile,mkdir,cp,link,symlink,lstat,readdir} from 'node:fs/promises';
 import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import path from 'node:path';
@@ -35,13 +35,13 @@ async function runtimeFixture(t){
 const live=config=>()=>controlCommand(config,{action:'status'});
 function keysOf(value,out=new Set()){if(Array.isArray(value))value.forEach(v=>keysOf(v,out));else if(value&&typeof value==='object')for(const [k,v] of Object.entries(value)){out.add(k);keysOf(v,out);}return out;}
 async function copySource(from,to){for(const name of ['bin','src'])await cp(path.join(from,name),path.join(to,name),{recursive:true});for(const name of ['package.json','pnpm-lock.yaml'])await writeFile(path.join(to,name),await readFile(path.join(from,name)));}
-async function cliFixture(t){
+async function cliFixture(t,{phase=(_name,action)=>action()}={}){
   const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-source-cli-')),app=path.join(root,'app');await mkdir(app);await copySource(packageRoot,app);
   await symlink(path.join(packageRoot,'node_modules'),path.join(app,'node_modules'),process.platform==='win32'?'junction':'dir');
   const config=exampleConfig({workspace:root,guildId:hiddenGuild});config.dataDir=path.join(root,'data');config.analyzer={executable:process.execPath,args:[fixtureCli],timeoutSeconds:10};config.worker={...config.worker,executable:process.execPath,args:[fixtureCli],timeoutSeconds:10};
   const file=path.join(root,'config.json');await atomicJson(file,config);const children=[];
   const stop=async child=>{if(child.exitCode!==null||child.signalCode!==null)return;child.kill('SIGTERM');await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.kill('SIGKILL');reject(new Error('owned CLI failed to stop'));},15000);child.once('exit',()=>{clearTimeout(timer);resolve();});});};
-  t.after(async()=>{try{for(const child of children)await stop(child);}finally{assert(inside(os.tmpdir(),root));await rm(root,{recursive:true,force:true});}});
+  t.after(async()=>{try{await phase('child-stop',async()=>{for(const child of children)await stop(child);});}finally{assert(inside(os.tmpdir(),root));await phase('tree-cleanup',()=>rm(root,{recursive:true,force:true}));}});
   const start=async({nodeArgs=[],extraEnv={}}={})=>{
     const env={...process.env,KOTODAMA_DEBUG:'',...extraEnv};if(!('NODE_OPTIONS' in extraEnv))delete env.NODE_OPTIONS;
     const child=spawn(process.execPath,[...nodeArgs,path.join(app,'bin/kotodama.mjs'),'start','--offline','--config',file],{env,stdio:['ignore','pipe','pipe']});children.push(child);let diagnostic='';child.stderr.on('data',bytes=>{diagnostic+=bytes;});
@@ -78,14 +78,45 @@ test('a symbolic link inside the source set is refused',{skip:process.platform==
 });
 
 test('a large source listing stays unverified without breaking real status and command control',{timeout:90000},async t=>{
-  const {app:tree,config,start}=await cliFixture(t);
-  // This allowed file count would exceed the existing 1 MB control response.
-  for(let first=0;first<3800;first+=50)await Promise.all(Array.from({length:50},(_,offset)=>writeFile(path.join(tree,'src',String(first+offset).padStart(4,'0')+'x'.repeat(180)+'.mjs'),'')));
-  await assert.rejects(computeSourceBinding(tree),{code:'SOURCE_SET_LIMIT'});
-  await start();
-  const status=await controlCommand(config,{action:'status'});assert.deepEqual(status.source,{set:SOURCE_SET,error:process.platform==='win32'?'SOURCE_BOOTSTRAP_UNSUPPORTED':'SOURCE_SET_LIMIT'});
+  const phase=async(name,action)=>{
+    const at=performance.now();let completed=false;t.diagnostic(JSON.stringify({sourceListingPhase:name,state:'start'}));
+    try{const result=await action();completed=true;return result;}
+    finally{t.diagnostic(JSON.stringify({sourceListingPhase:name,state:'end',completed,elapsedMs:Number((performance.now()-at).toFixed(3))}));}
+  };
+  const {app:tree,config,start}=await phase('fixture-copy',()=>cliFixture(t,{phase}));
+  // Shared relative path bytes exercise the same listing limit with fewer
+  // physical files to create, open, check and remove. No source limit changes.
+  await phase('listing-create',async()=>{
+    const directory=path.join(tree,'src',...Array(12).fill('p'.repeat(90)));await mkdir(directory,{recursive:true});
+    for(let first=0;first<900;first+=50)await Promise.all(Array.from({length:50},(_,offset)=>writeFile(path.join(directory,String(first+offset).padStart(4,'0')+'.mjs'),'')));
+  });
+  await phase('listing-inventory',async()=>{
+    const files=[],metrics={entries:0,depth:0,totalBytes:0,metadataBytes:128};
+    const visit=async(relative,depth=0)=>{
+      const absolute=path.join(tree,...relative.split('/')),stat=await lstat(absolute,{bigint:true});
+      ++metrics.entries;metrics.depth=Math.max(metrics.depth,depth);
+      const signature=[stat.dev,stat.ino,stat.size,stat.mtimeNs,stat.ctimeNs].map(String).join(':');
+      metrics.metadataBytes+=Buffer.byteLength(JSON.stringify([relative,signature]))+1;
+      assert(relative.split('/').every(segment=>Buffer.byteLength(segment)<=255));
+      assert(Buffer.byteLength(absolute)<4096);
+      if(stat.isDirectory()){for(const name of await readdir(absolute))await visit(relative+'/'+name,depth+1);return;}
+      assert(stat.isFile()&&stat.nlink===1n&&stat.size<=2000000n);
+      metrics.totalBytes+=Number(stat.size);files.push({path:relative,sha256:'0'.repeat(64)});
+    };
+    for(const name of ['bin','src','package.json','pnpm-lock.yaml'])await visit(name);
+    // All other source limits remain below their bounds on the actual tree.
+    // A 64-hex placeholder has the same serialized length as each real digest.
+    const listingBytes=Buffer.byteLength(JSON.stringify(files));
+    assert(files.length<5000&&metrics.entries<10000&&metrics.depth<64);
+    assert(metrics.totalBytes<64000000&&metrics.metadataBytes<1500000);
+    assert(listingBytes>1000000,'the uncapped file listing must exceed the control response limit');
+    t.diagnostic(JSON.stringify({sourceListingInventory:{...metrics,files:files.length,listingBytes}}));
+  });
+  await phase('binding-refusal',()=>assert.rejects(computeSourceBinding(tree),{code:'SOURCE_SET_LIMIT'}));
+  await phase('cli-start',()=>start());
+  const status=await phase('status',()=>controlCommand(config,{action:'status'}));assert.deepEqual(status.source,{set:SOURCE_SET,error:process.platform==='win32'?'SOURCE_BOOTSTRAP_UNSUPPORTED':'SOURCE_SET_LIMIT'});
   assert(Buffer.byteLength(JSON.stringify(status))<1000000);
-  const listed=await controlCommand(config,{action:'tasks',actor:config.discord.operators[0]});assert.deepEqual(listed,[]);
+  const listed=await phase('tasks',()=>controlCommand(config,{action:'tasks',actor:config.discord.operators[0]}));assert.deepEqual(listed,[]);
 });
 
 test('aggregate source bytes, directory traversal and depth have finite limits',{timeout:90000},async t=>{
