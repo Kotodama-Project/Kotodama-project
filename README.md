@@ -47,6 +47,8 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 
 [階層 CLI](docs/KNOWLEDGE-HIERARCHY-TRACE.md) は、Project・省略可能な Phase・Requirement の複数親と共有参照を、安定 ID と現在の Source から辿ります。上位制約と訂正を既存 Task の入力へ保持し、現在の owner に束縛した Task、receipt で固定した実行 Plan、保存済みのローカル worker/critic の入力・結果と実行時のコードを照合します。組織・設計などの現在の正本 owner を解決できない必須参照や、未観測の学習判断は `BLOCKED` となり、context を渡しません。
 
+[性能計測 CLI](docs/PERFORMANCE-BENCHMARK.md) と、幅1/2/4の[公開固定比較](docs/PERFORMANCE-TASK-ADMISSION-2026-10-13.md)（72試行・1,152件の Task 結果）も含みます。比較記録は source `d2822b0` 時点の観測として保持します。`qualification=NOT_EVALUATED`、既定幅1を維持し、全 Pipeline の資源計測・長期メモリ・本番性能の受入は #330/#331 の残件です。
+
 この版の source 能力、採用状況、残る owner 接続、性能測定と優先 Issue は [STATUS の現在地](STATUS.md#current-source-and-open-integration-work) に集約しています。次の担当はそこから各 Issue の最新 head・証拠・残る受入を確認してください。全8階層、実モデル・利用者成果、常駐運用は引き続き受入が必要です。
 
 ## 知識・目的・Project を CLI で確認する
@@ -61,6 +63,7 @@ checkout の Python 3.12 から使います。検索は現在の小さな Markdo
 | インストールした core で同じ有限実行を使う | `python -I -m kotodama_core.task_swarm.closed_loop --help` | [local executor](docs/TASK-LOOP-EXECUTOR.md)、[配布候補のビルド](python/README.md#ビルドと確認) |
 | Project と既存 Task の対応を読む | `python -B tools/project_hub.py --help` | [view / inspect-change](docs/PROJECT-HUB-VIEW.md) |
 | 現在の親制約・Task・保存済み実行を辿る | `python -B tools/hierarchy_trace.py --help` | [階層と実行履歴の参照](docs/KNOWLEDGE-HIERARCHY-TRACE.md) |
+| 固定 fixture の計測条件を確認する | `python -B tools/performance_benchmark.py --help` | [性能計測と固定比較](docs/PERFORMANCE-BENCHMARK.md) |
 
 実行には既存 owner に束縛した入力・worker と `--executor-mode local_executable_fixture` が必要です。学習の再利用には現在の採否判断も必要です。Python の Project CLI は参照と訂正候補の検査までです。既定無効の local owner 共通操作は Project の create/read/inspect/correct を扱い、保存した Project の `task_refs` は空です。Task 作成・更新・dispatch は行いません。検索品質・大規模性能や自律改善の全体受入は、これらの入口の存在だけでは成立しません。
 

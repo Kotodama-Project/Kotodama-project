@@ -39,6 +39,8 @@ Explicit `local_executable_fixture` mode lets the knowledge CLI or installed cor
 
 The [hierarchy CLI](docs/KNOWLEDGE-HIERARCHY-TRACE.md) follows multiple parents and shared references across Project, optional Phase and Requirement declarations using stable IDs and current Source. Parent constraints and corrections remain in the existing Task input. It reads current owner-bound Tasks, receipt-anchored execution Plans and saved local worker/critic inputs, results and the code retained for each execution. Required organization or architecture references without a resolved current owner, and unobserved learning decisions, leave the context `BLOCKED`.
 
+This revision also includes the [measurement CLI](docs/PERFORMANCE-BENCHMARK.md) and the [published fixed comparison](docs/PERFORMANCE-TASK-ADMISSION-2026-10-13.md) across widths 1/2/4: 72 trials and 1,152 Task result rows. The record preserves historical observations of source `d2822b0`. `qualification=NOT_EVALUATED` and default width 1 remain unchanged; full-pipeline resource measurement, sustained memory growth and production performance acceptance remain #330/#331 work.
+
 [STATUS](STATUS.md#current-source-and-open-integration-work) owns this revision's source capabilities, adoption status, remaining owner connections, performance observations and prioritized Issues. Follow each linked Issue's latest evidence before resuming. Whole eight-layer operation, actual model/user outcomes and continuous production operation remain unaccepted.
 
 ## Knowledge, Task and Project CLI entrypoints
@@ -53,6 +55,7 @@ Use Python 3.12 from the checkout. Follow the linked guides for dependencies and
 | Use the same bounded execution in installed core | `python -I -m kotodama_core.task_swarm.closed_loop --help` | [Local executor](docs/TASK-LOOP-EXECUTOR.md), [building the package candidate](python/README.md#ビルドと確認) |
 | Inspect a Project and existing Task bindings | `python -B tools/project_hub.py --help` | [view / inspect-change](docs/PROJECT-HUB-VIEW.md) |
 | Trace current parent constraints, Tasks and saved execution | `python -B tools/hierarchy_trace.py --help` | [Hierarchy and execution trace](docs/KNOWLEDGE-HIERARCHY-TRACE.md) |
+| Inspect fixed-fixture measurement options | `python -B tools/performance_benchmark.py --help` | [Measurement CLI and fixed comparison](docs/PERFORMANCE-BENCHMARK.md) |
 
 Execution requires input and workers bound to the existing owner plus `--executor-mode local_executable_fixture`. Learning reuse also requires a current decision. The Python Project CLI reads references and validates proposed corrections. The disabled-by-default local-owner operations handle Project create/read/inspect/correct; persisted Projects still have empty `task_refs`. They do not create, update or dispatch Tasks. These entrypoints do not establish large-corpus performance or acceptance of the complete improvement loop.
 
