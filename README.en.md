@@ -27,11 +27,11 @@ The 2026-09-30 [OpenAI alignment direction](docs/OPENAI-ALIGNMENT.md) makes Dots
 
 The target is the whole loop across organizational/design/Project documents and goals, memory, decomposition, parallel work, independent verification, integration, learning and replanning. Preserve original intent, corrections and inherited constraints; document or worker counts are not completion.
 
-The [owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) makes the Project a durable hub for people, agents, sources, Tasks, decisions, outcomes and learning. The first [Project view CLI](docs/PROJECT-HUB-VIEW.md) is on `main`: it reads existing Task bindings and inspects proposed corrections. Persistent Project operations, GUI/natural-language integration, dynamic delegation and live external connections remain [#385](https://github.com/Kotodama-Project/Kotodama-project/issues/385) work.
+The [owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) makes the Project a durable hub for people, agents, sources, Tasks, decisions, outcomes and learning. The [Project view CLI](docs/PROJECT-HUB-VIEW.md) and [existing local-owner persistence/correction](runtime/discord-template/docs/PROJECTS.md) are on `main`. Persistence preserves original requests and correction history; its operations are disabled by default. Dots/GUI shared operations, Task links, dynamic delegation and live external connections remain [#385](https://github.com/Kotodama-Project/Kotodama-project/issues/385) work.
 
 ## Current state
 
-This revision includes OKF Markdown retrieval and bounded context, Task inputs bound to original intent and corrections, independent critic evidence, durable cancellation, one repair of selected leaves, verified two-leaf A-to-B dependency execution, and a read-only Project view. Repair retains the existing Task and budget; terminal checkpoint recovery does not redispatch work.
+This revision includes OKF Markdown retrieval and bounded context, Task inputs bound to original intent and corrections, independent critic evidence, durable cancellation, one repair of selected leaves, verified two-leaf A-to-B dependency execution, a read-only Project view and bounded local Project persistence/correction. Repair retains the existing Task and budget; terminal checkpoint recovery does not redispatch work.
 
 [STATUS](STATUS.md#current-source-and-open-integration-work) owns the checked revisions, pending executor/learning/hierarchy integration, performance observations and prioritized Issues. Follow each linked Issue's latest evidence before resuming. Whole eight-layer operation, actual model/user outcomes and continuous production operation remain unaccepted.
 
@@ -45,7 +45,7 @@ Use Python 3.12 from the checkout. Follow the linked guides for dependencies and
 | Bind goals and corrected Source to an existing Task | `python -B tools/knowledge_base.py task-input --help` | [compile / verify / simulate](docs/KNOWLEDGE-TASK-INPUT.md) |
 | Inspect a Project and existing Task bindings | `python -B tools/project_hub.py --help` | [view / inspect-change](docs/PROJECT-HUB-VIEW.md) |
 
-The Project CLI reads references and validates proposed corrections; it does not create, update or dispatch Tasks. These entrypoints do not establish large-corpus performance or acceptance of the complete improvement loop.
+The Python Project CLI reads references and validates proposed corrections. The disabled-by-default local-owner operations handle Project create/read/inspect/correct; persisted Projects still have empty `task_refs`. They do not create, update or dispatch Tasks. These entrypoints do not establish large-corpus performance or acceptance of the complete improvement loop.
 
 You choose how to use the product:
 
@@ -58,11 +58,11 @@ You choose how to use the product:
 | Area | On `main` | Candidate (open PR) | Direction |
 |---|---|---|---|
 | Company Pack / Evidence Chain | starter with 9 Blocks, 9 Records, 3 MOCs; schemas, validators, review chain, smoke | | Promotion policy per lane |
-| Session / conversation ledger | schema and validator | | runtime ingestion |
+| Session / conversation ledger | schema, validator and [local ledger export/readback](docs/SESSION-CONVERSATION-LEDGER.md) (synthetic validation) | | real-data ingestion, retention and operation |
 | Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | | 15-minute rotation, Voice-to-Verified-Handoff, GrillU, the rest of the [GPT-Live adoption policy](docs/GPT-LIVE-ADOPTION.md) (#142 to #146) |
 | Agent swarm / autonomy | bounded Task execution, Luna Task swarm, swarm and route-binding contracts (#34), migration-ledger schema and read-only verifier (#35; synthetic fixture only), [agent-lifecycle contract](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md) (#36; schema, read-only verifier, synthetic fixture) | real registry and runtime/continuity acceptance | Goal Completion Loop after a human GO |
 | Knowledge / Context | canonical OKF Markdown, catalog/graph, bounded retrieval/context, typed goal/Source/frontier inputs and owner-bound learning candidates | hierarchy integration, process-executor/product CLI and large-corpus evaluation | Context Gateway and continuous improvement |
-| Project | minimal information contract, existing Task read-only view and correction proposal checks | persistence and GUI/natural-language shared operations | configurable collaboration and optimization |
+| Project | minimal information contract, existing Task read-only view and disabled-by-default local persistence of original requests and correction history in the existing SQLite store | [Dots shared operations #395](https://github.com/Kotodama-Project/Kotodama-project/pull/395), GUI and Task links | configurable collaboration and optimization |
 | Runtime | Compose / Proxmox lifecycle contracts, Cloudflare candidates | | deployment on Cloudflare edge and the official Cloudflare OS |
 
 [STATUS.md](STATUS.md) is the source for the current state. This page is a projection, not a Human Decision or Current Truth.
