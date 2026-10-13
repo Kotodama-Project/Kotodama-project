@@ -57,6 +57,47 @@ Dotへoperator/channel、返答先、監視期間を伝えます。`discord_requ
 
 長い相談が多い場合は`includeText: false`でID・revision・短いpreviewを読み、必要な相談だけ`discord_read_request`で全文を取得できます。offset 0から`nextOffset`がnullになるまで同じrevisionと`textDigest`で読みます。一回は最大4096 UTF-16単位で、surrogate pairを切らずに返します。previewは全文ではありません。ページごとに元のSource・閲覧範囲・受付状態を確認し、訂正・取消・期限切れ・失効があれば古い文脈の続きは拒否します。通常の相談・返答の操作は変わりません。
 
+## Projectの目的と条件を扱う
+
+operatorがBot configに`"projects": {"operations": ["read", "create", "inspect", "correct"]}`を
+設定すると、許可した操作だけをProject toolとして追加できます。既定は空配列です。
+`dots.enabled`だけでは有効になりません。設定変更後は対象runtimeとpluginを再接続し、
+取得したtool一覧を確認します。毎回の呼出しでも現在の設定・主体・Source範囲を再検査します。
+Projectの操作範囲は、同じinstallationの`discord.textChannelIds`／`resultChannelId`内で
+本人が所有し現在も閲覧できるSourceとProjectです。`dots.channelIds`は相談inboxと返答の範囲で、
+Projectの範囲ではありません。Project操作を有効にすると、この独立した範囲を利用できます。
+Dots経由であることもruntimeへ束縛し、保存・返却前にDotsの無効化やactor変更を確認します。
+すでに保存済みの訂正をDotsの無効化で取り消すことはありません。
+
+| tool | 操作 |
+|---|---|
+| `project_read` | 安定Project IDから現在の目的・条件、revision、digestを読む |
+| `project_create` | 明示された作成依頼を、閲覧済みSourceと結び付けてdraftとして保存する |
+| `project_inspect_change` | 現行revision・digestに対する訂正候補と、削除される条件を確認する |
+| `project_correct` | 同じrevision・digestに理由と訂正Sourceを結び付けて保存する |
+
+`discord_requests`と`discord_read_request`の`source: {key, revision}`、またはoperatorが
+指定した既存Sourceの同じ参照を渡します。
+参照が読めたことだけでは作成や訂正の許可にならず、Project ownerが現在の閲覧範囲と
+原依頼者を確認します。Dotが別actorや任意ファイル・URLを指定する引数はありません。
+既存local ownerを使用し、remote Task ownerからlocalへ自動で切り替えません。
+
+briefは[Project v1](../../../docs/PROJECT-HUB-VIEW.md)と同じ
+`outcome`、`in_scope`、`out_of_scope`、`constraints`、`acceptance`、`unknowns`です。
+訂正はbrief全体を渡し、未入力を推測で補わず、必須条件を省略しません。
+長さや件数の上限超過は拒否し、本文を切り詰めません。保存してもTask作成・実行・取消・完了や
+外部公開は起きません。
+
+createとcorrectには一つの依頼に固定した`request_id`を付けます。同じID・同じ内容の再送は
+既存の保存結果へ照合され、同じIDで内容を変えると拒否されます。応答が不明な場合はProjectを
+再読するか、同じIDと完全に同じ内容で照合し、別IDで自動作成し直しません。
+古いrevisionからの訂正は再読して候補を作り直します。
+
+`tests/project-dots.test.mjs`でSDKの操作schema、設定失効、Source参照の閲覧検査、
+stdioから既存loopback・Project ownerへの作成・訂正・重複照合を確認します。
+認可の待機中にDotsを無効化／actor変更した場合も、保存・本文返却を拒否します。
+実Dotでの呼出しとGUIとの往復は別の受入です。
+
 ## 受入の流れ
 
 1. 合成の相談をDiscordで受付し、Dotから同じID/revisionを読む。

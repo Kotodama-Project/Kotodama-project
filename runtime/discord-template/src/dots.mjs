@@ -82,7 +82,7 @@ export class DotsBridge {
     const refused=(id,e)=>{if(staleRequestCodes.has(errorCode(e)))this.store.db.prepare("UPDATE dot_requests SET state='stale' WHERE id=? AND state='pending'").run(id);else if(errorCode(e)!=='DOTS_REQUEST_NOT_PENDING')unavailable++;};
     for(const {id,ordinal} of rows){const remaining=this.listDeadlineMs-(performance.now()-started);if(remaining<=0)break;after=ordinal;try{
       const {row,source}=await this.current(id,{authorizationTimeoutMs:Math.max(1,Math.min(this.authorizationTimeoutMs,Math.ceil(remaining)))});check(row.state==='pending','DOTS_REQUEST_NOT_PENDING');
-      result.push({id,revision:row.source_revision,...(includeText?{text:source.text}:{preview:source.text.slice(0,splitPair(source.text,120)?119:120)}),textLength:source.text.length,textDigest:digest(source.text),channelId:source.channelId,createdAt:new Date(row.created).toISOString(),authority:'conversation_and_event_draft_only'});if(result.length===limit)break;
+      result.push({id,revision:row.source_revision,source:{key:row.source_key,revision:row.source_revision},...(includeText?{text:source.text}:{preview:source.text.slice(0,splitPair(source.text,120)?119:120)}),textLength:source.text.length,textDigest:digest(source.text),channelId:source.channelId,createdAt:new Date(row.created).toISOString(),authority:'conversation_and_event_draft_only'});if(result.length===limit)break;
     }catch(e){refused(id,e);}}
     // A later authorization may have allowed a correction/cancellation of an
     // earlier item. Recheck every returned binding immediately before emission.
@@ -96,7 +96,7 @@ export class DotsBridge {
     const {row,source}=await this.current(id);check(row.source_revision===revision,'DOTS_SOURCE_CHANGED');check(row.state==='pending','DOTS_REQUEST_NOT_PENDING');
     check(offset<=source.text.length&&!splitPair(source.text,offset),'DOTS_TEXT_OFFSET_INVALID');
     let end=Math.min(offset+limit,source.text.length);if(splitPair(source.text,end))end--;
-    return {id,revision,text:source.text.slice(offset,end),textDigest:digest(source.text),offset,nextOffset:end<source.text.length?end:null,textLength:source.text.length,offsetEncoding:'utf-16',channelId:source.channelId,authority:'conversation_and_event_draft_only',taskOwnerUnchanged:true};
+    return {id,revision,source:{key:row.source_key,revision:row.source_revision},text:source.text.slice(offset,end),textDigest:digest(source.text),offset,nextOffset:end<source.text.length?end:null,textLength:source.text.length,offsetEncoding:'utf-16',channelId:source.channelId,authority:'conversation_and_event_draft_only',taskOwnerUnchanged:true};
   }
   async send(id,revision,text){
     check(typeof text==='string'&&text.trim()&&text.length<=1900,'DOTS_REPLY_SIZE');const bodyDigest=digest(text);
