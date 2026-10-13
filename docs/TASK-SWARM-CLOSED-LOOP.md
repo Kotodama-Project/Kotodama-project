@@ -83,11 +83,56 @@ python -m kotodama_core.task_swarm.closed_loop \
 
 source checkoutでは`PYTHONPATH=runtime`を指定し、module名を`task_swarm.closed_loop`にします。
 scenarioは`work`、`critics`、`repair_plan`の3項目です。`work`は`r0-<job_id>`・
-`r1-<job_id>`から完全な報告JSONへのmap、`critics`は`"0"`・`"1"`から完全なcritic JSONへのmap、
+`r1-<job_id>`から完全な報告JSONへのmap、`critics`は`"0"`・`"1"`から完全なglobal critic JSONへのmap、
 `repair_plan`は上記planまたは`null`です。CLIは成功判定や引用を補完しません。
-critic JSONは`parent_input_digest`、初期`plan_digest`、`round`、`report_digests`、
+依存のあるspecification v2では、さらに`critics["prerequisite"]`に以下の前提レビュー応答を必ず指定します。
+global critic JSONは`parent_input_digest`、初期`plan_digest`、`round`、`report_digests`、
 `validations`を持ちます。各validationは`criterion_id/status/evidence/gap_reason/source_spans`です。
 passedには実在するjob/claim番号が必要で、failedには説明と実配布済み不足spanが必要です。
+
+前提レビューの応答は`kind/version/descriptor_sha256/report_sha256/validations`の5項目だけです。
+`kind`は`"prerequisite_review"`、`version`は整数`1`です。`validations`にはdescriptorの`gate`全件を
+重複なく記載し、各項目を`criterion_id/status/evidence`の3項目にします。statusは
+`passed`・`failed`・`unknown`、evidenceは`{"job_id": "r0-<Aのjob_id>", "claim_index": 0}`の形で、
+Aの実在するclaimを0始まりの整数で参照します。passedには一つ以上の参照が必要です。
+`report_sha256`はAの保存応答全体（`result`とsimulation receipt）をcanonical JSON＋改行にした
+ファイルのSHA-256です。report単体のdigestやglobal criticの`report_digests`とは異なります。
+
+source checkoutで`PYTHONPATH=runtime`を指定した次の関数は、その2つのhashを実入力から作ります。
+install済みwheelではimportの`task_swarm`を`kotodama_core.task_swarm`に置き換えます。
+`payload`は検証済みTask input、`specification`はCLIへ渡すplan、`scenario`は上記3項目のJSONです。
+`worker_actors`にはCLIの`--worker`と同じ順序を指定します。`validations`には、Aの報告を検査して
+作成した前述の配列を渡します。この関数はpassedの判定やclaimの引用を補完しません。
+
+```python
+from copy import deepcopy
+from hashlib import sha256
+from task_swarm.closed_loop_contract import work_input
+from task_swarm.dependency_contract import descriptor
+from task_swarm.protocol import canonical, digest
+
+def prerequisite_response(payload, specification, scenario, worker_actors, validations):
+    description, _ = descriptor(payload, specification)
+    jobs = {"r0-" + job["job_id"]: job for job in specification["jobs"]}
+    actors = dict(zip(sorted(jobs), worker_actors))
+    a = description["a_job_id"]
+    initial_digest = digest(specification)
+    delivered = work_input(payload, jobs[a], 0, initial_digest,
+                           round_plan_digest=initial_digest)
+    response = {"result": scenario["work"][a], "receipt": {
+        "actor_ref": actors[a], "invocation_ref": "simulation-" + a,
+        "input_digest": digest(delivered), "synthetic": True}}
+    return {"kind": "prerequisite_review", "version": 1,
+            "descriptor_sha256": digest(description),
+            "report_sha256": sha256((canonical(response) + "\n").encode("utf-8")).hexdigest(),
+            "validations": deepcopy(validations)}
+```
+
+返り値を`scenario["critics"]["prerequisite"]`へ設定し、scenarioをUTF-8 JSONで保存して
+上記`--simulation`へ渡します。Sourceからのcompile、ownerへの束縛、計算と前提レビュー、
+CLIの保存・再読まで動かす例は`tests/test_task_swarm_dependency_source.py`の
+`test_source_cli_in_separate_process_preserves_owner_and_exit_contract`です。
+同テストはこの文書の関数を実行し、passedとunknownの両方を別processのCLIへ渡します。
 
 完全な入力・owner・scenarioを組み立ててCLIから保存・再読まで動かす例は
 `tests/test_task_swarm_closed_loop.py`の
@@ -260,12 +305,32 @@ python -m kotodama_core.task_swarm.repair_planning --owner owner.json --input in
 source checkoutではmodule prefixを`task_swarm`として、既存のruntime import経路を使います。
 この入口は既存owner/Source/初期planを読み直し、`admitted: false`のproposal/impactを返します。
 初期criticが未報告、取消済み、期限切れ、gapなし、または必要な保存証拠が欠ける場合は拒否します。
-learning grant、保存済みcontext binding、またはcheckpointにlearning contextが残るrunのstandalone inspectionは、
+learning grant、保存済みcontext binding、checkpoint、またはDB release certificateが束縛したrelease-progressにlearning contextが残るrunのstandalone inspectionは、
 現在のlearning decisionを読む入口がないため`LOOP_REUSE_INSPECTION_UNSUPPORTED`で拒否します。
-checkpoint前は既存のgrantと保存bindingを判定に使い、両者を外した記録のlearning現在性は保証しません。
+profile2ではcheckpoint前でもrelease-progressのSHAを既存DB証跡に照合し、learning context/bindingの残存を拒否します。progressの欠落・改変も拒否します。
+旧記録にgrant・保存binding・checkpoint・DB release証跡のいずれも残らない場合のlearning現在性は保証しません。
 learningの通常実行・anchor再読・terminal resumeは既存の現在decision検査を使います。
 新規実行は既存のclosed-loop simulation入口から自動plannerへ接続します。
 未知leaseやcheckpoint前の一般的な再開は許可しません。
 
-実行依存、二度以上の修正、Source訂正を跨ぐ完了jobの再利用は未対応です。
+二度以上の修正と、Source訂正を跨ぐ完了jobの再利用は未対応です。実行依存の対応範囲は以下の二葉 A→B に限ります。
 構造上の証拠検査とlocal simulationの結果を、実providerの成果や全体loop完成とは扱いません。
+
+
+## 受理済み A に依存する B（#366）
+
+Source producer→candidate 検証→実行の入口では、owner が束縛した Source の `frontier.requires` から一つの依存を再導出し、ちょうど二つの atomic leaf を扱います。低水準の `execute_closed_loop` は既存 v1 と同様に呼出側の明示 plan を実行します。raw specification v2 だけでは Source 由来を証明せず、その保証は producer と candidate 検証を通した入口に限ります。独立 frontier は従来の specification v1、A→B は specification v2 です。分岐、合流、循環、別 Task、三葉以上の依存 graph は拒否します。owner と Task input v2 の契約は変わりません。元 Source、訂正履歴、root 条件、各 leaf の criterion 割当は両方の worker と critic に保たれます。
+
+新規 A→B run は dispatch 前に execution contract 3 と descriptor の digest を SQLite の不変 plan に固定します。初期jobはA、prerequisite critic、B、global criticの4件だけで、修復jobは後述のplan extensionで追加します。この四呼出しを最低単位とし、上限 4–6 attempts は同じ run 台帳で数えます。prerequisite critic は A・B・owner と異なる actor です。A 専有の A_i を全て検査し、全 claim が元 Source に supported、conflict がなく、全 gate が passed の時だけ A を scoped accept します。root/shared/I 条件の最終検査は global critic に残ります。前段の unknown/failed は不変 blocked evidence となり、A は未受理、B/global critic は pending のままです。完了 receipt や learning は作らず、CLI は exit 3 を返します。応答のshape・hash・claim参照が不正な場合はtyped errorとなり、前提レビューattemptを非retryableの失敗として確定します。ownerや取消によりその確定も拒否された場合は、元のエラーを保持して明示的な復旧を要求します。
+
+[公開plan schema](../schemas/task-swarm-plan.schema.json)もこの2項目を対で要求します。旧planでは両項目を省き、片方だけ・未知版・不正digestは拒否します。依存の形・予算・ownerとreleaseの一致はruntimeが検査します。specification v2、evidence v2、repair profile 2、execution/checkpoint/receipt v3はそれぞれの契約の版です。
+
+hash の循環を避けるため、Source/view/gate だけから prerequisite core を作り、descriptor は core digest、envelope は core と descriptor digest、DB job は envelope 全体の digest を束縛します。reader は各段を元 input/plan から再導出します。B の入力には元 Source と別の `prerequisite` lane として A の report/result hash/release certificate を渡します。元 Source を生成 claim で置換しません。B の inference も実 Source 引用を要し、global critic は全担当 leaf の証拠と、各 B の実入力 digest・prerequisite lane を受け取って再検査します。synthetic fixture は A の値変更が B の計算値を変え、別計算の critic が確かめます。これは実モデルの意味品質の保証ではありません。
+
+A の受理と release stage の保存は既存 SQLite transaction で一緒に確定します。state の B claim は A の accepted 行と一致する release を要求し、単独の `accept(A)` では開きません。operation lock は確認・保存・claim の間だけで、backend 呼出し中は保持しません。取消 Event と期限は transaction の最後にも観測し、失敗なら A と stage を共に rollback します。外部 Event の変化と SQLite commit の完全な同時性は保証しません。
+
+`--resume-finalization` は従来の終端復旧に加え、release 保存済みで B が pending・試行数 0 の場合だけ、明示した `--simulation` から B/global critic を継続できます。A と prerequisite critic を再実行せず、token/epoch/予算をリセットしません。release 前、B の lease/不明な実行結果、改変された proof、二重実行は拒否します。blocked の再読は現在のowner・Source・objective期限を検査し、呼出し 0 で同じ evidence を返します。receiptがないため`--receipt-sha256`付きの再読は拒否します。stage が壊れていても既存 owner の durable cancellation は利用できます。
+
+B 専有条件だけの失敗は repair profile 2 により一度だけ修復できます（合計六呼出し）。repair B にも同じ accepted A と release が必要です。A/shared 条件の失敗は unresolved のまま止め、古い B を残して A だけを修復することはありません。checkpoint/receipt v3 は preaccepted A の result/ref/owner/時刻を、残りの acceptance と分けて固定し、finalization CAS に raw stage を含めます。終端の最後の資格確認→receipt 公開→同じ anchor 返却は従来の境界を維持します。
+
+旧 writer の完了 v1（checkpoint 前・後）、未完 checkpoint v1、evidence v2/profile1 の修復済み・終端未公開・取消済み run は明示した旧形式の reader を維持します。新 run で legacy へ下げる opt-out はありません。core package の allowlist は新しい三 helper を含み、provider を呼ばない配布検証を行います。Task owner 更新、knowledge 自動採用、一般 DAG、実 provider、性能 SLO はこの slice の対象外です。

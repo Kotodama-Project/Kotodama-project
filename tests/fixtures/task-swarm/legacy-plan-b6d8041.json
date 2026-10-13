@@ -1,0 +1,47 @@
+{
+  "writer_commit": "b6d8041b0baeadbff64c982b6220b30dbdfc82b2",
+  "writer_state_blob": "308f493bffd147ca088e6934d238c6675b76b5ea",
+  "clock": 1000,
+  "binding": {
+    "task_id": "task-schema-fixture",
+    "revision": 1,
+    "context_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "owner_ref": "owner",
+    "active_home": "local",
+    "authority_ref": "authority",
+    "capability_ref": "capability",
+    "expires_at": 2000.0,
+    "status": "active"
+  },
+  "plan": {
+    "run_id": "legacy-plan",
+    "task_id": "task-schema-fixture",
+    "binding_digest": "d6e20dd0bb9e83b478c49f149737443b780dd84cd2d2b776fa55013f6edf107d",
+    "budget": {
+      "attempt_budget": 4,
+      "concurrency": 1,
+      "deadline": 1100.0,
+      "verifier_reserve": 1
+    },
+    "jobs": [
+      {
+        "job_id": "r0-original",
+        "kind": "work",
+        "dependencies": [],
+        "exclusive_keys": [],
+        "payload_ref": "ref/r0-original",
+        "payload_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      {
+        "job_id": "r0-critic",
+        "kind": "review",
+        "dependencies": [
+          "r0-original"
+        ],
+        "exclusive_keys": [],
+        "payload_ref": "ref/r0-critic",
+        "payload_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ]
+  }
+}
