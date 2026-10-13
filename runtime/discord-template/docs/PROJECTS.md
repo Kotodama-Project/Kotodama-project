@@ -95,6 +95,10 @@ receiptを消さず、許可・相談が有効な間は同じID・同じ内容�
 ## 既存Taskとの関連付け
 
 利用する場合だけ`projects.operations`へ`link_task`、`unlink_task`、`read_task`を加えます。
+Dotsから扱う場合は同じ操作を`dots.projectOperations`にも加えます。
+関連付け・解除は[Project候補の本人確認](../dots-plugin/README.md#projectの目的と条件を扱う)を通し、
+正確なProject版・Task ID・理由・Sourceと`request_id`へ束縛した`approval_id`で保存します。
+link_taskではTask版も固定し、unlink_taskでは保存済みProject参照を対象とします。
 新規Projectはv1・空の参照で作成し、最初の関連付け時に新revisionをv2へ進めます。
 v2のlocal参照は`{adapter: "discord_local_task_v1", task_id, revision}`です。
 swarm入力の`context_digest`とは区別し、TaskのSQLite本文digestを代用しません。
