@@ -9,12 +9,29 @@ const sourceRevision = v => Number.isSafeInteger(v) && v >= 0;
 const hex = v => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
 const whitespace = /^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$/u;
 const text = (v, max) => typeof v === "string" && v.isWellFormed() && !v.includes("\0") && !whitespace.test(v) && [...v].length <= max;
-const ref = v => typeof v === "string" && /^ref\/[A-Za-z0-9][A-Za-z0-9._/@-]{1,180}$/.test(v);
+const ref = v => typeof v === "string" && v.isWellFormed() && [...v].length > 0 && [...v].length <= 256 && !/[\x00-\x1f]/.test(v);
 const fields = ["outcome", "in_scope", "out_of_scope", "constraints", "acceptance", "unknowns"];
 const bounded = (v, limit = PROJECT_WIRE_BYTES) => check(new TextEncoder().encode(JSON.stringify(v)).length <= limit);
 const sources = v => check(Array.isArray(v) && v.length <= 256 && v.every(s => closed(s, ["key", "revision", "current_revision", "freshness"])
   && hex(s.key) && sourceRevision(s.revision) && sourceRevision(s.current_revision) && s.current_revision >= s.revision
   && s.freshness === (s.revision === s.current_revision ? "current" : "superseded")));
+export function validateProjectTaskRefs(values, version) {
+  check(Array.isArray(values) && values.length <= 50);
+  // Inspection envelopes remain v1 and do not carry the nested Project version.
+  const selected = version ?? (values.length && Object.hasOwn(values[0] ?? {}, "adapter") ? 2 : 1);
+  check([1, 2].includes(selected)); const ids = new Set();
+  for (const value of values) {
+    const local = selected === 2 && value?.adapter === "discord_local_task_v1";
+    if (selected === 2) check(["discord_local_task_v1", "swarm_execution_v1"].includes(value?.adapter));
+    check(closed(value, local ? ["adapter", "task_id", "revision"]
+      : [...(selected === 2 ? ["adapter"] : []), "task_id", "owner_ref", "revision", "context_digest"])
+      && typeof value.task_id === "string" && /^task-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value.task_id)
+      && positive(value.revision) && !ids.has(value.task_id));
+    if (!local) check(ref(value.owner_ref) && hex(value.context_digest));
+    ids.add(value.task_id);
+  }
+  return values;
+}
 export function validateProjectBrief(v) {
   check(closed(v, fields) && text(v.outcome, 4000));
   for (const key of fields.slice(1)) check(Array.isArray(v[key]) && v[key].length <= 20 && new Set(v[key]).size === v[key].length && v[key].every(s => text(s, 1000)));
@@ -27,10 +44,9 @@ export function validateProjectView(v, projectId) {
     && hex(v.project_digest) && v.task_state_changed === false && v.execution_authorized === false);
   const p = v.project;
   check(closed(p, ["version", "project_id", "revision", "owner_ref", "name", "original_ref", "brief", "task_refs"])
-    && p.version === 1 && ref(p.project_id) && (projectId === undefined || p.project_id === projectId) && positive(p.revision)
-    && p.revision === v.current_revision && ref(p.owner_ref) && ref(p.original_ref) && text(p.name, 200)
-    && Array.isArray(p.task_refs) && p.task_refs.length === 0);
-  validateProjectBrief(p.brief); sources(v.source_refs); return v;
+    && [1, 2].includes(p.version) && ref(p.project_id) && (projectId === undefined || p.project_id === projectId) && positive(p.revision)
+    && p.revision === v.current_revision && ref(p.owner_ref) && ref(p.original_ref) && text(p.name, 200));
+  validateProjectTaskRefs(p.task_refs, p.version); validateProjectBrief(p.brief); sources(v.source_refs); return v;
 }
 export function validateProjectInput(v) {
   bounded(v, PROJECT_INSPECTION_BYTES);
@@ -44,8 +60,8 @@ export function validateProjectInspection(v, projectId, input) {
     && v.kind === "kotodama.project-change-candidate" && v.version === 1 && v.authority === "candidate_only" && ref(v.project_id)
     && (projectId === undefined || projectId === v.project_id) && positive(v.expected_revision) && hex(v.base_digest) && hex(v.proposal_digest)
     && v.applied === false && v.task_state_changed === false && v.execution_authorized === false && v.next_action === "owner_revalidate_authorize_and_record_correction"
-    && Array.isArray(v.impact_task_refs) && v.impact_task_refs.length === 0
     && Array.isArray(v.changed_fields) && v.changed_fields.length > 0 && v.changed_fields.length <= 6 && new Set(v.changed_fields).size === v.changed_fields.length && v.changed_fields.every(k => fields.includes(k)));
+  validateProjectTaskRefs(v.impact_task_refs);
   const p = v.proposal;
   check(closed(p, ["version", "project_id", "expected_revision", "base_digest", "reason", "source_ref", "brief"])
     && p.version === 1 && p.project_id === v.project_id && p.expected_revision === v.expected_revision && p.base_digest === v.base_digest && text(p.reason, 1000) && ref(p.source_ref));
@@ -63,7 +79,13 @@ export function validateProjectResponse(v) {
   check(closed(v, ["state", "binding_sha256", "can_inspect", "view"]) && v.state === "connected" && hex(v.binding_sha256) && typeof v.can_inspect === "boolean");
   validateProjectView(v.view); return v;
 }
-export function validateProjectInspectionResponse(v, input) {
+export function validateProjectInspectionResponse(v, input, project) {
   bounded(v); check(closed(v, ["binding_sha256", "inspection"]) && hex(v.binding_sha256) && v.binding_sha256 === input.binding_sha256);
-  validateProjectInspection(v.inspection, undefined, input); return v;
+  validateProjectInspection(v.inspection, project?.project_id, input);
+  if (project) {
+    validateProjectTaskRefs(v.inspection.impact_task_refs, project.version);
+    const canonical = values => JSON.stringify(values.map(value => Object.keys(value).sort().map(key => [key, value[key]])));
+    check(canonical(v.inspection.impact_task_refs) === canonical(project.task_refs));
+  }
+  return v;
 }

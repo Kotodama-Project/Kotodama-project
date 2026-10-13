@@ -19,11 +19,15 @@ interface KotodamaBriefSource { handoff_id: string; revision: number; overview: 
 interface KotodamaBrief { objective: string; deliverable: string; constraints: string[]; acceptance_criteria: string[]; open_questions: string[]; }
 interface KotodamaBriefResult { request_id: string; state: ${SESSION_STATE_TYPE}; brief: KotodamaBrief | null; task_state_changed: false; publication: false; }
 type ProjectBrief = { outcome: string; in_scope: string[]; out_of_scope: string[]; constraints: string[]; acceptance: string[]; unknowns: string[] };
-type Project = { version: 1; project_id: string; revision: number; owner_ref: string; name: string; original_ref: string; brief: ProjectBrief; task_refs: string[] };
+type LegacySwarmTaskRef = { task_id: string; owner_ref: string; revision: number; context_digest: string };
+type LocalTaskRef = { adapter: "discord_local_task_v1"; task_id: string; revision: number };
+type SwarmTaskRef = { adapter: "swarm_execution_v1"; task_id: string; owner_ref: string; revision: number; context_digest: string };
+type ProjectTaskRef = LegacySwarmTaskRef | LocalTaskRef | SwarmTaskRef;
+type Project = { version: 1 | 2; project_id: string; revision: number; owner_ref: string; name: string; original_ref: string; brief: ProjectBrief; task_refs: ProjectTaskRef[] };
 type ProjectInput = { binding_sha256: string; expected_revision: number; base_digest: string; reason: string; brief: ProjectBrief };
 type ProjectView = { kind: "kotodama.project-owner-view"; version: 1; authority: "selected_local_project_owner"; project: Project; project_digest: string; snapshot: "current"; current_revision: number; source_refs: { key: string; revision: number; current_revision: number; freshness: "current" | "superseded" }[]; task_state_changed: false; execution_authorized: false };
 type ProjectResponse = { state: "not_connected" } | { state: "connected"; binding_sha256: string; can_inspect: boolean; view: ProjectView };
-type ProjectInspection = { kind: "kotodama.project-change-candidate"; version: 1; authority: "candidate_only"; project_id: string; expected_revision: number; base_digest: string; proposal_digest: string; proposal: { version: 1; project_id: string; expected_revision: number; base_digest: string; reason: string; source_ref: string; brief: ProjectBrief }; changed_fields: string[]; removed_requirements: { constraints: string[]; acceptance: string[] }; impact_task_refs: string[]; applied: false; next_action: "owner_revalidate_authorize_and_record_correction"; source_refs: { key: string; revision: number }[]; task_state_changed: false; execution_authorized: false };
+type ProjectInspection = { kind: "kotodama.project-change-candidate"; version: 1; authority: "candidate_only"; project_id: string; expected_revision: number; base_digest: string; proposal_digest: string; proposal: { version: 1; project_id: string; expected_revision: number; base_digest: string; reason: string; source_ref: string; brief: ProjectBrief }; changed_fields: string[]; removed_requirements: { constraints: string[]; acceptance: string[] }; impact_task_refs: ProjectTaskRef[]; applied: false; next_action: "owner_revalidate_authorize_and_record_correction"; source_refs: { key: string; revision: number }[]; task_state_changed: false; execution_authorized: false };
 type ProjectInspectionResponse = { binding_sha256: string; inspection: ProjectInspection };
 interface KotodamaTaskBrief {
   getProject(): Promise<ProjectResponse>;
@@ -210,7 +214,7 @@ export class KotodamaGatekeeper extends DurableObject<Cloudflare.Env, Props> imp
     const current = await this.readProject();
     if (current.state !== "connected" || !current.can_inspect || current.binding_sha256 !== input.binding_sha256
       || current.view.project.revision !== input.expected_revision || current.view.project_digest !== input.base_digest) throw new Error("Projectが変更されました。再確認してください。");
-    const result = validateProjectInspectionResponse(await bridge(this.env, this.ctx.props.principalRef, "/v1/project/inspect", input, PROJECT_WIRE_BYTES), input);
+    const result = validateProjectInspectionResponse(await bridge(this.env, this.ctx.props.principalRef, "/v1/project/inspect", input, PROJECT_WIRE_BYTES), input, current.view.project);
     await this.assertConnected();
     if (result.inspection.project_id !== current.view.project.project_id) throw new Error("Projectが一致しません。");
     return result;
