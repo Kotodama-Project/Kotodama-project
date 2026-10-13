@@ -1,20 +1,16 @@
-name: Diagnostic Windows learning cwd fix
+name: Diagnostic Windows learning target profile
 
 # Partial native evidence only; never replaces the full Trusted gate.
 on:
   push:
-    branches: [diagnostic/executor-windows-cwd-fix-20261013]
+    branches: [diagnostic/native-target-profile-20261013]
 
 permissions:
   contents: read
 
 jobs:
   learning-case:
-    name: Diagnostic learning CLI (${{ matrix.case }})
-    strategy:
-      fail-fast: false
-      matrix:
-        case: ['13-False', '23-False', '23-True']
+    name: Diagnostic learning target (13-False)
     runs-on: windows-latest
     timeout-minutes: 20
     env:
@@ -34,19 +30,21 @@ jobs:
         run: python -S -B tools/check_tracked_secret_hygiene.py
       - name: Install the hash-locked task swarm dependency set
         run: python -m pip install --require-hashes -r requirements-task-swarm-ci.txt
-      - name: Run one exact existing learning CLI case
+      - name: Sample only the first admitted target in one existing CLI case
         env:
           PYTEST_PLUGINS: tools.pytest_ci_observer
-          KOTODAMA_CI_OBSERVATION_DIR: ${{ runner.temp }}/learning-cwd-observation-${{ matrix.case }}
+          KOTODAMA_CI_OBSERVATION_DIR: ${{ runner.temp }}/learning-target-observation
           KOTODAMA_CI_HEAD_SHA: ${{ github.sha }}
-        run: python -m pytest -q -p no:cacheprovider -o 'python_files=test_task_swarm_*.py' "tests/test_task_swarm_executor_cli.py::test_learning_cli_uses_current_decision_and_keeps_the_typed_transport[${{ matrix.case }}]"
+        run: python -B tools/diagnostics/windows_target_profile.py "${{ runner.temp }}/learning-target-profile" -- -q -p no:cacheprovider -o 'python_files=test_task_swarm_*.py' "tests/test_task_swarm_executor_cli.py::test_learning_cli_uses_current_decision_and_keeps_the_typed_transport[13-False]"
       - name: Require complete observation after success
-        run: python -B tools/pytest_ci_observer.py "${{ runner.temp }}/learning-cwd-observation-${{ matrix.case }}"
+        run: python -B tools/pytest_ci_observer.py "${{ runner.temp }}/learning-target-observation"
       - name: Preserve complete or partial diagnostic observations
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: diagnostic-learning-cwd-${{ matrix.case }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/learning-cwd-observation-${{ matrix.case }}
+          name: diagnostic-learning-target-13-False-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/learning-target-observation
+            ${{ runner.temp }}/learning-target-profile
           if-no-files-found: error
           retention-days: 7
