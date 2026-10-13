@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import heapq
+import operator
+
 from .foundation import *  # noqa: F401,F403
 from .reserved import *  # noqa: F401,F403
 from .load import *  # noqa: F401,F403
+
+_SEARCH_FIELD_WEIGHTS = (
+    ("id", 5.0), ("title", 8.0), ("description", 5.0),
+    ("tags", 4.0), ("refs", 5.0), ("body", 1.0),
+)
 
 def _search_haystacks(concept: Concept) -> dict[str, str]:
     metadata = concept.metadata
@@ -42,69 +50,67 @@ def query_bundle(
     if not normalized_query:
         raise KnowledgeBaseError("query must not be empty")
     tokens = [token for token in re.findall(r"[\w-]+", normalized_query) if token]
-    references = {"goal_refs": set(goals), "kgi_refs": set(kgis),
-                  "initiative_refs": set(initiatives)}
+    references = {key: requested for key, values in (
+        ("goal_refs", goals), ("kgi_refs", kgis), ("initiative_refs", initiatives)
+    ) if (requested := set(values))}
     for key, requested in references.items():
-        known = {ref for concept in bundle.concepts for ref in concept.extension.get(key, [])}
-        if requested - known:
+        # Validate against the whole corpus, including non-deliverable concepts.
+        if requested.difference(ref for concept in bundle.concepts for ref in concept.extension.get(key, [])):
             raise KnowledgeBaseError("QUERY_REFERENCE_UNKNOWN")
-    results: list[SearchResult] = []
-    for concept in bundle.concepts:
-        extension = concept.extension
-        if any(requested and not requested.intersection(extension.get(key, []))
-               for key, requested in references.items()):
-            continue
-        agent_use = extension.get("agent_use", {})
-        if not agent_use.get("discoverable", False):
-            continue
-        if concept.metadata.get("status") == "deprecated" or extension.get("knowledge_state") in {"revoked", "deprecated"}:
-            continue
-        if concept.is_stale and not include_stale:
-            continue
-        if type_filter and _normalized_text(str(concept.metadata.get("type", ""))) != _normalized_text(type_filter):
-            continue
-        tags = [str(tag) for tag in concept.metadata.get("tags", [])]
-        if tag_filter and _normalized_text(tag_filter) not in {_normalized_text(tag) for tag in tags}:
-            continue
+    normalized_type = _normalized_text(type_filter) if type_filter else None
+    normalized_tag = _normalized_text(tag_filter) if tag_filter else None
 
-        haystacks = _search_haystacks(concept)
-        score = 0.0
-        reasons: list[str] = []
-        field_weights = {
-            "id": 5.0,
-            "title": 8.0,
-            "description": 5.0,
-            "tags": 4.0,
-            "refs": 5.0,
-            "body": 1.0,
-        }
-        for field, weight in field_weights.items():
-            text = haystacks[field]
-            if normalized_query in text:
-                score += weight * 2
-                reasons.append(f"query-in-{field}")
-            for token in tokens:
-                if token in text:
-                    score += weight
-                    reasons.append(f"token-in-{field}")
-        if score <= 0:
-            continue
-        if concept.trust_tier == "human-reviewed":
-            score += 2.0
-        elif concept.trust_tier == "machine-confirmed":
-            score += 1.0
-        score += max(0, 100 - int(extension.get("context_priority", 100))) / 100.0
-        if score > 0:
-            results.append(SearchResult(concept, score, tuple(sorted(set(reasons)))))
+    def matches():
+        # Metadata remains live query input; do not cache its normalized copy.
+        for concept in bundle.concepts:
+            extension = concept.extension
+            if any(not requested.intersection(extension.get(key, []))
+                   for key, requested in references.items()):
+                continue
+            agent_use = extension.get("agent_use", {})
+            if not agent_use.get("discoverable", False):
+                continue
+            if concept.metadata.get("status") == "deprecated" or extension.get("knowledge_state") in {"revoked", "deprecated"}:
+                continue
+            if concept.is_stale and not include_stale:
+                continue
+            if normalized_type is not None and _normalized_text(str(concept.metadata.get("type", ""))) != normalized_type:
+                continue
+            if normalized_tag is not None and not any(
+                _normalized_text(str(tag)) == normalized_tag for tag in concept.metadata.get("tags", [])
+            ):
+                continue
 
-    results.sort(
+            haystacks = _search_haystacks(concept)
+            score = 0.0
+            reasons: set[str] = set()
+            for field, weight in _SEARCH_FIELD_WEIGHTS:
+                text = haystacks[field]
+                if normalized_query in text:
+                    score += weight * 2
+                    reasons.add(f"query-in-{field}")
+                for token in tokens:
+                    if token in text:
+                        score += weight
+                        reasons.add(f"token-in-{field}")
+            if score <= 0:
+                continue
+            if concept.trust_tier == "human-reviewed":
+                score += 2.0
+            elif concept.trust_tier == "machine-confirmed":
+                score += 1.0
+            score += max(0, 100 - int(extension.get("context_priority", 100))) / 100.0
+            if score > 0:
+                yield SearchResult(concept, score, tuple(sorted(reasons)))
+
+    # A generator keeps selection at O(limit), even for all-matching queries.
+    return tuple(heapq.nsmallest(operator.index(limit), matches(),
         key=lambda result: (
             -result.score,
             int(result.concept.extension.get("context_priority", 1000)),
             result.concept.concept_id,
         )
-    )
-    return tuple(results[:limit])
+    ))
 
 
 def _mandatory_governance_ids(bundle: Bundle) -> set[str]:
