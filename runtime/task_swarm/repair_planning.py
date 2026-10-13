@@ -116,6 +116,28 @@ def make_impact(payload, initial, runtime_plan, prior, work_inputs, snapshot):
         "planned_calls": len(proposal["jobs"]) + 1}
     return proposal, impact
 
+def _stream_identity(stream):
+    """Compare open handles without mixing Windows lstat/fstat identities."""
+    import os
+    if os.name != "nt":
+        metadata = os.fstat(stream.fileno())
+        require(metadata.st_ino != 0, "RUN_ARTIFACT_CHANGED")
+        return metadata.st_dev, metadata.st_ino
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+    # Keep the structure and function prototype local to this call. Mutating a
+    # cached ctypes function's argtypes would race with concurrent inspectors.
+    class FileIdInfo(ctypes.Structure):
+        _fields_ = [("volume", ctypes.c_ulonglong), ("identifier", ctypes.c_ubyte * 16)]
+    query = ctypes.WinDLL("kernel32", use_last_error=True).GetFileInformationByHandleEx
+    query.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    query.restype = wintypes.BOOL
+    information = FileIdInfo()
+    require(query(msvcrt.get_osfhandle(stream.fileno()), 18,
+                  ctypes.byref(information), ctypes.sizeof(information)), "RUN_ARTIFACT_CHANGED")
+    require(information.volume != 0 and any(information.identifier), "RUN_ARTIFACT_CHANGED")
+    return information.volume, bytes(information.identifier)
 
 
 def _inspection_cut(database, destination):
@@ -131,19 +153,26 @@ def _inspection_cut(database, destination):
                 metadata.st_mtime_ns, metadata.st_ctime_ns)
     fingerprint = []
     with ExitStack() as stack:
-        streams, before = [], []
+        streams, before, descriptors, handles = [], [], [], []
         for index, path in enumerate(paths):
             try:
                 metadata = path.lstat()
             except FileNotFoundError:
                 require(index != 0, "LOOP_REPAIR_STATE")
                 before.append(None); streams.append(None)
+                descriptors.append(None); handles.append(None)
                 continue
             require(stat.S_ISREG(metadata.st_mode), "LOOP_REPAIR_STATE")
             stream = stack.enter_context(path.open("rb"))
-            require(identity(os.fstat(stream.fileno())) == identity(metadata), "RUN_ARTIFACT_CHANGED")
+            descriptor = os.fstat(stream.fileno())
+            require(stat.S_ISREG(descriptor.st_mode), "LOOP_REPAIR_STATE")
+            handle = _stream_identity(stream)
+            with path.open("rb") as named:
+                require(_stream_identity(named) == handle, "RUN_ARTIFACT_CHANGED")
+            require(identity(path.lstat()) == identity(metadata), "RUN_ARTIFACT_CHANGED")
             before.append(metadata); streams.append(stream)
-        require(sum(item.st_size for item in before if item is not None) <= limit,
+            descriptors.append(descriptor); handles.append(handle)
+        require(sum(item.st_size for item in descriptors if item is not None) <= limit,
                 "LOOP_REPAIR_STATE")
         consumed = 0
         for index, (path, stream, metadata) in enumerate(zip(paths, streams, before)):
@@ -163,16 +192,23 @@ def _inspection_cut(database, destination):
                 checksum.update(block)
                 if output is not None:
                     output.write(block)
-            require(count == metadata.st_size and identity(os.fstat(stream.fileno())) == identity(metadata),
+            require(count == descriptors[index].st_size
+                    and identity(os.fstat(stream.fileno())) == identity(descriptors[index]),
                     "RUN_ARTIFACT_CHANGED")
-            fingerprint.append((identity(metadata), checksum.hexdigest()))
-        for path, metadata in zip(paths, before):
+            fingerprint.append((identity(metadata), handles[index], checksum.hexdigest()))
+        for path, metadata, stream, descriptor, handle in zip(paths, before, streams, descriptors, handles):
             try:
                 current = path.lstat()
             except FileNotFoundError:
                 current = None
             require((None if current is None else identity(current))
                     == (None if metadata is None else identity(metadata)), "RUN_ARTIFACT_CHANGED")
+            if stream is not None:
+                with path.open("rb") as named:
+                    require(_stream_identity(named) == handle == _stream_identity(stream),
+                            "RUN_ARTIFACT_CHANGED")
+                require(identity(os.fstat(stream.fileno())) == identity(descriptor)
+                        and identity(path.lstat()) == identity(metadata), "RUN_ARTIFACT_CHANGED")
     return fingerprint
 
 

@@ -440,3 +440,88 @@ def test_long_and_short_repair_names_remain_unique_and_keep_both_origins(tmp_pat
     impact = read_json(directory / "repair-impact.json")
     assert {item["origin_job_id"] for item in impact["assignments"]} == {"r0-" + name for name in names}
     assert result["receipt"]["review_passed"]
+
+
+def test_inspector_accepts_stable_but_different_path_and_descriptor_metadata(tmp_path, monkeypatch):
+    import os
+    import task_swarm.repair_planning as planner
+    from types import SimpleNamespace
+    setup = setup_loop(tmp_path)
+    result = execute(setup, MeasuredBackend(setup[3], setup[6]))
+    directory = setup[0].parent / "operations" / result["receipt"]["run_id"]
+    before = inspection_files(directory)
+    original = os.fstat
+    def descriptor_metadata(fd):
+        metadata = original(fd)
+        values = {name: getattr(metadata, name) for name in dir(metadata) if name.startswith("st_")}
+        # Windows path and CRT descriptor APIs need not expose identical file
+        # identifiers, permission bits, or timestamp precision.
+        values.update(st_dev=metadata.st_dev + 1, st_ino=metadata.st_ino + 2,
+                      st_mode=metadata.st_mode ^ 0o111, st_ctime_ns=metadata.st_ctime_ns + 100)
+        return SimpleNamespace(**values)
+    original_cut = planner._inspection_cut
+    def cut(*args):
+        with monkeypatch.context() as patch:
+            patch.setattr(os, "fstat", descriptor_metadata)
+            return original_cut(*args)
+    monkeypatch.setattr(planner, "_inspection_cut", cut)
+    inspected = inspect_repair(setup[0], setup[1], clock=lambda: 1000)
+    assert inspected["admitted"] is False
+    assert inspected["impact"] == read_json(directory / "repair-impact.json")
+    assert inspection_files(directory) == before
+
+
+@pytest.mark.parametrize("redirect_at", [1, 3])
+def test_inspection_refuses_a_different_open_file_at_either_named_handle_check(tmp_path, monkeypatch, redirect_at):
+    from task_swarm.repair_planning import _inspection_cut
+    database, other, destination = tmp_path / "execution.sqlite", tmp_path / "other", tmp_path / "copy"
+    database.write_bytes(b"same bytes")
+    other.write_bytes(database.read_bytes())
+    destination.mkdir()
+    original = Path.open
+    opened = []
+    def redirect(path, *args, **kwargs):
+        if path == database and args == ("rb",):
+            opened.append(path)
+            if len(opened) == redirect_at:
+                return original(other, *args, **kwargs)
+        return original(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "open", redirect)
+    with pytest.raises(SwarmError, match="RUN_ARTIFACT_CHANGED"):
+        _inspection_cut(database, destination)
+    assert len(opened) >= redirect_at
+    assert database.read_bytes() == other.read_bytes() == b"same bytes"
+
+
+@pytest.mark.parametrize("outcome", ["full_identity", "unsupported", "zero_volume", "zero_id"])
+def test_windows_handle_identity_uses_full_file_id_and_refuses_unknown_identity(monkeypatch, outcome):
+    import ctypes
+    import os
+    from types import SimpleNamespace
+    from task_swarm.repair_planning import _stream_identity
+    file_id = b"\x00" * 8 + b"\x12\x34\x56\x78\x9a\xbc\xde\xf0"
+    volume = 2 ** 63 + 17
+    calls = []
+    class Query:
+        def __call__(self, handle, information_class, pointer, size):
+            assert handle == 123 and information_class == 18 and size == 24
+            calls.append(self)
+            info = pointer._obj
+            info.volume = 0 if outcome == "zero_volume" else volume
+            info.identifier[:] = b"\x00" * 16 if outcome == "zero_id" else file_id
+            return outcome != "unsupported"
+    def library(name, *, use_last_error):
+        assert name == "kernel32" and use_last_error is True
+        return SimpleNamespace(GetFileInformationByHandleEx=Query())
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "name", "nt")
+        patch.setattr(ctypes, "WinDLL", library, raising=False)
+        patch.setitem(sys.modules, "msvcrt", SimpleNamespace(get_osfhandle=lambda fd: 123))
+        stream = SimpleNamespace(fileno=lambda: 42)
+        if outcome == "full_identity":
+            assert _stream_identity(stream) == (volume, file_id)
+            assert _stream_identity(stream) == (volume, file_id)
+            assert calls[0] is not calls[1]
+        else:
+            with pytest.raises(SwarmError, match="RUN_ARTIFACT_CHANGED"):
+                _stream_identity(stream)
