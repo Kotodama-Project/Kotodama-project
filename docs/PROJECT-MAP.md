@@ -95,3 +95,5 @@ Task契約を持つcheckoutでは、そのresolver / records / events / restart 
 性能の比較は[固定fixtureの性能計測CLI](PERFORMANCE-BENCHMARK.md)を入口とし、
 `tools/performance_benchmark.py`でwall time・peak RSSと入力/結果の同一性を確認します。
 既存swarm-shortの合成検証であり、knowledge/voice・実モデル品質・本番性能の受入ではありません。
+
+[Task閉ループ](TASK-SWARM-CLOSED-LOOP.md) の A→B 契約は、Source に宣言した二葉だけを扱います。A の独立検証と受理を B の実入力へ束縛し、旧 run の読み戻し、有限の修復・復旧・取消までを同じ台帳で管理します。
