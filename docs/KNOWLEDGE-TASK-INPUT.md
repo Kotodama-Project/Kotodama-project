@@ -98,7 +98,10 @@ frontier:
 ```
 
 `atomic`は空のchildrenを持つ一つの仕事、`all_of`は列挙した子がすべて必要な要件です。
-root/中間/leafのすべてで`kind`・`children`・`requires`を必須とし、`requires`が非空なら拒否します。
+root/中間/leafのすべてで`kind`・`children`・`requires`を必須とします。
+初期の独立仕事は`requires: []`です。[#366](https://github.com/Kotodama-Project/Kotodama-project/issues/366)の経路は、
+ちょうど2つのatomic leaf間の1依存だけを、[前提の独立検証と受理](TASK-SWARM-CLOSED-LOOP.md#受理済み-a-に依存する-b366)へ渡します。
+rootや中間nodeからの依存、自己依存、循環、分岐・合流、別Task、3leaf以上は拒否します。
 独立性を推論したり、依存する仕事を独立として実行したりしません。`children`は要件分解の辺で、
 文書の`parent_ref`や仕事の実行順序とは別です。通常テンプレートや宣言version 1へは適用しません。
 
@@ -118,9 +121,9 @@ leafの仕事へ割り当て、起点が複数なら和集合を使います。`
 起点/担当leaf、元予算と初期必要attempt数を返します。ここで示す初期実行後の余裕は未実行時の計算値で、
 実runの残予算ではありません。実行済みattemptは既存coordinatorが同じrunで管理します。
 
-このsliceが保証するのは、明示分解からの入力配布・計画と全reportの収集です。現行critic validatorは
-個々の`A_i`のpassed evidenceが担当leafを参照することまでは強制しません。担当割当だけで要件の意味的達成を
-保証したとは扱いません。条件ごとの全担当証拠の強制は[#362](https://github.com/Kotodama-Project/Kotodama-project/issues/362)です。
+このsliceが保証するのは、明示分解からの入力配布・計画と全reportの収集です。現行の
+[#362](https://github.com/Kotodama-Project/Kotodama-project/issues/362) validatorは、個々の`A_i`に割り当てた
+全leafのpassed evidenceと実work入力を照合します。担当割当だけで要件の意味的達成を保証したとは扱いません。
 テストの独立criticは与えた数値からp95/RSS欠測を計算し、echoや別leafの値を
 失敗にする限定fixtureです。任意の実モデルの誤判定を検出する証明ではありません。
 

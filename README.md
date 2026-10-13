@@ -39,9 +39,9 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 
 ## 現在地
 
-`main` には、OKF Markdown の知識検索・限定 context、原意と訂正を束縛する Task 入力、独立 critic、永続取消、必要な leaf だけの一回修復、Project の read-only view があります。修復は同じ Task・予算を保ち、終端 checkpoint 後の復旧で仕事を再実行しません。
+この版には、OKF Markdown の知識検索・限定 context、原意と訂正を束縛する Task 入力、独立 critic、永続取消、必要な leaf だけの一回修復、検証済み A から B への二葉の依存実行、Project の read-only view があります。修復は同じ Task・予算を保ち、終端 checkpoint 後の復旧で仕事を再実行しません。
 
-採用済みの版、A→B 依存実行・実行器 CLI・学習・階層 reader の候補、性能測定と優先 Issue は [STATUS の現在地](STATUS.md#current-source-and-open-integration-work) に集約しています。次の担当はそこから各 Issue の最新 head・証拠・残る受入を確認してください。全8階層、実モデル・利用者成果、常駐運用は引き続き受入が必要です。
+採用済みの版、実行器 CLI・学習・階層 reader の候補、性能測定と優先 Issue は [STATUS の現在地](STATUS.md#current-source-and-open-integration-work) に集約しています。次の担当はそこから各 Issue の最新 head・証拠・残る受入を確認してください。全8階層、実モデル・利用者成果、常駐運用は引き続き受入が必要です。
 
 ## 知識・目的・Project を CLI で確認する
 

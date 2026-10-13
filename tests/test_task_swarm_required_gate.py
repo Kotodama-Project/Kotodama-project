@@ -47,6 +47,31 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         self.assertEqual(setup["with"]["python-version"], repository_setup["with"]["python-version"])
         self.assertFalse(setup["with"].get("check-latest", False))
 
+    def test_observation_keeps_execution_and_failure_gates(self):
+        swarm = yaml.safe_load((ROOT / ".github/workflows/task-swarm.yml").read_text(encoding="utf-8"))
+        job = swarm["jobs"]["validate"]
+        self.assertEqual(job["timeout-minutes"], 20)
+        self.assertIs(job["strategy"]["fail-fast"], False)
+        steps = job["steps"]
+        run = next(step for step in steps if step.get("run", "").startswith("python -m pytest "))
+        self.assertEqual(run["env"]["PYTEST_PLUGINS"], "tools.pytest_ci_observer")
+        self.assertEqual(run["env"]["KOTODAMA_CI_OBSERVATION_DIR"], "${{ runner.temp }}/task-swarm-observation")
+        self.assertEqual(run["env"]["KOTODAMA_CI_HEAD_SHA"], "${{ github.event.pull_request.head.sha || github.sha }}")
+        check = next(step for step in steps if "tools/pytest_ci_observer.py" in step.get("run", ""))
+        demo = next(step for step in steps if "tools/task_swarm.py demo" in step.get("run", ""))
+        benchmark = next(step for step in steps if "tools/task_swarm_benchmark.py" in step.get("run", ""))
+        self.assertLess(steps.index(run), steps.index(check))
+        self.assertLess(steps.index(check), steps.index(demo))
+        self.assertLess(steps.index(demo), steps.index(benchmark))
+        for step in (run, check, demo, benchmark):
+            self.assertNotIn("if", step)
+            self.assertNotIn("continue-on-error", step)
+        upload = next(step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@"))
+        self.assertEqual(upload["if"], "${{ always() }}")
+        self.assertEqual(upload["with"]["path"], run["env"]["KOTODAMA_CI_OBSERVATION_DIR"])
+        self.assertEqual(upload["with"]["if-no-files-found"], "error")
+        self.assertEqual(upload["with"]["retention-days"], 7)
+
     def test_swarm_lock_is_universal_pinned_and_hashed(self):
         lock = LOCK.read_text(encoding="utf-8")
         self.assertIn("uv pip compile --universal --generate-hashes", lock)

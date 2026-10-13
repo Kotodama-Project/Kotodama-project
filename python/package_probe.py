@@ -1,5 +1,6 @@
 """Execute with an artifact installed in a new venv, outside the source checkout."""
 import hashlib
+import copy
 import importlib
 import importlib.abc
 import importlib.metadata
@@ -8,6 +9,7 @@ import pkgutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 import os
 import venv
@@ -45,7 +47,7 @@ for invalid in ({1: "value"}, {"nested": {None: "value"}}, (1, 2), "\ud800", cyc
         else:
             raise AssertionError("non-JSON input was silently coerced")
 modules = list(pkgutil.iter_modules(swarm.__path__, swarm.__name__ + "."))
-assert len(modules) == 24
+assert len(modules) == 27
 for module in modules:
     importlib.import_module(module.name)
 # Exercise both input versions from the installed namespace. Import enumeration
@@ -151,6 +153,109 @@ except core.SwarmError as error:
 else:
     raise AssertionError("expired objective accepted for new work")
 assert validate_input(request, binding, now=1150, allow_expired_objective=True) == request
+
+
+def check_dependency_execution():
+    """Exercise installed release, long-ID repair, receipt and CLI readback."""
+    from kotodama_core.task_swarm.closed_loop import execute_closed_loop
+    payload = copy.deepcopy(request)
+    measured = {**source(1, "value=17\nIncrement the accepted value"), "key": "c" * 64}
+    payload["sources"].append(measured)
+    payload["acceptance"].append("Increment the accepted value")
+    payload["objective"]["acceptance"].append(span(measured, "Increment the accepted value"))
+    payload["objective"]["budget"] = {"attempt_budget": 6, "deadline": time.time() + 600}
+    shared = [key for key in loop_criteria(payload) if not key.startswith("A")]
+    selected = [span(measured, "value=17")]
+    plan = {"version": 2, "parent_input_digest": core.digest(payload), "jobs": [
+        {"job_id": "a", "purpose": "Read the supplied value.", "requires": [],
+         "criterion_ids": [*shared, "A1"], "selected_spans": selected},
+        {"job_id": "z" * 56, "purpose": "Increment the accepted value.", "requires": ["a"],
+         "criterion_ids": [*shared, "A2"], "selected_spans": selected}]}
+
+    class Calculation:
+        synthetic = True
+
+        def __init__(self):
+            self.inputs = []
+
+        def response(self, delivered, result, actor):
+            self.inputs.append(copy.deepcopy(delivered))
+            name = delivered.get("job_id", delivered.get("core", {}).get("job_id"))
+            return {"result": result, "receipt": {"actor_ref": actor,
+                "invocation_ref": "installed-" + name, "input_digest": core.digest(delivered), "synthetic": True}}
+
+        def produce(self, delivered, directory, *, actor_ref, **_kwargs):
+            record = next(s for s in delivered["view"]["spans"] if s["text"].startswith("value="))
+            text, status = record["text"], "supported"
+            if "prerequisite" in delivered:
+                accepted = int(delivered["prerequisite"]["report"]["claims"][0]["text"].split("=")[1])
+                text, status = "derived=" + str(accepted + (2 if delivered["round"] == 0 else 1)), "inference"
+            evidence = {key: record[key] for key in ("source_key", "source_revision", "start", "end")}
+            return self.response(delivered, {"job_id": delivered["job_id"], "summary": text, "conflicts": [],
+                "claims": [{"text": text, "status": status, "evidence": [{**evidence, "quote": record["text"]}]}]}, actor_ref)
+
+        def review(self, delivered, directory, *, actor_ref, **_kwargs):
+            view = delivered.get("view", delivered.get("core", {}).get("view"))
+            record = next(s for s in view["spans"] if s["text"].startswith("value="))
+            if "core" in delivered:
+                assert delivered["report"]["claims"][0]["text"] == record["text"]
+                result = {"kind": "prerequisite_review", "version": 1,
+                    "descriptor_sha256": delivered["descriptor_sha256"], "report_sha256": delivered["report_sha256"],
+                    "validations": [{"criterion_id": key, "status": "passed",
+                        "evidence": [{"job_id": "r0-a", "claim_index": 0}]} for key in delivered["core"]["gate"]]}
+            else:
+                expected = int(record["text"].split("=")[1]) + 1
+                reports = delivered["reports"]
+                gap = {key: record[key] for key in ("source_key", "source_revision", "start", "end")}
+                validations = []
+                for key, assigned in delivered["required_evidence_jobs"].items():
+                    current = [job for job in assigned if job.startswith("r1-")] or assigned
+                    failed = key == "A2" and any(reports[job]["claims"][0]["text"] != f"derived={expected}" for job in current)
+                    validations.append({"criterion_id": key, "status": "failed" if failed else "passed",
+                        "evidence": [] if failed else [{"job_id": job, "claim_index": 0} for job in assigned],
+                        "gap_reason": "Independent arithmetic mismatch" if failed else None,
+                        "source_spans": [gap] if failed else []})
+                result = {"parent_input_digest": core.digest(payload), "plan_digest": view["plan_digest"],
+                    "round": delivered["round"], "report_digests": {job: core.digest(report) for job, report in reports.items()},
+                    "validations": validations}
+            return self.response(delivered, result, actor_ref)
+
+    with tempfile.TemporaryDirectory() as temporary:
+        folder = Path(temporary)
+        root = folder / "operations"
+        root.mkdir()
+        payload_path, owner_path = folder / "input.json", folder / "owner.json"
+        def write(path, value):
+            path.write_bytes((core.canonical(value) + "\n").encode("utf-8"))
+        write(payload_path, payload)
+        actors = ["worker-a", "worker-b", "verifier"]
+        write(owner_path, {"binding": {**binding, "context_digest": core.digest(payload),
+                "active_home": str(root), "expires_at": time.time() + 1200},
+            "actors": {actor: {"epoch": 1, "invocation_ref": "installed-" + actor,
+                "actor_status": "active", "capability_ref": binding["capability_ref"], "peers": []} for actor in actors},
+            "allowed_actions": [], "source_checks": [{"path": str(payload_path),
+                "sha256": hashlib.sha256(payload_path.read_bytes()).hexdigest()}],
+            "storage": {"root": str(root), "mailbox": str(root / "mailbox"), "payloads": str(root / "payloads")}})
+        backend = Calculation()
+        result = execute_closed_loop(owner_path, payload_path, plan, backend, worker_actors=actors[:2])
+        assert result["receipt"]["version"] == 3 and result["receipt"]["review_passed"]
+        assert result["receipt"]["budget"]["attempts_used"] == len(backend.inputs) == 6
+        directory = root / result["receipt"]["run_id"]
+        execution = json.loads((directory / "execution.json").read_text(encoding="utf-8"))
+        repaired = next(value for value in backend.inputs if value.get("job_id") == "r1-repair-1")
+        assert repaired["prerequisite"]["certificate"] == execution["dependency_stage"]["certificate"]
+        assert result["receipt"]["preaccepted"]["r0-a"]["accepted_at"] == execution["jobs"]["r0-a"]["accepted_at"]
+        plan_path, scenario_path = folder / "plan.json", folder / "scenario.json"
+        write(plan_path, plan)
+        write(scenario_path, {"work": {}, "critics": {}, "repair_plan": None})
+        replay = subprocess.run([sys.executable, "-I", "-m", "kotodama_core.task_swarm.closed_loop",
+            "--owner", str(owner_path), "--input", str(payload_path), "--plan", str(plan_path),
+            "--worker", "worker-a", "--worker", "worker-b", "--simulation", str(scenario_path),
+            "--receipt-sha256", result["receipt_sha256"]], check=True, capture_output=True, text=True, timeout=30)
+        assert json.loads(replay.stdout)["receipt_sha256"] == result["receipt_sha256"]
+
+
+check_dependency_execution()
 
 distribution = importlib.metadata.distribution("kotodama-core")
 assert distribution.version == core.__version__
