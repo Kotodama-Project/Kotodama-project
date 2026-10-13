@@ -111,7 +111,9 @@ Projectの通常readは記録済み参照だけを返し、Task本文・現在�
 
 既存Requirements Gadgetの`objective`と`deliverable`は別の情報です。
 Projectの`outcome`へ自動要約したり、件数・文字数を切り捨てて移したりしません。
-GUIとagentのadapterはこの共通操作を呼び、別の保存先やTask ownerを作らない方針です。
+[既存GUIのbridge](../../codex-task-bridge/README.md)は、明示されたprincipal・Source・
+稼働source版に束縛して、この共通操作のread/inspectを呼びます。目的・条件を編集して
+変更候補を検査できますが、保存やTask実行は行いません。別の保存先やTask ownerは作りません。
 
 検証は`tests/project-owner.test.mjs`、`tests/project-control.test.mjs`、`tests/project-task.test.mjs`で、
 合成Source、実SQLite、実loopback HTTP、再起動、再送、旧版、取消された権限を扱います。
