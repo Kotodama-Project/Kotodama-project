@@ -11,6 +11,7 @@ import threading
 
 from .loop_executor import (check_current_executor_policy, derive_executor_policy,
                             executor_version, loop_schema, verify_loop_response, MAX_PROOF_BYTES)
+from .owner_file import _current_read
 from .protocol import SwarmError, canonical, digest, digest_ref, ref
 from .task_contract import require, shape
 from .task_runner import read_bytes, read_json, safe_directory
@@ -195,10 +196,11 @@ class SavedExecutor:
         root = self.owner.storage()["root"]
         require(safe_directory(self.directory).parent == root, "RUN_STORAGE_CHANGED")
         self.evidence.check()
-        task = self.owner.read_task(self.payload["task_id"])
+        current_owner = _current_read(self.owner)
+        task = current_owner.read_task(self.payload["task_id"])
         require(digest(task) == self.plan["binding_digest"], "STALE_BINDING")
         for actor, expected in self.binding["actor_binding_digests"].items():
-            current = self.owner.read_binding(self.payload["task_id"], actor)
+            current = current_owner.read_binding(self.payload["task_id"], actor)
             require(current["actor_status"] == "active" and digest(current) == expected, "STALE_ACTOR")
         require(read_json(self.owner.path, 1024 * 1024, with_digest=True)[1]
                 == self.binding["owner_input_sha256"], "OWNER_INPUT_CHANGED")

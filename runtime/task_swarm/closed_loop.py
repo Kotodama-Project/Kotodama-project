@@ -19,7 +19,7 @@ from .closed_loop_context import derive_child_view, validate_report_in_view
 from .repair_planning import make_impact, derive_repair
 from .closed_loop_cancellation import cancel_closed_loop
 from .closed_loop_recovery import finalize, make_checkpoint, operation_lock, terminal_evidence, read_artifact
-from .owner_file import OwnerFile
+from .owner_file import OwnerFile, _current_read
 from .state import SwarmState
 from .task_contract import require, shape, validate_input
 from .task_runner import read_json, safe_directory, write_json
@@ -152,11 +152,12 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
 
     def guard():
         check_cancellation()
-        require(protocol.digest(owner.read_task(binding["task_id"])) == binding_digest, "STALE_BINDING")
-        require(all(owner.read_binding(binding["task_id"], actor) == original
+        current = _current_read(owner)
+        require(protocol.digest(current.read_task(binding["task_id"])) == binding_digest, "STALE_BINDING")
+        require(all(current.read_binding(binding["task_id"], actor) == original
                     for actor, original in actor_bindings.items()), "STALE_ACTOR")
         require(replay_only or clock() < deadline, "DEADLINE_EXPIRED")
-        require(owner.storage()["root"] == root and safe_directory(root) == root, "RUN_STORAGE_CHANGED")
+        require(current.storage()["root"] == root and safe_directory(root) == root, "RUN_STORAGE_CHANGED")
         require(read_json(owner_path, 1024 * 1024, with_digest=True)[1] == owner_sha, "OWNER_INPUT_CHANGED")
         if executor_policy is not None:
             check_current_executor_policy(executor_policy, payload, initial_specification,
@@ -168,8 +169,9 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
             executor_evidence.check()
             # Re-read authority after the final policy callback and source I/O.
             require(replay_only or clock() < deadline, "DEADLINE_EXPIRED")
-            require(protocol.digest(owner.read_task(binding["task_id"])) == binding_digest, "STALE_BINDING")
-            require(all(owner.read_binding(binding["task_id"], actor) == original
+            current = _current_read(owner)
+            require(protocol.digest(current.read_task(binding["task_id"])) == binding_digest, "STALE_BINDING")
+            require(all(current.read_binding(binding["task_id"], actor) == original
                         for actor, original in actor_bindings.items()), "STALE_ACTOR")
             require(read_json(owner_path, 1024 * 1024, with_digest=True)[1] == owner_sha, "OWNER_INPUT_CHANGED")
 
