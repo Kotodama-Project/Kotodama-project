@@ -136,7 +136,7 @@ def case(root, second=13):
     return payload, spec, policy, delivered, identity, owner_path, owner_document
 
 
-def response(root, *, second=13, use_b=False):
+def response(root, *, second=13, use_b=False, snapshot=True):
     payload, spec, policy, delivered, dispatch, owner_path, owner_doc = case(root, second=second)
     if use_b:
         source = payload["sources"][-1]
@@ -152,6 +152,7 @@ def response(root, *, second=13, use_b=False):
     observed = []
     runtime = CodexBackend(root / "worker.py", session_root=directory / "sessions").invoke(
         request.decode(), schema, directory, timeout=8, record_input=True,
+        executable_bytes=(root / "worker.py").read_bytes() if snapshot else None,
         on_process=lambda pid, created: observed.append({"kind": "process", "pid": pid, "created_at": created}))
     attempt = {**dispatch, "worker_ref": dispatch["actor_ref"], "identity": observed[0]}
     value = {"result": copy.deepcopy(runtime["result"]), "receipt": {
@@ -298,7 +299,9 @@ def test_real_child_input_acquisition_and_freeze_replay_are_distinct_from_native
     assert value == before and set(runtime) == {"result", "receipt", "paths", "runtime_receipt_sha256", "runtime_rollout_sha256"}
     with pytest.raises(SwarmError) as caught:
         verify_runtime(runtime, options["attempt_directory"], freeze=True, expected_input=raw)
-    assert caught.value.code == "RUN_RUNTIME_POLICY_MISSING"
+    # The native reader's unchanged artifact set rejects the fixture snapshot
+    # before its separate permission-profile check.
+    assert caught.value.code == "RUN_RUNTIME_PATH_CHANGED"
 
 
 @pytest.mark.parametrize("number", [13, 23])

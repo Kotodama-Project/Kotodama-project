@@ -229,8 +229,8 @@ class ReuseOwner:
 
     def __init__(self, origin_owner, origin_input, anchor, target_owner, target_input,
                  proposal, *, clock=time.time, allow_expired_objective=False):
-        self.origin_owner, self.origin_input = Path(origin_owner), Path(origin_input)
-        self.anchor, self.target_owner, self.target_input = anchor, Path(target_owner), Path(target_input)
+        self.origin_owner, self.origin_input = OwnerFile(origin_owner).path, Path(origin_input)
+        self.anchor, self.target_owner, self.target_input = anchor, OwnerFile(target_owner).path, Path(target_input)
         self.proposal, self.clock = copy.deepcopy(proposal), clock
         require(type(allow_expired_objective) is bool, "REUSE_READBACK_INVALID")
         self._allow_expired_objective = allow_expired_objective

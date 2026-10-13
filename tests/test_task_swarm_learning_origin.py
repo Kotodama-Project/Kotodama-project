@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 import hashlib
 import json
 from pathlib import Path
@@ -96,19 +97,19 @@ def test_last_policy_cannot_change_any_pinned_proof_or_receipt(origin, monkeypat
 def test_last_policy_cannot_change_live_db(origin, monkeypatch, table, column, value):
     reuse, decision, _ = origin
     actual = loop_executor_runtime.check_current_executor_policy
-    with sqlite3.connect(reuse.state.db_path) as db:
+    with closing(sqlite3.connect(reuse.state.db_path)) as db, db:
         old = db.execute(f"SELECT rowid,{column} FROM {table}").fetchall()
     assert old
     def policy(*args, **kwargs):
         actual(*args, **kwargs)
-        with sqlite3.connect(reuse.state.db_path) as db:
+        with closing(sqlite3.connect(reuse.state.db_path)) as db, db:
             db.execute(f"UPDATE {table} SET {column}={value}")
     monkeypatch.setattr(loop_executor_runtime, "check_current_executor_policy", policy)
     try:
         with pytest.raises(SwarmError):
             reuse.current(decision)
     finally:
-        with sqlite3.connect(reuse.state.db_path) as db:
+        with closing(sqlite3.connect(reuse.state.db_path)) as db, db:
             db.executemany(f"UPDATE {table} SET {column}=? WHERE rowid=?", [(value, row) for row, value in old])
 
 
@@ -124,7 +125,7 @@ def test_legal_decisions_do_not_change_execution_cut_and_latest_head_wins(origin
             reuse.current(decision)
     finally:
         # Fixture restoration only. The production API never deletes history.
-        with sqlite3.connect(reuse.state.db_path) as db:
+        with closing(sqlite3.connect(reuse.state.db_path)) as db, db:
             db.execute("DELETE FROM learning_reuse_decisions WHERE generation=2")
 
 
@@ -211,7 +212,7 @@ def test_last_policy_rechecks_authority_and_cancel(origin, monkeypatch, mutation
             record = {"version": 1, "run_id": plan["run_id"], "binding_digest": plan["binding_digest"],
                 "initial_execution_plan_digest": digest(plan), "owner_ref": executor.owner.read_task()["owner_ref"],
                 "requested_at": 1000}
-            with sqlite3.connect(reuse.state.db_path) as db:
+            with closing(sqlite3.connect(reuse.state.db_path)) as db, db:
                 db.execute("INSERT INTO run_cancellations VALUES (?,?)", (plan["run_id"], canonical(record)))
     monkeypatch.setattr(loop_executor_runtime, "check_current_executor_policy", policy)
     try:
@@ -220,22 +221,22 @@ def test_last_policy_rechecks_authority_and_cancel(origin, monkeypatch, mutation
     finally:
         path.write_bytes(raw)
         reuse.clock = lambda: 1000
-        with sqlite3.connect(reuse.state.db_path) as db:
+        with closing(sqlite3.connect(reuse.state.db_path)) as db, db:
             db.execute("DELETE FROM run_cancellations")
 
 
 def test_initial_cut_does_not_repair_missing_schema(origin):
     reuse, _, _ = origin
-    with sqlite3.connect(reuse.state.db_path) as db:
+    with closing(sqlite3.connect(reuse.state.db_path)) as db, db:
         db.execute("ALTER TABLE run_cancellations RENAME TO held_cancellations")
     try:
         with pytest.raises(SwarmError, match="FINALIZATION_STATE_CHANGED"):
             ReuseOwner(reuse.origin_owner, reuse.origin_input, reuse.anchor, reuse.target_owner,
                        reuse.target_input, reuse.proposal, clock=lambda: 1000)
-        with sqlite3.connect(reuse.state.db_path) as db:
+        with closing(sqlite3.connect(reuse.state.db_path)) as db, db:
             assert not db.execute("SELECT name FROM sqlite_master WHERE name='run_cancellations'").fetchall()
     finally:
-        with sqlite3.connect(reuse.state.db_path) as db:
+        with closing(sqlite3.connect(reuse.state.db_path)) as db, db:
             db.execute("ALTER TABLE held_cancellations RENAME TO run_cancellations")
 
 

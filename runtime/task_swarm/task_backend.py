@@ -24,12 +24,17 @@ class TaskBackend:
         from pathlib import Path
         from .loop_executor import MODE, loop_request, loop_schema
         from .task_contract import require
+        from .task_runner import read_bytes
         require(self.loop_mode == MODE and actor_ref == dispatch_identity["actor_ref"], "LOOP_EXECUTOR_MODE_UNSUPPORTED")
         require(Path(self.codex.executable).resolve() == Path(policy["executable"]["path"]), "LOOP_EXECUTOR_POLICY_CHANGED")
         prompt = loop_request(policy, delivered, dispatch_identity)
+        executable = policy["executable"]
+        raw = read_bytes(Path(executable["path"]), executable["bytes"])
+        require(len(raw) == executable["bytes"] and hashlib.sha256(raw).hexdigest() == executable["sha256"],
+                "LOOP_EXECUTOR_FILE_CHANGED")
         runtime = CodexBackend(self.codex.executable, session_root=Path(directory)/"sessions").invoke(
             prompt.decode("utf-8"), loop_schema(delivered), directory, timeout=timeout,
-            cancel_event=cancel_event, on_process=on_process, record_input=True)
+            cancel_event=cancel_event, on_process=on_process, record_input=True, executable_bytes=raw)
         return {"result": runtime["result"], "receipt": {"actor_ref": actor_ref,
             "invocation_ref": runtime["receipt"]["thread_id"], "input_digest": digest(delivered),
             "synthetic": True, "executor_contract_version": 1, "executor_policy_sha256": digest(policy),
@@ -112,7 +117,6 @@ def checked_backend(backend, guard):
 
 def local_loop_backend(owner_path, payload, specification, *, mode, allow_expired=False):
     """Select only the current owner's explicit, byte-bound fixture policy."""
-    from pathlib import Path
     import time
     from .loop_executor import MODE, check_current_executor_policy
     from .loop_executor_runtime import select_executor_policy
@@ -121,9 +125,9 @@ def local_loop_backend(owner_path, payload, specification, *, mode, allow_expire
     from .task_runner import read_json
     require(mode == MODE, "LOOP_EXECUTOR_MODE_UNSUPPORTED")
     require(isinstance(payload, dict), "TASK_INPUT_INVALID")
-    owner_path = Path(owner_path)
-    document, owner_sha = read_json(owner_path, 1024 * 1024, with_digest=True)
     owner = OwnerFile(owner_path)
+    owner_path = owner.path
+    document, owner_sha = read_json(owner_path, 1024 * 1024, with_digest=True)
     binding = owner.read_task(payload.get("task_id"))
     payload = validate_input(payload, binding, now=time.time(), allow_expired_objective=allow_expired)
     policy = select_executor_policy(payload, specification, owner_path)

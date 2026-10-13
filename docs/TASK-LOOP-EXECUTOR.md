@@ -33,7 +33,7 @@ DocAの専用laneからDocBを外してもinput全体からdescriptorが消え�
 writerは既存Codex transportの`on_process`でpid/created_atを既存DBへcommitし、
 ownerを再確認してからstdinを渡します。実processをnative thread identityで上書きしません。
 
-technical verifierはraw input、pipe-write marker、8 artifact digests、schema、command、
+technical verifierはraw input、pipe-write marker、9 artifact digests、schema、command、
 process、thread/turn、job固有sessionsのrollout/resultと最後のcurrent bytesを再読します。
 入力は256KiB、1 invocationの証拠読取は2MiB以下。guardの元例外を維持します。
 native permission/profile証明をtechnical receiptへ付けたものは拒否します。
@@ -44,7 +44,7 @@ fixtureのLuna/max labelは実model/providerの利用・品質を証明しませ
 owner原bytesのSHA-256、選択worker/criticと現在actor bindingのdigestを保持します。
 metadataを持たないrepair inspectionもこの同じbindingを使います。
 `loop_executor_runtime.py`は各保存readerでpolicy・実stdin・process・rolloutを再読し、
-検証済みの保存文書と8 artifacts・raw receipt・rolloutのSHAを有限集合として保持します。
+検証済みの保存文書と9 artifacts・raw receipt・rolloutのSHAを有限集合として保持します。
 最後のpolicy検査後にそのbytesを再読し、actor epoch/invocationとowner原bytesを再照合します。
 同じ確認をwriterの公開直前と保存readerで使い、policy callback中の証拠・actor変更を
 旧proposalやlearningを返す前に拒否します。再読の中でpolicy検査を再帰実行しません。
@@ -54,6 +54,15 @@ active inspectionはafter-policyのcurrent guardで現在deadlineも検査しま
 read-only DB copyのlive cancellation/cut確認も、このguardから最終bytes確認の前に行えます。
 historical replayのobjective期限許容は維持し、owner/actorの有効期限は引き続き検査します。
 Source検査とguardは観測境界であり、外部writerの将来の変更を禁止するlockではありません。
+
+実行時は宣言exeを既存のdescriptor readerで読み、長さ・SHAをpolicyと照合したbytesから
+attempt専有の`executable.py`を作ります。子の固定loaderはそのコピーを上限付きで読み、
+policyの長さ・SHAを確認して同じbytesをcompile/execします。元pathの一時的な差替えや、
+子が開く前のコピーの差替えを元pathの事後検査だけで受け入れません。
+コピーもreceiptのartifactで、command・policyとの結び付けと保存後の変更を共通readerが検査します。
+従来の8 artifactsだけのlocal fixture証拠はこの条件を満たさず拒否します。
+ownerの相対exe・素材・Sourceの基準は、`OwnerFile`が解決したowner実体のディレクトリです。
+別ディレクトリのowner linkから選んだ場合も、source/installed CLIで同じ基準を使います。
 
 既存native `verify_runtime` のdefault7/strict8とTaskBackend.synthetic=Falseは維持します。
 明示local mode以外のnative backendをこのloopへ入れません。fixture receiptのsyntheticは
