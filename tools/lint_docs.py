@@ -192,7 +192,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     root = Path(args[0]).resolve() if args else ROOT
     report = lint(root)
-    sys.stdout.write(json.dumps(report, ensure_ascii=False, sort_keys=True) + "\n")
+    # Keep output machine-readable on Windows legacy code pages and preserve
+    # POSIX surrogateescaped filename bytes as JSON escapes, not raw bytes.
+    sys.stdout.write(json.dumps(report, ensure_ascii=True, sort_keys=True) + "\n")
     return 0 if report["status"] == "PASS" else 1
 
 
