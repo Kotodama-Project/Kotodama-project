@@ -23,6 +23,7 @@ import {startBridge} from './bridge.mjs';
 import {awaitWithSignal,deadlineScope,readHttpBody,sendHttpJson} from './http-limits.mjs';
 import {DotsBridge} from './dots.mjs';
 import {JudgmentStatusReader} from './judgment-status.mjs';
+import {ProjectHub} from './project-hub.mjs';
 import {projectSkillsDigest} from './project-skill-input.mjs';
 import {atomicJson,atomicText,check,uid,errorCode,redact,Refused,digest} from './common.mjs';
 import {consumeBootstrapBinding,registerRuntimeModule} from './source-bootstrap.mjs';
@@ -66,7 +67,18 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     readPolicy:async()=>{current=await loadConfig(filename);return current;},assertActive:()=>check(!closing&&store.lock()?.owner===ownerId,'RUNTIME_STOPPING'),
     accessEpoch:()=>discord?.accessGeneration??null,
     track:work=>{controlOperations.add(work);const settled=()=>controlOperations.delete(work);work.then(settled,settled);}});
+  let projects;
   try{
+    projects=new ProjectHub({config,store,policy:()=>current,
+    readConfig:async()=>{current=await loadConfig(filename);return current;},
+    accessEpoch:()=>discord?.accessGeneration??null,
+    assertActive:()=>check(!closing&&store.lock()?.owner===ownerId,'RUNTIME_STOPPING'),
+    authorizeSource:async(source,actor)=>{
+      if(!offline&&source.provider==='discord'){
+        const access=await discord.actorAccess(actor,[source.channelId]);
+        check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');
+      }
+    }});
     if(config.dots.enabled){
       const refreshDotsPolicy=async source=>{
         current=await loadConfig(filename);
@@ -116,6 +128,15 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         let result;
         if(input.action==='tasks')result=await pipeline.tasks(input.actor);
         else if(input.action==='judgment')result=await judgment.read({actor:input.actor,taskId:input.taskId});
+        else if(input.action==='project'){
+          const {action,...operation}=input;
+          scope=deadlineScope(8000,'PROJECT_OPERATION_TIMEOUT');controlReads.add(scope);
+          const work=projects.handle(operation,{signal:scope.signal});
+          // Keep SQLite/host ownership until the real authorization work settles,
+          // even if its response timed out. The hub rechecks abort before commit.
+          controlOperations.add(work);const settled=()=>controlOperations.delete(work);work.then(settled,settled);
+          result=await awaitWithSignal(work,scope.signal);
+        }
         else if(input.action==='result')result=await pipeline.result(input.taskId,input.actor);
         else if(input.action==='stop'){await pipeline.stop(input.taskId,input.actor);result={state:'stop_requested'};}
         else if(input.action==='resume')result=await pipeline.resume(input.taskId,input.actor);
@@ -192,7 +213,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     })().catch(error=>{closePromise=null;if(errorCode(error).endsWith('_DRAIN_UNCERTAIN'))shutdownKeepAlive??=setInterval(()=>{},1000);throw error;});
     return closePromise;
   }
-  return {config,store,owner,pipeline,discord,voice,dots,close};
+  return {config,store,owner,pipeline,discord,voice,dots,projects,close};
 }
 async function localControlRequest(port,route,token,payload){
   return new Promise((resolve,reject)=>{
