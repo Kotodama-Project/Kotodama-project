@@ -211,6 +211,12 @@ receiptは未公開の同一directory内ファイルへ書込み・fsync・再�
 未完workの自動復旧はこの境界の保証に含めません。上記の明示再開は、保存済みterminal
 checkpointと有効な現在資格がある場合に限ります。
 
+Windowsのbounded artifact readerはdelete-sharing付きの読取handleを使い、監視中の
+pending receiptの読取が同じprocessのatomic renameを妨げないようにします。読取の
+前後のfile identity・通常file・link・size・bytes検査は保持し、renameを跨いだpending
+receiptの監視は同じ固定SHAの`receipt.json`だけを再読します。共有違反のretryや
+資格検査の省略は行わず、他processが保持する共有不可handleの解放は保証しません。
+
 workerの完了順によらず、criticへ渡す報告、後続context、統合conflictはjob ID順に組み立てます。
 各report内のclaim/conflict順は保持します。同じ検証済み報告とcritic結果からは統合・学習候補の
 bytesが一致します。経過時間などを含む実行receipt全体の一致は要求しません。
