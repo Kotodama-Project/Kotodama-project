@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Dots pluginに設定済みProjectの読取・作成・訂正候補検査・訂正を追加。認可されたSource参照を返し、MCPから同じlocal ownerへ接続する。処理中のDots無効化も保存前に検査する（#385）。
+
 - local installationでProject briefを保存・訂正する共通操作を追加。原依頼・旧版・訂正event、再送照合とrevision/digest検査を保持し、既存Taskの作成・実行とは分離する（#385）。
 
 - Project briefと既存Task ownerを照合するread-only CLI、旧版・取消・未解決の表示、条件訂正候補のrevision/digest検査を追加。永続化・実行・採用は行わない（#385）。

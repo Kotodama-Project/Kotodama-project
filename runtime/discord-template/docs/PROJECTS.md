@@ -60,11 +60,23 @@ Project ID、owner参照、原依頼参照はownerが発行します。訂正は
 設定・owner・installation・保存場所の変更は再確認します。
 認可待ちが期限を超えた操作は、その後応答が戻っても保存へ進みません。
 
+## Dotsから同じProjectを扱う
+
+[既存Dots plugin](../dots-plugin/README.md)に、設定した操作のProject toolsを追加します。
+認可済みの相談読取からSourceのkey/revisionを得て、同じownerへ作成・訂正を返します。
+Dot用actorは設定から固定し、tool引数でactor・保存先・ownerを変更できません。
+
+`dots.channelIds`は相談一覧の範囲です。Project toolsは明示した`projects.operations`と、
+installationのtext/result channel内でそのactorが所有・閲覧できるSourceを使います。
+相談一覧に含まれないchannelのProjectも、この別の明示設定の対象です。
+Dotsから送った処理は`surface: "dots"`で接続元を固定し、Dotsの無効化・actor変更を
+保存直前にも確認します。このmarkerはoperatorの権限に制約を加え、権限を増やしません。
+
 ## 実装範囲と次の接続
 
 この版はactor所有のProject briefだけを扱い、`task_refs`は空です。
 Task参照の追加、成果・担当・完了の集約、共有参加者、Projectの取消・削除、
-動的役割生成、GUI操作、provider実接続は後続です。
+動的役割生成、GUI操作、実Dotアカウントによる受入、provider実接続は後続です。
 既存TaskのSQLite本文digestを、swarm入力の`context_digest`へ流用しません。
 
 既存Requirements Gadgetの`objective`と`deliverable`は別の情報です。
