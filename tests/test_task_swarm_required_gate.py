@@ -33,7 +33,9 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         self.assertIn("workflow_call", triggers)
         self.assertNotIn("pull_request", triggers, "the required gate already calls this workflow")
         job = swarm["jobs"]["validate"]
-        self.assertEqual(set(job["strategy"]["matrix"]["os"]), {"ubuntu-22.04", "windows-latest"})
+        self.assertEqual(job["strategy"]["matrix"]["include"], [
+            {"os": "ubuntu-22.04", "shard": 0, "shards": 1},
+            *({"os": "windows-latest", "shard": index, "shards": 4} for index in range(4))])
         commands = [step.get("run", "") for step in job["steps"]]
         installs = [command for command in commands if "pip install" in command]
         self.assertEqual(installs, ["python -m pip install --require-hashes -r requirements-task-swarm-ci.txt"])
@@ -54,8 +56,8 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         self.assertIs(job["strategy"]["fail-fast"], False)
         steps = job["steps"]
         run = next(step for step in steps if step.get("run", "").startswith("python -m pytest "))
-        self.assertEqual(run["env"]["PYTEST_PLUGINS"], "tools.pytest_ci_observer")
-        self.assertEqual(run["env"]["KOTODAMA_CI_OBSERVATION_DIR"], "${{ runner.temp }}/task-swarm-observation")
+        self.assertEqual(run["env"]["PYTEST_PLUGINS"], "tools.pytest_ci_observer,tools.pytest_ci_shards")
+        self.assertEqual(run["env"]["KOTODAMA_CI_OBSERVATION_DIR"], "${{ runner.temp }}/task-swarm-shard/observation")
         self.assertEqual(run["env"]["KOTODAMA_CI_HEAD_SHA"], "${{ github.event.pull_request.head.sha || github.sha }}")
         check = next(step for step in steps if "tools/pytest_ci_observer.py" in step.get("run", ""))
         demo = next(step for step in steps if "tools/task_swarm.py demo" in step.get("run", ""))
@@ -63,14 +65,41 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         self.assertLess(steps.index(run), steps.index(check))
         self.assertLess(steps.index(check), steps.index(demo))
         self.assertLess(steps.index(demo), steps.index(benchmark))
-        for step in (run, check, demo, benchmark):
+        for step in (run, check):
             self.assertNotIn("if", step)
+        for step in (demo, benchmark):
+            self.assertEqual(step["if"], "${{ matrix.shard == 0 }}")
+        for step in (run, check, demo, benchmark):
             self.assertNotIn("continue-on-error", step)
         upload = next(step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@"))
         self.assertEqual(upload["if"], "${{ always() }}")
-        self.assertEqual(upload["with"]["path"], run["env"]["KOTODAMA_CI_OBSERVATION_DIR"])
+        self.assertEqual(upload["with"]["path"], "${{ runner.temp }}/task-swarm-shard")
+        self.assertIn("${{ matrix.shard }}", upload["with"]["name"])
         self.assertEqual(upload["with"]["if-no-files-found"], "error")
         self.assertEqual(upload["with"]["retention-days"], 7)
+
+    def test_shard_union_and_post_checks_are_required_by_the_reusable_workflow(self):
+        swarm = yaml.safe_load((ROOT / ".github/workflows/task-swarm.yml").read_text(encoding="utf-8"))
+        aggregate = swarm["jobs"]["complete"]
+        self.assertEqual(aggregate["needs"], ["validate"])
+        self.assertEqual(aggregate["if"], "${{ always() }}")
+        self.assertEqual(aggregate["env"]["MATRIX_RESULT"], "${{ needs.validate.result }}")
+        commands = [step.get("run", "") for step in aggregate["steps"]]
+        self.assertIn('test "$MATRIX_RESULT" = success', commands)
+        self.assertIn('python -B tools/pytest_ci_shards.py verify "${{ runner.temp }}/task-swarm-matrix"', commands)
+        self.assertTrue(all("continue-on-error" not in step and "if" not in step for step in aggregate["steps"]))
+        steps = swarm["jobs"]["validate"]["steps"]
+        reference = next(step for step in steps if "pytest_ci_shards.py reference" in step.get("run", ""))
+        execution = next(step for step in steps if step.get("run", "").startswith("python -m pytest "))
+        seal = next(step for step in steps if "pytest_ci_shards.py seal" in step.get("run", ""))
+        self.assertEqual(reference["if"], "${{ matrix.shard == 0 }}")
+        self.assertNotIn("PYTEST_PLUGINS", reference.get("env", {}))
+        self.assertLess(steps.index(reference), steps.index(execution))
+        self.assertIn("${{ steps.demo.outcome }}", seal["run"])
+        self.assertIn("${{ steps.benchmark.outcome }}", seal["run"])
+        self.assertGreater(steps.index(seal), steps.index(next(s for s in steps if s.get("id") == "benchmark")))
+        self.assertNotIn("if", seal)
+        self.assertNotIn("continue-on-error", seal)
 
     def test_swarm_lock_is_universal_pinned_and_hashed(self):
         lock = LOCK.read_text(encoding="utf-8")
