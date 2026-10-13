@@ -69,7 +69,7 @@ def test_capture(capsys):
 
 def test_fd_capture(capfd):
     subprocess.run([sys.executable, "-c", "print('CAPTURED_CHILD_SENTINEL')"], check=True)
-    assert capfd.readouterr().out == "CAPTURED_CHILD_SENTINEL\\n"
+    assert capfd.readouterr().out in ("CAPTURED_CHILD_SENTINEL\\n", "CAPTURED_CHILD_SENTINEL\\r\\n")
 
 @pytest.fixture
 def staged_subtests(subtests):
