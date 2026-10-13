@@ -8,6 +8,7 @@ Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なと�
 
 外部の常駐agentから一つの窓口として使う構成、必要時の役割生成、上下・横の通信、
 要件の保持と可変profileは[動的ハブの設計候補](AGENT-HUB-DESIGN.md)を参照します。
+最初の実装は[Project情報契約とread-only view](PROJECT-HUB-VIEW.md)。既存Task ownerへの参照を検査します。
 既存ownerとswarmを再利用する設計で、外部接続や自動生成の稼働を示すものではありません。
 追加の[Project中心の利用体験と情報定義](AGENT-HUB-DESIGN.md#プロジェクトを中心にした利用体験と情報定義)は、
 GUI・自然言語から同じ仕事を動かす要件、Projectの最小入力、段階的な情報補完、最適化を扱います。
