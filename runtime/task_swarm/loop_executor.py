@@ -14,7 +14,6 @@ import json
 import math
 from pathlib import Path, PurePosixPath
 import re
-import sys
 
 from .protocol import SwarmError, canonical, digest, digest_ref, integer, ref
 from .task_contract import MAX_INPUT_BYTES, require, shape, text
@@ -32,7 +31,7 @@ _RECEIPT = {"actor_ref", "invocation_ref", "input_digest", "synthetic", *EXECUTO
             "prompt_contract_version", "prompt_sha256", "runtime"}
 _RUNTIME = {"result", "receipt", "paths"}
 _RUNTIME_HASHES = {"runtime_receipt_sha256", "runtime_rollout_sha256"}
-_DIGESTS = {"schema", "command", "process", "events", "stderr", "last_message", "result", "input"}
+_DIGESTS = {"schema", "command", "process", "events", "stderr", "last_message", "result", "input", "executable"}
 
 
 def _pure_input(function):
@@ -184,10 +183,10 @@ def derive_executor_policy(payload, initial_specification, policy_span, *, owner
 
 def check_current_executor_policy(policy, payload, initial_specification, *, owner_path, owner_document):
     """Extra bounded mapping/byte checks; a caller-supplied document is no grant."""
-    from .owner_file import _reject_symlink_components, _safe_resolve
+    from .owner_file import OwnerFile, _reject_symlink_components, _safe_resolve
     from .task_runner import read_bytes
     _policy_shape(policy)
-    base = Path(owner_path).absolute().parent
+    base = OwnerFile(owner_path).path.parent
     expected = derive_executor_policy(payload, initial_specification, policy["policy_source"], owner_base=str(base))
     require(_raw(policy) == _raw(expected), "LOOP_EXECUTOR_POLICY_CHANGED")
     require(isinstance(owner_document, dict) and len(_raw(owner_document)) <= 1024*1024, "LOOP_EXECUTOR_OWNER_MAPPING")
@@ -337,7 +336,7 @@ def verify_fixture_runtime(value, attempt_directory, *, expected_input, expected
                            maximum_bytes=MAX_PROOF_BYTES):
     """Technical pipe/process/protocol proof; never native profile or consumption."""
     from .codex import (_paths, _event_identity, _runtime_receipt, _redact, _result_from_message,
-                        _validate_schema, _build_command, MODEL, EFFORT, SANDBOX)
+                        _validate_schema, _build_command, _snapshot_command, MODEL, EFFORT, SANDBOX)
     from .task_runner import read_bytes, safe_directory, _verify_recorded_input, _validate_expected_input
     require(type(freeze) is bool, "LOOP_EXECUTOR_PROOF_OPTIONS")
     integer(maximum_bytes, "proof bytes", maximum=MAX_PROOF_BYTES)
@@ -346,6 +345,7 @@ def verify_fixture_runtime(value, attempt_directory, *, expected_input, expected
     original_packet = _raw(value)
     require(len(original_packet) <= MAX_PROOF_BYTES, "LOOP_EXECUTOR_PROOF_LIMIT")
     expected_schema, expected_identity = copy.deepcopy(expected_schema), copy.deepcopy(expected_identity)
+    expected_executable = copy.deepcopy(expected_executable)
     current_guard()
     require(isinstance(value, dict) and (set(value) == _RUNTIME or set(value) == _RUNTIME | _RUNTIME_HASHES), "LOOP_EXECUTOR_RUNTIME")
     require(freeze or set(value) == _RUNTIME | _RUNTIME_HASHES, "LOOP_EXECUTOR_RUNTIME_HASH_REQUIRED")
@@ -354,7 +354,7 @@ def verify_fixture_runtime(value, attempt_directory, *, expected_input, expected
     require(isinstance(supplied, dict) and isinstance(supplied.get("attempt_dir"), str), "RUN_RUNTIME_PATH_CHANGED")
     attempt = Path(supplied["attempt_dir"])
     require(attempt.parent == base and attempt.name.startswith("attempt-"), "RUN_RUNTIME_PATH_CHANGED")
-    paths = _paths(safe_directory(attempt), record_input=True)
+    paths = _paths(safe_directory(attempt), record_input=True, record_executable=True)
     require(supplied == {key:str(path) for key,path in paths.items()}, "RUN_RUNTIME_PATH_CHANGED")
     files, total = {}, 0
     def read(path, maximum=MAX_PROOF_BYTES):
@@ -374,8 +374,10 @@ def verify_fixture_runtime(value, attempt_directory, *, expected_input, expected
             and receipt.get("peer_tools") == [] and receipt.get("peer_write_authorized") is False, "LOOP_EXECUTOR_RUNTIME_SCOPE")
     require(isinstance(receipt.get("artifact_digests"), dict) and set(receipt["artifact_digests"]) == _DIGESTS, "RUN_RUNTIME_RECEIPT_INVALID")
     for key in sorted(_DIGESTS):
-        require(hashlib.sha256(read(paths[key], MAX_INPUT_BYTES if key == "input" else MAX_PROOF_BYTES)).hexdigest()
+        require(hashlib.sha256(read(paths[key], MAX_INPUT_BYTES if key in {"input", "executable"} else MAX_PROOF_BYTES)).hexdigest()
                 == receipt["artifact_digests"][key], "RUN_RUNTIME_ARTIFACT_CHANGED")
+    require(len(files[paths["executable"]]) == expected_executable["bytes"]
+            and receipt["artifact_digests"]["executable"] == expected_executable["sha256"], "LOOP_EXECUTOR_FILE_CHANGED")
     _verify_recorded_input(receipt, paths, expected_input)
     require(_json(files[paths["schema"]]) == expected_schema and _json(files[paths["result"]]) == value["result"], "LOOP_EXECUTOR_RESULT")
     try: _validate_schema(value["result"], expected_schema)
@@ -414,10 +416,11 @@ def verify_fixture_runtime(value, attempt_directory, *, expected_input, expected
                         or source["thread_id"] == source["session_id"], "RUN_RUNTIME_IDENTITY_CHANGED")
     thread, turn = _event_identity(events)
     require(thread == receipt.get("thread_id") and turn == receipt.get("turn_id"), "RUN_RUNTIME_IDENTITY_CHANGED")
-    executable = Path(expected_executable)
+    executable = Path(expected_executable["path"])
     require(executable.is_absolute() and executable.suffix == ".py", "LOOP_EXECUTOR_EXECUTABLE_UNSUPPORTED")
     command = _json(files[paths["command"]])
-    require(command == {"argv": _build_command([sys.executable, "-u", str(executable)],
+    require(command == {"argv": _build_command(_snapshot_command(executable, paths["executable"],
+        expected_executable["bytes"], expected_executable["sha256"]),
         schema_path=paths["schema"], last_message_path=paths["last_message"]), "shell": False, "cwd": str(attempt)}, "RUN_RUNTIME_PATH_CHANGED")
     require(process.get("cwd") == receipt.get("runtime_cwd") == str(attempt), "RUN_RUNTIME_PATH_CHANGED")
     rollout = Path(receipt.get("runtime_receipt_path", ""))
@@ -478,7 +481,7 @@ def verify_loop_response(value, *, policy, delivered, dispatch_identity, expecte
     original = copy.deepcopy(value)
     inputs = _raw([policy, delivered, dispatch_identity, expected_attempt, expected_schema])
     total = verify_fixture_runtime(runtime, attempt_directory, expected_input=prompt, expected_schema=expected_schema,
-        expected_executable=policy["executable"]["path"], expected_identity=expected_attempt.get("identity"),
+        expected_executable=policy["executable"], expected_identity=expected_attempt.get("identity"),
         current_guard=current_guard, freeze=freeze, maximum_bytes=maximum_bytes)
     if freeze:
         original["receipt"]["runtime"].update({key: runtime[key] for key in _RUNTIME_HASHES})

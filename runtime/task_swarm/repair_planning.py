@@ -279,6 +279,7 @@ def inspect_repair(owner_path, payload_path, *, clock=None):
     from .task_runner import read_json, safe_directory
     clock = clock or time.time
     owner = OwnerFile(owner_path, clock=clock)
+    owner_path = owner.path
     _, owner_sha = read_json(Path(owner_path), 1024 * 1024, with_digest=True)
     binding = owner.read_task()
     payload = validate_input(read_json(Path(payload_path), 256 * 1024), binding, now=clock())

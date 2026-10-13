@@ -55,6 +55,7 @@ def execute_closed_loop(owner_path, payload_path, supplied_plan, backend, *,
     replay_only = expected_receipt_sha256 is not None
     owner_path, payload_path = Path(owner_path), Path(payload_path)
     owner = OwnerFile(owner_path, clock=clock)
+    owner_path = owner.path
     _, owner_sha = read_json(owner_path, 1024 * 1024, with_digest=True)
     has_reuse_grant = "learning_reuse" in read_json(owner_path, 1024 * 1024)
     if resume_finalization:

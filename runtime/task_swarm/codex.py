@@ -308,7 +308,7 @@ def _prepare_attempt(attempt_dir: str | os.PathLike[str]) -> Path:
     return run
 
 
-def _paths(run: Path, *, record_input: bool = False) -> dict[str, Path]:
+def _paths(run: Path, *, record_input: bool = False, record_executable: bool = False) -> dict[str, Path]:
     paths = {
         "attempt_dir": run,
         "schema": run / "schema.json",
@@ -323,6 +323,8 @@ def _paths(run: Path, *, record_input: bool = False) -> dict[str, Path]:
     }
     if record_input:
         paths["input"] = run / "input.txt"
+    if record_executable:
+        paths["executable"] = run / "executable.py"
     return paths
 
 
@@ -737,6 +739,29 @@ def _resolve_executable(value: str | os.PathLike[str]) -> tuple[list[str], Path]
     return [str(resolved)], resolved
 
 
+_SNAPSHOT_LOADER = (
+    "import hashlib,importlib.machinery,os,sys\n"
+    "snapshot,size,sha,origin=sys.argv[1:5]\n"
+    "with open(snapshot,'rb') as stream: raw=stream.read(int(size)+1)\n"
+    "if len(raw)!=int(size) or hashlib.sha256(raw).hexdigest()!=sha: raise SystemExit(73)\n"
+    "sys.argv=[origin,*sys.argv[5:]]\n"
+    "sys.path[0]=os.path.dirname(origin)\n"
+    "def launch(code,origin,namespace,builtins,loader):\n"
+    " namespace.clear()\n"
+    " namespace.update(__name__='__main__',__file__=origin,__package__=None,"
+    "__spec__=None,__cached__=None,__doc__=None,__builtins__=builtins,__loader__=loader)\n"
+    " exec(code,namespace)\n"
+    "launch(compile(raw,origin,'exec'),origin,sys.modules['__main__'].__dict__,"
+    "__builtins__,importlib.machinery.SourceFileLoader('__main__',origin))\n"
+)
+
+
+def _snapshot_command(executable: Path, snapshot: Path, size: int, sha: str) -> list[str]:
+    # The interpreter compiles the same bounded bytes it hashed, even if the
+    # snapshot's pathname is replaced before or after the child opens it.
+    return [sys.executable, "-u", "-c", _SNAPSHOT_LOADER, str(snapshot), str(size), sha, str(executable)]
+
+
 def _process_created(process: subprocess.Popen[bytes]) -> float | None:
     if psutil is None:
         return None
@@ -798,7 +823,7 @@ def _artifact_digests(paths: Mapping[str, Path]) -> dict[str, str]:
         if name in {"receipt", "diagnostics"} or not path.is_file():
             continue
         try:
-            if name == "input":
+            if name in {"input", "executable"}:
                 from .task_runner import read_bytes
                 try:
                     raw = read_bytes(path, MAX_RECORDED_INPUT_BYTES)
@@ -997,9 +1022,15 @@ class CodexBackend:
         confidential: bool = False,
         task_codex_home: str | os.PathLike[str] | None = None,
         record_input: bool = False,
+        executable_bytes: bytes | None = None,
     ) -> dict[str, Any]:
         if type(record_input) is not bool:
             raise BackendError("stdin_record_invalid", "record_input must be boolean", retryable=False)
+        if executable_bytes is not None and (type(executable_bytes) is not bytes
+                or not 0 < len(executable_bytes) <= MAX_RECORDED_INPUT_BYTES
+                or not record_input or confidential or peer is not None
+                or authorize_peer_writes or task_codex_home is not None):
+            raise BackendError("executable_snapshot_invalid", "snapshot requires a bounded explicit fixture", retryable=False)
         if not isinstance(prompt, str):
             raise BackendError("prompt_invalid", "prompt must be text", retryable=False)
         try:
@@ -1027,7 +1058,7 @@ class CodexBackend:
             raise BackendError("policy_invalid", "confidential must be boolean", retryable=False)
         schema_object = _load_schema(schema)
         run_dir = _prepare_attempt(attempt_dir)
-        paths = _paths(run_dir, record_input=record_input)
+        paths = _paths(run_dir, record_input=record_input, record_executable=executable_bytes is not None)
         started_unix = time.time()
         diagnostics: dict[str, Any] = {
             "status": "started",
@@ -1051,6 +1082,7 @@ class CodexBackend:
         input_writer: threading.Thread | None = None
         writer_error: Exception | None = None
         input_sha = hashlib.sha256(prompt_bytes).hexdigest() if record_input else None
+        executable_sha = hashlib.sha256(executable_bytes).hexdigest() if executable_bytes is not None else None
         scope = None
         execution_cwd = run_dir
         execution_sessions = self.session_root
@@ -1069,6 +1101,17 @@ class CodexBackend:
                 raise BackendError("stdin_record_failed", "recorded input could not be reopened", retryable=False) from exc
             if raw != prompt_bytes:
                 raise BackendError("stdin_record_changed", "recorded input differs from submitted bytes", retryable=False)
+
+        def check_executable_snapshot() -> None:
+            if executable_bytes is None:
+                return
+            from .task_runner import read_bytes
+            try:
+                raw = read_bytes(paths["executable"], len(executable_bytes))
+            except (OSError, SwarmError) as exc:
+                raise BackendError("executable_snapshot_changed", "executable snapshot is unavailable", retryable=False) from exc
+            if raw != executable_bytes:
+                raise BackendError("executable_snapshot_changed", "executable snapshot differs from verified bytes", retryable=False)
 
         def failed(error: BackendError) -> BackendError:
             if process is not None and pid is not None and created_at is not None and process.poll() is None:
@@ -1094,6 +1137,15 @@ class CodexBackend:
                 peer_cfg = _peer_config(peer, authorize_peer_writes=authorize_peer_writes)
                 diagnostics["peer_write_authorized"] = bool(authorize_peer_writes)
             executable_command, executable_path = _resolve_executable(self.executable)
+            if executable_bytes is not None:
+                if executable_path.suffix != ".py":
+                    raise BackendError("executable_snapshot_invalid", "snapshot requires a Python fixture", retryable=False)
+                with paths["executable"].open("xb") as stream:
+                    stream.write(executable_bytes)
+                paths["executable"].chmod(0o600)
+                check_executable_snapshot()
+                executable_command = _snapshot_command(executable_path, paths["executable"],
+                                                       len(executable_bytes), executable_sha)
             command = _build_command(
                 executable_command,
                 schema_path=paths["schema"],
@@ -1319,7 +1371,12 @@ class CodexBackend:
             _scrub_last_message(paths["last_message"])
             if record_input:
                 check_recorded_input()
+            check_executable_snapshot()
             receipt["artifact_digests"] = _artifact_digests(paths)
+            if executable_bytes is not None:
+                if receipt["artifact_digests"].get("executable") != executable_sha:
+                    raise BackendError("executable_snapshot_changed", "executable snapshot digest differs", retryable=False)
+                check_executable_snapshot()
             if record_input:
                 if receipt["artifact_digests"].get("input") != input_sha:
                     raise BackendError("stdin_record_failed", "recorded input digest was unavailable or changed", retryable=False)
@@ -1396,6 +1453,8 @@ class CodexBackend:
                             # A later input change must remain a mismatch, not
                             # be rebound to new bytes by defensive final writes.
                             receipt_document["artifact_digests"]["input"] = input_sha
+                        if executable_bytes is not None:
+                            receipt_document["artifact_digests"]["executable"] = executable_sha
                         _write_json(paths["receipt"], receipt_document)
                 diagnostics["artifact_digests"] = artifact_digests
                 diagnostics.setdefault("finished_at", _utc_iso())
@@ -1421,6 +1480,7 @@ def invoke(
     confidential: bool = False,
     task_codex_home: str | os.PathLike[str] | None = None,
     record_input: bool = False,
+    executable_bytes: bytes | None = None,
 ) -> dict[str, Any]:
     return CodexBackend(executable, session_root=session_root).invoke(
         prompt,
@@ -1436,6 +1496,7 @@ def invoke(
         confidential=confidential,
         task_codex_home=task_codex_home,
         record_input=record_input,
+        executable_bytes=executable_bytes,
     )
 
 

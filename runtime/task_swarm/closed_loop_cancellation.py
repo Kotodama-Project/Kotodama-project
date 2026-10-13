@@ -31,6 +31,7 @@ def cancel_closed_loop(owner_path, payload_path, *, clock=time.time):
 
     owner_path, payload_path = Path(owner_path), Path(payload_path)
     owner = OwnerFile(owner_path, clock=clock)
+    owner_path = owner.path
     _, owner_sha = read_json(owner_path, 1024 * 1024, with_digest=True)
     raw, input_sha = read_json(payload_path, 256 * 1024, with_digest=True)
     binding = owner.read_task(raw.get("task_id"))

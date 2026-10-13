@@ -54,7 +54,7 @@ CALCULATION = textwrap.dedent(r'''
         assert len(data) == material["bytes"] and hashlib.sha256(data).hexdigest() == material["sha256"]
         acquired.append({"path": material["relative_path"], "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
         # Each critic opens both files itself; it never trusts a worker's answer.
-        value = re.findall(rb"^LOCAL_MEASUREMENT=(\d+)$", data, re.M)
+        value = re.findall(rb"^LOCAL_MEASUREMENT=(\d+)\r?$", data, re.M)
         assert len(value) == 1
         actual[material["relative_path"]] = int(value[0])
         record = next(s for s in core["view"]["spans"] if s["source_key"] == material["source_key"]
@@ -99,14 +99,14 @@ def save(path, value):
     path.write_bytes((canonical(value) + "\n").encode("utf-8"))
 
 
-def prepare(root, *, second=13, budget=6, fail=False):
+def prepare(root, *, second=13, budget=6, fail=False, material_newline=None):
     small_catalog(root)
     expiry = dt.datetime.fromtimestamp(time.time() + 86400, dt.timezone.utc).isoformat()
     for path in (root / "knowledge/synthetic").glob("*.md"):
         raw = path.read_text(encoding="utf-8").replace("2026-12-07T00:00:00Z", expiry)
         if path.stem in {"0", "1"}:
             raw += f"\nLOCAL_MEASUREMENT={5 if path.stem == '0' else second}\n"
-        path.write_text(raw, encoding="utf-8")
+        path.write_text(raw, encoding="utf-8", newline=material_newline)
     spec = {"REQ-ROOT": {"children": ["REQ-A", "REQ-B"],
                          "acceptance": ["Every partial result is truthful and missing material stays unknown."]},
             "REQ-A": {"data": {"doc": "DocA.md"}, "acceptance": ["Preserve the established DocA measurement."]},
@@ -245,7 +245,9 @@ def inspect_children(case, result, *, second=13, calls=5, learning=None):
 
 @pytest.mark.parametrize("second", [13, 23])
 def test_fresh_source_cli_repair_and_anchored_replay(tmp_path, second):
-    case = compile_case(tmp_path, second=second)
+    case = compile_case(tmp_path, second=second, material_newline="\r\n" if second == 23 else None)
+    if second == 23:
+        assert b"\r\n" in (case[1].parent/"DocB.md").read_bytes()
     before = case[1].read_bytes()
     result = execute(tmp_path, case)
     assert result["receipt"]["review_passed"] and case[1].read_bytes() == before
@@ -275,6 +277,27 @@ def test_fresh_core_module_requires_explicit_mode_and_replays_without_a_child(tm
     before = sorted(str(path) for path in directory.rglob("child-input.bin"))
     assert module_cli(tmp_path, case, extra=("--receipt-sha256", result["receipt_sha256"]))["duplicate"]
     assert before == sorted(str(path) for path in directory.rglob("child-input.bin"))
+
+
+@pytest.mark.parametrize("kind", ["file", "directory"])
+@pytest.mark.parametrize("entry", ["knowledge", "core"])
+def test_external_cwd_cli_resolves_owner_aliases_with_relative_materials(tmp_path, kind, entry):
+    case = list(compile_case(tmp_path))
+    links = tmp_path/"owner-aliases"
+    links.mkdir()
+    alias = links/("owner.json" if kind == "file" else "owner-home")
+    try:
+        alias.symlink_to(case[1] if kind == "file" else case[1].parent, target_is_directory=kind == "directory")
+    except OSError:
+        pytest.skip("owner symlink creation is not available")
+    case[1] = alias if kind == "file" else alias/case[1].name
+    result = (execute if entry == "knowledge" else module_cli)(tmp_path, case)
+    assert result["receipt"]["review_passed"]
+    directory = inspect_children(case, result)
+    saved = sorted(str(path) for path in directory.rglob("child-input.bin"))
+    replay = (execute if entry == "knowledge" else module_cli)(tmp_path, case,
+        extra=("--receipt-sha256", result["receipt_sha256"]))
+    assert replay["duplicate"] and saved == sorted(str(path) for path in directory.rglob("child-input.bin"))
 
 
 def test_implicit_anchor_replay_keeps_an_unresolved_receipt_at_exit_three(tmp_path):
@@ -307,9 +330,9 @@ def test_failed_real_child_returns_typed_refusal_without_a_success_receipt(tmp_p
     assert case[1].read_bytes() == before
 
 
-@pytest.mark.parametrize("second", [13, 23])
-def test_learning_cli_uses_current_decision_and_keeps_the_typed_transport(tmp_path, second):
-    origin = compile_case(tmp_path, second=second)
+@pytest.mark.parametrize("second,owner_alias", [(13, False), (23, False), (23, True)])
+def test_learning_cli_uses_current_decision_and_keeps_the_typed_transport(tmp_path, second, owner_alias):
+    origin = compile_case(tmp_path, second=second, material_newline="\r\n" if second == 23 else None)
     completed = execute(tmp_path, origin)
     seed = copy.deepcopy(origin[0])
     seed["task_id"] = "task-00000000-0000-4000-8000-000000000002"
@@ -345,6 +368,13 @@ def test_learning_cli_uses_current_decision_and_keeps_the_typed_transport(tmp_pa
     reuse.review("ref/review/cli-learning", "verifier", "allow", "Checked the retained DocA measurement.")
     decision = reuse.decide("ref/owner/synthetic", "ref/review/cli-learning", "allow",
                            "ref/decision/cli-learning", expected_generation=0)
+    if owner_alias:
+        link = tmp_path/"learning-owner-link.json"
+        try:
+            link.symlink_to(owner)
+        except OSError:
+            pytest.skip("owner symlink creation is not available")
+        owner = link
     case = (seed, owner, file, origin[3], candidate, target)
     assert execute(tmp_path, case, expected=2)["error"] == "TASK_LEARNING_DECISION_REQUIRED"
     options = ("--learning-decision-digest", digest(decision))

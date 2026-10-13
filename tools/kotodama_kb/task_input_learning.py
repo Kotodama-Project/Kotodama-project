@@ -108,8 +108,8 @@ def _verify_projection(bundle, candidate, owner_path, payload_path, *, clock, al
     seed["sources"] = [row for row in payload["sources"] if row["key"] != source["key"]]
     base = _build(bundle, seed, binding, now=clock(), allow_expired=allow_expired)
     require(_compose(base, candidate["learning"]) == candidate, "TASK_CONTEXT_CANDIDATE_CHANGED")
-    document = read_json(Path(owner_path))
-    declared = {str((Path(owner_path).parent / item["path"]).resolve()): item["sha256"]
+    document = read_json(owner.path)
+    declared = {str((owner.path.parent / item["path"]).resolve()): item["sha256"]
                 for item in document["source_checks"]}
     require(all(declared.get(str(Path(item["path"]).resolve())) == item["sha256"]
                 for item in candidate["source_checks"]), "TASK_CONTEXT_OWNER_CHECKS_REQUIRED")

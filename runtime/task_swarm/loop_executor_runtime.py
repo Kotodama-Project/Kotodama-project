@@ -24,6 +24,7 @@ def _saved(path):
 def select_executor_policy(payload, specification, owner_path):
     """Select the single explicit declaration in current constraint Sources."""
     from .loop_executor import _json
+    from .owner_file import OwnerFile
     from .task_planning import _Sources
     sources, selected = _Sources(payload), []
     for span in payload["objective"]["constraints"]:
@@ -34,7 +35,7 @@ def select_executor_policy(payload, specification, owner_path):
         if isinstance(declaration, dict) and declaration.get("kind") == "task_loop_executor":
             selected.append(span)
     require(len(selected) == 1, "LOOP_EXECUTOR_POLICY_SOURCE")
-    return derive_executor_policy(payload, specification, selected[0], owner_base=str(Path(owner_path).absolute().parent))
+    return derive_executor_policy(payload, specification, selected[0], owner_base=str(OwnerFile(owner_path).path.parent))
 
 
 def owner_binding(owner_sha, actors, critic_actor, actor_bindings):
@@ -100,7 +101,7 @@ class ExecutorEvidence:
         # calling the semantic verifier here would recurse through current().
         with self.lock:
             documents, proofs, receipts = dict(self.document_pins), dict(self.proof_pins), dict(self.receipt_pins)
-        require(len(documents) <= 32 and len(proofs) <= self.maximum_jobs*10 and len(receipts) <= 2,
+        require(len(documents) <= 32 and len(proofs) <= self.maximum_jobs*11 and len(receipts) <= 2,
                 "LOOP_EXECUTOR_PROOF_LIMIT")
         for pins, limit, code in ((documents, 2*1024*1024, "RUN_ARTIFACT_CHANGED"),
                                   (receipts, 2*MAX_PROOF_BYTES, "RUN_ARTIFACT_CHANGED"),

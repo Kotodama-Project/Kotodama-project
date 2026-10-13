@@ -256,13 +256,14 @@ def test_last_policy_callback_mutation_is_fenced_before_inspection_return(tmp_pa
     assert len(observed) == cutoff
 
 
-@pytest.mark.parametrize("artifact", ["input", "process", "events", "schema"])
+@pytest.mark.parametrize("artifact", ["input", "process", "events", "schema", "executable"])
 def test_saved_runtime_artifact_tamper_refuses_anchored_replay(tmp_path, artifact):
     setup = setup_executor(tmp_path)
     result = execute(setup)
     directory = run_directory(setup)
     response = read_json(directory/"r0-doc-a-result.json")
     target = Path(response["receipt"]["runtime"]["paths"][artifact])
+    target.chmod(0o600)
     target.write_bytes(target.read_bytes() + b"\n")
     with pytest.raises(SwarmError, match="RUN_RUNTIME_ARTIFACT_CHANGED"):
         execute(setup, expected_receipt_sha256=result["receipt_sha256"])
