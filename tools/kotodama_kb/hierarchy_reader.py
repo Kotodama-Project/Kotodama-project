@@ -461,7 +461,10 @@ def _trace_current_refs(bundle, input_payload, owner_path, request, *, clock, wi
         unresolved.append({"kind": "learning_reuse", "reason": "CURRENT_DECISION_NOT_OBSERVED",
             "next_action": "use_current_learning_verifier", "mandatory": True})
     else:
+        latest = _Sources(payload).latest
         for row in payload["sources"]:
+            if row["revision"] != latest[row["key"]]:
+                continue
             try:
                 proposal = json.loads(row["text"])
             except ValueError:

@@ -57,7 +57,7 @@ def completed(root, *, second=13, dependency=False, repair=True, now=1000):
         statements = [*fields["constraints"], *([fields["need"], *fields["acceptance"]] if parent else [])]
         raw = knowledge.markdown(metadata, "\n\n".join(statements))
         name = "work/" + identifier + ".md"
-        (root / name).write_text(raw)
+        (root / name).write_bytes(raw.encode("utf-8"))
         row = knowledge.source(identifier, 1, raw)
         payload["sources"].append(row)
         selected.append(knowledge.span(row, raw))

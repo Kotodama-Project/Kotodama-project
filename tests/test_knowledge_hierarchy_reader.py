@@ -642,6 +642,57 @@ class HierarchyReaderTests(unittest.TestCase):
         self.assertIsNone(result["context_candidate"])
         self.assertEqual("not_observed", result["current_learning_decision"])
 
+    def test_superseded_learning_proposal_uses_latest_source_without_losing_history(self):
+        data = self.graph()
+        original_sources = copy.deepcopy(data[1]["sources"])
+        proposal = canonical({"kind": "task_learning_reuse_proposal", "version": 1})
+        for latest_text in ("The prior learning proposal is withdrawn.",
+                            canonical({"kind": "corrected_source", "text": "No learning proposal remains."})):
+            rows = [fixture.source("learning-history", 1, proposal),
+                    fixture.source("learning-history", 3, proposal),
+                    fixture.source("learning-history", 7, latest_text)]
+            for order in ((0, 1, 2), (2, 0, 1), (1, 2, 0)):
+                with self.subTest(latest=latest_text, order=order):
+                    data[1]["sources"] = copy.deepcopy(original_sources + [rows[i] for i in order])
+                    self.change_source(data[1], data[2], data[3], data[4], 0, lambda text: text)
+                    before, expected = inventory(self.root), copy.deepcopy(data[1])
+                    result = self.run_reader(data)
+                    self.assertEqual("TRACED_CANDIDATE", result["status"])
+                    self.assertIsNotNone(result["context_candidate"])
+                    self.assertEqual([], result["unresolved"])
+                    self.assertEqual(digest(expected), result["parent_input_digest"])
+                    self.assertEqual(expected, data[1])
+                    self.assertEqual(expected, json.loads(data[3].read_bytes()))
+                    self.assertEqual(before, inventory(self.root))
+
+    def test_current_learning_sources_and_owner_grants_still_block_after_correction(self):
+        data = self.graph()
+        original_sources = copy.deepcopy(data[1]["sources"])
+        proposal = canonical({"kind": "task_learning_reuse_proposal", "version": 1})
+        old = fixture.source("learning-history", 1, proposal)
+        withdrawn = fixture.source("learning-history", 7, "The old proposal is withdrawn.")
+        for kind in ("same_key", "other_key", "owner_grant"):
+            with self.subTest(kind=kind):
+                current = fixture.source("learning-history", 9, proposal) if kind == "same_key" else (
+                    fixture.source("other-learning", 0, proposal) if kind == "other_key" else None)
+                data[1]["sources"] = copy.deepcopy(original_sources + ([current] if current else []) + [withdrawn, old])
+                self.change_source(data[1], data[2], data[3], data[4], 0, lambda text: text)
+                if kind == "owner_grant":
+                    document = json.loads(data[2].read_bytes())
+                    document["learning_reuse"] = {"opaque": "A current decision is still required."}
+                    data[2].write_bytes(canonical(document).encode())
+                before = inventory(self.root)
+                result = self.run_reader(data)
+                self.assertEqual("BLOCKED", result["status"])
+                self.assertIsNone(result["context_candidate"])
+                self.assertEqual("not_observed", result["current_learning_decision"])
+                expected = {"kind": "learning_reuse", "reason": "CURRENT_DECISION_NOT_OBSERVED",
+                            "next_action": "use_current_learning_verifier", "mandatory": True}
+                if current:
+                    expected.update(source_key=current["key"], source_revision=current["revision"])
+                self.assertEqual([expected], result["unresolved"])
+                self.assertEqual(before, inventory(self.root))
+
     def test_artifact_count_budget_and_complete_statement_budget_do_not_truncate(self):
         data, _, result = self.completed()
         directory = data[2].parent / result["receipt"]["run_id"]

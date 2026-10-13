@@ -154,9 +154,10 @@ Conceptの期限、readerのquery deadlineは引き続き拒否条件です。
 
 どちらの経路もorganization Plan revision、実provider/model、Task完了や成果採用の証明ではありません。
 normal runに保存された`learning.json`は`candidate_only`です。readerはcurrent decision storeを開きません。
-ownerにlearning reuse grantがある場合やSourceがreuse proposalを宣言する場合は
+ownerにlearning reuse grantがある場合や、各Source keyの最大revisionがreuse proposalを宣言する場合は
 `CURRENT_DECISION_NOT_OBSERVED`でcontextを止め、保存済みの許可を
-現在の許可に読み替えません。成果採用、human判断、Task完了は元のownerへ返す別責務です。
+現在の許可に読み替えません。訂正・撤回前の履歴は入力とSource検査に保持しますが、現在proposalの判定には使いません。
+成果採用、human判断、Task完了は元のownerへ返す別責務です。
 
 ## 検査・上限・未受入
 

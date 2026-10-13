@@ -18,12 +18,43 @@ from .task_contract import (
 )
 
 
+def _open_readonly(filename):
+    if os.name != "nt":
+        return os.open(filename, os.O_RDONLY | getattr(os, "O_BINARY", 0) |
+                       getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    # A receipt monitor must not prevent its atomic rename on Windows. As for
+    # rollout reads, permit delete sharing while the caller checks descriptor
+    # and named identity. Do not follow a reparse point swapped in after lstat.
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    create = kernel.CreateFileW
+    create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                       wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+    create.restype = wintypes.HANDLE
+    close = kernel.CloseHandle
+    close.argtypes = (wintypes.HANDLE,)
+    close.restype = wintypes.BOOL
+    # None SECURITY_ATTRIBUTES makes the handle non-inheritable. OPEN_EXISTING
+    # and FILE_FLAG_OPEN_REPARSE_POINT add no create/write permission.
+    handle = create(str(filename), 0x80000000, 0x1 | 0x2 | 0x4, None, 3, 0x200080, None)
+    if handle == wintypes.HANDLE(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        return msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY | os.O_NOINHERIT)
+    except BaseException:
+        close(handle)
+        raise
+
+
 def read_bytes(filename: Path, maximum=2*1024*1024):
     # Pin the actual descriptor before bounded reads. Owner paths are private
     # controlled inputs, but links/large files still cannot widen this reader.
     info = filename.lstat()
     require(not stat.S_ISLNK(info.st_mode) and not getattr(info, "st_file_attributes", 0) & 0x400, "RUN_FILE_REFUSED")
-    fd = os.open(filename, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    fd = _open_readonly(filename)
     try:
         before = os.fstat(fd)
         require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_size <= maximum, "RUN_FILE_REFUSED")
