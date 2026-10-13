@@ -129,9 +129,16 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         if(input.action==='tasks')result=await pipeline.tasks(input.actor);
         else if(input.action==='judgment')result=await judgment.read({actor:input.actor,taskId:input.taskId});
         else if(input.action==='project'){
-          const {action,...operation}=input;
+          const {action,surface,...operation}=input;
+          check(surface===undefined||surface==='dots','PROJECT_SURFACE_INVALID');
+          // A surface marker can only add restrictions to the operator grant.
+          // Keep the original call's scope through authorization and commit.
+          const assertScope=surface==='dots'?policy=>{
+            check(config.dots.enabled&&policy.dots.enabled,'DOTS_DISABLED');
+            check(config.dots.actorId===input.actor&&policy.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
+          }:()=>{};
           scope=deadlineScope(8000,'PROJECT_OPERATION_TIMEOUT');controlReads.add(scope);
-          const work=projects.handle(operation,{signal:scope.signal});
+          const work=projects.handle(operation,{signal:scope.signal,assertScope});
           // Keep SQLite/host ownership until the real authorization work settles,
           // even if its response timed out. The hub rechecks abort before commit.
           controlOperations.add(work);const settled=()=>controlOperations.delete(work);work.then(settled,settled);
