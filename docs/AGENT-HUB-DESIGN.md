@@ -17,8 +17,9 @@ GUIの表示・候補検査は[共通bridge](../runtime/codex-task-bridge/README
 が入口になる。Issueには今回の記録作業と次の実装担当の責務、実装順、受入条件がある。
 
 次のagentはIssueの全コメント・関連PRを読み、最新mainと対象componentを確認する。
-最初の実装範囲はProjectの最小情報契約・既存ownerへの対応・read-only統合viewと変更候補の検査。
-GUI/会話共通操作、動的割当、実接続、最適化はその後の段階として扱う。
+Projectの最小情報契約、local ownerでの保存・訂正・Task参照、Dots経由の確認付き変更、
+GUIの表示・変更候補検査を段階的に実装する。各変更がmainへ入ったかは関連PRで確認する。
+GUIからの保存、動的割当、実接続の受入、最適化は後続として扱う。
 一周ごとにPR/commit・実行した検証・未検証・次の一手を同じIssueへ返す。
 この文書の編集や文書PRのmergeを、Project hub全体の完成として記録しない。
 
@@ -289,6 +290,22 @@ deadline、token、金額はTaskごとの予算参照に束縛し、計測でき
 設定を戻しても失効した権限や無効化された成果は復活させない。
 現在実行の版と次に使う版を利用者から照会できるようにする。
 
+## Projectと既存実行をつなぐ次の実装
+
+次はProjectの条件と既存Taskの受入条件の対応を、書込みなしで検査する。
+入力にはProject revision/digest・条件の項目位置、関連付け済みTask ID/revision・
+受入条件番号を明示する。出力は対応済み・未割当・旧版・未対応を区別し、
+文字列の類似から対応や達成を推定しない。途中訂正・権限失効では古い対応を採用せず、
+検査によってTask・event・dispatchが増えないことを合成入力で確認する。
+
+その後の計画生成は既存`compile_task_input`と明示frontierを再利用する。
+Project briefにはまだRequirement IDやSource spanがないため、自動で捏造せず、
+既存要件への対応とownerによる入力束縛を先に確立する。
+現行closed loopには独立した1〜3仕事のほか、明示された二葉A→BとBのみの有限修復がある
+（[実行契約](TASK-SWARM-CLOSED-LOOP.md)）。
+これは一般DAG・再帰生成・任意の並行数の実装ではない。役割profileや横通信を追加するときも、
+この実行上限・既存owner・独立reviewを引き継ぐ。
+
 ## 実装順と観測可能な受入
 
 | 段階 | 作るもの | 完了条件 |
@@ -309,5 +326,7 @@ deadline、token、金額はTaskごとの予算参照に束縛し、計測でき
 利用者の修正回数、受入成果あたりの費用とする。coverageの件数だけで意味的な達成を判定しない。
 profile変更や学習で改善したという主張には同一課題での比較結果を必要とする。
 
-設計全体の受入は未完。限定実装の検証は上記Project view文書へ分ける。新たなruntime、provider接続、
-自動agent生成、A2A server、台帳更新は未実装であり、公開状態は `NO_GO_UNPUBLISHED` のまま。
+設計全体の受入は未完。Projectの保存・訂正・参照更新は既存local owner内の限定実装であり、
+その検証とGUI/Dotsの範囲は上記component文書へ分ける。動的agent生成、実registry、
+A2A server、profile最適化は未実装。実サービスの受入と公開状態は別で、
+`NO_GO_UNPUBLISHED` のまま。
