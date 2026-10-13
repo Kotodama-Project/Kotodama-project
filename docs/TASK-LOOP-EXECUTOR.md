@@ -55,6 +55,22 @@ read-only DB copyのlive cancellation/cut確認も、このguardから最終byte
 historical replayのobjective期限許容は維持し、owner/actorの有効期限は引き続き検査します。
 Source検査とguardは観測境界であり、外部writerの将来の変更を禁止するlockではありません。
 
+同じguard内のTask・actor・storage確認は、標準`OwnerFile`と組込`time.time`に限り、
+その区間で新しく読んだ一つのsnapshotを使います（#406）。Taskの比較後にactorを
+一人ずつ検証・比較し、最初の拒否理由と期限検査を保ちます。policy・learning再利用・
+proof検査をまたいでsnapshotを使い回しません。保存readerはproof前のstorage確認を
+独立した読取として残し、proof後のTask・actorには別の新規snapshotを使います。
+各呼出し・monitorの次の検査ではSourceとownerを再読し、最後のowner原bytes照合、
+取消・objective期限・actor状態とepochの確認も維持します。
+学習元readerの内部clock参照も、現在の参照先が組込clockである間だけこの経路を使います。
+Task・actor・storageを読むたびに参照先と標準readerを確認し、途中で独自clockやoverrideに
+変わった場合はcallbackを呼ぶ前に新しい逐次読取へ戻します。その検査内では再共有しません。
+独自clock、subclass、class/instanceのreader overrideは従来の逐次読取を使い、
+callbackや既存hookを省略しません。公開`read_task`/`read_binding`/`storage`も従来どおり
+毎回再読します。TTLやfenceを越えるcacheは追加しません。
+これは有限の重複I/O削減で、実Windowsの60秒受入・両OSの必須CI・配布物は別に確認します。
+製品全体の速度やメモリの目標は#330/#331に残ります。
+
 実行時は宣言exeを既存のdescriptor readerで読み、長さ・SHAをpolicyと照合したbytesから
 attempt専有の`executable.py`を作ります。子の固定loaderはそのコピーを上限付きで読み、
 policyの長さ・SHAを確認して同じbytesをcompile/execします。元pathの一時的な差替えや、

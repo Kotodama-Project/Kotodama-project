@@ -353,7 +353,9 @@ def test_durable_cancellation_stops_and_reaps_owned_fixture_children(tmp_path):
         future = pool.submit(execute, setup)
         limit, identities = time.monotonic() + 8, []
         while time.monotonic() < limit:
-            if database.exists():
+            # This fresh run creates its plan only after schema initialization
+            # and create_run finish; the DB file can exist before either.
+            if database.exists() and (database.parent / "plan.json").is_file():
                 with sqlite3.connect(database) as db:
                     identities = [json.loads(row[0]) for row in db.execute(
                         "SELECT identity_json FROM attempts WHERE identity_json IS NOT NULL")]

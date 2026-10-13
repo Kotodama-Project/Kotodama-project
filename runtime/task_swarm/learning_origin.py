@@ -87,8 +87,27 @@ class ReadOnlyOrigin:
         # SHM is a derived WAL index, rebuilt only in the private copy. Other
         # legitimate readers may touch it or create an empty WAL concurrently;
         # neither carries committed state. Pin DB and nonempty WAL exactly.
-        database, wal = _inspection_cut(self.database, destination, observe_shm=False)
-        return database, wal if wal is not None and wal[0][3] else None
+        for attempt in range(3):
+            # A concurrent SQLite reader or checkpoint can change the physical
+            # WAL while it is copied. Never reuse a partial copy. Only cut
+            # acquisition is retried; all semantic/current checks remain above
+            # this boundary and are applied to the successful private copy.
+            with TemporaryDirectory(prefix=destination.name + "-", dir=destination) as trial:
+                private = Path(trial)
+                try:
+                    database, wal = _inspection_cut(self.database, private, observe_shm=False)
+                except (SwarmError, FileNotFoundError) as error:
+                    changed = (isinstance(error, SwarmError) and error.code == "RUN_ARTIFACT_CHANGED")
+                    vanished_wal = (isinstance(error, FileNotFoundError)
+                        and error.filename == str(self.database.with_name(self.database.name + "-wal")))
+                    if not (changed or vanished_wal):
+                        raise
+                    if attempt == 2:
+                        raise SwarmError("RUN_ARTIFACT_CHANGED", "origin copy did not stabilize") from error
+                    continue
+                for path in private.iterdir():
+                    path.replace(destination / path.name)
+                return database, wal if wal is not None and wal[0][3] else None
 
     def check(self):
         """Recheck live evidence using copies; never initialize the original."""

@@ -91,6 +91,76 @@ def test_expiry_during_command_persistence_never_launches_a_child(tmp_path, monk
     assert not list((tmp_path/"attempt").rglob("*.raw"))
 
 
+def test_windows_execution_cwd_counts_utf16_and_the_complete_spelling(monkeypatch, subtests):
+    monkeypatch.setattr(codex, "sys", SimpleNamespace(platform="win32"))
+    prefixes = ("C:\\", "\\\\server\\share\\", "\\\\?\\C:\\", "C:/")
+    cases = [(prefix + "x" * (units - len(prefix)), units)
+             for prefix in prefixes for units in (258, 259, 266)]
+    cases += [("C:\\" + "x" * 253 + "\U0001f600", 258),
+              ("C:\\" + "x" * 254 + "\U0001f600", 259),
+              ("C:\\" + "x" * 254 + "\\", 258),
+              ("C:\\" + "x" * 255 + "\\", 259)]
+    for cwd, units in cases:
+        with subtests.test(cwd=cwd, units=units):
+            if units <= 258:
+                assert codex._check_execution_cwd(cwd) is None
+            else:
+                with pytest.raises(BackendError) as raised:
+                    codex._check_execution_cwd(cwd)
+                assert raised.value.code == "execution_cwd_limit" and raised.value.retryable is False
+                assert cwd not in str(raised.value)
+
+
+def test_execution_cwd_windows_limit_does_not_apply_to_posix(monkeypatch):
+    monkeypatch.setattr(codex, "sys", SimpleNamespace(platform="linux"))
+    assert codex._check_execution_cwd("/" + "x" * 300) is None
+
+
+@pytest.mark.parametrize("cwd_units,confidential", [(258, False), (259, False), (266, False), (259, True)])
+def test_windows_final_execution_cwd_is_checked_before_launch(tmp_path, monkeypatch, cwd_units, confidential):
+    # Preserve the real attempt UUID and filesystem preparation. Only the
+    # platform check and the otherwise failing CreateProcess call are simulated.
+    run_units = cwd_units - (len("/work") if confidential else 0)
+    base_units = run_units - len("/attempt-" + "0" * 32)
+    padding = base_units - len((str(tmp_path) + os.sep).encode("utf-16-le")) // 2
+    assert 0 < padding < 255
+    attempt_dir = tmp_path / ("c" * padding)
+    launched = []
+    def unavailable(*args, **kwargs):
+        launched.append(kwargs["cwd"])
+        error = NotADirectoryError(20, "synthetic unsupported Windows cwd")
+        error.winerror = 267
+        raise error
+    monkeypatch.setattr(codex, "sys", SimpleNamespace(platform="win32", executable=sys.executable))
+    monkeypatch.setattr(subprocess, "Popen", unavailable)
+    if confidential:
+        import task_swarm.confidential as permission
+        class Scope:
+            def __init__(self, run, *args, **kwargs):
+                self.work = run / "work"
+                self.work.mkdir()
+                self.codex_home, self.env = tmp_path / "home", None
+            def preflight(self, **kwargs):
+                return {"model_called": False}
+            def wrap(self, command):
+                return command
+        monkeypatch.setattr(permission, "ConfidentialScope", Scope)
+    with pytest.raises(BackendError) as raised:
+        CodexBackend(sys.executable).invoke("fixture", SCHEMA, attempt_dir, confidential=confidential)
+    expected_code = "execution_cwd_limit" if cwd_units > 258 else "backend_internal"
+    assert raised.value.code == expected_code
+    assert raised.value.retryable is (cwd_units <= 258)
+    paths = {name: Path(value) for name, value in raised.value.paths.items()}
+    command = json.loads(paths["command"].read_bytes())
+    assert len(command["cwd"].encode("utf-16-le")) // 2 == cwd_units
+    assert launched == ([] if cwd_units > 258 else [command["cwd"]])
+    assert len(str(paths["attempt_dir"]).encode("utf-16-le")) // 2 == run_units
+    assert not paths["process"].exists() and not paths["receipt"].exists()
+    assert not list(paths["attempt_dir"].glob("*.raw"))
+    diagnostics = json.loads(paths["diagnostics"].read_bytes())
+    assert diagnostics["error_code"] == expected_code and "pid" not in diagnostics
+
+
 @pytest.mark.parametrize("during_input", [False, True])
 def test_owner_cancels_owned_child_even_when_it_never_reads_stdin(tmp_path, monkeypatch, during_input):
     fake = _fake_codex(tmp_path)

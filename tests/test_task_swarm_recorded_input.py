@@ -1,6 +1,7 @@
 """Opt-in stdin submission proofs; fake rollouts never prove model consumption."""
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -116,6 +117,14 @@ def invoke(backend, tmp_path, prompt="original\r\n日本語\0end", **options):
     return backend.invoke(prompt, SCHEMA, tmp_path / "attempts", timeout=8, **options)
 
 
+def assert_closed_pipe_failure(error):
+    # CPython's subprocess._stdin_write documents Windows EINVAL when the
+    # child exits or closes stdin (bpo-19612 / bpo-30418).
+    assert isinstance(error, BrokenPipeError) or (
+        sys.platform == "win32" and type(error) is OSError and error.errno == errno.EINVAL
+    ), repr(error)
+
+
 def check_input(value, expected):
     paths = {key: Path(path) for key, path in value["paths"].items()}
     return runner._verify_recorded_input(value["receipt"], paths, expected)
@@ -149,7 +158,8 @@ def test_default_closed_pipe_retains_seven_artifacts(tmp_path, monkeypatch):
     backend = executable(tmp_path, monkeypatch, closed=True)
     failures, processes = pipe_proxy(monkeypatch, wait_for_exit=True)
     value = invoke(backend, tmp_path, "x" * LIMIT)
-    assert len(failures) == 1 and isinstance(failures[0], BrokenPipeError)
+    assert len(failures) == 1
+    assert_closed_pipe_failure(failures[0])
     assert processes[0].poll() == 0
     assert value["result"] == {"answer": "ok"}
     assert set(value["receipt"]["artifact_digests"]) == SEVEN
@@ -378,8 +388,9 @@ def test_input_record_failure_never_launches_a_child(tmp_path, monkeypatch):
 @pytest.mark.parametrize("flow", ["success", "body_changed", "oversize", "broken_pipe"])
 def test_every_input_digest_uses_only_the_bounded_descriptor_reader(tmp_path, monkeypatch, flow):
     backend = executable(tmp_path, monkeypatch, closed=flow == "broken_pipe")
+    failures = []
     if flow == "broken_pipe":
-        pipe_proxy(monkeypatch, wait_for_exit=True)
+        failures, _ = pipe_proxy(monkeypatch, wait_for_exit=True)
     elif flow != "success":
         spawn = codex.subprocess.Popen
 
@@ -416,7 +427,8 @@ def test_every_input_digest_uses_only_the_bounded_descriptor_reader(tmp_path, mo
         assert caught.value.code == {"body_changed": "stdin_record_changed", "oversize": "stdin_record_failed",
                                      "broken_pipe": "stdin_write_failed"}[flow]
         if flow == "broken_pipe":
-            assert isinstance(caught.value.__cause__, BrokenPipeError)
+            assert len(failures) == 1 and caught.value.__cause__ is failures[0]
+            assert_closed_pipe_failure(failures[0])
         assert not Path(caught.value.paths["receipt"]).exists()
     assert bounded and set(bounded) == {LIMIT}
 
@@ -460,7 +472,8 @@ def test_missing_bounded_input_digest_refuses_success_and_preserves_original_fai
     assert caught.value.code == {"hash_only": "stdin_record_failed", "broken_pipe": "stdin_write_failed",
                                  "cancel": "cancelled"}[flow]
     if flow == "broken_pipe":
-        assert isinstance(failures[0], BrokenPipeError) and caught.value.__cause__ is failures[0]
+        assert len(failures) == 1 and caught.value.__cause__ is failures[0]
+        assert_closed_pipe_failure(failures[0])
     assert blocked and set(blocked) == {LIMIT}
     assert not Path(caught.value.paths["receipt"]).exists()
 

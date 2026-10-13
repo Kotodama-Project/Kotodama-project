@@ -339,7 +339,8 @@ def test_learning_cli_uses_current_decision_and_keeps_the_typed_transport(tmp_pa
     owner, file = origin[1].with_name("learning-owner.json"), origin[2].with_name("learning-input.json")
     save(file, seed)
     document = json.loads(origin[1].read_bytes())
-    area = owner.parent / "learning-task"
+    # Leave room for the owned attempt suffix within the Windows cwd bound.
+    area = owner.parent / "next"
     area.mkdir()
     document["binding"].update(task_id=seed["task_id"], context_digest=digest(seed), active_home=str(area))
     document["storage"] = {"root": str(area), "mailbox": str(area / "mailbox.sqlite"), "payloads": str(area / "payloads")}

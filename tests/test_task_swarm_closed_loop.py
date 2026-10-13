@@ -281,30 +281,44 @@ def test_context_limit_stops_before_a_backend_call_and_cannot_be_reset_by_restar
 def test_noncooperative_callback_cannot_publish_after_deadline(tmp_path):
     setup = setup_loop(tmp_path, jobs=1)
     now, entered, release, cancelled = [1000], threading.Event(), threading.Event(), threading.Event()
-    errors = []
+    finished, returned = threading.Event(), threading.Event()
+    observers, observer_errors = [], []
+    def expire():
+        try:
+            now[0] = 1101
+            assert cancelled.wait(timeout=2), "deadline monitor did not cancel the running callback"
+            assert not finished.is_set()  # The coordinator must still wait for the callback.
+            assert not returned.is_set()
+        except BaseException as error:
+            observer_errors.append(error)
+        finally:
+            release.set()
     class Backend(MeasuredBackend):
         def produce(self, *args, **kwargs):
             entered.set()
-            release.wait(timeout=3)  # Deliberately ignores cancellation until released by the test.
-            return super().produce(*args, **kwargs)
-    def run():
-        try:
+            # Start the deadline observation at actual dispatch, after owner/SQLite preparation.
+            observer = threading.Thread(target=expire, name="deadline-test-observer", daemon=True)
+            observer.start()
+            observers.append(observer)
+            assert release.wait(timeout=3)  # Deliberately ignores cancellation until the test releases it.
+            response = super().produce(*args, **kwargs)
+            returned.set()
+            return response
+    try:
+        with pytest.raises(SwarmError, match="DEADLINE_EXPIRED"):
             execute_closed_loop(setup[0], setup[1], setup[4], Backend(setup[3], setup[6]),
                 worker_actors=setup[5],
                 clock=lambda: now[0], cancel_event=cancelled)
-        except Exception as error:
-            errors.append(error)
-    worker = threading.Thread(target=run, daemon=True)
-    worker.start()
-    try:
-        assert entered.wait(timeout=2)
-        now[0] = 1101
-        assert cancelled.wait(timeout=2)
-        assert worker.is_alive()  # Threads cannot forcibly stop an arbitrary Python callback.
     finally:
+        finished.set()
+        cancelled.set()
         release.set()
-        worker.join(timeout=3)
-    assert not worker.is_alive() and errors and isinstance(errors[0], SwarmError)
+        for observer in observers:
+            observer.join(timeout=3)
+        assert all(not observer.is_alive() for observer in observers)
+        if observer_errors:
+            raise observer_errors[0]
+    assert entered.is_set() and returned.is_set() and len(observers) == 1
     assert not list((setup[0].parent/"operations").glob("*/receipt.json"))
     with pytest.raises(SwarmError, match="RUN_RECOVERY_REQUIRED"):
         execute(setup, MeasuredBackend(setup[3], setup[6]))

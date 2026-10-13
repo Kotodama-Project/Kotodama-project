@@ -308,6 +308,15 @@ def _prepare_attempt(attempt_dir: str | os.PathLike[str]) -> Path:
     return run
 
 
+def _check_execution_cwd(cwd: str | os.PathLike[str]) -> None:
+    # CreateProcess needs room for the trailing separator and NUL. Count the
+    # supplied final cwd, including any scope suffix or extended/UNC prefix.
+    if sys.platform == "win32" and len(str(cwd).encode("utf-16-le", errors="surrogatepass")) // 2 > 258:
+        raise BackendError("execution_cwd_limit",
+                           "Windows execution cwd exceeds 258 UTF-16 units; choose a shorter owner storage root",
+                           retryable=False)
+
+
 def _paths(run: Path, *, record_input: bool = False, record_executable: bool = False) -> dict[str, Path]:
     paths = {
         "attempt_dir": run,
@@ -1178,6 +1187,7 @@ class CodexBackend:
             check_cancelled()
             if time.monotonic() >= deadline:
                 raise BackendError("timeout", "attempt budget expired before process launch", retryable=False)
+            _check_execution_cwd(execution_cwd)
             process = subprocess.Popen(
                 command,
                 cwd=str(execution_cwd),
