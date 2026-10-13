@@ -6,6 +6,7 @@ The resulting impact is derived evidence, never a replacement Task ledger.
 from __future__ import annotations
 
 import hashlib
+import re
 
 from .protocol import canonical, digest
 from .task_contract import require
@@ -19,14 +20,30 @@ def profile(template):
     if not fields:
         return None
     require(fields == PROFILE_FIELDS and type(template["repair_planning_contract"]) is int
-            and template["repair_planning_contract"] == 1
+            and template["repair_planning_contract"] in (1, 2)
             and template.get("evidence_contract_version") == 2,
             "LOOP_REPAIR_PROFILE")
-    return 1
+    require(template["repair_planning_contract"] != 2 or template.get("execution_contract_version") == 3,
+            "LOOP_REPAIR_PROFILE")
+    return template["repair_planning_contract"]
 
 
 def file_sha(value):
     return hashlib.sha256((canonical(value) + "\n").encode("utf-8")).hexdigest()
+
+
+def repair_job_id(original_id, initial_ids):
+    """Name a repair using the authenticated complete initial work set.
+
+    Short IDs retain their persisted spelling. Initial IDs start with a letter,
+    so full-set ordinals for longer IDs occupy a disjoint namespace.
+    """
+    require(isinstance(initial_ids, (list, tuple)) and 1 <= len(initial_ids) <= 3
+            and all(isinstance(name, str) and re.fullmatch(r"[a-z][a-z0-9_-]{0,55}", name)
+                    and name != "critic" for name in initial_ids), "LOOP_REPAIR_BINDING")
+    require(len(set(initial_ids)) == len(initial_ids) and original_id in initial_ids,
+            "LOOP_REPAIR_BINDING")
+    return "repair-" + (original_id if len(original_id) <= 49 else str(sorted(initial_ids).index(original_id)))
 
 
 def derive_repair(payload, initial, gap):
@@ -36,11 +53,16 @@ def derive_repair(payload, initial, gap):
     require(isinstance(gap, dict) and gap.get("parent_input_digest") == digest(payload)
             and gap.get("plan_digest") == digest(initial), "LOOP_REPAIR_BINDING")
     failed = set(gap["failed_criteria"])
+    if initial["version"] == 2:
+        from .dependency_contract import roles
+        a, b = roles(initial)
+        allowed = set(b["criterion_ids"]) - set(a["criterion_ids"])
+        require(failed <= allowed, "LOOP_DEPENDENCY_REPAIR_UNSUPPORTED")
     records = {item["criterion_id"]: item for item in gap["validations"]}
     require(failed and set(records) == failed and len(records) == len(gap["validations"]),
             "LOOP_REPAIR_BINDING")
     jobs, assignments, covered, selected = [], [], set(), set()
-    for ordinal, original in enumerate(sorted(initial["jobs"], key=lambda job: job["job_id"])):
+    for original in sorted(initial["jobs"], key=lambda job: job["job_id"]):
         assigned = sorted(failed.intersection(original["criterion_ids"]))
         if not assigned:
             continue
@@ -48,8 +70,7 @@ def derive_repair(payload, initial, gap):
         require(spans, "LOOP_REPAIR_SCOPE")
         selected.update(spans)
         covered.update(assigned)
-        # Initial IDs start with a letter; ordinals occupy a disjoint namespace.
-        job_id = "repair-" + (original["job_id"] if len(original["job_id"]) <= 49 else str(ordinal))
+        job_id = repair_job_id(original["job_id"], [job["job_id"] for job in initial["jobs"]])
         detail = [{"criterion_id": key, "gap_reason": records[key]["gap_reason"],
                    "evidence": records[key]["evidence"]} for key in assigned]
         jobs.append({"job_id": job_id,
@@ -76,13 +97,14 @@ def make_impact(payload, initial, runtime_plan, prior, work_inputs, snapshot):
     require(canonical(snapshot["plan"]) == canonical(runtime_plan), "LOOP_REPAIR_STATE")
     previous = prior["dispatched_input"]
     template = {key: value for key, value in previous.items()
-                if key not in {"template_digest", "reports", "report_digests"}}
+                if key not in {"template_digest", "reports", "report_digests", "release_certificate", "release_certificate_sha256", "prerequisite_inputs"}}
     critic = validate_critic(prior["response"]["result"], payload, previous["reports"],
         view=previous["view"], plan_digest=digest(initial), round_index=0,
         initial_execution_plan_digest=digest(runtime_plan), expected_jobs=work,
         dispatched_input=previous, dispatched_input_digest=prior["dispatched_input_digest"],
         initial_specification=initial, initial_runtime_plan=runtime_plan,
-        initial_template=template, work_inputs=work_inputs)
+        initial_template=template, work_inputs=work_inputs,
+        dependency_stage=snapshot.get("dependency_stage"))
     require(prior["response"]["receipt"]["input_digest"] == prior["dispatched_input_digest"],
             "LOOP_INPUT_RECEIPT_MISMATCH")
     critic_sha = file_sha(prior["response"])
@@ -114,6 +136,11 @@ def make_impact(payload, initial, runtime_plan, prior, work_inputs, snapshot):
                        "deadline": runtime_plan["budget"]["deadline"], "attempts": attempts,
                        "attempts_used": len(attempts), "remaining_attempts": remaining},
         "planned_calls": len(proposal["jobs"]) + 1}
+    if initial["version"] == 2:
+        from .dependency_contract import check_stage
+        stage = check_stage(snapshot.get("dependency_stage"), runtime_plan)
+        require(stage["status"] == "released", "LOOP_RELEASE_INVALID")
+        impact.update(version=2, release_certificate_sha256=stage["certificate_sha256"])
     return proposal, impact
 
 def _stream_identity(stream):
@@ -212,7 +239,7 @@ def _inspection_cut(database, destination):
     return fingerprint
 
 
-def _inspection_state(database, owner, clock):
+def _inspection_state(database, owner, clock, *, dependency=False):
     """Validate the copied original schema before any scheduler initializer."""
     import sqlite3
     from contextlib import closing
@@ -224,6 +251,8 @@ def _inspection_state(database, owner, clock):
         "run_finalizations": "run_id checkpoint_json progress_json receipt_json",
         "run_cancellations": "run_id cancellation_json",
     }
+    if dependency:
+        required["run_dependency_stages"] = "run_id stage_json"
     try:
         with database.open("rb") as stream:
             require(stream.read(16) == b"SQLite format 3\x00", "LOOP_REPAIR_STATE")
@@ -265,7 +294,20 @@ def inspect_repair(owner_path, payload_path, *, clock=None):
     plan = read_json(directory/"plan.json")
     with TemporaryDirectory(prefix="kotodama-repair-inspect-") as private:
         cut = _inspection_cut(directory/"execution.sqlite", Path(private))
-        state = _inspection_state(Path(private)/"execution.sqlite", owner, clock)
+        state = _inspection_state(Path(private)/"execution.sqlite", owner, clock,
+                                  dependency=plan.get("execution_contract_version") == 3)
+        stage = state.dependency_stage(run_id)
+        if stage is not None:
+            progress, progress_sha = read_json(directory/"release-progress.json", with_digest=True)
+            require(progress_sha == stage["certificate"]["progress_sha256"], "LOOP_RELEASE_CHANGED")
+            require(isinstance(progress, dict), "LOOP_RELEASE_INVALID")
+            metadata, artifacts = progress.get("metadata"), progress.get("artifacts")
+            require(isinstance(metadata, dict) and isinstance(artifacts, dict)
+                    and "reuse_context" in metadata, "LOOP_RELEASE_INVALID")
+            require(metadata["reuse_context"] is None
+                    and metadata.get("context_binding_digest") == digest(None)
+                    and "context-binding.json" not in artifacts,
+                    "LOOP_REUSE_INSPECTION_UNSUPPORTED")
         finalization = state.finalization(run_id)
         if finalization is not None:
             checkpoint = finalization["checkpoint"]
@@ -280,7 +322,7 @@ def inspect_repair(owner_path, payload_path, *, clock=None):
         template = read_json(directory/"r0-critic-template.json")
         require(canonical(snapshot["plan"]) == canonical(plan), "LOOP_REPAIR_STATE")
         evidence_version(plan, template)
-        require(profile(template) == 1, "LOOP_REPAIR_PROFILE")
+        require(profile(template) in (1, 2), "LOOP_REPAIR_PROFILE")
         require(all(snapshot["jobs"][job["job_id"]]["state"] in {"reported", "accepted"}
                     for job in plan["jobs"]), "LOOP_REPAIR_STATE")
         response = read_json(directory/"r0-critic-result.json")
@@ -302,7 +344,8 @@ def inspect_repair(owner_path, payload_path, *, clock=None):
         validate_input(payload, binding, now=clock())
         with TemporaryDirectory(prefix="kotodama-repair-recheck-") as fresh:
             current = _inspection_cut(directory/"execution.sqlite", Path(fresh))
-            live = _inspection_state(Path(fresh)/"execution.sqlite", owner, clock)
+            live = _inspection_state(Path(fresh)/"execution.sqlite", owner, clock,
+                                     dependency=plan.get("execution_contract_version") == 3)
             require(live.cancellation(run_id) is None, "RUN_CANCELLED")
             live.snapshot(run_id)
             require(current == cut, "RUN_ARTIFACT_CHANGED")

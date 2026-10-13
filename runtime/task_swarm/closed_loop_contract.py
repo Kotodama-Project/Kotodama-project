@@ -34,7 +34,7 @@ def span_identity(span):
 
 def validate_plan(value, payload, *, gap=None):
     shape(value, {"version", "parent_input_digest", "jobs"}, "LOOP_PLAN_INVALID")
-    require(type(value["version"]) is int and value["version"] == 1, "LOOP_PLAN_INVALID")
+    require(type(value["version"]) is int and value["version"] in (1, 2), "LOOP_PLAN_INVALID")
     require(value["parent_input_digest"] == digest(payload), "LOOP_PLAN_STALE")
     require(isinstance(value["jobs"], list) and 1 <= len(value["jobs"]) <= 3, "LOOP_PLAN_LIMIT")
     criteria, sources = loop_criteria(payload), _Sources(payload)
@@ -42,7 +42,8 @@ def validate_plan(value, payload, *, gap=None):
     permitted_spans = {span_identity(s) for s in gap["source_spans"]} if gap else None
     ids, covered, selected = set(), set(), set()
     for job in value["jobs"]:
-        shape(job, {"job_id", "purpose", "criterion_ids", "selected_spans"}, "LOOP_JOB_INVALID")
+        shape(job, {"job_id", "purpose", "criterion_ids", "selected_spans"} |
+              ({"requires"} if value["version"] == 2 else set()), "LOOP_JOB_INVALID")
         name = job["job_id"]
         require(isinstance(name, str) and re.fullmatch(r"[a-z][a-z0-9_-]{0,55}", name)
                 is not None and name != "critic" and name not in ids, "LOOP_JOB_ID_INVALID")
@@ -63,6 +64,9 @@ def validate_plan(value, payload, *, gap=None):
             require(permitted_spans is None or identity in permitted_spans, "LOOP_REPAIR_SCOPE")
             seen.add(identity)
         selected.update(seen)
+    if value["version"] == 2:
+        from .dependency_contract import roles
+        roles(value)
     require(covered == expected, "LOOP_PLAN_COVERAGE")
     if gap:
         require(selected == permitted_spans, "LOOP_GAP_COVERAGE")
@@ -96,7 +100,12 @@ def evidence_version(runtime_plan, initial_template):
     require(type(version) is int and version in (1, 2), "LOOP_EVIDENCE_POLICY")
     require((version == 2) == ("required_evidence_jobs" in initial_template)
             and (version == 2 or "evidence_contract_version" not in initial_template), "LOOP_EVIDENCE_POLICY")
-    keys = {"role", "job_id", "round", "round_plan_digest", "criteria", "view"}
+    from .dependency_contract import EXECUTION_FIELDS, execution_version
+    execution = execution_version(runtime_plan)
+    require(execution_version(initial_template) == execution, "LOOP_DEPENDENCY_POLICY")
+    keys = {"role", "job_id", "round", "round_plan_digest", "criteria", "view"} | (EXECUTION_FIELDS if execution else set())
+    if execution:
+        require(initial_template["dependency_descriptor_sha256"] == runtime_plan["dependency_descriptor_sha256"], "LOOP_DEPENDENCY_POLICY")
     planning = profile(initial_template)
     require(planning is None or (version == 2 and initial_template["repair_impact_sha256"] is None),
             "LOOP_REPAIR_PROFILE")
@@ -132,16 +141,21 @@ def required_evidence_jobs(payload, initial_specification, repair_specification=
     return {key: sorted(value) for key, value in result.items()}
 
 
-def _check_work_inputs(payload, initial, repair, inputs, scheduled, initial_digest, previous):
+def _check_work_inputs(payload, initial, repair, inputs, scheduled, initial_digest, previous, stage=None, reports=None):
     require(isinstance(inputs, dict), "LOOP_WORK_BINDING")
     for index, spec in enumerate([initial] + ([repair] if repair is not None else [])):
         for job in spec["jobs"]:
             expected = work_input(payload, job, index, initial_digest, round_plan_digest=digest(spec),
                                   previous=previous if index else None)
             name = expected["job_id"]
+            declared_digest = digest(expected)
+            if stage is not None:
+                from .dependency_contract import dependent_input
+                if name != stage["certificate"]["a_job_id"]:
+                    expected = dependent_input(expected, stage, reports[stage["certificate"]["a_job_id"]])
             require(name in inputs and name in scheduled and canonical(inputs[name]) == canonical(expected)
                     and scheduled[name]["kind"] == "work"
-                    and scheduled[name]["payload_digest"] == digest(expected), "LOOP_WORK_BINDING")
+                    and scheduled[name]["payload_digest"] == (declared_digest if not stage or index == 0 else digest(expected)), "LOOP_WORK_BINDING")
 
 
 def _planned_reports(reports, expected_jobs, round_index):
@@ -175,7 +189,7 @@ def _critic_dispatch(payload, reports, view, plan_digest, round_index,
             and dispatched_input.get("report_digests") == {k: digest(v) for k, v in reports.items()},
             "LOOP_CRITIC_DISPATCH_MISMATCH")
     template = {k: v for k, v in dispatched_input.items()
-                if k not in {"template_digest", "reports", "report_digests"}}
+                if k not in {"template_digest", "reports", "report_digests", "release_certificate", "release_certificate_sha256", "prerequisite_inputs"}}
     require(dispatched_input.get("template_digest") == digest(template), "LOOP_CRITIC_DISPATCH_MISMATCH")
     validate_child_view(view, payload, job_id=job, plan_digest=plan_digest,
                         previous_critic_digest=previous)
@@ -232,7 +246,7 @@ def validate_critic(value, payload, reports, *, view, plan_digest, round_index,
                     initial_execution_plan_digest, expected_jobs, dispatched_input, dispatched_input_digest,
                     initial_specification, initial_runtime_plan, initial_template, work_inputs,
                     repair_specification=None, prior_review=None, repair_admission=None,
-                    repair_impact=None, execution_snapshot=None):
+                    repair_impact=None, execution_snapshot=None, dependency_stage=None):
     """Validate all planned reports against a stored critic dispatch.
 
     Expected jobs and dispatch digests come from the coordinator's immutable
@@ -249,8 +263,21 @@ def validate_critic(value, payload, reports, *, view, plan_digest, round_index,
     require(digest(initial_runtime_plan) == initial_execution_plan_digest, "LOOP_EVIDENCE_POLICY")
     version = evidence_version(initial_runtime_plan, initial_template)
     policy = dict(initial_specification=initial_specification, initial_runtime_plan=initial_runtime_plan,
-                  initial_template=initial_template, work_inputs=work_inputs)
+                  initial_template=initial_template, work_inputs=work_inputs, dependency_stage=dependency_stage)
     require(isinstance(dispatched_input, dict), "LOOP_CRITIC_DISPATCH_MISMATCH")
+    if initial_runtime_plan.get("execution_contract_version") == 3:
+        from .dependency_contract import check_stage, check_descriptor, descriptor, prerequisite_inputs
+        desc, pre = descriptor(payload, initial_specification)
+        check_descriptor(payload, initial_specification, initial_runtime_plan, desc, pre)
+        check_stage(dependency_stage, initial_runtime_plan)
+        require(isinstance(work_inputs, dict) and set(reports) <= set(work_inputs)
+                and all(isinstance(work_inputs[job], dict) for job in reports), "LOOP_WORK_BINDING")
+        require(dependency_stage["status"] == "released"
+                and dispatched_input.get("release_certificate") == dependency_stage["certificate"]
+                and dispatched_input.get("release_certificate_sha256") == dependency_stage["certificate_sha256"]
+                and dispatched_input.get("prerequisite_inputs") == prerequisite_inputs({job: work_inputs[job] for job in reports}), "LOOP_RELEASE_INVALID")
+    else:
+        require(dependency_stage is None and not {"release_certificate", "release_certificate_sha256", "prerequisite_inputs"}.intersection(dispatched_input), "LOOP_DEPENDENCY_POLICY")
     required = None
     repaired_criteria, previous, round_plan = set(), None, plan_digest
     if round_index:
@@ -277,12 +304,12 @@ def validate_critic(value, payload, reports, *, view, plan_digest, round_index,
         require({j for j, item in scheduled.items() if item["kind"] == "work"} == first_jobs | repair_jobs,
                 "LOOP_WORK_BINDING")
         current_template = {key: value for key, value in dispatched_input.items()
-                            if key not in {"template_digest", "reports", "report_digests"}}
+                            if key not in {"template_digest", "reports", "report_digests", "release_certificate", "release_certificate_sha256", "prerequisite_inputs"}}
         shape(current_template, set(initial_template), "LOOP_EVIDENCE_POLICY")
         require(scheduled[f"r{round_index}-critic"]["payload_digest"] == digest(current_template),
                 "LOOP_EVIDENCE_POLICY")
         _check_work_inputs(payload, initial, repair_specification if round_index else None,
-                           work_inputs, scheduled, plan_digest, previous)
+                           work_inputs, scheduled, plan_digest, previous, dependency_stage, reports)
         require(dispatched_input.get("evidence_contract_version") == 2
                 and canonical(dispatched_input.get("required_evidence_jobs")) == canonical(required),
                 "LOOP_EVIDENCE_POLICY")

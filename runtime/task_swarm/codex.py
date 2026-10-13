@@ -607,6 +607,9 @@ def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | N
                     event_turn = payload.get("turn_id") or outer.get("turn_id")
                     if not isinstance(event_turn, str) or not event_turn:
                         continue
+                    # Validate all identities above, but retain only the explicit turn.
+                    if turn_id is not None and event_turn != turn_id:
+                        continue
                     if record_type == "turn_context":
                         file_contexts[event_turn] = payload
                         for key in ("cwd", "working_directory", "workdir", "runtime_cwd"):
