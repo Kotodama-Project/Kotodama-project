@@ -66,7 +66,8 @@ Task ownerを追加せず、実Codex・native core・配備の受入は残りま
 ## 作業を一つ進める
 
 [小単位の知識CLI](KNOWLEDGE-CLI.md)から、目的参照で検索しConcept/節を読む経路へ進めます。
-大規模索引、目的/制約の実入力束縛、限定改善は#326〜#328の後続受入です。
+型付きの目的・原意・訂正・制約は[Task入力](KNOWLEDGE-TASK-INPUT.md)から既存ownerに束縛します。
+大規模索引、全階層のowner接続、実モデル・利用者成果を伴う改善は#326〜#328と#347の後続受入です。
 [検証済みの学びの限定再利用](TASK-LEARNING-REUSE.md)は、独立reviewと既存owner判断を
 経て、一つの学びを同じ目的の次のTaskへ渡すlocal simulationの入口です。
 

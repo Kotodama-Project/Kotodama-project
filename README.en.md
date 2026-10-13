@@ -58,7 +58,7 @@ You choose how to use the product:
 | Area | On `main` | Candidate (open PR) | Direction |
 |---|---|---|---|
 | Company Pack / Evidence Chain | starter with 9 Blocks, 9 Records, 3 MOCs; schemas, validators, review chain, smoke | | Promotion policy per lane |
-| Session / conversation ledger | schema and validator | | runtime ingestion |
+| Session / conversation ledger | schema, validator and [local ledger export/readback](docs/SESSION-CONVERSATION-LEDGER.md) (synthetic validation) | | real-data ingestion, retention and operation |
 | Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | | 15-minute rotation, Voice-to-Verified-Handoff, GrillU, the rest of the [GPT-Live adoption policy](docs/GPT-LIVE-ADOPTION.md) (#142 to #146) |
 | Agent swarm / autonomy | bounded Task execution, Luna Task swarm, swarm and route-binding contracts (#34), migration-ledger schema and read-only verifier (#35; synthetic fixture only), [agent-lifecycle contract](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md) (#36; schema, read-only verifier, synthetic fixture) | real registry and runtime/continuity acceptance | Goal Completion Loop after a human GO |
 | Knowledge / Context | canonical OKF Markdown, catalog/graph, bounded retrieval/context, typed goal/Source/frontier inputs and owner-bound learning candidates | hierarchy integration, process-executor/product CLI and large-corpus evaluation | Context Gateway and continuous improvement |

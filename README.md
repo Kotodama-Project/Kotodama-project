@@ -72,7 +72,7 @@ Project CLI は参照と訂正候補の検査までです。Task 作成・更新
 | 面 | `main` | 候補（未統合） | 方向 |
 |---|---|---|---|
 | Company Pack / Evidence Chain | 9 Blocks、9 Records、3 MOCs の starter、schema と validator、review chain、smoke | | lane ごとの Promotion policy |
-| Session / conversation ledger | schema と validator | | runtime への取込 |
+| Session / conversation ledger | schema・validator、[local ledger-export/readback](docs/SESSION-CONVERSATION-LEDGER.md)（合成検証） | | 実データの取込・保持・運用 |
 | Discord / Voice | `runtime/discord-template` | | 15 分 rotation、Voice-to-Verified-Handoff、GrillU、[GPT-Live の採用方針](docs/GPT-LIVE-ADOPTION.md)の残り（#142〜#146） |
 | Agent swarm / 自律実行 | 限定 Task 実行、Luna Task swarm、agent swarm・route binding の契約（#34）、移行台帳の契約（#35）、agent lifecycle の契約（#36） | 実 registry と runtime/continuity 受入 | 「OK」後の Goal Completion Loop、reversible delegation |
 | 知識・Context | canonical OKF bundle、read-only検索/context、型付きTask目的・Source/frontier・learning候補の既存owner接続 | 階層統合、実executor入力・製品CLI、大規模検索評価 | Context Gateway、継続改善 |
