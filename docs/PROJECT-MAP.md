@@ -9,6 +9,7 @@ Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なと�
 外部の常駐agentから一つの窓口として使う構成、必要時の役割生成、上下・横の通信、
 要件の保持と可変profileは[動的ハブの設計候補](AGENT-HUB-DESIGN.md)を参照します。
 最初の実装は[Project情報契約とread-only view](PROJECT-HUB-VIEW.md)。既存Task ownerへの参照を検査します。
+保存・訂正は[local Project ownerの共通操作](../runtime/discord-template/docs/PROJECTS.md)を参照します。
 既存ownerとswarmを再利用する設計で、外部接続や自動生成の稼働を示すものではありません。
 追加の[Project中心の利用体験と情報定義](AGENT-HUB-DESIGN.md#プロジェクトを中心にした利用体験と情報定義)は、
 GUI・自然言語から同じ仕事を動かす要件、Projectの最小入力、段階的な情報補完、最適化を扱います。
@@ -66,7 +67,8 @@ Task ownerを追加せず、実Codex・native core・配備の受入は残りま
 ## 作業を一つ進める
 
 [小単位の知識CLI](KNOWLEDGE-CLI.md)から、目的参照で検索しConcept/節を読む経路へ進めます。
-大規模索引、目的/制約の実入力束縛、限定改善は#326〜#328の後続受入です。
+型付きの目的・原意・訂正・制約は[Task入力](KNOWLEDGE-TASK-INPUT.md)から既存ownerに束縛します。
+大規模索引、全階層のowner接続、実モデル・利用者成果を伴う改善は#326〜#328と#347の後続受入です。
 [検証済みの学びの限定再利用](TASK-LEARNING-REUSE.md)は、独立reviewと既存owner判断を
 経て、一つの学びを同じ目的の次のTaskへ渡すlocal simulationの入口です。
 
