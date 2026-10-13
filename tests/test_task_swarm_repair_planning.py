@@ -22,6 +22,52 @@ from task_swarm.task_runner import read_json
 from test_task_swarm_closed_loop import setup_loop, MeasuredBackend, execute
 
 
+@pytest.mark.parametrize("length", [49, 50, 56])
+def test_valid_long_initial_id_completes_real_repair_without_losing_initial_work(tmp_path, length):
+    setup = setup_loop(tmp_path)
+    name = "a" * length
+    setup[4]["jobs"][0]["job_id"] = name
+    from task_swarm.closed_loop_contract import validate_plan
+    assert validate_plan(setup[4], setup[3]) == setup[4]
+
+    class Observed(MeasuredBackend):
+        def review(self, delivered, directory, **kwargs):
+            if delivered["round"] == 0:
+                self.initial = {p.name: p.read_bytes() for p in directory.parent.glob("r0-*-*.json")
+                                if p.name.endswith(("-input.json", "-result.json"))
+                                and "critic" not in p.name}
+            return super().review(delivered, directory, **kwargs)
+
+    backend = Observed(setup[3], setup[6])
+    result = execute(setup, backend)
+    assert result["receipt"]["review_passed"]
+    assert len(backend.inputs) == 5
+    directory = setup[0].parent / "operations" / result["receipt"]["run_id"]
+    assert backend.initial and all((directory / path).read_bytes() == raw
+                                   for path, raw in backend.initial.items())
+    proposal = read_json(directory / "repair-proposal.json")
+    assert len(proposal["jobs"]) == 1 and len(proposal["jobs"][0]["job_id"]) <= 56
+    assert proposal["jobs"][0]["job_id"] == ("repair-" + name if length == 49 else "repair-0")
+    impact = read_json(directory / "repair-impact.json")
+    assert impact["assignments"][0]["origin_job_id"] == "r0-" + name
+    assert result["receipt"]["budget"]["attempts_used"] == 5
+    assert execute(setup, backend, expected_receipt_sha256=result["receipt_sha256"])["duplicate"]
+    assert len(backend.inputs) == 5
+
+
+def test_inspection_missing_database_refuses_without_creating_any_evidence(tmp_path):
+    setup = setup_loop(tmp_path)
+    backend = MeasuredBackend(setup[3], setup[6])
+    result = execute(setup, backend)
+    directory = setup[0].parent / "operations" / result["receipt"]["run_id"]
+    (directory / "execution.sqlite").unlink()
+    before = {str(p.relative_to(tmp_path)): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    with pytest.raises(SwarmError):
+        inspect_repair(setup[0], setup[1], clock=lambda: 1000)
+    assert {str(p.relative_to(tmp_path)): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()} == before
+    assert len(backend.inputs) == 5
+
+
 def evidence(setup, result):
     directory = setup[0].parent/"operations"/result["receipt"]["run_id"]
     state = SwarmState(directory/"execution.sqlite", OwnerFile(setup[0], clock=lambda: 1000).read_task,
@@ -290,3 +336,192 @@ def test_inspector_refuses_learning_bound_run_without_current_context_reader(tmp
         inspect_repair(arguments["target_owner"], arguments["target_input"], clock=lambda: 1000)
     assert len(backend.calls) == 4
     assert {path.name: path.read_bytes() for path in directory.iterdir() if path.is_file()} == before
+
+
+def inspection_files(directory):
+    return {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
+
+
+def test_inspector_reads_committed_live_wal_without_original_mutation(tmp_path):
+    import sqlite3
+    from contextlib import closing
+    setup = setup_loop(tmp_path)
+    result = execute(setup, MeasuredBackend(setup[3], setup[6]))
+    directory = setup[0].parent / "operations" / result["receipt"]["run_id"]
+    with closing(sqlite3.connect(directory / "execution.sqlite")) as conn:
+        conn.execute("PRAGMA wal_autocheckpoint=0")
+        conn.execute("CREATE TABLE inspection_wal_marker(value TEXT)")
+        conn.execute("INSERT INTO inspection_wal_marker VALUES ('committed')")
+        conn.commit()
+        assert (directory / "execution.sqlite-wal").stat().st_size > 32
+        before = inspection_files(directory)
+        assert inspect_repair(setup[0], setup[1], clock=lambda: 1000)["impact"] == read_json(directory / "repair-impact.json")
+        assert inspection_files(directory) == before
+
+
+@pytest.mark.parametrize("kind", ["header", "missing_table", "missing_column", "cap"])
+def test_inspector_refuses_invalid_saved_database_without_repairing_it(tmp_path, kind):
+    import sqlite3
+    from contextlib import closing
+    setup = setup_loop(tmp_path)
+    result = execute(setup, MeasuredBackend(setup[3], setup[6]))
+    directory = setup[0].parent / "operations" / result["receipt"]["run_id"]
+    database = directory / "execution.sqlite"
+    if kind == "header":
+        database.write_bytes(b"not sqlite")
+    elif kind == "cap":
+        with database.open("ab") as stream:
+            stream.truncate(8 * 1024 * 1024 + 1)
+    else:
+        with closing(sqlite3.connect(database)) as conn:
+            conn.execute("DROP TABLE run_cancellations")
+            if kind == "missing_column":
+                conn.execute("CREATE TABLE run_cancellations(run_id TEXT PRIMARY KEY)")
+            conn.commit()
+    before = inspection_files(directory)
+    with pytest.raises(SwarmError, match="LOOP_REPAIR_STATE"):
+        inspect_repair(setup[0], setup[1], clock=lambda: 1000)
+    assert inspection_files(directory) == before
+
+
+def test_inspector_refuses_mid_copy_database_change(tmp_path, monkeypatch):
+    import task_swarm.repair_planning as planner
+    setup = setup_loop(tmp_path)
+    result = execute(setup, MeasuredBackend(setup[3], setup[6]))
+    directory = setup[0].parent / "operations" / result["receipt"]["run_id"]
+    original = Path.open
+    changed = []
+    def changing(path, *args, **kwargs):
+        stream = original(path, *args, **kwargs)
+        if path == directory / "execution.sqlite" and args == ("rb",) and not changed:
+            changed.append(True)
+            with original(path, "ab") as writer:
+                writer.write(b"changed")
+        return stream
+    monkeypatch.setattr(Path, "open", changing)
+    with pytest.raises(SwarmError, match="RUN_ARTIFACT_CHANGED"):
+        inspect_repair(setup[0], setup[1], clock=lambda: 1000)
+    assert changed
+
+
+def test_inspector_rechecks_late_durable_cancellation(tmp_path, monkeypatch):
+    import task_swarm.repair_planning as planner
+    setup = setup_loop(tmp_path)
+    result = execute(setup, MeasuredBackend(setup[3], setup[6]))
+    directory, state, _ = evidence(setup, result)
+    original = planner.make_impact
+    def cancel_after_impact(*args, **kwargs):
+        value = original(*args, **kwargs)
+        plan = read_json(directory / "plan.json")
+        state._record_cancellation(result["receipt"]["run_id"],
+            expected_binding_digest=plan["binding_digest"],
+            expected_initial_execution_plan_digest=digest(plan), owner_ref=setup[2]["binding"]["owner_ref"])
+        return value
+    monkeypatch.setattr(planner, "make_impact", cancel_after_impact)
+    with pytest.raises(SwarmError, match="RUN_CANCELLED"):
+        inspect_repair(setup[0], setup[1], clock=lambda: 1000)
+    cancellation = state.cancellation(result["receipt"]["run_id"])
+    assert cancellation is not None
+    before = inspection_files(directory)
+    with pytest.raises(SwarmError, match="RUN_CANCELLED"):
+        inspect_repair(setup[0], setup[1], clock=lambda: 1000)
+    assert inspection_files(directory) == before
+
+
+def test_long_and_short_repair_names_remain_unique_and_keep_both_origins(tmp_path):
+    setup = setup_loop(tmp_path)
+    names = ["a" * 50, "repair-0"]
+    for job, name in zip(setup[4]["jobs"], names):
+        job["job_id"] = name
+    result = execute(setup, SharedFailure(setup[3], setup[6]))
+    directory = setup[0].parent / "operations" / result["receipt"]["run_id"]
+    proposal = read_json(directory / "repair-proposal.json")
+    assert {job["job_id"] for job in proposal["jobs"]} == {"repair-0", "repair-repair-0"}
+    impact = read_json(directory / "repair-impact.json")
+    assert {item["origin_job_id"] for item in impact["assignments"]} == {"r0-" + name for name in names}
+    assert result["receipt"]["review_passed"]
+
+
+def test_inspector_accepts_stable_but_different_path_and_descriptor_metadata(tmp_path, monkeypatch):
+    import os
+    import task_swarm.repair_planning as planner
+    from types import SimpleNamespace
+    setup = setup_loop(tmp_path)
+    result = execute(setup, MeasuredBackend(setup[3], setup[6]))
+    directory = setup[0].parent / "operations" / result["receipt"]["run_id"]
+    before = inspection_files(directory)
+    original = os.fstat
+    def descriptor_metadata(fd):
+        metadata = original(fd)
+        values = {name: getattr(metadata, name) for name in dir(metadata) if name.startswith("st_")}
+        # Windows path and CRT descriptor APIs need not expose identical file
+        # identifiers, permission bits, or timestamp precision.
+        values.update(st_dev=metadata.st_dev + 1, st_ino=metadata.st_ino + 2,
+                      st_mode=metadata.st_mode ^ 0o111, st_ctime_ns=metadata.st_ctime_ns + 100)
+        return SimpleNamespace(**values)
+    original_cut = planner._inspection_cut
+    def cut(*args):
+        with monkeypatch.context() as patch:
+            patch.setattr(os, "fstat", descriptor_metadata)
+            return original_cut(*args)
+    monkeypatch.setattr(planner, "_inspection_cut", cut)
+    inspected = inspect_repair(setup[0], setup[1], clock=lambda: 1000)
+    assert inspected["admitted"] is False
+    assert inspected["impact"] == read_json(directory / "repair-impact.json")
+    assert inspection_files(directory) == before
+
+
+@pytest.mark.parametrize("redirect_at", [1, 3])
+def test_inspection_refuses_a_different_open_file_at_either_named_handle_check(tmp_path, monkeypatch, redirect_at):
+    from task_swarm.repair_planning import _inspection_cut
+    database, other, destination = tmp_path / "execution.sqlite", tmp_path / "other", tmp_path / "copy"
+    database.write_bytes(b"same bytes")
+    other.write_bytes(database.read_bytes())
+    destination.mkdir()
+    original = Path.open
+    opened = []
+    def redirect(path, *args, **kwargs):
+        if path == database and args == ("rb",):
+            opened.append(path)
+            if len(opened) == redirect_at:
+                return original(other, *args, **kwargs)
+        return original(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "open", redirect)
+    with pytest.raises(SwarmError, match="RUN_ARTIFACT_CHANGED"):
+        _inspection_cut(database, destination)
+    assert len(opened) >= redirect_at
+    assert database.read_bytes() == other.read_bytes() == b"same bytes"
+
+
+@pytest.mark.parametrize("outcome", ["full_identity", "unsupported", "zero_volume", "zero_id"])
+def test_windows_handle_identity_uses_full_file_id_and_refuses_unknown_identity(monkeypatch, outcome):
+    import ctypes
+    import os
+    from types import SimpleNamespace
+    from task_swarm.repair_planning import _stream_identity
+    file_id = b"\x00" * 8 + b"\x12\x34\x56\x78\x9a\xbc\xde\xf0"
+    volume = 2 ** 63 + 17
+    calls = []
+    class Query:
+        def __call__(self, handle, information_class, pointer, size):
+            assert handle == 123 and information_class == 18 and size == 24
+            calls.append(self)
+            info = pointer._obj
+            info.volume = 0 if outcome == "zero_volume" else volume
+            info.identifier[:] = b"\x00" * 16 if outcome == "zero_id" else file_id
+            return outcome != "unsupported"
+    def library(name, *, use_last_error):
+        assert name == "kernel32" and use_last_error is True
+        return SimpleNamespace(GetFileInformationByHandleEx=Query())
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "name", "nt")
+        patch.setattr(ctypes, "WinDLL", library, raising=False)
+        patch.setitem(sys.modules, "msvcrt", SimpleNamespace(get_osfhandle=lambda fd: 123))
+        stream = SimpleNamespace(fileno=lambda: 42)
+        if outcome == "full_identity":
+            assert _stream_identity(stream) == (volume, file_id)
+            assert _stream_identity(stream) == (volume, file_id)
+            assert calls[0] is not calls[1]
+        else:
+            with pytest.raises(SwarmError, match="RUN_ARTIFACT_CHANGED"):
+                _stream_identity(stream)

@@ -9,6 +9,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 ### Added
 
 - 現在Sourceの複数親候補と保存normal runtime Planを読む独立source CLIを追加。実owner・行/span・出典bytesを照合し、dispatch・producer配布bridge・installed CLI・全8階層の受入は別に残す（#372）。
+- Projectを中心にしたagent協働、GUIと自然言語の共通操作、可変profileと最適化の意図・設計候補・継続作業の入口を追加。runtimeと実接続の実装は後続（#385）。
 
 - Discord workerの明示project Skills入力と配達receipt、仕事の判断状態CLI、要求整理・根拠再利用・訂正・成果検証のローカル評価を追加。入力の配達とモデル・利用者の受入は分け、既存Task/Decision ownerと公開境界を維持する（#352）。
 

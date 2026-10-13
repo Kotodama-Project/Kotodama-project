@@ -654,6 +654,15 @@ class SwarmState:
         finally:
             self._finish(conn, ok)
 
+    @staticmethod
+    def _dependency_repair_job_id(initial, stage):
+        from .repair_planning import repair_job_id
+        work_ids = [job["job_id"] for job in initial["jobs"] if job["kind"] == "work"]
+        if any(not name.startswith("r0-") for name in work_ids):
+            raise protocol.SwarmError("LOOP_RELEASE_INVALID", "repair needs initial work identities")
+        return "r1-" + repair_job_id(stage["certificate"]["b_job_id"][3:],
+                                    [name[3:] for name in work_ids])
+
     def extend_run(self, run_id: str, extension: Mapping[str, Any]) -> dict[str, Any]:
         """Append one owner-bound repair frontier without renewing its budget.
 
@@ -693,7 +702,7 @@ class SwarmState:
                 from .dependency_state import stage_row
                 stage = stage_row(self, conn, run)
                 if (stage is None or stage["status"] != "released" or len(new_work) != 1
-                        or new_work[0]["job_id"] != "r1-repair-" + stage["certificate"]["b_job_id"][3:]):
+                        or new_work[0]["job_id"] != self._dependency_repair_job_id(initial, stage)):
                     raise protocol.SwarmError("LOOP_RELEASE_INVALID", "repair needs one released prerequisite")
             invalid_dependencies = (any(job["dependencies"] != [stage["certificate"]["a_job_id"]] for job in new_work)
                                     if dependency else any(job["dependencies"] for job in new_work))
@@ -1114,11 +1123,14 @@ class SwarmState:
                 "lease_until": lease_until,
                 "deadline": deadline,
             }
-            if json.loads(run["plan_json"]).get("execution_contract_version") == 3:
+            initial = json.loads(run["plan_json"])
+            if initial.get("execution_contract_version") == 3:
                 from .dependency_state import stage_row
                 stage = stage_row(self, conn, run)
-                if stage and selected["job_id"] in {stage["certificate"]["b_job_id"], "r1-repair-" + stage["certificate"]["b_job_id"][3:]}:
-                    result["delivered_input_digest"] = stage["actual_input_digest"] if selected["job_id"] == stage["certificate"]["b_job_id"] else selected["payload_digest"]
+                if stage and selected["job_id"] in {stage["certificate"]["b_job_id"],
+                                                    self._dependency_repair_job_id(initial, stage)}:
+                    result["delivered_input_digest"] = (stage["actual_input_digest"]
+                        if selected["job_id"] == stage["certificate"]["b_job_id"] else selected["payload_digest"])
             ok = True
             return result
         except sqlite3.IntegrityError as exc:
