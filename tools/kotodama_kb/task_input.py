@@ -284,7 +284,11 @@ def _build(bundle, seed, binding, *, now, allow_expired=False):
         job["criterion_ids"] = [key for key in loop_criteria(payload)
                                 if work is None or key not in work["assignments"]
                                 or work["leaves"][index] in work["assignments"][key]]
-    plan = validate_plan({"version": 1, "parent_input_digest": digest(payload), "jobs": jobs}, payload)
+    dependency = any("requires" in job for job in jobs)
+    plan = validate_plan({"version": 2 if dependency else 1, "parent_input_digest": digest(payload), "jobs": jobs}, payload)
+    if dependency:
+        from runtime.task_swarm.dependency_contract import descriptor
+        descriptor(payload, plan)
     all_spans = {tuple(span[key] for key in ("source_key", "source_revision", "start", "end")): span
                  for job in jobs for span in job["selected_spans"]}
     require(len(all_spans) <= 32, "TASK_CONTEXT_LIMIT")
@@ -301,10 +305,10 @@ def _build(bundle, seed, binding, *, now, allow_expired=False):
         diagnostics["frontier"] = work["diagnostic"]
         diagnostics["frontier"]["budget"] = {
             "work_cap": 3, "initial_work_count": len(jobs),
-            "initial_attempts_required": len(jobs) + 1,
+            "initial_attempts_required": len(jobs) + (2 if dependency else 1),
             "original_attempt_budget": payload["objective"]["budget"]["attempt_budget"],
             "attempts_after_initial_if_no_retry": (
-                payload["objective"]["budget"]["attempt_budget"] - len(jobs) - 1),
+                payload["objective"]["budget"]["attempt_budget"] - len(jobs) - (2 if dependency else 1)),
             "runtime_remaining_attempts": None,
         }
     return _copy({"payload": payload, "supplied_plan": plan, "seed_digest": digest(seed),

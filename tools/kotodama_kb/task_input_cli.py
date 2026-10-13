@@ -71,7 +71,7 @@ def _execute(args, bundle, candidate):
         worker_actors=args.worker, critic_actor=args.critic,
         repair_planner=(lambda _gap: copy.deepcopy(repair)) if repair is not None else None,
         expected_receipt_sha256=args.receipt_sha256, **options)
-    return result, 0 if result["receipt"]["review_passed"] else 3
+    return result, 0 if result.get("receipt") and result["receipt"]["review_passed"] else 3
 
 
 def _emit(value, stream):
