@@ -51,6 +51,13 @@ def release(directory, payload, spec, plan, state, metadata, artifacts, dispatch
         guard()
         checked_artifacts(directory, artifacts)
         require(read_json(directory / "release-progress.json", with_digest=True) == (progress, progress_sha), "LOOP_RELEASE_CHANGED")
+        from .loop_executor_runtime import saved_executor
+        executor = saved_executor(directory, payload, plan, state, metadata)
+        if executor is not None:
+            executor.pin_artifacts(artifacts)
+            executor.verify(a, read_json(directory/(a+"-input.json")), response)
+            executor.verify(REVIEW_ID, delivered, result)
+            executor.current()
         return state.commit_dependency_stage(plan["run_id"], stage,
             expected_state_digest=state.finalization_evidence_digest(plan["run_id"]), cancel_event=cancel_event)
 
@@ -72,6 +79,11 @@ def verify_release(directory, payload, spec, plan, state, metadata):
     require(values["input.json"] == payload and values["specification.json"] == spec
             and values["plan.json"] == plan and values["dependency-descriptor.json"] == desc
             and values[REVIEW_ID + "-template.json"] == template, "LOOP_RELEASE_CHANGED")
+    from .loop_executor_runtime import saved_executor
+    executor = saved_executor(directory, payload, plan, state, metadata)
+    if executor is not None:
+        executor.pin_artifacts(progress["artifacts"])
+        executor.pin_artifacts({"release-progress.json": sha})
     a = desc["a_job_id"]
     original = next(job for job in spec["jobs"] if "r0-" + job["job_id"] == a)
     a_input = work_input(payload, original, 0, digest(spec), round_plan_digest=digest(spec))
@@ -83,11 +95,14 @@ def verify_release(directory, payload, spec, plan, state, metadata):
         proof = stage["certificate"]["a" if job == a else "review"]
         receipt = value["receipt"]
         require(progress["artifacts"][job + "-result.json"] == proof["result_digest"]
-                and receipt == {"actor_ref": proof["worker_ref"], "invocation_ref": proof["identity"]["thread_id"],
-                                "input_digest": digest(delivered), "synthetic": True}
+                and (executor is not None or receipt == {"actor_ref": proof["worker_ref"], "invocation_ref": proof["identity"]["thread_id"],
+                                "input_digest": digest(delivered), "synthetic": True})
                 and progress["dispatches"][job] == {"declared_input_ref": "ref/loop/" + ("template/" if job == REVIEW_ID else "input/") + job,
                     "declared_input_digest": next(item["payload_digest"] for item in plan["jobs"] if item["job_id"] == job),
                     "delivered_input_digest": digest(delivered)}, "LOOP_RELEASE_CHANGED")
+        if executor is not None:
+            require(attempt_proof(executor.snapshot["jobs"][job]["current_attempt"]) == proof, "LOOP_RELEASE_CHANGED")
+            executor.verify(job, delivered, value)
     actor = metadata["worker_actors"][["r0-"+job["job_id"] for job in sorted(spec["jobs"], key=lambda job:job["job_id"])].index(a)]
     require(response["receipt"]["actor_ref"] == actor
             and reviewed["receipt"]["actor_ref"] == metadata["critic_actor"], "REVIEW_NOT_INDEPENDENT")
@@ -100,6 +115,8 @@ def verify_release(directory, payload, spec, plan, state, metadata):
         require(digest(dependent_input(template_b, stage, response["result"])) == stage["actual_input_digest"], "LOOP_RELEASE_CHANGED")
     require(progress["context_bytes"] == sum(len(canonical(values[job + "-input.json"]).encode("utf-8"))
             for job in (a, REVIEW_ID)), "LOOP_RELEASE_CHANGED")
+    if executor is not None:
+        executor.current()
     return stage, progress, values
 
 

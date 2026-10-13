@@ -353,7 +353,7 @@ def verify_task_input(bundle, candidate, owner_path, *, clock=time.time, allow_e
 
 def execute_task_input(bundle, candidate, owner_path, payload_path, backend, *,
                        worker_actors, clock=time.time, **options):
-    """Use the existing simulation coordinator after actual owner admission.
+    """Use the existing finite coordinator after actual owner admission.
 
     The wrapper checks before every backend call; the coordinator's existing
     owner/source checks also cover the intervals and receipt publication.
@@ -369,20 +369,6 @@ def execute_task_input(bundle, candidate, owner_path, payload_path, backend, *,
 
     guard()
 
-    class CheckedBackend:
-        synthetic = getattr(backend, "synthetic", False)
-
-        def produce(self, *args, **kwargs):
-            guard()
-            result = backend.produce(*args, **kwargs)
-            guard()
-            return result
-
-        def review(self, *args, **kwargs):
-            guard()
-            result = backend.review(*args, **kwargs)
-            guard()
-            return result
-
-    return execute_closed_loop(owner_path, payload_path, candidate["supplied_plan"], CheckedBackend(),
+    from runtime.task_swarm.task_backend import checked_backend
+    return execute_closed_loop(owner_path, payload_path, candidate["supplied_plan"], checked_backend(backend, guard),
                                worker_actors=worker_actors, clock=clock, **options)

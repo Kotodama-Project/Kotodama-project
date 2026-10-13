@@ -33,7 +33,9 @@ The [owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) makes the Project a durable
 
 This revision includes OKF Markdown retrieval and bounded context, Task inputs bound to original intent and corrections, independent critic evidence, durable cancellation, one repair of selected leaves, verified two-leaf A-to-B dependency execution, and a read-only Project view. Repair retains the existing Task and budget; terminal checkpoint recovery does not redispatch work.
 
-[STATUS](STATUS.md#current-source-and-open-integration-work) owns the checked revisions, pending executor/learning/hierarchy integration, performance observations and prioritized Issues. Follow each linked Issue's latest evidence before resuming. Whole eight-layer operation, actual model/user outcomes and continuous production operation remain unaccepted.
+Explicit `local_executable_fixture` mode lets the knowledge CLI or installed core run local child processes declared by the existing owner. The two-document fixture verifies five calls, including a separate critic process, that retain DocA's result and repair only DocB. Learning-origin semantic verification is reused within one invocation, while every guard checks current execution evidence, owner bindings and the learning decision.
+
+[STATUS](STATUS.md#current-source-and-open-integration-work) owns this revision's source capabilities, adoption status, remaining hierarchy/readback work, performance observations and prioritized Issues. Follow each linked Issue's latest evidence before resuming. Whole eight-layer operation, actual model/user outcomes and continuous production operation remain unaccepted.
 
 ## Knowledge, Task and Project CLI entrypoints
 
@@ -42,10 +44,12 @@ Use Python 3.12 from the checkout. Follow the linked guides for dependencies and
 | Purpose | Entrypoint | Guide |
 |---|---|---|
 | Find small, source-bound knowledge units | `python -B tools/knowledge_base.py query --root . "intent KGI"` | [Knowledge retrieval/context](docs/KNOWLEDGE-BASE.md) |
-| Bind goals and corrected Source to an existing Task | `python -B tools/knowledge_base.py task-input --help` | [compile / verify / simulate](docs/KNOWLEDGE-TASK-INPUT.md) |
+| Bind goals and corrected Source to an existing Task | `python -B tools/knowledge_base.py task-input --help` | [compile / verify / simulate / execute](docs/KNOWLEDGE-TASK-INPUT.md) |
+| Execute a local fixture from admitted input | `python -B tools/knowledge_base.py task-input execute --help` | [Owner, input and explicit mode](docs/KNOWLEDGE-TASK-INPUT.md#知識cliから使う) |
+| Use the same bounded execution in installed core | `python -I -m kotodama_core.task_swarm.closed_loop --help` | [Local executor](docs/TASK-LOOP-EXECUTOR.md), [building the package candidate](python/README.md#ビルドと確認) |
 | Inspect a Project and existing Task bindings | `python -B tools/project_hub.py --help` | [view / inspect-change](docs/PROJECT-HUB-VIEW.md) |
 
-The Project CLI reads references and validates proposed corrections; it does not create, update or dispatch Tasks. These entrypoints do not establish large-corpus performance or acceptance of the complete improvement loop.
+Execution requires input and workers bound to the existing owner plus `--executor-mode local_executable_fixture`. Learning reuse also requires a current decision. The Project CLI reads references and validates proposed corrections; it does not create, update or dispatch Tasks. These entrypoints do not establish large-corpus performance or acceptance of the complete improvement loop.
 
 You choose how to use the product:
 
@@ -53,15 +57,15 @@ You choose how to use the product:
 - **Delegate bounded work**: [Task swarm research](docs/TASK-SWARM-RUN.md) connects explicit requests to three workers and a separate verifier. It is disabled by default; real model/Discord acceptance remains open.
 - **Spend time in a voice channel**: choose conversation or work modes. Casual conversation does not grant new work or authority.
 
-## What works today
+## What this revision includes
 
-| Area | On `main` | Candidate (open PR) | Direction |
+| Area | Source in this revision | Candidate (not integrated) | Direction |
 |---|---|---|---|
 | Company Pack / Evidence Chain | starter with 9 Blocks, 9 Records, 3 MOCs; schemas, validators, review chain, smoke | | Promotion policy per lane |
 | Session / conversation ledger | schema and validator | | runtime ingestion |
 | Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | | 15-minute rotation, Voice-to-Verified-Handoff, GrillU, the rest of the [GPT-Live adoption policy](docs/GPT-LIVE-ADOPTION.md) (#142 to #146) |
 | Agent swarm / autonomy | bounded Task execution, Luna Task swarm, swarm and route-binding contracts (#34), migration-ledger schema and read-only verifier (#35; synthetic fixture only), [agent-lifecycle contract](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md) (#36; schema, read-only verifier, synthetic fixture) | real registry and runtime/continuity acceptance | Goal Completion Loop after a human GO |
-| Knowledge / Context | canonical OKF Markdown, catalog/graph, bounded retrieval/context, typed goal/Source/frontier inputs and owner-bound learning candidates | hierarchy integration, process-executor/product CLI and large-corpus evaluation | Context Gateway and continuous improvement |
+| Knowledge / Context | canonical OKF Markdown, catalog/graph, bounded retrieval/context, typed goal/Source/frontier inputs and owner-bound learning candidates; explicit local-executor CLI, current evidence checks and learning-origin verification reuse within an invocation | hierarchy integration, non-creating readback of a missing DB and large-corpus evaluation | Context Gateway and continuous improvement |
 | Project | minimal information contract, existing Task read-only view and correction proposal checks | persistence and GUI/natural-language shared operations | configurable collaboration and optimization |
 | Runtime | Compose / Proxmox lifecycle contracts, Cloudflare candidates | | deployment on Cloudflare edge and the official Cloudflare OS |
 

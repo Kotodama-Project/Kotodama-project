@@ -8,9 +8,34 @@ from .task_schemas import report_schema, review_schema
 class TaskBackend:
     synthetic = False
 
-    def __init__(self, executable, *, task_codex_home, session_root=None):
+    def __init__(self, executable, *, task_codex_home=None, session_root=None, loop_mode=None):
+        from .loop_executor import MODE
+        from .task_contract import require
+        require(loop_mode in (None, MODE), "LOOP_EXECUTOR_MODE_UNSUPPORTED")
+        require(loop_mode is None or (task_codex_home is None and session_root is None), "LOOP_EXECUTOR_RUNTIME_SCOPE")
         self.codex = CodexBackend(executable, session_root=session_root)
         self.task_codex_home = task_codex_home
+        self.loop_mode = loop_mode
+
+    def produce_loop(self, delivered, directory, *, policy, dispatch_identity, actor_ref,
+                     timeout, cancel_event, on_process):
+        """Explicit local fixture transport; this does not select a native profile."""
+        import hashlib
+        from pathlib import Path
+        from .loop_executor import MODE, loop_request, loop_schema
+        from .task_contract import require
+        require(self.loop_mode == MODE and actor_ref == dispatch_identity["actor_ref"], "LOOP_EXECUTOR_MODE_UNSUPPORTED")
+        require(Path(self.codex.executable).resolve() == Path(policy["executable"]["path"]), "LOOP_EXECUTOR_POLICY_CHANGED")
+        prompt = loop_request(policy, delivered, dispatch_identity)
+        runtime = CodexBackend(self.codex.executable, session_root=Path(directory)/"sessions").invoke(
+            prompt.decode("utf-8"), loop_schema(delivered), directory, timeout=timeout,
+            cancel_event=cancel_event, on_process=on_process, record_input=True)
+        return {"result": runtime["result"], "receipt": {"actor_ref": actor_ref,
+            "invocation_ref": runtime["receipt"]["thread_id"], "input_digest": digest(delivered),
+            "synthetic": True, "executor_contract_version": 1, "executor_policy_sha256": digest(policy),
+            "prompt_contract_version": 1, "prompt_sha256": hashlib.sha256(prompt).hexdigest(), "runtime": runtime}}
+
+    review_loop = produce_loop
 
     def produce(self, job, payload, directory, *, timeout, cancel_event, on_process):
         prompt = (
@@ -38,6 +63,74 @@ class TaskBackend:
         return self.codex.invoke(prompt, review_schema(payload), directory, timeout=timeout,
                                  cancel_event=cancel_event, on_process=on_process,
                                  confidential=True, task_codex_home=self.task_codex_home)
+
+
+class _CheckedBackend:
+    def __init__(self, backend, guard):
+        self._backend, self._guard = backend, guard
+        self.synthetic = getattr(backend, "synthetic", False)
+
+    def _call(self, method, *args, **kwargs):
+        self._guard()
+        result = getattr(self._backend, method)(*args, **kwargs)
+        self._guard()
+        return result
+
+    def produce(self, *args, **kwargs):
+        return self._call("produce", *args, **kwargs)
+
+    def review(self, *args, **kwargs):
+        return self._call("review", *args, **kwargs)
+
+
+class _CheckedTaskBackend(_CheckedBackend, TaskBackend):
+    """Keep the concrete transport and explicit mode while adding KB guards."""
+    @property
+    def codex(self):
+        return self._backend.codex
+
+    @property
+    def loop_mode(self):
+        return self._backend.loop_mode
+
+    @property
+    def task_codex_home(self):
+        return self._backend.task_codex_home
+
+    def produce_loop(self, *args, **kwargs):
+        return self._call("produce_loop", *args, **kwargs)
+
+    def review_loop(self, *args, **kwargs):
+        return self._call("review_loop", *args, **kwargs)
+
+
+def checked_backend(backend, guard):
+    from .task_contract import require
+    require(callable(guard), "TASK_CONTEXT_GUARD_REQUIRED")
+    return (_CheckedTaskBackend if isinstance(backend, TaskBackend) else _CheckedBackend)(backend, guard)
+
+
+def local_loop_backend(owner_path, payload, specification, *, mode, allow_expired=False):
+    """Select only the current owner's explicit, byte-bound fixture policy."""
+    from pathlib import Path
+    import time
+    from .loop_executor import MODE, check_current_executor_policy
+    from .loop_executor_runtime import select_executor_policy
+    from .owner_file import OwnerFile
+    from .task_contract import require, validate_input
+    from .task_runner import read_json
+    require(mode == MODE, "LOOP_EXECUTOR_MODE_UNSUPPORTED")
+    require(isinstance(payload, dict), "TASK_INPUT_INVALID")
+    owner_path = Path(owner_path)
+    document, owner_sha = read_json(owner_path, 1024 * 1024, with_digest=True)
+    owner = OwnerFile(owner_path)
+    binding = owner.read_task(payload.get("task_id"))
+    payload = validate_input(payload, binding, now=time.time(), allow_expired_objective=allow_expired)
+    policy = select_executor_policy(payload, specification, owner_path)
+    check_current_executor_policy(policy, payload, specification, owner_path=owner_path, owner_document=document)
+    require(owner.read_task(payload["task_id"]) == binding
+            and read_json(owner_path, 1024 * 1024, with_digest=True)[1] == owner_sha, "OWNER_INPUT_CHANGED")
+    return TaskBackend(policy["executable"]["path"], loop_mode=MODE)
 
 
 class SyntheticTaskBackend:
