@@ -91,8 +91,10 @@ test('control accepts full Unicode and escaped Project briefs while bounding all
       assert.ok(Buffer.byteLength(body)>1200000);
       const {port}=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
       const token=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8');
-      const response=await fetch(`http://127.0.0.1:${port}/v1/command`,{method:'POST',headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},body});
+      const response=await fetch(`http://127.0.0.1:${port}/v1/project`,{method:'POST',headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},body});
       assert.equal(response.status,200);assert.deepEqual((await response.json()).result.project.brief,large);
+      const wrong=await fetch(`http://127.0.0.1:${port}/v1/project`,{method:'POST',headers:{authorization:`Bearer ${token}`},body:JSON.stringify({action:'tasks',actor})});
+      assert.equal(wrong.status,400);assert.equal((await wrong.json()).error,'PROJECT_ROUTE_REQUIRED');
     }
   }
   await assert.rejects(controlCommand(f.config,{action:'tasks',actor,padding:'x'.repeat(200000)}),/CONTROL_BODY_LIMIT/);
