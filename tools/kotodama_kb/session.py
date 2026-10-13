@@ -77,7 +77,7 @@ def _at_time(bundle: Bundle, as_of: dt.datetime) -> Bundle:
         path = concept.document.path.relative_to(bundle.root).as_posix()
         stale = (concept.stale_after is not None and as_of >= _parse_datetime(
             concept.stale_after, field="stale_after", path=path))
-        concepts.append(dataclasses.replace(concept, is_stale=stale))
+        concepts.append(concept if concept.is_stale == stale else dataclasses.replace(concept, is_stale=stale))
         if stale:
             marker = "critical " if set(concept.metadata.get("tags", [])) & critical else ""
             issues.append(Issue("warning", "STALE_CONCEPT", path,

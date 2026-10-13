@@ -53,6 +53,7 @@ export const Config = z.object({
     z.object({kind:z.literal('local')}).strict(),
     z.object({kind:z.literal('remote'),url:z.string().url(),tokenEnv:z.string().min(1)}).strict()
   ]).default({kind:'local'}),
+  projects:z.object({operations:z.array(z.enum(['read','create','inspect','correct'])).max(4).refine(values=>new Set(values).size===values.length,{message:'PROJECT_OPERATION_DUPLICATE'}).default([])}).strict().prefault({}),
   bridge:z.object({enabled:z.boolean().default(false),host:z.enum(['127.0.0.1','::1']).default('127.0.0.1'),port:z.number().int().min(1024).max(65535).default(18796),tokenEnv:z.string().default('KOTODAMA_BRIDGE_TOKEN'),actorId:id.optional()}).strict().prefault({}),
   browser:z.object({cdpUrl:z.string().url().optional(),allowedOrigins:z.array(z.string().url()).default([])}).strict().prefault({}),
   integrations:z.object({luma:z.object({eventUrl:z.string().url(),eventRef:z.string().min(1)}).strict().optional()}).strict().prefault({}),

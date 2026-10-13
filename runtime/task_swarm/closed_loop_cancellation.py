@@ -31,6 +31,7 @@ def cancel_closed_loop(owner_path, payload_path, *, clock=time.time):
 
     owner_path, payload_path = Path(owner_path), Path(payload_path)
     owner = OwnerFile(owner_path, clock=clock)
+    owner_path = owner.path
     _, owner_sha = read_json(owner_path, 1024 * 1024, with_digest=True)
     raw, input_sha = read_json(payload_path, 256 * 1024, with_digest=True)
     binding = owner.read_task(raw.get("task_id"))
@@ -71,7 +72,14 @@ def cancel_closed_loop(owner_path, payload_path, *, clock=time.time):
                 and plan["run_id"] == run_id, "RUN_REPLAY_CONFLICT")
         planned = {job["job_id"]: job for job in plan["jobs"]}
         initial_digest = protocol.digest(specification)
-        require(set(planned) == {"r0-critic", *("r0-" + job["job_id"] for job in specification["jobs"])},
+        extra = set()
+        if specification["version"] == 2:
+            from .dependency_contract import descriptor, execution_version, REVIEW_ID
+            desc, pre = descriptor(payload, specification)
+            require(execution_version(plan) == 3 and plan["dependency_descriptor_sha256"] == protocol.digest(desc), "RUN_REPLAY_CONFLICT")
+            extra.add(REVIEW_ID)
+            require(planned[REVIEW_ID]["payload_digest"] == protocol.digest(pre), "RUN_REPLAY_CONFLICT")
+        require(set(planned) == {"r0-critic", *("r0-" + job["job_id"] for job in specification["jobs"])} | extra,
                 "RUN_REPLAY_CONFLICT")
         for job in specification["jobs"]:
             delivered = work_input(payload, job, 0, initial_digest, round_plan_digest=initial_digest)

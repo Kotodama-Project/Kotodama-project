@@ -341,15 +341,16 @@ validation; false-neighbor and stale-index paths fail closed.
 
 ## Current reality
 
-- This branch is a **documentation-only public candidate**. The canonical
-  direction, README projection, STATUS, ROADMAP, and regression tests do not
-  implement or deploy the product.
+- This document records a **documentation-only direction milestone**. The
+  direction and its projections do not by themselves implement or deploy the
+  complete product. Current source capabilities and remaining acceptance are
+  owned by [STATUS](../STATUS.md#current-source-and-open-integration-work).
 - The private Voice/Intent/Swarm path does not yet prove one end-to-end slice of
   continuous capture, rotation, transcription, requirements, delegation,
   execution, and verification. Provider and public-access gates remain
   unproven.
-- Public Kotodama currently provides candidate contracts, validators, and
-  documentation. Public Voice, an activated Agent Swarm, provider E2E, and
+- Public Kotodama currently provides candidate contracts, validators, bounded
+  local runtimes, and documentation. Public Voice, an activated Agent Swarm, provider E2E, and
   Public Beta access remain unavailable; `NO_GO_UNPUBLISHED` remains in force.
 
 ## Open design decisions

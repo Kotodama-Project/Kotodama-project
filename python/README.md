@@ -73,3 +73,5 @@ tagで起動するrelease workflowは、tagを`v`+pyprojectのversionと完全�
 sdist、packageのSBOM、builder receipt、checksumも既存のattestationとdraft prereleaseへ
 含めます。過去のsource-only tagを新しいpackage版へ読み替えません。実tagのpushはownerが
 版・署名者・private consumer条件を受け入れた後に行い、この変更だけでは起動しません。
+
+Source producer と candidate 検証を通した二葉 A→B 宣言では execution contract/checkpoint/receipt v3 を使い、受理済み A の証拠を B の入力に渡します。旧形式の reader と同居し、一般 DAG や provider 実行は含みません。詳細と復旧条件は [閉ループ契約](../docs/TASK-SWARM-CLOSED-LOOP.md) を参照してください。

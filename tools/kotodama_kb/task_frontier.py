@@ -40,7 +40,8 @@ def resolve_frontier(nodes, root_id):
         value = node["frontier"]
         shape(value, {"kind", "children", "requires"}, "TASK_FRONTIER_INVALID")
         require(value["kind"] in ("atomic", "all_of"), "TASK_FRONTIER_INVALID")
-        require(isinstance(value["requires"], list) and not value["requires"],
+        require(isinstance(value["requires"], list) and len(value["requires"]) <= 1
+                and all(isinstance(item, str) for item in value["requires"]),
                 "TASK_FRONTIER_DEPENDENCY_UNSUPPORTED")
         targets = value["children"]
         require(isinstance(targets, list) and len(targets) <= 8
@@ -70,8 +71,20 @@ def resolve_frontier(nodes, root_id):
         leaves[identifier] = (set().union(*(leaves[key] for key in children[identifier]))
                               if children[identifier] else {identifier})
     require(1 <= len(leaves[root_id]) <= 3, "TASK_FRONTIER_WORK_LIMIT")
+    dependencies = [(identifier, nodes[identifier]["frontier"]["requires"][0])
+                    for identifier in visited if nodes[identifier]["frontier"]["requires"]]
+    if dependencies:
+        require(len(leaves[root_id]) == 2 and len(dependencies) == 1, "TASK_FRONTIER_DEPENDENCY_UNSUPPORTED")
+        dependent, prerequisite = dependencies[0]
+        require(dependent != prerequisite and {dependent, prerequisite} == leaves[root_id],
+                "TASK_FRONTIER_DEPENDENCY_UNSUPPORTED")
     required = set(visited)
     for identifier in visited:
+        if "structural_ancestors" in nodes[identifier]:
+            # Recomputed by the Source opt-in reader before this decomposition.
+            # Structural edges do not become all_of or execution dependencies.
+            required.update(nodes[identifier]["structural_ancestors"])
+            continue
         ancestors = set()
         parent = nodes[identifier]["parent"]
         while parent is not None:
@@ -80,7 +93,7 @@ def resolve_frontier(nodes, root_id):
             required.add(parent)
             parent = nodes[parent]["parent"]
     require(required == set(nodes), "TASK_CONTEXT_UNUSED_HIERARCHY")
-    return {"root": root_id, "requirements": [root_id, *sorted(visited - {root_id})],
+    return {"dependencies": dependencies, "root": root_id, "requirements": [root_id, *sorted(visited - {root_id})],
             "leaves": sorted(leaves[root_id]), "ancestors": sorted(required - visited),
             "descendants": {key: sorted(leaves[key]) for key in sorted(leaves)},
             "edges": [[key, child] for key in sorted(children) for child in children[key]],
@@ -122,6 +135,11 @@ def frontier_work(seed, nodes, root_id, constraints, catalog_spans):
         jobs.append({"job_id": identifier, "purpose": sources.span(node["need"]),
                      "selected_spans": _unique([*context, node["need"], *node["acceptance"],
                                                 *node["constraints"]], sources)})
+    if graph["dependencies"]:
+        identifiers = {leaf: job["job_id"] for leaf, job in zip(graph["leaves"], jobs)}
+        requires = dict(graph["dependencies"])
+        for leaf, job in zip(graph["leaves"], jobs):
+            job["requires"] = [identifiers[requires[leaf]]] if leaf in requires else []
     diagnostic = {"version": 1, "root_requirement_id": root_id, "edges": graph["edges"],
                   "max_depth": graph["depth"],
                   "leaf_jobs": [{"requirement_id": leaf, "job_id": job["job_id"]}

@@ -87,7 +87,7 @@ class MeasuredBackend:
         memory = next((job for job, report in reports.items() if report["claims"][0]["text"] == memory_record["text"]), None)
         validations = []
         for key in delivered["criteria"]:
-            failed = key in {"R", "A1"} and memory is None
+            failed = key == "A1" and memory is None
             target = memory if key in {"R", "A1"} and memory else speed
             validations.append({"criterion_id": key, "status": "failed" if failed else "passed",
                 "evidence": [] if failed else [{"job_id": job, "claim_index": 0}
@@ -102,18 +102,10 @@ class MeasuredBackend:
         return self.envelope(delivered, result, actor_ref)
 
 
-def repair_for(payload):
-    def repair(gap):
-        return {"version": 1, "parent_input_digest": digest(payload), "jobs": [{"job_id": "memory",
-            "purpose": "Supply the specifically missing memory measurement for the failed criteria.",
-            "criterion_ids": gap["failed_criteria"], "selected_spans": gap["source_spans"]}]}
-    return repair
-
-
 def execute(setup, backend, **kwargs):
     owner, file, _, payload, plan, actors, _ = setup
     return execute_closed_loop(owner, file, plan, backend, worker_actors=actors,
-                               repair_planner=repair_for(payload), clock=lambda: 1000, **kwargs)
+                               clock=lambda: 1000, **kwargs)
 
 
 def test_parallel_critic_repair_integrates_without_changing_owner_or_renewing_budget(tmp_path):
@@ -289,30 +281,44 @@ def test_context_limit_stops_before_a_backend_call_and_cannot_be_reset_by_restar
 def test_noncooperative_callback_cannot_publish_after_deadline(tmp_path):
     setup = setup_loop(tmp_path, jobs=1)
     now, entered, release, cancelled = [1000], threading.Event(), threading.Event(), threading.Event()
-    errors = []
+    finished, returned = threading.Event(), threading.Event()
+    observers, observer_errors = [], []
+    def expire():
+        try:
+            now[0] = 1101
+            assert cancelled.wait(timeout=2), "deadline monitor did not cancel the running callback"
+            assert not finished.is_set()  # The coordinator must still wait for the callback.
+            assert not returned.is_set()
+        except BaseException as error:
+            observer_errors.append(error)
+        finally:
+            release.set()
     class Backend(MeasuredBackend):
         def produce(self, *args, **kwargs):
             entered.set()
-            release.wait(timeout=3)  # Deliberately ignores cancellation until released by the test.
-            return super().produce(*args, **kwargs)
-    def run():
-        try:
-            execute_closed_loop(setup[0], setup[1], setup[4], Backend(setup[3], setup[6]),
-                worker_actors=setup[5], repair_planner=repair_for(setup[3]),
-                clock=lambda: now[0], cancel_event=cancelled)
-        except Exception as error:
-            errors.append(error)
-    worker = threading.Thread(target=run, daemon=True)
-    worker.start()
+            # Start the deadline observation at actual dispatch, after owner/SQLite preparation.
+            observer = threading.Thread(target=expire, name="deadline-test-observer", daemon=True)
+            observer.start()
+            observers.append(observer)
+            assert release.wait(timeout=3)  # Deliberately ignores cancellation until the test releases it.
+            response = super().produce(*args, **kwargs)
+            returned.set()
+            return response
     try:
-        assert entered.wait(timeout=2)
-        now[0] = 1101
-        assert cancelled.wait(timeout=2)
-        assert worker.is_alive()  # Threads cannot forcibly stop an arbitrary Python callback.
+        with pytest.raises(SwarmError, match="DEADLINE_EXPIRED"):
+            execute_closed_loop(setup[0], setup[1], setup[4], Backend(setup[3], setup[6]),
+                worker_actors=setup[5],
+                clock=lambda: now[0], cancel_event=cancelled)
     finally:
+        finished.set()
+        cancelled.set()
         release.set()
-        worker.join(timeout=3)
-    assert not worker.is_alive() and errors and isinstance(errors[0], SwarmError)
+        for observer in observers:
+            observer.join(timeout=3)
+        assert all(not observer.is_alive() for observer in observers)
+        if observer_errors:
+            raise observer_errors[0]
+    assert entered.is_set() and returned.is_set() and len(observers) == 1
     assert not list((setup[0].parent/"operations").glob("*/receipt.json"))
     with pytest.raises(SwarmError, match="RUN_RECOVERY_REQUIRED"):
         execute(setup, MeasuredBackend(setup[3], setup[6]))
@@ -398,7 +404,7 @@ def test_critic_contract_receives_saved_dispatch_and_admitted_work_in_both_round
     directory = setup[0].parent/"operations"/result["receipt"]["run_id"]
     assert len(calls) == 2
     assert set(calls[0]["expected_jobs"]) == {"r0-speed", "r0-uncertainty"}
-    assert set(calls[1]["expected_jobs"]) == {"r0-speed", "r0-uncertainty", "r1-memory"}
+    assert set(calls[1]["expected_jobs"]) == {"r0-speed", "r0-uncertainty", "r1-repair-speed"}
     assert calls[0]["prior_review"] is calls[0]["repair_admission"] is None
     assert calls[1]["repair_admission"] == read_json(directory/"extension.json")
     previous = calls[1]["prior_review"]

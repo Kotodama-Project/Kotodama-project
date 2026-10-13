@@ -89,3 +89,7 @@ source/input/result/Node versionのdriftは比較を不成立にする。`qualif
 `NOT_EVALUATED`。共有hostでの機構試験を静穏な比較やspeedupとみなさない。
 観測負荷・静穏条件・PSS・event-loop lag・実Pipeline/owner/子worker・実provider費用・
 CPU/RSS hard quota・通常Taskの取消/restart全体・既定幅の採用判断は#330/#331の残件。
+
+[2026-10-13の固定比較記録](PERFORMANCE-TASK-ADMISSION-2026-10-13.md)に、同じ16 Tasksを幅1/2/4で
+比較した12 arms・全生sample・指紋・静穏観測の限界を保存しています。`qualification=NOT_EVALUATED`と
+既定幅を維持した局所記録です。
