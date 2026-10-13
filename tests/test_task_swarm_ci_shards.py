@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import shutil
 import subprocess
 import sys
@@ -71,10 +72,17 @@ def run(root, command, env, expected=0):
     return result
 
 
+def host_environment(system=None):
+    system = platform.system() if system is None else system
+    return {"RUNNER_OS": system,
+            "KOTODAMA_CI_SHARD_OS": {"Linux": "ubuntu-22.04", "Windows": "windows-latest"}[system]}
+
+
 def clean_env(root):
     env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTEST_", "KOTODAMA_CI_"))}
     env.update(PYTHONPATH=str(root), PYTHONDONTWRITEBYTECODE="1", PYTHONUTF8="1", GITHUB_RUN_ID="123",
-               GITHUB_RUN_ATTEMPT="1", RUNNER_OS="Linux", MATRIX_RESULT="success")
+               GITHUB_RUN_ATTEMPT="1", MATRIX_RESULT="success")
+    env.update(host_environment())
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     env.update(GITHUB_SHA=head, KOTODAMA_CI_HEAD_SHA=head)
     return env
@@ -102,7 +110,7 @@ def campaign(tmp_path_factory):
     for width in (1, 2, 4):
         for index in range(width):
             directory = root / f"width-{width}-{index}"
-            local = {**env, "KOTODAMA_CI_SHARD_OS": "ubuntu-22.04", "KOTODAMA_CI_SHARD_INDEX": str(index),
+            local = {**env, "KOTODAMA_CI_SHARD_INDEX": str(index),
                      "KOTODAMA_CI_SHARD_COUNT": str(width), "KOTODAMA_CI_SHARD_DIR": str(directory / "partition")}
             if index == 0:
                 run(root, [sys.executable, "-B", "tools/pytest_ci_shards.py", "reference", str(directory / "reference")], local)
@@ -124,6 +132,24 @@ def campaign(tmp_path_factory):
     return root, env, outcomes, runs
 
 
+@pytest.mark.parametrize("system,lane", [("Linux", "ubuntu-22.04"), ("Windows", "windows-latest")])
+def test_host_environment_labels(system, lane):
+    assert host_environment(system) == {"RUNNER_OS": system, "KOTODAMA_CI_SHARD_OS": lane}
+
+
+def test_real_campaign_records_the_host_platform(campaign):
+    _, env, _, runs = campaign
+    assert env["RUNNER_OS"] == platform.system()
+    for (width, index), directory in runs.items():
+        selection = read(directory / "partition/selection.json")
+        first = json.loads((directory / "observation/events.jsonl").read_bytes().splitlines()[0])
+        assert first["run"]["RUNNER_OS"] == first["environment"]["system"] == platform.system()
+        assert selection["shard"] == {"os": env["KOTODAMA_CI_SHARD_OS"], "index": index, "count": width}
+        assert read(directory / "completion.json")["shard"] == selection["shard"]
+        if index == 0:
+            assert read(directory / "reference/reference.json")["os"] == selection["shard"]["os"]
+
+
 def test_real_one_two_four_shards_preserve_occurrences_outcomes_and_subtests(campaign):
     _, _, outcomes, runs = campaign
     expected = sorted(outcomes[1], key=lambda row: row[0])
@@ -141,35 +167,36 @@ def test_real_one_two_four_shards_preserve_occurrences_outcomes_and_subtests(cam
 
 
 def matrix(campaign, destination):
-    """Synthetic cross-OS metadata over real Linux runs, not a Windows run."""
+    """Synthetic cross-OS metadata over real host runs, not cross-OS execution."""
     root, env, _, runs = campaign
     destination.mkdir()
     for name, count in (("ubuntu-22.04", 1), ("windows-latest", 4)):
         for index in range(count):
             target = destination / f"task-swarm-shard-{name}-{index}-123-1"
             shutil.copytree(runs[count, index], target)
-            if name == "windows-latest":
-                path = target / "partition/selection.json"
-                selected = read(path)
-                selected["shard"]["os"] = name
-                save(path, selected)
-                event_path = target / "observation/events.jsonl"
-                events = [json.loads(line) for line in event_path.read_bytes().splitlines()]
-                events[0]["run"]["RUNNER_OS"] = "Windows"
-                events[0]["environment"]["system"] = "Windows"
-                raw = b"".join(encoded(e) for e in events)
-                event_path.write_bytes(raw)
-                final_path = target / "observation/final.json"
-                final = read(final_path)
-                final.update(events_sha256=hashlib.sha256(raw).hexdigest(), stream_bytes=len(raw))
-                save(final_path, final)
-                if index == 0:
-                    reference = target / "reference/reference.json"
-                    value = read(reference)
-                    value["os"] = name
-                    save(reference, value)
-            rebind_completion(target)
+            project_lane(target, name)
     return root, env
+
+
+def project_lane(target, name):
+    """Relabel every OS claim in a copied, explicitly synthetic reader fixture."""
+    system = {"ubuntu-22.04": "Linux", "windows-latest": "Windows"}[name]
+    path = target / "partition/selection.json"
+    selected = read(path)
+    selected["shard"]["os"] = name
+    save(path, selected)
+
+    def relabel(row):
+        row["run"]["RUNNER_OS"] = system
+        row["environment"]["system"] = system
+
+    rewrite_session(target, relabel)
+    reference = target / "reference/reference.json"
+    if reference.exists():
+        value = read(reference)
+        value["os"] = name
+        save(reference, value)
+    rebind_completion(target)
 
 
 def rebind_completion(target):
@@ -183,13 +210,15 @@ def rebind_completion(target):
 
 def rewrite_session(target, mutate):
     path = target / "observation/events.jsonl"
-    rows = [json.loads(line) for line in path.read_bytes().splitlines()]
+    previous = path.read_bytes()
+    rows = [json.loads(line) for line in previous.splitlines()]
     mutate(rows[0])
     raw = b"".join(encoded(row) for row in rows)
     path.write_bytes(raw)
     final_path = target / "observation/final.json"
     final = read(final_path)
-    final.update(events_sha256=hashlib.sha256(raw).hexdigest(), stream_bytes=len(raw))
+    final.update(events_sha256=hashlib.sha256(raw).hexdigest(), stream_bytes=len(raw),
+                 console_bytes=final["console_bytes"] + len(raw) - len(previous))
     save(final_path, final)
 
 
@@ -273,7 +302,7 @@ def test_matrix_requires_current_complete_independent_coverage(campaign, tmp_pat
 @pytest.mark.parametrize("option", ["keyword", "invalid_index", "empty", "failed_subtest"])
 def test_selector_refuses_filters_invalid_or_incomplete_execution(campaign, tmp_path, option):
     root, env, _, _ = campaign
-    env = {**env, "KOTODAMA_CI_SHARD_OS": "ubuntu-22.04", "KOTODAMA_CI_SHARD_INDEX": "0",
+    env = {**env, "KOTODAMA_CI_SHARD_INDEX": "0",
            "KOTODAMA_CI_SHARD_COUNT": "1", "KOTODAMA_CI_SHARD_DIR": str(tmp_path / "partition"),
            "KOTODAMA_CI_OBSERVATION_DIR": str(tmp_path / "observation"),
            "PYTEST_PLUGINS": "tools.pytest_ci_observer,tools.pytest_ci_shards"}
