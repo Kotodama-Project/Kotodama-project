@@ -16,6 +16,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 - local installationでProject briefを保存・訂正する共通操作を追加。原依頼・旧版・訂正event、再送照合とrevision/digest検査を保持し、既存Taskの作成・実行とは分離する（#385）。
 
+- Sourceに宣言した同一Taskの2仕事 A→B を、前提の独立検証・受理と実成果の配送へ接続。元の4〜6回の予算、B限定修復、永続取消、release後の限定再開、旧形式の読戻しを保ち、公開plan schemaと配布moduleを揃える。一般DAG・実providerは含まない（#366）。
+
 - Project briefと既存Task ownerを照合するread-only CLI、旧版・取消・未解決の表示、条件訂正候補のrevision/digest検査を追加。永続化・実行・採用は行わない（#385）。
 
 - Projectを中心にしたagent協働、GUIと自然言語の共通操作、可変profileと最適化の意図・設計候補・継続作業の入口を追加。runtimeと実接続の実装は後続（#385）。

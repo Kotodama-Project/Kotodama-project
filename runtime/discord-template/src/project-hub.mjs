@@ -15,7 +15,7 @@ const unique=refs=>[...new Map(refs.map(ref=>[sourceReference(ref),ref])).values
 const binding=config=>digest({installation:config.installation,dataDir:config.dataDir,owner:config.owner,
   guild:config.discord.guildId,application:config.discord.applicationId??null,workspace:config.worker.workspace});
 
-function request(input){
+export function validateProjectRequest(input){
   check(input&&Object.hasOwn(fields,input.operation),'PROJECT_OPERATION_INVALID');shape(input,fields[input.operation],'PROJECT_REQUEST_INVALID');
   check(typeof input.actor==='string'&&/^\d{5,24}$/.test(input.actor),'OPERATOR_REQUIRED');
   if(input.operation!=='create')reference(input.project_id);
@@ -128,7 +128,7 @@ export class ProjectHub{
   }
   async handle(raw,{signal,assertScope=()=>{}}={}){
     check(typeof assertScope==='function','PROJECT_SCOPE_GUARD_REQUIRED');
-    return this.#handle(request(raw),signal,true,assertScope);
+    return this.#handle(validateProjectRequest(raw),signal,true,assertScope);
   }
   async #handle(input,signal,replayRetry,assertScope){
     // The caller supplies this synchronous surface guard, never request JSON.

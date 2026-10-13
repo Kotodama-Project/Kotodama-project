@@ -31,9 +31,9 @@ The [owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) makes the Project a durable
 
 ## Current state
 
-`main` includes OKF Markdown retrieval and bounded context, Task inputs bound to original intent and corrections, independent critic evidence, durable cancellation, one repair of selected leaves, and a read-only Project view. Repair retains the existing Task and budget; terminal checkpoint recovery does not redispatch work.
+This revision includes OKF Markdown retrieval and bounded context, Task inputs bound to original intent and corrections, independent critic evidence, durable cancellation, one repair of selected leaves, verified two-leaf A-to-B dependency execution, and a read-only Project view. Repair retains the existing Task and budget; terminal checkpoint recovery does not redispatch work.
 
-[STATUS](STATUS.md#current-source-and-open-integration-work) owns the checked revisions, pending A-to-B execution and executor/learning/hierarchy integration, performance observations and prioritized Issues. Follow each linked Issue's latest evidence before resuming. Whole eight-layer operation, actual model/user outcomes and continuous production operation remain unaccepted.
+[STATUS](STATUS.md#current-source-and-open-integration-work) owns the checked revisions, pending executor/learning/hierarchy integration, performance observations and prioritized Issues. Follow each linked Issue's latest evidence before resuming. Whole eight-layer operation, actual model/user outcomes and continuous production operation remain unaccepted.
 
 ## Knowledge, Task and Project CLI entrypoints
 

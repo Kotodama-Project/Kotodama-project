@@ -101,7 +101,21 @@ def terminal_evidence(directory, payload, record, state):
     require(protocol.canonical(snapshot["plan"]) == protocol.canonical(plan)
             and protocol.canonical(snapshot.get("extension")) == protocol.canonical(admission)
             and set(snapshot["jobs"]) == set(scheduled), "FINALIZATION_PLAN_CONFLICT")
-    version = evidence_version(plan, values["r0-critic-template.json"])
+    from .dependency_contract import execution_version, REVIEW_ID
+    evidence = evidence_version(plan, values["r0-critic-template.json"])
+    version = execution_version(plan) or evidence
+    stage = None
+    if version == 3:
+        from .dependency_runtime import verify_release
+        from .dependency_state import preaccepted_proof
+        metadata = {key: record[key] for key in ("run_id", "binding_digest", "owner_ref", "owner_input_sha256",
+            "parent_input_digest", "initial_plan_digest", "initial_execution_plan_digest", "worker_actors",
+            "critic_actor", "actor_binding_digests", "reuse_context", "context_binding_digest")}
+        stage, progress, _ = verify_release(directory, payload, specification, plan, state, metadata)
+        require(stage["status"] == "released", "LOOP_RELEASE_INVALID")
+        require(record.get("preaccepted") == preaccepted_proof(stage)
+                and record.get("dependency_evidence_digest") == protocol.digest(stage), "LOOP_RELEASE_CHANGED")
+
     if profile(values["r0-critic-template.json"]):
         require(("repair-impact.json" in values) == (admission is not None), "LOOP_REPAIR_IMPACT_REQUIRED")
     require(type(record.get("version")) is int and record["version"] == version, "LOOP_EVIDENCE_POLICY")
@@ -124,6 +138,13 @@ def terminal_evidence(directory, payload, record, state):
     require(record["rounds"] == rounds, "FINALIZATION_ROUND_CONFLICT")
     reports, invocations, report_sha, prior = {}, set(), {}, None
     context_bytes = 0
+    if stage:
+        preinput = values[REVIEW_ID + "-input.json"]
+        context_bytes += len(protocol.canonical(preinput).encode("utf-8"))
+        proof = values[REVIEW_ID + "-result.json"]["receipt"]
+        require(proof["invocation_ref"] not in invocations, "LOOP_INPUT_RECEIPT_MISMATCH")
+        invocations.add(proof["invocation_ref"])
+        require(record["dispatches"][REVIEW_ID] == progress["dispatches"][REVIEW_ID], "LOOP_DISPATCH_INPUT_MISMATCH")
     for index in range(rounds):
         work = sorted(job for job, item in scheduled.items()
                       if job.startswith(f"r{index}-") and item["kind"] == "work")
@@ -148,15 +169,31 @@ def terminal_evidence(directory, payload, record, state):
                     "delivered_input_digest": protocol.digest(delivered)}, "LOOP_DISPATCH_INPUT_MISMATCH")
             context_bytes += len(protocol.canonical(delivered).encode("utf-8"))
             if scheduled[job]["kind"] == "work":
-                require(observed["declared_input_digest"] == observed["delivered_input_digest"],
-                        "LOOP_DISPATCH_INPUT_MISMATCH")
+                if stage and job != stage["certificate"]["a_job_id"]:
+                    from .dependency_contract import dependent_input
+                    from .closed_loop_contract import work_input
+                    selected_spec = proposal if index else specification
+                    original = next(item for item in selected_spec["jobs"] if f"r{index}-" + item["job_id"] == job)
+                    expected = work_input(payload, original, index, record["initial_plan_digest"],
+                        round_plan_digest=protocol.digest(selected_spec), previous=None)
+                    # Repair views bind the previous result-artifact hash.
+                    if index:
+                        expected = work_input(payload, original, index, record["initial_plan_digest"],
+                            round_plan_digest=protocol.digest(selected_spec), previous=critic_sha)
+                    a = stage["certificate"]["a_job_id"]
+                    require(delivered == dependent_input(expected, stage, values[a + "-result.json"]["result"]), "LOOP_WORK_BINDING")
+                    if not index:
+                        require(protocol.digest(delivered) == stage["actual_input_digest"], "LOOP_WORK_BINDING")
+                else:
+                    require(observed["declared_input_digest"] == observed["delivered_input_digest"],
+                            "LOOP_DISPATCH_INPUT_MISMATCH")
                 reports[job] = validate_report_in_view(response["result"], delivered["view"], payload, allowed_jobs=work)
                 report_sha[job] = record["artifact_sha256"][job + "-result.json"]
                 continue
             template = values[job + "-template.json"]
             require(protocol.digest(template) == observed["declared_input_digest"] == delivered["template_digest"]
                     and protocol.canonical({k: v for k, v in delivered.items()
-                        if k not in {"template_digest", "reports", "report_digests"}}) == protocol.canonical(template),
+                        if k not in {"template_digest", "reports", "report_digests", "release_certificate", "release_certificate_sha256", "prerequisite_inputs"}}) == protocol.canonical(template),
                     "LOOP_DISPATCH_TEMPLATE_MISMATCH")
             require(protocol.canonical(delivered["reports"]) == protocol.canonical(reports), "LOOP_REPORT_SET_MISMATCH")
             critic = validate_critic(response["result"], payload, reports, view=delivered["view"],
@@ -170,7 +207,7 @@ def terminal_evidence(directory, payload, record, state):
                 initial_template=values["r0-critic-template.json"],
                 work_inputs={j: values[j+"-input.json"] for j, item in scheduled.items() if item["kind"] == "work"},
                 repair_specification=proposal if index else None,
-                repair_impact=values.get("repair-impact.json") if index else None, execution_snapshot=snapshot)
+                repair_impact=values.get("repair-impact.json") if index else None, execution_snapshot=snapshot, dependency_stage=stage)
             critic_sha = record["artifact_sha256"][job + "-result.json"]
             prior = {"response": response, "dispatched_input": delivered,
                      "dispatched_input_digest": observed["delivered_input_digest"]}
@@ -179,17 +216,27 @@ def terminal_evidence(directory, payload, record, state):
     learning = learning_candidate(candidate) if candidate["status"] == "needs_owner_review" else None
     accepts = {ref["job_id"]: report_sha[ref["job_id"]]
                for item in critic["validations"] for ref in item["evidence"]} if learning else {}
+    if stage:
+        accepts.pop(stage["certificate"]["a_job_id"], None)
     if learning:
         accepts[f"r{rounds-1}-critic"] = critic_sha
+        if stage:
+            accepts[REVIEW_ID] = record["artifact_sha256"][REVIEW_ID + "-result.json"]
     return candidate, learning, accepts, critic_sha, total
 
 
 def make_checkpoint(directory, payload, state, metadata, *, artifact_sha256, dispatches,
                     rounds, stop_reason, context_bytes, observed_elapsed_seconds):
-    version = evidence_version(read_json(directory/"plan.json"), read_json(directory/"r0-critic-template.json"))
+    from .dependency_contract import execution_version
+    version = execution_version(read_json(directory/"plan.json")) or evidence_version(read_json(directory/"plan.json"), read_json(directory/"r0-critic-template.json"))
     record = {"version": version, **metadata, "artifact_sha256": dict(artifact_sha256),
               "dispatches": dict(dispatches), "rounds": rounds, "stop_reason": stop_reason,
               "context_bytes": context_bytes, "observed_elapsed_seconds": observed_elapsed_seconds}
+    if version == 3:
+        from .dependency_state import preaccepted_proof
+        stage = state.dependency_stage(record["run_id"])
+        require(stage is not None and stage["status"] == "released", "LOOP_RELEASE_INVALID")
+        record.update(preaccepted=preaccepted_proof(stage), dependency_evidence_digest=protocol.digest(stage))
     candidate, learning, accepts, critic_sha, _ = terminal_evidence(directory, payload, record, state)
     record.update(candidate_digest=protocol.digest(candidate), learning_digest=protocol.digest(learning),
                   accepts=accepts, verification_ref="ref/loop/verification/" + critic_sha,
@@ -220,7 +267,7 @@ def finalize(directory, payload, state, metadata, *, guard, reuse_owner=None, ca
     require(not (directory / "receipt.json").exists(), "RUN_REPLAY_ANCHOR_REQUIRED")
     if (directory / "execution.json").exists():
         current = state.snapshot(record["run_id"])
-        require({job for job, value in current["jobs"].items() if value["state"] == "accepted"} == set(accepts)
+        require({job for job, value in current["jobs"].items() if value["state"] == "accepted"} == set(accepts) | set(record.get("preaccepted", {}))
                 and protocol.canonical(read_json(directory / "execution.json")) == protocol.canonical(current),
                 "FINALIZATION_OUTPUT_CONFLICT")
     # Refuse malformed/conflicting existing outputs before committing an accept.
@@ -253,6 +300,8 @@ def finalize(directory, payload, state, metadata, *, guard, reuse_owner=None, ca
         "timing": {"scope": "observed_before_finalization_checkpoint", "after_checkpoint_seconds": None},
         "finalization_checkpoint_digest": checkpoint_digest, "dispatches": record["dispatches"],
         "artifact_sha256": artifacts}
+    if record["version"] == 3:
+        receipt.update(preaccepted=record["preaccepted"], dependency_evidence_digest=record["dependency_evidence_digest"])
     if stored["receipt"] is not None:
         require(protocol.canonical(receipt) == protocol.canonical(stored["receipt"]), "FINALIZATION_CONFLICT")
         receipt = stored["receipt"]

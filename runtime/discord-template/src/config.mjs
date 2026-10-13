@@ -12,6 +12,7 @@ const id = z.string().regex(/^\d{5,24}$/);
 const envName=z.string().regex(/^[A-Z_][A-Z0-9_]*$/);
 const projectSkillNames=z.array(z.string().min(1).max(64).regex(PROJECT_SKILL_NAME)).max(MAX_PROJECT_SKILLS).refine(names=>new Set(names).size===names.length,{message:'PROJECT_SKILL_DUPLICATE'});
 const projectSkills=z.object(Object.fromEntries(PROJECT_SKILL_ACTIONS.map(action=>[action,projectSkillNames.optional()]))).strict();
+const projectOperations=z.array(z.enum(['read','create','inspect','correct'])).max(4).refine(values=>new Set(values).size===values.length,{message:'PROJECT_OPERATION_DUPLICATE'}).default([]);
 const commandBase = z.object({executable:z.string().min(1),args:z.array(z.string()).default([]),model:z.string().optional(),codexHome:z.string().min(1).optional(),ignoreUserConfig:z.boolean().default(true),timeoutSeconds:z.number().int().min(5).max(3600).default(300)}).strict();
 const command=commandBase.extend({model:z.string().default('gpt-5.6-luna'),fallback:commandBase.extend({model:z.string().min(1)}).optional()});
 const analysisLimitsConfig=z.object({maxConcurrent:z.number().int().min(1).max(16),maxQueued:z.number().int().min(0).max(256),maxPerRoom:z.number().int().min(1).max(16),maxPerActor:z.number().int().min(1).max(16),maxDailyAnalyses:z.number().int().min(0).max(1000000),maxTotalAnalyses:z.number().int().min(0).max(10000000)}).partial().strict().transform(value=>({...DEFAULT_ANALYSIS_LIMITS,...value})).prefault({});
@@ -57,7 +58,7 @@ export const Config = z.object({
   bridge:z.object({enabled:z.boolean().default(false),host:z.enum(['127.0.0.1','::1']).default('127.0.0.1'),port:z.number().int().min(1024).max(65535).default(18796),tokenEnv:z.string().default('KOTODAMA_BRIDGE_TOKEN'),actorId:id.optional()}).strict().prefault({}),
   browser:z.object({cdpUrl:z.string().url().optional(),allowedOrigins:z.array(z.string().url()).default([])}).strict().prefault({}),
   integrations:z.object({luma:z.object({eventUrl:z.string().url(),eventRef:z.string().min(1)}).strict().optional()}).strict().prefault({}),
-  dots:z.object({enabled:z.boolean().default(false),actorId:id.optional(),channelIds:z.array(id).max(20).default([]),replyMode:z.enum(['channel','dm']).default('channel'),requestTtlSeconds:z.number().int().min(300).max(86400).default(3600),draftRetentionDays:z.number().int().min(1).max(30).default(7)}).strict().prefault({})
+  dots:z.object({enabled:z.boolean().default(false),actorId:id.optional(),channelIds:z.array(id).max(20).default([]),projectOperations,replyMode:z.enum(['channel','dm']).default('channel'),requestTtlSeconds:z.number().int().min(300).max(86400).default(3600),draftRetentionDays:z.number().int().min(1).max(30).default(7)}).strict().prefault({})
 }).strict().superRefine((value,ctx)=>{if(value.voice.proactive.enabled&&(value.voice.transcriptSource!=='local'||value.voice.naturalConversation||value.analyzer.kind!=='responses'))ctx.addIssue({code:'custom',path:['voice','proactive'],message:'PROACTIVE_REQUIRES_LOCAL_TRANSCRIPT_AND_RESPONSES'});if(value.voice.rotation.enabled&&(!value.voice.rotation.channelId||!value.discord.voiceChannelId||value.voice.rotation.channelId===value.discord.voiceChannelId||value.voice.transcriptSource!=='local'))ctx.addIssue({code:'custom',path:['voice','rotation'],message:'VOICE_ROTATION_SCOPE_REQUIRED'});});
 
 export async function loadConfig(filename) {
