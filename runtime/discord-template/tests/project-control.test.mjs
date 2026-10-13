@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {Config,exampleConfig} from '../src/config.mjs';
@@ -86,8 +86,16 @@ test('control accepts full Unicode and escaped Project briefs while bounding all
     const saved=await f.command({...f.create,request_id:`large-${index}`,brief:large});
     assert.deepEqual(saved.project.brief,large);
     assert.deepEqual((await f.command({operation:'read',project_id:saved.project.project_id})).project.brief,large);
+    if(index===0){
+      const body=JSON.stringify({action:'project',actor,...f.create,request_id:'ascii-escaped',brief:large}).replace(/[\u007f-\uffff]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
+      assert.ok(Buffer.byteLength(body)>1200000);
+      const {port}=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
+      const token=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8');
+      const response=await fetch(`http://127.0.0.1:${port}/v1/command`,{method:'POST',headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},body});
+      assert.equal(response.status,200);assert.deepEqual((await response.json()).result.project.brief,large);
+    }
   }
   await assert.rejects(controlCommand(f.config,{action:'tasks',actor,padding:'x'.repeat(200000)}),/CONTROL_BODY_LIMIT/);
-  await assert.rejects(f.command({...f.create,padding:'x'.repeat(750000)}),/CONTROL_BODY_LIMIT/);
-  assert.equal(f.runtime.store.statement('SELECT count(*) AS n FROM projects').get().n,2);
+  await assert.rejects(f.command({...f.create,padding:'x'.repeat(1500000)}),/CONTROL_BODY_LIMIT/);
+  assert.equal(f.runtime.store.statement('SELECT count(*) AS n FROM projects').get().n,3);
 });
