@@ -6,6 +6,15 @@ Kotodamaは、人とagentが楽しく過ごし、一緒に考え、必要なと�
 
 ## 要件と確認する場所
 
+外部の常駐agentから一つの窓口として使う構成、必要時の役割生成、上下・横の通信、
+要件の保持と可変profileは[動的ハブの設計候補](AGENT-HUB-DESIGN.md)を参照します。
+既存ownerとswarmを再利用する設計で、外部接続や自動生成の稼働を示すものではありません。
+追加の[Project中心の利用体験と情報定義](AGENT-HUB-DESIGN.md#プロジェクトを中心にした利用体験と情報定義)は、
+GUI・自然言語から同じ仕事を動かす要件、Projectの最小入力、段階的な情報補完、最適化を扱います。
+その元の意図は[owner intent](OWNER-INTENT-COMPANY-AGI.md)に保持しています。
+この系統の担当・実装順・受入条件・再開点は[Project hub作業 #385](https://github.com/Kotodama-Project/Kotodama-project/issues/385)
+へ集約します。次のagentはこのIssueと関連PRを読み、既存のTask・知識・画面の担当へ接続します。
+
 | 要件 | 実装・文書の入口 | 受入で確かめること |
 |---|---|---|
 | 普段の相談から仕事を始める | [README](../README.md)、[Company AGI direction](OWNER-INTENT-COMPANY-AGI.md) | カジュアルな単体利用と組織利用が共存し、必要のない基盤を必須にしない |
