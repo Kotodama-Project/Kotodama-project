@@ -107,7 +107,7 @@ test('packaged stdio Project tools use the owner-bound loopback and preserve exa
   const server=createServer(async(req,res)=>{
     assert.equal(req.headers.authorization,'Bearer '+token);res.setHeader('content-type','application/json');
     if(req.method==='GET'&&req.url==='/v1/status'){res.end(JSON.stringify(identity));return;}
-    assert.equal(req.method,'POST');assert.equal(req.url,'/v1/command');const chunks=[];for await(const chunk of req)chunks.push(chunk);
+    assert.equal(req.method,'POST');assert.equal(req.url,'/v1/project');const chunks=[];for await(const chunk of req)chunks.push(chunk);
     const input=JSON.parse(Buffer.concat(chunks));received.push(input);
     const value=input.expected_revision===2?{ok:false,error:'PROJECT_REVISION_STALE'}:{ok:true,result:{received:input,task_state_changed:false}};
     res.end(JSON.stringify(value));
