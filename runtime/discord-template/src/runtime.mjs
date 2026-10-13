@@ -120,12 +120,13 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
       try{
         const auth=Buffer.from(String(req.headers.authorization??'')),expected=Buffer.from('Bearer '+secret);check(auth.length===expected.length&&timingSafeEqual(auth,expected),'UNAUTHORIZED');
         if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,...(channelWorker?{channelWorkspaces:channelWorker.status()}:{}),taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status(),source});return;}
-        check(req.method==='POST'&&req.url==='/v1/command','ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');check(controlOperations.size<8,'CONTROL_BUSY');
+        check(req.method==='POST'&&['/v1/command','/v1/project'].includes(req.url),'ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');check(controlOperations.size<8,'CONTROL_BUSY');
         scope=deadlineScope(10000,'CONTROL_BODY_TIMEOUT');controlReads.add(scope);
-        // The Project contract can encode over 1.2 MB with surrogate JSON escapes. Keep
-        // the bounded authenticated reader and the earlier limit for other commands.
-        const body=await readHttpBody(req,{maxBytes:1500000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});
-        const input=JSON.parse(body.toString('utf8'));check(input?.action==='project'||body.length<=200000,'CONTROL_BODY_LIMIT');current=await awaitWithSignal(loadConfig(filename),scope.signal);check(!closing,'RUNTIME_STOPPING');check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
+        // Select the limit before buffering: a full escaped Project can exceed
+        // 1.2 MB, while other commands keep their 200 KB declared-length guard.
+        const projectRoute=req.url==='/v1/project';
+        const body=await readHttpBody(req,{maxBytes:projectRoute?1500000:200000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});
+        const input=JSON.parse(body.toString('utf8'));check(!projectRoute||input?.action==='project','PROJECT_ROUTE_REQUIRED');current=await awaitWithSignal(loadConfig(filename),scope.signal);check(!closing,'RUNTIME_STOPPING');check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
         controlReads.delete(scope);scope.dispose();scope=null;
         let result;
         if(input.action==='tasks')result=await pipeline.tasks(input.actor);
@@ -234,5 +235,5 @@ export async function controlCommand(config,input){
   const current=await localControlRequest(port,'/v1/status',token);
   check(current.ownerId===runtime.ownerId&&current.pid===runtime.pid&&current.startedAt===runtime.startedAt,'RUNTIME_OWNER_CHANGED');
   if(input.action==='status')return current;
-  const value=await localControlRequest(port,'/v1/command',token,input);check(value.ok,value.error??'CONTROL_FAILED');return value.result;
+  const value=await localControlRequest(port,input.action==='project'?'/v1/project':'/v1/command',token,input);check(value.ok,value.error??'CONTROL_FAILED');return value.result;
 }
