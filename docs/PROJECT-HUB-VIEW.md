@@ -5,6 +5,10 @@
 ローカルCLI。Task作成・更新・取消・dispatch・Project永続serviceは持たない。
 作業の継続入口は[Issue #385](https://github.com/Kotodama-Project/Kotodama-project/issues/385)。
 
+保存と訂正の限定経路は[Discord templateのProject owner](../runtime/discord-template/docs/PROJECTS.md)へ
+追加しました。同じv1 briefを既存installationのSQLiteへ保存します。このPython CLI自体は
+引き続きread-onlyで、NodeのTask本文とswarm入力digestは別の契約です。
+
 ## 最小情報契約 v1
 
 Project JSONはownerから得たsnapshotまたは候補入力であり、このファイルを置くだけでは
@@ -71,4 +75,5 @@ constraints/acceptance、影響する全Task参照、理由と訂正sourceを含
 読取、取消、失効、旧版、owner違い、観測中の変更、条件削除の明示、書込なしを検査する。
 外部認証・tenant isolation・GUI/NL共通操作・履歴台帳・provider実接続は未検証／未実装。
 ネットワーク公開には認証とアクセス制御を持つ既存入口への接続が必要。
-次は選択済みProject ownerの保存・訂正event契約を確定し、同じ候補操作をGUIと会話へ接続する。
+local ownerの保存・訂正は上記Node経路で扱います。次はTask参照・成果の対応と、
+同じ操作へのGUI・agent adapter接続を進めます。
