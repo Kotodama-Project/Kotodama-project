@@ -128,3 +128,42 @@ the run (maximum 256 MiB); small files allocate only their observed size plus a
 growth-detection byte. The operator must still keep the selected executable and
 its dependencies immutable: these observations do not attest kernel execution
 identity against a same-privilege writer that swaps and restores files.
+
+## Selected Project read and inspection
+
+An optional private `project` configuration connects this same bridge to an
+existing Discord-template Project owner. It contains `requesterRef`, `actorId`,
+`projectId`, `source` (`key`, `revision`), `expiresAt`, `operations`, `runtimeRoot`,
+`configFile`, and `sourceSetDigest`. `requesterRef` must equal the registered human
+requester of this bridge. This explicit mapping is additional authority;
+`DRAFT_REQUIREMENTS` alone never grants Project access. `operations` permits
+`read`, optionally `inspect`. The running owner also needs those operations in
+its current `projects.operations` configuration.
+
+The operator selects absolute runtime/config paths, one Project, one current
+correction Source and a finite expiry. No client can choose an actor, Source,
+Project, filesystem path, command or destination URL. The selected runtime's
+existing source snapshot must match `sourceSetDigest` before import and each
+operation. Its running official CLI bootstrap must report the same source digest;
+a direct or unverified runtime start is refused. The current bootstrap cannot
+establish this source proof on Windows, so this connector refuses it there. Restart the bridge and create a
+fresh native binding when changing this connection. Dependencies outside the
+existing source set remain the operator's responsibility; this is not OS process
+attestation against a malicious local writer.
+
+Authenticated `GET /v1/project` reads the existing owner; `POST
+/v1/project/inspect` inspects an exact revision/digest and explicit six-field
+Project brief. No Project, Source or Task is created or corrected. The shared
+catalog grant and separate Project expiry are checked before and after the call;
+account revocation and runtime permission changes withhold results. A maximum of
+eight outstanding Project operations and 750,000 UTF-8 bytes per response are
+allowed. Inspection input is limited to 190,000 bytes, reserving room for the
+fixed command envelope at the existing runtime's 200,000-byte ingress. The GUI
+checks this limit before sending and retains oversized edits. Oversized valid
+owner data is refused, never truncated.
+Existing inference grants, journal, budgets and requirements fields are unchanged.
+
+The synthetic HTTP, production-connector fixture and native/browser component
+checks cover this path without live accounts. Actual owner integration requires
+the Project operations runtime; OS provisioning, operator binding and deployed
+Gadget acceptance remain separate work.

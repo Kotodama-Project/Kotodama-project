@@ -21,6 +21,7 @@ compiled = compiled.replace(/import \{[^}]+\} from "capnweb-validate";/,
   "const validateRpc = () => (...args) => args.length === 1 ? args[0] : undefined; const skipRpcValidation = validateRpc;");
 compiled = compiled.replace(/import CONFIGURATOR from "[^"]+";/, 'const CONFIGURATOR = "fixture";');
 compiled = compiled.replace('"./protocol.mjs"', JSON.stringify(new URL("../src/protocol.mjs", import.meta.url).href));
+compiled = compiled.replace('"./project-protocol.mjs"', JSON.stringify(new URL("../src/project-protocol.mjs", import.meta.url).href));
 const { KotodamaGatekeeper } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
 
 test("native class preserves delayed, rejected and uncertain queue delivery across restart", async () => {
@@ -67,4 +68,39 @@ test("native class preserves delayed, rejected and uncertain queue delivery acro
       } else { assert.equal(posts, 0); }
     }
   } finally { globalThis.fetch = previousFetch; }
+});
+
+test("native Project inspection uses observation only, pins identity, and honors account revocation", async () => {
+  const oldFetch = globalThis.fetch; let revoked = false, observations = 0, inspections = 0;
+  const store = new Map(); const binding = "b".repeat(64), projectBinding = "c".repeat(64);
+  const brief = { outcome: "原資料は別に保持", in_scope: [], out_of_scope: [], constraints: ["公開しない"], acceptance: ["同じProjectを読む"], unknowns: [] };
+  const project = { version: 1, project_id: "ref/project/fixture", revision: 1, owner_ref: "ref/owner/fixture", name: "合成Project", original_ref: "ref/source/original", brief, task_refs: [] };
+  const view = { kind: "kotodama.project-owner-view", version: 1, authority: "selected_local_project_owner", project, project_digest: "a".repeat(64), snapshot: "current", current_revision: 1,
+    source_refs: [{ key: "f".repeat(64), revision: 1, current_revision: 1, freshness: "current" }], task_state_changed: false, execution_authorized: false };
+  let readBinding = projectBinding;
+  const context = { props: { principalRef: `urn:kotodama:principal:${randomUUID()}` },
+    storage: { kv: { get: key => store.get(key), put: (key, value) => store.set(key, value) } },
+    exports: { AccountState: { getByName: () => ({ isRevoked: async () => revoked }) } } };
+  const gatekeeper = new KotodamaGatekeeper(context, { KOTODAMA_BRIDGE_ORIGIN: "http://127.0.0.1:18790", KOTODAMA_BRIDGE_SECRET: "a".repeat(64) });
+  const queue = { dup() { return this; }, [Symbol.dispose]() {}, authorizeObservation: async () => { observations++; }, submitAction: () => assert.fail("no action queued") };
+  try {
+    globalThis.fetch = async (url, init) => {
+      if (new URL(url).pathname === "/v1/admission") return Response.json({ allowed: true, binding_sha256: binding });
+      if (new URL(url).pathname === "/v1/project") return Response.json({ state: "connected", binding_sha256: readBinding, can_inspect: true, view });
+      inspections++; const input = JSON.parse(init.body);
+      return Response.json({ binding_sha256: projectBinding, inspection: { kind: "kotodama.project-change-candidate", version: 1, authority: "candidate_only", project_id: project.project_id,
+        expected_revision: 1, base_digest: view.project_digest, proposal_digest: "d".repeat(64), proposal: { version: 1, project_id: project.project_id, expected_revision: 1, base_digest: view.project_digest, reason: input.reason, source_ref: "ref/source/correction", brief: input.brief },
+        changed_fields: ["constraints"], removed_requirements: { constraints: brief.constraints, acceptance: [] }, impact_task_refs: [], applied: false,
+        next_action: "owner_revalidate_authorize_and_record_correction", source_refs: [{ key: "f".repeat(64), revision: 1 }], task_state_changed: false, execution_authorized: false } });
+    };
+    const session = await gatekeeper.startSession(queue);
+    assert.deepEqual((await session.getProject()).view, view);
+    const input = { binding_sha256: projectBinding, expected_revision: 1, base_digest: view.project_digest, reason: "条件を検査", brief: { ...brief, constraints: [] } };
+    assert.equal((await session.inspectProjectChange(input)).inspection.applied, false);
+    assert.equal(observations, 2); assert.equal(inspections, 1);
+    await assert.rejects(session.inspectProjectChange({ ...input, expected_revision: 2 })); assert.equal(inspections, 1);
+    readBinding = "e".repeat(64); await assert.rejects(session.getProject());
+    readBinding = projectBinding; revoked = true; await assert.rejects(session.getProject());
+    assert.equal(inspections, 1);
+  } finally { globalThis.fetch = oldFetch; }
 });

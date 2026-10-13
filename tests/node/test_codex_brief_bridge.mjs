@@ -562,3 +562,109 @@ test("the actual Gadget preserves delayed approval, rejection and restart withou
     await assert.rejects(restarted.getState(), /revoked/);
   }
 });
+
+// One fixed synthetic owner behind the real authenticated HTTP bridge.
+const projectBrief = { outcome: "目的と成果物を別の原資料に保持する", in_scope: ["表示"], out_of_scope: [], constraints: ["公開しない"], acceptance: ["同じProjectを読む"], unknowns: [] };
+function projectFixture(config, root) {
+  const projectId = "ref/project/example";
+  config.project = { requesterRef: config.grant.requester_ref, actorId: "100000000000000002", projectId,
+    source: { key: "f".repeat(64), revision: 1 }, expiresAt: config.grant.expires_at, operations: ["read", "inspect"],
+    runtimeRoot: root, configFile: join(root, "private.json"), sourceSetDigest: "c".repeat(64) };
+  const view = { kind: "kotodama.project-owner-view", version: 1, authority: "selected_local_project_owner",
+    project: { version: 1, project_id: projectId, revision: 1, owner_ref: "ref/owner/example", name: "合成Project", original_ref: "ref/source/original", brief: projectBrief, task_refs: [] },
+    project_digest: "a".repeat(64), snapshot: "current", current_revision: 1, source_refs: [{ ...config.project.source, current_revision: 1, freshness: "current" }], task_state_changed: false, execution_authorized: false };
+  const inspect = input => ({ kind: "kotodama.project-change-candidate", version: 1, authority: "candidate_only", project_id: projectId,
+    expected_revision: input.expected_revision, base_digest: input.base_digest, proposal_digest: "b".repeat(64),
+    proposal: { version: 1, project_id: projectId, expected_revision: input.expected_revision, base_digest: input.base_digest, reason: input.reason, source_ref: "ref/source/correction", brief: input.brief },
+    changed_fields: ["constraints"], removed_requirements: { constraints: projectBrief.constraints, acceptance: [] }, impact_task_refs: [], applied: false,
+    next_action: "owner_revalidate_authorize_and_record_correction", source_refs: [config.project.source], task_state_changed: false, execution_authorized: false });
+  return { view, inspect };
+}
+
+test("Project bridge uses only the explicit principal/actor/Project binding and never starts inference", async () => {
+  const { root, config } = fixture(); const f = projectFixture(config, root); let bridge, calls = [];
+  try {
+    bridge = await startBriefBridge(config, { invoke: () => assert.fail("no inference"), projectConnect: async () => async input => {
+      calls.push(input); return input.operation === "read" ? structuredClone(f.view) : f.inspect(input);
+    } });
+    let response = await call(bridge, config, "/v1/project", { who: `urn:kotodama:principal:${randomUUID()}` });
+    assert.equal(response.status, 404); assert.equal(calls.length, 0);
+    const result = await (await call(bridge, config, "/v1/project")).json();
+    assert.deepEqual(result.view, f.view); assert.equal(calls[0].actor, config.project.actorId); assert.equal(calls[0].project_id, config.project.projectId);
+    const body = { binding_sha256: result.binding_sha256, expected_revision: 1, base_digest: f.view.project_digest, reason: "条件を明示して見直す", brief: { ...projectBrief, constraints: [] } };
+    response = await call(bridge, config, "/v1/project/inspect", { body });
+    const inspection = await response.json(); assert.equal(response.status, 200); assert.equal(inspection.inspection.applied, false);
+    assert.deepEqual(inspection.inspection.removed_requirements.constraints, ["公開しない"]);
+    assert.deepEqual(calls[1].source, config.project.source);
+    const count = calls.length;
+    for (const patch of [{ actor: "100000000000000003" }, { project_id: "ref/project/other" }, { source: { key: "other", revision: 1 } }, { binding_sha256: "f".repeat(64) }, { brief: { ...body.brief, outcome: "x".repeat(4001) } }]) {
+      assert.notEqual((await call(bridge, config, "/v1/project/inspect", { body: { ...body, ...patch } })).status, 200);
+    }
+    assert.equal(calls.length, count);
+    assert.equal(JSON.parse(readFileSync(join(config.stateRoot, "invocations.json"))).jobs.length, 0);
+    await call(bridge, config, "/v1/revoke", { body: {} });
+    assert.equal((await call(bridge, config, "/v1/project")).status, 404); assert.equal(calls.length, count);
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("Project revocation during an owner read withholds the pending response", async () => {
+  const { root, config } = fixture(); const f = projectFixture(config, root); let bridge, release, started;
+  const observed = new Promise(resolve => { started = resolve; });
+  try {
+    bridge = await startBriefBridge(config, { projectConnect: async () => async () => { started(); await new Promise(resolve => { release = resolve; }); return f.view; } });
+    const pending = call(bridge, config, "/v1/project"); await observed;
+    await call(bridge, config, "/v1/revoke", { body: {} }); release();
+    const response = await pending; assert.notEqual(response.status, 200); assert.equal(JSON.stringify(await response.json()).includes("合成Project"), false);
+  } finally { release?.(); if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});
+
+test("Project adapter rejects expiry, read-only inspection, source drift and wrong successful bodies", async () => {
+  const { createProjectAdapter } = await import("../../runtime/codex-task-bridge/project-adapter.mjs");
+  const { root, config } = fixture(); const f = projectFixture(config, root); let now = Date.now(), calls = 0;
+  try {
+    const adapter = await createProjectAdapter(config.project, { now: () => now, connect: async () => async () => { calls++; return f.view; } });
+    await adapter.read(config.grant.requester_ref); now = Date.parse(config.project.expiresAt);
+    await assert.rejects(adapter.read(config.grant.requester_ref)); assert.equal(calls, 1);
+    const readOnly = await createProjectAdapter({ ...config.project, operations: ["read"] }, { connect: async () => async () => { assert.fail(); } });
+    await assert.rejects(readOnly.inspect(config.grant.requester_ref, {}));
+    const wrong = await createProjectAdapter(config.project, { connect: async () => async () => ({ ...f.view, execution_authorized: true }) });
+    await assert.rejects(wrong.read(config.grant.requester_ref));
+    await assert.rejects(createProjectAdapter(config.project)); // no pinned runtime exists at the selected synthetic root
+    assert.equal(await createProjectAdapter(undefined), null);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("production Project connector pins selected files and refuses unverified owner/config changes", async () => {
+  const { createProjectAdapter } = await import("../../runtime/codex-task-bridge/project-adapter.mjs");
+  const { sourceSnapshot } = await import("../../runtime/discord-template/src/source-bootstrap.mjs");
+  const { root, config } = fixture(); const f = projectFixture(config, root);
+  const app = join(root, "runtime"); mkdirSync(app); mkdirSync(join(app, "src")); mkdirSync(join(app, "bin"));
+  const configPath = join(root, "selected-config.json");
+  writeFileSync(join(app, "package.json"), '{"type":"module"}'); writeFileSync(join(app, "pnpm-lock.yaml"), "synthetic lock");
+  writeFileSync(join(app, "src/config.mjs"), 'import {readFileSync} from "node:fs";export async function loadConfig(file){return JSON.parse(readFileSync(file,"utf8"))}');
+  writeFileSync(join(app, "src/runtime.mjs"), 'export async function controlCommand(config,input){return input.action==="status"?config.status:config.result}');
+  try {
+    const pin = (await sourceSnapshot(app)).binding.setDigest;
+    const selected = { installation: "fixture", dataDir: join(root, "data"), owner: { kind: "local" }, discord: { operators: [config.project.actorId] }, projects: { operations: ["read", "inspect"] }, status: { source: { setDigest: pin } }, result: f.view };
+    writeFileSync(configPath, JSON.stringify(selected));
+    const adapter = await createProjectAdapter({ ...config.project, runtimeRoot: app, configFile: configPath, sourceSetDigest: pin });
+    assert.deepEqual((await adapter.read(config.project.requesterRef)).view, f.view);
+    selected.status.source = { error: "SOURCE_BOOTSTRAP_REQUIRED" }; writeFileSync(configPath, JSON.stringify(selected));
+    await assert.rejects(adapter.read(config.project.requesterRef));
+    selected.status.source = { setDigest: pin }; selected.projects.operations = []; writeFileSync(configPath, JSON.stringify(selected));
+    await assert.rejects(adapter.read(config.project.requesterRef));
+    selected.projects.operations = ["read"]; writeFileSync(configPath, JSON.stringify(selected));
+    writeFileSync(join(app, "src/runtime.mjs"), "export const changed=true;");
+    await assert.rejects(adapter.read(config.project.requesterRef));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("Project wire preserves owner text and refuses oversized inspection before transport", async () => {
+  const { validateProjectBrief, validateProjectInput } = await import("../../runtime/cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/project-protocol.mjs");
+  for (const outcome of ["First page\fSecond page", "line\vnext", "\ufeff", "🌱".repeat(4000)]) assert.equal(validateProjectBrief({ ...projectBrief, outcome }).outcome, outcome);
+  for (const outcome of ["\0", "\u001c", "\u0085", "🌱".repeat(4001)]) assert.throws(() => validateProjectBrief({ ...projectBrief, outcome }));
+  const large = { ...projectBrief };
+  for (const key of ["in_scope", "out_of_scope", "constraints", "acceptance", "unknowns"]) large[key] = Array.from({ length: 20 }, (_, n) => `${String(n).padStart(2, "0")}:` + "界".repeat(997));
+  validateProjectBrief(large);
+  assert.throws(() => validateProjectInput({ binding_sha256: "a".repeat(64), expected_revision: 1, base_digest: "b".repeat(64), reason: "候補検査", brief: large }));
+});

@@ -10,6 +10,8 @@ style.textContent = `
   .status{font-size:14px;color:#566a5d;margin:14px 0}.error{color:#9b382c}
   main{min-width:0;overflow-wrap:anywhere}.actions{display:flex;flex-wrap:wrap;gap:10px}.actions .secondary{margin-left:0}
   @media(max-width:480px){body{padding:16px}.card{padding:16px}button{max-width:100%}}
+  textarea{display:block;width:100%;min-height:72px;font:inherit;line-height:1.6;padding:10px;border:1px solid #bdcbbf;border-radius:6px;resize:vertical}
+  label{display:block;margin:14px 0 6px}.project-item{margin:8px 0}.project-item button{padding:5px 10px;margin-top:4px}.project-add{padding:6px 12px}
   li{line-height:1.75;margin:6px 0}.note{font-size:13px;color:#617069}section+section{margin-top:24px}
 `;
 document.head.appendChild(style);
@@ -19,6 +21,13 @@ document.body.innerHTML = `<main><h1>Kotodama 要件整理</h1>
   <div class="actions"><button id="run" disabled>Codexで要件案を作る</button><button id="reload" class="secondary">再確認</button></div>
   <p id="status" class="status" role="status">接続と閲覧権限を確認しています。</p>
   <div id="result" class="card" hidden></div>
+  <div class="card" id="project-card"><h2>Projectの要件</h2>
+    <p id="project-status" class="status" role="status">Projectの接続を確認しています。</p>
+    <p id="project-name"></p><div id="project-editor"></div>
+    <label id="project-reason-label" hidden>変更の理由<textarea id="project-reason"></textarea></label>
+    <div class="actions"><button id="project-inspect" disabled>変更内容を検査</button><button id="project-reload" class="secondary">Projectを再確認</button></div>
+    <p class="note">記録がない項目は、確認済みという意味ではありません。検査は保存や実行を行いません。再確認すると編集内容を現在の要件で置き換えます。</p>
+    <div id="project-inspection" hidden></div></div>
   <p class="note">表示するのは要件の候補です。公開、他サービスへの投稿、既存タスクの完了変更は行いません。</p></main>`;
 const source = document.getElementById("source");
 const result = document.getElementById("result");
@@ -106,3 +115,105 @@ run.addEventListener("click", async () => {
 });
 document.getElementById("reload").addEventListener("click", () => refresh(true));
 refresh();
+
+// Project operations use the same native connection and its existing owner.
+const projectStatus = document.getElementById("project-status");
+const projectEditor = document.getElementById("project-editor");
+const projectName = document.getElementById("project-name");
+const projectInspect = document.getElementById("project-inspect");
+const projectReason = document.getElementById("project-reason");
+const projectResult = document.getElementById("project-inspection");
+const projectLabels = { outcome: "欲しい成果", in_scope: "含めること", out_of_scope: "含めないこと", constraints: "守る条件", acceptance: "受入条件", unknowns: "未確定のこと" };
+let projectSnapshot, projectGeneration = 0, inspectingProject = false;
+function clearInspection() {
+  projectResult.replaceChildren(); projectResult.hidden = true;
+  if (projectSnapshot) projectStatus.textContent = "編集内容はまだ検査していません。";
+}
+function projectEditable(enabled) {
+  for (const input of projectEditor.querySelectorAll("textarea,button")) input.disabled = !enabled;
+  projectReason.disabled = !enabled; projectInspect.disabled = !enabled;
+}
+function clearProject(message) {
+  projectSnapshot = null; projectName.textContent = ""; projectEditor.replaceChildren();
+  projectReason.value = ""; document.getElementById("project-reason-label").hidden = true;
+  clearInspection(); projectEditable(false); projectStatus.textContent = message;
+}
+function addProjectItem(container, value = "") {
+  const row = document.createElement("div"); row.className = "project-item";
+  const input = document.createElement("textarea"); input.value = value; input.setAttribute("aria-label", projectLabels[container.dataset.field] + "の項目");
+  const remove = document.createElement("button"); remove.textContent = "この項目を削除"; remove.className = "secondary";
+  remove.addEventListener("click", () => { row.remove(); clearInspection(); });
+  row.append(input, remove); container.append(row);
+}
+function renderProject(value) {
+  if (value.state !== "connected") { clearProject("この接続にはProjectが設定されていません。"); return; }
+  projectSnapshot = value; projectEditor.replaceChildren(); clearInspection();
+  const project = value.view.project;
+  projectName.textContent = `${project.name} · 第${project.revision}版`;
+  for (const [key, title] of Object.entries(projectLabels)) {
+    const group = document.createElement("section"); const label = document.createElement("label"); label.textContent = title;
+    const values = document.createElement("div"); values.dataset.field = key; group.append(label, values);
+    if (key === "outcome") { const input = document.createElement("textarea"); input.value = project.brief[key]; input.setAttribute("aria-label", title); values.append(input); }
+    else {
+      for (const item of project.brief[key]) addProjectItem(values, item);
+      const add = document.createElement("button"); add.textContent = "項目を追加"; add.className = "secondary project-add";
+      add.addEventListener("click", () => { if (values.children.length < 20) { addProjectItem(values); clearInspection(); } });
+      group.append(add);
+    }
+    projectEditor.append(group);
+  }
+  projectReason.value = ""; document.getElementById("project-reason-label").hidden = !value.can_inspect;
+  projectStatus.textContent = value.can_inspect ? "現在の要件です。編集して、条件の削除と影響を確認できます。" : "現在の要件です。この接続では閲覧できます。";
+  projectEditable(value.can_inspect);
+}
+async function refreshProject() {
+  if (inspectingProject) return;
+  const generation = ++projectGeneration;
+  clearProject("Projectの権限と現在の要件を確認しています。");
+  if (typeof gadget.getProject !== "function") { clearProject("この接続にはProjectが設定されていません。"); return; }
+  try { const value = await gadget.getProject(); if (generation === projectGeneration) renderProject(value); }
+  catch { if (generation === projectGeneration) clearProject("Projectを表示できません。権限・期限・接続を確認してください。"); }
+}
+projectEditor.addEventListener("input", clearInspection);
+projectReason.addEventListener("input", clearInspection);
+projectInspect.addEventListener("click", async () => {
+  if (!projectSnapshot || inspectingProject || projectInspect.disabled) return;
+  const current = projectSnapshot;
+  const brief = {};
+  for (const key of Object.keys(projectLabels)) {
+    const values = [...projectEditor.querySelector(`[data-field="${key}"]`).querySelectorAll("textarea")].map(input => input.value);
+    brief[key] = key === "outcome" ? values[0] : values;
+  }
+  const whitespace = /^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$/u;
+  const validText = (value, max) => value.isWellFormed() && !value.includes("\0") && !whitespace.test(value) && [...value].length <= max;
+  if (!validText(projectReason.value, 1000) || !validText(brief.outcome, 4000)
+    || Object.keys(projectLabels).slice(1).some(key => new Set(brief[key]).size !== brief[key].length || brief[key].some(value => !validText(value, 1000)))) {
+    clearInspection(); projectStatus.textContent = "理由・成果と各項目を入力してください。成果は4,000文字、理由と各項目は1,000文字までです。同じ項目は重複させず、空の項目は削除してください。"; return;
+  }
+  if (Object.keys(projectLabels).every(key => JSON.stringify(brief[key]) === JSON.stringify(current.view.project.brief[key]))) {
+    clearInspection(); projectStatus.textContent = "要件の変更がありません。編集内容を変えてから検査してください。"; return;
+  }
+  const input = { binding_sha256: current.binding_sha256, expected_revision: current.view.project.revision,
+    base_digest: current.view.project_digest, reason: projectReason.value, brief };
+  if (new TextEncoder().encode(JSON.stringify(input)).length > 190000) {
+    clearInspection(); projectStatus.textContent = "この入力は接続の上限を超えています。編集内容は残しています。"; return;
+  }
+  const generation = ++projectGeneration; inspectingProject = true;
+  projectEditable(false); clearInspection(); projectStatus.textContent = "変更候補を検査しています。";
+  try {
+    const result = await gadget.inspectProjectChange(input);
+    if (generation !== projectGeneration) return;
+    const candidate = result.inspection;
+    const heading = document.createElement("h2"); heading.textContent = "変更候補の検査結果"; projectResult.append(heading);
+    const changed = document.createElement("p"); changed.textContent = "変更する項目: " + candidate.changed_fields.map(key => projectLabels[key]).join("、"); projectResult.append(changed);
+    for (const key of ["constraints", "acceptance"]) {
+      const title = document.createElement("p"); title.textContent = `削除される${projectLabels[key]}: ${candidate.removed_requirements[key].length}件`; projectResult.append(title);
+      const list = document.createElement("ul"); for (const value of candidate.removed_requirements[key]) { const item = document.createElement("li"); item.textContent = value; list.append(item); } projectResult.append(list);
+    }
+    const note = document.createElement("p"); note.textContent = `第${candidate.expected_revision}版に対する検査です。影響するTask参照: ${candidate.impact_task_refs.length}件。変更は保存されていません。意味や条件の妥当性は別途確認が必要です。`; projectResult.append(note);
+    projectResult.hidden = false; projectStatus.textContent = "検査できました。現在の要件は変更していません。"; projectEditable(true);
+  } catch { if (generation === projectGeneration) clearProject("変更候補を検査できませんでした。Projectを再確認してください。変更は保存していません。"); }
+  finally { inspectingProject = false; }
+});
+document.getElementById("project-reload").addEventListener("click", refreshProject);
+refreshProject();

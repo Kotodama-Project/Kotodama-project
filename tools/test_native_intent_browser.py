@@ -80,6 +80,47 @@ def main():
         p=page("window.gadget={getState:async()=>({state:'ready',source:{overview:'<img src=x onerror=alert(1)>'},result:{objective:'<script>boom</script>',deliverable:'candidate',constraints:[],acceptance_criteria:[],open_questions:[]}})}")
         actual=p.evaluate("({images:document.querySelectorAll('main img').length,scripts:document.querySelectorAll('main script').length,text:document.getElementById('result').textContent})")
         add("literal-untrusted-text-and-empty-criteria", "Text is inert; missing criteria are not presented as no more questions",actual,actual['images']==0 and actual['scripts']==0 and '確認済みという意味ではありません' in actual['text'],"inert-and-unknown")
+        p.close()
+        project_brief = {"outcome": "Project独自の成果", "in_scope": ["複数行\nと絵文字🌱を保持"], "out_of_scope": [],
+                         "constraints": ["公開しない"], "acceptance": ["同じProjectを読む"], "unknowns": []}
+        project_state = {"state": "connected", "binding_sha256": "b"*64, "can_inspect": True,
+                         "view": {"project": {"name": "Project候補", "project_id": "ref/project/fixture", "revision": 1, "brief": project_brief}, "project_digest": "a"*64}}
+        script = "window.project=" + json.dumps(project_state, ensure_ascii=False) + """;
+window.inspections=0;window.gadget={getState:async()=>({state:'ready',source:{overview:'原依頼'},result:{objective:'原資料の目的',deliverable:'原資料の成果物',constraints:['公開しない'],acceptance_criteria:['読戻し'],open_questions:[]}}),
+getProject:async()=>project,inspectProjectChange:async input=>{inspections++;window.inspected=input;return {inspection:{expected_revision:input.expected_revision,changed_fields:['constraints'],removed_requirements:{constraints:['公開しない'],acceptance:[]},impact_task_refs:[],applied:false}}}};
+"""
+        p = page(script); p.wait_for_function("!document.getElementById('project-inspect').disabled")
+        p.locator('[data-field="constraints"] button').click(); p.locator('#project-reason').fill('条件の削除を検査する')
+        p.locator('#project-inspect').click(); p.wait_for_function("!document.getElementById('project-inspection').hidden")
+        actual = p.evaluate("({inspections,input:inspected,original:document.getElementById('result').textContent,inspection:document.getElementById('project-inspection').textContent})")
+        expected_brief = dict(project_brief, constraints=[])
+        add("project-inspection-preserves-separate-requirements", "Project fields and original objective/deliverable remain distinct; no implicit saving", actual,
+            actual['inspections']==1 and actual['input']['brief']==expected_brief and '原資料の目的' in actual['original'] and '原資料の成果物' in actual['original'] and '保存されていません' in actual['inspection'], "project-inspection")
+        p.evaluate("() => { gadget.getProject=async()=>{throw Error('revoked')}; }"); p.locator('#project-reload').click()
+        p.wait_for_function("document.getElementById('project-status').textContent.includes('表示できません')")
+        actual = p.evaluate("({name:document.getElementById('project-name').textContent,items:document.querySelectorAll('#project-editor textarea').length,disabled:document.getElementById('project-inspect').disabled,hidden:document.getElementById('project-inspection').hidden,inspections})")
+        add("project-revocation-clears-content", "Revocation removes Project data and inspection; no retry", actual,
+            actual['name']=='' and actual['items']==0 and actual['disabled'] and actual['hidden'] and actual['inspections']==1, "project-access")
+        p.close()
+        p = page(script); p.wait_for_function("!document.getElementById('project-inspect').disabled")
+        p.evaluate("() => { window.projectReads=0;gadget.getProject=()=>{projectReads++;if(projectReads===1)return new Promise(r=>window.oldProject=r);return Promise.resolve({...project,view:{...project.view,project:{...project.view.project,name:'最新のProject'}}})}; }")
+        p.locator('#project-reload').click(); p.wait_for_function('window.oldProject !== undefined'); p.locator('#project-reload').click()
+        p.wait_for_function("document.getElementById('project-name').textContent.includes('最新のProject')")
+        p.evaluate("oldProject(project)"); p.evaluate("() => new Promise(resolve => requestAnimationFrame(resolve))")
+        actual = p.evaluate("({name:document.getElementById('project-name').textContent,projectReads})")
+        add("project-new-read-supersedes-old", "Delayed Project read cannot replace newer result", actual, '最新のProject' in actual['name'] and actual['projectReads']==2, "project-read-ordering")
+        p.close()
+        large_brief = dict(project_brief)
+        for key in ('in_scope', 'out_of_scope', 'constraints', 'acceptance', 'unknowns'):
+            large_brief[key] = [f"{n:02}:" + '界'*997 for n in range(20)]
+        large_state = dict(project_state, view=dict(project_state['view'], project=dict(project_state['view']['project'], brief=large_brief)))
+        p = page(script.replace(json.dumps(project_state, ensure_ascii=False), json.dumps(large_state, ensure_ascii=False)))
+        p.wait_for_function("!document.getElementById('project-inspect').disabled")
+        p.locator('[data-field="outcome"] textarea').fill('編集を失わず候補を検査する'); p.locator('#project-reason').fill('サイズ上限を確認する')
+        p.locator('#project-inspect').click()
+        actual = p.evaluate("({inspections,status:document.getElementById('project-status').textContent,outcome:document.querySelector('[data-field=outcome] textarea').value,items:document.querySelectorAll('#project-editor textarea').length})")
+        add("project-size-refusal-preserves-edits", "Input above owner transport scope is refused locally without losing edits", actual,
+            actual['inspections']==0 and '上限を超えています' in actual['status'] and actual['outcome']=='編集を失わず候補を検査する' and actual['items']==101, "project-input-boundary")
         p.close();browser.close()
     counts={s:sum(r['status']==s for r in records) for s in ('PASS','FAIL')}
     report={"scope":__doc__,"client_sha256":hashlib.sha256(client.read_bytes()).hexdigest(),"counts":counts,

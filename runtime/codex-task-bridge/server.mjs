@@ -1,4 +1,6 @@
 import { createServer } from "node:http";
+import { createProjectAdapter } from "./project-adapter.mjs";
+import { PROJECT_INSPECTION_BYTES } from "../cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/project-protocol.mjs";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { lstatSync, mkdirSync, openSync, closeSync, fsyncSync, writeFileSync, renameSync, rmdirSync, unlinkSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -128,7 +130,7 @@ async function requestBody(request) {
   return value;
 }
 
-export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serviceSecret, expectedHost, grant, runner, port = 0 }, { invoke = runCodexBrief, shutdownTimeoutMs = 5000 } = {}) {
+export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serviceSecret, expectedHost, grant, runner, project: projectConfig, port = 0 }, { invoke = runCodexBrief, shutdownTimeoutMs = 5000, projectConnect } = {}) {
   if (typeof serviceSecret !== "string" || !/^[0-9a-f]{64}$/.test(serviceSecret)
     || typeof expectedHost !== "string" || !expectedHost || /[\s/]/.test(expectedHost)
     || !closed(grant, GRANT_KEYS) || grant.operation !== "DRAFT_REQUIREMENTS"
@@ -142,6 +144,8 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
     || typeof grant.source_sha256 !== "string" || !hex.test(grant.source_sha256) || typeof grant.expires_at !== "string"
     || !Number.isFinite(Date.parse(grant.expires_at)) || new Date(grant.expires_at).toISOString() !== grant.expires_at
     || !Number.isInteger(port) || port < 0 || port > 65535) throw new Error("bridge_configuration_denied");
+  if (projectConfig && projectConfig.requesterRef !== grant.requester_ref) throw new Error("project_connection_denied");
+  const project = await createProjectAdapter(projectConfig, { connect: projectConnect });
   const boundGrant = structuredClone(grant);
   const grantBinding = JSON.stringify(GRANT_KEYS.map((key) => [key, boundGrant[key]]));
   const bindingSha256 = grantDigest(boundGrant);
@@ -217,6 +221,13 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
       active = null;
     }
   }
+  let projectOperations = 0;
+  async function projectOperation(requester, operation) {
+    if (projectOperations >= 8) throw new Error("project_busy");
+    projectOperations++;
+    try { admitted(requester); const value = await operation(); admitted(requester); return value; }
+    finally { projectOperations--; }
+  }
   const server = createServer({ maxHeaderSize: 8192, requestTimeout: 5000, headersTimeout: 5000 }, async (request, response) => {
     try {
       if (closing || request.headers.host !== expectedHost || request.headers.origin) return reply(response, 403, { error: "request_denied" });
@@ -235,6 +246,21 @@ export async function startBriefBridge({ stateRoot, reviewStateRoot, seeds, serv
       try { source = admitted(requester); } catch { return reply(response, 404, { error: "information_unavailable" }); }
       if (request.method === "GET" && request.url === "/v1/admission") return reply(response, 200, { allowed: true, binding_sha256: bindingSha256 });
       if (request.method === "GET" && request.url === "/v1/handoff") return reply(response, 200, { handoff_id: boundGrant.handoff_id, revision: source.projection.revision, overview: source.projection.overview, binding_sha256: bindingSha256 });
+      if (request.method === "GET" && request.url === "/v1/project") {
+        const result = project ? await projectOperation(requester, () => project.read(requester)) : { state: "not_connected" };
+        admitted(requester); return reply(response, 200, result);
+      }
+      if (request.method === "POST" && request.url === "/v1/project/inspect") {
+        if (!project || request.headers["content-type"] !== "application/json") return reply(response, 400, { error: "project_request_denied" });
+        const chunks = []; let size = 0;
+        for await (const bytes of request.iterator({ destroyOnReturn: false })) {
+          size += bytes.length; if (size > PROJECT_INSPECTION_BYTES) { request.resume(); return reply(response, 413, { error: "project_request_limit" }); }
+          chunks.push(bytes);
+        }
+        admitted(requester);
+        const result = await projectOperation(requester, () => project.inspect(requester, strictJson(Buffer.concat(chunks))));
+        admitted(requester); return reply(response, 200, result);
+      }
       if (request.method === "POST" && request.url === "/v1/briefs") {
         let body; try { body = await requestBody(request); admitted(requester); } catch { return reply(response, 400, { error: "request_denied" }); }
         if (body.source_revision !== boundGrant.source_revision || body.binding_sha256 !== bindingSha256) return reply(response, 409, { error: "revision_conflict" });
