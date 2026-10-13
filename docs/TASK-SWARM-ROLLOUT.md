@@ -113,6 +113,25 @@ p95 は 5 標本中の最大値で、本番 percentile や SLO ではありま�
 探索の確認粒度は各 entry、解析は独立した 16 MiB/file の上限です。
 既存の解析上限超過は引き続き明示的に拒否し、途中成功を返しません。
 
+## 明示 turn の保持量
+
+stdout または保存済み receipt が `turn_id` を明示した読取では、その turn の
+context・completion・failure・cwd だけを集約します。別 turn の JSON も最後まで
+解析し、session/thread identity と session metadata、鮮度、取消、読取終了時の
+変更検知を維持します。選択 turn の最後の context/completion、failure の累積、
+cwd の既存 fallback、最初の有効 receipt path、後続 file の訂正は同じ規則です。
+`turn_id` が省略された場合の全 turn 集約と曖昧性拒否は従来どおりです。
+
+合成回帰では256個の別 turn の context/completion、計512個をすべて解析し、
+非選択 payload の同時生存数が512個から最大2個（現在と直前の行）になることを
+確認しています。path と exact bytes、選択 turn が先頭・末尾の4条件で同じ結果を
+返し、読取後は計測した非選択 payload を保持しません。これは object の保持量の
+確認であり、時間・RSS の新しい測定ではありません。
+
+一行の大きさ、選択 payload、directory frontier・候補集合、`turn_id` 省略経路と
+replay 呼出し元の raw bytes は別の保持要因です。全候補の総解析 bytes・総探索 budget、
+OS の単一操作中の取消期限は #332 に残り、上の過去の性能値をこの変更の実測としません。
+
 ## 確認と残る境界
 
 必要な依存は既存の `requirements-task-swarm-ci.txt` に従います。
