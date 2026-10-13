@@ -641,7 +641,7 @@ def main(argv=None):
     parser.add_argument("--critic", default="verifier")
     parser.add_argument("--receipt-sha256", help="Read back an already completed run using this external anchor")
     parser.add_argument("--resume-finalization", action="store_true",
-                        help="Finish a terminal checkpoint, or continue released A→B with --simulation; never retry an unknown attempt")
+                        help="Finish a terminal checkpoint, or continue released A->B with --simulation; never retry an unknown attempt")
     args = parser.parse_args(argv)
     try:
         if args.resume_finalization and args.simulation is None:
