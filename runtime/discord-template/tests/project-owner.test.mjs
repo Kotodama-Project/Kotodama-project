@@ -126,6 +126,16 @@ test('Discord access changes during the final policy read refuse the stale obser
   await assert.rejects(f.create(),/PROJECT_ACCESS_CHANGED/);assert.equal(count(f.store,'projects'),0);
 });
 
+test('trusted surface guard is checked after the final policy read without leaking into other calls',async t=>{
+  const f=await fixture(t);let reads=0,allowed=true;
+  f.readConfig=async()=>{if(++reads===2)allowed=false;return f.policy;};
+  const input={actor,operation:'create',request_id:'scoped-create',name:'候補',source:f.source,brief:brief()};
+  await assert.rejects(f.hub.handle(input,{assertScope:policy=>{assert.equal(policy,f.policy);assert.equal(allowed,true,'PROJECT_SURFACE_DISABLED');}}),/PROJECT_SURFACE_DISABLED/);
+  assert.equal(count(f.store,'projects'),0);assert.equal(count(f.store,'project_requests'),0);
+  assert.equal(f.store.statement("SELECT COUNT(*) AS n FROM events WHERE type='project.created'").get().n,0);
+  assert.equal((await f.create()).saved_revision,1);
+});
+
 test('two asynchronous corrections to one base cannot overwrite each other',async t=>{
   const f=await fixture(t),initial=await f.create(),input=change(initial,f.ingest('correction'));
   let release;const held=new Promise(resolve=>{release=resolve;}),started=[];f.authorize=async()=>{started.push(true);await held;};
