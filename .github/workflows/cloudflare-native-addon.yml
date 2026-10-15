@@ -63,8 +63,9 @@ jobs:
           node_exe="$(command -v node)"
           pnpm_js="$RUNNER_TEMP/native-pnpm/package/bin/pnpm.cjs"
           cd "$RUNNER_TEMP/native-core"
+          # Reuse pinned resolutions offline; do not refresh registry deprecation metadata.
           env -i PATH="$(dirname "$node_exe"):/usr/bin:/bin" HOME="$RUNNER_TEMP/native-home" CI=true \
-            "$node_exe" "$pnpm_js" install --lockfile-only --ignore-scripts --no-frozen-lockfile --registry=https://registry.npmjs.org/
+            "$node_exe" "$pnpm_js" install --lockfile-only --offline --ignore-scripts --no-frozen-lockfile --registry=https://registry.npmjs.org/
           git diff -- pnpm-lock.yaml > "$RUNNER_TEMP/native-lock.diff"
           python - <<'PY'
           import pathlib, subprocess
