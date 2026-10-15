@@ -86,6 +86,32 @@ jobs:
           env -i PATH="$(dirname "$node_exe"):/usr/bin:/bin" HOME="$RUNNER_TEMP/native-home" CI=true \
             "$node_exe" --test packages/gatekeeper-kotodama-brief/test/native-approval.test.mjs \
             | tee "$RUNNER_TEMP/native-test.log"
+      - name: Build the native Gatekeeper with official tools (no deployment)
+        shell: bash
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          node_exe="$(command -v node)"
+          pnpm_js="$RUNNER_TEMP/native-pnpm/package/bin/pnpm.cjs"
+          native_bin="$RUNNER_TEMP/native-bin"
+          mkdir "$native_bin"
+          # Child builders must use the same integrity-verified pnpm, not Corepack/latest.
+          printf '#!/bin/sh\nexec "%s" "%s" "$@"\n' "$node_exe" "$pnpm_js" > "$native_bin/pnpm"
+          chmod 700 "$native_bin/pnpm"
+          env -i PATH="$native_bin:$(dirname "$node_exe"):/usr/bin:/bin" \
+            HOME="$RUNNER_TEMP/native-home" CI=true WRANGLER_SEND_METRICS=false \
+            bash --noprofile --norc -euo pipefail -c '
+              cd "$1/packages/gatekeeper-kotodama-brief"
+              pnpm exec gadgets-build-configurator .
+              pnpm exec capnweb-validate build --out .wrangler/validate
+              test -s .wrangler/validate/src/kotodama.ts
+              node generate-types.mjs
+              test -s worker-configuration.d.ts
+              pnpm exec tsc --noEmit
+              pnpm exec wrangler deploy --dry-run --outdir "$2"
+              echo NATIVE_GATEKEEPER_BUILT_NOT_LIVE
+            ' native-build "$RUNNER_TEMP/native-core" "$RUNNER_TEMP/native-dry-run" \
+            2>&1 | tee "$RUNNER_TEMP/native-build.log"
       - name: Retain exact source selection and dependency diff for review
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -97,3 +123,4 @@ jobs:
             ${{ runner.temp }}/native-source.json
             ${{ runner.temp }}/native-lock.diff
             ${{ runner.temp }}/native-test.log
+            ${{ runner.temp }}/native-build.log
