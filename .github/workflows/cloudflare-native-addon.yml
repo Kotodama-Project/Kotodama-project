@@ -1,0 +1,100 @@
+name: Cloudflare native addon
+on:
+  pull_request:
+    paths:
+      - .github/workflows/cloudflare-native-addon.yml
+      - tools/prepare_cloudflare_native.py
+      - tests/test_cloudflare_native_workspace.py
+      - governance/cloudflare-os-integration.json
+      - runtime/cloudflare-os-kotodama/**
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cloudflare-native-addon-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+jobs:
+  native-addon:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+          check-latest: false
+      - run: python -S -B tools/check_tracked_secret_hygiene.py
+      - name: Offline preparation regressions
+        run: python -S -B -m unittest discover -s tests -p test_cloudflare_native_workspace.py -v
+      - name: Prepare the actual pinned official source and current committed addon
+        run: |
+          python -S -B tools/prepare_cloudflare_native.py --destination "$RUNNER_TEMP/native-core" > "$RUNNER_TEMP/native-source.json"
+          cat "$RUNNER_TEMP/native-source.json"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.19.0'
+          check-latest: false
+      - name: Acquire the package manager bound by the native core, not the older OS evaluation
+        shell: python
+        run: |
+          import hashlib, io, json, os, pathlib, tarfile, urllib.request
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          receipt = json.loads((root / 'native-source.json').read_text())
+          version, digest = receipt['package_manager'].removeprefix('pnpm@').split('+sha512.')
+          url = 'https://registry.npmjs.org/pnpm/-/pnpm-' + version + '.tgz'
+          with urllib.request.urlopen(url, timeout=60) as response:
+              archive = response.read(32 * 1024 * 1024 + 1)
+          assert len(archive) <= 32 * 1024 * 1024
+          assert hashlib.sha512(archive).hexdigest() == digest
+          with tarfile.open(fileobj=io.BytesIO(archive), mode='r:gz') as source:
+              assert len(source.getmembers()) <= 20000
+              assert sum(member.size for member in source.getmembers()) <= 256 * 1024 * 1024
+              source.extractall(root / 'native-pnpm', filter='data')
+      - name: Materialize the addon importer without accepting a new registry graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/native-home"
+          node_exe="$(command -v node)"
+          pnpm_js="$RUNNER_TEMP/native-pnpm/package/bin/pnpm.cjs"
+          cd "$RUNNER_TEMP/native-core"
+          env -i PATH="$(dirname "$node_exe"):/usr/bin:/bin" HOME="$RUNNER_TEMP/native-home" CI=true \
+            "$node_exe" "$pnpm_js" install --lockfile-only --ignore-scripts --no-frozen-lockfile --registry=https://registry.npmjs.org/
+          git diff -- pnpm-lock.yaml > "$RUNNER_TEMP/native-lock.diff"
+          python - <<'PY'
+          import pathlib, subprocess
+          before = subprocess.check_output(['git', 'show', 'HEAD:pnpm-lock.yaml']).decode()
+          after = pathlib.Path('pnpm-lock.yaml').read_text()
+          # pnpm may add the new workspace importer, not change pinned packages/snapshots.
+          def fixed_sections(text):
+              prefix, rest = text.split('\nimporters:\n', 1)
+              return prefix, rest.split('\npackages:\n', 1)[1]
+          assert fixed_sections(before) == fixed_sections(after), 'Registry graph or lock settings changed'
+          PY
+          env -i PATH="$(dirname "$node_exe"):/usr/bin:/bin" HOME="$RUNNER_TEMP/native-home" CI=true \
+            "$node_exe" "$pnpm_js" install --frozen-lockfile --ignore-scripts --registry=https://registry.npmjs.org/
+      - name: Existing native approval regression (doubles, not live OS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node_exe="$(command -v node)"
+          cd "$RUNNER_TEMP/native-core"
+          env -i PATH="$(dirname "$node_exe"):/usr/bin:/bin" HOME="$RUNNER_TEMP/native-home" CI=true \
+            "$node_exe" --test packages/gatekeeper-kotodama-brief/test/native-approval.test.mjs \
+            | tee "$RUNNER_TEMP/native-test.log"
+      - name: Retain exact source selection and dependency diff for review
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cloudflare-native-addon
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/native-source.json
+            ${{ runner.temp }}/native-lock.diff
+            ${{ runner.temp }}/native-test.log
