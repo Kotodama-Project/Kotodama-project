@@ -71,6 +71,21 @@ python -B tools/pytest_ci_observer.py PATH_TO_OBSERVATION_DIRECTORY
 unknown とし、単発の fixture や OS 間の所要差を高速化の受入・SLO に転用しません。
 次の最適化は同じ固定 source/environment の実行・skip・subtest 集合を照合して評価します。
 
+### 子processの期限切れ診断
+
+#420の復旧・learning CLIの2 occurrenceだけに、`tools.pytest_ci_process_probe`を明示して
+適用します。既存の30秒/60秒の`subprocess.communicate`期限、失敗の伝播、終了と回収は
+Pythonの元の実装が担います。期限直前とtimeout時に、rootのPID・exit状態・CPU/RSS/I/O
+counterとWindowsのstdout/stderr reader threadの生存だけを記録します。引数・環境変数・
+標準出力の本文やファイル内容は記録しません。rootの終了とpipe EOF待ちは区別できますが、
+特定の子孫がhandleを保有することや、SQLite待ち・CPU遅延の根本原因はこの観測だけでは証明しません。
+
+追加artifact `task-swarm-process-OS-INDEX-RUN-ATTEMPT` は最大128 KiB・64 child呼出の
+`events.jsonl`と別枠の有限summaryを7日間保持します。既存の全occurrence照合とは別の診断で、欠測・容量超過は
+summaryの`complete=false`またはsummary欠落として扱います。観測でtestの成否を変えず、
+追加samplingの費用を記録し、test全体への観測負荷は未測定のままです。再実行成功だけで
+#420を解決済みとは扱いません。
+
 ## Windows の全件分割と集約
 
 Windowsでは全件実行が20分で中断したため、CIに限って4個の独立jobへ分割します。
@@ -94,6 +109,10 @@ artifactは `task-swarm-shard-OS-INDEX-RUN-ATTEMPT` で7日間保存します。
 各sidecarは最大2 MiB、全件一覧は最大5,000 occurrencesです。observerの容量は従来どおりです。
 欠測時は公開consoleをpartial evidenceとして扱います。分割による実際の所要は現在headの
 hosted実行で確認し、過去の工程時間の割当計算を新しい実行時間や速度SLOとは呼びません。
+
+再実行はworkflowの全jobを対象にします。失敗jobだけを再実行すると、成功済み区画の
+artifactは前attemptに残るため、同じattemptの5区画を要求する集約が拒否します。
+過去attemptの成果物を混ぜたり、集約条件を緩めたりして成功にしません。
 
 ## Release の SBOM と provenance を確認する
 

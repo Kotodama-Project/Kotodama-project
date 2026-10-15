@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Windows Task swarmの復旧・learning CLI timeout調査用に、該当2 occurrenceの子process状態を期限直前とtimeout時だけ有限記録するCI診断を追加。既存の期限・成否・回収を維持し、引数や入出力本文を追加保存しない（#420、根本原因は調査中）。
+
 - local installationでProject briefを保存・訂正する共通操作を追加。原依頼・旧版・訂正event、再送照合とrevision/digest検査を保持し、既存Taskの作成・実行とは分離する（#385）。
 
 - Sourceに宣言した同一Taskの2仕事 A→B を、前提の独立検証・受理と実成果の配送へ接続。元の4〜6回の予算、B限定修復、永続取消、release後の限定再開、旧形式の読戻しを保ち、公開plan schemaと配布moduleを揃える。一般DAG・実providerは含まない（#366）。
