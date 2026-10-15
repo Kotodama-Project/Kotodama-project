@@ -8,6 +8,7 @@ created destination is retained for inspection, never reported as prepared.
 from __future__ import annotations
 
 import argparse
+from difflib import SequenceMatcher
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -171,6 +172,38 @@ def prepare(repo: Path, destination: Path, *, ref: str = "HEAD",
         "kotodama_commit": commit, "copied_files": len(files),
         "package_manager": manager, "runtime_started": False,
     }
+
+
+def validate_native_lock(before: str, after: str) -> int:
+    """Allow one addon importer and added advisories, never changed resolutions.
+
+    pnpm refreshes registry deprecation strings even with exact dependency pins.
+    Compare the emitted lock text; do not rewrite it or remove existing warnings.
+    """
+    def sections(text):
+        prefix, rest = text.split("\nimporters:\n", 1)
+        importers, rest = rest.split("\npackages:\n", 1)
+        packages, snapshots = rest.split("\nsnapshots:\n", 1)
+        return prefix, re.split(r"(?m)(?=^  \S)", importers), packages, snapshots
+
+    old, new = sections(before), sections(after)
+    marker = "  packages/gatekeeper-kotodama-brief:\n"
+    added = [block for block in new[1] if block.startswith(marker)]
+    if (old[0] != new[0] or old[3] != new[3] or len(added) != 1
+            or [block for block in new[1] if not block.startswith(marker)] != old[1]):
+        raise PreparationError("native_lock_settings_importers_or_snapshots_changed")
+    old_lines, new_lines = old[2].splitlines(keepends=True), new[2].splitlines(keepends=True)
+    count = 0
+    for kind, _a, _b, start, end in SequenceMatcher(
+            None, old_lines, new_lines, autojunk=False).get_opcodes():
+        if kind == "equal":
+            continue
+        lines = new_lines[start:end]
+        if kind != "insert" or not all(re.fullmatch(r"    deprecated: [^\r\n]+\n", line)
+                                        for line in lines):
+            raise PreparationError("native_lock_package_graph_changed")
+        count += len(lines)
+    return count
 
 
 def main(argv: list[str] | None = None) -> int:

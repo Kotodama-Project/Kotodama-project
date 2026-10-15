@@ -48,8 +48,11 @@ python -S -B -m unittest discover -s tests -p test_cloudflare_native_workspace.p
 The path-scoped [native addon workflow](../../.github/workflows/cloudflare-native-addon.yml)
 prepares the real official source, verifies the package-manager archive against the
 native core's `packageManager` integrity, generates the additional workspace
-importer, and refuses changes outside the lock's importer section. It then performs
-a scripts-disabled frozen install and runs the **existing** native approval test.
+importer, and refuses changes to existing importers, settings, versions, resolution
+hashes and dependency snapshots. Added registry deprecation advisories are retained
+and counted, not treated as package upgrades; existing warnings cannot be removed
+or rewritten. It then performs a scripts-disabled frozen install and runs the
+**existing** native approval test.
 The dependency diff and test log are retained for review. This test uses doubles
 for queue, storage and transport; it does not prove a live OS, authentication or
 model inference. The workflow does not run `run-local`, deploy, or use secrets.

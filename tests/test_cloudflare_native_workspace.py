@@ -271,5 +271,44 @@ class NativeWorkspaceTests(unittest.TestCase):
             "status": "NOT_PREPARED", "error": "invalid_input_or_io"})
 
 
+class NativeLockTests(unittest.TestCase):
+    before = ("lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n"
+              "    dependencies: {}\n\npackages:\n\n  lib@1.0.0:\n"
+              "    resolution: {integrity: sha512-fixture}\n"
+              "    deprecated: existing warning\n\nsnapshots:\n\n  lib@1.0.0: {}\n")
+    importer = ("  packages/gatekeeper-kotodama-brief:\n"
+                "    dependencies: {}\n\n")
+
+    def updated(self):
+        return self.before.replace("\npackages:\n", self.importer + "\npackages:\n")
+
+    def test_generated_importer_with_no_registry_changes(self):
+        self.assertEqual(MODULE.validate_native_lock(self.before, self.updated()), 0)
+
+    def test_added_deprecation_metadata_is_retained_not_erased(self):
+        original = self.before.replace("    deprecated: existing warning\n", "")
+        updated = self.updated().replace("existing warning", "new registry advisory")
+        self.assertEqual(MODULE.validate_native_lock(original, updated), 1)
+
+    def test_rejects_dependency_changes_and_loss_of_existing_warnings(self):
+        updated = self.updated()
+        candidates = [
+            updated.replace("lockfileVersion: '9.0'", "lockfileVersion: '8.0'"),
+            updated.replace("lib@1.0.0", "lib@2.0.0", 1),
+            updated.replace("sha512-fixture", "sha512-changed"),
+            updated.replace("  lib@1.0.0: {}", "  lib@1.0.0: {changed: true}"),
+            updated.replace("    deprecated: existing warning\n", ""),
+            updated.replace("existing warning", "rewritten warning"),
+            updated.replace("  .:\n    dependencies: {}", "  .:\n    dependencies: {other: x}"),
+            updated.replace(self.importer, self.importer * 2),
+            updated.replace(self.importer, ""),
+            updated.replace("    resolution:", "    hasBin: true\n    resolution:"),
+        ]
+        for candidate in candidates:
+            with self.subTest(candidate=candidate):
+                with self.assertRaises(MODULE.PreparationError):
+                    MODULE.validate_native_lock(self.before, candidate)
+
+
 if __name__ == "__main__":
     unittest.main()

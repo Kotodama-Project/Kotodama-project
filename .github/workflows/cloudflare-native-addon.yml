@@ -63,19 +63,17 @@ jobs:
           node_exe="$(command -v node)"
           pnpm_js="$RUNNER_TEMP/native-pnpm/package/bin/pnpm.cjs"
           cd "$RUNNER_TEMP/native-core"
-          # Reuse pinned resolutions offline; do not refresh registry deprecation metadata.
           env -i PATH="$(dirname "$node_exe"):/usr/bin:/bin" HOME="$RUNNER_TEMP/native-home" CI=true \
-            "$node_exe" "$pnpm_js" install --lockfile-only --offline --ignore-scripts --no-frozen-lockfile --registry=https://registry.npmjs.org/
+            "$node_exe" "$pnpm_js" install --lockfile-only --ignore-scripts --no-frozen-lockfile --registry=https://registry.npmjs.org/
           git diff -- pnpm-lock.yaml > "$RUNNER_TEMP/native-lock.diff"
           python - <<'PY'
-          import pathlib, subprocess
+          import os, pathlib, subprocess, sys
+          sys.path.insert(0, str(pathlib.Path(os.environ['GITHUB_WORKSPACE']) / 'tools'))
+          from prepare_cloudflare_native import validate_native_lock
           before = subprocess.check_output(['git', 'show', 'HEAD:pnpm-lock.yaml']).decode()
           after = pathlib.Path('pnpm-lock.yaml').read_text()
-          # pnpm may add the new workspace importer, not change pinned packages/snapshots.
-          def fixed_sections(text):
-              prefix, rest = text.split('\nimporters:\n', 1)
-              return prefix, rest.split('\npackages:\n', 1)[1]
-          assert fixed_sections(before) == fixed_sections(after), 'Registry graph or lock settings changed'
+          count = validate_native_lock(before, after)
+          print(f'Native lock graph unchanged; {count} added deprecation advisories retained')
           PY
           env -i PATH="$(dirname "$node_exe"):/usr/bin:/bin" HOME="$RUNNER_TEMP/native-home" CI=true \
             "$node_exe" "$pnpm_js" install --frozen-lockfile --ignore-scripts --registry=https://registry.npmjs.org/
