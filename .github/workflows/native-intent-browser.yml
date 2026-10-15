@@ -37,7 +37,7 @@ jobs:
           python tools/test_native_intent_browser.py --evidence-dir "$RUNNER_TEMP/kotodama-browser-evidence" > "$RUNNER_TEMP/kotodama-browser-evidence/results.json"
       - name: Preserve component evidence without claiming full OS E2E
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-intent-browser-${{ github.run_id }}
           path: ${{ runner.temp }}/kotodama-browser-evidence/
@@ -50,7 +50,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
       - name: Exercise real local HTTP and persistence with synthetic identities
@@ -61,7 +61,7 @@ jobs:
           node --test tests/node/test_local_review_gateway.mjs tests/node/test_information_access.mjs tests/node/test_company_persona_journeys.mjs 2>&1 | tee "$RUNNER_TEMP/kotodama-persona-http/results.log"
       - name: Preserve local HTTP evidence without claiming live company E2E
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: company-persona-http-${{ github.run_id }}
           path: ${{ runner.temp }}/kotodama-persona-http/
