@@ -10,7 +10,7 @@ const unique=refs=>[...new Map(refs.map(ref=>[sourceReference(ref),ref])).values
 const binding=config=>digest({installation:config.installation,dataDir:config.dataDir,owner:config.owner,
   guild:config.discord.guildId,application:config.discord.applicationId??null,workspace:config.worker.workspace});
 
-function request(input){
+export function validateProjectRequest(input){
   check(input&&Object.hasOwn(fields,input.operation),'PROJECT_OPERATION_INVALID');shape(input,fields[input.operation],'PROJECT_REQUEST_INVALID');
   check(typeof input.actor==='string'&&/^\d{5,24}$/.test(input.actor),'OPERATOR_REQUIRED');
   if(input.operation!=='create')reference(input.project_id);
@@ -85,12 +85,16 @@ export class ProjectHub{
       source_refs:version.sources.map(ref=>{const observed=sources.find(s=>sourceReference(s.ref)===sourceReference(ref));return {...ref,current_revision:observed.current.revision,freshness:observed.current.revision===ref.revision?'current':'superseded'};}),
       ...(write?{replay,saved_revision:version.project.revision}:{}),task_state_changed:false,execution_authorized:false};
   }
-  async handle(raw,{signal}={}){
-    return this.#handle(request(raw),signal,true);
+  async handle(raw,{signal,assertScope=()=>{}}={}){
+    check(typeof assertScope==='function','PROJECT_SCOPE_GUARD_REQUIRED');
+    return this.#handle(validateProjectRequest(raw),signal,true,assertScope);
   }
-  async #handle(input,signal,replayRetry){
-    this.guard(input,signal);
-    const policy=await this.readConfig();this.guard(input,signal,policy);
+  async #handle(input,signal,replayRetry,assertScope){
+    // The caller supplies this synchronous surface guard, never request JSON.
+    // Keep it scoped to this invocation, including the one bounded replay.
+    const guard=(policy=this.policy())=>{this.guard(input,signal,policy);assertScope(policy);signal?.throwIfAborted();};
+    guard();
+    const policy=await this.readConfig();guard(policy);
     const write=['create','correct'].includes(input.operation),requestDigest=write?digest(input):null;
     const prior=write?this.store.statement('SELECT * FROM project_requests WHERE actor=? AND request_id=?').get(input.actor,input.request_id):null;
     if(prior)check(prior.request_digest===requestDigest,'PROJECT_REQUEST_CONFLICT');
@@ -103,12 +107,12 @@ export class ProjectHub{
     const observed=this.sources(refs,input.actor,current?.room),epoch=this.accessEpoch();this.sourceScope(observed,policy);
     if(input.source&&!prior)check(observed.find(s=>sourceReference(s.ref)===sourceReference(input.source)).current.revision===input.source.revision,'SOURCE_CHANGED');
     for(const {current:source} of [...new Map(observed.map(s=>[room(s.current),s])).values()]){
-      this.guard(input,signal);await this.authorizeSource(source,input.actor,{signal});this.guard(input,signal);
+      guard();await this.authorizeSource(source,input.actor,{signal});guard();
     }
-    const final=await this.readConfig();this.guard(input,signal,final);this.sourceScope(observed,final);check(this.accessEpoch()===epoch,'PROJECT_ACCESS_CHANGED');
+    const final=await this.readConfig();guard(final);this.sourceScope(observed,final);check(this.accessEpoch()===epoch,'PROJECT_ACCESS_CHANGED');
     // No await between these final checks and the same-Store transaction.
     try{return this.store.transaction(()=>{
-      this.guard(input,signal,final);check(this.accessEpoch()===epoch,'PROJECT_ACCESS_CHANGED');
+      guard(final);check(this.accessEpoch()===epoch,'PROJECT_ACCESS_CHANGED');
       check(digest(this.sources(refs,input.actor,current?.room))===digest(observed),'PROJECT_SOURCE_CHANGED');
       if(current)check(digest(this.current(current.id,input.actor))===digest(current),'PROJECT_CHANGED');
       if(prior)return this.response(saved,current,observed,{replay:true,write:true});
@@ -134,7 +138,7 @@ export class ProjectHub{
       // are never replayed or rebased onto a newer Project automatically.
       if(replayRetry&&write&&!prior&&error.code==='PROJECT_CHANGED'){
         const completed=this.store.statement('SELECT request_digest FROM project_requests WHERE actor=? AND request_id=?').get(input.actor,input.request_id);
-        if(completed?.request_digest===requestDigest)return this.#handle(input,signal,false);
+        if(completed?.request_digest===requestDigest)return this.#handle(input,signal,false,assertScope);
       }
       throw error;
     }

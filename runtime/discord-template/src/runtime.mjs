@@ -24,6 +24,7 @@ import {awaitWithSignal,deadlineScope,readHttpBody,sendHttpJson} from './http-li
 import {DotsBridge} from './dots.mjs';
 import {JudgmentStatusReader} from './judgment-status.mjs';
 import {ProjectHub} from './project-hub.mjs';
+import {shape} from './project-contract.mjs';
 import {projectSkillsDigest} from './project-skill-input.mjs';
 import {atomicJson,atomicText,check,uid,errorCode,redact,Refused,digest} from './common.mjs';
 import {consumeBootstrapBinding,registerRuntimeModule} from './source-bootstrap.mjs';
@@ -116,7 +117,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     const secret=randomBytes(32).toString('hex');const secretFile=path.join(config.dataDir,'control.secret');await atomicText(secretFile,secret);
     const handleControl=async(req,res)=>{
       const send=(status,body,close=false)=>sendHttpJson(res,status,body,{close});
-      let scope;
+      let scope,disconnect;
       try{
         const auth=Buffer.from(String(req.headers.authorization??'')),expected=Buffer.from('Bearer '+secret);check(auth.length===expected.length&&timingSafeEqual(auth,expected),'UNAUTHORIZED');
         if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,...(channelWorker?{channelWorkspaces:channelWorker.status()}:{}),taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status(),source});return;}
@@ -132,9 +133,37 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         if(input.action==='tasks')result=await pipeline.tasks(input.actor);
         else if(input.action==='judgment')result=await judgment.read({actor:input.actor,taskId:input.taskId});
         else if(input.action==='project'){
-          const {action,...operation}=input;
+          const {action,surface,approval_id,...operation}=input;
+          check(surface===undefined||surface==='dots','PROJECT_SURFACE_INVALID');
+          // A surface marker can only add restrictions to the operator grant.
+          // Keep the original call's scope through authorization and commit.
+          const assertScope=surface==='dots'?policy=>{
+            check(config.dots.enabled&&policy.dots.enabled,'DOTS_DISABLED');
+            check(config.dots.actorId===input.actor&&policy.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
+            check(config.dots.projectOperations?.includes(operation.operation)&&policy.dots.projectOperations?.includes(operation.operation),'PROJECT_OPERATION_NOT_ALLOWED');
+          }:()=>{};
           scope=deadlineScope(8000,'PROJECT_OPERATION_TIMEOUT');controlReads.add(scope);
-          const work=projects.handle(operation,{signal:scope.signal});
+          const operationScope=scope;
+          disconnect=()=>{if(!res.writableFinished)operationScope.abort(new Refused('HTTP_CLIENT_DISCONNECTED'));};
+          req.once('aborted',disconnect);res.once('close',disconnect);
+          if(req.aborted||res.destroyed)disconnect();
+          const signal=scope.signal;
+          const work=(async()=>{
+            if(['prepare','read_approval'].includes(operation.operation)){
+              check(surface==='dots'&&dots&&config.dots.actorId===input.actor&&current.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
+              if(operation.operation==='prepare'){
+                check(approval_id===undefined,'PROJECT_REQUEST_INVALID');shape(operation,['actor','operation','id','revision','candidate'],'PROJECT_REQUEST_INVALID');
+                return dots.prepareProject(operation.id,operation.revision,operation.candidate,{signal});
+              }
+              shape(operation,['actor','operation'],'PROJECT_REQUEST_INVALID');return dots.readProjectDraft(approval_id,{signal});
+            }
+            let assertApproval=()=>{};
+            if(surface==='dots'&&['create','correct'].includes(operation.operation)){
+              check(dots,'DOTS_DISABLED');assertScope(current);
+              assertApproval=await dots.authorizeProjectWrite(approval_id,operation,{signal});
+            }else check(approval_id===undefined,'PROJECT_REQUEST_INVALID');
+            return projects.handle(operation,{signal,assertScope:policy=>{assertScope(policy);assertApproval(policy);}});
+          })();
           // Keep SQLite/host ownership until the real authorization work settles,
           // even if its response timed out. The hub rechecks abort before commit.
           controlOperations.add(work);const settled=()=>controlOperations.delete(work);work.then(settled,settled);
@@ -160,7 +189,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         else if(input.action==='shutdown'){result={state:'stopping'};setImmediate(()=>{void close().catch(e=>log({event:'runtime_shutdown_failed',code:errorCode(e)}));});}
         else throw new Error('UNKNOWN_COMMAND');send(200,{ok:true,result});
       }catch(e){const code=errorCode(e);send(code==='UNAUTHORIZED'?401:code==='CONTROL_BUSY'||code==='RUNTIME_STOPPING'?503:code==='CONTROL_BODY_LIMIT'?413:code==='CONTROL_BODY_TIMEOUT'?408:400,{ok:false,error:code},true);}
-      finally{if(scope){controlReads.delete(scope);scope.dispose();}}
+      finally{if(disconnect){req.removeListener('aborted',disconnect);res.removeListener('close',disconnect);}if(scope){controlReads.delete(scope);scope.dispose();}}
     };
     control=http.createServer({maxHeaderSize:16384,requestTimeout:15000,headersTimeout:10000},(req,res)=>{
       const operation=handleControl(req,res);controlOperations.add(operation);void operation.finally(()=>controlOperations.delete(operation)).catch(()=>{});
@@ -218,22 +247,28 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   }
   return {config,store,owner,pipeline,discord,voice,dots,projects,close};
 }
-async function localControlRequest(port,route,token,payload){
+async function localControlRequest(port,route,token,payload,{signal}={}){
+  signal?.throwIfAborted();
   return new Promise((resolve,reject)=>{
+    const cleanup=()=>signal?.removeEventListener('abort',abort);
+    const fail=error=>{cleanup();reject(error);};
+    const succeed=value=>{cleanup();resolve(value);};
+    const abort=()=>request.destroy(signal.reason instanceof Error?signal.reason:new Refused('OPERATION_CANCELLED'));
     const body=payload===undefined?null:JSON.stringify(payload);
     const request=http.request({hostname:'127.0.0.1',port,path:route,method:body===null?'GET':'POST',headers:{authorization:'Bearer '+token,...(body===null?{}:{'content-type':'application/json','content-length':Buffer.byteLength(body)})}},response=>{
       const chunks=[];let size=0;response.on('data',chunk=>{size+=chunk.length;if(size>1000000){request.destroy(new Error('CONTROL_RESPONSE_LIMIT'));return;}chunks.push(chunk);});
-      response.on('error',reject);response.on('end',()=>{try{const value=JSON.parse(Buffer.concat(chunks).toString('utf8'));check(response.statusCode===200,typeof value.error==='string'&&/^[A-Z_]+$/.test(value.error)?value.error:'RUNTIME_NOT_AVAILABLE');resolve(value);}catch(error){reject(error);}});
+      response.on('error',fail);response.on('end',()=>{try{const value=JSON.parse(Buffer.concat(chunks).toString('utf8'));check(response.statusCode===200,typeof value.error==='string'&&/^[A-Z_]+$/.test(value.error)?value.error:'RUNTIME_NOT_AVAILABLE');succeed(value);}catch(error){fail(error);}});
     });
-    request.setTimeout(body===null?3000:30000,()=>request.destroy(new Error('CONTROL_TIMEOUT')));request.on('error',reject);request.end(body);
+    request.setTimeout(body===null?3000:30000,()=>request.destroy(new Error('CONTROL_TIMEOUT')));request.on('error',fail);signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();else request.end(body);
   });
 }
-export async function controlCommand(config,input){
+export async function controlCommand(config,input,{signal}={}){
+  signal?.throwIfAborted();
   const runtime=JSON.parse((await readArtifact(path.join(config.dataDir,'runtime.json'),65536)).toString('utf8'));
   const port=Number(runtime.port);check(Number.isInteger(port)&&port>=1&&port<=65535,'RUNTIME_PORT_INVALID');
   const token=(await readArtifact(path.join(config.dataDir,'control.secret'),64)).toString('utf8');check(/^[a-f0-9]{64}$/.test(token),'CONTROL_TOKEN_INVALID');
-  const current=await localControlRequest(port,'/v1/status',token);
+  const current=await localControlRequest(port,'/v1/status',token,undefined,{signal});
   check(current.ownerId===runtime.ownerId&&current.pid===runtime.pid&&current.startedAt===runtime.startedAt,'RUNTIME_OWNER_CHANGED');
   if(input.action==='status')return current;
-  const value=await localControlRequest(port,input.action==='project'?'/v1/project':'/v1/command',token,input);check(value.ok,value.error??'CONTROL_FAILED');return value.result;
+  const value=await localControlRequest(port,input.action==='project'?'/v1/project':'/v1/command',token,input,{signal});check(value.ok,value.error??'CONTROL_FAILED');return value.result;
 }

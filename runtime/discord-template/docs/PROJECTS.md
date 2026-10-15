@@ -66,11 +66,34 @@ Project ID、owner参照、原依頼参照はownerが発行します。訂正は
 設定・owner・installation・保存場所の変更は再確認します。
 認可待ちが期限を超えた操作は、その後応答が戻っても保存へ進みません。
 
+## Dotsから同じProjectを扱う
+
+[既存Dots plugin](../dots-plugin/README.md)には、`projects.operations`と
+`dots.projectOperations`の両方に設定したProject toolsだけを追加します。
+Dots側も既定は空配列です。端末用Project操作や既存のDots返信権限を、モデルへの
+Project操作許可として流用しません。actorは設定から固定し、tool引数で変更できません。
+
+Projectのread/inspectは、両方の操作設定とinstallationの設定済みtext/result channel・
+voice room内で、そのactorが所有・閲覧できるSourceを使います。
+作成・訂正はさらに、`dots.channelIds`内の現在pendingな相談のSource・版へ束縛します。
+`project_prepare_change`で候補全文を提示し、依頼者本人がDiscordの確認buttonで
+正確な内容を許可した後に、`approval_id`付きcreate/correctで同じownerへ保存します。
+モデルが自分で許可するtoolはありません。候補にはrequest_id・Source・操作・対象版も含めます。
+許可は5分で失効し、再送で期限を更新しません。相談の取消・訂正、候補の差替え、
+いずれかの権限失効は、保存直前にも検査します。候補は依頼ごと8件、未expired全体128件までです。
+確認の配達が不明なら自動再送せず、本人の`/kotodama project_review`で同じ候補を再確認できます。
+
+Dotsから送った処理は`surface: "dots"`で接続元を固定し、Dotsの無効化・actor変更を
+保存直前にも確認します。このmarkerはoperatorの権限に制約を加え、権限を増やしません。
+MCP呼出しの取消はloopback接続から保存前の検査まで伝播します。保存後の応答紛失では
+receiptを消さず、許可・相談が有効な間は同じID・同じ内容で照合します。取消・期限切れ後の
+書込再送は拒否し、Project readまたはlocal operatorで照合します。新しいIDで自動再実行しません。
+
 ## 実装範囲と次の接続
 
 この版はactor所有のProject briefだけを扱い、`task_refs`は空です。
 Task参照の追加、成果・担当・完了の集約、共有参加者、Projectの取消・削除、
-動的役割生成、GUI操作、provider実接続は後続です。
+動的役割生成、GUI操作、実Dotアカウントによる受入、provider実接続は後続です。
 既存TaskのSQLite本文digestを、swarm入力の`context_digest`へ流用しません。
 
 既存Requirements Gadgetの`objective`と`deliverable`は別の情報です。

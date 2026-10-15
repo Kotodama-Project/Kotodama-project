@@ -101,3 +101,36 @@ test('control accepts full Unicode and escaped Project briefs while bounding all
   await assert.rejects(f.command({...f.create,padding:'x'.repeat(1500000)}),/CONTROL_BODY_LIMIT/);
   assert.equal(f.runtime.store.statement('SELECT count(*) AS n FROM projects').get().n,3);
 });
+
+test('caller cancellation disconnects pending Project authorization and prevents a late commit',async t=>{
+  const f=await fixture(t),controller=new AbortController();
+  let entered,release,disconnected;
+  const started=new Promise(resolve=>{entered=resolve;}),held=new Promise(resolve=>{release=resolve;}),aborted=new Promise(resolve=>{disconnected=resolve;});
+  f.runtime.projects.authorizeSource=async(_source,_actor,{signal})=>{
+    signal.addEventListener('abort',disconnected,{once:true});entered();await held;
+  };
+  const call=controlCommand(f.config,{action:'project',actor,...f.create},{signal:controller.signal});
+  const refused=assert.rejects(call,/CALLER_CANCELLED/);
+  await started;controller.abort(new Error('CALLER_CANCELLED'));await refused;await aborted;
+  assert.equal(f.runtime.store.statement('SELECT count(*) AS n FROM projects').get().n,0);
+  release();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.runtime.store.statement('SELECT count(*) AS n FROM project_requests').get().n,0);
+  f.runtime.projects.authorizeSource=async()=>{};
+  assert.equal((await f.command(f.create)).saved_revision,1);
+});
+
+test('cancellation after commit leaves the same-key receipt available for reconciliation',async t=>{
+  const f=await fixture(t),controller=new AbortController(),event=f.runtime.store.event.bind(f.runtime.store);
+  f.runtime.store.event=(type,...args)=>{
+    const result=event(type,...args);
+    // The synchronous transaction completes before socket disconnect delivery;
+    // the caller nevertheless loses its response and must reconcile by key.
+    if(type==='project.created')controller.abort(new Error('RESPONSE_UNCERTAIN'));
+    return result;
+  };
+  await assert.rejects(controlCommand(f.config,{action:'project',actor,...f.create},{signal:controller.signal}),/RESPONSE_UNCERTAIN/);
+  f.runtime.store.event=event;
+  const replay=await f.command(f.create);assert.equal(replay.replay,true);
+  assert.equal(f.runtime.store.statement('SELECT count(*) AS n FROM projects').get().n,1);
+  assert.equal(f.runtime.store.statement("SELECT count(*) AS n FROM events WHERE type='project.created'").get().n,1);
+});
