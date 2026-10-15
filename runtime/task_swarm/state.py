@@ -806,6 +806,50 @@ class SwarmState:
         finally:
             conn.close()
 
+    def completed_evidence_cut(self, run_id: str) -> str:
+        return self.completed_evidence_cut_at(self.db_path, run_id)
+
+    @staticmethod
+    def completed_evidence_cut_at(db_path, run_id: str) -> str:
+        """Read a bounded completed execution, excluding mutable reuse decisions.
+
+        This cut is for a verified local loop (at most eight single attempts).
+        It never recomputes jobs, obtains a write lock or reads another run.
+        """
+        run_id = protocol.ref(run_id, "run id")
+        conn = None
+        try:
+            conn = sqlite3.connect(Path(db_path).absolute().as_uri() + "?mode=ro",
+                                   uri=True, isolation_level=None, timeout=5.0)
+            conn.row_factory = sqlite3.Row
+            conn.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 2 * 1024 * 1024)
+            conn.execute("PRAGMA query_only=ON")
+            conn.execute("BEGIN")
+            run = SwarmState._get_run(conn, run_id)
+            SwarmState._require_not_cancelled(conn, run)
+            rows = {}
+            for table, maximum, order in (("jobs", 8, "job_id"), ("attempts", 8, "job_id,attempt"),
+                    ("run_extensions", 1, "run_id"), ("run_finalizations", 1, "run_id")):
+                rows[table] = [dict(row) for row in conn.execute(
+                    f"SELECT * FROM {table} WHERE run_id=? ORDER BY {order} LIMIT ?", (run_id, maximum + 1))]
+                if len(rows[table]) > maximum:
+                    raise protocol.SwarmError("FINALIZATION_STATE_CHANGED", "completed execution exceeds its bound")
+            evidence = {"run": dict(run), "jobs": rows["jobs"], "attempts": rows["attempts"],
+                        "extension": rows["run_extensions"][0]["extension_json"] if rows["run_extensions"] else None}
+            if SwarmState._plan_from_run(run).get("execution_contract_version") == 3:
+                stage = conn.execute("SELECT stage_json FROM run_dependency_stages WHERE run_id=?", (run_id,)).fetchone()
+                evidence["dependency_stage"] = stage[0] if stage else None
+            final = rows["run_finalizations"]
+            if (len(final) != 1 or final[0]["receipt_json"] is None
+                    or protocol.canonical(evidence) != final[0]["progress_json"]):
+                raise protocol.SwarmError("FINALIZATION_STATE_CHANGED", "completed execution is not intact")
+            return protocol.digest({"execution": evidence, "finalization": final[0]})
+        except sqlite3.Error as exc:
+            raise protocol.SwarmError("FINALIZATION_STATE_CHANGED", "completed execution is unreadable") from exc
+        finally:
+            if conn is not None:
+                conn.close()
+
     def prepare_finalization(self, run_id: str, checkpoint: Mapping[str, Any]) -> dict[str, Any]:
         """Freeze a fully reported terminal run, never grant new execution."""
         run_id = protocol.ref(run_id, "run id")

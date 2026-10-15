@@ -48,7 +48,7 @@ mainには、[#43](https://github.com/Kotodama-Project/Kotodama-project/pull/43)
 | 系統 | 次に確認する候補 | 判断の要点 |
 |---|---|---|
 | 仕事・文脈の継続 | 情報アクセスは[#203](https://github.com/Kotodama-Project/Kotodama-project/pull/203)を統合。旧#44〜#47は[#30の再配置方針](https://github.com/Kotodama-Project/Kotodama-project/issues/30)へ | 保全tagのコードと契約を参照し、必要機能を最新mainへ小さく再配置する。古いstack、日付付きsnapshot、運用方針の写しをまとめて取り込まない |
-| 知識と検索 | [Knowledge base](KNOWLEDGE-BASE.md)、[公開知識](../knowledge/index.md)。#48・#61を再配置、#59はparked | 知識基盤の正本はこの系統。schema適合、producer checks、actor/purposeの判断readinessを分け、出典変更・失効・必須context欠落を成功にしない。内容の独立検証と訂正の実入力束縛は後続 |
+| 知識と検索 | [Knowledge base](KNOWLEDGE-BASE.md)、[公開知識](../knowledge/index.md)。#48・#61を再配置、#59はparked | 知識基盤の正本はこの系統。schema適合、producer checks、actor/purposeの判断readinessを分け、出典変更・失効・必須context欠落を成功にしない。原意・訂正は既存Taskと明示local executorの実入力に束縛する。実モデル品質・利用者成果は別受入 |
 | 音声 | [GPT-Liveの採用方針](GPT-LIVE-ADOPTION.md)、[#142](https://github.com/Kotodama-Project/Kotodama-project/issues/142)〜[#146](https://github.com/Kotodama-Project/Kotodama-project/issues/146) | Node runtime（`runtime/discord-template`）に一本化する（2026-09-24 owner判断）。#69・#71の別runtimeは取り込まず、方針文書だけをNodeに合わせて取り込んだ。Nodeに無い考え方は後継のIssueで進める |
 | 並列実行 | [Luna Task swarm](LUNA-TASK-SWARM.md)（[#67](https://github.com/Kotodama-Project/Kotodama-project/pull/67)・[#85](https://github.com/Kotodama-Project/Kotodama-project/pull/85)を統合） | 明示slashの調査を同じlocal Taskへつなぐ入口、専用の読取範囲、取消・成果readbackを実装。Linuxの合成E2EとWindowsの実行前拒否を検証。過去版`7df1aea`のlive fixture記録は #159、現行版のlive受入は残件。契約候補[#34](https://github.com/Kotodama-Project/Kotodama-project/pull/34)（agent swarm・route binding）は[このruntimeとの対応表](AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md#luna-task-swarm-との対応)を付けて取り込み済み。[移行台帳の契約](PUBLIC-MIGRATION-LEDGER.md)（#35）はschema・read-only verifier・合成fixtureとLunaとの対応表を含む。台帳は未記入で実移行は未検証。[agent lifecycle の契約](PUBLIC-AGENT-LIFECYCLE-REGISTRY.md)（#36）はschema・read-only verifier・合成fixtureの段階。実registryは未作成 |
 | 別系統のcontrol-plane | [OpenMaus / Cloudflare OS の統合契約候補](OPENMAUS-CLOUDFLARE-OS-INTEGRATION.md)（[#56](https://github.com/Kotodama-Project/Kotodama-project/pull/56) 由来）、[Git Steward](../runtime/git-steward/README.md)。旧#49と後続Draftはparked | #179のGit Steward調整コアはlocal candidate。[設計文書](GIT-STEWARD-AND-WORK-CELLS.md)と[業務演習](BUSINESS-REHEARSAL.md)で訂正・担当交代・再起動を検査。OpenMaus / Cloudflare OSは五つの既存reviewを処理した契約・schema・read-only validatorと合成fixture。旧OKF registryやauditは取り込まず、#48の知識ownerへつなぐ。UI・provider操作・実配備は未実装 |
@@ -67,9 +67,14 @@ Task ownerを追加せず、実Codex・native core・配備の受入は残りま
 ## 作業を一つ進める
 
 [小単位の知識CLI](KNOWLEDGE-CLI.md)から、目的参照で検索しConcept/節を読む経路へ進めます。
-大規模索引、目的/制約の実入力束縛、限定改善は#326〜#328の後続受入です。
+[有限階層reader](KNOWLEDGE-HIERARCHY-TRACE.md)は現在Sourceの親と既存Task・保存実行を照合し、
+[複数親のproducer](KNOWLEDGE-TASK-INPUT.md#明示した複数親を実task入力へ渡す)が全必須制約を
+実worker・critic入力へ渡します。未解決の組織Planやcurrent learning decisionは推定しません。
+型付きの目的・原意・訂正・制約は[Task入力](KNOWLEDGE-TASK-INPUT.md)から既存ownerに束縛します。
+大規模索引、全階層のowner接続、実モデル・利用者成果を伴う改善は#326〜#328と#347の後続受入です。
 [検証済みの学びの限定再利用](TASK-LEARNING-REUSE.md)は、独立reviewと既存owner判断を
-経て、一つの学びを同じ目的の次のTaskへ渡すlocal simulationの入口です。
+経て、一つの学びを同じ目的の次のTaskへ渡します。明示local executorでは、現在の採否・Source・期限・取消を
+再確認して実childとcriticの入力へ束縛します。知識の自動採用や実モデル・利用者成果は別受入です。
 
 人・組織・関係・活動の[共通catalog候補](RELATIONSHIP-CATALOG.md)は、架空データの
 source／revision／ACLを同じ人向け一覧とagent Contextへ投影します。Salesforce実接続は未確認です。
@@ -94,7 +99,10 @@ Task契約を持つcheckoutでは、そのresolver / records / events / restart 
 同じTaskへの返却は実装済みで、専用ログイン・live利用枠・実モデル/依頼者の受入は残ります。
 
 性能の比較は[固定fixtureの性能計測CLI](PERFORMANCE-BENCHMARK.md)を入口とし、
-`tools/performance_benchmark.py`でwall time・peak RSSと入力/結果の同一性を確認します。
-既存swarm-shortの合成検証であり、knowledge/voice・実モデル品質・本番性能の受入ではありません。
+`tools/performance_benchmark.py`で`swarm-short`と`task-admission`の有限fixtureを選べます。
+後者はLinuxで同じ16 Tasksを幅1/2/4で実行し、待機・throughputと一つのNode processの起動から
+終了・回収までのwall/CPU/peak RSSを測ります。[固定比較記録](PERFORMANCE-TASK-ADMISSION-2026-10-13.md)は
+source `d2822b0`の観測で、`qualification=NOT_EVALUATED`・既定幅1を維持します。
+knowledge/voice・全Pipeline・実モデル品質・本番性能の受入は別です。
 
 [Task閉ループ](TASK-SWARM-CLOSED-LOOP.md) の A→B 契約は、Source に宣言した二葉だけを扱います。A の独立検証と受理を B の実入力へ束縛し、旧 run の読み戻し、有限の修復・復旧・取消までを同じ台帳で管理します。

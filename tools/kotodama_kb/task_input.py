@@ -149,9 +149,60 @@ def _live_context(projection, now):
         for item in projection["concepts"]), "TASK_CONTEXT_EXPIRED")
 
 
+def _multiple_parents(bundle, seed, entries, nodes, checks):
+    # Source-checkout helper only. A missing optional reader must not affect
+    # default imports, and an unrelated missing dependency is not hidden.
+    from importlib import import_module
+    module_name = __package__ + ".hierarchy_reader"
+    try:
+        reader = import_module(module_name)
+    except ModuleNotFoundError as exc:
+        if exc.name != module_name:
+            raise
+        require(False, "TASK_CONTEXT_HIERARCHY_UNSUPPORTED")
+    rich, current_checks = reader._nodes(bundle, seed, entries)
+    require(checks == {str(path): sha for path, sha in current_checks.items()},
+            "TASK_CONTEXT_SOURCE_CHANGED")
+    sources = _Sources(seed)
+
+    def plain(value):
+        span = {key: value[key] for key in ("source_key", "source_revision", "start", "end")}
+        sources.span(span)
+        return span
+
+    for identifier, record in rich.items():
+        node = nodes[identifier]
+        statements = record["statements"]
+        expected = {"constraints": [plain(value) for value in statements["constraints"]],
+                    "acceptance": [plain(value) for value in statements.get("acceptance", [])],
+                    "need": plain(statements["need"]) if "need" in statements else None}
+        require(canonical({key: node[key] for key in expected}) == canonical(expected),
+                "TASK_CONTEXT_SOURCE_CHANGED")
+        node.update(expected, parents=list(record["parents"]),
+                    parent_spans=[plain(value) for value in record["parent_spans"]])
+        if node["kind"] != "requirement":
+            continue
+        subset = {}
+
+        def visit(key):
+            require(key in rich, "HIERARCHY_PARENT_UNRESOLVED")
+            if key in subset:
+                return
+            subset[key] = rich[key]
+            for parent in rich[key]["parents"]:
+                visit(parent)
+
+        visit(identifier)
+        closure, _reverse, _edges, _constraints = reader._closure(subset, identifier)
+        node["structural_ancestors"] = [key for key in closure if key != identifier]
+    require(sum(len(node["parents"]) for node in nodes.values()) <= reader.MAX_EDGES,
+            "HIERARCHY_EDGE_LIMIT")
+    return nodes, checks
+
+
 def _hierarchy(bundle, seed, entries, *, planning=False):
     require(isinstance(entries, list) and 1 <= len(entries) <= 8, "TASK_CONTEXT_HIERARCHY_LIMIT")
-    nodes, checks, paths = {}, {}, set()
+    nodes, checks, paths, multiple = {}, {}, set(), False
     for entry in entries:
         shape(entry, {"path", "source_key", "source_revision"}, "TASK_CONTEXT_HIERARCHY_INVALID")
         relative = entry["path"]
@@ -167,6 +218,7 @@ def _hierarchy(bundle, seed, entries, *, planning=False):
         document = _parse_frontmatter(path, bundle.root)
         require(document.raw == source["text"], "TASK_CONTEXT_SOURCE_CHANGED")
         meta = document.frontmatter
+        multiple |= "parent_refs" in meta
         identifier, kind = meta.get("id"), meta.get("template_kind")
         require(isinstance(identifier, str) and _ID.fullmatch(identifier)
                 and identifier not in nodes and kind in {"project", "phase", "requirement"}
@@ -193,6 +245,8 @@ def _hierarchy(bundle, seed, entries, *, planning=False):
             nodes[identifier].update(frontier=fields["frontier"], source=source)
         require(_read_bytes(path) == expected_bytes, "TASK_CONTEXT_SOURCE_CHANGED")
         checks[str(path)] = hashlib.sha256(expected_bytes).hexdigest()
+    if multiple:
+        return _multiple_parents(bundle, seed, entries, nodes, checks)
     for node in nodes.values():
         parent = node["parent"]
         if node["kind"] == "project":
@@ -244,13 +298,20 @@ def _build(bundle, seed, binding, *, now, allow_expired=False):
                     and nodes[identifier]["kind"] == "requirement" and identifier not in covered,
                     "TASK_CONTEXT_REQUIREMENT_INVALID")
             node, ancestors = nodes[identifier], []
-            while identifier is not None:
-                require(identifier not in ancestors, "TASK_CONTEXT_PARENT_CYCLE")
-                ancestors.append(identifier)
-                if identifier not in covered:
-                    constraints.extend(nodes[identifier]["constraints"])
-                    covered.add(identifier)
-                identifier = nodes[identifier]["parent"]
+            if "structural_ancestors" in node:
+                ancestors = [identifier, *node["structural_ancestors"]]
+                for ancestor in ancestors:
+                    if ancestor not in covered:
+                        constraints.extend(nodes[ancestor]["constraints"])
+                        covered.add(ancestor)
+            else:
+                while identifier is not None:
+                    require(identifier not in ancestors, "TASK_CONTEXT_PARENT_CYCLE")
+                    ancestors.append(identifier)
+                    if identifier not in covered:
+                        constraints.extend(nodes[identifier]["constraints"])
+                        covered.add(identifier)
+                    identifier = nodes[identifier]["parent"]
             acceptance.extend(node["acceptance"])
             jobs.append({"job_id": job["job_id"], "purpose": _Sources(seed).span(node["need"]),
                          "selected_spans": [*catalog_spans, node["need"], *node["acceptance"], *node["constraints"]]})
@@ -301,6 +362,15 @@ def _build(bundle, seed, binding, *, now, allow_expired=False):
                    "history": "input_only_unverified", "catalog_adoption": "candidate",
                    "omitted_optional_concepts": list(selection.omitted_ids),
                    "provider_delivery_verified": False}
+    if any("parents" in node for node in nodes.values()):
+        reverse = {key: [] for key in sorted(nodes)}
+        edges = []
+        for key in sorted(nodes):
+            for parent, span in zip(nodes[key]["parents"], nodes[key]["parent_spans"]):
+                reverse[parent].append(key)
+                edges.append({"child": key, "parent": parent, "source": span})
+        diagnostics["structural_parents"] = {
+            "relation": "source_declared_parent_candidate", "edges": edges, "reverse_refs": reverse}
     if work is not None:
         diagnostics["frontier"] = work["diagnostic"]
         diagnostics["frontier"]["budget"] = {
@@ -341,8 +411,8 @@ def verify_task_input(bundle, candidate, owner_path, *, clock=time.time, allow_e
     seed["version"] = 1
     rebuilt = _build(bundle, seed, binding, now=clock(), allow_expired=allow_expired)
     require(rebuilt == candidate, "TASK_CONTEXT_CANDIDATE_CHANGED")
-    document = read_json(Path(owner_path))
-    declared = {str((Path(owner_path).parent / item["path"]).resolve()): item["sha256"]
+    document = read_json(owner.path)
+    declared = {str((owner.path.parent / item["path"]).resolve()): item["sha256"]
                 for item in document["source_checks"]}
     require(all(declared.get(str(Path(item["path"]).resolve())) == item["sha256"]
                 for item in candidate["source_checks"]), "TASK_CONTEXT_OWNER_CHECKS_REQUIRED")
@@ -353,7 +423,7 @@ def verify_task_input(bundle, candidate, owner_path, *, clock=time.time, allow_e
 
 def execute_task_input(bundle, candidate, owner_path, payload_path, backend, *,
                        worker_actors, clock=time.time, **options):
-    """Use the existing simulation coordinator after actual owner admission.
+    """Use the existing finite coordinator after actual owner admission.
 
     The wrapper checks before every backend call; the coordinator's existing
     owner/source checks also cover the intervals and receipt publication.
@@ -369,20 +439,6 @@ def execute_task_input(bundle, candidate, owner_path, payload_path, backend, *,
 
     guard()
 
-    class CheckedBackend:
-        synthetic = getattr(backend, "synthetic", False)
-
-        def produce(self, *args, **kwargs):
-            guard()
-            result = backend.produce(*args, **kwargs)
-            guard()
-            return result
-
-        def review(self, *args, **kwargs):
-            guard()
-            result = backend.review(*args, **kwargs)
-            guard()
-            return result
-
-    return execute_closed_loop(owner_path, payload_path, candidate["supplied_plan"], CheckedBackend(),
+    from runtime.task_swarm.task_backend import checked_backend
+    return execute_closed_loop(owner_path, payload_path, candidate["supplied_plan"], checked_backend(backend, guard),
                                worker_actors=worker_actors, clock=clock, **options)

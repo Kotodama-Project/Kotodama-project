@@ -61,6 +61,18 @@ source checkoutでは`PYTHONPATH=runtime`と`task_swarm.learning_reuse`を使い
 `prepare --input B_INPUT --proposal PROPOSAL_JSON`は未承認の投影入力をstdoutへ返します。
 本文を含むため、その出力は元資料と同じ閲覧範囲で扱います。
 
+`propose`とPythonの`propose_learning`は元の`execution.sqlite`を作成・修復しません。
+元DBとWALを合計8 MiB以内のprivate copyへ読み、既存のanchored replayで検証します。
+SHMはcopy側だけで再構築します。欠落・不正DBや現行形式の必須schema欠損は型付きで拒否し、
+元DB/WAL/SHMを変更しません。
+並行readerやcheckpointによってコピー中のWALが変わった場合は、未完成copyを破棄して
+最大3回だけ取得します。安定したcopyを得られない場合や、保存された予算・期限・時刻が
+NULL、不正な型、非有限値の場合は型付きで拒否します。現在の証拠や取消の不一致は再試行しません。
+真正旧形式は外部anchor、保存plan、templateとreceipt形式を照合し、
+当時まだ存在しなかったtableだけをcopy内で補います。proposal構築後も現在のowner・Source・
+元DB/非空WAL・全artifact・実childのproofを再確認し、新dispatchを行いません。
+この読取経路と、明示review・owner判断による既存DBへの証拠保存は別の操作です（#392）。
+
 既存ownerがBの入力とgrantを束縛した後、context JSONを用意します。
 項目は`origin_owner`、`origin_input`、`anchor`、`target_owner`、`target_input`、`proposal`のみです。
 最後の`proposal`にはファイル名でなくproposal objectを入れます。
@@ -89,6 +101,15 @@ dispatch前と報告の利用前に取消・grant・owner・資料を再確認�
 完了済みBの再読には外部保存した`--receipt-sha256`が必要です。有効なowner/grantの範囲で
 objective deadline後も再読できますが、新dispatch・review・判断は期限後に受け付けません。
 失効・取消・改訂後の旧証拠による利用は拒否します。
+
+local executor の完了済み A は、一回の `ReuseOwner` 呼出し内で全 job の意味検証結果を
+保持します。各 guard は現在の policy・Source・owner・actor・生の proof/receipt/input、
+attempt/session の保存先、診断ファイルの読取可否と元の byte 上限を再確認します。
+DB は A の run/job/attempt/extension/stage/checkpoint/receipt だけを有限の読取 snapshot で
+照合し、取消と最新の review/判断を読むため、正当な判断の追加で実行証拠全体を無効化しません。
+最後の policy 照合後にも現在の判断・DB・proof・owner を確認します。成功結果や期限付きの
+共有 cache は持たず、別の呼出しでは意味検証からやり直します。historical readback で許される
+元 objective の期限経過と、現在の owner/grant/actor/判断の失効は区別します。
 
 ## 確認すること
 

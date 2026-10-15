@@ -8,7 +8,7 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
-- Dots pluginに設定済みProjectの読取・作成・訂正候補検査・訂正を追加。認可されたSource参照を返し、MCPから同じlocal ownerへ接続する。処理中のDots無効化も保存前に検査する（#385）。
+- Windows Task swarmの復旧・learning CLI timeout調査用に、該当2 occurrenceの子process状態を期限直前とtimeout時だけ有限記録するCI診断を追加。既存の期限・成否・回収を維持し、引数や入出力本文を追加保存しない（#420、根本原因は調査中）。
 
 - local installationでProject briefを保存・訂正する共通操作を追加。原依頼・旧版・訂正event、再送照合とrevision/digest検査を保持し、既存Taskの作成・実行とは分離する（#385）。
 
@@ -116,6 +116,10 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Dots pluginにcursor一覧とrevision/権限付き全文pageを追加。簡略一覧は合成SDK試験で転送JSONを約97.6%削減し、元の全文一覧を維持する。長文・多言語・複雑な依存の通信benchmarkを必須CIで検査する（#204）。
 
 ### Fixed
+
+- tracked Markdownの日本語・Unicode改行文字を含むpathの検査漏れを修正し、非UTF-8のstdoutや不正バイト名でも一行JSONを保持。Git設定に左右されない回帰テストを追加（#418）。
+
+- 学習proposalの読取が欠落DBや必須tableを作成・修復する問題を修正。元DB/WALをprivate copyで検証し、真正旧形式の互換と、返却直前の取消・owner・Source・実child証拠の再確認を維持する（#392）。
 
 - 開発branchからmainへPRを付け替えた場合にもDependency reviewを起動する。既存の必須check、検査対象、脆弱性の拒否基準は維持する。
 

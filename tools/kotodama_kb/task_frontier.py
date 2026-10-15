@@ -80,6 +80,11 @@ def resolve_frontier(nodes, root_id):
                 "TASK_FRONTIER_DEPENDENCY_UNSUPPORTED")
     required = set(visited)
     for identifier in visited:
+        if "structural_ancestors" in nodes[identifier]:
+            # Recomputed by the Source opt-in reader before this decomposition.
+            # Structural edges do not become all_of or execution dependencies.
+            required.update(nodes[identifier]["structural_ancestors"])
+            continue
         ancestors = set()
         parent = nodes[identifier]["parent"]
         while parent is not None:

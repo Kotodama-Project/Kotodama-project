@@ -109,7 +109,11 @@ def evidence_version(runtime_plan, initial_template):
     planning = profile(initial_template)
     require(planning is None or (version == 2 and initial_template["repair_impact_sha256"] is None),
             "LOOP_REPAIR_PROFILE")
-    shape(initial_template, keys | (PROFILE_FIELDS if planning else set()) | ({"evidence_contract_version", "required_evidence_jobs"} if version == 2 else set()),
+    from .loop_executor import EXECUTOR_TEMPLATE_FIELDS, executor_version
+    executor_fields = EXECUTOR_TEMPLATE_FIELDS.intersection(initial_template)
+    if executor_fields:
+        require(executor_version(runtime_plan, initial_template) == 1, "LOOP_EXECUTOR_VERSION")
+    shape(initial_template, keys | executor_fields | (PROFILE_FIELDS if planning else set()) | ({"evidence_contract_version", "required_evidence_jobs"} if version == 2 else set()),
           "LOOP_EVIDENCE_POLICY")
     require(initial_template["role"] == "critic" and initial_template["job_id"] == "r0-critic"
             and type(initial_template["round"]) is int and initial_template["round"] == 0,
@@ -306,6 +310,9 @@ def validate_critic(value, payload, reports, *, view, plan_digest, round_index,
         current_template = {key: value for key, value in dispatched_input.items()
                             if key not in {"template_digest", "reports", "report_digests", "release_certificate", "release_certificate_sha256", "prerequisite_inputs"}}
         shape(current_template, set(initial_template), "LOOP_EVIDENCE_POLICY")
+        from .loop_executor import EXECUTOR_TEMPLATE_FIELDS
+        require(all(current_template.get(key) == initial_template.get(key) for key in EXECUTOR_TEMPLATE_FIELDS),
+                "LOOP_EXECUTOR_POLICY_CHANGED")
         require(scheduled[f"r{round_index}-critic"]["payload_digest"] == digest(current_template),
                 "LOOP_EVIDENCE_POLICY")
         _check_work_inputs(payload, initial, repair_specification if round_index else None,
