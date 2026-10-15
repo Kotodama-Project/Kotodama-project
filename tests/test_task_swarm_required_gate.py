@@ -56,8 +56,10 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         self.assertIs(job["strategy"]["fail-fast"], False)
         steps = job["steps"]
         run = next(step for step in steps if step.get("run", "").startswith("python -m pytest "))
-        self.assertEqual(run["env"]["PYTEST_PLUGINS"], "tools.pytest_ci_observer,tools.pytest_ci_shards")
+        self.assertEqual(run["env"]["PYTEST_PLUGINS"],
+                         "tools.pytest_ci_observer,tools.pytest_ci_shards,tools.pytest_ci_process_probe")
         self.assertEqual(run["env"]["KOTODAMA_CI_OBSERVATION_DIR"], "${{ runner.temp }}/task-swarm-shard/observation")
+        self.assertEqual(run["env"]["KOTODAMA_CI_PROCESS_PROBE_DIR"], "${{ runner.temp }}/task-swarm-process-probe")
         self.assertEqual(run["env"]["KOTODAMA_CI_HEAD_SHA"], "${{ github.event.pull_request.head.sha || github.sha }}")
         check = next(step for step in steps if "tools/pytest_ci_observer.py" in step.get("run", ""))
         demo = next(step for step in steps if "tools/task_swarm.py demo" in step.get("run", ""))
@@ -77,6 +79,14 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         self.assertIn("${{ matrix.shard }}", upload["with"]["name"])
         self.assertEqual(upload["with"]["if-no-files-found"], "error")
         self.assertEqual(upload["with"]["retention-days"], 7)
+        diagnostic = next(step for step in steps if step.get("with", {}).get("name", "").startswith("task-swarm-process-"))
+        self.assertEqual(diagnostic["uses"], upload["uses"])
+        self.assertEqual(diagnostic["if"], "${{ always() }}")
+        self.assertEqual(diagnostic["with"]["path"], run["env"]["KOTODAMA_CI_PROCESS_PROBE_DIR"])
+        self.assertEqual(diagnostic["with"]["name"],
+                         "task-swarm-process-${{ matrix.os }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}")
+        self.assertEqual(diagnostic["with"]["if-no-files-found"], "ignore")
+        self.assertEqual(diagnostic["with"]["retention-days"], 7)
 
     def test_shard_union_and_post_checks_are_required_by_the_reusable_workflow(self):
         swarm = yaml.safe_load((ROOT / ".github/workflows/task-swarm.yml").read_text(encoding="utf-8"))

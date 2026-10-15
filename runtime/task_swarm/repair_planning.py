@@ -167,14 +167,15 @@ def _stream_identity(stream):
     return information.volume, bytes(information.identifier)
 
 
-def _inspection_cut(database, destination):
+def _inspection_cut(database, destination, *, observe_shm=True):
     """Copy a bounded physical cut using only reads of original DB/WAL/SHM."""
     import os
     import stat
     from contextlib import ExitStack
     limit = 8 * 1024 * 1024
-    paths = [database, database.with_name(database.name + "-wal"),
-             database.with_name(database.name + "-shm")]
+    paths = [database, database.with_name(database.name + "-wal")]
+    if observe_shm:
+        paths.append(database.with_name(database.name + "-shm"))
     def identity(metadata):
         return (metadata.st_dev, metadata.st_ino, metadata.st_mode, metadata.st_size,
                 metadata.st_mtime_ns, metadata.st_ctime_ns)
@@ -239,8 +240,9 @@ def _inspection_cut(database, destination):
     return fingerprint
 
 
-def _inspection_state(database, owner, clock, *, dependency=False):
+def _inspection_state(database, owner, clock, *, dependency=False, legacy_optional=()):
     """Validate the copied original schema before any scheduler initializer."""
+    import math
     import sqlite3
     from contextlib import closing
     required = {
@@ -253,6 +255,7 @@ def _inspection_state(database, owner, clock, *, dependency=False):
     }
     if dependency:
         required["run_dependency_stages"] = "run_id stage_json"
+    require(set(legacy_optional) <= {"run_finalizations", "run_cancellations"}, "LOOP_REPAIR_STATE")
     try:
         with database.open("rb") as stream:
             require(stream.read(16) == b"SQLite format 3\x00", "LOOP_REPAIR_STATE")
@@ -261,7 +264,18 @@ def _inspection_state(database, owner, clock, *, dependency=False):
             require(conn.execute("PRAGMA quick_check").fetchall() == [("ok",)], "LOOP_REPAIR_STATE")
             for table, columns in required.items():
                 actual = {row[1] for row in conn.execute("PRAGMA table_info(" + table + ")")}
+                if not actual and table in legacy_optional:
+                    continue
                 require(set(columns.split()) <= actual, "LOOP_REPAIR_STATE")
+            # Table names/columns alone do not enforce the writer's scalar
+            # contract. A copied table may lack NOT NULL/type constraints.
+            # Reject bad stored values before snapshot() converts them.
+            for budget, concurrency, deadline, created in conn.execute(
+                    "SELECT attempt_budget, concurrency, deadline, created_at FROM runs"):
+                require(type(budget) is int and 0 <= budget <= 1000
+                        and type(concurrency) is int and 1 <= concurrency <= 40
+                        and all(type(value) in (int, float) and math.isfinite(value) and value >= 0
+                                for value in (deadline, created)), "LOOP_REPAIR_STATE")
     except sqlite3.Error as error:
         from .protocol import SwarmError
         raise SwarmError("LOOP_REPAIR_STATE", "saved execution state is invalid") from error
@@ -279,6 +293,7 @@ def inspect_repair(owner_path, payload_path, *, clock=None):
     from .task_runner import read_json, safe_directory
     clock = clock or time.time
     owner = OwnerFile(owner_path, clock=clock)
+    owner_path = owner.path
     _, owner_sha = read_json(Path(owner_path), 1024 * 1024, with_digest=True)
     binding = owner.read_task()
     payload = validate_input(read_json(Path(payload_path), 256 * 1024), binding, now=clock())
@@ -317,11 +332,36 @@ def inspect_repair(owner_path, payload_path, *, clock=None):
                     "LOOP_REUSE_INSPECTION_UNSUPPORTED")
         snapshot = state.snapshot(run_id)
         require(state.cancellation(run_id) is None, "RUN_CANCELLED")
+        def current_guard():
+            # A saved executor reads an owned DB copy. Its final policy callback
+            # must be followed by a fresh cut of the live DB, before proof and
+            # actor/owner fences run. No SQLite connection opens the original.
+            require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
+                    and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
+                    "STALE_BINDING")
+            validate_input(payload, binding, now=clock())
+            with TemporaryDirectory(prefix="kotodama-repair-recheck-") as fresh:
+                current = _inspection_cut(directory/"execution.sqlite", Path(fresh))
+                live = _inspection_state(Path(fresh)/"execution.sqlite", owner, clock,
+                                         dependency=plan.get("execution_contract_version") == 3)
+                require(live.cancellation(run_id) is None, "RUN_CANCELLED")
+                live.snapshot(run_id)
+                require(current == cut, "RUN_ARTIFACT_CHANGED")
+                with TemporaryDirectory(prefix="kotodama-repair-final-") as final:
+                    require(_inspection_cut(directory/"execution.sqlite", Path(final)) == cut,
+                            "RUN_ARTIFACT_CHANGED")
+            require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
+                    and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
+                    "STALE_BINDING")
+            validate_input(payload, binding, now=clock())
+
         require(plan["binding_digest"] == digest(binding) and plan["run_id"] == run_id,
                 "LOOP_REPAIR_STATE")
         template = read_json(directory/"r0-critic-template.json")
         require(canonical(snapshot["plan"]) == canonical(plan), "LOOP_REPAIR_STATE")
         evidence_version(plan, template)
+        from .loop_executor_runtime import saved_executor
+        executor = saved_executor(directory, payload, plan, state, current_guard=current_guard)
         require(profile(template) in (1, 2), "LOOP_REPAIR_PROFILE")
         require(all(snapshot["jobs"][job["job_id"]]["state"] in {"reported", "accepted"}
                     for job in plan["jobs"]), "LOOP_REPAIR_STATE")
@@ -333,30 +373,17 @@ def inspect_repair(owner_path, payload_path, *, clock=None):
             value, sha = read_json(directory/(name+"-result.json"), with_digest=True)
             require(snapshot["jobs"][name]["current_attempt"]["result_digest"] == sha,
                     "RUN_ARTIFACT_CHANGED")
+            if executor is not None:
+                executor.verify(name, read_json(directory/(name+"-input.json")), value)
             if job["kind"] == "work":
                 require(value["result"] == delivered["reports"][name], "LOOP_PRIOR_REPORT_CHANGED")
                 inputs[name] = read_json(directory/(name+"-input.json"))
         result = make_impact(payload, initial, plan, {"response": response, "dispatched_input": delivered,
                             "dispatched_input_digest": digest(delivered)}, inputs, snapshot)
-        require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
-                and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
-                "STALE_BINDING")
-        validate_input(payload, binding, now=clock())
-        with TemporaryDirectory(prefix="kotodama-repair-recheck-") as fresh:
-            current = _inspection_cut(directory/"execution.sqlite", Path(fresh))
-            live = _inspection_state(Path(fresh)/"execution.sqlite", owner, clock,
-                                     dependency=plan.get("execution_contract_version") == 3)
-            require(live.cancellation(run_id) is None, "RUN_CANCELLED")
-            live.snapshot(run_id)
-            require(current == cut, "RUN_ARTIFACT_CHANGED")
-            # A writer or cancellation during the fresh read is also a changed cut.
-            with TemporaryDirectory(prefix="kotodama-repair-final-") as final:
-                require(_inspection_cut(directory/"execution.sqlite", Path(final)) == cut,
-                        "RUN_ARTIFACT_CHANGED")
-        require(read_json(Path(owner_path), 1024 * 1024, with_digest=True)[1] == owner_sha
-                and owner.read_task() == binding and read_json(Path(payload_path), 256 * 1024) == payload,
-                "STALE_BINDING")
-        validate_input(payload, binding, now=clock())
+        if executor is None:
+            current_guard()
+        else:
+            executor.current()
         return {"proposal": result[0], "impact": result[1], "admitted": False}
 
 

@@ -24,8 +24,9 @@
 plan生成器、再帰的な分解、途中work間の依存を持つ多段DAG、実provider、金額・token予算、
 複数の学びの検索・採用と再帰的な改善は未実装です。
 [一つの学びを次のTaskへ渡す限定経路](TASK-LEARNING-REUSE.md)は、別の独立reviewとowner判断を要求します。
-今は明示したlocal simulationのみを
-受け付けます。合成のpassedは実モデルの品質改善や本番運用の受入を証明しません。
+明示local simulationと、現在ownerが宣言した
+[local executable fixture](TASK-LOOP-EXECUTOR.md)を受け付けます。
+合成・fixtureのpassedは実モデルの品質改善や本番運用の受入を証明しません。
 この変更は既存の固定3worker runner、Discord入口、Taskの完了処理を切り替えません。
 
 ## planと子の入力
@@ -69,8 +70,11 @@ viewの親・plan・job・自己digest、報告集合、templateとの結合を�
 Python APIは`closed_loop.execute_closed_loop(owner_path, payload_path, supplied_plan, backend,
 worker_actors=..., critic_actor="verifier", repair_planner=...)`です。
 `repair_planner(gap)`は外部呼出しをしないpureなデータ変換という境界です。
-現在のbackendは`synthetic=True`を明示し、`produce`と`review`から実入力digestに束縛した
-結果を返します。provider用adapterを追加するには、実配送・runtime証拠・費用を別途接続する必要があります。
+simulation backendは`synthetic=True`を明示し、`produce`と`review`から実入力digestに束縛した
+結果を返します。`TaskBackend(..., loop_mode="local_executable_fixture")`は実processを使い、
+`produce_loop`と`review_loop`のstdin・process・rollout証拠を全runtime readerで再検査します。
+source知識CLIとinstalled moduleの明示入口は[Task loop executor](TASK-LOOP-EXECUTOR.md)にあります。
+provider用adapterには、素材可視性・実配送・runtime証拠・費用の別途の受入が必要です。
 
 install済みwheelでは次の入口を使えます。新しい権限やTaskは作らず、既存ownerのactorを指定します。
 
@@ -207,6 +211,12 @@ receiptは未公開の同一directory内ファイルへ書込み・fsync・再�
 未完workの自動復旧はこの境界の保証に含めません。上記の明示再開は、保存済みterminal
 checkpointと有効な現在資格がある場合に限ります。
 
+Windowsのbounded artifact readerはdelete-sharing付きの読取handleを使い、監視中の
+pending receiptの読取が同じprocessのatomic renameを妨げないようにします。読取の
+前後のfile identity・通常file・link・size・bytes検査は保持し、renameを跨いだpending
+receiptの監視は同じ固定SHAの`receipt.json`だけを再読します。共有違反のretryや
+資格検査の省略は行わず、他processが保持する共有不可handleの解放は保証しません。
+
 workerの完了順によらず、criticへ渡す報告、後続context、統合conflictはjob ID順に組み立てます。
 各report内のclaim/conflict順は保持します。同じ検証済み報告とcritic結果からは統合・学習候補の
 bytesが一致します。経過時間などを含む実行receipt全体の一致は要求しません。
@@ -329,7 +339,7 @@ hash の循環を避けるため、Source/view/gate だけから prerequisite co
 
 A の受理と release stage の保存は既存 SQLite transaction で一緒に確定します。state の B claim は A の accepted 行と一致する release を要求し、単独の `accept(A)` では開きません。operation lock は確認・保存・claim の間だけで、backend 呼出し中は保持しません。取消 Event と期限は transaction の最後にも観測し、失敗なら A と stage を共に rollback します。外部 Event の変化と SQLite commit の完全な同時性は保証しません。
 
-`--resume-finalization` は従来の終端復旧に加え、release 保存済みで B が pending・試行数 0 の場合だけ、明示した `--simulation` から B/global critic を継続できます。A と prerequisite critic を再実行せず、token/epoch/予算をリセットしません。release 前、B の lease/不明な実行結果、改変された proof、二重実行は拒否します。blocked の再読は現在のowner・Source・objective期限を検査し、呼出し 0 で同じ evidence を返します。receiptがないため`--receipt-sha256`付きの再読は拒否します。stage が壊れていても既存 owner の durable cancellation は利用できます。
+`--resume-finalization` は従来の終端復旧に加え、release 保存済みで B が pending・試行数 0 の場合だけ、明示した `--simulation` または `--executor-mode local_executable_fixture` から B/global critic を継続できます。A と prerequisite critic を再実行せず、token/epoch/予算をリセットしません。release 前、B の lease/不明な実行結果、改変された proof、二重実行は拒否します。blocked の再読は現在のowner・Source・objective期限を検査し、呼出し 0 で同じ evidence を返します。receiptがないため`--receipt-sha256`付きの再読は拒否します。stage が壊れていても既存 owner の durable cancellation は利用できます。
 
 B 専有条件だけの失敗は repair profile 2 により一度だけ修復できます（合計六呼出し）。repair B にも同じ accepted A と release が必要です。A/shared 条件の失敗は unresolved のまま止め、古い B を残して A だけを修復することはありません。checkpoint/receipt v3 は preaccepted A の result/ref/owner/時刻を、残りの acceptance と分けて固定し、finalization CAS に raw stage を含めます。終端の最後の資格確認→receipt 公開→同じ anchor 返却は従来の境界を維持します。
 

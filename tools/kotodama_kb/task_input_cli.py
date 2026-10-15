@@ -12,6 +12,7 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from runtime.task_swarm.closed_loop import ScriptedSimulation
+from runtime.task_swarm.codex import BackendError
 from runtime.task_swarm.protocol import SwarmError, canonical, digest
 from runtime.task_swarm.task_contract import MAX_INPUT_BYTES, require, shape
 from runtime.task_swarm.task_runner import read_json
@@ -58,15 +59,24 @@ def _execute(args, bundle, candidate):
             payload = verify_task_input(bundle, candidate, args.owner)
         return {"status": "binding_and_learning_verified" if learning else "binding_verified", "task_id": payload["task_id"],
                 "revision": payload["revision"], "payload_digest": digest(payload)}, 0
-    scenario = read_json(args.simulation, 1024 * 1024)
-    backend = ScriptedSimulation(scenario)
-    repair = scenario["repair_plan"]
     execute = execute_task_input
     options = {}
     if learning:
         from .task_input_learning import execute_task_learning_input
         execute = execute_task_learning_input
         options["decision_digest"] = decision
+    if args.operation == "execute":
+        from runtime.task_swarm.task_backend import local_loop_backend
+        allow_expired = args.receipt_sha256 is not None
+        # Selection reads the bound policy only. The execution adapter below
+        # retains its initial verification and pre/post-call KB/current guards.
+        backend = local_loop_backend(args.owner, candidate["payload"], candidate["supplied_plan"],
+                                     mode=args.executor_mode, allow_expired=allow_expired)
+        repair = None  # The existing coordinator derives the bounded assigned-leaf repair.
+        options["resume_finalization"] = args.resume_finalization
+    else:
+        scenario = read_json(args.simulation, 1024 * 1024)
+        backend, repair = ScriptedSimulation(scenario), scenario["repair_plan"]
     result = execute(bundle, candidate, args.owner, args.input, backend,
         worker_actors=args.worker, critic_actor=args.critic,
         repair_planner=(lambda _gap: copy.deepcopy(repair)) if repair is not None else None,
@@ -105,6 +115,8 @@ def run(args):
         refusal = {"error": exc.code, "message": exc.detail}
     except KnowledgeBaseError as exc:
         refusal = {"error": "KNOWLEDGE_INPUT_REFUSED", "message": str(exc)}
+    except BackendError as exc:
+        refusal = {"error": "LOOP_EXECUTOR_FAILURE", "message": exc.code}
     except OSError:
         refusal = {"error": "TASK_CONTEXT_FILE_UNAVAILABLE", "message": "Local input could not be read"}
     except (ValueError, UnicodeError, RecursionError):

@@ -22,7 +22,7 @@ import tomllib
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULES = {"__init__", "dependency_contract", "dependency_runtime", "dependency_state", "cancellation", "closed_loop", "closed_loop_cancellation", "closed_loop_context", "closed_loop_contract", "closed_loop_recovery", "codex", "confidential", "learning_reuse", "mcp_server", "owner_file", "payload_budget", "payloads", "privacy", "protocol", "repair_planning", "sqlite_work", "state", "task_backend", "task_contract", "task_planning", "task_runner", "task_schemas", "transport"}
+MODULES = {"__init__", "dependency_contract", "dependency_runtime", "dependency_state", "cancellation", "closed_loop", "closed_loop_cancellation", "closed_loop_context", "closed_loop_contract", "closed_loop_recovery", "codex", "confidential", "learning_origin", "learning_reuse", "loop_executor", "loop_executor_runtime", "mcp_server", "owner_file", "payload_budget", "payloads", "privacy", "protocol", "repair_planning", "sqlite_work", "state", "task_backend", "task_contract", "task_planning", "task_runner", "task_schemas", "transport"}
 PUBLIC = {"__init__.py", "__main__.py", "cli.py"}
 SOURCE_PATHS = {"LICENSE", "MANIFEST.in", "pyproject.toml", "python/README.md"} | {"python/src/kotodama_core/" + name for name in PUBLIC} | {"runtime/task_swarm/" + name + ".py" for name in MODULES}
 BUILDER_PATHS = {"tools/build_python_candidate.py", "tools/build_release_sbom.py", "tools/record_python_candidate_execution.py",

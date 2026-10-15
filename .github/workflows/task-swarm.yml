@@ -58,9 +58,10 @@ jobs:
         run: python -B tools/pytest_ci_shards.py reference "${{ runner.temp }}/task-swarm-shard/reference"
       - name: Run the complete collection's assigned Task swarm occurrences
         env:
-          PYTEST_PLUGINS: tools.pytest_ci_observer,tools.pytest_ci_shards
+          PYTEST_PLUGINS: tools.pytest_ci_observer,tools.pytest_ci_shards,tools.pytest_ci_process_probe
           KOTODAMA_CI_OBSERVATION_DIR: ${{ runner.temp }}/task-swarm-shard/observation
           KOTODAMA_CI_SHARD_DIR: ${{ runner.temp }}/task-swarm-shard/partition
+          KOTODAMA_CI_PROCESS_PROBE_DIR: ${{ runner.temp }}/task-swarm-process-probe
           KOTODAMA_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python -m pytest -q -p no:cacheprovider -o 'python_files=test_task_swarm_*.py' tests
       - name: Require complete pytest observation after success
@@ -81,6 +82,14 @@ jobs:
           name: task-swarm-shard-${{ matrix.os }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/task-swarm-shard
           if-no-files-found: error
+          retention-days: 7
+      - name: Preserve bounded child-timeout diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: task-swarm-process-${{ matrix.os }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/task-swarm-process-probe
+          if-no-files-found: ignore
           retention-days: 7
   complete:
     name: Complete Task swarm coverage

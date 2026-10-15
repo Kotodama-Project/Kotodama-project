@@ -92,6 +92,13 @@ governanceを保持し、欠落・鮮度・予算を確認します。actor/purp
 既存ownerに束縛した原文・訂正・要件を実Task入力へ渡す入口は
 [`task-input compile / verify / simulate`](KNOWLEDGE-TASK-INPUT.md#知識cliから使う)です。
 
+現在Sourceの候補階層と保存済みruntime Planは
+[`tools/hierarchy_trace.py`](../tools/hierarchy_trace.py)で照合できます。
+[有限reader](KNOWLEDGE-HIERARCHY-TRACE.md)は現在owner、全必須祖先、実worker・critic入力と
+保存proofを読み、未解決の正本やcurrent decisionを理由付きで止めます。
+複数親の実配布は[既存producer](KNOWLEDGE-TASK-INPUT.md#明示した複数親を実task入力へ渡す)が
+Sourceから別途再導出します。両方ともsource checkoutの入口です。
+
 ## 小単位で知識を保つ
 
 一つのConceptには、一つの問い・定義・判断材料・検証方法を置きます。
