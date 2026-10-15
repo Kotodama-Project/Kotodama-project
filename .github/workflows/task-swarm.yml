@@ -41,7 +41,7 @@ jobs:
         run: python -S -B tools/check_tracked_secret_hygiene.py
       - name: Install the hash-locked task swarm dependency set
         run: python -m pip install --require-hashes -r requirements-task-swarm-ci.txt
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: runner.os == 'Linux'
         with:
           node-version: '24'
@@ -77,7 +77,7 @@ jobs:
         run: python -B tools/pytest_ci_shards.py seal "${{ runner.temp }}/task-swarm-shard" --demo '${{ steps.demo.outcome }}' --benchmark '${{ steps.benchmark.outcome }}'
       - name: Preserve complete or partial pytest observations
         if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: task-swarm-shard-${{ matrix.os }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/task-swarm-shard
@@ -85,7 +85,7 @@ jobs:
           retention-days: 7
       - name: Preserve bounded child-timeout diagnostics
         if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: task-swarm-process-${{ matrix.os }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/task-swarm-process-probe
