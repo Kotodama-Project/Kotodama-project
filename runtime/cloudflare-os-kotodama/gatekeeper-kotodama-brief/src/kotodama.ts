@@ -7,6 +7,9 @@ import CONFIGURATOR from "./generated/brief-configurator-ui.txt";
 import { validateAdmission, validateSource, validateQueued, validateResult, validateRevoked, validateBridgeOrigin,
   validateSessionResult, SESSION_STATE_TYPE, type SessionResult } from "./protocol.mjs";
 
+import { PROJECT_WIRE_BYTES, validateProjectInput, validateProjectResponse, validateProjectInspectionResponse,
+  type ProjectInput, type ProjectResponse, type ProjectInspectionResponse } from "./project-protocol.mjs";
+
 // Logical resource identity only; no request is ever sent to this reserved domain.
 const RESOURCE = "https://requirements.kotodama.invalid/current";
 const RESOURCES: SupportedResource[] = [{ urlPattern: RESOURCE, title: "Kotodamaの要件整理", description: "許可された依頼の要件案と検証結果。" }];
@@ -15,7 +18,16 @@ const TYPES = `
 interface KotodamaBriefSource { handoff_id: string; revision: number; overview: string; binding_sha256: string; }
 interface KotodamaBrief { objective: string; deliverable: string; constraints: string[]; acceptance_criteria: string[]; open_questions: string[]; }
 interface KotodamaBriefResult { request_id: string; state: ${SESSION_STATE_TYPE}; brief: KotodamaBrief | null; task_state_changed: false; publication: false; }
+type ProjectBrief = { outcome: string; in_scope: string[]; out_of_scope: string[]; constraints: string[]; acceptance: string[]; unknowns: string[] };
+type Project = { version: 1; project_id: string; revision: number; owner_ref: string; name: string; original_ref: string; brief: ProjectBrief; task_refs: string[] };
+type ProjectInput = { binding_sha256: string; expected_revision: number; base_digest: string; reason: string; brief: ProjectBrief };
+type ProjectView = { kind: "kotodama.project-owner-view"; version: 1; authority: "selected_local_project_owner"; project: Project; project_digest: string; snapshot: "current"; current_revision: number; source_refs: { key: string; revision: number; current_revision: number; freshness: "current" | "superseded" }[]; task_state_changed: false; execution_authorized: false };
+type ProjectResponse = { state: "not_connected" } | { state: "connected"; binding_sha256: string; can_inspect: boolean; view: ProjectView };
+type ProjectInspection = { kind: "kotodama.project-change-candidate"; version: 1; authority: "candidate_only"; project_id: string; expected_revision: number; base_digest: string; proposal_digest: string; proposal: { version: 1; project_id: string; expected_revision: number; base_digest: string; reason: string; source_ref: string; brief: ProjectBrief }; changed_fields: string[]; removed_requirements: { constraints: string[]; acceptance: string[] }; impact_task_refs: string[]; applied: false; next_action: "owner_revalidate_authorize_and_record_correction"; source_refs: { key: string; revision: number }[]; task_state_changed: false; execution_authorized: false };
+type ProjectInspectionResponse = { binding_sha256: string; inspection: ProjectInspection };
 interface KotodamaTaskBrief {
+  getProject(): Promise<ProjectResponse>;
+  inspectProjectChange(input: ProjectInput): Promise<ProjectInspectionResponse>;
   getSource(): Promise<KotodamaBriefSource>;
   requestBrief(requestId: string, sourceRevision: number, bindingSha256: string): Promise<{actionId:number}>;
   getResult(requestId: string): Promise<KotodamaBriefResult>;
@@ -26,6 +38,8 @@ type BriefSource = { handoff_id: string; revision: number; overview: string; bin
 type BriefResult = SessionResult;
 type Action = { requestId: string; sourceRevision: number; bindingSha256: string; state: "pending" | "submitted" | "rejected"; submission: "queued" | "uncertain" };
 interface Session {
+  getProject(): Promise<ProjectResponse>;
+  inspectProjectChange(input: ProjectInput): Promise<ProjectInspectionResponse>;
   getSource(): Promise<BriefSource>;
   requestBrief(requestId: string, sourceRevision: number, bindingSha256: string): Promise<{ actionId: number }>;
   getResult(requestId: string): Promise<BriefResult>;
@@ -36,7 +50,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{1
 function accountState(exports: Cloudflare.Exports, principalRef: string) {
   return exports.AccountState.getByName(principalRef);
 }
-async function bridge(env: Cloudflare.Env, principalRef: string, path: string, body?: unknown): Promise<unknown> {
+async function bridge(env: Cloudflare.Env, principalRef: string, path: string, body?: unknown, maxBytes = 65536): Promise<unknown> {
   const origin = validateBridgeOrigin(env.KOTODAMA_BRIDGE_ORIGIN);
   if (!/^[0-9a-f]{64}$/.test(env.KOTODAMA_BRIDGE_SECRET)) throw new Error("実行サービスの設定を確認してください。");
   const response = await fetch(new URL(path, origin), { method: body === undefined ? "GET" : "POST", redirect: "manual",
@@ -46,7 +60,7 @@ async function bridge(env: Cloudflare.Env, principalRef: string, path: string, b
   const reader = response.body?.getReader(); if (!reader) throw new Error("応答がありません。");
   const chunks: Uint8Array[] = []; let size = 0;
   while (true) { const next = await reader.read(); if (next.done) break; size += next.value.length;
-    if (size > 65536) { await reader.cancel(); throw new Error("応答が大きすぎます。"); } chunks.push(next.value); }
+    if (size > maxBytes) { await reader.cancel(); throw new Error("応答が大きすぎます。"); } chunks.push(next.value); }
   const bytes = new Uint8Array(size); let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
   return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes));
@@ -116,6 +130,15 @@ class BriefSession extends RpcTarget implements Session {
   #queue: RpcStub<ApprovalQueue>;
   #gatekeeper: KotodamaGatekeeper;
   constructor(queue: RpcStub<ApprovalQueue>, gatekeeper: KotodamaGatekeeper) { super(); this.#queue = queue.dup(); this.#gatekeeper = gatekeeper; }
+  async getProject(): Promise<ProjectResponse> {
+    await this.#queue.authorizeObservation({ title: "Projectを読む", description: "接続されたProjectの現在の要件を取得します。" });
+    return this.#gatekeeper.readProject();
+  }
+  async inspectProjectChange(input: ProjectInput): Promise<ProjectInspectionResponse> {
+    validateProjectInput(input);
+    await this.#queue.authorizeObservation({ title: "Projectの変更候補を検査する", description: "削除される条件と影響を確認します。保存や実行は行いません。" });
+    return this.#gatekeeper.inspectProjectChange(input);
+  }
   async getSource(): Promise<BriefSource> {
     await this.#queue.authorizeObservation({ title: "依頼を読む", description: "閲覧を許可された依頼だけを取得します。" });
     return this.#gatekeeper.readSource();
@@ -170,6 +193,27 @@ export class KotodamaGatekeeper extends DurableObject<Cloudflare.Env, Props> imp
     const source = validateSource(await bridge(this.env, this.ctx.props.principalRef, "/v1/handoff"));
     this.pinBinding(source.binding_sha256);
     return source;
+  }
+  async readProject(): Promise<ProjectResponse> {
+    await this.assertAdmission();
+    const value = validateProjectResponse(await bridge(this.env, this.ctx.props.principalRef, "/v1/project", undefined, PROJECT_WIRE_BYTES));
+    await this.assertConnected();
+    if (value.state === "connected") {
+      const pinned = this.ctx.storage.kv.get<string>("project-binding");
+      if (pinned && pinned !== value.binding_sha256) throw new Error("Projectの接続が変更されました。");
+      this.ctx.storage.kv.put("project-binding", value.binding_sha256);
+    }
+    return value;
+  }
+  async inspectProjectChange(input: ProjectInput): Promise<ProjectInspectionResponse> {
+    validateProjectInput(input);
+    const current = await this.readProject();
+    if (current.state !== "connected" || !current.can_inspect || current.binding_sha256 !== input.binding_sha256
+      || current.view.project.revision !== input.expected_revision || current.view.project_digest !== input.base_digest) throw new Error("Projectが変更されました。再確認してください。");
+    const result = validateProjectInspectionResponse(await bridge(this.env, this.ctx.props.principalRef, "/v1/project/inspect", input, PROJECT_WIRE_BYTES), input);
+    await this.assertConnected();
+    if (result.inspection.project_id !== current.view.project.project_id) throw new Error("Projectが一致しません。");
+    return result;
   }
   async readResult(requestId: string): Promise<BriefResult> {
     if (!UUID.test(requestId)) throw new Error("依頼を確認してください。");

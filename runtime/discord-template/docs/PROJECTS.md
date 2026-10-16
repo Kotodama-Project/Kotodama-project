@@ -93,12 +93,14 @@ receiptを消さず、許可・相談が有効な間は同じID・同じ内容�
 
 この版はactor所有のProject briefだけを扱い、`task_refs`は空です。
 Task参照の追加、成果・担当・完了の集約、共有参加者、Projectの取消・削除、
-動的役割生成、GUI操作、実Dotアカウントによる受入、provider実接続は後続です。
+動的役割生成、GUIからの保存、実Dotアカウントによる受入、provider実接続は後続です。
 既存TaskのSQLite本文digestを、swarm入力の`context_digest`へ流用しません。
 
 既存Requirements Gadgetの`objective`と`deliverable`は別の情報です。
 Projectの`outcome`へ自動要約したり、件数・文字数を切り捨てて移したりしません。
-GUIとagentのadapterはこの共通操作を呼び、別の保存先やTask ownerを作らない方針です。
+[既存GUIのbridge](../../codex-task-bridge/README.md)は、明示されたprincipal・Source・
+稼働source版に束縛して、この共通操作のread/inspectを呼びます。目的・条件を編集して
+変更候補を検査できますが、保存やTask実行は行いません。別の保存先やTask ownerは作りません。
 
 検証は`tests/project-owner.test.mjs`と`tests/project-control.test.mjs`で、
 合成Source、実SQLite、実loopback HTTP、再起動、再送、旧版、取消された権限を扱います。

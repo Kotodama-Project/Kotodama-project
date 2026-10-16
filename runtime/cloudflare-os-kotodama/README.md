@@ -111,3 +111,20 @@ API provenance: [official Gatekeeper contract](https://github.com/cloudflare/clo
 [bundled Blueprint format](https://github.com/cloudflare/cloudflare-os/blob/c0b6f3e52ff0ab8d44d290647e256936e88e6b57/docs/blueprints.md).
 This package is new Kotodama code using those public interfaces; no private
 repository history or runtime account state is included.
+
+The same requirements Gadget can additionally read one operator-selected Project
+and inspect edits to its outcome, in/out scope, constraints, acceptance and
+unknowns. The private bridge must explicitly bind the OS principal to the existing
+Project owner's actor, Project, correction Source, operations, expiry and runtime
+source digest; see [the Project connection](../codex-task-bridge/README.md#selected-project-read-and-inspection).
+A requirements inference grant does not imply this access. Both methods use native
+observation authorization and recheck the current owner; the Gadget stores no
+Project copy. A changed connection binding requires a fresh native connection.
+
+The original requirements `objective` and `deliverable` remain separate. Project
+fields are explicitly edited without automatic conversion or truncation. Inspection
+shows deleted constraints/acceptance and Task references; it neither saves a
+Project revision nor grants or starts work. Refresh replaces unsaved edits with
+the current owner view. Missing values are not treated as confirmed absence.
+This slice exposes no Project create/correct action in the GUI. Fixture/browser
+passes establish component behavior, not a live OS deployment or user acceptance.
