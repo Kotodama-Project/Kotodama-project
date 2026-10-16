@@ -3,6 +3,7 @@ import {check,digest} from './common.mjs';
 export const BRIEF_FIELDS=['outcome','in_scope','out_of_scope','constraints','acceptance','unknowns'];
 const PROJECT_FIELDS=['version','project_id','revision','owner_ref','name','original_ref','brief','task_refs'];
 const taskId=/^task-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export function validateTaskId(value){check(typeof value==='string'&&taskId.test(value),'PROJECT_TASK_INVALID');}
 const hash=/^[a-f0-9]{64}$/;
 // Match Python str.strip(), including its additional ASCII separators.
 const whitespace=/^[\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$/u;
@@ -22,17 +23,19 @@ export function validateBrief(brief){
   return structuredClone(brief);
 }
 
-/** The same finite v1 snapshot accepted by tools/project_hub.py. */
+/** Versioned references distinguish an owner Task from a swarm execution input. */
 export function validateProject(project){
-  shape(project,PROJECT_FIELDS,'PROJECT_INVALID');check(project.version===1,'PROJECT_VERSION_INVALID');
+  shape(project,PROJECT_FIELDS,'PROJECT_INVALID');check([1,2].includes(project.version),'PROJECT_VERSION_INVALID');
   for(const field of ['project_id','owner_ref','original_ref'])reference(project[field]);
   revision(project.revision);text(project.name,200,'PROJECT_NAME_INVALID');validateBrief(project.brief);
   check(Array.isArray(project.task_refs)&&project.task_refs.length<=50,'PROJECT_TASK_LIMIT');const seen=new Set();
   for(const task of project.task_refs){
-    shape(task,['task_id','owner_ref','revision','context_digest'],'PROJECT_TASK_INVALID');
-    check(typeof task.task_id==='string'&&taskId.test(task.task_id),'PROJECT_TASK_INVALID');
+    const local=project.version===2&&task?.adapter==='discord_local_task_v1';
+    if(project.version===2)check(['discord_local_task_v1','swarm_execution_v1'].includes(task?.adapter),'PROJECT_TASK_ADAPTER_INVALID');
+    shape(task,local?['adapter','task_id','revision']:[...(project.version===2?['adapter']:[]),'task_id','owner_ref','revision','context_digest'],'PROJECT_TASK_INVALID');
+    validateTaskId(task.task_id);
     check(!seen.has(task.task_id),'PROJECT_TASK_DUPLICATE');seen.add(task.task_id);
-    reference(task.owner_ref);revision(task.revision);check(typeof task.context_digest==='string'&&hash.test(task.context_digest),'PROJECT_CONTEXT_INVALID');
+    revision(task.revision);if(!local){reference(task.owner_ref);check(typeof task.context_digest==='string'&&hash.test(task.context_digest),'PROJECT_CONTEXT_INVALID');}
   }
   return structuredClone(project);
 }

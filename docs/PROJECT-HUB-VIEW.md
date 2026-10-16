@@ -6,17 +6,17 @@
 作業の継続入口は[Issue #385](https://github.com/Kotodama-Project/Kotodama-project/issues/385)。
 
 保存と訂正の限定経路は[Discord templateのProject owner](../runtime/discord-template/docs/PROJECTS.md)へ
-追加しました。同じv1 briefを既存installationのSQLiteへ保存します。このPython CLI自体は
+追加しました。同じbriefを既存installationのSQLiteへ保存します。このPython CLI自体は
 引き続きread-onlyで、NodeのTask本文とswarm入力digestは別の契約です。
 
-## 最小情報契約 v1
+## 最小情報契約 v1 / v2
 
 Project JSONはownerから得たsnapshotまたは候補入力であり、このファイルを置くだけでは
 正本や権限にならない。Project IDは選択済みownerが発行した安定IDを使う。
 
 | field | 制約・既存情報との対応 |
 |---|---|
-| `version` | 整数1。Project契約の版 |
+| `version` | 整数1または2。Project契約の版 |
 | `project_id`, `revision` | 安定参照、1以上の整数。名前やchat IDから再生成しない |
 | `owner_ref` | Projectの責任主体への参照。Task ownerとは独立 |
 | `name` | 表示名、200文字以内 |
@@ -25,7 +25,16 @@ Project JSONはownerから得たsnapshotまたは候補入力であり、この�
 | `brief.in_scope`, `brief.out_of_scope` | templateのBoundary |
 | `brief.constraints`, `brief.acceptance` | 必須条件と受入条件。各20件以内 |
 | `brief.unknowns` | 不明点。推測で埋めず文字列として明示する |
-| `task_refs` | 最大50件、Task ID重複不可。各要素は`task_id`, `owner_ref`, `revision`, `context_digest` |
+| `task_refs` | 最大50件、Task ID重複不可。v1は`task_id`, `owner_ref`, `revision`, `context_digest`。v2は以下のadapterを明示 |
+
+v2は`discord_local_task_v1`（`adapter`, `task_id`, `revision`）と、
+`swarm_execution_v1`（`adapter`とv1の4項目）を区別します。
+localのTask本文digestをswarmのcontext digestへ変換しません。
+Node ownerでのTask関連付け・v2への保存は後続の変更で追加します。
+この変更では読取側を先に対応させ、既存のv1履歴を保持します。
+このPython CLIはlocal参照を認識しますが、状態は未観測として返します。
+local参照に`--task`で任意ファイルを与えてもOwnerFileへ渡さず拒否します。
+v1とv2のswarm参照だけが、既存OwnerFileの照合対象です。
 
 各brief配列は必須だが空でも候補を表示できる。空配列は「記録なし」であり、
 「該当なし」や実行準備完了を意味しない。この版では該当なしの確定操作を扱わない。
@@ -73,7 +82,7 @@ constraints/acceptance、影響する全Task参照、理由と訂正sourceを含
 
 `python -B -m unittest discover -s tests -p test_project_hub.py -v` は実ownerファイルの
 読取、取消、失効、旧版、owner違い、観測中の変更、条件削除の明示、書込なしを検査する。
-外部認証・tenant isolation・GUI/NL共通操作・履歴台帳・provider実接続は未検証／未実装。
+このCLI単体では外部認証・tenant isolation・履歴台帳・provider実接続を検証しません。
 ネットワーク公開には認証とアクセス制御を持つ既存入口への接続が必要。
-local ownerの保存・訂正は上記Node経路で扱います。次はTask参照・成果の対応と、
-同じ操作へのGUI・agent adapter接続を進めます。
+local ownerの保存・訂正は上記Node経路、GUIの表示・候補検査は
+[既存bridge](../runtime/codex-task-bridge/README.md)で扱います。いずれも実サービスの受入は別途必要です。

@@ -128,3 +128,9 @@ Project revision nor grants or starts work. Refresh replaces unsaved edits with
 the current owner view. Missing values are not treated as confirmed absence.
 This slice exposes no Project create/correct action in the GUI. Fixture/browser
 passes establish component behavior, not a live OS deployment or user acceptance.
+
+The view preserves legacy Project v1 references and Project v2's typed local Task
+or swarm execution-input references. Inspection must return the same affected
+references as the current Project. IDs, revisions and input digests identify saved
+references; they do not establish current Task state, assignment, artifacts or
+completion. The GUI provides no Task-link, reference-edit or execution operation.
