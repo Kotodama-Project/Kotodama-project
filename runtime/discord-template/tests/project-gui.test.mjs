@@ -49,7 +49,7 @@ function bridgeRequest(origin,route,secret,principal,body){
   });
 }
 
-test('GUI bridge reads and inspects the pinned official Project owner without changing work',
+for(const withTask of [false,true])test(`GUI bridge reads and inspects the pinned official Project v${withTask?2:1} owner without changing work`,
   {timeout:30000,skip:bridgeAvailable?false:'standalone template does not include the repository GUI bridge'},async t=>{
     // Production adapter imports stay dynamic so a standalone template remains
     // independently testable. Repository CI must exercise the real connector.
@@ -65,15 +65,20 @@ test('GUI bridge reads and inspects the pinned official Project owner without ch
     const {Store}=await import(pathToFileURL(path.join(app,'src/store.mjs')).href);
     const {controlCommand}=await import(pathToFileURL(path.join(app,'src/runtime.mjs')).href);
     const {atomicJson}=await import(pathToFileURL(path.join(app,'src/common.mjs')).href);
-    const config=exampleConfig({workspace:root});config.dataDir=path.join(root,'data');config.projects.operations=['read','create','inspect'];
+    const config=exampleConfig({workspace:root});config.dataDir=path.join(root,'data');config.projects.operations=['read','create','inspect','link_task'];
     const file=path.join(root,'config.json');await atomicJson(file,config);
-    const actor=config.discord.operators[0],store=new Store(config.dataDir);let source;
+    const actor=config.discord.operators[0],store=new Store(config.dataDir);let source,existingTask;
     try{source=store.ingest({provider:'discord',guildId:config.discord.guildId,channelId:config.discord.resultChannelId,sourceId:'gui-synthetic-request',
-      actorId:actor,revision:0,readers:[actor],final:true,text:'原意を保持してProjectを確認する',metadata:{kind:'text'}});}finally{store.close();}
+      actorId:actor,revision:0,readers:[actor],final:true,text:'原意を保持してProjectを確認する',metadata:{kind:'text'}});
+      if(withTask){const task=store.createTask(store.sourceInternal(source.key),{title:'既存仕事',request:'実行しない合成fixture',action:'research',acceptance:['参照だけ'],contextSources:[]});
+        store.cancel(task.id,actor);existingTask=store.taskInternal(task.id);}
+    }finally{store.close();}
     const env={...process.env,KOTODAMA_DEBUG:''};delete env.NODE_OPTIONS;
     child=spawn(process.execPath,[path.join(app,'bin/kotodama.mjs'),'start','--offline','--config',file],{env,stdio:['ignore','pipe','pipe'],windowsHide:true});await ready(child);
     const brief={outcome:'原意を保持する',in_scope:['読取と検査'],out_of_scope:['実行'],constraints:['公開しない'],acceptance:['同じProjectと版を読む'],unknowns:[]};
-    const created=await controlCommand(config,{action:'project',actor,operation:'create',request_id:'gui-fixture-create',name:'GUI連携候補',source:{key:source.key,revision:0},brief});
+    let created=await controlCommand(config,{action:'project',actor,operation:'create',request_id:'gui-fixture-create',name:'GUI連携候補',source:{key:source.key,revision:0},brief});
+    if(withTask)created=await controlCommand(config,{action:'project',actor,operation:'link_task',request_id:'gui-fixture-link',project_id:created.project.project_id,
+      expected_revision:created.project.revision,base_digest:created.project_digest,source:{key:source.key,revision:0},reason:'既存Taskを参照する',task_id:existingTask.id,expected_task_revision:existingTask.revision});
     config.projects.operations=['read','inspect'];await atomicJson(file,config);
     const seed=syntheticSeed(),principal=seed.principal_ref,pin=(await sourceSnapshot(app)).binding.setDigest;
     const project={requesterRef:principal,actorId:actor,projectId:created.project.project_id,source:{key:source.key,revision:0},expiresAt:new Date(Date.now()+60000).toISOString(),
@@ -97,20 +102,22 @@ test('GUI bridge reads and inspects the pinned official Project owner without ch
     const call=(route,body)=>bridgeRequest(bridge.origin,route,secret,principal,body);
     const state=()=>{const db=new DatabaseSync(path.join(config.dataDir,'kotodama.sqlite'),{readOnly:true});try{return {
       projects:db.prepare('SELECT body FROM projects ORDER BY id').all(),versions:db.prepare('SELECT COUNT(*) AS n FROM project_versions').get().n,
-      tasks:db.prepare('SELECT COUNT(*) AS n FROM tasks').get().n,events:db.prepare('SELECT COUNT(*) AS n FROM events').get().n};}finally{db.close();}};
-    const before=state();assert.equal(before.tasks,0);
+      tasks:db.prepare('SELECT * FROM tasks ORDER BY id').all(),events:db.prepare('SELECT COUNT(*) AS n FROM events').get().n};}finally{db.close();}};
+    const before=state();assert.equal(before.tasks.length,withTask?1:0);
     assert.equal((await bridgeRequest(bridge.origin,'/v1/project','invalid',principal)).status,401);
     const read=await call('/v1/project');assert.equal(read.status,200);assert.equal(read.body.view.project_digest,created.project_digest);
     assert.deepEqual(read.body.view.project.brief,brief);assert.equal(read.body.can_inspect,true);
-    const inspected=await call('/v1/project/inspect',{binding_sha256:read.body.binding_sha256,expected_revision:1,base_digest:created.project_digest,
+    assert.equal(read.body.view.project.version,withTask?2:1);assert.deepEqual(read.body.view.project.task_refs,created.project.task_refs);
+    const inspected=await call('/v1/project/inspect',{binding_sha256:read.body.binding_sha256,expected_revision:created.project.revision,base_digest:created.project_digest,
       reason:'制約を削除した場合の影響を確認',brief:{...brief,constraints:[]}});
     assert.equal(inspected.status,200);assert.equal(inspected.body.inspection.applied,false);
+    assert.deepEqual(inspected.body.inspection.impact_task_refs,created.project.task_refs);
     assert.deepEqual(inspected.body.inspection.removed_requirements.constraints,['公開しない']);
     // Exercise owner-side currentness through the real HTTP/CLI/SQLite path,
     // rather than relying only on protocol fixtures or a mocked owner.
-    const candidate={binding_sha256:read.body.binding_sha256,expected_revision:1,base_digest:created.project_digest,
+    const candidate={binding_sha256:read.body.binding_sha256,expected_revision:created.project.revision,base_digest:created.project_digest,
       reason:'不一致を拒否する',brief:{...brief,constraints:[]}};
-    for(const mismatch of [{expected_revision:2},{base_digest:'0'.repeat(64)},{binding_sha256:'0'.repeat(64)}]){
+    for(const mismatch of [{expected_revision:created.project.revision+1},{base_digest:'0'.repeat(64)},{binding_sha256:'0'.repeat(64)}]){
       const denied=await call('/v1/project/inspect',{...candidate,...mismatch});
       assert.equal(denied.status,503);assert.deepEqual(denied.body,{error:'bridge_unavailable'});
       assert.deepEqual(state(),before,'rejected inspection must not change Project, events or Task state');

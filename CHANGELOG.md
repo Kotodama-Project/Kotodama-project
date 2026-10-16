@@ -8,7 +8,9 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
-- GUIとread-only CLIでProject v2の型付きTask参照を認識し、訂正候補の影響を表示する。local Taskとswarm入力を区別し、状態・完了を推定しない。関連付けの保存操作は後続（#385）。
+- Project v2で既存local Taskへの関連付け・解除・状態照会を追加。Dotsでは本人が確認した候補だけを保存し、原意・訂正履歴とTask自体を保持する。成果の報告と完了の受入を分ける（#385）。
+
+- GUIとread-only CLIでProject v2の型付きTask参照を認識し、訂正候補の影響を表示する。local Taskとswarm入力を区別し、状態・完了を推定しない（#385）。
 
 - Windows Task swarmの復旧・learning CLI timeout調査用に、該当2 occurrenceの子process状態を期限直前とtimeout時だけ有限記録するCI診断を追加。既存の期限・成否・回収を維持し、引数や入出力本文を追加保存しない（#420、根本原因は調査中）。
 

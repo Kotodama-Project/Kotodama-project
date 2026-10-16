@@ -30,8 +30,7 @@ Project JSONはownerから得たsnapshotまたは候補入力であり、この�
 v2は`discord_local_task_v1`（`adapter`, `task_id`, `revision`）と、
 `swarm_execution_v1`（`adapter`とv1の4項目）を区別します。
 localのTask本文digestをswarmのcontext digestへ変換しません。
-Node ownerでのTask関連付け・v2への保存は後続の変更で追加します。
-この変更では読取側を先に対応させ、既存のv1履歴を保持します。
+Node ownerは初回Task関連付け時にv2へ進め、元のv1履歴を保持します。
 このPython CLIはlocal参照を認識しますが、状態は未観測として返します。
 local参照に`--task`で任意ファイルを与えてもOwnerFileへ渡さず拒否します。
 v1とv2のswarm参照だけが、既存OwnerFileの照合対象です。
@@ -84,5 +83,5 @@ constraints/acceptance、影響する全Task参照、理由と訂正sourceを含
 読取、取消、失効、旧版、owner違い、観測中の変更、条件削除の明示、書込なしを検査する。
 このCLI単体では外部認証・tenant isolation・履歴台帳・provider実接続を検証しません。
 ネットワーク公開には認証とアクセス制御を持つ既存入口への接続が必要。
-local ownerの保存・訂正は上記Node経路、GUIの表示・候補検査は
+local ownerの保存・訂正・既存Task関連付けは上記Node経路、GUIの表示・候補検査は
 [既存bridge](../runtime/codex-task-bridge/README.md)で扱います。いずれも実サービスの受入は別途必要です。
