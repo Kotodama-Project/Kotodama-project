@@ -117,6 +117,12 @@ for(const withTask of [false,true])test(`GUI bridge reads and inspects the pinne
     // rather than relying only on protocol fixtures or a mocked owner.
     const candidate={binding_sha256:read.body.binding_sha256,expected_revision:created.project.revision,base_digest:created.project_digest,
       reason:'不一致を拒否する',brief:{...brief,constraints:[]}};
+    for(const extra of [{surface:'dots'},{surface:null},{action:'project'},{operation:'link_task'},
+      {operation:'unlink_task'},{actor:'100000000000000009'},{project_id:'ref/project/other'},{source:{key:source.key,revision:0}}]){
+      const denied=await call('/v1/project/inspect',{...candidate,...extra});
+      assert.equal(denied.status,503);assert.deepEqual(denied.body,{error:'bridge_unavailable'});
+      assert.deepEqual(state(),before,'GUI authority fields must not change Project, events or Task state');
+    }
     for(const mismatch of [{expected_revision:created.project.revision+1},{base_digest:'0'.repeat(64)},{binding_sha256:'0'.repeat(64)}]){
       const denied=await call('/v1/project/inspect',{...candidate,...mismatch});
       assert.equal(denied.status,503);assert.deepEqual(denied.body,{error:'bridge_unavailable'});

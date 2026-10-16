@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm,writeFile} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile,readFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -63,6 +63,70 @@ test('Task-only grants expose strict approval-bound writes and read-only metadat
     await assert.rejects(controlCommand(await loadConfig(f.file),{action:'project',surface:'dots',actor,...value}),/PROJECT_APPROVAL_REQUIRED/);
   }
   assert.equal(f.projectSnapshot(),before);assert.equal(f.runtime.store.db.prepare('SELECT count(*) AS n FROM dot_project_drafts').get().n,0);
+});
+
+test('stdio Task writes reject caller authority fields before forwarding an approved candidate',async t=>{
+  const f=await fixture(t);let view=f.project;
+  for(const operation of ['link_task','unlink_task']){
+    const candidate=f.association(view,'authority-'+operation,operation),draft=await f.approved(candidate);
+    const {operation:ignored,...payload}=candidate,before=f.projectSnapshot(),tasks=f.taskSnapshot();
+    const forwarded=[],handle=f.runtime.projects.handle.bind(f.runtime.projects);
+    f.runtime.projects.handle=(...args)=>{forwarded.push(args);return handle(...args);};
+    try{
+      for(const extra of [{surface:'operator'},{surface:null},{surface:''},{surface:['dots']},
+        {actor:'100000000000000009'},{action:'request'},{operation:'read'}]){
+        const result=await f.client.callTool({name:'project_'+operation,arguments:{...payload,approval_id:draft.id,...extra}});
+        assert.equal(result.isError,true,JSON.stringify(extra));
+        assert.equal(f.projectSnapshot(),before);assert.equal(f.taskSnapshot(),tasks);
+      }
+      assert.equal((await f.client.callTool({name:'project_'+operation,arguments:payload})).isError,true);
+      assert.equal(forwarded.length,0,'invalid authority fields must not reach the Project owner');
+      view=await f.commitSuccess(candidate,draft);assert.equal(forwarded.length,1);
+      assert.equal(f.taskSnapshot(),tasks);
+    }finally{f.runtime.projects.handle=handle;}
+  }
+  assert.deepEqual(view.project.task_refs,[]);
+});
+
+test('both control routes authenticate before parsing and preserve operator versus Dots Task grants',async t=>{
+  const f=await fixture(t),{port}=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
+  const token=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8');
+  const post=async(route,body,authorization)=>{
+    const response=await fetch(`http://127.0.0.1:${port}${route}`,{method:'POST',
+      headers:{'content-type':'application/json',...(authorization===undefined?{}:{authorization})},
+      body:typeof body==='string'?body:JSON.stringify(body)});
+    return {status:response.status,body:await response.json()};
+  };
+  const denied=async(route,input,error,authorization='Bearer '+token,status=400)=>{
+    const before=f.projectSnapshot(),tasks=f.taskSnapshot(),result=await post(route,input,authorization);
+    assert.equal(result.status,status);assert.deepEqual(result.body,{ok:false,error});
+    assert.equal(f.projectSnapshot(),before);assert.equal(f.taskSnapshot(),tasks);
+  };
+  let view=f.project;
+  for(const route of ['/v1/project','/v1/command']){
+    for(const operation of ['link_task','unlink_task']){
+      const candidate=f.association(view,route.slice(4)+'-'+operation,operation),input={action:'project',actor,...candidate};
+      for(const authorization of [undefined,'Bearer '+('0'.repeat(64))]){
+        const before=f.projectSnapshot(),tasks=f.taskSnapshot();
+        for(const body of [input,{...input,surface:'dots'},'{']){
+          const result=await post(route,body,authorization);
+          assert.equal(result.status,401);assert.deepEqual(result.body,{ok:false,error:'UNAUTHORIZED'});
+        }
+        assert.equal(f.projectSnapshot(),before);assert.equal(f.taskSnapshot(),tasks);
+      }
+      await denied(route,{...input,actor:'100000000000000009'},'OPERATOR_REQUIRED');
+      for(const surface of [null,'','operator','DOTS',false,[],['dots'],{}])await denied(route,{...input,surface},'PROJECT_SURFACE_INVALID');
+      await denied(route,{...input,surface:'dots'},'PROJECT_APPROVAL_REQUIRED');
+      await denied(route,{...input,surface:'dots',approval_id:'project_'+('f'.repeat(24))},'PROJECT_APPROVAL_REQUIRED');
+      // The broad local credential still needs the current installation grant.
+      f.config.projects.operations=operations.filter(value=>value!==operation);await f.save();
+      await denied(route,input,'PROJECT_OPERATION_NOT_ALLOWED');
+      f.config.projects.operations=operations;await f.save();
+      const tasks=f.taskSnapshot(),result=await post(route,input,'Bearer '+token);
+      assert.equal(result.status,200);view=result.body.result;
+      assert.equal(view.project.task_refs.length,operation==='link_task'?1:0);assert.equal(f.taskSnapshot(),tasks);
+    }
+  }
 });
 
 test('stdio confirms exact Task links, reports metadata and unlinks revoked Tasks without mutating them',async t=>{

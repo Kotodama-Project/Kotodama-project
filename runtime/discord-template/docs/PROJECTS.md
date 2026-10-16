@@ -16,6 +16,14 @@ Taskを作成・更新・実行しません。作業の入口は[Project hub #38
 Projectの所有者と一致する必要があります。公開HTTP endpointを追加しません。
 選択済みownerがremoteの場合は未対応として拒否し、localへの代替保存は行いません。
 
+controlのBearerはlocal operator用の資格情報です。`surface`は認証情報ではなく、
+Dots adapterが追加制限を選ぶ固定値です。MCPの呼出引数からは変更できず、
+GUI adapterは固定した`read`／`inspect`だけを送ります。本人確認の制限対象となる
+clientにcontrol tokenやoperatorのconfig・stateへの直接アクセスを与えない構成が前提です。
+loopbackと`0600`は同一OSユーザーのプロセスを隔離しません。computer／shell接続を
+併用する場合のcredential・filesystem境界は配備先で別途検証が必要で、MCP経路の
+合成テスト成功だけではその隔離を証明しません。
+
 | operation | 入力 | 結果 |
 |---|---|---|
 | `create` | `request_id`, `name`, `source: {key, revision}`, `brief` | ownerが発行したProject ID、revision 1、digest |
