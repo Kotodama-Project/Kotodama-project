@@ -121,6 +121,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- peer並行送信の回帰検査で、予約後の有限な混雑拒否と即時成功を区別。同じキーの一回再照合後にreceipt・payload・配送が正確に3件へ揃うことを検査し、競合中の上限とruntimeの期限を維持する（#428）。
+
 - tracked Markdownの日本語・Unicode改行文字を含むpathの検査漏れを修正し、非UTF-8のstdoutや不正バイト名でも一行JSONを保持。Git設定に左右されない回帰テストを追加（#418）。
 
 - 学習proposalの読取が欠落DBや必須tableを作成・修復する問題を修正。元DB/WALをprivate copyで検証し、真正旧形式の互換と、返却直前の取消・owner・Source・実child証拠の再確認を維持する（#392）。
