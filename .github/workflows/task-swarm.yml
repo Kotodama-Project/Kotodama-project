@@ -5,6 +5,33 @@ on:
 permissions:
   contents: read
 jobs:
+  measure-learning:
+    name: Learning CLI measurement (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      PIP_NO_INPUT: '1'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+          check-latest: false
+      - name: Check tracked credential hygiene
+        run: python -S -B tools/check_tracked_secret_hygiene.py
+      - name: Install hash-locked dependencies
+        run: python -m pip install --require-hashes -r requirements-task-swarm-ci.txt
+      - name: Measure real learning CLI without changing its deadline
+        run: python -B tools/measure_learning_reuse_cli.py
   validate:
     name: validate (${{ matrix.os }}, shard ${{ matrix.shard }})
     strategy:
