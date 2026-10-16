@@ -506,23 +506,34 @@ def main(argv=None):
             context = read_json(args.context, 65536)
             shape(context, {"origin_owner", "origin_input", "anchor", "target_owner", "target_input", "proposal"},
                   "REUSE_CONTEXT_INVALID")
-            owner = ReuseOwner(**context, allow_expired_objective=(
-                args.command == "run" and args.receipt_sha256 is not None))
-            if args.command == "review":
-                result = owner.review(args.review_ref, args.reviewer, args.outcome, args.reason)
-            elif args.command == "decide":
-                result = owner.decide(args.actor, args.review_ref, args.outcome, args.key,
-                                      expected_generation=args.expected_generation)
-            elif args.command == "current":
-                result = owner.current(args.decision_digest)
-            else:
+            if args.command == "run":
+                # The coordinator constructs and checks the real current owner.
+                # Preserve the old path normalization, without first replaying
+                # the origin through a second, unused ReuseOwner here.
+                origin_owner = OwnerFile(context["origin_owner"]).path
+                target_owner = OwnerFile(context["target_owner"]).path
                 scenario = read_json(args.simulation, 1024 * 1024)
                 backend = ScriptedSimulation(scenario)
                 repair = scenario["repair_plan"]
-                result = owner.execute(args.decision_digest, read_json(args.plan, 256 * 1024),
-                    backend, worker_actors=args.worker, critic_actor=args.critic,
+                result = execute_closed_loop(target_owner, Path(context["target_input"]),
+                    read_json(args.plan, 256 * 1024), backend,
+                    worker_actors=args.worker, critic_actor=args.critic,
                     repair_planner=(lambda _gap: copy.deepcopy(repair)) if repair is not None else None,
-                    expected_receipt_sha256=args.receipt_sha256)
+                    expected_receipt_sha256=args.receipt_sha256,
+                    reuse_context={"origin_owner": str(origin_owner),
+                        "origin_input": str(Path(context["origin_input"])), "anchor": context["anchor"],
+                        "proposal": context["proposal"], "decision_digest": args.decision_digest})
+                result = {**result, "reuse_decision_digest": args.decision_digest,
+                          "reuse_proposal_digest": digest(context["proposal"])}
+            else:
+                owner = ReuseOwner(**context)
+                if args.command == "review":
+                    result = owner.review(args.review_ref, args.reviewer, args.outcome, args.reason)
+                elif args.command == "decide":
+                    result = owner.decide(args.actor, args.review_ref, args.outcome, args.key,
+                                          expected_generation=args.expected_generation)
+                else:
+                    result = owner.current(args.decision_digest)
         print(canonical(result))
         return 0
     except SwarmError as exc:

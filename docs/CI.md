@@ -86,6 +86,15 @@ summaryの`complete=false`またはsummary欠落として扱います。観測�
 追加samplingの費用を記録し、test全体への観測負荷は未測定のままです。再実行成功だけで
 #420を解決済みとは扱いません。
 
+### Learning CLIの初期化計測
+
+`python -B tools/measure_learning_reuse_cli.py` は、既存の合成実CLI受入testを
+通常module起動とconstructor時間だけを観測する起動で実行します。
+元のassertionと各20秒の期限を維持し、操作名・回数・時間・終了codeだけを表示します。
+timeoutは失敗として残し、別fixtureの観測modeまで実行してから非zeroで終了します。
+CIではWindows/Linuxの独立job（各10分）で実行し、全件shardとその20分上限を変更しません。
+観測付きmain起動と通常module起動は区別し、時間差だけをtimeout原因の証明にしません。
+
 ## Windows の全件分割と集約
 
 Windowsでは全件実行が20分で中断したため、CIに限って4個の独立jobへ分割します。
