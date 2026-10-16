@@ -106,6 +106,17 @@ test('GUI bridge reads and inspects the pinned official Project owner without ch
       reason:'制約を削除した場合の影響を確認',brief:{...brief,constraints:[]}});
     assert.equal(inspected.status,200);assert.equal(inspected.body.inspection.applied,false);
     assert.deepEqual(inspected.body.inspection.removed_requirements.constraints,['公開しない']);
+    // Exercise owner-side currentness through the real HTTP/CLI/SQLite path,
+    // rather than relying only on protocol fixtures or a mocked owner.
+    const candidate={binding_sha256:read.body.binding_sha256,expected_revision:1,base_digest:created.project_digest,
+      reason:'不一致を拒否する',brief:{...brief,constraints:[]}};
+    for(const mismatch of [{expected_revision:2},{base_digest:'0'.repeat(64)},{binding_sha256:'0'.repeat(64)}]){
+      const denied=await call('/v1/project/inspect',{...candidate,...mismatch});
+      assert.equal(denied.status,503);assert.deepEqual(denied.body,{error:'bridge_unavailable'});
+      assert.deepEqual(state(),before,'rejected inspection must not change Project, events or Task state');
+    }
+    const wrongPrincipal=await bridgeRequest(bridge.origin,'/v1/project',secret,worker);
+    assert.equal(wrongPrincipal.status,404);assert.deepEqual(wrongPrincipal.body,{error:'information_unavailable'});
     const reread=await call('/v1/project');assert.equal(reread.status,200);assert.equal(reread.body.view.project_digest,created.project_digest);assert.deepEqual(state(),before);
     config.projects.operations=[];await atomicJson(file,config);
     const revoked=await call('/v1/project');assert.equal(revoked.status,503);assert.deepEqual(revoked.body,{error:'bridge_unavailable'});
