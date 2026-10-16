@@ -84,10 +84,10 @@ def main():
         project_brief = {"outcome": "Project独自の成果", "in_scope": ["複数行\nと絵文字🌱を保持"], "out_of_scope": [],
                          "constraints": ["公開しない"], "acceptance": ["同じProjectを読む"], "unknowns": []}
         project_state = {"state": "connected", "binding_sha256": "b"*64, "can_inspect": True,
-                         "view": {"project": {"name": "Project候補", "project_id": "ref/project/fixture", "revision": 1, "brief": project_brief}, "project_digest": "a"*64}}
+                         "view": {"project": {"name": "Project候補", "project_id": "ref/project/fixture", "revision": 1, "brief": project_brief, "task_refs": []}, "project_digest": "a"*64}}
         script = "window.project=" + json.dumps(project_state, ensure_ascii=False) + """;
 window.inspections=0;window.gadget={getState:async()=>({state:'ready',source:{overview:'原依頼'},result:{objective:'原資料の目的',deliverable:'原資料の成果物',constraints:['公開しない'],acceptance_criteria:['読戻し'],open_questions:[]}}),
-getProject:async()=>project,inspectProjectChange:async input=>{inspections++;window.inspected=input;return {inspection:{expected_revision:input.expected_revision,changed_fields:['constraints'],removed_requirements:{constraints:['公開しない'],acceptance:[]},impact_task_refs:[],applied:false}}}};
+getProject:async()=>project,inspectProjectChange:async input=>{inspections++;window.inspected=input;return {inspection:{expected_revision:input.expected_revision,changed_fields:['constraints'],removed_requirements:{constraints:['公開しない'],acceptance:[]},impact_task_refs:project.view.project.task_refs,applied:false}}}};
 """
         p = page(script); p.wait_for_function("!document.getElementById('project-inspect').disabled")
         p.locator('[data-field="constraints"] button').click(); p.locator('#project-reason').fill('条件の削除を検査する')
@@ -121,6 +121,22 @@ getProject:async()=>project,inspectProjectChange:async input=>{inspections++;win
         actual = p.evaluate("({inspections,status:document.getElementById('project-status').textContent,outcome:document.querySelector('[data-field=outcome] textarea').value,items:document.querySelectorAll('#project-editor textarea').length})")
         add("project-size-refusal-preserves-edits", "Input above owner transport scope is refused locally without losing edits", actual,
             actual['inspections']==0 and '上限を超えています' in actual['status'] and actual['outcome']=='編集を失わず候補を検査する' and actual['items']==101, "project-input-boundary")
+        p.close()
+        task_refs = [{"adapter": "discord_local_task_v1", "task_id": "task-00000000-0000-4000-8000-000000000001", "revision": 2},
+                     {"adapter": "swarm_execution_v1", "task_id": "task-00000000-0000-4000-8000-000000000002", "revision": 3, "owner_ref": "ref/owner/<img src=x>", "context_digest": "e"*64}]
+        typed_state = dict(project_state, view=dict(project_state['view'], project=dict(project_state['view']['project'], version=2, task_refs=task_refs)))
+        p = page(script.replace(json.dumps(project_state, ensure_ascii=False), json.dumps(typed_state, ensure_ascii=False)))
+        p.wait_for_function("!document.getElementById('project-inspect').disabled")
+        p.locator('[data-field="constraints"] button').click(); p.locator('#project-reason').fill('Taskの参照を保持して検査する'); p.locator('#project-inspect').click()
+        p.wait_for_function("!document.getElementById('project-inspection').hidden")
+        actual = p.evaluate("({inspections,read:document.getElementById('project-tasks').textContent,impact:document.getElementById('project-inspection').textContent,inputKeys:Object.keys(inspected),images:document.querySelectorAll('#project-card img').length})")
+        preserved = all(str(ref[key]) in actual[field] for ref in task_refs for key in ('task_id', 'revision') for field in ('read', 'impact'))
+        add("project-v2-typed-refs-read-and-inspection", "Local Task and swarm input references are preserved without claiming completion or allowing reference mutation", actual,
+            preserved and task_refs[1]['owner_ref'] in actual['read'] and task_refs[1]['context_digest'] in actual['impact'] and '完了を確認した表示ではありません' in actual['read'] and 'task_refs' not in actual['inputKeys'] and actual['images']==0 and actual['inspections']==1, "project-task-references")
+        p.evaluate("() => { gadget.getProject=async()=>{throw Error('revoked')}; }"); p.locator('#project-reload').click()
+        p.wait_for_function("document.getElementById('project-status').textContent.includes('表示できません')")
+        actual = p.evaluate("({read:document.getElementById('project-tasks').textContent,impact:document.getElementById('project-inspection').textContent})")
+        add("project-v2-revocation-removes-task-references", "Denied reread clears current and affected references", actual, actual['read']=='' and actual['impact']=='', "project-access")
         p.close();browser.close()
     counts={s:sum(r['status']==s for r in records) for s in ('PASS','FAIL')}
     report={"scope":__doc__,"client_sha256":hashlib.sha256(client.read_bytes()).hexdigest(),"counts":counts,

@@ -23,7 +23,7 @@ document.body.innerHTML = `<main><h1>Kotodama 要件整理</h1>
   <div id="result" class="card" hidden></div>
   <div class="card" id="project-card"><h2>Projectの要件</h2>
     <p id="project-status" class="status" role="status">Projectの接続を確認しています。</p>
-    <p id="project-name"></p><div id="project-editor"></div>
+    <p id="project-name"></p><div id="project-tasks"></div><div id="project-editor"></div>
     <label id="project-reason-label" hidden>変更の理由<textarea id="project-reason"></textarea></label>
     <div class="actions"><button id="project-inspect" disabled>変更内容を検査</button><button id="project-reload" class="secondary">Projectを再確認</button></div>
     <p class="note">記録がない項目は、確認済みという意味ではありません。検査は保存や実行を行いません。再確認すると編集内容を現在の要件で置き換えます。</p>
@@ -120,11 +120,29 @@ refresh();
 const projectStatus = document.getElementById("project-status");
 const projectEditor = document.getElementById("project-editor");
 const projectName = document.getElementById("project-name");
+const projectTasks = document.getElementById("project-tasks");
 const projectInspect = document.getElementById("project-inspect");
 const projectReason = document.getElementById("project-reason");
 const projectResult = document.getElementById("project-inspection");
 const projectLabels = { outcome: "欲しい成果", in_scope: "含めること", out_of_scope: "含めないこと", constraints: "守る条件", acceptance: "受入条件", unknowns: "未確定のこと" };
 let projectSnapshot, projectGeneration = 0, inspectingProject = false;
+function renderTaskRefs(container, refs, title) {
+  container.replaceChildren();
+  const heading = document.createElement("h2"); heading.textContent = title; container.append(heading);
+  const note = document.createElement("p"); note.className = "note";
+  note.textContent = refs.length ? "記録された参照です。Taskの現在の状態や完了を確認した表示ではありません。" : "関連付けた参照は記録されていません。";
+  container.append(note);
+  for (const ref of refs) {
+    const row = document.createElement("details"); const summary = document.createElement("summary");
+    const kind = ref.adapter === "discord_local_task_v1" ? "Task" : ref.adapter === "swarm_execution_v1" ? "swarmへの実行入力" : "実行入力（旧形式）";
+    summary.textContent = `${kind} · ${ref.task_id} · 第${ref.revision}版`; row.append(summary);
+    if (ref.adapter !== "discord_local_task_v1") {
+      const owner = document.createElement("p"); owner.textContent = `実行元の参照: ${ref.owner_ref}`;
+      const digest = document.createElement("p"); digest.textContent = `入力の照合値: ${ref.context_digest}`; row.append(owner, digest);
+    }
+    container.append(row);
+  }
+}
 function clearInspection() {
   projectResult.replaceChildren(); projectResult.hidden = true;
   if (projectSnapshot) projectStatus.textContent = "編集内容はまだ検査していません。";
@@ -134,7 +152,7 @@ function projectEditable(enabled) {
   projectReason.disabled = !enabled; projectInspect.disabled = !enabled;
 }
 function clearProject(message) {
-  projectSnapshot = null; projectName.textContent = ""; projectEditor.replaceChildren();
+  projectSnapshot = null; projectName.textContent = ""; projectTasks.replaceChildren(); projectEditor.replaceChildren();
   projectReason.value = ""; document.getElementById("project-reason-label").hidden = true;
   clearInspection(); projectEditable(false); projectStatus.textContent = message;
 }
@@ -150,6 +168,7 @@ function renderProject(value) {
   projectSnapshot = value; projectEditor.replaceChildren(); clearInspection();
   const project = value.view.project;
   projectName.textContent = `${project.name} · 第${project.revision}版`;
+  renderTaskRefs(projectTasks, project.task_refs, "関連するTaskの参照");
   for (const [key, title] of Object.entries(projectLabels)) {
     const group = document.createElement("section"); const label = document.createElement("label"); label.textContent = title;
     const values = document.createElement("div"); values.dataset.field = key; group.append(label, values);
@@ -211,6 +230,7 @@ projectInspect.addEventListener("click", async () => {
       const list = document.createElement("ul"); for (const value of candidate.removed_requirements[key]) { const item = document.createElement("li"); item.textContent = value; list.append(item); } projectResult.append(list);
     }
     const note = document.createElement("p"); note.textContent = `第${candidate.expected_revision}版に対する検査です。影響するTask参照: ${candidate.impact_task_refs.length}件。変更は保存されていません。意味や条件の妥当性は別途確認が必要です。`; projectResult.append(note);
+    const affected = document.createElement("div"); renderTaskRefs(affected, candidate.impact_task_refs, "影響するTaskの参照"); projectResult.append(affected);
     projectResult.hidden = false; projectStatus.textContent = "検査できました。現在の要件は変更していません。"; projectEditable(true);
   } catch { if (generation === projectGeneration) clearProject("変更候補を検査できませんでした。Projectを再確認してください。変更は保存していません。"); }
   finally { inspectingProject = false; }

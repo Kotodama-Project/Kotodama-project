@@ -668,3 +668,45 @@ test("Project wire preserves owner text and refuses oversized inspection before 
   validateProjectBrief(large);
   assert.throws(() => validateProjectInput({ binding_sha256: "a".repeat(64), expected_revision: 1, base_digest: "b".repeat(64), reason: "候補検査", brief: large }));
 });
+
+const localTaskRef = { adapter: "discord_local_task_v1", task_id: "task-00000000-0000-4000-8000-000000000001", revision: 2 };
+const swarmTaskRef = { adapter: "swarm_execution_v1", task_id: "task-00000000-0000-4000-8000-000000000002", owner_ref: "ref/owner/swarm", revision: 3, context_digest: "e".repeat(64) };
+
+test("Project wire preserves versioned references and rejects mixed or malformed owner types", async () => {
+  const { validateProjectTaskRefs, validateProjectView, validateProjectInspectionResponse } = await import("../../runtime/cloudflare-os-kotodama/gatekeeper-kotodama-brief/src/project-protocol.mjs");
+  const { root, config } = fixture(); const f = projectFixture(config, root);
+  try {
+    const refs = [localTaskRef, swarmTaskRef], legacy = (({ adapter, ...ref }) => ref)(swarmTaskRef);
+    assert.deepEqual(validateProjectTaskRefs([legacy], 1), [legacy]);
+    assert.deepEqual(validateProjectTaskRefs(refs, 2), refs);
+    assert.equal(validateProjectTaskRefs([{ ...swarmTaskRef, owner_ref: "実行元🌱".repeat(50) }], 2).length, 1);
+    for (const [values, version] of [[[localTaskRef], 1], [[legacy], 2], [[legacy, localTaskRef], undefined], [[localTaskRef, localTaskRef], 2],
+      [[{ ...localTaskRef, context_digest: "e".repeat(64) }], 2], [[{ ...swarmTaskRef, adapter: "unknown" }], 2],
+      [[{ ...swarmTaskRef, owner_ref: "x\0y" }], 2], [[{ ...swarmTaskRef, context_digest: "wrong" }], 2],
+      [[{ ...localTaskRef, task_id: "arbitrary-task" }], 2], [[{ ...localTaskRef, revision: 0 }], 2], [Array.from({ length: 51 }, () => localTaskRef), 2]]) assert.throws(() => validateProjectTaskRefs(values, version));
+    f.view.project = { ...f.view.project, version: 2, task_refs: refs };
+    assert.deepEqual(validateProjectView(f.view).project.task_refs, refs);
+    const input = { binding_sha256: "b".repeat(64), expected_revision: 1, base_digest: f.view.project_digest, reason: "参照を保持する", brief: { ...projectBrief, constraints: [] } };
+    const value = { binding_sha256: input.binding_sha256, inspection: { ...f.inspect(input), impact_task_refs: refs } };
+    assert.deepEqual(validateProjectInspectionResponse(value, input, f.view.project), value);
+    assert.throws(() => validateProjectInspectionResponse({ ...value, inspection: { ...value.inspection, impact_task_refs: [localTaskRef] } }, input, f.view.project));
+    assert.throws(() => validateProjectInspectionResponse({ ...value, inspection: { ...value.inspection, impact_task_refs: [{ ...localTaskRef, revision: 3 }, swarmTaskRef] } }, input, f.view.project));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("authenticated Project read/inspect forwards v2 local and swarm references without mutations", async () => {
+  const { root, config } = fixture(); const f = projectFixture(config, root); let bridge;
+  const refs = [localTaskRef, swarmTaskRef]; f.view.project = { ...f.view.project, version: 2, task_refs: refs };
+  try {
+    bridge = await startBriefBridge(config, { projectConnect: async () => async input => {
+      assert(["read", "inspect"].includes(input.operation)); assert(!Object.hasOwn(input, "task_refs"));
+      return input.operation === "read" ? f.view : { ...f.inspect(input), impact_task_refs: refs };
+    } });
+    const read = await (await call(bridge, config, "/v1/project")).json();
+    assert.equal(read.view.project.version, 2); assert.deepEqual(read.view.project.task_refs, refs);
+    const result = await (await call(bridge, config, "/v1/project/inspect", { body: { binding_sha256: read.binding_sha256, expected_revision: 1,
+      base_digest: read.view.project_digest, reason: "条件削除の影響を調べる", brief: { ...projectBrief, constraints: [] } } })).json();
+    assert.deepEqual(result.inspection.impact_task_refs, refs); assert.equal(result.inspection.applied, false);
+    assert.deepEqual(JSON.parse(readFileSync(join(config.stateRoot, "invocations.json"))).jobs, []);
+  } finally { if (bridge) await bridge.close(); rmSync(root, { recursive: true, force: true }); }
+});

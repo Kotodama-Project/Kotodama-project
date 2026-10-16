@@ -39,7 +39,7 @@ def validate_project(value: dict) -> dict:
     """Validate a candidate/read snapshot, never establish its authority."""
     bounded(value)
     shape(value, PROJECT_FIELDS, "PROJECT_INVALID")
-    require(type(value["version"]) is int and value["version"] == 1, "PROJECT_VERSION_INVALID")
+    require(type(value["version"]) is int and value["version"] in (1, 2), "PROJECT_VERSION_INVALID")
     for key in ("project_id", "owner_ref", "original_ref"):
         ref(value[key], key)
     integer(value["revision"], "Project revision", maximum=2**53 - 1)
@@ -55,14 +55,22 @@ def validate_project(value: dict) -> dict:
     require(isinstance(value["task_refs"], list) and len(value["task_refs"]) <= 50, "PROJECT_TASK_LIMIT")
     seen = set()
     for task in value["task_refs"]:
-        shape(task, {"task_id", "owner_ref", "revision", "context_digest"}, "PROJECT_TASK_INVALID")
+        fields = {"task_id", "owner_ref", "revision", "context_digest"}
+        if value["version"] == 2:
+            adapter = task.get("adapter") if isinstance(task, dict) else None
+            require(adapter in ("discord_local_task_v1", "swarm_execution_v1"),
+                    "PROJECT_TASK_ADAPTER_INVALID")
+            fields = ({"adapter", "task_id", "revision"} if adapter == "discord_local_task_v1"
+                      else fields | {"adapter"})
+        shape(task, fields, "PROJECT_TASK_INVALID")
         require(isinstance(task["task_id"], str) and TASK_ID.fullmatch(task["task_id"]) is not None,
                 "PROJECT_TASK_INVALID")
         require(task["task_id"] not in seen, "PROJECT_TASK_DUPLICATE")
         seen.add(task["task_id"])
-        ref(task["owner_ref"], "Task owner")
         integer(task["revision"], "Task revision", maximum=2**53 - 1)
-        digest_ref(task["context_digest"])
+        if task.get("adapter") != "discord_local_task_v1":
+            ref(task["owner_ref"], "Task owner")
+            digest_ref(task["context_digest"])
     return json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False))
 
 
@@ -78,6 +86,10 @@ def project_view(project: dict, resolve: Resolver, *, now: float) -> dict:
     for selected in project["task_refs"]:
         row = {**selected, "resolution": "unresolved"}
         try:
+            # A local Store Task is not a swarm execution input. Its association
+            # is retained, but this CLI has no authorized local owner adapter.
+            require(selected.get("adapter") != "discord_local_task_v1",
+                    "PROJECT_TASK_ADAPTER_UNSUPPORTED")
             binding, payload = resolve(selected["task_id"])
             bounded(binding)
             bounded(payload)
@@ -156,12 +168,14 @@ def main(argv: list[str] | None = None) -> int:
             result = inspect_change(project, load_json(args.proposal))
         else:
             require(args.proposal is None, "PROJECT_ARGUMENTS_INVALID")
+            selected_refs = {t["task_id"]: t for t in validate_project(project)["task_refs"]}
             selections = {}
             for task_id, owner_path, input_path in args.task:
                 require(task_id not in selections, "PROJECT_TASK_DUPLICATE")
+                require(task_id in selected_refs, "PROJECT_TASK_UNEXPECTED")
+                require(selected_refs[task_id].get("adapter") != "discord_local_task_v1",
+                        "PROJECT_TASK_ADAPTER_UNSUPPORTED")
                 selections[task_id] = (OwnerFile(owner_path), Path(input_path))
-            selected_ids = {t["task_id"] for t in validate_project(project)["task_refs"]}
-            require(set(selections).issubset(selected_ids), "PROJECT_TASK_UNEXPECTED")
 
             def resolve(task_id: str) -> tuple[dict, dict]:
                 require(task_id in selections, "PROJECT_OWNER_UNSELECTED")
