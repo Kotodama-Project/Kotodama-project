@@ -27,7 +27,7 @@ The 2026-09-30 [OpenAI alignment direction](docs/OPENAI-ALIGNMENT.md) makes Dots
 
 The target is the whole loop across organizational/design/Project documents and goals, memory, decomposition, parallel work, independent verification, integration, learning and replanning. Preserve original intent, corrections and inherited constraints; document or worker counts are not completion.
 
-The [owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) makes the Project a durable hub for people, agents, sources, Tasks, decisions, outcomes and learning. The [Project view CLI](docs/PROJECT-HUB-VIEW.md) and [existing local-owner persistence/correction](runtime/discord-template/docs/PROJECTS.md) are on `main`. Persistence preserves original requests and correction history; its operations are disabled by default. Dots/GUI shared operations, Task links, dynamic delegation and live external connections remain [#385](https://github.com/Kotodama-Project/Kotodama-project/issues/385) work.
+The [owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) makes the Project a durable hub for people, agents, sources, Tasks, decisions, outcomes and learning. The [Project view CLI](docs/PROJECT-HUB-VIEW.md) and [existing local-owner persistence/correction](runtime/discord-template/docs/PROJECTS.md) are on `main`. This revision also includes Dots shared operations, links to existing Tasks and current-state readback, and GUI read/inspection. Project operations are disabled by default; Dots writes require requester approval. GUI writes, dynamic delegation and live external acceptance remain [#385](https://github.com/Kotodama-Project/Kotodama-project/issues/385) work.
 
 ## Current state
 
@@ -43,6 +43,8 @@ This revision also includes the [measurement CLI](docs/PERFORMANCE-BENCHMARK.md)
 
 [STATUS](STATUS.md#current-source-and-open-integration-work) owns this revision's source capabilities, adoption status, remaining owner connections, performance observations and prioritized Issues. Follow each linked Issue's latest evidence before resuming. Whole eight-layer operation, actual model/user outcomes and continuous production operation remain unaccepted.
 
+The [namespace consumer inventory](docs/NAMESPACE-CONSUMER-INVENTORY.md) reads pinned Git source without executing it and saves reference candidates privately. Private-consumer compatibility, pin cutover and rollback acceptance remain incomplete.
+
 ## Knowledge, Task and Project CLI entrypoints
 
 Use Python 3.12 from the checkout. Follow the linked guides for dependencies and admitted inputs.
@@ -57,7 +59,7 @@ Use Python 3.12 from the checkout. Follow the linked guides for dependencies and
 | Trace current parent constraints, Tasks and saved execution | `python -B tools/hierarchy_trace.py --help` | [Hierarchy and execution trace](docs/KNOWLEDGE-HIERARCHY-TRACE.md) |
 | Inspect fixed-fixture measurement options | `python -B tools/performance_benchmark.py --help` | [Measurement CLI and fixed comparison](docs/PERFORMANCE-BENCHMARK.md) |
 
-Execution requires input and workers bound to the existing owner plus `--executor-mode local_executable_fixture`. Learning reuse also requires a current decision. The Python Project CLI reads references and validates proposed corrections. The disabled-by-default local-owner operations handle Project create/read/inspect/correct; persisted Projects still have empty `task_refs`. They do not create, update or dispatch Tasks. These entrypoints do not establish large-corpus performance or acceptance of the complete improvement loop.
+Execution requires input and workers bound to the existing owner plus `--executor-mode local_executable_fixture`. Learning reuse also requires a current decision. The Python Project CLI reads references and validates proposed corrections. The disabled-by-default local-owner operations handle Project create/read/inspect/correct plus link_task/unlink_task/read_task for existing Tasks. New Projects start with empty `task_refs`; linking saves typed v2 references. These operations do not create, update or dispatch Tasks themselves. The GUI only reads Projects and inspects proposed corrections. These entrypoints do not establish large-corpus performance or acceptance of the complete improvement loop.
 
 You choose how to use the product:
 
@@ -74,7 +76,7 @@ You choose how to use the product:
 | Discord / Voice | `runtime/discord-template` (Node 24, local ASR, continuous Live conversation, bounded Task worker, agent channels that start clear requests immediately; write tasks need Linux with Docker verification; real-microphone continuity not yet accepted) | | 15-minute rotation, Voice-to-Verified-Handoff, GrillU, the rest of the [GPT-Live adoption policy](docs/GPT-LIVE-ADOPTION.md) (#142 to #146) |
 | Agent swarm / autonomy | bounded Task execution, Luna Task swarm, swarm and route-binding contracts (#34), migration-ledger schema and read-only verifier (#35; synthetic fixture only), [agent-lifecycle contract](docs/PUBLIC-AGENT-LIFECYCLE-REGISTRY.md) (#36; schema, read-only verifier, synthetic fixture) | real registry and runtime/continuity acceptance | Goal Completion Loop after a human GO |
 | Knowledge / Context | canonical OKF Markdown, catalog/graph, bounded retrieval/context, typed goal/Source/frontier inputs and owner-bound learning candidates; explicit local-executor CLI, current evidence checks, learning-origin verification reuse within an invocation, proposal readback without creating or repairing the original DB, and bounded multiple-parent hierarchy and saved-execution trace | owner connections across all eight layers and large-corpus evaluation | Context Gateway and continuous improvement |
-| Project | minimal information contract, existing Task read-only view and disabled-by-default local persistence of original requests and correction history in the existing SQLite store | [Dots shared operations #395](https://github.com/Kotodama-Project/Kotodama-project/pull/395), GUI and Task links | configurable collaboration and optimization |
+| Project | read-only CLI; local persistence/correction, Dots shared operations and existing Task links/state readback in the existing SQLite store (disabled by default); GUI read/inspection | GUI writes, shared participants and live Dots/external acceptance | configurable collaboration and optimization |
 | Runtime | Compose / Proxmox lifecycle contracts, Cloudflare candidates | | deployment on Cloudflare edge and the official Cloudflare OS |
 
 [STATUS.md](STATUS.md) is the source for the current state. This page is a projection, not a Human Decision or Current Truth.

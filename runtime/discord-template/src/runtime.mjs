@@ -158,7 +158,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
               shape(operation,['actor','operation'],'PROJECT_REQUEST_INVALID');return dots.readProjectDraft(approval_id,{signal});
             }
             let assertApproval=()=>{};
-            if(surface==='dots'&&['create','correct'].includes(operation.operation)){
+            if(surface==='dots'&&['create','correct','link_task','unlink_task'].includes(operation.operation)){
               check(dots,'DOTS_DISABLED');assertScope(current);
               assertApproval=await dots.authorizeProjectWrite(approval_id,operation,{signal});
             }else check(approval_id===undefined,'PROJECT_REQUEST_INVALID');

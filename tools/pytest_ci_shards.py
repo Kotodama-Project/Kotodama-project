@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MAX_BYTES = 2 * 1024 * 1024
 MAX_ITEMS = 5000
 OS_NAMES = {"ubuntu-22.04": "Linux", "windows-latest": "Windows"}
-MATRIX = (("ubuntu-22.04", 0, 1), *(('windows-latest', i, 4) for i in range(4)))
+MATRIX = (*(("ubuntu-22.04", i, 2) for i in range(2)), *(('windows-latest', i, 4) for i in range(4)))
 COLLECTION_ARGS = ["-q", "-p", "no:cacheprovider", "-o", "python_files=test_task_swarm_*.py", "tests"]
 
 

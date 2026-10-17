@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import lru_cache
 import hashlib
 import json
 import os
@@ -18,6 +19,24 @@ from .task_contract import (
 )
 
 
+@lru_cache(maxsize=1)
+def _windows_read_kernel():
+    # Reuse only the immutable API bindings. File handles, evidence bytes and
+    # identity checks remain fresh on every read. Concurrent first calls may
+    # bind twice, but never share an open file or mutable reader state.
+    import ctypes
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    create = kernel.CreateFileW
+    create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                       wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+    create.restype = wintypes.HANDLE
+    close = kernel.CloseHandle
+    close.argtypes = (wintypes.HANDLE,)
+    close.restype = wintypes.BOOL
+    return kernel
+
+
 def _open_readonly(filename):
     if os.name != "nt":
         return os.open(filename, os.O_RDONLY | getattr(os, "O_BINARY", 0) |
@@ -29,23 +48,16 @@ def _open_readonly(filename):
     from ctypes import wintypes
     import msvcrt
 
-    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-    create = kernel.CreateFileW
-    create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
-                       wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
-    create.restype = wintypes.HANDLE
-    close = kernel.CloseHandle
-    close.argtypes = (wintypes.HANDLE,)
-    close.restype = wintypes.BOOL
+    kernel = _windows_read_kernel()
     # None SECURITY_ATTRIBUTES makes the handle non-inheritable. OPEN_EXISTING
     # and FILE_FLAG_OPEN_REPARSE_POINT add no create/write permission.
-    handle = create(str(filename), 0x80000000, 0x1 | 0x2 | 0x4, None, 3, 0x200080, None)
+    handle = kernel.CreateFileW(str(filename), 0x80000000, 0x1 | 0x2 | 0x4, None, 3, 0x200080, None)
     if handle == wintypes.HANDLE(-1).value:
         raise ctypes.WinError(ctypes.get_last_error())
     try:
         return msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY | os.O_NOINHERIT)
     except BaseException:
-        close(handle)
+        kernel.CloseHandle(handle)
         raise
 
 
