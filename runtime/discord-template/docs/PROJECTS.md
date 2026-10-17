@@ -172,6 +172,8 @@ paused/failed/cancelledは`resume_task`で同じTaskを明示的に再開でき�
 実行中もProjectの条件・出典束縛・Task参照と現在の権限を検査します。
 Project訂正・参照解除・Source更新・権限失効後の成果公開は拒否します。
 Projectの条件を変える操作自体はTaskを成功・完了にはしません。
+Project作成Taskを通常のTask訂正から書き換える操作は、条件の脱落を避けるため拒否します。
+変更はProjectの条件を訂正してから新しい明示依頼として行い、既存成果を上書きしません。
 
 `read_result`はneeds_reviewの現在版だけを対象に、既存verifyArtifactsで全記録artifactを照合し、保存された`result.md`の実体・
 サイズ・digest・報告本文の一致を検査します。追加ファイルは既存resultFilesが許可する

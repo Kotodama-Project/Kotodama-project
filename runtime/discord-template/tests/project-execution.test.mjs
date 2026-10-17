@@ -175,3 +175,18 @@ test('base64 deliverables remain inside the control response budget, oversized c
   await set(400000);const result=await f.call(input);assert.equal(Buffer.from(result.result.files[0].data,'base64').length,400000);
   await set(600000);await assert.rejects(f.call(input),/PROJECT_RESULT_SIZE_LIMIT/);
 });
+
+
+test('generic Task corrections cannot discard the Project contract or mutate its Source',async t=>{
+  const f=await fixture(t),run=await f.call(f.run);await f.runtime.pipeline.tail;
+  const task=f.runtime.store.taskInternal(run.task_ref.task_id),source=f.runtime.store.source(task.source_key,actor);
+  const events=JSON.stringify(f.runtime.store.statement('SELECT * FROM events ORDER BY seq').all());
+  const project=f.runtime.projects.current(f.run.project_id,actor);
+  const input={title:'override',request:'drop Project constraints',action:'research',acceptance:[]};
+  assert.throws(()=>f.runtime.store.reviseTask(task.id,source,input),/PROJECT_TASK_CORRECTION_REQUIRES_PROJECT/);
+  assert.throws(()=>f.runtime.store.correctTask(task.id,actor,{...input,taskRevision:1,sourceRevision:1,interactionId:'100000000000000004',at:Date.now()}),/PROJECT_TASK_CORRECTION_REQUIRES_PROJECT/);
+  assert.deepEqual(f.runtime.store.source(task.source_key,actor),source);
+  assert.deepEqual(f.runtime.store.taskInternal(task.id),task);
+  assert.deepEqual(f.runtime.projects.current(f.run.project_id,actor),project);
+  assert.equal(JSON.stringify(f.runtime.store.statement('SELECT * FROM events ORDER BY seq').all()),events);
+});
