@@ -277,9 +277,13 @@ test('limited Dots credential cannot select operator authority or execute generi
   const operator=await controlPost(info.port,'/v1/command',{action:'project',actor,operation:'read',project_id:f.project.project.project_id},'Bearer '+operatorToken);
   assert.equal(operator.status,200);
   await f.runtime.close();f.config.dots.enabled=true;await f.save();
-  const restarted=await startRuntime(f.file,{offline:true,log:()=>{}});t.after(()=>restarted.close());
-  const next=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
-  const nextToken=await readFile(path.join(f.config.dataDir,'control.dots.secret'),'utf8');assert.notEqual(nextToken,dotsToken);
-  assert.equal((await controlPost(next.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+dotsToken)).status,401);
-  assert.equal((await controlPost(next.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+nextToken)).status,200);
+  const restarted=await startRuntime(f.file,{offline:true,log:()=>{}});
+  // Close the replacement owner before the fixture removes its SQLite files.
+  // A later t.after hook runs after fixture cleanup and leaves Windows locked.
+  try{
+    const next=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
+    const nextToken=await readFile(path.join(f.config.dataDir,'control.dots.secret'),'utf8');assert.notEqual(nextToken,dotsToken);
+    assert.equal((await controlPost(next.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+dotsToken)).status,401);
+    assert.equal((await controlPost(next.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+nextToken)).status,200);
+  }finally{await restarted.close();}
 });
