@@ -4,6 +4,10 @@
 
 機械可読契約は[`proxmox-segmented.json`](../examples/installation-lifecycle/proxmox-segmented.json)です。
 
+担当、入力役割、verifier revision、返却要約と未提供verifierの扱いは、
+[Composeから始めるWork Order草案](COMPOSE-MINIMUM-RUNBOOK.md#158-実施担当へ渡すwork-order草案)を
+参照してください。Proxmoxの実施証拠は別candidateへ束縛し、Composeの結果で代用しません。
+
 ## 理想と現在の公開candidate
 
 ### 理想の導入ライフサイクル
