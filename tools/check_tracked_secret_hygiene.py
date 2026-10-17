@@ -995,7 +995,7 @@ def strip_block_comments(path: Path, text: str) -> str:
         return text
     result = list(text)
     block_depth = 0
-    nested_blocks = path.suffix.lower() in NESTED_BLOCK_COMMENT_SUFFIXES
+    nested_blocks = suffix in NESTED_BLOCK_COMMENT_SUFFIXES
     quote: str | None = None
     dollar_quote: str | None = None
     raw_quote: str | None = None
@@ -1119,17 +1119,17 @@ def strip_block_comments(path: Path, text: str) -> str:
             quote = character
             index += 1
             continue
-        if path.suffix.lower() == ".sql" and character == "$":
+        if suffix == ".sql" and character == "$":
             delimiter = POSTGRES_DOLLAR_QUOTE.match(text, index)
             if delimiter is not None:
                 dollar_quote = delimiter.group()
                 index = delimiter.end()
                 continue
         if (
-            path.suffix.lower() in SLASH_COMMENT_SUFFIXES
+            suffix in SLASH_COMMENT_SUFFIXES
             and text.startswith("//", index)
         ) or (
-            path.suffix.lower() == ".sql"
+            suffix == ".sql"
             and text.startswith("--", index)
         ):
             newline = text.find("\n", index)
