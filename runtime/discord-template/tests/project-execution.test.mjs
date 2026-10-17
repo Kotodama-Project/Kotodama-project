@@ -123,6 +123,16 @@ test('cancelled or corrected work never returns old artifact content',async t=>{
   assert.equal((await f.call({operation:'read_task',...args})).owner_state,'cancelled');
 });
 
+test('generic result refuses a Project contract correction during final authorization',async t=>{
+  const f=await fixture(t),run=await f.call(f.run);await f.runtime.pipeline.tail;
+  const authorize=f.runtime.pipeline.authorize;let checks=0;
+  f.runtime.pipeline.authorize=async(...args)=>{await authorize(...args);if(++checks===2){
+    const current=await f.call({operation:'read',project_id:f.run.project_id});
+    await f.call({operation:'correct',project_id:f.run.project_id,expected_revision:current.project.revision,base_digest:current.project_digest,request_id:'result-correction',source:f.source,reason:'成果読取中に条件を訂正',brief:{...brief,constraints:[...brief.constraints,'追加の条件']}});
+  }};
+  await assert.rejects(f.runtime.pipeline.result(run.task_ref.task_id,actor),/PROJECT_TASK_CONTRACT_CHANGED/);
+});
+
 test('Project condition correction during worker execution refuses publication',async t=>{
   let release,entered;const started=new Promise(resolve=>{entered=resolve;}),blocked=new Promise(resolve=>{release=resolve;});
   const f=await fixture(t,{workerHook:async({authorize})=>{entered();await blocked;await authorize();}});

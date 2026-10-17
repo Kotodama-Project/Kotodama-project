@@ -9,9 +9,9 @@ import {InteractionState} from './interaction-state.mjs';
 import {projectSkillsDigest} from './project-skill-input.mjs';
 
 export class Pipeline {
-  constructor({store,owner=store,config,policy=()=>config,readPolicy=async()=>policy(),analyzer,worker,authorize=async()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onTaskQueued=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
+  constructor({store,owner=store,config,policy=()=>config,readPolicy=async()=>policy(),analyzer,worker,authorize=async()=>{},assertResultScope=()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onTaskQueued=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
     this.interactions=new InteractionState(store);
-    Object.assign(this,{store,owner,config,policy,readPolicy,analyzer,worker,authorize,authorizeAnalysis,onTask,onTaskQueued,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);this.taskAdmission=new TaskAdmission(()=>this.policy().worker?.taskLimits);
+    Object.assign(this,{store,owner,config,policy,readPolicy,analyzer,worker,authorize,assertResultScope,authorizeAnalysis,onTask,onTaskQueued,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);this.taskAdmission=new TaskAdmission(()=>this.policy().worker?.taskLimits);
   }
   get tail(){return this.taskAdmission.idle();}
   context(source,principal,pending=null,{sourceLimit=Infinity,completeSources=false}={}){
@@ -247,6 +247,15 @@ export class Pipeline {
     for(const task of await this.owner.tasks(actor))try{check(task.actor===actor,'TASK_ACCESS_DENIED');await this.authorize(task,'read_result');visible.push(task);}catch{}
     return visible;
   }
-  async result(id,actor){const task=await this.owner.task(id,actor);await this.authorize(task,'read_result');return verifyArtifacts(task);}
+  async assertResultCurrent(task){
+    check(task.result,'RESULT_NOT_AVAILABLE');
+    const current=await this.owner.task(task.id,task.actor);check(digest(current)===digest(task),'TASK_CHANGED');
+    await this.authorize(current,'read_result');
+    check(digest(await this.owner.task(task.id,task.actor))===digest(current),'TASK_CHANGED');
+  }
+  // The local owner is synchronous: close the final await gap immediately at
+  // each exposure boundary. Remote reads only attest their response snapshot.
+  assertResultSnapshot(task){if(this.owner===this.store)check(digest(this.store.task(task.id,task.actor))===digest(task),'TASK_CHANGED');this.assertResultScope(task);}
+  async result(id,actor){const task=await this.owner.task(id,actor);await this.authorize(task,'read_result');const result=await verifyArtifacts(task);await this.assertResultCurrent(task);this.assertResultSnapshot(task);return result;}
   async close(){this.closing=true;this.analysisAdmission.close();this.taskAdmission.close();for(const c of this.analysisControllers.values())c.abort();for(const run of this.active.values())run.controller.abort();await Promise.allSettled([...this.analysis.values()]);await this.tail;}
 }
