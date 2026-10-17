@@ -4,6 +4,7 @@ import {mkdtemp,rm,writeFile,readFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {request} from 'node:http';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {exampleConfig,loadConfig} from '../src/config.mjs';
@@ -16,6 +17,35 @@ const operations=['read','create','inspect','correct','link_task','unlink_task',
 const taskOperations=['read','link_task','unlink_task','read_task'];
 const brief={outcome:'要件と仕事を結び付ける',in_scope:[],out_of_scope:[],constraints:['原意を保持する'],acceptance:['担当成果を確認できる'],unknowns:[]};
 const code=result=>result.content?.[0]?.text;
+
+function controlPost(port,route,body,authorization){
+  assert(Number.isInteger(port)&&port>=1&&port<=65535,'synthetic control port must be a valid integer');
+  assert(['/v1/project','/v1/command'].includes(route),'only fixed control routes are allowed');
+  return new Promise((resolve,reject)=>{
+    // Separate options prevent a file-derived port from changing the host.
+    // node:http does not follow redirects with the synthetic bearer credential.
+    const outgoing=request({hostname:'127.0.0.1',port,path:route,method:'POST',
+      headers:{'content-type':'application/json',...(authorization===undefined?{}:{authorization})}},response=>{
+      const chunks=[];
+      response.on('data',chunk=>chunks.push(chunk));response.on('error',reject);
+      response.on('end',()=>{
+        try{resolve({status:response.statusCode,body:JSON.parse(Buffer.concat(chunks).toString('utf8'))});}
+        catch(error){reject(error);}
+      });
+    });
+    outgoing.on('error',reject);
+    outgoing.end(typeof body==='string'?body:JSON.stringify(body));
+  });
+}
+
+test('synthetic control requests reject a file-derived URL authority or route',()=>{
+  for(const port of ['12345@outbound.invalid', '12345',0,65536,1.5,null,{},NaN]){
+    assert.throws(()=>controlPost(port,'/v1/project',{},undefined),/valid integer/);
+  }
+  for(const route of ['http://outbound.invalid','//outbound.invalid','/v1/project?redirect=1']){
+    assert.throws(()=>controlPost(12345,route,{},undefined),/fixed control routes/);
+  }
+});
 
 async function fixture(t,{dotsOperations=taskOperations}={}){
   const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-project-dots-tasks-')),config=exampleConfig({workspace:root}),cleanups=[];
@@ -91,12 +121,8 @@ test('stdio Task writes reject caller authority fields before forwarding an appr
 test('both control routes authenticate before parsing and preserve operator versus Dots Task grants',async t=>{
   const f=await fixture(t),{port}=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
   const token=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8');
-  const post=async(route,body,authorization)=>{
-    const response=await fetch(`http://127.0.0.1:${port}${route}`,{method:'POST',
-      headers:{'content-type':'application/json',...(authorization===undefined?{}:{authorization})},
-      body:typeof body==='string'?body:JSON.stringify(body)});
-    return {status:response.status,body:await response.json()};
-  };
+  assert(/^[a-f0-9]{64}$/.test(token),'synthetic control token must be 64 hex characters');
+  const post=(route,body,authorization)=>controlPost(port,route,body,authorization);
   const denied=async(route,input,error,authorization='Bearer '+token,status=400)=>{
     const before=f.projectSnapshot(),tasks=f.taskSnapshot(),result=await post(route,input,authorization);
     assert.equal(result.status,status);assert.deepEqual(result.body,{ok:false,error});

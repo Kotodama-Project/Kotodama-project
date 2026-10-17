@@ -121,6 +121,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- learning CLIの`run`で使われない外側ReuseOwner初期化を省き、coordinatorの実owner再構築・現在の権限/Source/判断/取消/receipt検査を保持。実CLIの重複検出・拒否・パス互換回帰とWindows/Linuxの有限計測を追加（#420のtimeout原因全体は引き続き調査中）。
+
 - peer並行送信の回帰検査で、予約後の有限な混雑拒否と即時成功を区別。同じキーの一回再照合後にreceipt・payload・配送が正確に3件へ揃うことを検査し、競合中の上限とruntimeの期限を維持する（#428）。
 
 - tracked Markdownの日本語・Unicode改行文字を含むpathの検査漏れを修正し、非UTF-8のstdoutや不正バイト名でも一行JSONを保持。Git設定に左右されない回帰テストを追加（#418）。
