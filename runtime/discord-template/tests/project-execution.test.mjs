@@ -53,6 +53,35 @@ test('Project execution uses one existing Task, retains complete conditions and 
   await assert.rejects(f.call({...f.run,task:{...f.run.task,request:'別の依頼'}}),/PROJECT_REQUEST_CONFLICT/);
 });
 
+test('accepted same-Source corrections preserve original text and execute the latest bound version',async t=>{
+  const f=await fixture(t),correctedText='訂正後の依頼も公開せず資料にする';
+  f.runtime.store.ingest({...f.raw,revision:2,text:correctedText});const source={...f.source,revision:2};
+  const corrected=await f.call({operation:'correct',project_id:f.run.project_id,expected_revision:1,base_digest:f.project.project_digest,request_id:'correct-source',source,reason:'原依頼の訂正を反映',brief:{...brief,outcome:'訂正を反映した成果'}});
+  const input={...f.run,expected_revision:2,base_digest:corrected.project_digest,source};
+  const run=await f.call(input);await f.runtime.pipeline.tail;
+  assert.equal(run.dispatch.state,'admitted');assert.equal(f.runs,1);
+  assert.deepEqual(f.seen.task.contextSources,[source]);assert.deepEqual(f.seen.context.map(s=>s.text),[correctedText]);
+  assert.deepEqual(f.seen.task.projectBinding.source_history,[f.source,source]);
+  const contract=JSON.parse(f.seen.task.request.split('\n\nPROJECT_CONTRACT\n')[1]);
+  assert.equal(contract.original_ref,f.project.project.original_ref);
+  assert.deepEqual(contract.source_refs,[f.source,source]);assert.deepEqual(contract.source_history,[{...f.source,text:f.raw.text}]);
+  assert.deepEqual(contract.brief,corrected.project.brief);
+  const result=await f.call({operation:'read_result',project_id:f.run.project_id,task_id:run.task_ref.task_id});
+  assert.equal(result.result_metadata.artifact_readback,'verified');
+  await f.restart();assert.equal((await f.call(input)).dispatch.state,'not_repeated');assert.equal(f.runs,1);
+  assert.deepEqual((await f.call({operation:'read',project_id:f.run.project_id})).source_refs.map(s=>s.revision),[1,2]);
+});
+
+test('an unacknowledged later Source revision is refused even with a fresh execution request',async t=>{
+  const f=await fixture(t);f.runtime.store.ingest({...f.raw,revision:2,text:'明示的に反映した訂正'});
+  const corrected=await f.call({operation:'correct',project_id:f.run.project_id,expected_revision:1,base_digest:f.project.project_digest,request_id:'correct-source',source:{...f.source,revision:2},reason:'訂正を反映',brief:{...brief,outcome:'更新した目的'}});
+  f.runtime.store.ingest({...f.raw,revision:3,text:'まだProjectに反映していない訂正'});
+  const key=f.runtime.store.ingest({...f.raw,sourceId:'separate-request',text:'最新Projectを実行して'}).key;
+  await assert.rejects(f.call({...f.run,expected_revision:2,base_digest:corrected.project_digest,source:{key,revision:1}}),/PROJECT_SOURCE_CHANGED/);
+  assert.equal(f.runs,0);assert.equal(f.runtime.store.tasks(actor).length,0);
+  assert.equal((await f.call({operation:'read',project_id:f.run.project_id})).project.revision,2);
+});
+
 test('run requires the operation grant, current action grant, exact Project version and unchanged Source',async t=>{
   const f=await fixture(t);
   for(const patch of [{expected_revision:2},{base_digest:'0'.repeat(64)},{task:{...f.run.task,action:'swarm_research'}},{task:{...f.run.task,actor:'other'}}])await assert.rejects(f.call({...f.run,...patch}));
@@ -94,6 +123,16 @@ test('cancelled or corrected work never returns old artifact content',async t=>{
   assert.equal((await f.call({operation:'read_task',...args})).owner_state,'cancelled');
 });
 
+test('generic result refuses a Project contract correction during final authorization',async t=>{
+  const f=await fixture(t),run=await f.call(f.run);await f.runtime.pipeline.tail;
+  const authorize=f.runtime.pipeline.authorize;let checks=0;
+  f.runtime.pipeline.authorize=async(...args)=>{await authorize(...args);if(++checks===2){
+    const current=await f.call({operation:'read',project_id:f.run.project_id});
+    await f.call({operation:'correct',project_id:f.run.project_id,expected_revision:current.project.revision,base_digest:current.project_digest,request_id:'result-correction',source:f.source,reason:'成果読取中に条件を訂正',brief:{...brief,constraints:[...brief.constraints,'追加の条件']}});
+  }};
+  await assert.rejects(f.runtime.pipeline.result(run.task_ref.task_id,actor),/PROJECT_TASK_CONTRACT_CHANGED/);
+});
+
 test('Project condition correction during worker execution refuses publication',async t=>{
   let release,entered;const started=new Promise(resolve=>{entered=resolve;}),blocked=new Promise(resolve=>{release=resolve;});
   const f=await fixture(t,{workerHook:async({authorize})=>{entered();await blocked;await authorize();}});
@@ -131,6 +170,34 @@ test('explicit resume keeps the Task ID, changes its revision and cannot revive 
   await f.runtime.pipeline.stop(run.task_ref.task_id,actor);
   const changed=await f.call({operation:'correct',project_id:f.run.project_id,expected_revision:3,base_digest:resumed.project_digest,request_id:'change',source:f.source,reason:'別の条件',brief:{...brief,outcome:'変更した目的'}});
   await assert.rejects(f.call({...resume,request_id:'resume-changed',expected_revision:4,base_digest:changed.project_digest,expected_task_revision:3}),/PROJECT_TASK_CONTRACT_CHANGED/);
+});
+
+test('generic resume refuses Project Tasks before changing owner state or events',async t=>{
+  const f=await fixture(t);f.runtime.projects.dispatchTask=async()=>{throw new Refused('SIMULATED_DISCONNECT');};
+  const run=await f.call(f.run);await f.restart();
+  const snapshot=()=>JSON.stringify({task:f.runtime.store.taskInternal(run.task_ref.task_id),project:f.runtime.store.statement('SELECT * FROM projects').all(),events:f.runtime.store.statement('SELECT * FROM events').all()});
+  const before=snapshot();await assert.rejects(f.runtime.pipeline.resume(run.task_ref.task_id,actor),/PROJECT_TASK_RESUME_REQUIRES_PROJECT/);
+  assert.equal(snapshot(),before);assert.equal(f.runs,0);
+  const resumed=await f.call({operation:'resume_task',project_id:f.run.project_id,expected_revision:2,base_digest:run.project_digest,request_id:'project-resume',source:f.source,reason:'Projectから再開',task_id:run.task_ref.task_id,expected_task_revision:1});
+  await f.runtime.pipeline.tail;assert.equal(resumed.task_ref.revision,2);assert.equal(f.runs,1);
+});
+
+test('linked built-in adapter results read verified deliverables and label the owner-reported summary',async t=>{
+  for(const [action,adapter,name] of [['create_company_pack','company_pack_builtin_v1','company-pack.txt'],['swarm_research','task_swarm_v1','swarm-report.md']])await t.test(action,async t=>{
+    const f=await fixture(t),source=f.runtime.store.source(f.source.key,actor),task=f.runtime.store.createTask(source,{title:'既存仕事',request:'既存形式の成果',action,acceptance:[]});
+    const workspace=path.join(f.config.dataDir,'worktrees',task.id),relative='deliverables/'+name,filename=path.join(workspace,relative),body='既存adapterの成果本文';
+    await mkdir(path.dirname(filename),{recursive:true});await writeFile(filename,body);
+    const result={state:'needs_review',summary:'ownerが報告した要約',adapter,workspace,taskRevision:task.revision,sourceRevision:task.source_revision,artifacts:[{path:filename,relative,bytes:Buffer.byteLength(body),sha256:digest(body)}],validations:[]};
+    f.runtime.store.claim(task.id,task.revision);f.runtime.store.finish(task.id,task.revision,result);
+    await f.call({operation:'link_task',project_id:f.run.project_id,expected_revision:1,base_digest:f.project.project_digest,source:f.source,reason:'既存成果を読む',request_id:'link-adapter',task_id:task.id,expected_task_revision:task.revision});
+    const read={operation:'read_result',project_id:f.run.project_id,task_id:task.id},observed=await f.call(read);
+    assert.equal(observed.result.summary_evidence,'owner_report');assert.equal(observed.result.summary_sha256,null);assert.equal(observed.result.summary,result.summary);
+    assert.equal(Buffer.from(observed.result.files[0].data,'base64').toString(),body);assert.equal(observed.result_metadata.artifact_readback,'verified');assert.equal(observed.completion,'not_observed');
+    f.runtime.store.statement('UPDATE tasks SET result=? WHERE id=?').run(JSON.stringify({...result,adapter:'unknown_adapter'}),task.id);
+    await assert.rejects(f.call(read),/PROJECT_RESULT_SUMMARY_REQUIRED/);
+    f.runtime.store.statement('UPDATE tasks SET result=? WHERE id=?').run(JSON.stringify(result),task.id);
+    await writeFile(filename,'改変された本文');await assert.rejects(f.call(read),/ARTIFACT_CHANGED/);
+  });
 });
 
 

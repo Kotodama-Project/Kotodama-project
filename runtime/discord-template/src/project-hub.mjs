@@ -140,7 +140,8 @@ export class ProjectHub{
     const b=task.projectBinding,current=this.current(b.project_id,task.actor);
     check(digest({brief:current.project.brief,original_ref:current.project.original_ref})===b.contract_digest,'PROJECT_TASK_CONTRACT_CHANGED');
     check(current.project.task_refs.some(ref=>ref.task_id===task.id&&ref.revision===task.revision),'PROJECT_TASK_NOT_LINKED');
-    const sources=this.sources(b.sources,task.actor,current.room);this.sourceScope(sources,policy);
+    const history=this.sources(b.source_history??b.sources,task.actor,current.room);this.sourceScope(history,policy);
+    const sources=this.sources(b.sources,task.actor,current.room);
     check(sources.every(s=>s.current.revision===s.ref.revision),'PROJECT_SOURCE_CHANGED');
   }
   async readResult(task){
@@ -149,18 +150,24 @@ export class ProjectHub{
     await verifyArtifacts(task);
     check(result.taskRevision===task.revision&&result.sourceRevision===task.source_revision,'PROJECT_TASK_RESULT_INVALID');
     check(typeof result.summary==='string'&&Buffer.byteLength(result.summary)<=65536,'PROJECT_RESULT_SIZE_LIMIT');
-    // Read the saved summary artifact, not merely a reported string. No caller
-    // path is accepted; other content uses the existing deliverables allowlist.
+    // CLI summaries have a saved artifact. Existing built-in adapters instead
+    // record an owner summary alongside separately verified deliverables.
     const summary=(result.artifacts??[]).filter(a=>a.relative==='result.md'&&!a.deleted);
-    check(summary.length===1,'PROJECT_RESULT_SUMMARY_REQUIRED');
-    const base=path.join(this.config.dataDir,'artifacts',`${task.id}-r${task.revision}`);
-    const file=await safePath(base,'result.md'),a=summary[0];
-    check(a.path===file&&a.bytes===Buffer.byteLength(result.summary),'PROJECT_TASK_RESULT_INVALID');
-    const bytes=await readArtifact(file,65536);
-    check(bytes.length===a.bytes&&digest(bytes)===a.sha256&&bytes.toString('utf8')===result.summary,'ARTIFACT_CHANGED');
+    const reported=task.action==='create_company_pack'&&result.adapter==='company_pack_builtin_v1'||task.action==='swarm_research'&&result.adapter==='task_swarm_v1';
+    let summarySha=null;
+    if(reported)check(summary.length===0,'PROJECT_TASK_RESULT_INVALID');
+    else{
+      check(summary.length===1,'PROJECT_RESULT_SUMMARY_REQUIRED');
+      const base=path.join(this.config.dataDir,'artifacts',`${task.id}-r${task.revision}`);
+      const file=await safePath(base,'result.md'),a=summary[0];
+      check(a.path===file&&a.bytes===Buffer.byteLength(result.summary),'PROJECT_TASK_RESULT_INVALID');
+      const bytes=await readArtifact(file,65536);
+      check(bytes.length===a.bytes&&digest(bytes)===a.sha256&&bytes.toString('utf8')===result.summary,'ARTIFACT_CHANGED');summarySha=digest(bytes);
+    }
     const files=await resultFiles(result,{artifactRoot:path.join(this.config.dataDir,'worktrees')});
+    if(reported)check(files.length>0,'PROJECT_RESULT_DELIVERABLE_REQUIRED');
     check(files.reduce((n,f)=>n+f.attachment.length,0)<=512000,'PROJECT_RESULT_SIZE_LIMIT');
-    return {summary:result.summary,summary_sha256:digest(bytes),files:files.map(f=>({name:f.name,encoding:'base64',data:f.attachment.toString('base64'),sha256:digest(f.attachment),bytes:f.attachment.length})),acceptance:'not_evaluated'};
+    return {summary:result.summary,summary_evidence:reported?'owner_report':'artifact_verified',summary_sha256:summarySha,files:files.map(f=>({name:f.name,encoding:'base64',data:f.attachment.toString('base64'),sha256:digest(f.attachment),bytes:f.attachment.length})),acceptance:'not_evaluated'};
   }
   response(version,current,sources,{replay=false,write=false}={}){
     return {kind:'kotodama.project-owner-view',version:1,authority:'selected_local_project_owner',project:version.project,project_digest:digest(version.project),
@@ -257,13 +264,20 @@ export class ProjectHub{
         taskLink={adapter:'discord_local_task_v1',task_id:task.id,revision:task.revision};taskRefs=[...taskRefs.filter(ref=>ref.task_id!==task.id),taskLink];
       }
       if(input.operation==='run_task'){
-        check(observed.every(s=>s.current.revision===s.ref.revision),'PROJECT_SOURCE_CHANGED');
-        const request=input.task.request+'\n\nPROJECT_CONTRACT\n'+JSON.stringify({project_id:current.id,revision:current.revision,brief:current.project.brief,original_ref:current.project.original_ref});
+        // Project history retains original and correction versions. Bind work
+        // to the latest explicitly accepted version of each Source, while
+        // keeping older text and access dependencies as provenance.
+        const latest=new Map();for(const entry of observed){const previous=latest.get(entry.ref.key);if(!previous||previous.ref.revision<entry.ref.revision)latest.set(entry.ref.key,entry);}
+        const executionSources=[...latest.values()];
+        check(executionSources.every(s=>s.current.revision===s.ref.revision),'PROJECT_SOURCE_CHANGED');
+        const sourceHistory=observed.filter(s=>s.ref.revision!==s.current.revision).map(s=>({key:s.ref.key,revision:s.ref.revision,text:s.original.text}));
+        const request=input.task.request+'\n\nPROJECT_CONTRACT\n'+JSON.stringify({project_id:current.id,revision:current.revision,brief:current.project.brief,original_ref:current.project.original_ref,source_refs:refs,source_history:sourceHistory});
         text(request,16000,'PROJECT_TASK_INPUT_LIMIT');
         const acceptance=[...new Set([...current.project.brief.acceptance,...input.task.acceptance])];
         check(acceptance.length<=40,'PROJECT_TASK_INPUT_LIMIT');
+        const executionRefs=executionSources.map(s=>s.ref);
         const task=this.store.createTask(observed.find(s=>sourceReference(s.ref)===sourceReference(input.source)).current,{...input.task,request,acceptance,
-          key:'project:'+input.request_id,contextSources:refs,projectBinding:{project_id:current.id,contract_digest:digest({brief:current.project.brief,original_ref:current.project.original_ref}),sources:refs}});
+          key:'project:'+input.request_id,contextSources:executionRefs,projectBinding:{project_id:current.id,contract_digest:digest({brief:current.project.brief,original_ref:current.project.original_ref}),sources:executionRefs,source_history:refs}});
         taskLink={adapter:'discord_local_task_v1',task_id:task.id,revision:task.revision};taskRefs=[...taskRefs,taskLink];
       }
       if(input.operation==='link_task')taskRefs=[...taskRefs.filter(ref=>ref.task_id!==input.task_id),{adapter:'discord_local_task_v1',task_id:input.task_id,revision:input.expected_task_revision}];

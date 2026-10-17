@@ -158,6 +158,8 @@ Project操作の許可だけでは実行できず、現在の`worker.actions`も
 `run_task`はresearch/summarize/develop/write_fileだけを受け付けます。
 Sourceは既に保存された本人の確定版を使い、Project条件・原依頼参照・受入条件を
 省略せずTask入力へ保持します。上限超過は切捨てず拒否します。
+同じSourceの訂正前の版はProject履歴・原文として保持し、現在性はSourceごとの
+最新の明示採用版へ束縛します。未採用の後続訂正は拒否し、旧版の閲覧権限も確認します。
 新しいTask、Project参照、新revisionと再送receiptは同じSQLite transactionです。
 その後、既存Pipelineの有限キュー、既存worker、取消・grant再照合へ渡します。
 書込みのLinux隔離・検証設定は既存workerと同じで、Projectから迂回できません。
@@ -174,11 +176,16 @@ paused/failed/cancelledは`resume_task`で同じTaskを明示的に再開でき�
 実行中もProjectの条件・出典束縛・Task参照と現在の権限を検査します。
 Project訂正・参照解除・Source更新・権限失効後の成果公開は拒否します。
 Projectの条件を変える操作自体はTaskを成功・完了にはしません。
-Project作成Taskを通常のTask訂正から書き換える操作は、条件の脱落を避けるため拒否します。
+Project作成Taskを通常のTask訂正・resumeから書き換える操作は、条件の脱落や参照版の不整合を避けるため変更前に拒否します。
+同じTaskの再開にはProjectの`resume_task`を使います。
 変更はProjectの条件を訂正してから新しい明示依頼として行い、既存成果を上書きしません。
 
 `read_result`はneeds_reviewの現在版だけを対象に、既存verifyArtifactsで全記録artifactを照合し、保存された`result.md`の実体・
-サイズ・digest・報告本文の一致を検査します。追加ファイルは既存resultFilesが許可する
+サイズ・digest・報告本文の一致を検査します（`summary_evidence=artifact_verified`）。
+既存Company Pack/Swarm Taskでは専用adapterの形式を使い、要約は`summary_evidence=owner_report`、
+`summary_sha256=null`として区別します。成果ファイルは記録された全artifactの照合と
+指定deliverableの実読取を必須にします。これらのTaskの新規実行をProjectから許可する変更ではありません。
+追加ファイルは既存resultFilesが許可する
 worktree内の`deliverables/`だけで、合計512,000 bytesまでをbase64とdigestで返します。
 任意path・workspace・検証commandは返しません。非対応の大きい成果は明示拒否し、
 切り捨てた本文を完全な成果として扱いません。JSON返却全体も900,000 bytes以下に制限します。読取後にもProject/Task/Source/権限を再照合します。

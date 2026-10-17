@@ -234,6 +234,17 @@ test('stdio execution and same-Task resume require exact requester approval and 
   assert.equal(code(await f.commit(next,nextDraft)),'PROJECT_OPERATION_NOT_ALLOWED');assert.equal(runs,2);
 });
 
+test('stdio Task text uses the same Unicode code-point limits as Project control',async t=>{
+  const f=await fixture(t,{dotsOperations:['read','run_task'],worker:{run:async()=>({state:'failed',summary:'synthetic failure',artifacts:[]})}});
+  const task={title:'😀'.repeat(120),request:'😀'.repeat(4000),action:'research',acceptance:['😀'.repeat(1000)]};
+  const candidate={operation:'run_task',project_id:f.project.project.project_id,expected_revision:1,base_digest:f.project.project_digest,request_id:'unicode-run',source:f.source,reason:'Unicodeの条件を保持',task};
+  for(const patch of [{title:'😀'.repeat(121)},{request:'😀'.repeat(4001)},{acceptance:['😀'.repeat(1001)]},{title:'\ud800'},{request:'\0'},{acceptance:['　']}]){
+    const result=await f.client.callTool({name:'project_prepare_change',arguments:{id:f.request.id,revision:1,candidate:{...candidate,task:{...task,...patch}}}});assert.equal(result.isError,true);
+  }
+  const draft=await f.approved(candidate),run=await f.commitSuccess(candidate,draft);await f.runtime.pipeline.tail;
+  const saved=f.runtime.store.taskInternal(run.task_ref.task_id);assert.equal(saved.title,task.title);assert(saved.request.startsWith(task.request+'\n\nPROJECT_CONTRACT\n'));assert(saved.acceptance.includes(task.acceptance[0]));
+});
+
 test('limited Dots credential cannot select operator authority or execute generic control actions',async t=>{
   const f=await fixture(t),info=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
   const operatorToken=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8'),dotsToken=await readFile(path.join(f.config.dataDir,'control.dots.secret'),'utf8');

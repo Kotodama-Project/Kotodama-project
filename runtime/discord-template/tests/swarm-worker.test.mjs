@@ -100,7 +100,7 @@ test('Windows rejects a granted swarm Task before process launch or quota reserv
 });
 
 test('failed and uncertain results use truthful DM headings',async t=>{
-  const f=await fixture(t),messages=[],adapter=new DiscordAdapter({config:f.config,store:f.store,pipeline:{authorize:async()=>{}},onError:code=>f.errors.push(code)});
+  const f=await fixture(t),messages=[],adapter=new DiscordAdapter({config:f.config,store:f.store,pipeline:f.pipeline,onError:code=>f.errors.push(code)});
   t.after(()=>adapter.client.destroy());adapter.member=async()=>({});adapter.canRead=async()=>true;adapter.client.channels.fetch=async()=>({});adapter.client.users.fetch=async()=>({send:async value=>{messages.push(value);return {id:'delivered-'+messages.length};}});
   for(const state of ['failed','uncertain']){
     const receipt=f.store.ingest(f.source('source-'+state)),s=f.store.source(receipt.key,actor),task=f.store.createTask(s,{title:'fixture',request:'fixture',action:'swarm_research',intentIds:[]},state);
