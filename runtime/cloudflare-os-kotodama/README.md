@@ -4,12 +4,67 @@ This directory is a source addon for official Cloudflare OS core
 `c0b6f3e52ff0ab8d44d290647e256936e88e6b57`. It provides a native Gatekeeper and
 bundled requirements Gadget. It is not a replacement OS or a new identity SSOT.
 
-Copy `gatekeeper-kotodama-brief` into an isolated core checkout's `packages/`, and
-the `blueprints/kotodama-requirements` directory into
-`packages/workshop-backend/format-blueprints/`. Preserve the original checkout and
-state. The core dev runner discovers the Gatekeeper package; the original bundled
-blueprints builder reconstructs the normal Gadget archive from these files.
-This is an additive evaluation deployment, not production self-host certification.
+## Reproducible native workspace
+
+From the Kotodama checkout, with Git and Python 3.12 or later:
+
+```bash
+python -S -B tools/prepare_cloudflare_native.py --destination ../kotodama-native-os
+```
+
+The destination's parent must exist; the destination itself must not. The command
+fetches the exact compatibility commit from the selected Kotodama commit's
+[existing integration record](../../governance/cloudflare-os-integration.json),
+checks it out detached, and mounts only committed native source:
+
+| Kotodama source in this directory | Path in the official core checkout |
+|---|---|
+| `gatekeeper-kotodama-brief/` | `packages/gatekeeper-kotodama-brief/` |
+| `blueprints/kotodama-requirements/` | `packages/workshop-backend/format-blueprints/kotodama-requirements/` |
+
+Use `--ref <kotodama-commit>` to reproduce an earlier extension, or
+`--source-core <local-official-clone>` to fetch that same pin locally without a
+network connection. Dirty working-tree edits, untracked configuration and runtime
+state are not copied. Commit reviewed source changes before preparing them.
+Existing destinations and locations inside either source repository are refused.
+A failed preparation keeps its newly created directory for inspection and returns
+`NOT_PREPARED`; do not use it as a successful installation or reset another checkout.
+
+Success is `PREPARED_NOT_INSTALLED`, with the two actual commit IDs, file count and
+core's integrity-pinned package manager. It means source assembly only: no package
+install, patch application, service startup, bridge configuration or provider call.
+The official core stays outside Kotodama; do not commit its tree back into this repo.
+This is an additive evaluation workspace, not production self-host certification.
+
+## AI maintenance loop
+
+Change this extension in Kotodama, not a second fork of the OS. Run the small offline
+regression before preparing a new workspace:
+
+```bash
+python -S -B -m unittest discover -s tests -p test_cloudflare_native_workspace.py -v
+```
+
+The path-scoped [native addon workflow](../../.github/workflows/cloudflare-native-addon.yml)
+prepares the real official source, verifies the package-manager archive against the
+native core's `packageManager` integrity, generates the additional workspace
+importer, and refuses changes to existing importers, settings, versions, resolution
+hashes and dependency snapshots. Added registry deprecation advisories are retained
+and counted, not treated as package upgrades; existing warnings cannot be removed
+or rewritten. It then performs a scripts-disabled frozen install and runs the
+**existing** native approval test.
+The dependency diff and test log are retained for review. This test uses doubles
+for queue, storage and transport; it does not prove a live OS, authentication or
+model inference. The workflow does not run `run-local`, deploy, or use secrets.
+
+Do not substitute `runtime/cloudflare-os/`'s older evaluation pin/toolchain or the
+latest upstream HEAD for this addon pin. A compatibility upgrade needs its own
+review. The core dev runner and bundled-blueprint builder are reused; no new UI
+host, scheduler or Task database is introduced. Track this preparation/CI work in
+[#424](https://github.com/Kotodama-Project/Kotodama-project/issues/424), not a second
+Task ledger. Existing Project GUI work remains with #385 and its PRs.
+
+## Before runtime use
 
 Use the existing pinned dependency graph. The new package's dependency declarations
 match the existing Home Assistant Gatekeeper importer; a new workspace importer
@@ -56,3 +111,26 @@ API provenance: [official Gatekeeper contract](https://github.com/cloudflare/clo
 [bundled Blueprint format](https://github.com/cloudflare/cloudflare-os/blob/c0b6f3e52ff0ab8d44d290647e256936e88e6b57/docs/blueprints.md).
 This package is new Kotodama code using those public interfaces; no private
 repository history or runtime account state is included.
+
+The same requirements Gadget can additionally read one operator-selected Project
+and inspect edits to its outcome, in/out scope, constraints, acceptance and
+unknowns. The private bridge must explicitly bind the OS principal to the existing
+Project owner's actor, Project, correction Source, operations, expiry and runtime
+source digest; see [the Project connection](../codex-task-bridge/README.md#selected-project-read-and-inspection).
+A requirements inference grant does not imply this access. Both methods use native
+observation authorization and recheck the current owner; the Gadget stores no
+Project copy. A changed connection binding requires a fresh native connection.
+
+The original requirements `objective` and `deliverable` remain separate. Project
+fields are explicitly edited without automatic conversion or truncation. Inspection
+shows deleted constraints/acceptance and Task references; it neither saves a
+Project revision nor grants or starts work. Refresh replaces unsaved edits with
+the current owner view. Missing values are not treated as confirmed absence.
+This slice exposes no Project create/correct action in the GUI. Fixture/browser
+passes establish component behavior, not a live OS deployment or user acceptance.
+
+The view preserves legacy Project v1 references and Project v2's typed local Task
+or swarm execution-input references. Inspection must return the same affected
+references as the current Project. IDs, revisions and input digests identify saved
+references; they do not establish current Task state, assignment, artifacts or
+completion. The GUI provides no Task-link, reference-edit or execution operation.

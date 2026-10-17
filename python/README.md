@@ -18,6 +18,12 @@ MCP／process機能には`swarm` extraと既存のhash付き依存lockが必要�
 別のpeer用Pythonを指定した場合も、serverはこのartifactの実ファイルから起動します。
 peer側には従来どおりpeer依存だけを入れ、同じcore distributionの重複installを要求しません。
 `tools/task_swarm.py`のdemoやrepoのexamplesは配布APIに含めません。
+`python -m kotodama_core.task_swarm.closed_loop --help`で、既存ownerへ束縛する
+閉ループの実験入口を確認できます。現在は明示local simulationのみで、実provider・
+planner生成は未接続です。詳細は`docs/TASK-SWARM-CLOSED-LOOP.md`を参照してください。
+`python -m kotodama_core.task_swarm.learning_reuse --help`は、一つの学びを独立reviewと
+既存owner判断を経て次のTaskへ渡す限定入口です。会社のCurrent Truthへ昇格せず、
+実providerも呼びません。入力と判断は`docs/TASK-LEARNING-REUSE.md`を参照してください。
 
 `0.2.0.dev0`は開発候補です。1.0前の破壊変更はminor版を上げ、patch版は互換修正のみとします。
 1.0以降はSemVerに従います。experimental APIのconsumerは版だけでなくartifact SHA-256と
@@ -67,3 +73,5 @@ tagで起動するrelease workflowは、tagを`v`+pyprojectのversionと完全�
 sdist、packageのSBOM、builder receipt、checksumも既存のattestationとdraft prereleaseへ
 含めます。過去のsource-only tagを新しいpackage版へ読み替えません。実tagのpushはownerが
 版・署名者・private consumer条件を受け入れた後に行い、この変更だけでは起動しません。
+
+Source producer と candidate 検証を通した二葉 A→B 宣言では execution contract/checkpoint/receipt v3 を使い、受理済み A の証拠を B の入力に渡します。旧形式の reader と同居し、一般 DAG や provider 実行は含みません。詳細と復旧条件は [閉ループ契約](../docs/TASK-SWARM-CLOSED-LOOP.md) を参照してください。

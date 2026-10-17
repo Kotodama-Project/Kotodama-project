@@ -76,8 +76,8 @@ class KnowledgeWorkSourceRootTests(unittest.TestCase):
             path.write_bytes(original)
 
     def test_relative_bindings_stay_under_selected_root(self):
-        for relative in ("../source.txt", str(self.evidence / "source.txt"), "source.txt:ads", "a\\source.txt"):
-            with self.subTest(relative=relative):
+        for case_index, relative in enumerate(("../source.txt", str(self.evidence / "source.txt"), "source.txt:ads", "a\\source.txt")):
+            with self.subTest(case=("parent-path", "absolute-path", "alternate-stream", "backslash")[case_index]):
                 self.package["sources"][0]["path"] = relative
                 self.save()
                 self.assertIn("PATH_REFUSED", self.validate()["errors"])
@@ -154,8 +154,8 @@ class KnowledgeWorkSourceRootTests(unittest.TestCase):
         self.assertFalse(any(report["claims"].values()))
 
     def test_unknown_absolute_and_duplicate_explicit_workspace_refused(self):
-        for workspaces in (["absent"], ["../outside"], [str(self.workspace)], ["private/package-one"] * 2):
-            with self.subTest(workspaces=workspaces):
+        for case_index, workspaces in enumerate((["absent"], ["../outside"], [str(self.workspace)], ["private/package-one"] * 2)):
+            with self.subTest(case=("absent", "parent-path", "absolute-path", "duplicate")[case_index]):
                 args = ["--root", self.root, "--source-root", self.evidence]
                 for workspace in workspaces:
                     args += ["--workspace", workspace]

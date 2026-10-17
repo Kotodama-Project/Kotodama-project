@@ -33,12 +33,13 @@ class FiveMinuteTourTests(unittest.TestCase):
 
     def test_readme_exposes_tour_before_the_longer_quick_start(self) -> None:
         for relative, target in (("README.md", "docs/FIVE-MINUTE-TOUR.md"),
+                                 ("README.en.md", "docs/FIVE-MINUTE-TOUR.md"),
                                  ("docs/OVERVIEW.md", "FIVE-MINUTE-TOUR.md")):
             with self.subTest(surface=relative):
                 path = ROOT / relative
                 text = path.read_text(encoding="utf-8")
                 assert_links(self, path, text, (target,))
-                if relative == "README.md":
+                if relative in {"README.md", "README.en.md"}:
                     first_smoke = command_section(text, ("python3 -S -B tools/smoke_company_pack_review_chain.py",))
                     first_visit_end = text.index(first_smoke) + len(first_smoke)
                     self.assertIn(target, link_targets(text[:first_visit_end]))

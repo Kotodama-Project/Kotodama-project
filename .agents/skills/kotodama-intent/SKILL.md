@@ -14,8 +14,8 @@ inference as a candidate rather than a decision.
 ## Triggers
 
 Use when a request is broad, ambiguous, spans several skills, or mixes an
-outcome with an implementation idea. Ask for an intent candidate before a
-state-changing workflow begins.
+outcome with an implementation idea. Form an intent candidate before selecting
+work; reuse confirmed scope and still-valid authorization from the session.
 
 ## Non-triggers
 
@@ -25,23 +25,37 @@ truth. Do not collect secrets or raw private conversation into the candidate.
 
 ## Procedure
 
-1. Capture purpose, beneficiary, desired outcome, constraints, non-goals, and
-   the smallest useful scope. Done when: each intent field is present or unknown.
+1. Read the current source, relevant project definitions, and existing work
+   before asking the user. Capture purpose, beneficiary, desired outcome,
+   constraints, non-goals, and smallest useful scope. Resolve facts from those
+   sources; leave choices to their owner. Done when: each field is supported or
+   unknown and no question asks for an already available fact.
 2. Separate `confirmed`, `proposed`, and `unknown` fields. Preserve source
    locators and revision/time instead of quoting private bodies. Done when:
    every statement has one evidence status and a source locator or gap.
 3. Write measurable acceptance criteria, stop conditions, rollback intent, and
-   the evidence tier that would be sufficient. Done when: success and refusal
-   can both be evaluated without inference.
-4. Identify missing decisions and return one bounded clarification list; do not
-   silently expand scope. Done when: every blocker has one owner or question.
+   the evidence tier that would be sufficient. Link each criterion to its
+   planned check and result. Done when: success and refusal can be evaluated
+   without inference and unfinished checks cannot become a completion claim.
+4. Ask only material unresolved choices whose prerequisites are known. Include
+   a recommended answer and its tradeoff; keep questions within the selected
+   runtime's clarification budget. Record confirmed terms, constraints, and
+   decisions immediately with source/revision references in the existing
+   Intent/Decision owner when the invocation's existing apply scope permits
+   that write; in plan mode return the candidate and its owner reference.
+   Use an existing decision record for consequential
+   tradeoffs, not a second Task or approval ledger. Stop questioning when the
+   bounded work can proceed. Done when: blockers have an owner or question,
+   confirmed agreements are recorded, and the next authorized action is clear.
 
 ## Completion
 
-Return a content-free receipt with `status`, `changed=false`, an input digest,
+Return a content-free receipt with `status`, the actual `changed` value, mode,
+an input digest,
 source references, `evidence_tier=LOCAL`, and `no_go_reasons` for unresolved
 authority or scope. `COMPLETED` means the intent candidate is explicit, not
-that the work is approved or published.
+that the work is approved or published. A plan has `changed=false`; an
+authorized owner update reports its actual changed state and evidence.
 
 ## Recovery
 

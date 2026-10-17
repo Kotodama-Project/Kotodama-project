@@ -18,6 +18,8 @@
 | 接続 | ID・guild・権限読戻し、コマンド登録、テキスト動作確認 | 結果を確かめる |
 | 音声 | 指定した処理対象で両モードを接続し、停止・成果返却を確認する | 説明・同意確認は人間側の責任で扱い、Botから再確認を繰り返さない。実際の聞こえ方を確かめる |
 
+別の人・別の環境で導入を試す場合は、工程1を始める前に[クリーン導入の依頼・記録様式](ACCEPTANCE.md#クリーン導入の依頼と記録155)を用意し、開始時刻を手元で控えます。途中で止めた場合も、その時点の所要時間と最後に終えた工程・止まった工程を記録してください。ローカルの `doctor` までで止めても記録でき、実接続をしていない項目は未実施のままにします。
+
 ## 1. ブラウザのセッションを選ぶ
 
 普段のブラウザですでにログインしている場合は、その有効なログインを保ちます。[既存セッションでの分担と任意のCLI接続](BROWSER.md)を確認し、対象のDeveloper Portalアカウントで次へ進みます。Lumaなどの連携先も、そのサービスへログイン済みのセッションを優先します。
@@ -79,7 +81,6 @@ node tools/codex-login.mjs --config .kotodama/config.json
 表示されたURLを本人が開き、本人がコードを入力します。エージェントはその操作を代行せず、完了後に実際のモデル応答まで確認します。音声APIの認証・利用上限も別途設定します。[公式の認証手順](https://learn.chatgpt.com/docs/auth#login-on-headless-devices)。
 
 ## 5. 接続を確認する
-
 
 ```sh
 node --env-file=.kotodama/secrets/discord.env tools/discord-setup.mjs verify --app YOUR_NEW_APPLICATION_ID --guild YOUR_GUILD_ID --output .kotodama/discord-setup-receipt.json

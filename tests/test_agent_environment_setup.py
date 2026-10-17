@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import shlex
 import shutil
 from pathlib import Path
 import subprocess
@@ -116,6 +117,60 @@ class AgentEnvironmentSetupTests(unittest.TestCase):
             self.assertNotIn("private detail", json.dumps(result))
             self.assertFalse((root / "work/agent-env/ready.json").exists())
             self.assertFalse((root / "work/agent-env/setup.lock").exists())
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux cloud launcher")
+    def test_launcher_reuses_setup_store_after_activation_and_cached_setup(self):
+        with tempfile.TemporaryDirectory(prefix="agent root 'with spaces' ") as temporary, ExitStack() as stack:
+            root = Path(temporary)
+            self.fixture(root)
+            probe = root / "launcher-probe.py"
+            probe.write_text(
+                "import json, os, sys\n"
+                "print(json.dumps({'args': sys.argv[1:], 'store': os.environ.get('pnpm_config_store_dir'), "
+                "'ci': os.environ.get('CI'), 'tty': sys.stdin.isatty()}))\n", encoding="utf-8")
+            node = root / "node"
+            node.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(probe))} \"$@\"\n", encoding="utf-8")
+            node.chmod(0o700)
+            install_stores = []
+
+            def command(args, *, cwd, env, timeout=180, output=False):
+                if "--version" in args:
+                    return "11.19.0" if "corepack.js" in " ".join(args) else "v24.14.0"
+                if "venv" in args:
+                    python = Path(args[-1]) / "bin/python"
+                    python.parent.mkdir(parents=True)
+                    python.write_text("fixture", encoding="utf-8")
+                if "--frozen-lockfile" in args:
+                    install_stores.append(env["pnpm_config_store_dir"])
+                    marker = cwd / "node_modules/.modules.yaml"
+                    marker.parent.mkdir(parents=True, exist_ok=True)
+                    marker.write_text("fixture", encoding="utf-8")
+                return ""
+
+            stack.enter_context(patch.object(setup.sys, "platform", "linux"))
+            stack.enter_context(patch.object(setup.sys, "version_info", (3, 12, 10)))
+            stack.enter_context(patch.object(setup.shutil, "which", return_value=str(node)))
+            stack.enter_context(patch.object(setup, "verified_archive"))
+            stack.enter_context(patch.object(setup, "run", side_effect=command))
+            expected_store = str(root / "work/agent-env/pnpm-store")
+            for cached in (False, True):
+                self.assertEqual(setup.prepare(root)["cached"], cached)
+                env = {key: value for key, value in os.environ.items() if key != "CI"}
+                env["pnpm_config_store_dir"] = str(root / "ambient-store")
+                activation = root / "work/agent-env/activate.sh"
+                for arguments in (["test", "--", "--fixture=a b", "$literal"],
+                                  ["run", "test", "--", "--fixture=a b", "$literal"]):
+                    result = subprocess.run(
+                        ["bash", "-ec", '. "$1"; shift; pnpm "$@"; pnpm "$@"', "launcher-test", str(activation), *arguments],
+                        env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, check=True, timeout=10)
+                    captures = [json.loads(line) for line in result.stdout.splitlines()]
+                    self.assertEqual(len(captures), 2)
+                    for captured in captures:
+                        self.assertEqual(captured["store"], expected_store)
+                        self.assertEqual(captured["args"][2:], arguments)
+                        self.assertIsNone(captured["ci"])
+                        self.assertFalse(captured["tty"])
+            self.assertEqual(install_stores, [expected_store])
 
     def test_initial_write_failure_is_nonblocking(self):
         with tempfile.TemporaryDirectory() as temporary, patch.object(setup.sys, "platform", "linux"), patch.object(setup.sys, "version_info", (3, 12, 10)), patch.object(Path, "mkdir", side_effect=PermissionError("private detail")):

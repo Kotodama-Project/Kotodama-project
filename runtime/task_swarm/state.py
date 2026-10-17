@@ -12,6 +12,7 @@ import copy
 import json
 import secrets
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -30,6 +31,8 @@ _JOB_KEYS = {
     "payload_digest",
 }
 _OUTCOMES = {"candidate", "needs_data", "identity_conflict"}
+_CANCELLATION_KEYS = {"version", "run_id", "binding_digest", "initial_execution_plan_digest",
+                      "owner_ref", "requested_at"}
 _LEASE_MAX = 86_400.0
 _PER_JOB_LIMIT_MAX = 1_000
 
@@ -143,6 +146,28 @@ class SwarmState:
         CREATE INDEX IF NOT EXISTS attempts_running ON attempts(run_id, state);
         CREATE INDEX IF NOT EXISTS jobs_leased ON jobs(run_id, exclusive_keys_json)
             WHERE state = 'leased';
+        CREATE TABLE IF NOT EXISTS run_extensions (
+            run_id TEXT PRIMARY KEY,
+            extension_json TEXT NOT NULL,
+            FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE RESTRICT
+        );
+        CREATE TABLE IF NOT EXISTS run_dependency_stages (
+            run_id TEXT PRIMARY KEY,
+            stage_json TEXT NOT NULL,
+            FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE RESTRICT
+        );
+        CREATE TABLE IF NOT EXISTS run_finalizations (
+            run_id TEXT PRIMARY KEY,
+            checkpoint_json TEXT NOT NULL,
+            progress_json TEXT NOT NULL,
+            receipt_json TEXT,
+            FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE RESTRICT
+        );
+        CREATE TABLE IF NOT EXISTS run_cancellations (
+            run_id TEXT PRIMARY KEY,
+            cancellation_json TEXT NOT NULL,
+            FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE RESTRICT
+        );
         """
         for retry in range(6):
             conn: sqlite3.Connection | None = None
@@ -270,7 +295,9 @@ class SwarmState:
         now: float,
         owner: Mapping[str, Any],
     ) -> dict[str, Any]:
-        self._closed(plan, _PLAN_KEYS, "plan")
+        from .dependency_contract import EXECUTION_FIELDS, execution_version
+        execution = execution_version(plan)
+        self._closed(plan, _PLAN_KEYS | (EXECUTION_FIELDS if execution else set()), "plan")
         run_id = protocol.ref(plan["run_id"], "run id")
         task_id = protocol.ref(plan["task_id"], "task id")
         if task_id != owner["task_id"]:
@@ -332,12 +359,26 @@ class SwarmState:
             if missing:
                 raise protocol.SwarmError("INVALID_PLAN", f"missing dependency for {job['job_id']}")
         self._reject_cycles(jobs)
+        if execution:
+            initial = [job for job in jobs if job["job_id"].startswith("r0-")]
+            work = [job for job in initial if job["kind"] == "work"]
+            first = [job for job in work if not job["dependencies"]]
+            if not (4 <= attempt_budget <= 6 and len(initial) == 4 and len(work) == 2 and len(first) == 1):
+                raise protocol.SwarmError("LOOP_DEPENDENCY_PLAN", "two work jobs and two reviews required")
+            a = first[0]["job_id"]
+            b = next(job for job in work if job["job_id"] != a)
+            reviews = {job["job_id"]: job for job in initial if job["kind"] == "review"}
+            if (b["dependencies"] != [a] or set(reviews) != {"r0-prerequisite", "r0-critic"}
+                    or reviews["r0-prerequisite"]["dependencies"] != [a]
+                    or set(reviews["r0-critic"]["dependencies"]) != {a, b["job_id"]}):
+                raise protocol.SwarmError("LOOP_DEPENDENCY_PLAN", "invalid prerequisite topology")
         review_count = sum(job["kind"] == "review" for job in jobs)
         reserve = protocol.integer(budget.get("verifier_reserve", min(attempt_budget, review_count)),
                                    "verifier reserve", minimum=0, maximum=1_000)
         if reserve > attempt_budget or (review_count and attempt_budget and reserve < 1):
             raise protocol.SwarmError("INVALID_PLAN", "review attempts require a reserve within the total budget")
         return {
+            **({key: plan[key] for key in EXECUTION_FIELDS} if execution else {}),
             "run_id": run_id,
             "task_id": task_id,
             "binding_digest": binding_digest,
@@ -396,6 +437,95 @@ class SwarmState:
         return row
 
     @staticmethod
+    def _cancellation_record(conn: sqlite3.Connection, run: sqlite3.Row) -> dict[str, Any] | None:
+        row = conn.execute("SELECT cancellation_json FROM run_cancellations WHERE run_id = ?",
+                           (run["run_id"],)).fetchone()
+        if row is None:
+            return None
+        try:
+            raw = row["cancellation_json"]
+            if not isinstance(raw, str) or len(raw.encode("utf-8")) > 4096:
+                raise ValueError("cancellation record exceeds its bound")
+            record = json.loads(raw)
+            if (not isinstance(record, dict) or set(record) != _CANCELLATION_KEYS
+                    or type(record["version"]) is not int or record["version"] != 1
+                    or record["run_id"] != run["run_id"]
+                    or record["binding_digest"] != run["binding_digest"]
+                    or record["initial_execution_plan_digest"] != protocol.digest(SwarmState._plan_from_run(run))
+                    or type(record["requested_at"]) not in (int, float)):
+                raise ValueError("cancellation record does not match its run")
+            protocol.ref(record["owner_ref"], "cancellation owner")
+            protocol.finite(record["requested_at"], "cancellation time")
+        except (ValueError, TypeError, KeyError, OverflowError, protocol.SwarmError) as exc:
+            raise protocol.SwarmError("CORRUPT_STATE", "stored cancellation is invalid") from exc
+        return record
+
+    @staticmethod
+    def _require_not_cancelled(conn: sqlite3.Connection, run: sqlite3.Row) -> None:
+        if SwarmState._cancellation_record(conn, run) is not None:
+            raise protocol.SwarmError("RUN_CANCELLED", "run was durably cancelled")
+
+    def cancellation(self, run_id: str) -> dict[str, Any] | None:
+        """Read a bounded cancellation record without granting execution.
+
+        Status remains readable after owner expiry. Execution paths must still
+        perform their current owner, source and deadline checks.
+        """
+        run_id = protocol.ref(run_id, "run id")
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN")
+            return self._cancellation_record(conn, self._get_run(conn, run_id))
+        finally:
+            conn.close()
+
+    def _record_cancellation(self, run_id: str, *, expected_binding_digest: str,
+                             expected_initial_execution_plan_digest: str,
+                             owner_ref: str) -> dict[str, Any]:
+        """Internal database step, NOT a public cancellation acknowledgement.
+
+        The owner adapter must hold the shared finalization OS lock, recheck
+        current input/source and the absence of a published receipt, then call
+        this method. Only that adapter may acknowledge cancellation; this
+        database-only helper cannot serialize the filesystem publication cut.
+        """
+        run_id = protocol.ref(run_id, "run id")
+        expected_binding_digest = protocol.digest_ref(expected_binding_digest, "binding digest")
+        expected_initial_execution_plan_digest = protocol.digest_ref(
+            expected_initial_execution_plan_digest, "initial execution plan digest")
+        owner_ref = protocol.ref(owner_ref, "cancellation owner")
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
+        conn, ok = self._transaction(), False
+        try:
+            now = self._now()
+            run = self._get_run(conn, run_id)
+            owner = self._run_owner(run, now, prefetched)
+            if owner_ref != owner["owner_ref"]:
+                raise protocol.SwarmError("WRONG_OWNER", "cancellation caller is not the current owner")
+            if (expected_binding_digest != run["binding_digest"]
+                    or expected_initial_execution_plan_digest != protocol.digest(self._plan_from_run(run))):
+                raise protocol.SwarmError("CANCELLATION_CONFLICT", "cancellation does not match the existing run")
+            previous = self._cancellation_record(conn, run)
+            if previous is not None:
+                if previous["owner_ref"] != owner_ref:
+                    raise protocol.SwarmError("CANCELLATION_CONFLICT", "cancellation owner cannot change")
+                ok = True
+                return previous
+            if now >= float(run["deadline"]):
+                raise protocol.SwarmError("DEADLINE_EXPIRED", "incomplete run has expired")
+            record = {"version": 1, "run_id": run_id, "binding_digest": expected_binding_digest,
+                      "initial_execution_plan_digest": expected_initial_execution_plan_digest,
+                      "owner_ref": owner_ref, "requested_at": now}
+            conn.execute("INSERT INTO run_cancellations(run_id,cancellation_json) VALUES (?,?)",
+                         (run_id, protocol.canonical(record)))
+            ok = True
+            return record
+        except sqlite3.Error as exc:
+            raise protocol.SwarmError("STATE_WRITE_FAILED", "unable to persist cancellation") from exc
+        finally:
+            self._finish(conn, ok)
+
+    @staticmethod
     def _decode_list(raw: Any, name: str) -> list[str]:
         try:
             value = json.loads(raw)
@@ -452,6 +582,14 @@ class SwarmState:
             "updated_at": row["updated_at"],
         }
 
+    def dependency_stage(self, run_id):
+        from .dependency_state import read_stage
+        return read_stage(self, run_id)
+
+    def commit_dependency_stage(self, run_id, stage, *, expected_state_digest, cancel_event=None):
+        from .dependency_state import commit_stage
+        return commit_stage(self, run_id, stage, expected_state_digest, cancel_event)
+
     def create_run(self, plan: Mapping[str, Any]) -> dict[str, Any]:
         now = self._now()
         # Validate the shape enough to obtain the owner Task id before calling
@@ -461,6 +599,8 @@ class SwarmState:
         task_id = protocol.ref(plan["task_id"], "task id")
         owner = self._owner_binding(task_id, now)
         normalized = self._normalize_plan(plan, now, owner)
+        if normalized.get("execution_contract_version") == 3 and len(normalized["jobs"]) != 4:
+            raise protocol.SwarmError("LOOP_DEPENDENCY_PLAN", "initial dependency run requires exactly four jobs")
         plan_json = protocol.canonical(normalized)
 
         conn = self._transaction()
@@ -470,6 +610,7 @@ class SwarmState:
                 "SELECT * FROM runs WHERE run_id = ?", (normalized["run_id"],)
             ).fetchone()
             if existing is not None:
+                self._require_not_cancelled(conn, existing)
                 if existing["plan_json"] != plan_json:
                     raise protocol.SwarmError("RUN_IMMUTABLE", "run id is already bound to another plan")
                 ok = True
@@ -515,6 +656,299 @@ class SwarmState:
         finally:
             self._finish(conn, ok)
 
+    @staticmethod
+    def _dependency_repair_job_id(initial, stage):
+        from .repair_planning import repair_job_id
+        work_ids = [job["job_id"] for job in initial["jobs"] if job["kind"] == "work"]
+        if any(not name.startswith("r0-") for name in work_ids):
+            raise protocol.SwarmError("LOOP_RELEASE_INVALID", "repair needs initial work identities")
+        return "r1-" + repair_job_id(stage["certificate"]["b_job_id"][3:],
+                                    [name[3:] for name in work_ids])
+
+    def extend_run(self, run_id: str, extension: Mapping[str, Any]) -> dict[str, Any]:
+        """Append one owner-bound repair frontier without renewing its budget.
+
+        The coordinator validates the critic's artifact before this CAS. The
+        initial plan stays immutable; extension and new jobs commit together.
+        This is execution history in the same database, never another Task.
+        """
+        run_id = protocol.ref(run_id, "run id")
+        self._closed(extension, {"round", "initial_plan_digest", "critic_job_id",
+                                 "critic_result_digest", "proposal_digest", "jobs"}, "extension")
+        if type(extension["round"]) is not int or extension["round"] != 1:
+            raise protocol.SwarmError("ROUND_LIMIT", "only one corrective round is admitted")
+        for key in ("initial_plan_digest", "critic_result_digest", "proposal_digest"):
+            protocol.digest_ref(extension[key], key)
+        protocol.ref(extension["critic_job_id"], "critic job")
+        if not isinstance(extension["jobs"], list) or not 2 <= len(extension["jobs"]) <= 4:
+            raise protocol.SwarmError("INVALID_PLAN", "repair needs one to three work jobs and one critic")
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
+        conn, ok = self._transaction(), False
+        try:
+            now = self._now()
+            run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
+            owner = self._run_owner(run, now, prefetched)
+            initial = self._plan_from_run(run)
+            if protocol.digest(initial) != extension["initial_plan_digest"]:
+                raise protocol.SwarmError("ROUND_CONFLICT", "initial plan changed")
+            combined = dict(initial, jobs=initial["jobs"] + extension["jobs"])
+            normalized = self._normalize_plan(combined, now, owner)
+            new_jobs = normalized["jobs"][len(initial["jobs"]):]
+            new_work = [job for job in new_jobs if job["kind"] == "work"]
+            new_reviews = [job for job in new_jobs if job["kind"] == "review"]
+            previous_work = {job["job_id"] for job in initial["jobs"] if job["kind"] == "work"}
+            dependency = initial.get("execution_contract_version") == 3
+            stage = None
+            if dependency:
+                from .dependency_state import stage_row
+                stage = stage_row(self, conn, run)
+                if (stage is None or stage["status"] != "released" or len(new_work) != 1
+                        or new_work[0]["job_id"] != self._dependency_repair_job_id(initial, stage)):
+                    raise protocol.SwarmError("LOOP_RELEASE_INVALID", "repair needs one released prerequisite")
+            invalid_dependencies = (any(job["dependencies"] != [stage["certificate"]["a_job_id"]] for job in new_work)
+                                    if dependency else any(job["dependencies"] for job in new_work))
+            if (not new_work or len(new_reviews) != 1 or invalid_dependencies
+                    or set(new_reviews[0]["dependencies"]) != previous_work | {job["job_id"] for job in new_work}):
+                raise protocol.SwarmError("INVALID_PLAN", "repair requires work and one independent critic")
+            # The persisted manifest describes the same normalized rows that
+            # will be scheduled. Equivalent dependency/key ordering is an
+            # idempotent replay, including after the round has finished.
+            encoded = protocol.canonical(dict(extension, jobs=new_jobs))
+            previous = conn.execute("SELECT extension_json FROM run_extensions WHERE run_id=?", (run_id,)).fetchone()
+            if previous is not None:
+                if previous[0] != encoded:
+                    raise protocol.SwarmError("ROUND_CONFLICT", "repair round is already bound")
+                ok = True
+                return json.loads(previous[0])
+            if conn.execute("SELECT 1 FROM run_finalizations WHERE run_id=?", (run_id,)).fetchone():
+                raise protocol.SwarmError("FINALIZATION_SEALED", "terminal run cannot admit another round")
+            if now >= float(run["deadline"]):
+                raise protocol.SwarmError("ROUND_BUDGET", "run deadline elapsed")
+            if conn.execute("SELECT 1 FROM jobs WHERE run_id=? AND state='leased'", (run_id,)).fetchone():
+                raise protocol.SwarmError("ROUND_BUSY", "outstanding work must settle first")
+            if conn.execute("SELECT 1 FROM jobs WHERE run_id=? AND state NOT IN ('reported','accepted')",
+                            (run_id,)).fetchone():
+                raise protocol.SwarmError("ROUND_UNSETTLED", "every initial job must have a settled report")
+            critic = conn.execute("SELECT * FROM jobs WHERE run_id=? AND job_id=?",
+                                  (run_id, extension["critic_job_id"])).fetchone()
+            proof = conn.execute("SELECT * FROM attempts WHERE run_id=? AND job_id=? ORDER BY attempt DESC LIMIT 1",
+                                 (run_id, extension["critic_job_id"])).fetchone()
+            if (critic is None or critic["kind"] != "review" or critic["state"] != "reported"
+                    or proof is None or proof["outcome"] != "candidate"
+                    or proof["result_digest"] != extension["critic_result_digest"]):
+                raise protocol.SwarmError("ROUND_CRITIC_REQUIRED", "repair needs the reported critic artifact")
+            previous_reviews = [job for job in initial["jobs"] if job["kind"] == "review"]
+            terminal_reviews = [job for job in previous_reviews if job["job_id"] == extension["critic_job_id"]]
+            if (len(previous_reviews) != (2 if dependency else 1) or len(terminal_reviews) != 1
+                    or set(terminal_reviews[0]["dependencies"]) != previous_work):
+                raise protocol.SwarmError("ROUND_CRITIC_REQUIRED", "repair follows the terminal initial critic")
+            used = conn.execute("SELECT COUNT(*) FROM attempts WHERE run_id=?", (run_id,)).fetchone()[0]
+            remaining_work, _ = self._work_remaining(conn, run)
+            if (used + len(new_jobs) > int(run["attempt_budget"])
+                    or sum(j["kind"] == "work" for j in new_jobs) > remaining_work):
+                raise protocol.SwarmError("ROUND_BUDGET", "repair exceeds the original total budget")
+            for job in new_jobs:
+                conn.execute("""INSERT INTO jobs
+                    (run_id,job_id,kind,dependencies_json,exclusive_keys_json,payload_ref,payload_digest)
+                    VALUES (?,?,?,?,?,?,?)""", (run_id, job["job_id"], job["kind"],
+                    protocol.canonical(job["dependencies"]), protocol.canonical(job["exclusive_keys"]),
+                    job["payload_ref"], job["payload_digest"]))
+            conn.execute("INSERT INTO run_extensions VALUES (?,?)", (run_id, encoded))
+            ok = True
+            return json.loads(encoded)
+        except sqlite3.Error as exc:
+            raise protocol.SwarmError("STATE_WRITE_FAILED", "unable to append repair round") from exc
+        finally:
+            self._finish(conn, ok)
+
+    def extension(self, run_id: str) -> dict[str, Any] | None:
+        """Read the persisted repair manifest; this does not admit work."""
+        run_id = protocol.ref(run_id, "run id")
+        conn = self._connect()
+        try:
+            row = conn.execute("SELECT extension_json FROM run_extensions WHERE run_id=?", (run_id,)).fetchone()
+            return json.loads(row[0]) if row else None
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _finalization_evidence(conn, run_id):
+        """Raw execution rows, including every timestamp and attempt identity.
+
+        Unlike snapshot(), this never recomputes pending jobs. Finalization
+        may only advance the expressly listed accepts in this same database.
+        """
+        extension = conn.execute("SELECT extension_json FROM run_extensions WHERE run_id=?", (run_id,)).fetchone()
+        run = SwarmState._get_run(conn, run_id)
+        extra = {}
+        if json.loads(run["plan_json"]).get("execution_contract_version") == 3:
+            stage = conn.execute("SELECT stage_json FROM run_dependency_stages WHERE run_id=?", (run_id,)).fetchone()
+            extra["dependency_stage"] = stage[0] if stage else None
+        return {**extra, "run": dict(run),
+                "jobs": [dict(row) for row in conn.execute("SELECT * FROM jobs WHERE run_id=? ORDER BY job_id", (run_id,))],
+                "attempts": [dict(row) for row in conn.execute("SELECT * FROM attempts WHERE run_id=? ORDER BY job_id,attempt", (run_id,))],
+                "extension": extension[0] if extension else None}
+
+    @staticmethod
+    def _checked_finalization(conn, run_id):
+        row = conn.execute("SELECT * FROM run_finalizations WHERE run_id=?", (run_id,)).fetchone()
+        if row is not None and protocol.canonical(SwarmState._finalization_evidence(conn, run_id)) != row["progress_json"]:
+            raise protocol.SwarmError("FINALIZATION_STATE_CHANGED", "execution changed outside finalization")
+        return row
+
+    def finalization_evidence_digest(self, run_id: str) -> str:
+        """Capture a read-only CAS token; no leases or Task records change."""
+        conn = self._connect()
+        try:
+            conn.execute("BEGIN")
+            return protocol.digest(self._finalization_evidence(conn, run_id))
+        finally:
+            conn.close()
+
+    def completed_evidence_cut(self, run_id: str) -> str:
+        return self.completed_evidence_cut_at(self.db_path, run_id)
+
+    @staticmethod
+    def completed_evidence_cut_at(db_path, run_id: str) -> str:
+        """Read a bounded completed execution, excluding mutable reuse decisions.
+
+        This cut is for a verified local loop (at most eight single attempts).
+        It never recomputes jobs, obtains a write lock or reads another run.
+        """
+        run_id = protocol.ref(run_id, "run id")
+        conn = None
+        try:
+            conn = sqlite3.connect(Path(db_path).absolute().as_uri() + "?mode=ro",
+                                   uri=True, isolation_level=None, timeout=5.0)
+            conn.row_factory = sqlite3.Row
+            conn.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 2 * 1024 * 1024)
+            conn.execute("PRAGMA query_only=ON")
+            conn.execute("BEGIN")
+            run = SwarmState._get_run(conn, run_id)
+            SwarmState._require_not_cancelled(conn, run)
+            rows = {}
+            for table, maximum, order in (("jobs", 8, "job_id"), ("attempts", 8, "job_id,attempt"),
+                    ("run_extensions", 1, "run_id"), ("run_finalizations", 1, "run_id")):
+                rows[table] = [dict(row) for row in conn.execute(
+                    f"SELECT * FROM {table} WHERE run_id=? ORDER BY {order} LIMIT ?", (run_id, maximum + 1))]
+                if len(rows[table]) > maximum:
+                    raise protocol.SwarmError("FINALIZATION_STATE_CHANGED", "completed execution exceeds its bound")
+            evidence = {"run": dict(run), "jobs": rows["jobs"], "attempts": rows["attempts"],
+                        "extension": rows["run_extensions"][0]["extension_json"] if rows["run_extensions"] else None}
+            if SwarmState._plan_from_run(run).get("execution_contract_version") == 3:
+                stage = conn.execute("SELECT stage_json FROM run_dependency_stages WHERE run_id=?", (run_id,)).fetchone()
+                evidence["dependency_stage"] = stage[0] if stage else None
+            final = rows["run_finalizations"]
+            if (len(final) != 1 or final[0]["receipt_json"] is None
+                    or protocol.canonical(evidence) != final[0]["progress_json"]):
+                raise protocol.SwarmError("FINALIZATION_STATE_CHANGED", "completed execution is not intact")
+            return protocol.digest({"execution": evidence, "finalization": final[0]})
+        except sqlite3.Error as exc:
+            raise protocol.SwarmError("FINALIZATION_STATE_CHANGED", "completed execution is unreadable") from exc
+        finally:
+            if conn is not None:
+                conn.close()
+
+    def prepare_finalization(self, run_id: str, checkpoint: Mapping[str, Any]) -> dict[str, Any]:
+        """Freeze a fully reported terminal run, never grant new execution."""
+        run_id = protocol.ref(run_id, "run id")
+        if not isinstance(checkpoint, Mapping):
+            raise protocol.SwarmError("FINALIZATION_INVALID", "checkpoint must be an object")
+        encoded = protocol.canonical(checkpoint)
+        if len(encoded.encode("utf-8")) > 262144:
+            raise protocol.SwarmError("FINALIZATION_INVALID", "checkpoint is too large")
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
+        conn, ok = self._transaction(), False
+        try:
+            run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
+            owner = self._run_owner(run, self._now(), prefetched)
+            previous = self._checked_finalization(conn, run_id)
+            if previous is not None:
+                if previous["checkpoint_json"] != encoded:
+                    raise protocol.SwarmError("FINALIZATION_CONFLICT", "terminal checkpoint is immutable")
+                ok = True
+                return json.loads(encoded)
+            evidence = self._finalization_evidence(conn, run_id)
+            if self._now() >= float(run["deadline"]):
+                raise protocol.SwarmError("DEADLINE_EXPIRED", "incomplete run has expired")
+            if (checkpoint.get("run_id") != run_id or checkpoint.get("binding_digest") != run["binding_digest"]
+                    or checkpoint.get("owner_ref") != owner["owner_ref"]
+                    or checkpoint.get("state_digest") != protocol.digest(evidence)):
+                raise protocol.SwarmError("FINALIZATION_STATE_CHANGED", "checkpoint CAS does not match this execution")
+            jobs, attempts = evidence["jobs"], evidence["attempts"]
+            preaccepted = {}
+            if self._plan_from_run(run).get("execution_contract_version") == 3:
+                from .dependency_state import stage_row, preaccepted_proof
+                stage = stage_row(self, conn, run)
+                if stage is None or stage["status"] != "released" or checkpoint.get("version") != 3:
+                    raise protocol.SwarmError("LOOP_RELEASE_INVALID", "terminal stage is not released")
+                preaccepted = preaccepted_proof(stage)
+                if checkpoint.get("preaccepted") != preaccepted:
+                    raise protocol.SwarmError("LOOP_RELEASE_CHANGED", "preaccepted evidence changed")
+            if (not jobs or len(jobs) != len(attempts)
+                    or any(job["state"] != ("accepted" if job["job_id"] in preaccepted else "reported") for job in jobs)
+                    or any(a["state"] != ("accepted" if a["job_id"] in preaccepted else "reported") or a["outcome"] != "candidate" or not a["identity_json"] for a in attempts)):
+                raise protocol.SwarmError("FINALIZATION_UNSETTLED", "every job needs exactly one identified report")
+            accepts = checkpoint.get("accepts")
+            results = {a["job_id"]: a["result_digest"] for a in attempts}
+            if not isinstance(accepts, dict) or set(accepts).intersection(preaccepted) or any(results.get(job) != result for job, result in accepts.items()):
+                raise protocol.SwarmError("FINALIZATION_INVALID", "accepted results must be current reports")
+            protocol.ref(checkpoint.get("verification_ref"), "verification reference")
+            conn.execute("INSERT INTO run_finalizations(run_id,checkpoint_json,progress_json) VALUES (?,?,?)",
+                         (run_id, encoded, protocol.canonical(evidence)))
+            ok = True
+            return json.loads(encoded)
+        finally:
+            self._finish(conn, ok)
+
+    def finalization(self, run_id: str) -> dict[str, Any] | None:
+        """Read the checkpoint only if its exact durable progress still matches."""
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
+        conn, ok = self._transaction(), False
+        try:
+            run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
+            self._run_owner(run, self._now(), prefetched)
+            row = self._checked_finalization(conn, run_id)
+            ok = True
+            if row is None:
+                return None
+            checkpoint = json.loads(row["checkpoint_json"])
+            receipt = json.loads(row["receipt_json"]) if row["receipt_json"] is not None else None
+            return {"checkpoint": checkpoint, "checkpoint_digest": protocol.digest(checkpoint), "receipt": receipt}
+        finally:
+            self._finish(conn, ok)
+
+    def pin_final_receipt(self, run_id: str, checkpoint_digest: str, receipt: Mapping[str, Any]) -> dict[str, Any]:
+        """Pin the complete receipt preimage before any receipt file is written."""
+        encoded = protocol.canonical(receipt)
+        prefetched = self._prefetch_owner(self._now(), run_id=run_id)
+        conn, ok = self._transaction(), False
+        try:
+            run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
+            self._run_owner(run, self._now(), prefetched)
+            row = self._checked_finalization(conn, run_id)
+            if row is None or protocol.digest(json.loads(row["checkpoint_json"])) != checkpoint_digest:
+                raise protocol.SwarmError("FINALIZATION_CONFLICT", "checkpoint changed")
+            checkpoint = json.loads(row["checkpoint_json"])
+            if (self._now() >= float(run["deadline"]) or receipt.get("run_id") != run_id
+                    or receipt.get("binding_digest") != run["binding_digest"]
+                    or receipt.get("finalization_checkpoint_digest") != checkpoint_digest):
+                raise protocol.SwarmError("FINALIZATION_CONFLICT", "receipt scope is not current")
+            accepted = {r["job_id"] for r in conn.execute("SELECT job_id FROM jobs WHERE run_id=? AND state='accepted'", (run_id,))}
+            if accepted != set(checkpoint["accepts"]) | set(checkpoint.get("preaccepted", {})):
+                raise protocol.SwarmError("FINALIZATION_UNSETTLED", "verified acceptance is incomplete")
+            if row["receipt_json"] is not None and row["receipt_json"] != encoded:
+                raise protocol.SwarmError("FINALIZATION_CONFLICT", "receipt preimage is immutable")
+            conn.execute("UPDATE run_finalizations SET receipt_json=? WHERE run_id=?", (encoded, run_id))
+            ok = True
+            return json.loads(encoded)
+        finally:
+            self._finish(conn, ok)
+
     # ------------------------------------------------------------------
     # Claims and attempt lifecycle
     # ------------------------------------------------------------------
@@ -556,10 +990,19 @@ class SwarmState:
         plan = json.loads(run["plan_json"])
         reserve = plan["budget"].get("verifier_reserve", min(int(run["attempt_budget"]),
             sum(job["kind"] == "review" for job in plan["jobs"])))
-        used = conn.execute("""SELECT COUNT(*) FROM attempts a JOIN jobs j
-            ON a.run_id=j.run_id AND a.job_id=j.job_id WHERE a.run_id=? AND j.kind='work'""",
+        used, work_used = conn.execute("""SELECT COUNT(*), COALESCE(SUM(j.kind='work'), 0)
+            FROM attempts a JOIN jobs j ON a.run_id=j.run_id AND a.job_id=j.job_id
+            WHERE a.run_id=?""", (run["run_id"],)).fetchone()
+        pending_reviews = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE run_id=? AND kind='review' AND state='pending'",
             (run["run_id"],)).fetchone()[0]
-        return max(0, int(run["attempt_budget"]) - reserve - used), reserve
+        # Preserve the initial declared review budget, while also reserving
+        # an actual remaining attempt for each pending review (including a
+        # newly admitted repair critic). Completed/retried reviews have
+        # already spent the global budget and cannot be ignored here.
+        remaining = min(int(run["attempt_budget"]) - reserve - work_used,
+                        int(run["attempt_budget"]) - used - pending_reviews)
+        return max(0, remaining), reserve
 
     @staticmethod
     def _dependency_map(conn: sqlite3.Connection, run_id: str) -> dict[str, sqlite3.Row]:
@@ -639,6 +1082,7 @@ class SwarmState:
         try:
             now = self._now()
             run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
             self._run_owner(run, now, prefetched)
             deadline, attempt_budget, concurrency = self._run_values(run)
             if now >= deadline:
@@ -668,6 +1112,9 @@ class SwarmState:
                 if job["state"] != "pending":
                     continue
                 if job["kind"] == "work" and work_remaining == 0:
+                    continue
+                from .dependency_state import claim_allowed
+                if not claim_allowed(self, conn, run, job, worker_ref):
                     continue
                 if not self._dependencies_ready(job, jobs):
                     continue
@@ -722,6 +1169,14 @@ class SwarmState:
                 "lease_until": lease_until,
                 "deadline": deadline,
             }
+            initial = json.loads(run["plan_json"])
+            if initial.get("execution_contract_version") == 3:
+                from .dependency_state import stage_row
+                stage = stage_row(self, conn, run)
+                if stage and selected["job_id"] in {stage["certificate"]["b_job_id"],
+                                                    self._dependency_repair_job_id(initial, stage)}:
+                    result["delivered_input_digest"] = (stage["actual_input_digest"]
+                        if selected["job_id"] == stage["certificate"]["b_job_id"] else selected["payload_digest"])
             ok = True
             return result
         except sqlite3.IntegrityError as exc:
@@ -742,6 +1197,9 @@ class SwarmState:
         if attempt["state"] != "leased":
             raise protocol.SwarmError("STALE_ATTEMPT", "attempt token is no longer current")
         run = self._get_run(conn, str(attempt["run_id"]))
+        # Even expired-token cleanup must not release an unconfirmed worker's
+        # permit after cancellation. fail() shares this transaction boundary.
+        self._require_not_cancelled(conn, run)
         expired = now >= float(run["deadline"]) or now >= float(attempt["lease_until"])
         # Giving up an expired lease only downgrades state, so the current
         # token holder may still do it; everything else needs a live lease.
@@ -775,6 +1233,8 @@ class SwarmState:
         try:
             now = self._now()
             attempt = self._attempt_for_token(conn, token)
+            run = self._get_run(conn, str(attempt["run_id"]))
+            self._require_not_cancelled(conn, run)
             if attempt["state"] != "leased":
                 if attempt["identity_json"] is not None:
                     try:
@@ -785,7 +1245,6 @@ class SwarmState:
                         ok = True
                         return copy.deepcopy(normalized)
                 raise protocol.SwarmError("STALE_ATTEMPT", "attempt token is no longer current")
-            run = self._get_run(conn, str(attempt["run_id"]))
             self._run_owner(run, now, prefetched)
             if now >= float(run["deadline"]):
                 raise protocol.SwarmError("DEADLINE_EXPIRED", "run deadline has elapsed")
@@ -852,7 +1311,18 @@ class SwarmState:
         result_digest: str,
         verification_ref: str,
         owner_ref: str,
+        *,
+        cancel_event: threading.Event | None = None,
     ) -> dict[str, Any]:
+        if cancel_event is not None and not isinstance(cancel_event, threading.Event):
+            raise protocol.SwarmError("RUN_CANCELLATION_INVALID", "cancel_event must be an Event")
+
+        def eligible(run):
+            if cancel_event is not None and cancel_event.is_set():
+                raise protocol.SwarmError("RUN_CANCELLED", "run was cancelled")
+            if self._now() >= float(run["deadline"]):
+                raise protocol.SwarmError("DEADLINE_EXPIRED", "run deadline has elapsed")
+
         run_id = protocol.ref(run_id, "run id")
         job_id = protocol.ref(job_id, "job id")
         result_digest = protocol.digest_ref(result_digest, "result digest")
@@ -864,9 +1334,20 @@ class SwarmState:
         try:
             now = self._now()
             run = self._get_run(conn, run_id)
+            self._require_not_cancelled(conn, run)
+            eligible(run)
             owner = self._run_owner(run, now, prefetched)
             if owner_ref != owner["owner_ref"]:
                 raise protocol.SwarmError("WRONG_OWNER", "acceptance caller is not the current owner")
+            finalization = self._checked_finalization(conn, run_id)
+            if finalization is not None:
+                checkpoint = json.loads(finalization["checkpoint_json"])
+                if now >= float(run["deadline"]):
+                    raise protocol.SwarmError("DEADLINE_EXPIRED", "incomplete run has expired")
+                if (checkpoint["accepts"].get(job_id) != result_digest
+                        or checkpoint["verification_ref"] != verification_ref
+                        or checkpoint["owner_ref"] != owner_ref):
+                    raise protocol.SwarmError("FINALIZATION_CONFLICT", "acceptance is outside the terminal proof")
             job = conn.execute(
                 "SELECT * FROM jobs WHERE run_id = ? AND job_id = ?", (run_id, job_id)
             ).fetchone()
@@ -886,6 +1367,7 @@ class SwarmState:
                     raise protocol.SwarmError("IDENTITY_CONFLICT", "worker cannot accept its own report")
                 if job["accepted_digest"] != result_digest or job["verification_ref"] != verification_ref:
                     raise protocol.SwarmError("RESULT_MISMATCH", "job is already accepted with another result")
+                eligible(run)
                 ok = True
                 return {
                     "run_id": run_id,
@@ -919,6 +1401,13 @@ class SwarmState:
                    WHERE run_id = ? AND job_id = ? AND state = 'reported'""",
                 (result_digest, verification_ref, owner_ref, now, run_id, job_id),
             )
+            if finalization is not None:
+                conn.execute("UPDATE run_finalizations SET progress_json=? WHERE run_id=?",
+                             (protocol.canonical(self._finalization_evidence(conn, run_id)), run_id))
+            # The final eligibility observation is inside BEGIN IMMEDIATE;
+            # rejection rolls back both writes. A later external Event change
+            # cannot be atomic with SQLite and does not undo this acceptance.
+            eligible(run)
             ok = True
             return {
                 "run_id": run_id,
@@ -1000,6 +1489,7 @@ class SwarmState:
         # missing/unknown identity is deliberately never treated as dead.
         conn = self._connect()
         try:
+            self._require_not_cancelled(conn, self._get_run(conn, run_id))
             rows = conn.execute(
                 "SELECT * FROM attempts WHERE run_id = ? AND state = 'leased' AND lease_until <= ?",
                 (run_id, now),
@@ -1034,6 +1524,7 @@ class SwarmState:
         conn = self._transaction()
         ok = False
         try:
+            self._require_not_cancelled(conn, self._get_run(conn, run_id))
             for token, decision in decisions:
                 if decision == "dead":
                     changed = conn.execute(
@@ -1095,8 +1586,8 @@ class SwarmState:
             grouped.setdefault(str(row["job_id"]), []).append(SwarmState._attempt_public(row))
         return grouped
 
-    @staticmethod
     def _claimable_for_snapshot(
+        self,
         conn: sqlite3.Connection,
         jobs: dict[str, sqlite3.Row],
         run_id: str,
@@ -1114,6 +1605,9 @@ class SwarmState:
             if job["kind"] == "work" and work_remaining == 0:
                 continue
             if job["state"] == "pending" and SwarmState._dependencies_ready(job, jobs):
+                from .dependency_state import claim_allowed
+                if not claim_allowed(self, conn, self._get_run(conn, run_id), job, None):
+                    continue
                 return True
         return False
 
@@ -1124,8 +1618,10 @@ class SwarmState:
         ok = False
         try:
             run = self._get_run(conn, run_id)
-            self._recompute_blocks(conn, run_id)
-            run = self._get_run(conn, run_id)
+            cancellation = self._cancellation_record(conn, run)
+            if cancellation is None:
+                self._recompute_blocks(conn, run_id)
+                run = self._get_run(conn, run_id)
             plan = self._plan_from_run(run)
             work_remaining, reserve = self._work_remaining(conn, run)
             jobs = self._dependency_map(conn, run_id)
@@ -1196,7 +1692,10 @@ class SwarmState:
                 attempts_used,
                 work_remaining,
             )
-            if counts["reported"] and not claimable and counts["running"] == 0:
+            if cancellation is not None:
+                run_state = "cancelled"
+                reasons.append("run durably cancelled; outstanding leases are not confirmed stopped")
+            elif counts["reported"] and not claimable and counts["running"] == 0:
                 run_state = "waiting_owner"
             elif counts["pending"] and (
                 attempts_used >= int(run["attempt_budget"]) or now >= float(run["deadline"])
@@ -1236,6 +1735,14 @@ class SwarmState:
                 "run_state": run_state,
                 "reasons": reasons,
             }
+            extension = conn.execute("SELECT extension_json FROM run_extensions WHERE run_id = ?", (run_id,)).fetchone()
+            if extension is not None:
+                result["extension"] = json.loads(extension[0])
+            if plan.get("execution_contract_version") == 3:
+                from .dependency_state import stage_row
+                result["dependency_stage"] = stage_row(self, conn, run)
+            if cancellation is not None:
+                result["cancellation"] = cancellation
             ok = True
             return result
         finally:

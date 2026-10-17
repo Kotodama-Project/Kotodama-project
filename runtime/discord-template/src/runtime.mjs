@@ -22,6 +22,10 @@ import {RemoteOwner} from './remote-owner.mjs';
 import {startBridge} from './bridge.mjs';
 import {awaitWithSignal,deadlineScope,readHttpBody,sendHttpJson} from './http-limits.mjs';
 import {DotsBridge} from './dots.mjs';
+import {JudgmentStatusReader} from './judgment-status.mjs';
+import {ProjectHub} from './project-hub.mjs';
+import {shape} from './project-contract.mjs';
+import {projectSkillsDigest} from './project-skill-input.mjs';
 import {atomicJson,atomicText,check,uid,errorCode,redact,Refused,digest} from './common.mjs';
 import {consumeBootstrapBinding,registerRuntimeModule} from './source-bootstrap.mjs';
 registerRuntimeModule(startRuntime,import.meta.url);
@@ -52,7 +56,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     for(const scope of controlReads)scope.abort(new Refused('RUNTIME_STOPPING'));
     control.closeIdleConnections();return controlClosed;
   };
-  const authorize=async(task,purpose='execute',{monitor=false}={})=>{const c=await loadConfig(filename);current=c;check(!monitor||!closing,'RUNTIME_STOPPING');check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(task.action==='create_company_pack'){check(c.dataDir===config.dataDir,'COMPANY_PACK_BINDING_CHANGED');if(purpose==='execute'){check(c.worker.companyPack&&digest(c.worker.companyPack)===digest(config.worker.companyPack)&&digest(c.worker.verification??null)===digest(config.worker.verification??null),'COMPANY_PACK_BINDING_CHANGED');check(Date.parse(c.worker.companyPack.authorityExpiresAt)>Date.now(),'COMPANY_PACK_AUTHORITY_EXPIRED');}}if(task.action==='swarm_research'){check(c.dataDir===config.dataDir,'SWARM_BINDING_CHANGED');for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.metadata?.kind==='voice'){const speaker=source.metadata.inputAccountId??source.actorId;check(typeof speaker==='string'&&!store.voiceOptedOut(source.guildId,source.channelId,speaker),'SWARM_VOICE_SCOPE_REVOKED');}}if(purpose==='execute'){check(c.worker.swarm&&digest(c.worker.swarm)===digest(config.worker.swarm),'SWARM_BINDING_CHANGED');check(Date.parse(c.worker.swarm.authorityExpiresAt)>Date.now(),'SWARM_AUTHORITY_EXPIRED');}}if(discord&&!offline){const channels=[];for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.provider==='discord')channels.push(source.channelId);}const access=await discord.actorAccess(task.actor,channels,{cached:monitor});check(!monitor||!closing,'RUNTIME_STOPPING');check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
+  const authorize=async(task,purpose='execute',{monitor=false}={})=>{const c=await loadConfig(filename);current=c;if(purpose==='execute')check(projectSkillsDigest(c.worker.projectSkills)===projectSkillsDigest(config.worker.projectSkills),'PROJECT_SKILL_CONFIG_CHANGED');check(!monitor||!closing,'RUNTIME_STOPPING');check(c.discord.operators.includes(task.actor)&&(purpose!=='execute'||[task.action,...(task.requiredActions??[])].every(action=>c.worker.actions.includes(action))),'GRANT_REVOKED');check(c.worker.workspace===config.worker.workspace&&c.owner.kind===config.owner.kind,'WORKSPACE_BINDING_CHANGED');if(task.action==='create_company_pack'){check(c.dataDir===config.dataDir,'COMPANY_PACK_BINDING_CHANGED');if(purpose==='execute'){check(c.worker.companyPack&&digest(c.worker.companyPack)===digest(config.worker.companyPack)&&digest(c.worker.verification??null)===digest(config.worker.verification??null),'COMPANY_PACK_BINDING_CHANGED');check(Date.parse(c.worker.companyPack.authorityExpiresAt)>Date.now(),'COMPANY_PACK_AUTHORITY_EXPIRED');}}if(task.action==='swarm_research'){check(c.dataDir===config.dataDir,'SWARM_BINDING_CHANGED');for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.metadata?.kind==='voice'){const speaker=source.metadata.inputAccountId??source.actorId;check(typeof speaker==='string'&&!store.voiceOptedOut(source.guildId,source.channelId,speaker),'SWARM_VOICE_SCOPE_REVOKED');}}if(purpose==='execute'){check(c.worker.swarm&&digest(c.worker.swarm)===digest(config.worker.swarm),'SWARM_BINDING_CHANGED');check(Date.parse(c.worker.swarm.authorityExpiresAt)>Date.now(),'SWARM_AUTHORITY_EXPIRED');}}if(discord&&!offline){const channels=[];for(const key of new Set([task.source_key,...(task.contextSources??[]).map(b=>b.key)])){const source=store.source(key,task.actor);if(source.provider==='discord')channels.push(source.channelId);}const access=await discord.actorAccess(task.actor,channels,{cached:monitor});check(!monitor||!closing,'RUNTIME_STOPPING');check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');}if(owner.kind==='remote'){const s=await owner.source(task.source_key,task.actor);check(s.revision===task.source_revision,'REMOTE_SOURCE_CHANGED');}};
   const authorizeAnalysis=createAnalysisAuthorizer({readConfig:()=>loadConfig(filename),config,onPolicy:value=>{current=value;},voice:source=>voice?.forSource?voice.forSource(source):voice,discord:()=>discord,owner,offline});
   const selectedAnalyzer=analyzer??(config.analyzer.kind==='responses'?new ResponsesAnalyzer(config):new CliAnalyzer(config));
   let selectedWorker;
@@ -60,7 +64,22 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
   catch(error){if(owner.kind==='remote')await owner.close();store.releaseHost(ownerId);store.close();stopDebug();throw error;}
   const workspaceAuthorize=async(task,purpose='execute',options)=>{await authorize(task,purpose,options);if(purpose==='execute')channelWorker?.scope(store.source(task.source_key,task.actor));};
   const pipeline=new Pipeline({store,owner,config,policy:()=>current,readPolicy:async()=>{current=await loadConfig(filename);return current;},analyzer:selectedAnalyzer,worker:selectedWorker,authorize:workspaceAuthorize,authorizeAnalysis,onTask:async task=>{if(discord)await discord.deliver(task);},onTaskQueued:async(task,options)=>{if(discord)await discord.acknowledgeTask(task,options);},onReply:async reply=>{if(discord)await discord.reply(reply);},onVoiceAction:async action=>{if(discord)await discord.voiceAction(action);},onError:code=>log({event:'operation_failed',code})});
+  const judgment=new JudgmentStatusReader({config,store,owner,dots:()=>dots,authorize:task=>authorize(task,'read_result'),
+    readPolicy:async()=>{current=await loadConfig(filename);return current;},assertActive:()=>check(!closing&&store.lock()?.owner===ownerId,'RUNTIME_STOPPING'),
+    accessEpoch:()=>discord?.accessGeneration??null,
+    track:work=>{controlOperations.add(work);const settled=()=>controlOperations.delete(work);work.then(settled,settled);}});
+  let projects;
   try{
+    projects=new ProjectHub({config,store,policy:()=>current,
+    readConfig:async()=>{current=await loadConfig(filename);return current;},
+    accessEpoch:()=>discord?.accessGeneration??null,
+    assertActive:()=>check(!closing&&store.lock()?.owner===ownerId,'RUNTIME_STOPPING'),
+    authorizeSource:async(source,actor)=>{
+      if(!offline&&source.provider==='discord'){
+        const access=await discord.actorAccess(actor,[source.channelId]);
+        check(access!=='unavailable','ACCESS_UNAVAILABLE');check(access==='allowed','SOURCE_ACCESS_DENIED');
+      }
+    }});
     if(config.dots.enabled){
       const refreshDotsPolicy=async source=>{
         current=await loadConfig(filename);
@@ -98,17 +117,58 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     const secret=randomBytes(32).toString('hex');const secretFile=path.join(config.dataDir,'control.secret');await atomicText(secretFile,secret);
     const handleControl=async(req,res)=>{
       const send=(status,body,close=false)=>sendHttpJson(res,status,body,{close});
-      let scope;
+      let scope,disconnect;
       try{
         const auth=Buffer.from(String(req.headers.authorization??'')),expected=Buffer.from('Bearer '+secret);check(auth.length===expected.length&&timingSafeEqual(auth,expected),'UNAUTHORIZED');
         if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,...(channelWorker?{channelWorkspaces:channelWorker.status()}:{}),taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status(),source});return;}
-        check(req.method==='POST'&&req.url==='/v1/command','ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');check(controlOperations.size<8,'CONTROL_BUSY');
+        check(req.method==='POST'&&['/v1/command','/v1/project'].includes(req.url),'ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');check(controlOperations.size<8,'CONTROL_BUSY');
         scope=deadlineScope(10000,'CONTROL_BODY_TIMEOUT');controlReads.add(scope);
-        const body=await readHttpBody(req,{maxBytes:200000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});
-        const input=JSON.parse(body.toString('utf8'));current=await awaitWithSignal(loadConfig(filename),scope.signal);check(!closing,'RUNTIME_STOPPING');check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
+        // Select the limit before buffering: a full escaped Project can exceed
+        // 1.2 MB, while other commands keep their 200 KB declared-length guard.
+        const projectRoute=req.url==='/v1/project';
+        const body=await readHttpBody(req,{maxBytes:projectRoute?1500000:200000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});
+        const input=JSON.parse(body.toString('utf8'));check(!projectRoute||input?.action==='project','PROJECT_ROUTE_REQUIRED');current=await awaitWithSignal(loadConfig(filename),scope.signal);check(!closing,'RUNTIME_STOPPING');check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
         controlReads.delete(scope);scope.dispose();scope=null;
         let result;
         if(input.action==='tasks')result=await pipeline.tasks(input.actor);
+        else if(input.action==='judgment')result=await judgment.read({actor:input.actor,taskId:input.taskId});
+        else if(input.action==='project'){
+          const {action,surface,approval_id,...operation}=input;
+          check(surface===undefined||surface==='dots','PROJECT_SURFACE_INVALID');
+          // A surface marker can only add restrictions to the operator grant.
+          // Keep the original call's scope through authorization and commit.
+          const assertScope=surface==='dots'?policy=>{
+            check(config.dots.enabled&&policy.dots.enabled,'DOTS_DISABLED');
+            check(config.dots.actorId===input.actor&&policy.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
+            check(config.dots.projectOperations?.includes(operation.operation)&&policy.dots.projectOperations?.includes(operation.operation),'PROJECT_OPERATION_NOT_ALLOWED');
+          }:()=>{};
+          scope=deadlineScope(8000,'PROJECT_OPERATION_TIMEOUT');controlReads.add(scope);
+          const operationScope=scope;
+          disconnect=()=>{if(!res.writableFinished)operationScope.abort(new Refused('HTTP_CLIENT_DISCONNECTED'));};
+          req.once('aborted',disconnect);res.once('close',disconnect);
+          if(req.aborted||res.destroyed)disconnect();
+          const signal=scope.signal;
+          const work=(async()=>{
+            if(['prepare','read_approval'].includes(operation.operation)){
+              check(surface==='dots'&&dots&&config.dots.actorId===input.actor&&current.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
+              if(operation.operation==='prepare'){
+                check(approval_id===undefined,'PROJECT_REQUEST_INVALID');shape(operation,['actor','operation','id','revision','candidate'],'PROJECT_REQUEST_INVALID');
+                return dots.prepareProject(operation.id,operation.revision,operation.candidate,{signal});
+              }
+              shape(operation,['actor','operation'],'PROJECT_REQUEST_INVALID');return dots.readProjectDraft(approval_id,{signal});
+            }
+            let assertApproval=()=>{};
+            if(surface==='dots'&&['create','correct'].includes(operation.operation)){
+              check(dots,'DOTS_DISABLED');assertScope(current);
+              assertApproval=await dots.authorizeProjectWrite(approval_id,operation,{signal});
+            }else check(approval_id===undefined,'PROJECT_REQUEST_INVALID');
+            return projects.handle(operation,{signal,assertScope:policy=>{assertScope(policy);assertApproval(policy);}});
+          })();
+          // Keep SQLite/host ownership until the real authorization work settles,
+          // even if its response timed out. The hub rechecks abort before commit.
+          controlOperations.add(work);const settled=()=>controlOperations.delete(work);work.then(settled,settled);
+          result=await awaitWithSignal(work,scope.signal);
+        }
         else if(input.action==='result')result=await pipeline.result(input.taskId,input.actor);
         else if(input.action==='stop'){await pipeline.stop(input.taskId,input.actor);result={state:'stop_requested'};}
         else if(input.action==='resume')result=await pipeline.resume(input.taskId,input.actor);
@@ -129,7 +189,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         else if(input.action==='shutdown'){result={state:'stopping'};setImmediate(()=>{void close().catch(e=>log({event:'runtime_shutdown_failed',code:errorCode(e)}));});}
         else throw new Error('UNKNOWN_COMMAND');send(200,{ok:true,result});
       }catch(e){const code=errorCode(e);send(code==='UNAUTHORIZED'?401:code==='CONTROL_BUSY'||code==='RUNTIME_STOPPING'?503:code==='CONTROL_BODY_LIMIT'?413:code==='CONTROL_BODY_TIMEOUT'?408:400,{ok:false,error:code},true);}
-      finally{if(scope){controlReads.delete(scope);scope.dispose();}}
+      finally{if(disconnect){req.removeListener('aborted',disconnect);res.removeListener('close',disconnect);}if(scope){controlReads.delete(scope);scope.dispose();}}
     };
     control=http.createServer({maxHeaderSize:16384,requestTimeout:15000,headersTimeout:10000},(req,res)=>{
       const operation=handleControl(req,res);controlOperations.add(operation);void operation.finally(()=>controlOperations.delete(operation)).catch(()=>{});
@@ -180,29 +240,35 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     closePromise=(async()=>{
       // Keep the store and host lock if a dispatched import has an uncertain drain.
       await bridge?.drain();await rotation?.close();await discord?.close();await archive?.close();await channelWorker?.close();await pipeline.close();
-      await Promise.allSettled([...controlOperations]);await stopped;await accessMonitor.drain({pending:policyWork?[policyWork]:[]});if(owner.kind==='remote')await owner.close();
+      await judgment.drain();await Promise.allSettled([...controlOperations]);await stopped;await accessMonitor.drain({pending:policyWork?[policyWork]:[]});if(owner.kind==='remote')await owner.close();
       store.releaseHost(ownerId);store.close();clearInterval(shutdownKeepAlive);log({event:'runtime_stopped',ownerId});stopDebug();
     })().catch(error=>{closePromise=null;if(errorCode(error).endsWith('_DRAIN_UNCERTAIN'))shutdownKeepAlive??=setInterval(()=>{},1000);throw error;});
     return closePromise;
   }
-  return {config,store,owner,pipeline,discord,voice,dots,close};
+  return {config,store,owner,pipeline,discord,voice,dots,projects,close};
 }
-async function localControlRequest(port,route,token,payload){
+async function localControlRequest(port,route,token,payload,{signal}={}){
+  signal?.throwIfAborted();
   return new Promise((resolve,reject)=>{
+    const cleanup=()=>signal?.removeEventListener('abort',abort);
+    const fail=error=>{cleanup();reject(error);};
+    const succeed=value=>{cleanup();resolve(value);};
+    const abort=()=>request.destroy(signal.reason instanceof Error?signal.reason:new Refused('OPERATION_CANCELLED'));
     const body=payload===undefined?null:JSON.stringify(payload);
     const request=http.request({hostname:'127.0.0.1',port,path:route,method:body===null?'GET':'POST',headers:{authorization:'Bearer '+token,...(body===null?{}:{'content-type':'application/json','content-length':Buffer.byteLength(body)})}},response=>{
       const chunks=[];let size=0;response.on('data',chunk=>{size+=chunk.length;if(size>1000000){request.destroy(new Error('CONTROL_RESPONSE_LIMIT'));return;}chunks.push(chunk);});
-      response.on('error',reject);response.on('end',()=>{try{const value=JSON.parse(Buffer.concat(chunks).toString('utf8'));check(response.statusCode===200,typeof value.error==='string'&&/^[A-Z_]+$/.test(value.error)?value.error:'RUNTIME_NOT_AVAILABLE');resolve(value);}catch(error){reject(error);}});
+      response.on('error',fail);response.on('end',()=>{try{const value=JSON.parse(Buffer.concat(chunks).toString('utf8'));check(response.statusCode===200,typeof value.error==='string'&&/^[A-Z_]+$/.test(value.error)?value.error:'RUNTIME_NOT_AVAILABLE');succeed(value);}catch(error){fail(error);}});
     });
-    request.setTimeout(body===null?3000:30000,()=>request.destroy(new Error('CONTROL_TIMEOUT')));request.on('error',reject);request.end(body);
+    request.setTimeout(body===null?3000:30000,()=>request.destroy(new Error('CONTROL_TIMEOUT')));request.on('error',fail);signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();else request.end(body);
   });
 }
-export async function controlCommand(config,input){
+export async function controlCommand(config,input,{signal}={}){
+  signal?.throwIfAborted();
   const runtime=JSON.parse((await readArtifact(path.join(config.dataDir,'runtime.json'),65536)).toString('utf8'));
   const port=Number(runtime.port);check(Number.isInteger(port)&&port>=1&&port<=65535,'RUNTIME_PORT_INVALID');
   const token=(await readArtifact(path.join(config.dataDir,'control.secret'),64)).toString('utf8');check(/^[a-f0-9]{64}$/.test(token),'CONTROL_TOKEN_INVALID');
-  const current=await localControlRequest(port,'/v1/status',token);
+  const current=await localControlRequest(port,'/v1/status',token,undefined,{signal});
   check(current.ownerId===runtime.ownerId&&current.pid===runtime.pid&&current.startedAt===runtime.startedAt,'RUNTIME_OWNER_CHANGED');
   if(input.action==='status')return current;
-  const value=await localControlRequest(port,'/v1/command',token,input);check(value.ok,value.error??'CONTROL_FAILED');return value.result;
+  const value=await localControlRequest(port,input.action==='project'?'/v1/project':'/v1/command',token,input,{signal});check(value.ok,value.error??'CONTROL_FAILED');return value.result;
 }

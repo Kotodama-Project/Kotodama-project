@@ -95,18 +95,31 @@ class SchedulerScalabilityTests(unittest.TestCase):
         state = self.state()
         state.create_run(self.plan([self.job("held", keys=["shared-resource"])]))
         state.claim("run-demo", "holder")
+
+        def query_work():
+            connection = state._connect()
+            try:
+                steps = [0]
+                connection.set_progress_handler(lambda: steps.__setitem__(0, steps[0] + 1) or 0, 1)
+                self.assertEqual(state._leased_exclusive_keys(connection), {"shared-resource"})
+                cold = steps[0]
+                steps[0] = 0
+                self.assertEqual(state._leased_exclusive_keys(connection), {"shared-resource"})
+                return cold, steps[0]
+            finally:
+                connection.close()
+
+        empty_history = query_work()
         for number in range(10):
             retained = self.plan([self.job(f"job-{job:03}") for job in range(1_000)], budget=0)
             retained["run_id"] = f"retained-run-{number}"
             state.create_run(retained)
-        connection = state._connect()
-        try:
-            steps = [0]
-            connection.set_progress_handler(lambda: steps.__setitem__(0, steps[0] + 1) or 0, 1)
-            self.assertEqual(state._leased_exclusive_keys(connection), {"shared-resource"})
-            self.assertLess(steps[0], 100, "lease lookup work must be independent of retained jobs")
-        finally:
-            connection.close()
+        retained_history = query_work()
+        # A fresh connection also loads schema metadata. Compare that overhead
+        # for this same schema, and bound the actual lookup separately so adding
+        # an unrelated table cannot masquerade as a retained-history scan.
+        self.assertEqual(retained_history, empty_history, "cold and warm lookup work must ignore retained jobs")
+        self.assertLess(retained_history[1], 100, "warm lease lookup work must be bounded")
 
 
 class TransportScalabilityTests(unittest.TestCase):

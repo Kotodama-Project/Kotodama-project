@@ -26,7 +26,7 @@ export class VoiceProvider {
         const error=new Refused(code);error.voiceProviderReported=true;
         this.abort();reject(error);this.onError(code);
       };
-      const commandFailure=cause=>{const commandId=cause?.client_event_id??cause?.error?.client_event_id;if(!commandId)return false;if(this.rejectedCommands.delete(commandId))return true;if(!this.commandIds.has(commandId))return false;const commandType=this.commandIds.get(commandId),code=cause?.error?.code??cause?.code??null;this.commandIds.delete(commandId);this.rejectedCommands.add(commandId);this.lastCommandError={code,at:Date.now()};const cleanup=setTimeout(()=>this.rejectedCommands.delete(commandId),5000);cleanup.unref();this.onEvent('session.command.rejected',{commandType,code});if(!this.closing)this.onError('VOICE_PROVIDER_COMMAND_REJECTED');return true;};
+      const commandFailure=cause=>{const commandId=cause?.client_event_id??cause?.error?.client_event_id;if(!commandId)return false;if(this.rejectedCommands.delete(commandId))return true;if(!this.commandIds.has(commandId))return false;const command=this.commandIds.get(commandId),code=cause?.error?.code??cause?.code??null;this.commandIds.delete(commandId);this.rejectedCommands.add(commandId);this.lastCommandError={code,at:Date.now()};const cleanup=setTimeout(()=>this.rejectedCommands.delete(commandId),5000);cleanup.unref();this.onEvent('session.command.rejected',{commandType:command.commandType,code});if(!this.closing)this.onError('VOICE_PROVIDER_COMMAND_REJECTED',command);return true;};
       const expectedCommandWrapper=cause=>{const code=cause?.error?.code??cause?.code??null;if(code==='context_injection_incomplete'&&this.closing)return true;if(this.lastCommandError&&Date.now()-this.lastCommandError.at<1000&&(code===null||code===this.lastCommandError.code)){this.lastCommandError=null;return true;}return false;};
       try{
       if(this.mode==='assist'){
@@ -95,17 +95,18 @@ export class VoiceProvider {
     }
     if(this.active&&!this.closed)this.transport.send({type:'response.create'});
   }
-  sendAppend(type,content,delegationId=null){
+  sendAppend(type,content,delegationId=null,{replyToken=null,outputGeneration=null}={}){
     check(this.mode==='assist'&&this.active&&!this.closed,'VOICE_NOT_ACTIVE');check(typeof content==='string'&&content.trim()&&content.length<=2000,'VOICE_CONTEXT_INVALID');
-    const event_id=uid('live');this.commandIds.set(event_id,type);this.transport.send({type,event_id,delegation_id:delegationId,content:content.trim()});return event_id;
+    // Bind locally before send: the SDK may reject this command synchronously.
+    const event_id=uid('live');this.commandIds.set(event_id,Object.freeze({commandType:type,replyToken,outputGeneration}));this.transport.send({type,event_id,delegation_id:delegationId,content:content.trim()});return event_id;
   }
-  async respond(text,{delegationId=null}={}){
+  async respond(text,{delegationId=null,replyToken=null}={}){
     check(this.mode==='assist','VOICE_MODE_INVALID');if(this.interrupted){const delay=120-(Date.now()-this.interruptedAt);if(delay>0)await new Promise(resolve=>setTimeout(resolve,delay));}this.interrupted=false;this.outputPermitted=true;this.outputGeneration++;
-    const eventId=this.sendAppend('session.commentary.append',text,delegationId);return {eventId,outputGeneration:this.outputGeneration};
+    const outputGeneration=this.outputGeneration,eventId=this.sendAppend('session.commentary.append',text,delegationId,{replyToken,outputGeneration});return {eventId,outputGeneration};
   }
-  interrupt(){
+  interrupt({replyToken=null,outputGeneration=this.outputGeneration}={}){
     if(this.mode!=='assist'||!this.active||this.closed)return null;this.interrupted=true;this.interruptedAt=Date.now();this.outputPermitted=false;this.outputGeneration++;
-    return this.sendAppend('session.instructions.append','今の発話を直ちに止め、未完の文を続けず、ユーザーの次の発話を聞いてください。',null);
+    return this.sendAppend('session.instructions.append','今の発話を直ちに止め、未完の文を続けず、ユーザーの次の発話を聞いてください。',null,{replyToken,outputGeneration});
   }
   resumeOutput(){if(this.naturalConversation&&this.active&&this.interrupted){this.interrupted=false;this.outputPermitted=true;this.outputGeneration++;}}
   completeItem(e){if(this.seen.has(e.item_id))return;if(!this.items.has(e.item_id)){this.completions.set(e.item_id,e);return;}check(typeof e.transcript==='string','TRANSCRIPT_INVALID');const binding=this.items.get(e.item_id);this.items.delete(e.item_id);this.completions.delete(e.item_id);this.seen.add(e.item_id);this.onCompleted({...binding,providerItemId:e.item_id,text:e.transcript,final:true});if(!this.items.size&&!this.commits.length)this.resolveDrained?.();}
