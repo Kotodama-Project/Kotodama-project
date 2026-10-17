@@ -8,6 +8,7 @@ import {request} from 'node:http';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {exampleConfig,loadConfig} from '../src/config.mjs';
+import {atomicJson} from '../src/common.mjs';
 import {startRuntime,controlCommand} from '../src/runtime.mjs';
 import {DiscordAdapter} from '../src/discord.mjs';
 
@@ -52,7 +53,9 @@ async function fixture(t,{dotsOperations=taskOperations}={}){
   t.after(async()=>{try{for(const cleanup of cleanups.reverse())await cleanup();}finally{assert(path.basename(root).startsWith('ktdm-project-dots-tasks-'));await rm(root,{recursive:true,force:true});}});
   config.dataDir=path.join(root,'data');config.projects={operations};
   config.dots={enabled:true,actorId:actor,channelIds:[channel],requestTtlSeconds:3600,projectOperations:dotsOperations};
-  const file=path.join(root,'bot.json'),save=()=>writeFile(file,JSON.stringify(config),'utf8');await save();
+  // Publish a complete grant update; the policy watcher must not observe a
+  // truncate/write gap and exercise the unrelated malformed-config refusal.
+  const file=path.join(root,'bot.json'),save=()=>atomicJson(file,config);await save();
   const runtime=await startRuntime(file,{offline:true,log:()=>{}});cleanups.push(()=>runtime.close());
   const sent=[];runtime.dots.deliver=async(source,message,{beforeSend})=>{beforeSend();sent.push(message);return {id:'synthetic-'+sent.length};};
   const adapter=new DiscordAdapter({config:runtime.config,store:runtime.store,pipeline:runtime.pipeline,dots:runtime.dots});adapter.verifiedInstallation=true;cleanups.push(()=>adapter.client.destroy());
