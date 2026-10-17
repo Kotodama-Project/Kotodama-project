@@ -53,6 +53,35 @@ test('Project execution uses one existing Task, retains complete conditions and 
   await assert.rejects(f.call({...f.run,task:{...f.run.task,request:'別の依頼'}}),/PROJECT_REQUEST_CONFLICT/);
 });
 
+test('accepted same-Source corrections preserve original text and execute the latest bound version',async t=>{
+  const f=await fixture(t),correctedText='訂正後の依頼も公開せず資料にする';
+  f.runtime.store.ingest({...f.raw,revision:2,text:correctedText});const source={...f.source,revision:2};
+  const corrected=await f.call({operation:'correct',project_id:f.run.project_id,expected_revision:1,base_digest:f.project.project_digest,request_id:'correct-source',source,reason:'原依頼の訂正を反映',brief:{...brief,outcome:'訂正を反映した成果'}});
+  const input={...f.run,expected_revision:2,base_digest:corrected.project_digest,source};
+  const run=await f.call(input);await f.runtime.pipeline.tail;
+  assert.equal(run.dispatch.state,'admitted');assert.equal(f.runs,1);
+  assert.deepEqual(f.seen.task.contextSources,[source]);assert.deepEqual(f.seen.context.map(s=>s.text),[correctedText]);
+  assert.deepEqual(f.seen.task.projectBinding.source_history,[f.source,source]);
+  const contract=JSON.parse(f.seen.task.request.split('\n\nPROJECT_CONTRACT\n')[1]);
+  assert.equal(contract.original_ref,f.project.project.original_ref);
+  assert.deepEqual(contract.source_refs,[f.source,source]);assert.deepEqual(contract.source_history,[{...f.source,text:f.raw.text}]);
+  assert.deepEqual(contract.brief,corrected.project.brief);
+  const result=await f.call({operation:'read_result',project_id:f.run.project_id,task_id:run.task_ref.task_id});
+  assert.equal(result.result_metadata.artifact_readback,'verified');
+  await f.restart();assert.equal((await f.call(input)).dispatch.state,'not_repeated');assert.equal(f.runs,1);
+  assert.deepEqual((await f.call({operation:'read',project_id:f.run.project_id})).source_refs.map(s=>s.revision),[1,2]);
+});
+
+test('an unacknowledged later Source revision is refused even with a fresh execution request',async t=>{
+  const f=await fixture(t);f.runtime.store.ingest({...f.raw,revision:2,text:'明示的に反映した訂正'});
+  const corrected=await f.call({operation:'correct',project_id:f.run.project_id,expected_revision:1,base_digest:f.project.project_digest,request_id:'correct-source',source:{...f.source,revision:2},reason:'訂正を反映',brief:{...brief,outcome:'更新した目的'}});
+  f.runtime.store.ingest({...f.raw,revision:3,text:'まだProjectに反映していない訂正'});
+  const key=f.runtime.store.ingest({...f.raw,sourceId:'separate-request',text:'最新Projectを実行して'}).key;
+  await assert.rejects(f.call({...f.run,expected_revision:2,base_digest:corrected.project_digest,source:{key,revision:1}}),/PROJECT_SOURCE_CHANGED/);
+  assert.equal(f.runs,0);assert.equal(f.runtime.store.tasks(actor).length,0);
+  assert.equal((await f.call({operation:'read',project_id:f.run.project_id})).project.revision,2);
+});
+
 test('run requires the operation grant, current action grant, exact Project version and unchanged Source',async t=>{
   const f=await fixture(t);
   for(const patch of [{expected_revision:2},{base_digest:'0'.repeat(64)},{task:{...f.run.task,action:'swarm_research'}},{task:{...f.run.task,actor:'other'}}])await assert.rejects(f.call({...f.run,...patch}));

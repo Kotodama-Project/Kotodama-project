@@ -156,6 +156,8 @@ Project操作の許可だけでは実行できず、現在の`worker.actions`も
 `run_task`はresearch/summarize/develop/write_fileだけを受け付けます。
 Sourceは既に保存された本人の確定版を使い、Project条件・原依頼参照・受入条件を
 省略せずTask入力へ保持します。上限超過は切捨てず拒否します。
+同じSourceの訂正前の版はProject履歴・原文として保持し、現在性はSourceごとの
+最新の明示採用版へ束縛します。未採用の後続訂正は拒否し、旧版の閲覧権限も確認します。
 新しいTask、Project参照、新revisionと再送receiptは同じSQLite transactionです。
 その後、既存Pipelineの有限キュー、既存worker、取消・grant再照合へ渡します。
 書込みのLinux隔離・検証設定は既存workerと同じで、Projectから迂回できません。
