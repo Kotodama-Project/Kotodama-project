@@ -23,6 +23,8 @@ TARGETS = {
     "tests/test_task_swarm_executor_cli.py::test_learning_cli_uses_current_decision_and_keeps_the_typed_transport[23-False]",
     "tests/test_task_swarm_executor_cli.py::test_learning_cli_uses_current_decision_and_keeps_the_typed_transport[13-False]",
     "tests/test_task_swarm_learning_reuse.py::test_cli_explicit_review_decision_run_and_anchor_replay",
+    "tests/test_task_swarm_learning_reuse_cli.py::test_cli_constructs_only_the_coordinator_owner_on_run_and_replay",
+    "tests/test_task_swarm_learning_reuse_cli.py::test_cli_normalizes_owner_paths_and_replays_from_another_cwd[home]",
     "tests/test_task_swarm_dependency_recovery.py::test_terminal_resume_preserves_scoped_acceptance",
     "tests/test_task_swarm_dependency_recovery.py::test_two_fresh_resumers_create_only_one_b_attempt",
 }
@@ -173,6 +175,8 @@ class Plugin:
                     label = "dependency-recovery"
                 elif list(command[1:4]) == ["-B", "-m", "task_swarm.learning_reuse"]:
                     label = "learning-reuse"
+                elif list(command[1:4]) == ["-B", str(ROOT / "tools/measure_learning_reuse_cli.py"), "--child"]:
+                    label = "learning-reuse-constructor"
             if label is None:
                 return original(process, input=input, timeout=timeout)
             return self.probe.communicate(original, process, input, timeout, label=label)
