@@ -97,6 +97,8 @@ plan/scenarioは[閉ループの形式](TASK-SWARM-CLOSED-LOOP.md#実行入口)�
 Pythonでは`ReuseOwner.review/decide/current/execute`を使います。`execute`は既存
 `execute_closed_loop`へ委譲し、coordinator自身が現在のowner/storeを読みます。
 任意のsuccess callbackや自己申告のcontext bindingで判断検査を置き換えられません。
+CLIの`run`は引数とownerパスを準備して同じcoordinatorへ直接渡し、外側で使われない
+`ReuseOwner`を先に構築しません。coordinator自身の再構築と全guardは保持します。
 dispatch前と報告の利用前に取消・grant・owner・資料を再確認します。
 完了済みBの再読には外部保存した`--receipt-sha256`が必要です。有効なowner/grantの範囲で
 objective deadline後も再読できますが、新dispatch・review・判断は期限後に受け付けません。
