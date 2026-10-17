@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,writeFile,readFile,rm,symlink} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,readFile,rm,symlink,realpath} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -10,8 +10,13 @@ import {startRuntime,controlCommand} from '../src/runtime.mjs';
 
 const actor='100000000000000002';
 const brief={outcome:'元の依頼を保つ',in_scope:['調査'],out_of_scope:['公開'],constraints:['原文を省略しない'],acceptance:['根拠を返す'],unknowns:['未確認の前提']};
-async function fixture(t,{workerHook=null,realWorker=false}={}){
-  const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-project-execution-'));
+async function fixture(t,{workerHook=null,realWorker=false,workspaceAlias=false}={}){
+  const container=await mkdtemp(path.join(os.tmpdir(),'ktdm-project-execution-'));
+  let root=container;
+  if(workspaceAlias){
+    const physical=path.join(container,'physical');await mkdir(physical);root=path.join(container,'alias');
+    await symlink(physical,root,process.platform==='win32'?'junction':'dir');
+  }
   const config=exampleConfig({workspace:root});config.dataDir=path.join(root,'data');
   config.projects={operations:['create','read','correct','run_task','resume_task','read_task','read_result','link_task','unlink_task']};
   if(realWorker){config.worker.executable=process.execPath;config.worker.args=[fileURLToPath(new URL('./fixtures/model-cli.mjs',import.meta.url))];}
@@ -24,7 +29,7 @@ async function fixture(t,{workerHook=null,realWorker=false}={}){
     return {state:'needs_review',summary,artifacts:[{path:summaryPath,relative:'result.md',sha256:digest(summary),bytes:Buffer.byteLength(summary)}],validations:[],taskRevision:task.revision,sourceRevision:task.source_revision,verifiedExecution:true,independentReview:false};
   }};
   const start=()=>startRuntime(filename,{offline:true,...(realWorker?{}:{worker}),analyzer:{analyze:()=>{throw Error('unexpected analyzer');}},log:()=>{}});
-  let runtime=await start();t.after(async()=>{await runtime.close();await rm(root,{recursive:true,force:true});});
+  let runtime=await start();t.after(async()=>{await runtime.close();await rm(container,{recursive:true,force:true});});
   const raw={provider:'discord',guildId:config.discord.guildId,channelId:config.discord.resultChannelId,sourceId:'project-origin',actorId:actor,revision:1,final:true,readers:[actor],text:'公開せず資料を作る',metadata:{kind:'text'}};
   const source={key:runtime.store.ingest(raw).key,revision:1};
   const call=input=>controlCommand(config,{action:'project',actor,...input});
@@ -149,6 +154,17 @@ test('artifact tamper, replacement symlink and current Source revocation refuse 
   await writeFile(f.summaryPath,'改ざん');await assert.rejects(f.call(input),/ARTIFACT_CHANGED/);
   if(process.platform!=='win32'){await rm(f.summaryPath);const other=path.join(f.root,'outside.md');await writeFile(other,'合成workerの成果');await symlink(other,f.summaryPath);await assert.rejects(f.call(input));}
   f.runtime.store.ingest({...f.raw,revision:2,readers:[]});await assert.rejects(f.call(input),/SOURCE_ACCESS_DENIED/);
+});
+
+test('result readback accepts a configured directory alias but rejects a different same-content artifact',async t=>{
+  const f=await fixture(t,{workspaceAlias:true}),run=await f.call(f.run);await f.runtime.pipeline.tail;
+  assert.notEqual(await realpath(f.summaryPath),f.summaryPath);
+  const input={operation:'read_result',project_id:f.run.project_id,task_id:run.task_ref.task_id};
+  assert.equal((await f.call(input)).result.summary,'合成workerの成果');
+  const task=f.runtime.store.taskInternal(run.task_ref.task_id),other=path.join(f.root,'other-result.md');
+  await writeFile(other,task.result.summary);task.result.artifacts[0].path=other;
+  f.runtime.store.statement('UPDATE tasks SET result=? WHERE id=?').run(JSON.stringify(task.result),task.id);
+  await assert.rejects(f.call(input),/PROJECT_TASK_RESULT_INVALID/);
 });
 
 test('result readback rechecks authorization and Task after the asynchronous file read',async t=>{

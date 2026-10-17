@@ -1,4 +1,5 @@
 import path from 'node:path';
+import {realpath} from 'node:fs/promises';
 import {readArtifact} from './artifact.mjs';
 import {resultFiles} from './result-files.mjs';
 import {verifyArtifacts} from './worker.mjs';
@@ -160,7 +161,9 @@ export class ProjectHub{
       check(summary.length===1,'PROJECT_RESULT_SUMMARY_REQUIRED');
       const base=path.join(this.config.dataDir,'artifacts',`${task.id}-r${task.revision}`);
       const file=await safePath(base,'result.md'),a=summary[0];
-      check(a.path===file&&a.bytes===Buffer.byteLength(result.summary),'PROJECT_TASK_RESULT_INVALID');
+      // Match the actual file, as resultFiles does: Windows short names and
+      // configured directory aliases can differ from safePath's canonical root.
+      check(path.relative(await realpath(a.path),file)===''&&a.bytes===Buffer.byteLength(result.summary),'PROJECT_TASK_RESULT_INVALID');
       const bytes=await readArtifact(file,65536);
       check(bytes.length===a.bytes&&digest(bytes)===a.sha256&&bytes.toString('utf8')===result.summary,'ARTIFACT_CHANGED');summarySha=digest(bytes);
     }
