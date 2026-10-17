@@ -144,7 +144,7 @@ export class DotsBridge {
     // Validate all bounded content before any transport receipt is inserted.
     check(candidate&&typeof candidate==='object'&&!Object.hasOwn(candidate,'actor'),'PROJECT_REQUEST_INVALID');
     const payload=validateProjectRequest({...candidate,actor:this.config.dots.actorId});
-    check(['create','correct','link_task','unlink_task'].includes(payload.operation),'PROJECT_OPERATION_INVALID');this.projectScope(payload.operation);
+    check(['create','correct','link_task','unlink_task','run_task','resume_task'].includes(payload.operation),'PROJECT_OPERATION_INVALID');this.projectScope(payload.operation);
     check(typeof id==='string'&&/^dot_[a-f0-9]{24}$/.test(id)&&Number.isSafeInteger(revision)&&revision>=0,'DOTS_SOURCE_CHANGED');
     const {row,source}=await this.current(id,{signal});
     check(row.state==='pending'&&row.source_revision===revision,'DOTS_SOURCE_CHANGED');
@@ -167,11 +167,11 @@ export class DotsBridge {
   }
   projectReviewMessage(draft){
     const operation=draft.payload.operation,association=['link_task','unlink_task'].includes(operation);
-    const label={create:'作成',correct:'訂正',link_task:'Task関連付け',unlink_task:'Task関連解除'}[operation];
-    const fields=association?'Task ID・Project revision・digest・理由'+(operation==='link_task'?'・Task revision':''):'目的・全条件'+(operation==='correct'?'・訂正理由・対象revision':'');
-    return {content:`Projectの${label}候補です。添付JSONの${fields}・Source・request_idを確認してください。この内容の保存を一回だけ許可します。Task自体の実行・取消・削除は行いません。許可は5分間有効です。\n${draft.id}`,
+    const label={create:'作成',correct:'訂正',link_task:'Task関連付け',unlink_task:'Task関連解除',run_task:'Task作成・実行',resume_task:'同じTaskの再開'}[operation];
+    const fields=operation==='resume_task'?'再開するTask ID・Task revision・Project revision・digest・理由':operation==='run_task'?'Taskの全文・操作・受入条件・Project revision・digest・理由':association?'Task ID・Project revision・digest・理由'+(operation==='link_task'?'・Task revision':''):'目的・全条件'+(operation==='correct'?'・訂正理由・対象revision':'');
+    return {content:`Projectの${label}候補です。添付JSONの${fields}・Source・request_idを確認してください。${operation==='resume_task'?'このTaskの再開を一回だけ許可します。':operation==='run_task'?'この内容で既存ownerにTaskを作成し、現在の実行grant内で一回だけ実行を開始します。':'この内容の保存を一回だけ許可します。Task自体の実行・取消・削除は行いません。'}許可は5分間有効です。\n${draft.id}`,
       files:[{attachment:Buffer.from(JSON.stringify(draft.payload,null,2),'utf8'),name:'project-candidate.json'}],
-      components:[{type:1,components:[{type:2,style:1,label:'この内容のProject保存を許可',custom_id:'kotodama-project:'+draft.id+':'+draft.digest.slice(0,16)}]}],allowedMentions:{parse:[]}};
+      components:[{type:1,components:[{type:2,style:1,label:['run_task','resume_task'].includes(operation)?'この内容のTask実行を許可':'この内容のProject保存を許可',custom_id:'kotodama-project:'+draft.id+':'+draft.digest.slice(0,16)}]}],allowedMentions:{parse:[]}};
   }
   async readProjectDraft(id,{signal}={}){
     this.prune();const draft=this.projectDraft(id);this.projectScope(draft.payload.operation);await this.current(draft.requestId,{signal});
@@ -186,7 +186,7 @@ export class DotsBridge {
   }
   async authorizeProjectWrite(id,input,{signal}={}){
     const payload=validateProjectRequest(input),draft=this.projectDraft(id);
-    check(['create','correct','link_task','unlink_task'].includes(payload.operation)&&digest(payload)===draft.digest,'PROJECT_APPROVAL_BINDING_CHANGED');
+    check(['create','correct','link_task','unlink_task','run_task','resume_task'].includes(payload.operation)&&digest(payload)===draft.digest,'PROJECT_APPROVAL_BINDING_CHANGED');
     await this.current(draft.requestId,{signal});
     // The caller invokes this synchronous guard inside the Project owner's
     // transaction. Its existing exact-payload request receipt is the only

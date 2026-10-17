@@ -173,7 +173,7 @@ export class Store {
     return this.transaction(()=>{
       const current=this.source(source.key,source.actorId);check(current.revision===source.revision,'SOURCE_CHANGED');
       const old=this.statement('SELECT id FROM tasks WHERE request_key=?').get(requestKey);if(old){const task=this.task(old.id,source.actorId);if(task.source_revision!==source.revision)return this.reviseTask(old.id,source,intent);return task;}
-      const id=uid('task');const task={id,source_key:source.key,source_revision:source.revision,room:`${source.provider}:${source.guildId}:${source.channelId}`,actor:source.actorId,title:intent.title,request:intent.request,action:intent.action,intentIds:intent.intentIds??[],requiredActions:intent.requiredActions??[intent.action],acceptance:intent.acceptance??[],contextSources:intent.contextSources??[],createdAt:new Date().toISOString()};
+      const id=uid('task');const task={id,source_key:source.key,source_revision:source.revision,room:`${source.provider}:${source.guildId}:${source.channelId}`,actor:source.actorId,title:intent.title,request:intent.request,action:intent.action,intentIds:intent.intentIds??[],requiredActions:intent.requiredActions??[intent.action],acceptance:intent.acceptance??[],contextSources:intent.contextSources??[],createdAt:new Date().toISOString(),...(intent.projectBinding?{projectBinding:structuredClone(intent.projectBinding)}:{})};
       this.statement('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,NULL)').run(id,requestKey,source.key,source.revision,task.room,source.actorId,1,'queued',JSON.stringify(task));this.indexTaskBindings(id,task.contextSources);this.indexesCurrent();this.event('task.created',{source_key:source.key,action:task.action},id);return this.task(id,source.actorId);
     });
   }

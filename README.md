@@ -67,7 +67,7 @@ checkout の Python 3.12 から使います。検索は現在の小さな Markdo
 | 現在の親制約・Task・保存済み実行を辿る | `python -B tools/hierarchy_trace.py --help` | [階層と実行履歴の参照](docs/KNOWLEDGE-HIERARCHY-TRACE.md) |
 | 固定 fixture の計測条件を確認する | `python -B tools/performance_benchmark.py --help` | [性能計測と固定比較](docs/PERFORMANCE-BENCHMARK.md) |
 
-実行には既存 owner に束縛した入力・worker と `--executor-mode local_executable_fixture` が必要です。学習の再利用には現在の採否判断も必要です。Python の Project CLI は参照と訂正候補の検査までです。既定無効の local owner 共通操作は Project の create/read/inspect/correct と、既存Taskの link_task/unlink_task/read_task を扱います。新規Projectの `task_refs` は空で、関連付け時にv2の型付き参照を保存します。Task自体の作成・更新・dispatchは行いません。GUIは参照と訂正候補の検査までです。検索品質・大規模性能や自律改善の全体受入は、これらの入口の存在だけでは成立しません。
+実行には既存 owner に束縛した入力・worker と `--executor-mode local_executable_fixture` が必要です。学習の再利用には現在の採否判断も必要です。Python の Project CLI は参照と訂正候補の検査までです。既定無効の local owner 共通操作は Project の create/read/inspect/correct と、既存Taskの link_task/unlink_task/read_task を扱います。新規Projectの `task_refs` は空で、関連付け時にv2の型付き参照を保存します。これらの参照・関連付け操作はTaskを実行しません。追加の明示`run_task`/`resume_task`は同じlocal Task ownerと既存Pipelineへ接続し、`read_result`は成果ファイルを照合します。既定無効で、Dotsの実行は本人確認と現在のworker grantが必要です。実サービス受入は未完了です。GUIは参照と訂正候補の検査までです。検索品質・大規模性能や自律改善の全体受入は、これらの入口の存在だけでは成立しません。
 
 ## 使い方を選ぶ
 

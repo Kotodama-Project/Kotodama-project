@@ -12,7 +12,7 @@ const id = z.string().regex(/^\d{5,24}$/);
 const envName=z.string().regex(/^[A-Z_][A-Z0-9_]*$/);
 const projectSkillNames=z.array(z.string().min(1).max(64).regex(PROJECT_SKILL_NAME)).max(MAX_PROJECT_SKILLS).refine(names=>new Set(names).size===names.length,{message:'PROJECT_SKILL_DUPLICATE'});
 const projectSkills=z.object(Object.fromEntries(PROJECT_SKILL_ACTIONS.map(action=>[action,projectSkillNames.optional()]))).strict();
-const projectOperations=z.array(z.enum(['read','create','inspect','correct','link_task','unlink_task','read_task'])).max(7).refine(values=>new Set(values).size===values.length,{message:'PROJECT_OPERATION_DUPLICATE'}).default([]);
+const projectOperations=z.array(z.enum(['read','create','inspect','correct','link_task','unlink_task','read_task','run_task','resume_task','read_result'])).max(10).refine(values=>new Set(values).size===values.length,{message:'PROJECT_OPERATION_DUPLICATE'}).default([]);
 const commandBase = z.object({executable:z.string().min(1),args:z.array(z.string()).default([]),model:z.string().optional(),codexHome:z.string().min(1).optional(),ignoreUserConfig:z.boolean().default(true),timeoutSeconds:z.number().int().min(5).max(3600).default(300)}).strict();
 const command=commandBase.extend({model:z.string().default('gpt-5.6-luna'),fallback:commandBase.extend({model:z.string().min(1)}).optional()});
 const analysisLimitsConfig=z.object({maxConcurrent:z.number().int().min(1).max(16),maxQueued:z.number().int().min(0).max(256),maxPerRoom:z.number().int().min(1).max(16),maxPerActor:z.number().int().min(1).max(16),maxDailyAnalyses:z.number().int().min(0).max(1000000),maxTotalAnalyses:z.number().int().min(0).max(10000000)}).partial().strict().transform(value=>({...DEFAULT_ANALYSIS_LIMITS,...value})).prefault({});

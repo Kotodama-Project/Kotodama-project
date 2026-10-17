@@ -8,6 +8,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
+- Projectの明示run_task/resume_taskを既存local Task owner・有限Pipelineへ接続し、本人確認・同一Task再送・条件束縛・再起動回復と成果ファイルreadbackを追加。既定無効、実サービス受入は別。
+
 - Project v2で既存local Taskへの関連付け・解除・状態照会を追加。Dotsでは本人が確認した候補だけを保存し、原意・訂正履歴とTask自体を保持する。成果の報告と完了の受入を分ける（#385）。
 
 - Linux Task swarm CIを2 shardへ分割し、各jobの20分上限を維持したまま全occurrenceと必須post-checkを6 jobの集約で照合する。Windowsの4 shardと製品の期限は変更しない。

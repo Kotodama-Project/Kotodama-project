@@ -139,6 +139,18 @@ export class Pipeline {
     try{task=await this.owner.createTask(s,{title,request,action,acceptance,key:'explicit-command',intentIds,requiredActions:[action]});await this.authorize(task);await this.#checkAdmission(source,[action]);await this.#enqueueTasks([task]);}catch(error){await this.#discardAdmission(task?[{task}]:[],error);throw error;}
     this.interactions.close(s,'task_created');return task;
   }
+  async dispatchProjectTask(id,actor,{signal,assertCurrent=()=>{}}={}){
+    let task;
+    try{
+      signal?.throwIfAborted();task=await this.owner.task(id,actor);
+      check(this.owner===this.store&&task.projectBinding,'PROJECT_LOCAL_OWNER_REQUIRED');
+      check(task.state==='queued','TASK_NOT_QUEUED');
+      await this.authorize(task);await this.#checkAdmission(this.store.source(task.source_key,actor),[task.action]);
+      signal?.throwIfAborted();assertCurrent();
+      const current=this.store.taskInternal(id);check(current.revision===task.revision&&current.state==='queued','TASK_CHANGED');
+      this.#scheduleTasks([task]);
+    }catch(error){await this.#discardAdmission(task?[{task}]:[],error);throw error;}
+  }
   endInteraction(source){this.interactions.close(source,'voice_end');}
   currentCorrectionTarget(id,actor,expected={}){
     const current=this.policy();check(this.owner===this.store&&current.owner.kind==='local'&&this.config.owner.kind==='local','TASK_CORRECTION_REQUIRES_LOCAL_OWNER');
@@ -217,7 +229,7 @@ export class Pipeline {
     const authorize=async()=>{check(!controller.signal.aborted,'CANCELLED');const latest=await this.owner.task(id,actor);check(latest.revision===task.revision&&latest.state==='running','TASK_CHANGED');const source=this.store.source(task.source_key,actor);check(source.revision===task.source_revision,'SOURCE_CHANGED');await this.owner.assertContext(id,actor);await this.authorize(latest);};
     try{
       check(!controller.signal.aborted,'CANCELLED');
-      const source=this.store.source(task.source_key,actor);const options=task.action==='swarm_research'?{sourceLimit:9,completeSources:true}:{};const context=[source,...this.context(source,actor,null,options)];const bindings=context.map(s=>({key:s.key,revision:s.revision}));const workerTask={...task,contextSources:bindings};check(Buffer.byteLength(JSON.stringify({task:workerTask,context}))<=this.taskAdmission.limits().maxInputBytes,'TASK_INPUT_BYTES_EXCEEDED');await this.owner.bindContext(id,task.revision,bindings);active.sourceKeys=new Set(bindings.map(s=>s.key));
+      const source=this.store.source(task.source_key,actor);const options=task.action==='swarm_research'?{sourceLimit:9,completeSources:true}:{};const context=task.projectBinding?task.projectBinding.sources.map(ref=>{const value=this.store.source(ref.key,actor);check(value.revision===ref.revision,'PROJECT_SOURCE_CHANGED');return value;}):[source,...this.context(source,actor,null,options)];const bindings=context.map(s=>({key:s.key,revision:s.revision}));const workerTask={...task,contextSources:bindings};check(Buffer.byteLength(JSON.stringify({task:workerTask,context}))<=this.taskAdmission.limits().maxInputBytes,'TASK_INPUT_BYTES_EXCEEDED');await this.owner.bindContext(id,task.revision,bindings);active.sourceKeys=new Set(bindings.map(s=>s.key));
       check(!controller.signal.aborted,'CANCELLED');
       const result=await this.worker.run(workerTask,context,{signal:controller.signal,authorize,onStart:p=>this.store.event('worker.started',p,id)});
       await authorize();check(Buffer.byteLength(JSON.stringify(result))<=this.taskAdmission.limits().maxResultBytes,'TASK_RESULT_BYTES_EXCEEDED');await this.owner.finish(id,task.revision,result);await this.onTask(await this.owner.task(id,actor));
