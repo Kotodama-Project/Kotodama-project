@@ -1,4 +1,4 @@
-"""Opt-in, content-free diagnosis for two Windows child-timeout regressions.
+"""Opt-in, content-free diagnosis for known Windows child-timeout regressions.
 
 The normal subprocess.run/communicate implementation still owns deadlines,
 termination and reaping. Missing diagnostics never turn a failing test green.
@@ -21,6 +21,10 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGETS = {
     "tests/test_task_swarm_closed_loop_recovery.py::test_recovery_reconstructs_actual_reuse_owner_and_current_decision[none]",
     "tests/test_task_swarm_executor_cli.py::test_learning_cli_uses_current_decision_and_keeps_the_typed_transport[23-False]",
+    "tests/test_task_swarm_executor_cli.py::test_learning_cli_uses_current_decision_and_keeps_the_typed_transport[13-False]",
+    "tests/test_task_swarm_learning_reuse.py::test_cli_explicit_review_decision_run_and_anchor_replay",
+    "tests/test_task_swarm_dependency_recovery.py::test_terminal_resume_preserves_scoped_acceptance",
+    "tests/test_task_swarm_dependency_recovery.py::test_two_fresh_resumers_create_only_one_b_attempt",
 }
 MAX_BYTES = 128 * 1024
 MAX_CALLS = 64
@@ -164,6 +168,11 @@ class Plugin:
                     label = "recovery"
                 elif str(ROOT / "tools/knowledge_base.py") in command:
                     label = "task-input"
+            elif isinstance(command, (list, tuple)) and timeout == 20:
+                if str(ROOT / "tests/test_task_swarm_dependency_recovery.py") in command:
+                    label = "dependency-recovery"
+                elif list(command[1:4]) == ["-B", "-m", "task_swarm.learning_reuse"]:
+                    label = "learning-reuse"
             if label is None:
                 return original(process, input=input, timeout=timeout)
             return self.probe.communicate(original, process, input, timeout, label=label)
