@@ -100,6 +100,34 @@ resource = "runtime.app.plugin"
             self.assertEqual(result["read_text_candidate_files"], 0)
             self.assertEqual(result["uninspected_or_blocked_files"], 3)
 
+    def test_subdirectory_and_linked_worktree_cannot_write_checkout_or_git_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); repo, commit = self.fixture(root)
+            nested = repo / "nested"; nested.mkdir()
+            linked = root / "linked"
+            subprocess.run(["git", "-C", str(repo), "worktree", "add", "--detach", str(linked), commit],
+                           check=True, capture_output=True)
+            linked_nested = linked / "nested"; linked_nested.mkdir()
+            metadata = repo / ".git"
+            for source, destination in [(nested, repo / "blocked.json"),
+                                        (linked_nested, linked / "blocked.json"),
+                                        (linked_nested, metadata / "blocked.json"),
+                                        (linked_nested, metadata / "worktrees/linked/blocked.json")]:
+                with self.subTest(source=source.name, target=destination.parent.name):
+                    args = [sys.executable, "-B", str(Path(scanner.__file__)), "--source-git", str(source),
+                            "--commit", commit, "--private-output", str(destination)]
+                    result = subprocess.run(args, capture_output=True)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertEqual(json.loads(result.stdout), {"status": "NAMESPACE_INVENTORY_REFUSED"})
+                    self.assertFalse(destination.exists())
+            for index, source in enumerate([nested, linked_nested]):
+                destination = root / f"private-{index}.json"
+                result = subprocess.run([sys.executable, "-B", str(Path(scanner.__file__)),
+                    "--source-git", str(source), "--commit", commit, "--private-output", str(destination)],
+                    capture_output=True, check=True)
+                self.assertEqual(json.loads(result.stdout)["status"], "PRIVATE_INVENTORY_CANDIDATE")
+                self.assertEqual(json.loads(destination.read_bytes())["source_commit"], commit)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -120,8 +120,19 @@ def test_crash_after_file_write_has_durable_admission_and_does_not_duplicate(tmp
     assert b.peer_receive()['messages'][0]['text']=='body'
 
 
-def test_concurrent_unique_sends_cannot_overrun_admission(tmp_path):
+@pytest.mark.parametrize('publication_busy', [False, True])
+def test_concurrent_unique_sends_cannot_overrun_admission(tmp_path, monkeypatch, publication_busy):
     a,b=peers(tmp_path,max_pending=3,max_messages=3)
+    original_publish=a.transport._publish_pending
+    injected=[]; injection_lock=threading.Lock()
+    if publication_busy:
+        def publish(parsed, *args, **kwargs):
+            with injection_lock:
+                if len(injected)<2:
+                    injected.append(parsed['message_id'])
+                    raise SwarmError('STORE_BUSY','synthetic busy refusal after admission')
+            return original_publish(parsed,*args,**kwargs)
+        monkeypatch.setattr(a.transport,'_publish_pending',publish)
     diagnostics=[]
     def send(i):
         try: return a.peer_send('actor-b',f'body {i}',f'key-{i}')
@@ -137,10 +148,33 @@ def test_concurrent_unique_sends_cannot_overrun_admission(tmp_path):
                 diagnostics.append(chain)
             return e.code
     with ThreadPoolExecutor(max_workers=12) as pool: results=list(pool.map(send,range(60)))
-    assert sum(isinstance(r,dict) for r in results)==3
     assert set(r for r in results if isinstance(r,str)) <= {'BACKPRESSURE','QUOTA_EXCEEDED','STORE_BUSY'}, diagnostics
+    receipts={r['message_id']:r for r in results if isinstance(r,dict)}
+    assert sum(isinstance(r,dict) for r in results)==len(receipts)<=3
+    with closing(sqlite3.connect(a.transport.db_path)) as db:
+        states=dict(db.execute('SELECT payload_state,COUNT(*) FROM messages GROUP BY payload_state'))
+    # Finite STORE_BUSY may follow committed admission. Keep the quota safety
+    # check independent of whether publication returned a successful receipt.
+    assert len(receipts)<=sum(states.values())<=3, states
+    assert len(payload_files(a))<=3
+    assert len(b.peer_receive()['messages'])<=3
+    if publication_busy:
+        assert len(injected)==2
+        assert states.get('pending',0)>=2, states
+    monkeypatch.setattr(a.transport,'_publish_pending',original_publish)
+    # Reconcile each exact key once after contention, without extending the
+    # runtime's retry budget or creating replacement logical requests.
+    settled=[send(i) for i in range(60)]
+    assert set(r for r in settled if isinstance(r,str)) <= {'BACKPRESSURE','QUOTA_EXCEEDED','STORE_BUSY'}, diagnostics
+    completed={r['message_id']:r for r in settled if isinstance(r,dict)}
+    assert sum(isinstance(r,dict) for r in settled)==len(completed)==3
+    assert all(completed.get(key)==value for key,value in receipts.items())
+    with closing(sqlite3.connect(a.transport.db_path)) as db:
+        assert dict(db.execute('SELECT payload_state,COUNT(*) FROM messages GROUP BY payload_state'))=={'ready':3}
     assert len(payload_files(a))==3
-    assert len(b.peer_receive()['messages'])==3
+    delivered=b.peer_receive()['messages']
+    assert len(delivered)==3
+    assert {message['message_id'] for message in delivered}==set(completed)
 
 
 def test_parallel_replay_publishes_one_immutable_shared_payload(tmp_path):

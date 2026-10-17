@@ -2,6 +2,14 @@ import { DurableObject } from "cloudflare:workers";
 
 export class Gadget extends DurableObject {
   #reserving = false;
+  async getProject() {
+    if (!this.env.KOTODAMA_BRIEF) return { state: "not_connected" };
+    return this.env.KOTODAMA_BRIEF.getProject();
+  }
+  async inspectProjectChange(input) {
+    if (!this.env.KOTODAMA_BRIEF) throw new Error("Projectの接続を確認してください。");
+    return this.env.KOTODAMA_BRIEF.inspectProjectChange(input);
+  }
   async getState() {
     if (!this.env.KOTODAMA_BRIEF) return { state: "not_connected", source: null, result: null };
     const source = await this.env.KOTODAMA_BRIEF.getSource();

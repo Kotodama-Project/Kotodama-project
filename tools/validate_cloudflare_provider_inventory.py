@@ -28,31 +28,44 @@ def validate(receipt):
     schema = json.loads((ROOT / "schemas/cloudflare-provider-inventory-receipt.schema.json").read_text(encoding="utf-8"))
     require(next(Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(receipt), None) is None, "INVENTORY_SHAPE_REFUSED")
     unresolved = []
+    dashboard = receipt["method"] == "DASHBOARD_UI"
+    zone_state = receipt.get("zone_state", "SELECTED_REPORTED" if receipt["zone_locator"] else "UNKNOWN")
+    if zone_state == "SELECTED_REPORTED":
+        require(receipt["zone_locator"] is not None, "SELECTED_ZONE_REQUIRED")
+    elif zone_state == "NO_ZONE_REPORTED":
+        require(receipt["zone_locator"] is None, "ABSENT_ZONE_HAS_LOCATOR")
+    else:
+        require(receipt["zone_locator"] is None, "UNKNOWN_ZONE_HAS_LOCATOR")
     if receipt["identity_state"] == "REPORTED_MATCH":
         require(receipt["account_locator"] is not None and receipt["private_receipt_sha256"] is not None, "IDENTITY_EVIDENCE_REQUIRED")
     else:
         unresolved.append("identity")
     for name, row in receipt["services"].items():
         status = row["status"]
+        if dashboard:
+            require(row["http_status"] is None, "DASHBOARD_HAS_NO_HTTP_PROOF")
         if status == "OBSERVED":
-            require(row["http_status"] == 200 and type(row["resource_count"]) is int and row["response_sha256"] is not None, "OBSERVATION_INCOMPLETE")
+            require((dashboard or row["http_status"] == 200) and type(row["resource_count"]) is int and row["response_sha256"] is not None, "OBSERVATION_INCOMPLETE")
         else:
             require(row["resource_count"] is None, "UNKNOWN_IS_NOT_ZERO")
             if status == "DENIED":
-                require(row["http_status"] in (401, 403), "DENIAL_STATUS_MISMATCH")
+                require(row["response_sha256"] is not None if dashboard else row["http_status"] in (401, 403), "DENIAL_STATUS_MISMATCH")
             elif status == "UNAVAILABLE":
-                require(row["http_status"] in (404, 429, 500, 502, 503), "UNAVAILABLE_STATUS_MISMATCH")
+                require(row["response_sha256"] is not None if dashboard else row["http_status"] in (404, 429, 500, 502, 503), "UNAVAILABLE_STATUS_MISMATCH")
             else:
                 require(row["http_status"] is None and row["response_sha256"] is None, "UNKNOWN_STATUS_MISMATCH")
             unresolved.append(name)
     if receipt["zone_locator"] is None:
         require(receipt["services"]["dns"]["status"] != "OBSERVED", "ZONE_BINDING_REQUIRED")
-        unresolved.append("zone")
+        if zone_state != "NO_ZONE_REPORTED":
+            unresolved.append("zone")
     if receipt["plan"]["name"] == "UNKNOWN":
         require(receipt["plan"]["entitlement_sha256"] is None, "UNKNOWN_PLAN_EVIDENCE")
         unresolved.append("plan")
     else:
         require(receipt["plan"]["entitlement_sha256"] is not None and receipt["services"]["billing"]["status"] == "OBSERVED", "PLAN_EVIDENCE_REQUIRED")
+        if dashboard:
+            require(receipt["plan"].get("scope") == "WORKERS", "PLAN_PRODUCT_SCOPE_REQUIRED")
     budget = receipt["budget"]
     require(budget["monthly_ceiling"] is None or math.isfinite(budget["monthly_ceiling"]), "FINITE_BUDGET_REQUIRED")
     if budget["state"] == "UNKNOWN":
@@ -60,9 +73,13 @@ def validate(receipt):
         unresolved.append("budget")
     else:
         require(all(budget[key] is not None for key in ("currency", "monthly_ceiling", "decision_sha256")), "BUDGET_DECISION_REQUIRED")
+        if dashboard:
+            require(budget.get("scope") in ("ACCOUNT_TOTAL", "ADDITIONAL_PROJECT_SPEND"), "BUDGET_SCOPE_REQUIRED")
     unresolved.extend(receipt["unknown_bindings"])
     return {"status": "INVENTORY_RECORD_VALID", "reported_completeness": "PARTIAL" if unresolved else "COMPLETE_REPORTED",
             "unresolved": sorted(set(unresolved)), "authenticity_verified": False, "identity_verified": False,
+            "observation_surface": receipt["method"], "reported_zone_state": zone_state,
+            "reported_budget_scope": budget.get("scope"),
             "observations_reverified": False, "budget_approved": False, "deployment_authorized": False,
             "public_beta": "NO_GO_UNPUBLISHED"}
 

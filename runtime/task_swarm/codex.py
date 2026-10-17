@@ -1,14 +1,18 @@
 """Local Codex subprocess backend for one bounded Task swarm attempt.
 
 The backend starts one explicitly supplied executable with a fixed read-only
-worker policy, captures only redacted artifacts below a fresh attempt
-directory, and refuses completion until the child process can be connected to
-local runtime metadata by its stdout thread UUID and a completed turn.
+worker policy, captures redacted artifacts below a fresh attempt directory
+(plus exact private input when explicitly requested), and refuses completion
+until the child process can be connected to local runtime metadata by its
+stdout thread UUID and a completed turn.
 """
 
 from __future__ import annotations
 
 import json
+import fnmatch
+import io
+from contextlib import closing
 import hashlib
 import math
 import os
@@ -42,6 +46,9 @@ APPROVAL_POLICY = "never"
 MAX_TIMEOUT = 3600.0
 MAX_STDOUT_BYTES = 16 * 1024 * 1024
 MAX_STDERR_BYTES = 1024 * 1024
+# Independent from subprocess output: replay already admits at most 16 MiB.
+MAX_RUNTIME_ROLLOUT_BYTES = 16 * 1024 * 1024
+MAX_RECORDED_INPUT_BYTES = 256 * 1024
 _READ_TOOLS = frozenset({"peer_list", "peer_receive", "peer_status"})
 
 
@@ -301,8 +308,17 @@ def _prepare_attempt(attempt_dir: str | os.PathLike[str]) -> Path:
     return run
 
 
-def _paths(run: Path) -> dict[str, Path]:
-    return {
+def _check_execution_cwd(cwd: str | os.PathLike[str]) -> None:
+    # CreateProcess needs room for the trailing separator and NUL. Count the
+    # supplied final cwd, including any scope suffix or extended/UNC prefix.
+    if sys.platform == "win32" and len(str(cwd).encode("utf-16-le", errors="surrogatepass")) // 2 > 258:
+        raise BackendError("execution_cwd_limit",
+                           "Windows execution cwd exceeds 258 UTF-16 units; choose a shorter owner storage root",
+                           retryable=False)
+
+
+def _paths(run: Path, *, record_input: bool = False, record_executable: bool = False) -> dict[str, Path]:
+    paths = {
         "attempt_dir": run,
         "schema": run / "schema.json",
         "events": run / "stdout-events.jsonl",
@@ -314,6 +330,11 @@ def _paths(run: Path) -> dict[str, Path]:
         "diagnostics": run / "diagnostics.json",
         "command": run / "command.json",
     }
+    if record_input:
+        paths["input"] = run / "input.txt"
+    if record_executable:
+        paths["executable"] = run / "executable.py"
+    return paths
 
 
 def _public_paths(paths: Mapping[str, Path]) -> dict[str, str]:
@@ -397,26 +418,160 @@ def _runtime_roots(explicit: Path | None) -> list[Path]:
     return unique
 
 
+def _open_runtime_rollout(path: Path) -> Any:
+    """Open a rollout for bounded reads while allowing observed replacement."""
+    if os.name != "nt":
+        return path.open("rb")
+    # The CRT opener denies deletion on Windows. Sharing delete lets the same
+    # path/descriptor checks detect a concurrent rename/unlink on both systems.
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    create = kernel.CreateFileW
+    create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                       wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+    create.restype = wintypes.HANDLE
+    close = kernel.CloseHandle
+    close.argtypes = (wintypes.HANDLE,)
+    close.restype = wintypes.BOOL
+    handle = create(str(path), 0x80000000, 0x1 | 0x2 | 0x4, None, 3, 0x80, None)
+    if handle == wintypes.HANDLE(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        fd = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+    except BaseException:
+        close(handle)
+        raise
+    try:
+        return os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _runtime_lines(path: Path, exact_bytes: bytes | None = None,
+                   check_cancelled: Callable[[], None] | None = None) -> Iterable[str]:
+    """Read one bounded rollout without retaining its decoded history or line list."""
+    def fingerprint(info: os.stat_result) -> tuple[int, ...]:
+        return (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+    if exact_bytes is not None and len(exact_bytes) > MAX_RUNTIME_ROLLOUT_BYTES:
+        raise _RuntimeResolutionError("runtime_rollout_limit", "runtime rollout exceeds the read limit")
+    named_before = path.stat() if exact_bytes is None else None
+    with (io.BytesIO(exact_bytes) if exact_bytes is not None else _open_runtime_rollout(path)) as source:
+        before = os.fstat(source.fileno()) if exact_bytes is None else None
+        if before is not None and before.st_size > MAX_RUNTIME_ROLLOUT_BYTES:
+            raise _RuntimeResolutionError("runtime_rollout_limit", "runtime rollout exceeds the read limit")
+        if before is not None and (before.st_dev, before.st_ino) != (named_before.st_dev, named_before.st_ino):
+            raise _RuntimeResolutionError("runtime_rollout_changed", "runtime rollout changed while opening")
+        consumed = 0
+        read_failed = False
+        try:
+            while True:
+                if check_cancelled is not None:
+                    check_cancelled()
+                raw = source.readline(MAX_RUNTIME_ROLLOUT_BYTES - consumed + 1)
+                consumed += len(raw)
+                if consumed > MAX_RUNTIME_ROLLOUT_BYTES:
+                    raise _RuntimeResolutionError("runtime_rollout_limit", "runtime rollout exceeds the read limit")
+                if not raw:
+                    break
+                # Match read_text(errors="replace").splitlines(), including CR,
+                # Unicode line separators, malformed UTF-8 and a final partial line.
+                for line in raw.decode("utf-8", errors="replace").splitlines():
+                    if check_cancelled is not None:
+                        check_cancelled()
+                    yield line
+        except BaseException as exc:
+            # Preserve cancellation, limits and read failures even if the file
+            # also changes. An intentional early close still checks mutation.
+            read_failed = not isinstance(exc, GeneratorExit)
+            raise
+        finally:
+            if before is not None and not read_failed:
+                try:
+                    after, named = os.fstat(source.fileno()), path.stat()
+                except OSError as exc:
+                    raise _RuntimeResolutionError("runtime_rollout_changed", "runtime rollout changed while reading") from exc
+                # Windows stat reports birth time as ctime while fstat can
+                # report change time. Compare timestamps within each API and
+                # retain cross-API identity to bind the stream to its path.
+                if (fingerprint(before) != fingerprint(after) or fingerprint(named_before) != fingerprint(named)
+                        or (after.st_dev, after.st_ino) != (named.st_dev, named.st_ino)):
+                    raise _RuntimeResolutionError("runtime_rollout_changed", "runtime rollout changed while reading")
+
+
+def _runtime_candidates(root: Path, thread_id: str,
+                        check_cancelled: Callable[[], None] | None) -> Iterable[Path]:
+    """Scan each directory once, retaining directories but not unrelated files.
+
+    Keep only one scandir handle open, including on cancellation or errors.
+    Directory order matches Path.walk; the caller still sorts resolved files.
+    """
+    pending = [str(root)]
+    pattern = re.compile(fnmatch.translate(f"*{thread_id}*.jsonl"),
+                         re.IGNORECASE if os.name == "nt" else re.NOFLAG).match
+    while pending:
+        if check_cancelled is not None:
+            check_cancelled()
+        directory = pending.pop()
+        try:
+            entries = os.scandir(directory)
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError as exc:
+            raise _RuntimeResolutionError("runtime_discovery_failed",
+                                          "runtime directory could not be enumerated") from exc
+        subdirectories = []
+        matches = []
+        with entries:
+            while True:
+                if check_cancelled is not None:
+                    check_cancelled()
+                try:
+                    entry = next(entries)
+                except StopIteration:
+                    break
+                except OSError as exc:
+                    raise _RuntimeResolutionError("runtime_discovery_failed",
+                                                  "runtime directory enumeration was incomplete") from exc
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        subdirectories.append(entry.path)
+                    if (pattern(entry.name) and thread_id in entry.name
+                            and entry.is_file()):
+                        matches.append(Path(entry.path))
+                except (FileNotFoundError, NotADirectoryError):
+                    continue
+                except OSError as exc:
+                    raise _RuntimeResolutionError("runtime_discovery_failed",
+                                                  "runtime directory entry could not be classified") from exc
+        for match in matches:
+            if check_cancelled is not None:
+                check_cancelled()
+            yield match
+        pending.extend(reversed(subdirectories))
+
+
 def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | None, expected_cwd: Path,
-                     started_unix: float | None = None, *, exact_record: tuple[Path, bytes] | None = None) -> dict[str, Any] | None:
+                     started_unix: float | None = None, *, exact_record: tuple[Path, bytes] | None = None,
+                     check_cancelled: Callable[[], None] | None = None) -> dict[str, Any] | None:
     if not isinstance(thread_id, str) or _ID_RE.fullmatch(thread_id) is None:
         raise _RuntimeResolutionError("runtime_thread_invalid", "stdout thread identity is invalid")
-    candidates: list[Path] = []
+    candidates: dict[str, Path] = {}
     for root in (() if exact_record is not None else _runtime_roots(session_root)):
         if not root.is_dir():
             continue
-        try:
-            for candidate in root.rglob(f"*{thread_id}*.jsonl"):
-                if candidate.is_file() and thread_id in candidate.name:
-                    try:
-                        resolved = candidate.resolve(strict=True)
-                        resolved.relative_to(root)
-                    except (OSError, RuntimeError, ValueError):
-                        continue
-                    candidates.append(resolved)
-        except OSError:
-            continue
-    unique = [exact_record[0]] if exact_record is not None else sorted({os.path.normcase(str(path)): path for path in candidates}.values())
+        for candidate in _runtime_candidates(root, thread_id, check_cancelled):
+            try:
+                resolved = candidate.resolve(strict=True)
+                resolved.relative_to(root)
+            except (OSError, RuntimeError, ValueError):
+                continue
+            candidates[os.path.normcase(str(resolved))] = resolved
+    unique = [exact_record[0]] if exact_record is not None else sorted(candidates.values())
     if not unique:
         return None
     contexts: dict[str, Mapping[str, Any]] = {}
@@ -434,56 +589,59 @@ def _runtime_receipt(thread_id: str, turn_id: str | None, session_root: Path | N
         file_failures: set[str] = set()
         file_cwds: dict[str, str] = {}
         try:
-            lines = (exact_record[1].decode("utf-8", errors="replace") if exact_record is not None else
-                     path.read_text(encoding="utf-8", errors="replace")).splitlines()
+            with closing(_runtime_lines(path, exact_record[1] if exact_record is not None else None,
+                                        check_cancelled)) as lines:
+                for line in lines:
+                    try:
+                        record = json.loads(line)
+                    except (TypeError, ValueError):
+                        continue
+                    if not isinstance(record, Mapping):
+                        continue
+                    outer, payload = _outer_payload(record)
+                    record_type = str(outer.get("type", "")).lower()
+                    identity = payload.get("id") or payload.get("session_id")
+                    if record_type == "session_meta" and isinstance(identity, str) and identity:
+                        session_identity = identity
+                        if isinstance(payload.get("cwd"), str):
+                            session_cwd = payload["cwd"]
+                        stamp = payload.get("timestamp") or outer.get("timestamp")
+                        if isinstance(stamp, str):
+                            try:
+                                parsed_stamp = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                                if parsed_stamp.tzinfo is not None:
+                                    session_started = parsed_stamp.timestamp()
+                            except (ValueError, OverflowError):
+                                pass
+                        if identity != thread_id:
+                            mismatch = True
+                            break
+                    event_thread = payload.get("thread_id") or outer.get("thread_id")
+                    if isinstance(event_thread, str) and event_thread != thread_id:
+                        mismatch = True
+                        break
+                    event_turn = payload.get("turn_id") or outer.get("turn_id")
+                    if not isinstance(event_turn, str) or not event_turn:
+                        continue
+                    # Validate all identities above, but retain only the explicit turn.
+                    if turn_id is not None and event_turn != turn_id:
+                        continue
+                    if record_type == "turn_context":
+                        file_contexts[event_turn] = payload
+                        for key in ("cwd", "working_directory", "workdir", "runtime_cwd"):
+                            value = payload.get(key)
+                            if isinstance(value, str) and value:
+                                file_cwds[event_turn] = value
+                                break
+                    event_kind = str(payload.get("type", "")).lower()
+                    if record_type in {"event_msg", "event.message"} and event_kind in {"task_complete", "turn.completed", "turn_complete"}:
+                        file_completions[event_turn] = payload
+                    elif record_type in {"turn.completed", "turn_complete"}:
+                        file_completions[event_turn] = payload
+                    elif record_type in {"event_msg", "event.message"} and event_kind in {"task_failed", "turn_failed", "turn.failed", "turn_error"}:
+                        file_failures.add(event_turn)
         except OSError:
             continue
-        for line in lines:
-            try:
-                record = json.loads(line)
-            except (TypeError, ValueError):
-                continue
-            if not isinstance(record, Mapping):
-                continue
-            outer, payload = _outer_payload(record)
-            record_type = str(outer.get("type", "")).lower()
-            identity = payload.get("id") or payload.get("session_id")
-            if record_type == "session_meta" and isinstance(identity, str) and identity:
-                session_identity = identity
-                if isinstance(payload.get("cwd"), str):
-                    session_cwd = payload["cwd"]
-                stamp = payload.get("timestamp") or outer.get("timestamp")
-                if isinstance(stamp, str):
-                    try:
-                        parsed_stamp = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-                        if parsed_stamp.tzinfo is not None:
-                            session_started = parsed_stamp.timestamp()
-                    except (ValueError, OverflowError):
-                        pass
-                if identity != thread_id:
-                    mismatch = True
-                    break
-            event_thread = payload.get("thread_id") or outer.get("thread_id")
-            if isinstance(event_thread, str) and event_thread != thread_id:
-                mismatch = True
-                break
-            event_turn = payload.get("turn_id") or outer.get("turn_id")
-            if not isinstance(event_turn, str) or not event_turn:
-                continue
-            if record_type == "turn_context":
-                file_contexts[event_turn] = payload
-                for key in ("cwd", "working_directory", "workdir", "runtime_cwd"):
-                    value = payload.get(key)
-                    if isinstance(value, str) and value:
-                        file_cwds[event_turn] = value
-                        break
-            event_kind = str(payload.get("type", "")).lower()
-            if record_type in {"event_msg", "event.message"} and event_kind in {"task_complete", "turn.completed", "turn_complete"}:
-                file_completions[event_turn] = payload
-            elif record_type in {"turn.completed", "turn_complete"}:
-                file_completions[event_turn] = payload
-            elif record_type in {"event_msg", "event.message"} and event_kind in {"task_failed", "turn_failed", "turn.failed", "turn_error"}:
-                file_failures.add(event_turn)
         if mismatch:
             continue
         if session_identity != thread_id:
@@ -593,6 +751,29 @@ def _resolve_executable(value: str | os.PathLike[str]) -> tuple[list[str], Path]
     return [str(resolved)], resolved
 
 
+_SNAPSHOT_LOADER = (
+    "import hashlib,importlib.machinery,os,sys\n"
+    "snapshot,size,sha,origin=sys.argv[1:5]\n"
+    "with open(snapshot,'rb') as stream: raw=stream.read(int(size)+1)\n"
+    "if len(raw)!=int(size) or hashlib.sha256(raw).hexdigest()!=sha: raise SystemExit(73)\n"
+    "sys.argv=[origin,*sys.argv[5:]]\n"
+    "sys.path[0]=os.path.dirname(origin)\n"
+    "def launch(code,origin,namespace,builtins,loader):\n"
+    " namespace.clear()\n"
+    " namespace.update(__name__='__main__',__file__=origin,__package__=None,"
+    "__spec__=None,__cached__=None,__doc__=None,__builtins__=builtins,__loader__=loader)\n"
+    " exec(code,namespace)\n"
+    "launch(compile(raw,origin,'exec'),origin,sys.modules['__main__'].__dict__,"
+    "__builtins__,importlib.machinery.SourceFileLoader('__main__',origin))\n"
+)
+
+
+def _snapshot_command(executable: Path, snapshot: Path, size: int, sha: str) -> list[str]:
+    # The interpreter compiles the same bounded bytes it hashed, even if the
+    # snapshot's pathname is replaced before or after the child opens it.
+    return [sys.executable, "-u", "-c", _SNAPSHOT_LOADER, str(snapshot), str(size), sha, str(executable)]
+
+
 def _process_created(process: subprocess.Popen[bytes]) -> float | None:
     if psutil is None:
         return None
@@ -654,7 +835,15 @@ def _artifact_digests(paths: Mapping[str, Path]) -> dict[str, str]:
         if name in {"receipt", "diagnostics"} or not path.is_file():
             continue
         try:
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            if name in {"input", "executable"}:
+                from .task_runner import read_bytes
+                try:
+                    raw = read_bytes(path, MAX_RECORDED_INPUT_BYTES)
+                except SwarmError:
+                    continue
+            else:
+                raw = path.read_bytes()
+            digest = hashlib.sha256(raw).hexdigest()
         except OSError:
             continue
         result[name] = digest
@@ -844,13 +1033,24 @@ class CodexBackend:
         cancel_event: threading.Event | None = None,
         confidential: bool = False,
         task_codex_home: str | os.PathLike[str] | None = None,
+        record_input: bool = False,
+        executable_bytes: bytes | None = None,
     ) -> dict[str, Any]:
+        if type(record_input) is not bool:
+            raise BackendError("stdin_record_invalid", "record_input must be boolean", retryable=False)
+        if executable_bytes is not None and (type(executable_bytes) is not bytes
+                or not 0 < len(executable_bytes) <= MAX_RECORDED_INPUT_BYTES
+                or not record_input or confidential or peer is not None
+                or authorize_peer_writes or task_codex_home is not None):
+            raise BackendError("executable_snapshot_invalid", "snapshot requires a bounded explicit fixture", retryable=False)
         if not isinstance(prompt, str):
             raise BackendError("prompt_invalid", "prompt must be text", retryable=False)
         try:
             prompt_bytes = prompt.encode("utf-8")
         except UnicodeError as exc:
             raise BackendError("prompt_invalid", "prompt must be valid UTF-8 text", retryable=False) from exc
+        if record_input and len(prompt_bytes) > MAX_RECORDED_INPUT_BYTES:
+            raise BackendError("prompt_input_limit", "recorded input exceeded its byte limit", retryable=False)
         try:
             timeout_value = float(timeout)
         except (TypeError, ValueError) as exc:
@@ -870,7 +1070,7 @@ class CodexBackend:
             raise BackendError("policy_invalid", "confidential must be boolean", retryable=False)
         schema_object = _load_schema(schema)
         run_dir = _prepare_attempt(attempt_dir)
-        paths = _paths(run_dir)
+        paths = _paths(run_dir, record_input=record_input, record_executable=executable_bytes is not None)
         started_unix = time.time()
         diagnostics: dict[str, Any] = {
             "status": "started",
@@ -892,10 +1092,38 @@ class CodexBackend:
         exit_code: int | None = None
         peer_cfg: dict[str, Any] | None = None
         input_writer: threading.Thread | None = None
+        writer_error: Exception | None = None
+        input_sha = hashlib.sha256(prompt_bytes).hexdigest() if record_input else None
+        executable_sha = hashlib.sha256(executable_bytes).hexdigest() if executable_bytes is not None else None
         scope = None
         execution_cwd = run_dir
         execution_sessions = self.session_root
         execution_env = None
+
+        def check_recorded_input() -> None:
+            if not record_input:
+                return
+            # Reuse the existing descriptor-pinned artifact reader only for
+            # this opt-in path; default transport imports and reads are intact.
+            from .task_runner import read_bytes
+            check_cancelled()
+            try:
+                raw = read_bytes(paths["input"], MAX_RECORDED_INPUT_BYTES)
+            except (OSError, SwarmError) as exc:
+                raise BackendError("stdin_record_failed", "recorded input could not be reopened", retryable=False) from exc
+            if raw != prompt_bytes:
+                raise BackendError("stdin_record_changed", "recorded input differs from submitted bytes", retryable=False)
+
+        def check_executable_snapshot() -> None:
+            if executable_bytes is None:
+                return
+            from .task_runner import read_bytes
+            try:
+                raw = read_bytes(paths["executable"], len(executable_bytes))
+            except (OSError, SwarmError) as exc:
+                raise BackendError("executable_snapshot_changed", "executable snapshot is unavailable", retryable=False) from exc
+            if raw != executable_bytes:
+                raise BackendError("executable_snapshot_changed", "executable snapshot differs from verified bytes", retryable=False)
 
         def failed(error: BackendError) -> BackendError:
             if process is not None and pid is not None and created_at is not None and process.poll() is None:
@@ -908,11 +1136,28 @@ class CodexBackend:
             return error
 
         try:
+            if record_input:
+                try:
+                    run_dir.chmod(0o700)
+                    _atomic_write(paths["input"], prompt_bytes)
+                    paths["input"].chmod(0o600)
+                except OSError as exc:
+                    raise BackendError("stdin_record_failed", "input could not be recorded", retryable=False) from exc
+                check_recorded_input()
             _write_json(paths["schema"], schema_object)
             if peer is not None:
                 peer_cfg = _peer_config(peer, authorize_peer_writes=authorize_peer_writes)
                 diagnostics["peer_write_authorized"] = bool(authorize_peer_writes)
             executable_command, executable_path = _resolve_executable(self.executable)
+            if executable_bytes is not None:
+                if executable_path.suffix != ".py":
+                    raise BackendError("executable_snapshot_invalid", "snapshot requires a Python fixture", retryable=False)
+                with paths["executable"].open("xb") as stream:
+                    stream.write(executable_bytes)
+                paths["executable"].chmod(0o600)
+                check_executable_snapshot()
+                executable_command = _snapshot_command(executable_path, paths["executable"],
+                                                       len(executable_bytes), executable_sha)
             command = _build_command(
                 executable_command,
                 schema_path=paths["schema"],
@@ -942,6 +1187,7 @@ class CodexBackend:
             check_cancelled()
             if time.monotonic() >= deadline:
                 raise BackendError("timeout", "attempt budget expired before process launch", retryable=False)
+            _check_execution_cwd(execution_cwd)
             process = subprocess.Popen(
                 command,
                 cwd=str(execution_cwd),
@@ -983,15 +1229,23 @@ class CodexBackend:
                     raise BackendError("process_callback", "process ownership callback failed", retryable=True) from exc
             check_cancelled()
             def feed_prompt() -> None:
+                nonlocal writer_error
                 try:
-                    process.stdin.write(prompt_bytes)
-                except (BrokenPipeError, OSError, ValueError):
-                    pass  # the exit status and output decide the outcome
+                    written = process.stdin.write(prompt_bytes)
+                    if record_input:
+                        if type(written) is not int or written != len(prompt_bytes):
+                            raise ValueError("the input write was incomplete")
+                        process.stdin.flush()
+                except (BrokenPipeError, OSError, ValueError) as exc:
+                    if record_input:
+                        writer_error = exc
+                    # Default execution retains its output/exit-based contract.
                 finally:
                     try:
                         process.stdin.close()
-                    except (OSError, ValueError):
-                        pass
+                    except (OSError, ValueError) as exc:
+                        if record_input and writer_error is None:
+                            writer_error = exc
             # A child that never reads stdin must not hide cancellation/timeout
             # behind a full pipe. Termination releases this owned writer.
             input_writer = threading.Thread(target=feed_prompt, name="swarm-prompt-writer", daemon=True)
@@ -1021,8 +1275,12 @@ class CodexBackend:
                 time.sleep(0.05)
             check_cancelled()
             input_writer.join(timeout=2.0)
+            if record_input:
+                check_cancelled()
             if input_writer.is_alive():
                 raise BackendError("stdin_unconfirmed", "the input writer did not finish after child exit", retryable=False)
+            if record_input and writer_error is not None:
+                raise BackendError("stdin_write_failed", "the input pipe write did not complete", retryable=False) from writer_error
             stdout = _read_spool(stdout_spool, MAX_STDOUT_BYTES)
             stderr = _read_spool(stderr_spool, MAX_STDERR_BYTES)
             if os.fstat(stdout_spool.fileno()).st_size > MAX_STDOUT_BYTES or os.fstat(stderr_spool.fileno()).st_size > MAX_STDERR_BYTES:
@@ -1039,7 +1297,8 @@ class CodexBackend:
             if not thread_id:
                 raise BackendError("completion_identity_missing", "stdout did not identify a thread UUID", retryable=True)
             try:
-                runtime = _runtime_receipt(thread_id, stdout_turn, execution_sessions, execution_cwd, started_unix)
+                runtime = _runtime_receipt(thread_id, stdout_turn, execution_sessions, execution_cwd, started_unix,
+                                           check_cancelled=check_cancelled)
             except _RuntimeResolutionError as exc:
                 raise BackendError(exc.code, str(exc), retryable=False) from exc
             if runtime is None:
@@ -1110,6 +1369,9 @@ class CodexBackend:
                 "permission_profile_sha256": (hashlib.sha256(_json_dump(runtime["permission_profile"]).encode("utf-8")).hexdigest()
                                                if scope is not None else None),
             }
+            if record_input:
+                receipt["stdin_submission"] = {"version": 1, "encoding": "utf-8", "bytes": len(prompt_bytes),
+                    "sha256": input_sha, "writer_status": "pipe_write_completed"}
             redacted_result = _redact(result)
             check_cancelled()
             _write_json(paths["result"], redacted_result)
@@ -1120,7 +1382,18 @@ class CodexBackend:
             _write_events(paths["events"], stdout, records)
             _atomic_write(paths["stderr"], _safe_text(stderr).encode("utf-8"))
             _scrub_last_message(paths["last_message"])
+            if record_input:
+                check_recorded_input()
+            check_executable_snapshot()
             receipt["artifact_digests"] = _artifact_digests(paths)
+            if executable_bytes is not None:
+                if receipt["artifact_digests"].get("executable") != executable_sha:
+                    raise BackendError("executable_snapshot_changed", "executable snapshot digest differs", retryable=False)
+                check_executable_snapshot()
+            if record_input:
+                if receipt["artifact_digests"].get("input") != input_sha:
+                    raise BackendError("stdin_record_failed", "recorded input digest was unavailable or changed", retryable=False)
+                check_recorded_input()
             check_cancelled()
             _write_json(paths["receipt"], receipt)
             diagnostics.update({"status": "completed", "thread_id": thread_id, "turn_id": runtime["turn_id"], "finished_at": _utc_iso(finished)})
@@ -1188,7 +1461,13 @@ class CodexBackend:
                     except (OSError, UnicodeError, json.JSONDecodeError):
                         receipt_document = {}
                     if isinstance(receipt_document, dict):
-                        receipt_document["artifact_digests"] = artifact_digests
+                        receipt_document["artifact_digests"] = dict(artifact_digests)
+                        if record_input:
+                            # A later input change must remain a mismatch, not
+                            # be rebound to new bytes by defensive final writes.
+                            receipt_document["artifact_digests"]["input"] = input_sha
+                        if executable_bytes is not None:
+                            receipt_document["artifact_digests"]["executable"] = executable_sha
                         _write_json(paths["receipt"], receipt_document)
                 diagnostics["artifact_digests"] = artifact_digests
                 diagnostics.setdefault("finished_at", _utc_iso())
@@ -1213,6 +1492,8 @@ def invoke(
     cancel_event: threading.Event | None = None,
     confidential: bool = False,
     task_codex_home: str | os.PathLike[str] | None = None,
+    record_input: bool = False,
+    executable_bytes: bytes | None = None,
 ) -> dict[str, Any]:
     return CodexBackend(executable, session_root=session_root).invoke(
         prompt,
@@ -1227,6 +1508,8 @@ def invoke(
         cancel_event=cancel_event,
         confidential=confidential,
         task_codex_home=task_codex_home,
+        record_input=record_input,
+        executable_bytes=executable_bytes,
     )
 
 

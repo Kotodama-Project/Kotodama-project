@@ -206,7 +206,13 @@ def main():
     try:
         source = args.source_git.resolve(strict=True)
         output = args.private_output.parent.resolve(strict=True) / args.private_output.name
-        require(not output.is_relative_to(ROOT) and not output.is_relative_to(source), "OUTPUT_MUST_BE_OUTSIDE_BOTH_REPOSITORIES")
+        # git -C also accepts subdirectories and linked worktrees. Bind the
+        # exclusion to the actual checkout and both metadata directories.
+        roots = git(source, "rev-parse", "--path-format=absolute", "--show-toplevel",
+                    "--absolute-git-dir", "--git-common-dir").decode("utf-8").splitlines()
+        require(len(roots) == 3, "SOURCE_CHECKOUT_REQUIRED")
+        protected = [ROOT, *(Path(root).resolve(strict=True) for root in roots)]
+        require(not any(output.is_relative_to(root) for root in protected), "OUTPUT_MUST_BE_OUTSIDE_BOTH_REPOSITORIES")
         result = inventory(source, args.commit)
         raw = (json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
         require(len(raw) <= 32 * 1024 * 1024, "OUTPUT_LIMIT")

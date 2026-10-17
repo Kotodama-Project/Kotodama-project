@@ -18,12 +18,43 @@ from .task_contract import (
 )
 
 
+def _open_readonly(filename):
+    if os.name != "nt":
+        return os.open(filename, os.O_RDONLY | getattr(os, "O_BINARY", 0) |
+                       getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    # A receipt monitor must not prevent its atomic rename on Windows. As for
+    # rollout reads, permit delete sharing while the caller checks descriptor
+    # and named identity. Do not follow a reparse point swapped in after lstat.
+    import ctypes
+    from ctypes import wintypes
+    import msvcrt
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    create = kernel.CreateFileW
+    create.argtypes = (wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                       wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE)
+    create.restype = wintypes.HANDLE
+    close = kernel.CloseHandle
+    close.argtypes = (wintypes.HANDLE,)
+    close.restype = wintypes.BOOL
+    # None SECURITY_ATTRIBUTES makes the handle non-inheritable. OPEN_EXISTING
+    # and FILE_FLAG_OPEN_REPARSE_POINT add no create/write permission.
+    handle = create(str(filename), 0x80000000, 0x1 | 0x2 | 0x4, None, 3, 0x200080, None)
+    if handle == wintypes.HANDLE(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        return msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY | os.O_NOINHERIT)
+    except BaseException:
+        close(handle)
+        raise
+
+
 def read_bytes(filename: Path, maximum=2*1024*1024):
     # Pin the actual descriptor before bounded reads. Owner paths are private
     # controlled inputs, but links/large files still cannot widen this reader.
     info = filename.lstat()
     require(not stat.S_ISLNK(info.st_mode) and not getattr(info, "st_file_attributes", 0) & 0x400, "RUN_FILE_REFUSED")
-    fd = os.open(filename, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    fd = _open_readonly(filename)
     try:
         before = os.fstat(fd)
         require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_size <= maximum, "RUN_FILE_REFUSED")
@@ -62,26 +93,71 @@ def read_json(filename: Path, maximum=2*1024*1024, *, with_digest=False):
     return (value, hashlib.sha256(raw).hexdigest()) if with_digest else value
 
 
-def verify_runtime(value, attempt, *, freeze=False):
+def _validate_expected_input(expected_input):
+    from .codex import MAX_RECORDED_INPUT_BYTES
+    require(type(expected_input) is bytes and len(expected_input) <= MAX_RECORDED_INPUT_BYTES,
+            "RUN_RUNTIME_INPUT_INVALID")
+    try:
+        expected_input.decode("utf-8")
+    except UnicodeError as exc:
+        raise SwarmError("RUN_RUNTIME_INPUT_INVALID", "expected input must be UTF-8 bytes") from exc
+
+
+def _verify_recorded_input(receipt, paths, expected_input):
+    """Verify parent recording and pipe-write proof, never child consumption."""
+    from .codex import MAX_RECORDED_INPUT_BYTES
+    _validate_expected_input(expected_input)
+    marker = receipt.get("stdin_submission")
+    require(isinstance(marker, dict) and set(marker) == {"version", "encoding", "bytes", "sha256", "writer_status"},
+            "RUN_RUNTIME_INPUT_REQUIRED")
+    require(type(marker["version"]) is int and marker["version"] == 1
+            and type(marker["bytes"]) is int and marker["bytes"] == len(expected_input)
+            and marker["encoding"] == "utf-8" and marker["writer_status"] == "pipe_write_completed",
+            "RUN_RUNTIME_INPUT_INVALID")
+    sha = hashlib.sha256(expected_input).hexdigest()
+    artifacts = receipt.get("artifact_digests")
+    require(isinstance(artifacts, dict) and marker["sha256"] == sha and artifacts.get("input") == sha
+            and "input" in paths, "RUN_RUNTIME_INPUT_CHANGED")
+    try:
+        raw = read_bytes(paths["input"], MAX_RECORDED_INPUT_BYTES)
+    except (OSError, SwarmError) as exc:
+        raise SwarmError("RUN_RUNTIME_INPUT_CHANGED", "recorded runtime input could not be reopened") from exc
+    require(raw == expected_input, "RUN_RUNTIME_INPUT_CHANGED")
+
+
+def verify_runtime(value, attempt, *, freeze=False, expected_input=None):
     """Reopen nested runtime evidence before publication, acceptance and replay."""
     from datetime import datetime
-    from .codex import _paths, _event_identity, _runtime_receipt, _redact, _result_from_message, _json_dump, MODEL, EFFORT
+    from .codex import (_paths, _event_identity, _runtime_receipt, _redact,
+                        _result_from_message, _json_dump, MODEL, EFFORT, MAX_RECORDED_INPUT_BYTES)
     from .confidential import require_observed_profile, runtime_paths
+    record_input = expected_input is not None
+    if record_input:
+        _validate_expected_input(expected_input)
+        require(isinstance(value, dict) and isinstance(value.get("receipt"), dict)
+                and isinstance(value.get("paths"), dict)
+                and isinstance(value["paths"].get("attempt_dir"), str), "RUN_RUNTIME_INPUT_INVALID")
     receipt, supplied = value["receipt"], value["paths"]
     base = safe_directory(attempt)
     actual_attempt = Path(supplied["attempt_dir"])
     require(actual_attempt.parent == base and actual_attempt.name.startswith("attempt-"), "RUN_RUNTIME_PATH_CHANGED")
-    paths = _paths(safe_directory(actual_attempt))
+    paths = _paths(safe_directory(actual_attempt), record_input=record_input)
     work = safe_directory(actual_attempt/"work")
     require(supplied == {key:str(path) for key,path in paths.items()}, "RUN_RUNTIME_PATH_CHANGED")
     saved_receipt, receipt_sha = read_json(paths["receipt"], with_digest=True)
     require(saved_receipt == receipt and (freeze or value.get("runtime_receipt_sha256") == receipt_sha),
             "RUN_RUNTIME_RECEIPT_CHANGED")
     required = {"schema", "command", "process", "events", "stderr", "last_message", "result"}
+    if record_input:
+        required.add("input")
+        require(isinstance(receipt.get("artifact_digests"), dict), "RUN_RUNTIME_INPUT_INVALID")
     require(set(receipt.get("artifact_digests", {})) == required, "RUN_RUNTIME_RECEIPT_INVALID")
     for key in required:
-        require(hashlib.sha256(read_bytes(paths[key], 16*1024*1024)).hexdigest() == receipt["artifact_digests"][key],
+        limit = MAX_RECORDED_INPUT_BYTES if key == "input" else 16*1024*1024
+        require(hashlib.sha256(read_bytes(paths[key], limit)).hexdigest() == receipt["artifact_digests"][key],
                 "RUN_RUNTIME_ARTIFACT_CHANGED")
+    if record_input:
+        _verify_recorded_input(receipt, paths, expected_input)
     require(read_json(paths["result"]) == value["result"], "RUN_RUNTIME_RESULT_CHANGED")
     require(receipt.get("permission_probe") == {"kind":"task_synthetic_permission_probe_v1",
             "outer_read_denied":True,"inner_metadata_read_denied":True,"model_called":False}, "RUN_RUNTIME_POLICY_MISSING")
@@ -111,6 +187,8 @@ def verify_runtime(value, attempt, *, freeze=False):
     require(receipt.get("permission_profile_sha256") == hashlib.sha256(_json_dump(runtime["permission_profile"]).encode("utf-8")).hexdigest(),
             "RUN_RUNTIME_POLICY_CHANGED")
     require(read_bytes(rollout,16*1024*1024) == raw, "RUN_RUNTIME_ROLLOUT_CHANGED")
+    if record_input:
+        _verify_recorded_input(receipt, paths, expected_input)
     if freeze:
         value["runtime_rollout_sha256"] = sha
         value["runtime_receipt_sha256"] = receipt_sha
@@ -142,8 +220,11 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
     _, owner_input_sha = read_json(Path(owner_path), 1024*1024, with_digest=True)
     payload = read_json(Path(payload_path), 256*1024)
     binding = owner.read_task(payload.get("task_id"))
-    payload = validate_input(payload, binding, now=clock())
-    plan = make_plan(payload, binding, now=clock())
+    # A supplied receipt anchor requests readback only. This path cannot create
+    # a run and still requires a current owner, exact input and intact artifacts.
+    replay_only = expected_receipt_sha256 is not None
+    payload = validate_input(payload, binding, now=clock(), allow_expired_objective=replay_only)
+    plan = make_plan(payload, binding, now=clock(), allow_expired_objective=replay_only)
     root = safe_directory(owner.storage()["root"])
     require(Path(binding["active_home"]).is_absolute() and Path(binding["active_home"]).resolve() == root, "RUN_HOME_MISMATCH")
     actors = {job: "worker-"+job for job in WORK_JOBS}
@@ -154,14 +235,21 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
         require(actor_binding["actor_status"] == "active" and actor_binding["capability_ref"] == binding["capability_ref"], "RUN_ACTOR_SCOPE_INVALID")
     cancellation = cancel_event if cancel_event is not None else threading.Event()
     require(isinstance(cancellation, threading.Event), "RUN_CANCELLATION_INVALID")
+    failures = []
+    failure_lock = threading.Lock()
     expected = digest(binding)
     def guard():
-        require(not cancellation.is_set(), "RUN_CANCELLED")
+        with failure_lock:
+            failure = failures[0] if failures else None
+            cancelled = cancellation.is_set()
+        if failure is not None:
+            raise SwarmError(*failure)
+        require(not cancelled, "RUN_CANCELLED")
         current = owner.read_task(binding["task_id"])
         require(digest(current) == expected, "STALE_BINDING")
         for actor, initial in actor_bindings.items():
             require(owner.read_binding(binding["task_id"], actor) == initial, "STALE_ACTOR")
-        require(clock() < plan["budget"]["deadline"], "DEADLINE_EXPIRED")
+        require(replay_only or clock() < plan["budget"]["deadline"], "DEADLINE_EXPIRED")
         require(owner.storage()["root"] == root and safe_directory(root) == root, "RUN_STORAGE_CHANGED")
         require(read_json(Path(owner_path), 1024*1024, with_digest=True)[1] == owner_input_sha, "OWNER_INPUT_CHANGED")
     guard()
@@ -194,14 +282,21 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
     state = SwarmState(directory / "execution.sqlite", owner.read_task, clock=clock)
     state.create_run(plan)
     done = threading.Event()
-    failures = []
     def monitor():
         while not done.wait(.1):
             try:
                 guard()
             except Exception as exc:
-                failures.append(getattr(exc, "code", "BINDING_UNAVAILABLE"))
-                cancellation.set()
+                with failure_lock:
+                    if not failures and not cancellation.is_set():
+                        if isinstance(exc, SwarmError):
+                            failures.append((exc.code, exc.detail))
+                        else:
+                            failures.append((
+                                "BINDING_UNAVAILABLE",
+                                "Task owner binding could not be validated",
+                            ))
+                    cancellation.set()
                 return
     watcher = threading.Thread(target=monitor, name="swarm-owner-watch", daemon=True)
     watcher.start()
@@ -287,6 +382,19 @@ def execute_task(owner_path, payload_path, backend, *, cancel_event=None, clock=
         receipt_sha = write_json(directory / "receipt.json", receipt)
         guard()
         return {"result":result, "receipt":receipt, "receipt_sha256":receipt_sha, "duplicate":False}
+    except Exception as exc:
+        with failure_lock:
+            failure = failures[0] if failures else None
+        if failure is not None:
+            if isinstance(exc, SwarmError):
+                cancelled = exc.code == "RUN_CANCELLED"
+            else:
+                # Preserve the normal/replay path's lazy backend import.
+                from .codex import BackendError
+                cancelled = isinstance(exc, BackendError) and exc.code == "cancelled"
+            if cancelled:
+                raise SwarmError(*failure) from exc
+        raise
     finally:
         done.set()
         watcher.join(timeout=1)

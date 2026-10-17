@@ -10,7 +10,9 @@ python -B tools/inventory_namespace_consumers.py --source-git PRIVATE_CHECKOUT -
 
 Python 3.12で実行し、Gitの40/64桁の完全commit IDを指定します。出力先のparentは事前に
 用意し、ツール自身のrepositoryと調査対象repositoryの両方の外を明示します。
-既存ファイルへの上書きは拒否します。対象はcheckout不要ですが、必要なGit objectは
+sourceにsubdirectoryを指定しても実checkout全体とGit metadataを除外し、linked worktreeの
+共通Git directory内への保存も拒否します。bare repositoryは入力にしません。
+既存ファイルへの上書きは拒否します。対象commitへのcheckout切替は不要ですが、必要なGit objectは
 事前に取得してください。調査中のlazy fetch、filter実行、source書込みは行いません。
 
 ## 記録するもの
@@ -28,7 +30,9 @@ hintはgeneratorの本人性や正本を認証するものではありません�
 
 ## 調査範囲と未確定事項
 
-1 fileは4MiB、読取全体は256MiB、tree一覧は8MiB、出力は32MiBまでです。link/gitlink、
+受け入れる1 fileは4MiB、読取全体は256MiB、tree一覧は8MiB、出力は32MiBまでです。
+tree/バッチ読込とJSON生成後にもsizeを検査するため、これらはprocessメモリのハード上限ではありません。
+link/gitlink、
 非text形式、上限超過、decode/parse不能、計算で決まるimportなどは未確認の行として残します。
 working treeの未commit差分、環境設定、外部の配備caller、実import到達性は検査しません。
 任意のPython動作や間接呼出しを完全に静的解決できるとは主張しません。

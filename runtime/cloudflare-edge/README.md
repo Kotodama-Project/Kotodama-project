@@ -30,6 +30,9 @@ CLIはlocal JSONの整合とrevisionを確認するだけで、upload／再照�
 変化がないことを読み戻し、元aliasの復旧や生成versionの保持／削除は対象をprivate記録で
 特定して別の承認下で行います。保存先のrestoreと実rollbackは#8／#10の受入として残ります。
 
+Environment・runner・clock/nonce・private保存先とrestoreの条件は
+[保護された実行とreceipt保存先](../../docs/CLOUDFLARE-PROTECTED-RECEIPTS.md)で確認します。
+
 ## リクエスト期限
 
 Access key取得、Gatewayへの要求、response／review bodyの読取には、同じ5秒のrequest期限を

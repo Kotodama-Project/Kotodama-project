@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kotodama-Project/Kotodama-project/schemas/surface-event-envelope.schema.json",
+  "title": "Synthetic external surface event envelope",
+  "type": "object", "additionalProperties": false,
+  "required": ["kind", "synthetic", "surface", "tenant", "installation", "channel", "thread", "actor", "eventId", "sourceId", "revision", "permissionRevision", "operation", "text", "occurredAt", "expiresAt", "consentRef", "acl", "capabilities"],
+  "properties": {
+    "kind": {"const": "kotodama/surface-envelope/v1"},
+    "synthetic": {"const": true},
+    "surface": {"enum": ["slack", "teams"]},
+    "tenant": {"$ref": "#/$defs/ref"},
+    "installation": {"$ref": "#/$defs/ref"},
+    "channel": {"$ref": "#/$defs/ref"},
+    "thread": {"$ref": "#/$defs/ref"},
+    "actor": {"$ref": "#/$defs/ref"},
+    "eventId": {"$ref": "#/$defs/ref"},
+    "sourceId": {"$ref": "#/$defs/ref"},
+    "revision": {"$ref": "#/$defs/revision"},
+    "permissionRevision": {"$ref": "#/$defs/revision"},
+    "operation": {"enum": ["message", "edit", "delete", "revoke"]},
+    "text": {"type": "string", "maxLength": 12000},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "expiresAt": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+    "consentRef": {"$ref": "#/$defs/ref"},
+    "acl": {
+      "type": "object", "additionalProperties": false, "required": ["tenant", "readers"],
+      "properties": {"tenant": {"$ref": "#/$defs/ref"}, "readers": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}}}
+    },
+    "capabilities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["textIngress", "textProjection", "receiveAudio", "sendAudio", "verifiedSpeaker"],
+      "properties": {
+        "textIngress": {"const": true}, "textProjection": {"const": true},
+        "receiveAudio": {"enum": ["unknown", "unsupported"]},
+        "sendAudio": {"enum": ["unknown", "unsupported"]},
+        "verifiedSpeaker": {"enum": ["unknown", "unsupported"]}
+      }
+    }
+  },
+  "allOf": [{"if": {"properties": {"operation": {"enum": ["delete", "revoke"]}}}, "then": {"properties": {"text": {"const": ""}}}}],
+  "$defs": {
+    "ref": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\x00-\\x1f]+$"},
+    "revision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+  }
+}

@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {performance} from 'node:perf_hooks';
 import {check,digest,uid,errorCode} from './common.mjs';
 import {awaitWithSignal,deadlineScope} from './http-limits.mjs';
+import {validateProjectRequest} from './project-hub.mjs';
 
 export const lumaEventSchema=z.object({
   name:z.string().trim().min(1).max(150),description_md:z.string().max(12000),
@@ -15,6 +16,7 @@ export const lumaEventSchema=z.object({
 });
 function eventUrl(value){check(typeof value==='string'&&value.length<=1000,'LUMA_EVENT_URL_INVALID');const parsed=new URL(value);check(parsed.protocol==='https:'&&['luma.com','lu.ma'].includes(parsed.hostname)&&!parsed.username&&!parsed.password&&!parsed.search&&!parsed.hash&&parsed.pathname.length>1,'LUMA_EVENT_URL_INVALID');return parsed.href;}
 const staleRequestCodes=new Set(['DOTS_SOURCE_CHANGED','DOTS_SOURCE_SCOPE_CHANGED','DOTS_REQUEST_EXPIRED','SOURCE_ACCESS_DENIED','SOURCE_NOT_FOUND']);
+const projectInstallation=config=>digest({installation:config.installation,dataDir:config.dataDir,owner:config.owner,guild:config.discord.guildId,application:config.discord.applicationId??null,workspace:config.worker.workspace});
 function inboxCursor(value,scope){
   if(value===null)return null;
   check(typeof value==='string'&&/^[A-Za-z0-9_-]{1,320}$/.test(value),'DOTS_CURSOR_INVALID');
@@ -32,6 +34,7 @@ export class DotsBridge {
       CREATE TABLE IF NOT EXISTS dot_requests(id TEXT PRIMARY KEY,source_key TEXT NOT NULL,source_revision INTEGER NOT NULL,actor TEXT NOT NULL,state TEXT NOT NULL,created INTEGER NOT NULL,response_digest TEXT,message_id TEXT);
       CREATE INDEX IF NOT EXISTS dot_requests_inbox ON dot_requests(state,actor);
       CREATE TABLE IF NOT EXISTS dot_event_drafts(id TEXT PRIMARY KEY,request_id TEXT NOT NULL,revision INTEGER NOT NULL,event TEXT NOT NULL,digest TEXT NOT NULL,state TEXT NOT NULL,operation TEXT NOT NULL,target_url TEXT,approved_at INTEGER,claim_id TEXT,review_message_id TEXT,reported TEXT);
+      CREATE TABLE IF NOT EXISTS dot_project_drafts(id TEXT PRIMARY KEY,request_id TEXT NOT NULL,revision INTEGER NOT NULL,actor TEXT NOT NULL,binding TEXT NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL,state TEXT NOT NULL,created INTEGER NOT NULL,approved_at INTEGER,review_message_id TEXT);
     `);
     // A interrupted send may already have reached Discord; never replay it.
     store.db.prepare("UPDATE dot_requests SET state='unknown' WHERE state='sending'").run();
@@ -55,13 +58,14 @@ export class DotsBridge {
     }
     // A timed-out caller cannot free an SDK read that ignores cancellation or
     // dispatch another read for the same request while that raw call is pending.
-    const deadline=deadlineScope(options.authorizationTimeoutMs??this.authorizationTimeoutMs,'DOTS_ACCESS_TIMEOUT');
+    const deadline=deadlineScope(options.authorizationTimeoutMs??this.authorizationTimeoutMs,'DOTS_ACCESS_TIMEOUT',options.signal);
     try{await awaitWithSignal(raw,deadline.signal);return this.snapshot(id,options);}finally{deadline.dispose();}
   }
   prune(){
     if(this.lastPrunedAt!==undefined&&this.now()>=this.lastPrunedAt&&this.now()-this.lastPrunedAt<60000)return 0;
     const days=this.policy().dots?.draftRetentionDays??7,cutoff=this.now()-days*86400000;this.lastPrunedAt=this.now();
-    return this.store.db.prepare("UPDATE dot_event_drafts SET event='{}',target_url=NULL,reported=NULL,state='expired' WHERE state<>'expired' AND request_id IN (SELECT id FROM dot_requests WHERE created<?)").run(cutoff).changes;
+    const events=this.store.db.prepare("UPDATE dot_event_drafts SET event='{}',target_url=NULL,reported=NULL,state='expired' WHERE state<>'expired' AND request_id IN (SELECT id FROM dot_requests WHERE created<?)").run(cutoff).changes;
+    return events+this.store.db.prepare("UPDATE dot_project_drafts SET payload='{}',state='expired' WHERE state<>'expired' AND created<?").run(cutoff).changes;
   }
   enqueue(source){
     const {config,dots}=this.settings();check(source.actorId===dots.actorId&&source.provider==='discord'&&source.guildId===config.discord.guildId&&dots.channelIds.includes(source.channelId),'DOTS_ACTOR_REQUIRED');
@@ -82,7 +86,7 @@ export class DotsBridge {
     const refused=(id,e)=>{if(staleRequestCodes.has(errorCode(e)))this.store.db.prepare("UPDATE dot_requests SET state='stale' WHERE id=? AND state='pending'").run(id);else if(errorCode(e)!=='DOTS_REQUEST_NOT_PENDING')unavailable++;};
     for(const {id,ordinal} of rows){const remaining=this.listDeadlineMs-(performance.now()-started);if(remaining<=0)break;after=ordinal;try{
       const {row,source}=await this.current(id,{authorizationTimeoutMs:Math.max(1,Math.min(this.authorizationTimeoutMs,Math.ceil(remaining)))});check(row.state==='pending','DOTS_REQUEST_NOT_PENDING');
-      result.push({id,revision:row.source_revision,...(includeText?{text:source.text}:{preview:source.text.slice(0,splitPair(source.text,120)?119:120)}),textLength:source.text.length,textDigest:digest(source.text),channelId:source.channelId,createdAt:new Date(row.created).toISOString(),authority:'conversation_and_event_draft_only'});if(result.length===limit)break;
+      result.push({id,revision:row.source_revision,source:{key:row.source_key,revision:row.source_revision},...(includeText?{text:source.text}:{preview:source.text.slice(0,splitPair(source.text,120)?119:120)}),textLength:source.text.length,textDigest:digest(source.text),channelId:source.channelId,createdAt:new Date(row.created).toISOString(),authority:'conversation_and_event_draft_only'});if(result.length===limit)break;
     }catch(e){refused(id,e);}}
     // A later authorization may have allowed a correction/cancellation of an
     // earlier item. Recheck every returned binding immediately before emission.
@@ -96,7 +100,7 @@ export class DotsBridge {
     const {row,source}=await this.current(id);check(row.source_revision===revision,'DOTS_SOURCE_CHANGED');check(row.state==='pending','DOTS_REQUEST_NOT_PENDING');
     check(offset<=source.text.length&&!splitPair(source.text,offset),'DOTS_TEXT_OFFSET_INVALID');
     let end=Math.min(offset+limit,source.text.length);if(splitPair(source.text,end))end--;
-    return {id,revision,text:source.text.slice(offset,end),textDigest:digest(source.text),offset,nextOffset:end<source.text.length?end:null,textLength:source.text.length,offsetEncoding:'utf-16',channelId:source.channelId,authority:'conversation_and_event_draft_only',taskOwnerUnchanged:true};
+    return {id,revision,source:{key:row.source_key,revision:row.source_revision},text:source.text.slice(offset,end),textDigest:digest(source.text),offset,nextOffset:end<source.text.length?end:null,textLength:source.text.length,offsetEncoding:'utf-16',channelId:source.channelId,authority:'conversation_and_event_draft_only',taskOwnerUnchanged:true};
   }
   async send(id,revision,text){
     check(typeof text==='string'&&text.trim()&&text.length<=1900,'DOTS_REPLY_SIZE');const bodyDigest=digest(text);
@@ -111,6 +115,82 @@ export class DotsBridge {
     }finally{this.inFlight.delete(id);}
   }
   async cancel(id,actor){const {row}=await this.current(id);check(actor===row.actor,'DOTS_ACTOR_REQUIRED');check(!this.inFlight.has(id)&&row.state==='pending','DOTS_DELIVERY_UNCERTAIN');this.store.db.prepare("UPDATE dot_requests SET state='cancelled' WHERE id=? AND state='pending'").run(id);return {state:'cancelled',delegatedWorkStopped:false};}
+  projectScope(operation,policy=this.policy()){
+    this.settings();
+    check(projectInstallation(policy)===projectInstallation(this.config),'PROJECT_INSTALLATION_CHANGED');
+    for(const config of [this.config,policy]){
+      check(config.dots.enabled&&config.dots.actorId===this.config.dots.actorId,'DOTS_OWNER_CHANGED');
+      check(config.projects?.operations.includes(operation)&&config.dots.projectOperations?.includes(operation),'PROJECT_OPERATION_NOT_ALLOWED');
+    }
+  }
+  projectDraft(id){
+    check(typeof id==='string'&&/^project_[a-f0-9]{24}$/.test(id),'PROJECT_APPROVAL_REQUIRED');
+    const row=this.store.db.prepare('SELECT * FROM dot_project_drafts WHERE id=?').get(id);check(row,'PROJECT_APPROVAL_REQUIRED');
+    check(row.state!=='expired','PROJECT_DRAFT_CONTENT_EXPIRED');
+    check(row.binding===projectInstallation(this.config),'PROJECT_INSTALLATION_CHANGED');
+    return {id:row.id,requestId:row.request_id,revision:row.revision,actor:row.actor,payload:JSON.parse(row.payload),digest:row.digest,state:row.state,approvedAt:row.approved_at,reviewDelivery:row.review_message_id?'sent':'unknown'};
+  }
+  projectBinding(draft,{policy=this.policy(),signal,approved=false}={}){
+    signal?.throwIfAborted();this.projectScope(draft.payload.operation,policy);
+    const {row}=this.snapshot(draft.requestId);
+    check(row.actor===draft.actor&&row.source_revision===draft.revision&&draft.payload.actor===row.actor
+      &&draft.payload.source.key===row.source_key&&draft.payload.source.revision===row.source_revision,'PROJECT_APPROVAL_BINDING_CHANGED');
+    check(row.state==='pending','DOTS_REQUEST_NOT_PENDING');
+    if(approved){check(draft.state==='approved','PROJECT_APPROVAL_REQUIRED');check(this.now()>=draft.approvedAt&&this.now()-draft.approvedAt<=300000,'PROJECT_APPROVAL_EXPIRED');}
+    return row;
+  }
+  async prepareProject(id,revision,candidate,{signal}={}){
+    signal?.throwIfAborted();
+    // Validate all bounded content before any transport receipt is inserted.
+    check(candidate&&typeof candidate==='object'&&!Object.hasOwn(candidate,'actor'),'PROJECT_REQUEST_INVALID');
+    const payload=validateProjectRequest({...candidate,actor:this.config.dots.actorId});
+    check(['create','correct'].includes(payload.operation),'PROJECT_OPERATION_INVALID');this.projectScope(payload.operation);
+    check(typeof id==='string'&&/^dot_[a-f0-9]{24}$/.test(id)&&Number.isSafeInteger(revision)&&revision>=0,'DOTS_SOURCE_CHANGED');
+    const {row,source}=await this.current(id,{signal});
+    check(row.state==='pending'&&row.source_revision===revision,'DOTS_SOURCE_CHANGED');
+    const contentDigest=digest(payload),draftId='project_'+digest([projectInstallation(this.config),id,revision,row.actor,contentDigest]).slice(0,24);
+    const draft={id:draftId,requestId:id,revision,actor:row.actor,payload,digest:contentDigest};this.projectBinding(draft,{signal});this.prune();
+    const old=this.store.db.prepare('SELECT state FROM dot_project_drafts WHERE id=?').get(draftId);
+    if(old){check(old.state!=='superseded','PROJECT_DRAFT_SUPERSEDED');return {...this.projectDraft(draftId),projectWritePerformed:false,taskOwnerUnchanged:true};}
+    check(this.store.db.prepare('SELECT count(*) AS n FROM dot_project_drafts WHERE request_id=?').get(id).n<8,'PROJECT_DRAFT_LIMIT');
+    check(this.store.db.prepare("SELECT count(*) AS n FROM dot_project_drafts WHERE state<>'expired'").get().n<128,'PROJECT_DRAFT_LIMIT');
+    this.store.transaction(()=>{
+      this.projectBinding(draft,{signal});
+      this.store.db.prepare("UPDATE dot_project_drafts SET state='superseded' WHERE request_id=? AND state IN ('needs_review','approved')").run(id);
+      this.store.db.prepare("INSERT INTO dot_project_drafts(id,request_id,revision,actor,binding,payload,digest,state,created) VALUES(?,?,?,?,?,?,?,'needs_review',?)").run(draftId,id,revision,row.actor,projectInstallation(this.config),JSON.stringify(payload),contentDigest,this.now());
+    });
+    let message;try{signal?.throwIfAborted();message=await this.deliver(source,this.projectReviewMessage(this.projectDraft(draftId)),{purpose:'project_review',beforeSend:()=>{
+      const fresh=this.projectDraft(draftId);this.projectBinding(fresh,{signal});check(fresh.state==='needs_review','PROJECT_APPROVAL_BINDING_CHANGED');
+    }});}catch(error){if(signal?.aborted)throw error;}
+    this.store.db.prepare('UPDATE dot_project_drafts SET review_message_id=? WHERE id=?').run(message?.id??null,draftId);
+    const fresh=this.projectDraft(draftId);this.projectBinding(fresh,{signal});return {...fresh,projectWritePerformed:false,taskOwnerUnchanged:true};
+  }
+  projectReviewMessage(draft){
+    return {content:`Projectの${draft.payload.operation==='create'?'作成':'訂正'}候補です。添付JSONの目的・全条件・Source・request_id${draft.payload.operation==='correct'?'・訂正理由・対象revision':''}を確認してください。この内容の保存を一回だけ許可します。Taskの実行許可は含みません。許可は5分間有効です。\n${draft.id}`,
+      files:[{attachment:Buffer.from(JSON.stringify(draft.payload,null,2),'utf8'),name:'project-candidate.json'}],
+      components:[{type:1,components:[{type:2,style:1,label:'この内容のProject保存を許可',custom_id:'kotodama-project:'+draft.id+':'+draft.digest.slice(0,16)}]}],allowedMentions:{parse:[]}};
+  }
+  async readProjectDraft(id,{signal}={}){
+    this.prune();const draft=this.projectDraft(id);this.projectScope(draft.payload.operation);await this.current(draft.requestId,{signal});
+    const fresh=this.projectDraft(id);this.projectBinding(fresh,{signal});return fresh;
+  }
+  async approveProject(id,prefix,actor){
+    const draft=await this.readProjectDraft(id);
+    check(actor===draft.actor&&prefix===draft.digest.slice(0,16),'PROJECT_APPROVAL_BINDING_CHANGED');
+    check(draft.state==='needs_review','PROJECT_DRAFT_ALREADY_DECIDED');this.projectBinding(draft);
+    const changed=this.store.db.prepare("UPDATE dot_project_drafts SET state='approved',approved_at=? WHERE id=? AND state='needs_review'").run(this.now(),id);
+    check(changed.changes===1,'PROJECT_DRAFT_ALREADY_DECIDED');return this.projectDraft(id);
+  }
+  async authorizeProjectWrite(id,input,{signal}={}){
+    const payload=validateProjectRequest(input),draft=this.projectDraft(id);
+    check(['create','correct'].includes(payload.operation)&&digest(payload)===draft.digest,'PROJECT_APPROVAL_BINDING_CHANGED');
+    await this.current(draft.requestId,{signal});
+    // The caller invokes this synchronous guard inside the Project owner's
+    // transaction. Its existing exact-payload request receipt is the only
+    // commit/consume record; no claim can strand a local write in progress.
+    const assertScope=policy=>{const fresh=this.projectDraft(id);check(fresh.digest===digest(payload),'PROJECT_APPROVAL_BINDING_CHANGED');this.projectBinding(fresh,{policy,signal,approved:true});};
+    assertScope(this.policy());return assertScope;
+  }
   async prepareEvent(id,revision,event,{operation='create',targetUrl}={}){
     const {row,source}=await this.current(id);check(row.source_revision===revision&&row.state==='pending','DOTS_SOURCE_CHANGED');const parsed=lumaEventSchema.parse(event);
     check(['create','update'].includes(operation),'LUMA_OPERATION_INVALID');check(operation==='update'?Boolean(targetUrl):!targetUrl,'LUMA_TARGET_REQUIRED');const target=targetUrl?eventUrl(targetUrl):null;

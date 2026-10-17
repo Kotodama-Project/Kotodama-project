@@ -977,8 +977,8 @@ class SourceBindingVerificationCandidateTests(unittest.TestCase):
             empty.write_bytes(b"")
             oversized = root / "oversized.bin"
             oversized.write_bytes(b"12345")
-            for path, maximum in ((empty, 4), (root, 4), (oversized, 4)):
-                with self.subTest(path=path.name):
+            for case_index, (path, maximum) in enumerate(((empty, 4), (root, 4), (oversized, 4))):
+                with self.subTest(case=("empty-file", "directory", "over-limit-file")[case_index]):
                     with self.assertRaises(verifier.StrictInputError):
                         verifier.stable_read(path, maximum)
 

@@ -459,7 +459,7 @@ def validate(root: pathlib.Path = ROOT) -> list[str]:
         "--preview-alias voice-review",
         "python trusted/tools/verify_wrangler_artifact.py",
         "trusted/runtime/cloudflare-edge/wrangler-integrity.json",
-        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+        "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
         'node-version: "24.14.0"',
         "curl --fail --location --proto '=https' --tlsv1.2",
         "trusted/runtime/cloudflare-edge/wrangler-runner-package.json",
