@@ -123,6 +123,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- tracked credential gateの文字走査で同じ拡張子の再計算を省き、検出規則・全snapshot・行番号を保持する（#417）。
+
 - 並行する同一peer送信の回帰試験で、有限のwriter混雑拒否後に同じkeyを一回だけ再照合し、24 receipt・単一DB行・payloadの一回公開と内容不変・一回配送を検査する。2回の混雑拒否も決定的に注入し、実装の期限・quotaは変更しない（#428）。
 
 - Windowsの証拠readerで毎回行っていたWin32 APIの読込・型設定を一回のbindingにまとめ、各読取で新しいhandle・現在bytes・file identityを引き続き検査。20秒CLI期限やSource/owner検査は変更せず、#420のtimeout原因全体は調査中。
