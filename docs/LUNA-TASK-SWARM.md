@@ -85,6 +85,14 @@ native の callable surface が一つも無い場合は、native の success と
 
 新しい invocation は新しい epoch/token を受けます。古い epoch の report、send、ACK、reply は stale として拒否されます。続行時に最初の attempt ID、spawn receipt、child UUID を再利用しません。root が runtime provenance をまだ束縛していない場合、worker は unknown のまま返します。
 
+Windows の `CodexBackend` は、子プロセスへ渡す最終作業ディレクトリを UTF-16 の
+258 code units 以下に制限します。owner の storage root だけでなく、Task・job・
+`attempt-<UUID>` と機密実行の `work`、区切り、UNC・extended prefix も含む長さです。
+非 BMP 文字は2 unitsとして数え、prefixで制限を回避しません。超過時は現在の取消・期限を
+確認した後、子を起動せず `execution_cwd_limit`（再試行不可）を返します。既に作成した
+attempt の診断は保持し、process・completed receipt は発行しません。owner は短い
+storage root を選んでください。この制限は POSIX には適用しません。
+
 履歴を保持したまま、scheduler snapshot は一つの照会で attempt を集め、claim は稼働中の lease を一回読む構成です。peer 通信は現在の owner scope・expiry の索引と ACK の結合照会を使い、receive は許可された要求件数に達したところで行の読取りを止めます。ACK の不整合、閲覧権限、epoch、budget の照合は省略しません。`tests/test_task_swarm_scalability.py` の合成履歴で照会数と SQLite の処理量を検証しています。ローカル SQLite の writer 直列化と payload 領域の quota 検査は残り、実 provider や世界規模の負荷を検証したことにはなりません。
 
 ## peer 通信の意味

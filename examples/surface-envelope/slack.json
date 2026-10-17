@@ -1,0 +1,27 @@
+{
+  "kind": "kotodama/surface-envelope/v1",
+  "synthetic": true,
+  "surface": "slack",
+  "tenant": "tenant-a",
+  "installation": "install-a",
+  "channel": "room-a",
+  "thread": "thread-a",
+  "actor": "actor-a",
+  "eventId": "event-a",
+  "sourceId": "message-a",
+  "revision": 1,
+  "permissionRevision": 3,
+  "operation": "message",
+  "text": "架空の相談",
+  "occurredAt": "2023-11-14T22:13:20Z",
+  "expiresAt": 2000000000,
+  "consentRef": "ref/synthetic/consent",
+  "acl": {"tenant": "tenant-a", "readers": ["actor-a"]},
+  "capabilities": {
+    "textIngress": true,
+    "textProjection": true,
+    "receiveAudio": "unsupported",
+    "sendAudio": "unsupported",
+    "verifiedSpeaker": "unknown"
+  }
+}

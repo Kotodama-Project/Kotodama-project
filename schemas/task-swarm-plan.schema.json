@@ -6,10 +6,19 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["run_id", "task_id", "binding_digest", "budget", "jobs"],
+  "dependentRequired": {
+    "execution_contract_version": ["dependency_descriptor_sha256"],
+    "dependency_descriptor_sha256": ["execution_contract_version"]
+  },
   "properties": {
     "run_id": { "$ref": "#/$defs/ref" },
     "task_id": { "$ref": "#/$defs/ref" },
     "binding_digest": { "$ref": "#/$defs/digest" },
+    "execution_contract_version": {
+      "type": "integer", "const": 3,
+      "description": "Explicit two-leaf A→B execution contract; absence denotes a legacy plan. Runtime validates topology, budget and owner-bound release evidence."
+    },
+    "dependency_descriptor_sha256": { "$ref": "#/$defs/digest" },
     "budget": {
       "type": "object",
       "additionalProperties": false,

@@ -228,8 +228,9 @@ def test_aggregate_output_limit_is_checked_before_acceptance(tmp_path):
 @pytest.mark.parametrize("mode,code", [("stale", "REVIEW_STALE"), ("identity", "REVIEW_NOT_INDEPENDENT"),
                                      ("revoked", "INACTIVE_TASK"), ("bytes", "RUN_ARTIFACT_CHANGED"),
                                      ("actor", "STALE_ACTOR"), ("requirements", "REVIEW_CONTEXT_MISMATCH")])
-def test_review_cannot_accept_changed_reports_owner_or_its_own_producer(tmp_path, mode, code):
+def test_review_cannot_accept_changed_reports_owner_or_its_own_producer(tmp_path, monkeypatch, mode, code):
     owner, file, document, root = setup(tmp_path)
+    gate = OwnerMonitorGate(monkeypatch) if mode in ("revoked", "actor") else None
     class Backend(SyntheticTaskBackend):
         def review(self, payload, reports, directory, **kwargs):
             value = super().review(payload, reports, directory, **kwargs)
@@ -240,17 +241,29 @@ def test_review_cannot_accept_changed_reports_owner_or_its_own_producer(tmp_path
             elif mode == "identity":
                 value["receipt"]["invocation_ref"] = "fixture-facts"
             elif mode == "revoked":
+                gate.wait_until_entered()
                 document["binding"]["status"] = "cancelled"
                 owner.write_text(json.dumps(document), encoding="utf-8")
+                gate.release.set()
+                assert kwargs["cancel_event"].wait(10)
             elif mode == "actor":
+                gate.wait_until_entered()
                 document["actors"]["verifier"]["epoch"] += 1
                 owner.write_text(json.dumps(document), encoding="utf-8")
+                gate.release.set()
+                assert kwargs["cancel_event"].wait(10)
             else:
                 target = directory.parent.parent / "facts.json"
                 target.write_bytes(target.read_bytes()+b" ")
             return value
-    with pytest.raises(SwarmError) as raised:
-        execute_task(owner, file, Backend())
+    try:
+        with pytest.raises(SwarmError) as raised:
+            execute_task(owner, file, Backend())
+        if gate is not None:
+            gate.assert_stopped()
+    finally:
+        if gate is not None:
+            gate.finish()
     assert raised.value.code == code
     assert not list(root.glob("task-run-*/receipt.json"))
     # An interrupted attempt cannot be turned into another dispatch by retry.
@@ -313,3 +326,201 @@ def test_cli_requires_separate_fixture_or_codex_invocation_authorization(tmp_pat
     assert result.returncode == 2
     assert json.loads(result.stderr)["error"] == "LOCAL_FIXTURE_REQUIRED"
     assert not list(root.iterdir())
+
+
+class OwnerMonitorGate:
+    """Hold only the owner watcher's real read at an explicit test boundary."""
+
+    def __init__(self, monkeypatch, *, release_on_foreground_error=False, monitor_error=None):
+        import task_swarm.task_runner as runner
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.thread = None
+        self.release_on_foreground_error = release_on_foreground_error
+        self.monitor_error = monitor_error
+        original_task = runner.OwnerFile.read_task
+        original_binding = runner.OwnerFile.read_binding
+        original_require = runner.require
+
+        def invoke(original, instance, *args, **kwargs):
+            watching = threading.current_thread().name == "swarm-owner-watch"
+            try:
+                return original(instance, *args, **kwargs)
+            except Exception:
+                if not watching and self.release_on_foreground_error:
+                    self.release.set()
+                raise
+
+        def read_task(instance, *args, **kwargs):
+            if threading.current_thread().name == "swarm-owner-watch":
+                self.thread = threading.current_thread()
+                self.entered.set()
+                assert self.release.wait(10), "watcher read was not released"
+                if self.monitor_error is not None:
+                    raise self.monitor_error
+            return invoke(original_task, instance, *args, **kwargs)
+
+        def read_binding(instance, *args, **kwargs):
+            return invoke(original_binding, instance, *args, **kwargs)
+
+        def require(*args, **kwargs):
+            try:
+                return original_require(*args, **kwargs)
+            except Exception:
+                if self.release_on_foreground_error and threading.current_thread().name != "swarm-owner-watch":
+                    self.release.set()
+                raise
+
+        monkeypatch.setattr(runner.OwnerFile, "read_task", read_task)
+        monkeypatch.setattr(runner.OwnerFile, "read_binding", read_binding)
+        monkeypatch.setattr(runner, "require", require)
+
+    def wait_until_entered(self):
+        assert self.entered.wait(10), "watcher did not reach the read boundary"
+
+    def assert_stopped(self):
+        assert self.thread is not None, "watcher was never observed"
+        assert not self.thread.is_alive(), "execution returned before the watcher stopped"
+
+    def finish(self):
+        self.release.set()
+        if self.thread is not None:
+            self.thread.join(timeout=10)
+            assert not self.thread.is_alive(), "watcher remained alive after execution"
+
+
+def assert_no_owner_acceptance(root):
+    import sqlite3
+    from contextlib import closing
+    assert not list(root.glob("task-run-*/receipt.json"))
+    with closing(sqlite3.connect(next(root.glob("task-run-*/execution.sqlite")))) as connection:
+        assert connection.execute("SELECT count(*) FROM jobs WHERE state='accepted'").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("order", ["monitor", "foreground"])
+@pytest.mark.parametrize("mode,code", [
+    ("revoked", "INACTIVE_TASK"),
+    ("actor", "STALE_ACTOR"),
+    ("expired", "EXPIRED_BINDING"),
+])
+def test_owner_refusal_reason_is_stable_in_both_observed_orders(tmp_path, monkeypatch, order, mode, code):
+    owner, file, document, root = setup(tmp_path)
+    gate = OwnerMonitorGate(monkeypatch, release_on_foreground_error=order == "foreground")
+    now = [time.time()]
+
+    class Backend(SyntheticTaskBackend):
+        def review(self, payload, reports, directory, **kwargs):
+            value = super().review(payload, reports, directory, **kwargs)
+            gate.wait_until_entered()
+            if mode == "revoked":
+                document["binding"]["status"] = "cancelled"
+                owner.write_text(json.dumps(document), encoding="utf-8")
+            elif mode == "actor":
+                document["actors"]["verifier"]["epoch"] += 1
+                owner.write_text(json.dumps(document), encoding="utf-8")
+            else:
+                now[0] = document["binding"]["expires_at"] + 1
+            if order == "monitor":
+                gate.release.set()
+                assert kwargs["cancel_event"].wait(10)
+            return value
+
+    try:
+        with pytest.raises(SwarmError) as raised:
+            execute_task(owner, file, Backend(), clock=lambda: now[0])
+        gate.assert_stopped()
+    finally:
+        gate.finish()
+    assert raised.value.code == code
+    assert_no_owner_acceptance(root)
+
+
+@pytest.mark.parametrize("kind", [
+    "swarm_cancel", "codex_cancel", "stop_unconfirmed", "timeout", "other_swarm", "lookup",
+])
+def test_monitor_reason_only_translates_explicit_backend_cancellation(tmp_path, monkeypatch, kind):
+    from task_swarm.codex import BackendError
+    owner, file, document, root = setup(tmp_path)
+    gate = OwnerMonitorGate(monkeypatch)
+    failures = {
+        "swarm_cancel": SwarmError("RUN_CANCELLED", "synthetic cancellation"),
+        "codex_cancel": BackendError("cancelled", "synthetic cancellation", retryable=False),
+        "stop_unconfirmed": BackendError("stop_unconfirmed", "child stop unconfirmed", retryable=False,
+                                          diagnostics={"cleanup": "unconfirmed"}),
+        "timeout": BackendError("timeout", "synthetic timeout", retryable=False,
+                                diagnostics={"timeout": "fixture"}),
+        "other_swarm": SwarmError("RUN_OUTPUT_LIMIT", "synthetic output limit"),
+        "lookup": LookupError("unrelated backend failure"),
+    }
+    failure = failures[kind]
+
+    class Backend(SyntheticTaskBackend):
+        def review(self, payload, reports, directory, **kwargs):
+            gate.wait_until_entered()
+            document["binding"]["status"] = "cancelled"
+            owner.write_text(json.dumps(document), encoding="utf-8")
+            gate.release.set()
+            assert kwargs["cancel_event"].wait(10)
+            raise failure
+
+    try:
+        with pytest.raises(Exception) as raised:
+            execute_task(owner, file, Backend())
+        gate.assert_stopped()
+    finally:
+        gate.finish()
+    if kind in ("swarm_cancel", "codex_cancel"):
+        assert isinstance(raised.value, SwarmError)
+        assert raised.value.code == "INACTIVE_TASK"
+        assert raised.value.__cause__ is failure
+    else:
+        assert raised.value is failure
+    assert_no_owner_acceptance(root)
+
+
+def test_external_cancellation_does_not_acquire_a_later_monitor_reason(tmp_path, monkeypatch):
+    owner, file, document, root = setup(tmp_path)
+    gate = OwnerMonitorGate(monkeypatch)
+    event = threading.Event()
+
+    class Backend(SyntheticTaskBackend):
+        def review(self, payload, reports, directory, **kwargs):
+            value = super().review(payload, reports, directory, **kwargs)
+            gate.wait_until_entered()
+            event.set()
+            document["binding"]["status"] = "cancelled"
+            owner.write_text(json.dumps(document), encoding="utf-8")
+            gate.finish()
+            return value
+
+    try:
+        with pytest.raises(SwarmError) as raised:
+            execute_task(owner, file, Backend(), cancel_event=event)
+        gate.assert_stopped()
+    finally:
+        gate.finish()
+    assert raised.value.code == "RUN_CANCELLED"
+    assert_no_owner_acceptance(root)
+
+
+def test_untyped_monitor_failure_is_a_bounded_binding_refusal(tmp_path, monkeypatch):
+    owner, file, _, root = setup(tmp_path)
+    gate = OwnerMonitorGate(monkeypatch, monitor_error=OSError("private fixture diagnostic"))
+
+    class Backend(SyntheticTaskBackend):
+        def review(self, payload, reports, directory, **kwargs):
+            value = super().review(payload, reports, directory, **kwargs)
+            gate.wait_until_entered()
+            gate.release.set()
+            assert kwargs["cancel_event"].wait(10)
+            return value
+
+    try:
+        with pytest.raises(SwarmError) as raised:
+            execute_task(owner, file, Backend())
+        gate.assert_stopped()
+    finally:
+        gate.finish()
+    assert raised.value.code == "BINDING_UNAVAILABLE"
+    assert raised.value.detail == "Task owner binding could not be validated"
+    assert_no_owner_acceptance(root)

@@ -17,6 +17,38 @@ Truth.
 
 ## Target
 
+### 2026-10-12 project-centered agent collaboration refinement
+
+The owner's further direction is recorded here as a summarized product intent,
+not a verbatim transcript or a runtime acceptance record:
+
+- Kotodama should itself be an agent alongside the personal agents people
+  already use. It can collaborate as a peer and coordinate work when delegated;
+  it need not be the parent of every external agent.
+- The **project is the durable hub** for intent, requirements, people, agents,
+  work, decisions, artifacts, and learning across conversations and providers.
+- People should create and steer work through either simple GUI interactions
+  or natural-language instructions. Both operate on the same project and work
+  state, preserving corrections when switching between them.
+- Work may follow different orchestration patterns: a single agent, specialist
+  delegation, parallel collaboration, or staged work with review. The pattern
+  should follow the project's needs and remain understandable and adjustable.
+- Optimization is part of the product: improve accepted outcomes, effort,
+  elapsed time, and cost under the project's constraints. Preserve the original
+  goal rather than optimizing a proxy or silently relaxing requirements.
+- Define what information a project needs more precisely. Capture a small
+  starting brief, retain unknowns, and enrich the project as work reveals what
+  is needed instead of requiring an exhaustive form at creation.
+- Keep roles, procedures, context selection, and orchestration configurable and
+  versioned. Preserve this direction so subsequent design and implementation
+  continue from it.
+
+The [project hub design](AGENT-HUB-DESIGN.md#プロジェクトを中心にした利用体験と情報定義)
+develops these requirements into a proposed information model and acceptance
+scenario. Its field choices and defaults are design proposals, not additional
+owner decisions. Existing authority, Task ownership, and migration boundaries
+continue to apply.
+
 ### 2026-09-13 usage and interaction refinement
 
 The owner's direct template implementation plan and subsequent usage instructions
@@ -309,15 +341,16 @@ validation; false-neighbor and stale-index paths fail closed.
 
 ## Current reality
 
-- This branch is a **documentation-only public candidate**. The canonical
-  direction, README projection, STATUS, ROADMAP, and regression tests do not
-  implement or deploy the product.
+- This document records a **documentation-only direction milestone**. The
+  direction and its projections do not by themselves implement or deploy the
+  complete product. Current source capabilities and remaining acceptance are
+  owned by [STATUS](../STATUS.md#current-source-and-open-integration-work).
 - The private Voice/Intent/Swarm path does not yet prove one end-to-end slice of
   continuous capture, rotation, transcription, requirements, delegation,
   execution, and verification. Provider and public-access gates remain
   unproven.
-- Public Kotodama currently provides candidate contracts, validators, and
-  documentation. Public Voice, an activated Agent Swarm, provider E2E, and
+- Public Kotodama currently provides candidate contracts, validators, bounded
+  local runtimes, and documentation. Public Voice, an activated Agent Swarm, provider E2E, and
   Public Beta access remain unavailable; `NO_GO_UNPUBLISHED` remains in force.
 
 ## Open design decisions

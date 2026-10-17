@@ -3,12 +3,29 @@ import hashlib
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 from tools import build_python_candidate as builder
 
 
 class PythonCandidateArtifactsTests(unittest.TestCase):
+    def test_packaging_allowlist_covers_current_public_swarm_modules(self):
+        modules = {path.stem for path in (builder.ROOT / "runtime/task_swarm").glob("*.py")}
+        self.assertEqual(builder.MODULES, modules)
+        self.assertTrue({"runtime/task_swarm/" + name + ".py" for name in modules} <= builder.SOURCE_PATHS)
+
+    def test_builder_and_lock_drift_are_refused_against_the_recorded_commit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / "builder.py"
+            path.write_bytes(b"committed\n")
+            with patch.object(builder, "ROOT", root), patch.object(builder, "git", return_value=b"committed\n"):
+                self.assertEqual(builder.pinned_files("a" * 40, {"builder.py"}), {"builder.py": b"committed\n"})
+                path.write_bytes(b"changed locally\n")
+                with self.assertRaisesRegex(ValueError, "SOURCE_DIFFERS_FROM_COMMIT"):
+                    builder.pinned_files("a" * 40, {"builder.py"})
+
     def test_generated_metadata_lf_and_crlf_produce_same_record_without_source_changes(self):
         source = b"do not rewrite source\r\n"
         linux = {"kotodama_core/a.py": source,

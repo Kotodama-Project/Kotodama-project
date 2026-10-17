@@ -84,17 +84,19 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
         self.assertIn("docs/HISTORY.md", self.roadmap)
 
     def test_status_surface_table_covers_main_components(self) -> None:
-        boundary = next((offset for _, anchor, offset in headings(self.status)
-                         if anchor == "latest-cloudflare-candidate-result"), None)
-        self.assertIsNotNone(boundary, "STATUS's surface table must end at its owning boundary")
-        table = self.status[:boundary]
+        self.assert_status_surface_table(self.status)
+
+    def assert_status_surface_table(self, text: str) -> None:
+        table = section(text, "current-public-surfaces")
         rows = table_rows(table)
+        self.assertTrue(rows, "STATUS's owned surface table must be present")
         self.assertEqual(rows[0], ["Surface", "Status"])
         self.assertTrue(rows[1:])
         for row in rows[1:]:
             self.assertEqual(len(row), 2)
             self.assertTrue(row[1])
         by_name = {row[0]: row[1] for row in rows[1:]}
+        self.assertEqual(len(by_name), len(rows) - 1, "surface names must be unique")
         for name, expected in (("Public Beta access", "Not open"), ("Public Voice Bot", "Inactive"),
                                ("Final Human GO", "Not completed")):
             self.assertEqual(by_name.get(name), expected)
@@ -102,6 +104,29 @@ class PublicStatusRoadmapSyncTests(unittest.TestCase):
                      "runtime/local-review-gateway/README.md", "docs/SESSION-CONVERSATION-LEDGER.md",
                      "docs/CLOUDFLARE-OS-ADOPTION.md", "docs/OWNER-INTENT-COMPANY-AGI.md"))
         self.assertIn("runtime/discord-template", (ROOT / "docs/DISCORD-RUNTIME.md").read_text(encoding="utf-8"))
+
+    def test_surface_contract_ignores_tables_outside_its_section(self) -> None:
+        unrelated = "| Surface | Status |\n|---|---|\n| Public Beta access | Open |\n\n"
+        text = self.status.replace("## Current public surfaces", unrelated + "## Current public surfaces", 1)
+        text = text.replace("## Latest Cloudflare candidate result",
+                            "## Latest Cloudflare candidate result\n\n" + unrelated, 1)
+        self.assert_status_surface_table(text)
+
+    def test_surface_contract_still_refuses_missing_or_invalid_owned_content(self) -> None:
+        mutations = (
+            ("## Current public surfaces", "## Other surfaces"),
+            ("| Surface | Status |", "| Candidate | Status |"),
+            ("| Public Beta access | Not open |\n", ""),
+            ("| Public Beta access | Not open |", "| Public Beta access | Open |"),
+            ("| Public Voice Bot | Inactive |", "| Public Voice Bot | |"),
+            ("| Final Human GO | Not completed |", "| Final Human GO | Not completed | extra |"),
+            ("| Public Beta access | Not open |", "| Public Beta access | Not open |\n| Public Beta access | Not open |"),
+        )
+        for original, replacement in mutations:
+            with self.subTest(original=original, replacement=replacement):
+                self.assertIn(original, self.status)
+                with self.assertRaises(AssertionError):
+                    self.assert_status_surface_table(self.status.replace(original, replacement, 1))
 
     def test_public_status_surface_exposes_pack_entry_links(self) -> None:
         status_table = self.status.split("## Latest runtime result", 1)[0]

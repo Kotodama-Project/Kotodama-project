@@ -32,7 +32,7 @@ IDsは合成例です。actorは`discord.operators`、channelは`discord.textCha
 
 通常messageへの返答は同じchannelが既定です。`dots.replyMode`を`dm`にすると本人のDMへ返します。privateなslash相談と、正確な住所などを含むLumaの内容確認は本人のDMへ届けます。CodexCatchupの専用確認channelは既存adapter側の接続確認で扱います。
 
-Luma候補の説明・場所・URLなど、このtransportが複製した詳細は既定7日で消去します。`dots.draftRetentionDays`で1〜30日に設定できます。起動時・読取時・稼働中の定期回収で適用し、内容を含まないdigestと操作状態は残します。元のSourceやTask ownerの記録を消す操作ではありません。
+Luma候補の説明・場所・URL、Project候補の全文など、このtransportが複製した詳細は既定7日で消去します。`dots.draftRetentionDays`で1〜30日に設定できます。起動時・読取時・稼働中の定期回収で適用し、内容を含まないdigestと操作状態は残します。元のSourceやTask ownerの記録を消す操作ではありません。
 
 開始済みの操作は、受付期限の後でも同じclaimと不変のSource・現在の閲覧権限で読戻しを記録できます。これは新しい操作や期限後のDiscord送信の許可ではありません。期限後の結果はDotと保存済みreportで確認し、Botからの新しい返答には新しい受付を使います。
 
@@ -56,6 +56,82 @@ Dotへoperator/channel、返答先、監視期間を伝えます。`discord_requ
 閲覧確認は一回2秒、一覧の一ページは8秒を上限に待ちます。timeout後も実際のSDK読取が終わるまで最大8件の枠を保持し、同じ相談の再読で未終了の確認を重ねません。遅い確認で一覧全体を待ち続けず、残りはcursorから続けます。timeoutや`DOTS_ACCESS_BUSY`は許可の失効と区別し、本文を返さず次の読取で確認します。
 
 長い相談が多い場合は`includeText: false`でID・revision・短いpreviewを読み、必要な相談だけ`discord_read_request`で全文を取得できます。offset 0から`nextOffset`がnullになるまで同じrevisionと`textDigest`で読みます。一回は最大4096 UTF-16単位で、surrogate pairを切らずに返します。previewは全文ではありません。ページごとに元のSource・閲覧範囲・受付状態を確認し、訂正・取消・期限切れ・失効があれば古い文脈の続きは拒否します。通常の相談・返答の操作は変わりません。
+
+## Projectの目的と条件を扱う
+
+operatorがBot configの`projects.operations`と`dots.projectOperations`の両方へ
+許可する操作を設定すると、その共通部分だけをProject toolとして追加できます。
+両方の既定は空配列です。既存operator／GUI向けのProject許可はDotsへ引き継がれません。
+
+```json
+{
+  "projects": {"operations": ["read", "create", "inspect", "correct"]},
+  "dots": {
+    "enabled": true,
+    "actorId": "100000000000000002",
+    "channelIds": ["100000000000000003"],
+    "projectOperations": ["read", "create", "inspect", "correct"]
+  }
+}
+```
+
+使う操作だけを設定し、対象runtimeとpluginを再接続してtool一覧を確認します。
+毎回の呼出しと保存・返却直前にも、起動時と現在の両設定、主体、installation、Sourceの
+閲覧範囲を再検査します。許可の削除やDotsの無効化は以後の保存・返却を拒否します。
+すでに保存したProjectを巻き戻す操作ではありません。
+
+読取の範囲は、同じinstallationで本人が所有し現在も閲覧できるProjectとSourceです。
+作成・訂正には、さらに`dots.channelIds`で受け付けた未取消・未返答・期限内のDot依頼と、
+その依頼に完全一致するSource／revisionが必要です。
+
+| tool | 操作 |
+|---|---|
+| `project_read` | 安定Project IDから現在の目的・条件、revision、digestを読む |
+| `project_prepare_change` | create／correctの全入力を受付ID・revisionへ束縛し、本人へ全文と確認buttonを送る |
+| `project_read_change` | `approval_id`で保存候補と本人の確認状態を読む |
+| `project_create` | 本人が確認した同じ候補を`approval_id`と共に保存する |
+| `project_inspect_change` | 現行revision・digestに対する訂正候補と、削除される条件を確認する |
+| `project_correct` | 本人が確認した同じrevision・digest・理由・briefで訂正する |
+
+`project_prepare_change`には`id`、`revision`、`candidate`を渡します。
+`candidate`は`operation: "create"`または`"correct"`と、その保存に渡す全項目です。
+createは`request_id`、`name`、`source`、`brief`、correctは`request_id`、`project_id`、
+`expected_revision`、`base_digest`、`source`、`reason`、`brief`を含めます。
+`source: {key, revision}`は同じ受付を`discord_read_request`で読んだ値を使います。
+actorや許可済みbooleanをDotが指定する引数はありません。
+
+準備で得た`id`が保存時の`approval_id`です。本人が全文JSONを確認してDiscordのbuttonを
+押すと、正確な内容と`request_id`の組み合わせについて5分間だけ保存できます。
+Sourceが読めること、通常の相談、modelの出力は保存の許可になりません。
+MCPやcontrol APIに確認を承認する操作はありません。内容を変えると古い確認は使えず、
+受付の訂正・取消・期限切れや返答済み化も保存を止めます。期限を自動延長しません。
+確認DMが届かなければ、本人が`/kotodama project_review draft:...`で同じ全文とbuttonを
+自分だけに再表示できます。未知の配送を自動再送しません。
+
+候補は既存Store内のtransport receiptで、別のTask台帳ではありません。
+一受付8候補、保持中128候補を上限にし、上限や本文の検証を通る前に保存しません。
+既定7日後には候補本文を消し、内容を含まないdigestと状態を残します。
+既存local ownerを使用し、remote Task ownerからlocalへ自動で切り替えません。
+
+briefは[Project v1](../../../docs/PROJECT-HUB-VIEW.md)と同じ
+`outcome`、`in_scope`、`out_of_scope`、`constraints`、`acceptance`、`unknowns`です。
+訂正はbrief全体を渡し、未入力を推測で補わず、必須条件を省略しません。
+訂正によって既存条件を削除できるため、削除条件と全文を確認します。
+長さや件数の上限超過は拒否し、本文を切り詰めません。保存してもTask作成・実行・取消・完了や
+外部公開は起きません。
+
+createとcorrectには固定した`request_id`を付けます。確認済みの同じ`approval_id`・ID・
+内容による再送は既存の保存結果へ照合され、同じIDで内容を変えると拒否されます。
+応答が不明な場合はProjectを再読するか、受付と確認がまだ有効な間だけ同じ入力で照合します。
+取消・期限切れ後はDotsから書込を再送せず、`project_read`または既存operator経路で
+保存結果を確認します。別IDで自動作成し直しません。通信の取消は保存済み変更のrollbackを
+意味しません。古いrevisionからの訂正は再読して候補を作り直します。
+
+`tests/project-dots.test.mjs`と`tests/project-dots-approval.test.mjs`でSDK schema、独立した
+許可設定、Source／受付の束縛、全文候補、認証済みDiscord button、stdioから既存loopback・
+Project ownerへの作成・訂正・重複照合を確認します。認可待機中の取消・期限切れ・設定失効でも
+保存を拒否し、MCPの取消signalをcontrolへ渡します。実Dot・live Discordでの呼出しと
+GUIとの往復は別の受入です。
 
 ## 受入の流れ
 

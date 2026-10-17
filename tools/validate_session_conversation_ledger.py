@@ -82,7 +82,7 @@ PUBLIC_SAFETY_KEYS = {
 }
 INTEGRITY_KEYS = {"marker", "marker_ref"}
 
-SOURCE_TYPES = {"discord_text", "discord_voice", "notion", "github", "codex", "claude", "google_drive", "n8n", "system"}
+SOURCE_TYPES = {"discord_text", "discord_voice", "slack_text", "teams_text", "notion", "github", "codex", "claude", "google_drive", "n8n", "system"}
 ACTOR_AUTHORITY_ROLES = {
     "actor": {"HUMAN", "OWNER"},
     "speaker": {"HUMAN", "OWNER"},

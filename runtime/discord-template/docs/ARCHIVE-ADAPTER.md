@@ -52,4 +52,4 @@ retention ownerから届いた削除receiptは[現物照合](RETENTION-READBACK.
 
 合成試験で最後のsample、共通時刻、mixed overlap、再送、誤話者、訂正時刻、再起動再開、取消、上限を検査。実ffmpeg、実HTTP fixture、CLIモデルfixture、既存Storeを通して原音保存→journal PCM解放→後処理再起動→Intent記録を検査する。既存の private source をread-only確認して契約を参照した新規MIT候補。既存private sourceを丸ごと移植していない。実 transcribe endpoint/Luna応答、音声の実聴、retentionの本番削除、分散排他、public Task ownerへの実配線は未受入。rootの統合・配備作業が必要。
 
-既存のraw-retention実装を合成sessionに対して実行し、29日目は削除対象0、31日目はPCM/MP3の6ファイルだけ削除、text削除0、再実行削除0を確認した。認証grantを発行した試験ではない。
+旧markerを使う既存raw-retention実装の過去の合成試験では、29日目は削除対象0、31日目はPCM/MP3の6ファイルだけ削除、text削除0、再実行削除0を確認した。新markerのdual-reader配備・受入の証拠ではなく、その検証は未完了である。認証grantを発行した試験ではない。

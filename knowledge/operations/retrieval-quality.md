@@ -15,6 +15,10 @@ sources:
     resource: ../../docs/OWNER-INTENT-COMPANY-AGI.md
     title: Owner-recorded Company AGI direction
     author: team:kotodama-project
+  - id: knowledge-cli
+    resource: ../../docs/KNOWLEDGE-CLI.md
+    title: Bounded purpose-scoped knowledge CLI
+    author: team:kotodama-project
 kotodama:
   profile: "0.1"
   id: operations/retrieval-quality
@@ -62,8 +66,19 @@ Each fixture represents an authorized question or task and records:
 
 The current implementation intentionally starts with transparent lexical scoring plus explicit graph filters. It is a baseline, not a claim of semantic adequacy. A vector, reranker or encoder is adopted only after comparison on the same fixtures shows a meaningful improvement in required-context recall or task outcome while preserving access, invalidation, latency, cost and rollback behavior.
 
+# Purpose-scoped small reads
+
+The [knowledge CLI](../../docs/KNOWLEDGE-CLI.md) filters existing Goal/KGI/initiative
+references before ranking and reads one Concept or named ATX section with source
+digests and bounded Unicode pagination. Continuation requires the previous source
+digest; corrections invalidate it. JSON and Markdown use the same snapshot.
+This source CLI is a public projection, not a grant, installed package feature,
+persistent database index, or proof of retrieval latency at scale.[^knowledge-cli]
+
 # Negative fixtures
 
 Tests must include ambiguous queries, stale current-state pages, conflicting sources, missing parent links, revoked information, similarly worded but unrelated concepts, and a KPI that improves while the actual requested outcome does not.
 
 Use [agent context assembly](agent-context.md) for the bounded output contract and the [success model](../project/success-model.md) for measurement interpretation.
+
+[^knowledge-cli]: Source CLI input, output, continuation and remaining acceptance boundaries.
