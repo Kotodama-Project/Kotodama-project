@@ -25,7 +25,7 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 
 組織・設計・Project の文書階層と、目標・記憶・分解・並行実行・独立検証・統合・学習・再計画をつなぐ仕組み全体が対象です。各仕事へ原意・訂正・上位制約を保ち、同じ課題を繰り返さず、品質・時間・メモリ・費用・人の手間を改善します。文書や固定 worker の数を、全体の完成とは扱いません。
 
-[Owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) に、Project を目的・要件・人・agent・資料・Task・判断・成果・学習のハブにする方向を保持しています。必要な役割が親子・横で協働し、GUI・自然言語・CLI から同じ仕事を扱う設計です。[Project 参照 CLI](docs/PROJECT-HUB-VIEW.md) と、原依頼・訂正履歴を保持する[既存 local owner の保存・訂正](runtime/discord-template/docs/PROJECTS.md)は `main` にあります。保存操作は既定無効です。Dots・GUI との共通操作、Task の関連付け、動的割当・実外部接続は [#385](https://github.com/Kotodama-Project/Kotodama-project/issues/385) で進めています。
+[Owner intent](docs/OWNER-INTENT-COMPANY-AGI.md) に、Project を目的・要件・人・agent・資料・Task・判断・成果・学習のハブにする方向を保持しています。必要な役割が親子・横で協働し、GUI・自然言語・CLI から同じ仕事を扱う設計です。[Project 参照 CLI](docs/PROJECT-HUB-VIEW.md) と、原依頼・訂正履歴を保持する[既存 local owner の保存・訂正](runtime/discord-template/docs/PROJECTS.md)は `main` にあります。この版にはDotsの共通操作、既存Taskの関連付け・解除・状態照会、GUIの参照・訂正候補検査も含みます。Project操作は既定無効で、Dotsからの保存には本人確認が必要です。GUIの保存、動的割当・実外部接続の受入は [#385](https://github.com/Kotodama-Project/Kotodama-project/issues/385) で進めています。
 
 2026-09-30の方針として、[OpenAI Dotsを日常の入口と継続作業の第一候補](docs/OPENAI-ALIGNMENT.md)にします。Kotodamaは会社の知識・権限・訂正・Task・検証証拠を既存の各正本へ返します。Cloudflare edgeと公式Cloudflare OSは接続・専用画面の候補として維持し、実接続と配備は検証して決めます。
 
@@ -51,6 +51,8 @@ Windows の PowerShell では `python3` の代わりに `python` を使います
 
 この版の source 能力、採用状況、残る owner 接続、性能測定と優先 Issue は [STATUS の現在地](STATUS.md#current-source-and-open-integration-work) に集約しています。次の担当はそこから各 Issue の最新 head・証拠・残る受入を確認してください。全8階層、実モデル・利用者成果、常駐運用は引き続き受入が必要です。
 
+[namespace consumer inventory](docs/NAMESPACE-CONSUMER-INVENTORY.md)は、固定Git sourceを実行せず参照候補をprivateに保存します。これは移行前の棚卸しで、private consumerの互換・pin切替・rollbackの受入は未完了です。
+
 ## 知識・目的・Project を CLI で確認する
 
 checkout の Python 3.12 から使います。検索は現在の小さな Markdown 単位で出典・鮮度を返します。Task と Project の入力・依存準備はリンク先の手順を参照してください。
@@ -65,7 +67,7 @@ checkout の Python 3.12 から使います。検索は現在の小さな Markdo
 | 現在の親制約・Task・保存済み実行を辿る | `python -B tools/hierarchy_trace.py --help` | [階層と実行履歴の参照](docs/KNOWLEDGE-HIERARCHY-TRACE.md) |
 | 固定 fixture の計測条件を確認する | `python -B tools/performance_benchmark.py --help` | [性能計測と固定比較](docs/PERFORMANCE-BENCHMARK.md) |
 
-実行には既存 owner に束縛した入力・worker と `--executor-mode local_executable_fixture` が必要です。学習の再利用には現在の採否判断も必要です。Python の Project CLI は参照と訂正候補の検査までです。既定無効の local owner 共通操作は Project の create/read/inspect/correct を扱い、保存した Project の `task_refs` は空です。Task 作成・更新・dispatch は行いません。検索品質・大規模性能や自律改善の全体受入は、これらの入口の存在だけでは成立しません。
+実行には既存 owner に束縛した入力・worker と `--executor-mode local_executable_fixture` が必要です。学習の再利用には現在の採否判断も必要です。Python の Project CLI は参照と訂正候補の検査までです。既定無効の local owner 共通操作は Project の create/read/inspect/correct と、既存Taskの link_task/unlink_task/read_task を扱います。新規Projectの `task_refs` は空で、関連付け時にv2の型付き参照を保存します。Task自体の作成・更新・dispatchは行いません。GUIは参照と訂正候補の検査までです。検索品質・大規模性能や自律改善の全体受入は、これらの入口の存在だけでは成立しません。
 
 ## 使い方を選ぶ
 
@@ -77,7 +79,7 @@ checkout の Python 3.12 から使います。検索は現在の小さな Markdo
 | 会社の runtime を配備する | Compose minimum / Proxmox segmented の lifecycle contract と validator（live receipt なし）。Cloudflare edge と公式 Cloudflare OS の候補（未 upload、未 deploy） | [Installation Lifecycle](docs/INSTALLATION-LIFECYCLE.md)、[Cloudflare OS](docs/CLOUDFLARE-OS-ADOPTION.md) |
 | agent swarm に調査を任せる | 明示slashから同じTaskの3worker・別verifier・成果readbackへ接続。既定無効、Linux限定。移行台帳とlifecycle registryの実運用は別の未完事項 | [Task swarm run](docs/TASK-SWARM-RUN.md)、[実行基盤](docs/LUNA-TASK-SWARM.md)、[swarm契約](docs/AGENT-SWARM-KOTODAMA-ADOPTION-CANDIDATE.md) |
 | 知識基盤と目的入力を使う | canonical OKF Markdown、catalog/graph、出典・鮮度の検査、字句検索、限定context、型付き目的と原意・訂正を既存Taskへ束縛する compile/verify/simulate/execute。明示した local fixture の子プロセス・独立 critic・部分修復と学習を同じTaskへ接続。内容の独立検証・実モデル品質・大規模性能は別の受入 | [Knowledge base](docs/KNOWLEDGE-BASE.md)、[Task input](docs/KNOWLEDGE-TASK-INPUT.md)、[local executor](docs/TASK-LOOP-EXECUTOR.md)、[公開知識の入口](knowledge/index.md) |
-| Project と既存 Task を確認する | Project 情報契約、既存 owner に束縛した Task 参照 view、訂正候補と影響の検査。local owner の保存・訂正は既定無効の共通操作から使う | [Project view](docs/PROJECT-HUB-VIEW.md)、[保存・訂正](runtime/discord-template/docs/PROJECTS.md) |
+| Project と既存 Task を確認する | Project 情報契約、既存ownerへの保存・訂正・Task関連付け、状態照会。Dotsは同じ共通操作を使い、GUIは参照と訂正候補検査まで。Project操作は既定無効 | [Project view](docs/PROJECT-HUB-VIEW.md)、[保存・訂正](runtime/discord-template/docs/PROJECTS.md) |
 
 ## この版に含むもの、候補、方向
 
@@ -88,7 +90,7 @@ checkout の Python 3.12 から使います。検索は現在の小さな Markdo
 | Discord / Voice | `runtime/discord-template` | | 15 分 rotation、Voice-to-Verified-Handoff、GrillU、[GPT-Live の採用方針](docs/GPT-LIVE-ADOPTION.md)の残り（#142〜#146） |
 | Agent swarm / 自律実行 | 限定 Task 実行、Luna Task swarm、agent swarm・route binding の契約（#34）、移行台帳の契約（#35）、agent lifecycle の契約（#36） | 実 registry と runtime/continuity 受入 | 「OK」後の Goal Completion Loop、reversible delegation |
 | 知識・Context | canonical OKF bundle、read-only検索/context、型付きTask目的・Source/frontier・learning候補の既存owner接続、明示 local executor の CLI と現在証拠の検査、呼出し内の学習元検証再利用、元DBを生成・修復しない学習提案の読戻し、有限の多親階層と保存済み実行の参照 | 全8階層のowner接続、大規模検索評価 | Context Gateway、継続改善 |
-| Project | 最小情報契約、既存 Task の read-only view、原依頼と訂正履歴を既存 SQLite に保持する local 保存（既定無効） | [Dots 共通操作 #395](https://github.com/Kotodama-Project/Kotodama-project/pull/395)、GUI・Task の関連付け | 目的に応じた協働・最適化 |
+| Project | read-only CLI、既存SQLiteへのlocal保存・訂正、Dotsの共通操作と既存Taskの関連付け・状態照会（既定無効）、GUIの参照・訂正候補検査 | GUIの保存、共有参加者、実Dot・外部接続の受入 | 目的に応じた協働・最適化 |
 | Runtime | Compose / Proxmox contract、Cloudflare candidate | | Cloudflare edge と公式 Cloudflare OS を基盤にした配備 |
 | 組織・事業 | | | Resident Clone、Agent Foundry、AI Business Loop |
 

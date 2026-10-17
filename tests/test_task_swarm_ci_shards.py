@@ -170,7 +170,7 @@ def matrix(campaign, destination):
     """Synthetic cross-OS metadata over real host runs, not cross-OS execution."""
     root, env, _, runs = campaign
     destination.mkdir()
-    for name, count in (("ubuntu-22.04", 1), ("windows-latest", 4)):
+    for name, count in (("ubuntu-22.04", 2), ("windows-latest", 4)):
         for index in range(count):
             target = destination / f"task-swarm-shard-{name}-{index}-123-1"
             shutil.copytree(runs[count, index], target)
@@ -222,7 +222,7 @@ def rewrite_session(target, mutate):
     save(final_path, final)
 
 
-@pytest.mark.parametrize("change", ["none", "missing", "extra", "duplicate", "selected", "full", "reference",
+@pytest.mark.parametrize("change", ["none", "missing", "missing_linux", "extra", "duplicate", "selected", "full", "reference",
     "source", "all_stale", "lock", "selector", "run", "attempt", "footer", "exit", "postcheck",
     "raw_source", "typed_version", "typed_index", "typed_count",
     "failure", "skipped", "cancelled", "absent_result"])
@@ -234,6 +234,8 @@ def test_matrix_requires_current_complete_independent_coverage(campaign, tmp_pat
     doc = read(selection)
     if change == "missing":
         shutil.rmtree(target)
+    elif change == "missing_linux":
+        shutil.rmtree(destination / "task-swarm-shard-ubuntu-22.04-1-123-1")
     elif change == "extra":
         (destination / "unknown").mkdir()
     elif change in ("duplicate", "selected", "full"):
@@ -296,7 +298,7 @@ def test_matrix_requires_current_complete_independent_coverage(campaign, tmp_pat
     result = run(root, [sys.executable, "-B", "tools/pytest_ci_shards.py", "verify", str(destination)], env,
                  expected=0 if change == "none" else 3)
     if change == "none":
-        assert json.loads(result.stdout) == {"complete": True, "shards": 5, "occurrences_per_os": 10}
+        assert json.loads(result.stdout) == {"complete": True, "shards": 6, "occurrences_per_os": 10}
 
 
 @pytest.mark.parametrize("option", ["keyword", "invalid_index", "empty", "failed_subtest"])

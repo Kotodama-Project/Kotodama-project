@@ -34,7 +34,7 @@ class TaskSwarmRequiredGateTests(unittest.TestCase):
         self.assertNotIn("pull_request", triggers, "the required gate already calls this workflow")
         job = swarm["jobs"]["validate"]
         self.assertEqual(job["strategy"]["matrix"]["include"], [
-            {"os": "ubuntu-22.04", "shard": 0, "shards": 1},
+            *({"os": "ubuntu-22.04", "shard": index, "shards": 2} for index in range(2)),
             *({"os": "windows-latest", "shard": index, "shards": 4} for index in range(4))])
         commands = [step.get("run", "") for step in job["steps"]]
         installs = [command for command in commands if "pip install" in command]

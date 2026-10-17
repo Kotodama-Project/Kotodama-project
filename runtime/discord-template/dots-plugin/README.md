@@ -81,24 +81,39 @@ operatorがBot configの`projects.operations`と`dots.projectOperations`の両�
 すでに保存したProjectを巻き戻す操作ではありません。
 
 読取の範囲は、同じinstallationで本人が所有し現在も閲覧できるProjectとSourceです。
-作成・訂正には、さらに`dots.channelIds`で受け付けた未取消・未返答・期限内のDot依頼と、
+作成・訂正・Task関連の保存には、さらに`dots.channelIds`で受け付けた未取消・未返答・期限内のDot依頼と、
 その依頼に完全一致するSource／revisionが必要です。
 
 | tool | 操作 |
 |---|---|
 | `project_read` | 安定Project IDから現在の目的・条件、revision、digestを読む |
-| `project_prepare_change` | create／correctの全入力を受付ID・revisionへ束縛し、本人へ全文と確認buttonを送る |
+| `project_prepare_change` | create／correct／link_task／unlink_taskの全入力を受付ID・revisionへ束縛し、本人へ全文と確認buttonを送る |
 | `project_read_change` | `approval_id`で保存候補と本人の確認状態を読む |
 | `project_create` | 本人が確認した同じ候補を`approval_id`と共に保存する |
 | `project_inspect_change` | 現行revision・digestに対する訂正候補と、削除される条件を確認する |
 | `project_correct` | 本人が確認した同じrevision・digest・理由・briefで訂正する |
+| `project_link_task` | 本人が確認したProject版と既存Task版の対応を保存する。Taskを作成・実行しない |
+| `project_unlink_task` | 本人が確認したTask参照だけを外す。Taskを取消・削除しない |
+| `project_read_task` | 関連Taskの現在状態・版の照合と、報告済み成果の件数・検査状態を読む |
 
 `project_prepare_change`には`id`、`revision`、`candidate`を渡します。
-`candidate`は`operation: "create"`または`"correct"`と、その保存に渡す全項目です。
+`candidate`は`operation: "create"`、`"correct"`、`"link_task"`、`"unlink_task"`と、その保存に渡す全項目です。
 createは`request_id`、`name`、`source`、`brief`、correctは`request_id`、`project_id`、
 `expected_revision`、`base_digest`、`source`、`reason`、`brief`を含めます。
+link_taskは`request_id`、`project_id`、`expected_revision`、`base_digest`、`source`、`reason`、
+`task_id`、`expected_task_revision`、unlink_taskはこのうち`expected_task_revision`を除いた項目です。
 `source: {key, revision}`は同じ受付を`discord_read_request`で読んだ値を使います。
 actorや許可済みbooleanをDotが指定する引数はありません。
+
+Taskとの対応を扱う場合だけ、必要な`link_task`・`unlink_task`・`read_task`を
+`projects.operations`と`dots.projectOperations`の両方へ加えます。create／correctの許可は不要です。
+既存local ownerのTaskを使い、保存済みTask参照の版を更新するときも新しい正確な候補を確認します。
+unlink_taskはTaskの現在版・本文を読みません。Taskの閲覧権限を失った後も、Projectと依頼の
+権限が残っていれば確認済みの関連を外せます。
+
+read_taskはProjectとTaskの両方の出典・現在の権限を検査します。版の差分を表示し、
+新しい成果を自動採用しません。成果本文やパスは返さず、`artifact_readback: "not_run"`、
+`completion: "not_observed"`です。確認待ちのTaskを完了とは呼びません。
 
 準備で得た`id`が保存時の`approval_id`です。本人が全文JSONを確認してDiscordのbuttonを
 押すと、正確な内容と`request_id`の組み合わせについて5分間だけ保存できます。
@@ -132,6 +147,8 @@ createとcorrectには固定した`request_id`を付けます。確認済みの�
 Project ownerへの作成・訂正・重複照合を確認します。認可待機中の取消・期限切れ・設定失効でも
 保存を拒否し、MCPの取消signalをcontrolへ渡します。実Dot・live Discordでの呼出しと
 GUIとの往復は別の受入です。
+`tests/project-dots-tasks.test.mjs`はTask操作だけの許可、本人確認後のID・版の差替え拒否、
+成果メタデータ、Taskの閲覧失効後の関連解除、Task本文・eventが変わらないことを確認します。
 
 ## 受入の流れ
 

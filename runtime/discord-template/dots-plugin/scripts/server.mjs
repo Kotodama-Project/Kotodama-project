@@ -23,12 +23,13 @@ export async function createDotsServer({runtimeRoot,configFile,call}={}){
     signal?.throwIfAborted();return call?call({...input,action:'dots',actor},{signal}):controlCommand(current,{...input,action:'dots',actor},{signal});
   };
   const projectOperations=(initial.projects?.operations??[]).filter(operation=>initial.dots.projectOperations?.includes(operation));
+  const projectWrites=['create','correct','link_task','unlink_task'];
   const invokeProject=async(input,{signal}={})=>{
     signal?.throwIfAborted();
     const current=await loadConfig(file);
     if(!current.dots.enabled||current.dots.actorId!==actor||current.dataDir!==initial.dataDir
       ||current.installation!==initial.installation||digest(current.owner)!==digest(initial.owner))throw new Error('DOTS_PLUGIN_SCOPE_CHANGED');
-    const required=input.operation==='prepare'?[input.candidate.operation]:input.operation==='read_approval'?['create','correct']:[input.operation];
+    const required=input.operation==='prepare'?[input.candidate.operation]:input.operation==='read_approval'?projectWrites:[input.operation];
     if(!required.some(operation=>projectOperations.includes(operation)&&current.projects?.operations.includes(operation)&&current.dots.projectOperations?.includes(operation)))throw new Error('PROJECT_OPERATION_NOT_ALLOWED');
     signal?.throwIfAborted();const envelope={...input,action:'project',surface:'dots',actor};
     return call?call(envelope,{signal}):controlCommand(current,envelope,{signal});
@@ -58,14 +59,19 @@ export async function createDotsServer({runtimeRoot,configFile,call}={}){
   const request_id=z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/),project_id=z.string().min(1).max(512).refine(value=>value.isWellFormed()&&[...value].length<=256&&!/[\x00-\x1f]/.test(value));
   const change={project_id,expected_revision:z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),base_digest:z.string().regex(/^[a-f0-9]{64}$/),source,reason:text(1000),brief};
   const create={request_id,name:text(200),source,brief},approval_id=z.string().regex(/^project_[a-f0-9]{24}$/);
-  const projectTool=(operation,...args)=>{if(projectOperations.includes(operation))register(...args,operation,{readOnly:operation==='read'||operation==='inspect',destructive:operation==='correct',project:true});};
+  const task_id=z.string().regex(/^task-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),{brief:unusedBrief,...cas}=change;
+  const association={...cas,request_id,task_id},link={...association,expected_task_revision:z.number().int().min(1).max(Number.MAX_SAFE_INTEGER)};
+  const projectTool=(operation,...args)=>{if(projectOperations.includes(operation))register(...args,operation,{readOnly:['read','inspect','read_task'].includes(operation),destructive:['correct','link_task','unlink_task'].includes(operation),project:true});};
   projectTool('read','project_read','Projectの現在の目的と条件を読む','Read one actor-accessible Project from the selected local owner. Returns its current revision and digest; does not read arbitrary files or authorize Task execution.',{project_id});
   projectTool('create','project_create','確認済みProject draftを保存する','Save the exact candidate approved by the bound requester through the Discord confirmation button. Requires a pending unchanged Dot request and approval within five minutes. Reuse the same approval_id, request_id and exact input to reconcile delivery while still authorized. Creates no Task or execution grant.',{...create,approval_id});
   projectTool('inspect','project_inspect_change','Projectの訂正候補と影響を確認する','Inspect a complete brief replacement against the exact current Project revision and digest. Shows removed conditions and affected Task references. Does not apply a change.',change);
   projectTool('correct','project_correct','確認済みProjectの目的と条件を訂正する','Save the exact requester-approved brief replacement against the current Project revision and digest. This can remove existing conditions. Requires a pending unchanged Dot request and approval within five minutes. Does not revise, cancel or complete Tasks.',{...change,request_id,approval_id});
-  if(projectOperations.some(operation=>['create','correct'].includes(operation))){
-    const candidate=z.discriminatedUnion('operation',[z.object({operation:z.literal('create'),...create}).strict(),z.object({operation:z.literal('correct'),...change,request_id}).strict()]);
-    register('project_prepare_change','Projectの保存候補を本人へ確認する','Bind one exact create/correct candidate to a pending Dot request and its source revision, and send the full JSON with a confirmation button to that requester. Saves only a transport draft. Does not approve or save a Project. Content changes need a new candidate and human confirmation.',{id:z.string().regex(/^dot_[a-f0-9]{24}$/),revision:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),candidate},'prepare',{project:true,openWorld:true});
+  projectTool('link_task','project_link_task','確認済みTask参照をProjectへ保存する','Save the exact requester-approved association to an existing local Task at its explicit current revision. Requires the Project revision and digest, a pending unchanged Dot request and approval within five minutes. May replace the saved reference revision. Does not create, dispatch or change the Task.',{...link,approval_id});
+  projectTool('unlink_task','project_unlink_task','確認済みTask参照をProjectから外す','Remove the exact requester-approved Task reference against the Project revision and digest. Requires a pending unchanged Dot request and approval within five minutes. Does not read, cancel or delete the Task, so removing a reference remains possible after Task access is revoked.',{...association,approval_id});
+  projectTool('read_task','project_read_task','関連Taskの状態と成果メタデータを読む','Read the existing owner state and bounded reported result metadata with current Project and Task source access. Reports revision drift, never adopts a new revision automatically, and returns no result content or paths. Artifact readback and completion are not performed.',{project_id,task_id});
+  if(projectOperations.some(operation=>projectWrites.includes(operation))){
+    const candidate=z.discriminatedUnion('operation',[z.object({operation:z.literal('create'),...create}).strict(),z.object({operation:z.literal('correct'),...change,request_id}).strict(),z.object({operation:z.literal('link_task'),...link}).strict(),z.object({operation:z.literal('unlink_task'),...association}).strict()]);
+    register('project_prepare_change','Projectの保存候補を本人へ確認する','Bind one exact create/correct/link_task/unlink_task candidate to a pending Dot request and its source revision, and send the full JSON with a confirmation button to that requester. Saves only a transport draft. Does not approve or save a Project or change any Task. Content changes need a new candidate and human confirmation.',{id:z.string().regex(/^dot_[a-f0-9]{24}$/),revision:z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),candidate},'prepare',{project:true,openWorld:true});
     register('project_read_change','Project候補と確認状態を読む','Read one exact Project candidate and its human approval state with current request, source and operation access. No programmatic approval is available.',{approval_id},'read_approval',{project:true,readOnly:true});
   }
   return {server,require};

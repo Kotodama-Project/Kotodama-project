@@ -8,9 +8,13 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Added
 
-- GUIとread-only CLIでProject v2の型付きTask参照を認識し、訂正候補の影響を表示する。local Taskとswarm入力を区別し、状態・完了を推定しない。関連付けの保存操作は後続（#385）。
+- Project v2で既存local Taskへの関連付け・解除・状態照会を追加。Dotsでは本人が確認した候補だけを保存し、原意・訂正履歴とTask自体を保持する。成果の報告と完了の受入を分ける（#385）。
 
-- Windows Task swarmの復旧・learning CLI timeout調査用に、失敗を観測した6 occurrenceの子process状態を期限直前とtimeout時だけ有限記録するCI診断を追加。既存の20秒/30秒/60秒の期限・成否・回収を維持し、引数や入出力本文を追加保存しない（#420、根本原因は調査中）。
+- Linux Task swarm CIを2 shardへ分割し、各jobの20分上限を維持したまま全occurrenceと必須post-checkを6 jobの集約で照合する。Windowsの4 shardと製品の期限は変更しない。
+
+- GUIとread-only CLIでProject v2の型付きTask参照を認識し、訂正候補の影響を表示する。local Taskとswarm入力を区別し、状態・完了を推定しない（#385）。
+
+- Windows Task swarmの復旧・learning CLI timeout調査用に、失敗を観測した8 occurrenceの子process状態を期限直前とtimeout時だけ有限記録するCI診断を追加。既存の20秒/30秒/60秒の期限・成否・回収を維持し、引数や入出力本文を追加保存しない（#420、根本原因は調査中）。
 
 - local installationでProject briefを保存・訂正する共通操作を追加。原依頼・旧版・訂正event、再送照合とrevision/digest検査を保持し、既存Taskの作成・実行とは分離する（#385）。
 
@@ -118,6 +122,10 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 - Dots pluginにcursor一覧とrevision/権限付き全文pageを追加。簡略一覧は合成SDK試験で転送JSONを約97.6%削減し、元の全文一覧を維持する。長文・多言語・複雑な依存の通信benchmarkを必須CIで検査する（#204）。
 
 ### Fixed
+
+- 並行する同一peer送信の回帰試験で、有限のwriter混雑拒否後に同じkeyを一回だけ再照合し、24 receipt・単一DB行・payloadの一回公開と内容不変・一回配送を検査する。2回の混雑拒否も決定的に注入し、実装の期限・quotaは変更しない（#428）。
+
+- Windowsの証拠readerで毎回行っていたWin32 APIの読込・型設定を一回のbindingにまとめ、各読取で新しいhandle・現在bytes・file identityを引き続き検査。20秒CLI期限やSource/owner検査は変更せず、#420のtimeout原因全体は調査中。
 
 - learning CLIの`run`で使われない外側ReuseOwner初期化を省き、coordinatorの実owner再構築・現在の権限/Source/判断/取消/receipt検査を保持。実CLIの重複検出・拒否・パス互換回帰とWindows/Linuxの有限計測を追加（#420のtimeout原因全体は引き続き調査中）。
 

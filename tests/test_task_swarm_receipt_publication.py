@@ -34,6 +34,15 @@ class ReaderOS:
         return getattr(os, name)
 
 
+@pytest.fixture(autouse=True)
+def isolated_windows_api_binding():
+    # Tests below replace WinDLL with different native-call models. Never
+    # retain a fake binding into another case or the real Windows test suite.
+    task_runner._windows_read_kernel.cache_clear()
+    yield
+    task_runner._windows_read_kernel.cache_clear()
+
+
 def held_reader(monkeypatch, on_read):
     """Native Windows handles, or an explicit Win32 sharing model on POSIX."""
     descriptors, closed, reads = {}, [], []
@@ -156,6 +165,33 @@ def test_windows_reader_handle_abi_and_transfer_ownership(tmp_path, monkeypatch,
     assert kernel.CreateFileW.restype is wintypes.HANDLE
     assert kernel.CloseHandle.argtypes == (wintypes.HANDLE,)
     assert kernel.CloseHandle.restype is wintypes.BOOL
+
+
+def test_windows_reader_reuses_api_binding_but_opens_each_current_file(tmp_path, monkeypatch):
+    path = tmp_path / "proof.json"
+    path.write_bytes(b"first")
+    loads, opens = [], []
+
+    def create(filename, access, share, security, creation, flags, template):
+        assert (access, share, security, creation, flags, template) == (
+            0x80000000, 7, None, 3, 0x200080, None)
+        opens.append(filename)
+        return os.open(filename, os.O_RDONLY)
+
+    kernel = SimpleNamespace(CreateFileW=NativeCall(create), CloseHandle=NativeCall(os.close))
+
+    def load(name, **options):
+        loads.append((name, options))
+        return kernel
+
+    monkeypatch.setattr(ctypes, "WinDLL", load, raising=False)
+    monkeypatch.setitem(sys.modules, "msvcrt", SimpleNamespace(open_osfhandle=lambda handle, flags: handle))
+    monkeypatch.setattr(task_runner, "os", ReaderOS(name="nt", O_BINARY=0x8000, O_NOINHERIT=0x80))
+    assert task_runner.read_bytes(path) == b"first"
+    path.write_bytes(b"second")
+    assert task_runner.read_bytes(path) == b"second"
+    assert opens == [str(path), str(path)]
+    assert loads == [("kernel32", {"use_last_error": True})]
 
 
 @pytest.mark.parametrize("change", ["oversize", "hardlink", "append", "replace", "read_error"])
