@@ -9,9 +9,9 @@ import {InteractionState} from './interaction-state.mjs';
 import {projectSkillsDigest} from './project-skill-input.mjs';
 
 export class Pipeline {
-  constructor({store,owner=store,config,policy=()=>config,readPolicy=async()=>policy(),analyzer,worker,authorize=async()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onTaskQueued=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
+  constructor({store,owner=store,config,policy=()=>config,readPolicy=async()=>policy(),analyzer,worker,authorize=async()=>{},assertResultScope=()=>{},authorizeAnalysis=async()=>{},onTask=async()=>{},onTaskQueued=async()=>{},onReply=async()=>{},onVoiceAction=async()=>{},onError=()=>{}}){
     this.interactions=new InteractionState(store);
-    Object.assign(this,{store,owner,config,policy,readPolicy,analyzer,worker,authorize,authorizeAnalysis,onTask,onTaskQueued,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);this.taskAdmission=new TaskAdmission(()=>this.policy().worker?.taskLimits);
+    Object.assign(this,{store,owner,config,policy,readPolicy,analyzer,worker,authorize,assertResultScope,authorizeAnalysis,onTask,onTaskQueued,onReply,onVoiceAction,onError});this.active=new Map();this.queued=new Set();this.analysis=new Map();this.analysisControllers=new Map();this.analysisBindings=new Map();this.closing=false;this.analysisAdmission=new AnalysisAdmission(()=>this.policy().analyzer?.limits);this.taskAdmission=new TaskAdmission(()=>this.policy().worker?.taskLimits);
   }
   get tail(){return this.taskAdmission.idle();}
   context(source,principal,pending=null,{sourceLimit=Infinity,completeSources=false}={}){
@@ -139,6 +139,18 @@ export class Pipeline {
     try{task=await this.owner.createTask(s,{title,request,action,acceptance,key:'explicit-command',intentIds,requiredActions:[action]});await this.authorize(task);await this.#checkAdmission(source,[action]);await this.#enqueueTasks([task]);}catch(error){await this.#discardAdmission(task?[{task}]:[],error);throw error;}
     this.interactions.close(s,'task_created');return task;
   }
+  async dispatchProjectTask(id,actor,{signal,assertCurrent=()=>{}}={}){
+    let task;
+    try{
+      signal?.throwIfAborted();task=await this.owner.task(id,actor);
+      check(this.owner===this.store&&task.projectBinding,'PROJECT_LOCAL_OWNER_REQUIRED');
+      check(task.state==='queued','TASK_NOT_QUEUED');
+      await this.authorize(task);await this.#checkAdmission(this.store.source(task.source_key,actor),[task.action]);
+      signal?.throwIfAborted();assertCurrent();
+      const current=this.store.taskInternal(id);check(current.revision===task.revision&&current.state==='queued','TASK_CHANGED');
+      this.#scheduleTasks([task]);
+    }catch(error){await this.#discardAdmission(task?[{task}]:[],error);throw error;}
+  }
   endInteraction(source){this.interactions.close(source,'voice_end');}
   currentCorrectionTarget(id,actor,expected={}){
     const current=this.policy();check(this.owner===this.store&&current.owner.kind==='local'&&this.config.owner.kind==='local','TASK_CORRECTION_REQUIRES_LOCAL_OWNER');
@@ -217,7 +229,7 @@ export class Pipeline {
     const authorize=async()=>{check(!controller.signal.aborted,'CANCELLED');const latest=await this.owner.task(id,actor);check(latest.revision===task.revision&&latest.state==='running','TASK_CHANGED');const source=this.store.source(task.source_key,actor);check(source.revision===task.source_revision,'SOURCE_CHANGED');await this.owner.assertContext(id,actor);await this.authorize(latest);};
     try{
       check(!controller.signal.aborted,'CANCELLED');
-      const source=this.store.source(task.source_key,actor);const options=task.action==='swarm_research'?{sourceLimit:9,completeSources:true}:{};const context=[source,...this.context(source,actor,null,options)];const bindings=context.map(s=>({key:s.key,revision:s.revision}));const workerTask={...task,contextSources:bindings};check(Buffer.byteLength(JSON.stringify({task:workerTask,context}))<=this.taskAdmission.limits().maxInputBytes,'TASK_INPUT_BYTES_EXCEEDED');await this.owner.bindContext(id,task.revision,bindings);active.sourceKeys=new Set(bindings.map(s=>s.key));
+      const source=this.store.source(task.source_key,actor);const options=task.action==='swarm_research'?{sourceLimit:9,completeSources:true}:{};const context=task.projectBinding?task.projectBinding.sources.map(ref=>{const value=this.store.source(ref.key,actor);check(value.revision===ref.revision,'PROJECT_SOURCE_CHANGED');return value;}):[source,...this.context(source,actor,null,options)];const bindings=context.map(s=>({key:s.key,revision:s.revision}));const workerTask={...task,contextSources:bindings};check(Buffer.byteLength(JSON.stringify({task:workerTask,context}))<=this.taskAdmission.limits().maxInputBytes,'TASK_INPUT_BYTES_EXCEEDED');await this.owner.bindContext(id,task.revision,bindings);active.sourceKeys=new Set(bindings.map(s=>s.key));
       check(!controller.signal.aborted,'CANCELLED');
       const result=await this.worker.run(workerTask,context,{signal:controller.signal,authorize,onStart:p=>this.store.event('worker.started',p,id)});
       await authorize();check(Buffer.byteLength(JSON.stringify(result))<=this.taskAdmission.limits().maxResultBytes,'TASK_RESULT_BYTES_EXCEEDED');await this.owner.finish(id,task.revision,result);await this.onTask(await this.owner.task(id,actor));
@@ -229,12 +241,21 @@ export class Pipeline {
     }finally{this.active.delete(id);}
   }
   async stop(id,actor){await this.owner.cancel(id,actor);for(const key of this.queued)if(key.startsWith(id+':'))this.taskAdmission.cancel(key);this.active.get(id)?.controller.abort();}
-  async resume(id,actor){check(!this.closing&&!this.draining,'RUNTIME_STOPPING');check(!this.active.has(id),'STOP_NOT_FINISHED');await this.authorize(await this.owner.task(id,actor));const t=await this.owner.resume(id,actor);try{await this.authorize(t);await this.#enqueueTasks([t]);}catch(error){await this.#discardAdmission([{task:t}],error);throw error;}return t;}
+  async resume(id,actor){check(!this.closing&&!this.draining,'RUNTIME_STOPPING');check(!this.active.has(id),'STOP_NOT_FINISHED');const current=await this.owner.task(id,actor);check(!current.projectBinding,'PROJECT_TASK_RESUME_REQUIRES_PROJECT');await this.authorize(current);const t=await this.owner.resume(id,actor);try{await this.authorize(t);await this.#enqueueTasks([t]);}catch(error){await this.#discardAdmission([{task:t}],error);throw error;}return t;}
   async tasks(actor){
     const visible=[];
     for(const task of await this.owner.tasks(actor))try{check(task.actor===actor,'TASK_ACCESS_DENIED');await this.authorize(task,'read_result');visible.push(task);}catch{}
     return visible;
   }
-  async result(id,actor){const task=await this.owner.task(id,actor);await this.authorize(task,'read_result');return verifyArtifacts(task);}
+  async assertResultCurrent(task){
+    check(task.result,'RESULT_NOT_AVAILABLE');
+    const current=await this.owner.task(task.id,task.actor);check(digest(current)===digest(task),'TASK_CHANGED');
+    await this.authorize(current,'read_result');
+    check(digest(await this.owner.task(task.id,task.actor))===digest(current),'TASK_CHANGED');
+  }
+  // The local owner is synchronous: close the final await gap immediately at
+  // each exposure boundary. Remote reads only attest their response snapshot.
+  assertResultSnapshot(task){if(this.owner===this.store)check(digest(this.store.task(task.id,task.actor))===digest(task),'TASK_CHANGED');this.assertResultScope(task);}
+  async result(id,actor){const task=await this.owner.task(id,actor);await this.authorize(task,'read_result');const result=await verifyArtifacts(task);await this.assertResultCurrent(task);this.assertResultSnapshot(task);return result;}
   async close(){this.closing=true;this.analysisAdmission.close();this.taskAdmission.close();for(const c of this.analysisControllers.values())c.abort();for(const run of this.active.values())run.controller.abort();await Promise.allSettled([...this.analysis.values()]);await this.tail;}
 }

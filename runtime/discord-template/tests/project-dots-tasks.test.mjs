@@ -48,15 +48,15 @@ test('synthetic control requests reject a file-derived URL authority or route',(
   }
 });
 
-async function fixture(t,{dotsOperations=taskOperations}={}){
+async function fixture(t,{dotsOperations=taskOperations,worker}={}){
   const root=await mkdtemp(path.join(os.tmpdir(),'ktdm-project-dots-tasks-')),config=exampleConfig({workspace:root}),cleanups=[];
   t.after(async()=>{try{for(const cleanup of cleanups.reverse())await cleanup();}finally{assert(path.basename(root).startsWith('ktdm-project-dots-tasks-'));await rm(root,{recursive:true,force:true});}});
-  config.dataDir=path.join(root,'data');config.projects={operations};
+  config.dataDir=path.join(root,'data');config.projects={operations:[...operations,'run_task','resume_task','read_result']};
   config.dots={enabled:true,actorId:actor,channelIds:[channel],requestTtlSeconds:3600,projectOperations:dotsOperations};
   // Publish a complete grant update; the policy watcher must not observe a
   // truncate/write gap and exercise the unrelated malformed-config refusal.
   const file=path.join(root,'bot.json'),save=()=>atomicJson(file,config);await save();
-  const runtime=await startRuntime(file,{offline:true,log:()=>{}});cleanups.push(()=>runtime.close());
+  const runtime=await startRuntime(file,{offline:true,log:()=>{},...(worker?{worker}:{})});cleanups.push(()=>runtime.close());
   const sent=[];runtime.dots.deliver=async(source,message,{beforeSend})=>{beforeSend();sent.push(message);return {id:'synthetic-'+sent.length};};
   const adapter=new DiscordAdapter({config:runtime.config,store:runtime.store,pipeline:runtime.pipeline,dots:runtime.dots});adapter.verifiedInstallation=true;cleanups.push(()=>adapter.client.destroy());
   const client=new Client({name:'synthetic-project-task-owner',version:'1'}),transport=new StdioClientTransport({command:process.execPath,args:[path.join(runtimeRoot,'dots-plugin/scripts/server.mjs')],env:{...process.env,KOTODAMA_DISCORD_ROOT:runtimeRoot,KOTODAMA_DOTS_CONFIG:file},stderr:'pipe'});
@@ -72,7 +72,7 @@ async function fixture(t,{dotsOperations=taskOperations}={}){
   runtime.store.finish(task.id,task.revision,{state:'needs_review',summary:'UNEXPOSED_RESULT_SUMMARY',artifacts:[{path:'UNEXPOSED_ARTIFACT_PATH',sha256:'a'.repeat(64),bytes:12}],validations:[{exitCode:0}],verifiedExecution:true,independentReview:true});
   const association=(view,id,operation='link_task')=>({operation,project_id:view.project.project_id,expected_revision:view.project.revision,base_digest:view.project_digest,source,reason:'既存の担当仕事を対応付ける',request_id:id,task_id:task.id,...(operation==='link_task'?{expected_task_revision:task.revision}:{})});
   const prepare=async candidate=>call('project_prepare_change',{id:request.id,revision:request.revision,candidate});
-  const confirm=async draft=>{let response;await adapter.interaction({isButton:()=>true,customId:'kotodama-project:'+draft.id+':'+draft.digest.slice(0,16),user:{id:actor},deferReply:async()=>{},editReply:async message=>{response=message;}});assert.match(response.content,/Project保存を許可しました/);assert.equal((await call('project_read_change',{approval_id:draft.id})).state,'approved');};
+  const confirm=async draft=>{let response;await adapter.interaction({isButton:()=>true,customId:'kotodama-project:'+draft.id+':'+draft.digest.slice(0,16),user:{id:actor},deferReply:async()=>{},editReply:async message=>{response=message;}});assert.match(response.content,/この内容の(Project保存|Task実行)を許可しました/);assert.equal((await call('project_read_change',{approval_id:draft.id})).state,'approved');};
   const commit=(candidate,draft)=>{const {operation,...payload}=candidate;return client.callTool({name:'project_'+operation,arguments:{...payload,approval_id:draft.id}});};
   const approved=async candidate=>{const draft=await prepare(candidate);await confirm(draft);return draft;};
   const commitSuccess=async(candidate,draft)=>{const result=await commit(candidate,draft);assert.equal(result.isError,undefined,code(result));return result.structuredContent;};
@@ -123,7 +123,7 @@ test('stdio Task writes reject caller authority fields before forwarding an appr
 
 test('both control routes authenticate before parsing and preserve operator versus Dots Task grants',async t=>{
   const f=await fixture(t),{port}=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
-  const token=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8');
+  const token=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8'),dotsToken=await readFile(path.join(f.config.dataDir,'control.dots.secret'),'utf8');
   assert(/^[a-f0-9]{64}$/.test(token),'synthetic control token must be 64 hex characters');
   const post=(route,body,authorization)=>controlPost(port,route,body,authorization);
   const denied=async(route,input,error,authorization='Bearer '+token,status=400)=>{
@@ -145,8 +145,10 @@ test('both control routes authenticate before parsing and preserve operator vers
       }
       await denied(route,{...input,actor:'100000000000000009'},'OPERATOR_REQUIRED');
       for(const surface of [null,'','operator','DOTS',false,[],['dots'],{}])await denied(route,{...input,surface},'PROJECT_SURFACE_INVALID');
-      await denied(route,{...input,surface:'dots'},'PROJECT_APPROVAL_REQUIRED');
-      await denied(route,{...input,surface:'dots',approval_id:'project_'+('f'.repeat(24))},'PROJECT_APPROVAL_REQUIRED');
+      await denied(route,{...input,surface:'dots'},'PROJECT_SURFACE_CREDENTIAL_MISMATCH');
+      await denied(route,{...input,surface:'dots'},'PROJECT_APPROVAL_REQUIRED','Bearer '+dotsToken);
+      await denied(route,input,'PROJECT_APPROVAL_REQUIRED','Bearer '+dotsToken);
+      await denied(route,{...input,surface:'dots',approval_id:'project_'+('f'.repeat(24))},'PROJECT_APPROVAL_REQUIRED','Bearer '+dotsToken);
       // The broad local credential still needs the current installation grant.
       f.config.projects.operations=operations.filter(value=>value!==operation);await f.save();
       await denied(route,input,'PROJECT_OPERATION_NOT_ALLOWED');
@@ -210,4 +212,78 @@ test('read_task grant never grants preparation or write authority',async t=>{
   await assert.rejects(controlCommand(await loadConfig(f.file),{action:'project',surface:'dots',actor,operation:'prepare',id:f.request.id,revision:1,candidate:f.association(linked,'blocked')}),/PROJECT_OPERATION_NOT_ALLOWED/);
   for(const operation of ['link_task','unlink_task'])await assert.rejects(controlCommand(await loadConfig(f.file),{action:'project',surface:'dots',actor,...f.association(linked,'blocked-'+operation,operation)}),/PROJECT_OPERATION_NOT_ALLOWED/);
   assert.equal(f.projectSnapshot(),before);assert.equal(f.taskSnapshot(),tasks);
+});
+
+
+test('stdio execution and same-Task resume require exact requester approval and current grants',async t=>{
+  let runs=0;
+  const f=await fixture(t,{dotsOperations:['read','read_task','run_task','resume_task','read_result'],worker:{run:async()=>{runs++;return {state:'failed',summary:'synthetic failure',artifacts:[]};}}});
+  const candidate={operation:'run_task',project_id:f.project.project.project_id,expected_revision:1,base_digest:f.project.project_digest,request_id:'execute',source:f.source,reason:'この仕事を実行',task:{title:'調査',request:'条件を調べる',action:'research',acceptance:['出典']}};
+  const draft=await f.prepare(candidate);assert.match(f.sent.at(-1).content,/実行を開始/);assert.equal(runs,0);
+  assert.equal(code(await f.commit(candidate,draft)),'PROJECT_APPROVAL_REQUIRED');
+  await f.confirm(draft);
+  assert.equal(code(await f.commit({...candidate,task:{...candidate.task,action:'develop'}},draft)),'PROJECT_APPROVAL_BINDING_CHANGED');
+  const run=await f.commitSuccess(candidate,draft);await f.runtime.pipeline.tail;assert.equal(runs,1);
+  assert.equal((await f.commitSuccess(candidate,draft)).dispatch.state,'not_repeated');assert.equal(runs,1);
+  const resume={operation:'resume_task',project_id:candidate.project_id,expected_revision:2,base_digest:run.project_digest,request_id:'resume',source:f.source,reason:'同じ仕事を再開',task_id:run.task_ref.task_id,expected_task_revision:1};
+  const resumeDraft=await f.prepare(resume);assert.equal(code(await f.commit(resume,resumeDraft)),'PROJECT_APPROVAL_REQUIRED');await f.confirm(resumeDraft);
+  const resumed=await f.commitSuccess(resume,resumeDraft);await f.runtime.pipeline.tail;
+  assert.equal(resumed.task_ref.task_id,run.task_ref.task_id);assert.equal(resumed.task_ref.revision,2);assert.equal(runs,2);
+  const next={...resume,request_id:'revoked',expected_revision:3,base_digest:resumed.project_digest,expected_task_revision:2},nextDraft=await f.approved(next);
+  f.runtime.projects.authorizeSource=async()=>{f.config.dots.projectOperations=[];await f.save();};
+  assert.equal(code(await f.commit(next,nextDraft)),'PROJECT_OPERATION_NOT_ALLOWED');assert.equal(runs,2);
+});
+
+test('stdio Task text uses the same Unicode code-point limits as Project control',async t=>{
+  const f=await fixture(t,{dotsOperations:['read','run_task'],worker:{run:async()=>({state:'failed',summary:'synthetic failure',artifacts:[]})}});
+  const task={title:'😀'.repeat(120),request:'😀'.repeat(4000),action:'research',acceptance:['😀'.repeat(1000)]};
+  const candidate={operation:'run_task',project_id:f.project.project.project_id,expected_revision:1,base_digest:f.project.project_digest,request_id:'unicode-run',source:f.source,reason:'Unicodeの条件を保持',task};
+  for(const patch of [{title:'😀'.repeat(121)},{request:'😀'.repeat(4001)},{acceptance:['😀'.repeat(1001)]},{title:'\ud800'},{request:'\0'},{acceptance:['　']}]){
+    const result=await f.client.callTool({name:'project_prepare_change',arguments:{id:f.request.id,revision:1,candidate:{...candidate,task:{...task,...patch}}}});assert.equal(result.isError,true);
+  }
+  const draft=await f.approved(candidate),run=await f.commitSuccess(candidate,draft);await f.runtime.pipeline.tail;
+  const saved=f.runtime.store.taskInternal(run.task_ref.task_id);assert.equal(saved.title,task.title);assert(saved.request.startsWith(task.request+'\n\nPROJECT_CONTRACT\n'));assert(saved.acceptance.includes(task.acceptance[0]));
+});
+
+test('limited Dots credential cannot select operator authority or execute generic control actions',async t=>{
+  const f=await fixture(t),info=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
+  const operatorToken=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8'),dotsToken=await readFile(path.join(f.config.dataDir,'control.dots.secret'),'utf8');
+  assert.notEqual(operatorToken,dotsToken);assert.equal(JSON.stringify(info).includes(dotsToken),false);
+  const before=f.taskSnapshot(),projects=f.projectSnapshot(),candidate=f.association(f.project,'raw-limited');
+  for(const route of ['/v1/command','/v1/project']){
+    for(const surface of [undefined,'dots']){
+      const result=await controlPost(info.port,route,{action:'project',actor,...candidate,...(surface?{surface}:{})},'Bearer '+dotsToken);
+      assert.equal(result.body.error,'PROJECT_APPROVAL_REQUIRED');
+    }
+    const forged=await controlPost(info.port,route,{action:'project',actor,...candidate,surface:'operator'},'Bearer '+dotsToken);
+    assert.equal(forged.body.error,'PROJECT_SURFACE_INVALID');
+  }
+  for(const action of ['request','stop','resume','shutdown','tasks','result','voice','verify-deletion']){
+    const result=await controlPost(info.port,'/v1/command',{action,actor,text:'should not run',taskId:f.task.id,operation:'research'},'Bearer '+dotsToken);
+    assert.equal(result.body.error,'DOTS_CONTROL_ACTION_DENIED');
+  }
+  const other='100000000000000009';f.config.discord.operators.push(other);await f.save();
+  const spoofed=await controlPost(info.port,'/v1/command',{action:'dots',actor:other,operation:'list'},'Bearer '+dotsToken);
+  assert.equal(spoofed.body.error,'DOTS_ACTOR_REQUIRED');
+  assert.equal(f.taskSnapshot(),before);assert.equal(f.projectSnapshot(),projects);
+  f.config.dots.actorId=other;await f.save();
+  assert.equal((await controlPost(info.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+dotsToken)).body.error,'DOTS_ACTOR_REQUIRED');
+  f.config.dots.actorId=actor;
+  f.config.dots.enabled=false;await f.save();
+  const revoked=await controlPost(info.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+dotsToken);
+  assert.equal(revoked.body.error,'DOTS_DISABLED');
+  // The operator credential remains an operator credential, independent of
+  // the restricted principal and its configuration.
+  const operator=await controlPost(info.port,'/v1/command',{action:'project',actor,operation:'read',project_id:f.project.project.project_id},'Bearer '+operatorToken);
+  assert.equal(operator.status,200);
+  await f.runtime.close();f.config.dots.enabled=true;await f.save();
+  const restarted=await startRuntime(f.file,{offline:true,log:()=>{}});
+  // Close the replacement owner before the fixture removes its SQLite files.
+  // A later t.after hook runs after fixture cleanup and leaves Windows locked.
+  try{
+    const next=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
+    const nextToken=await readFile(path.join(f.config.dataDir,'control.dots.secret'),'utf8');assert.notEqual(nextToken,dotsToken);
+    assert.equal((await controlPost(next.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+dotsToken)).status,401);
+    assert.equal((await controlPost(next.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+nextToken)).status,200);
+  }finally{await restarted.close();}
 });

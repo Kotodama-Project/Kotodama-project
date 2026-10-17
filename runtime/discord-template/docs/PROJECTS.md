@@ -16,13 +16,15 @@ Taskを作成・更新・実行しません。作業の入口は[Project hub #38
 Projectの所有者と一致する必要があります。公開HTTP endpointを追加しません。
 選択済みownerがremoteの場合は未対応として拒否し、localへの代替保存は行いません。
 
-controlのBearerはlocal operator用の資格情報です。`surface`は認証情報ではなく、
-Dots adapterが追加制限を選ぶ固定値です。MCPの呼出引数からは変更できず、
-GUI adapterは固定した`read`／`inspect`だけを送ります。本人確認の制限対象となる
-clientにcontrol tokenやoperatorのconfig・stateへの直接アクセスを与えない構成が前提です。
-loopbackと`0600`は同一OSユーザーのプロセスを隔離しません。computer／shell接続を
-併用する場合のcredential・filesystem境界は配備先で別途検証が必要で、MCP経路の
-合成テスト成功だけではその隔離を証明しません。
+controlのoperator用BearerとDots用Bearerは別で、起動ごとに更新します。
+サーバーは一致した資格情報から接続元を決めます。本文の`surface`は権限を発行しません。
+Dots用資格情報は起動時に固定した本人のDots/Project操作に限り、通常のTask実行・停止・
+runtime停止等のoperator操作は拒否します。DotsのProject書込みは`surface`が省略されても
+本人確認を要求します。MCPは固定された限定clientを使い、operator資格情報を読みません。
+GUI adapterは引き続き固定した`read`／`inspect`だけを送ります。
+同一OSユーザーがoperatorのconfig・資格情報・stateを直接読める場合の分離は別の境界です。
+loopbackと`0600`は同一ユーザーのプロセスを隔離しません。computer／shell接続の権限は
+配備先で別途検証が必要で、MCP合成テストだけではその隔離を証明しません。
 
 | operation | 入力 | 結果 |
 |---|---|---|
@@ -32,6 +34,9 @@ loopbackと`0600`は同一OSユーザーのプロセスを隔離しません。c
 | `correct` | inspectの入力と`request_id` | 原依頼参照を保った新revisionと訂正event |
 | `link_task` | `project_id`, `expected_revision`, `base_digest`, `source`, `reason`, `request_id`, `task_id`, `expected_task_revision` | 同じownerの既存Taskを版付きで関連付ける |
 | `unlink_task` | link_taskの入力から`expected_task_revision`を除く | 参照を外す。Task自体は取消・削除しない |
+| `run_task` | Project版・digest・`source`, `reason`, `request_id`, `task: {title, request, action, acceptance}` | 既存ownerに一つのTaskを作成・関連付け、既存Pipelineへ投入 |
+| `resume_task` | link_taskと同じ入力 | 失敗・停止・再起動でpausedの同じTaskを新revisionで再開 |
+| `read_result` | `project_id`, `task_id` | 現在の関連Taskの成果本文・指定deliverablesを実ファイルと照合して返す |
 | `read_task` | `project_id`, `task_id` | 関連付けたTaskの現在状態と照合結果、成果の報告済みメタデータ |
 
 すべてに`actor`を含めます。`source`はそのinstallationに既に保存されたDiscord Sourceの参照です。
@@ -94,8 +99,8 @@ voice room内で、そのactorが所有・閲覧できるSourceを使います�
 いずれかの権限失効は、保存直前にも検査します。候補は依頼ごと8件、未expired全体128件までです。
 確認の配達が不明なら自動再送せず、本人の`/kotodama project_review`で同じ候補を再確認できます。
 
-Dotsから送った処理は`surface: "dots"`で接続元を固定し、Dotsの無効化・actor変更を
-保存直前にも確認します。このmarkerはoperatorの権限に制約を加え、権限を増やしません。
+Dotsから送った処理は専用資格情報からサーバーが接続元を固定し、Dotsの無効化・actor変更を
+保存直前にも確認します。互換用`surface`は接続元を変更できず、資格情報と矛盾する値は拒否します。
 MCP呼出しの取消はloopback接続から保存前の検査まで伝播します。保存後の応答紛失では
 receiptを消さず、許可・相談が有効な間は同じID・同じ内容で照合します。取消・期限切れ後の
 書込再送は拒否し、Project readまたはlocal operatorで照合します。新しいIDで自動再実行しません。
@@ -129,7 +134,7 @@ Projectの通常readは記録済み参照だけを返し、Task本文・現在�
 
 既存[Requirements GadgetのProject表示と候補検査](../../codex-task-bridge/README.md)は
 同じlocal ownerへ接続します。GUIは参照と変更候補の検査までで、保存やTask実行を行いません。
-成果の内容readback・要件ごとの充足・完了集約、共有参加者、Projectの取消・削除、
+要件ごとの充足・完了集約、共有参加者、Projectの取消・削除、
 動的役割生成、実Dotアカウントによる受入、provider実接続は後続です。
 
 既存Requirements Gadgetの`objective`と`deliverable`は別の情報です。
@@ -141,3 +146,52 @@ Projectの`outcome`へ自動要約したり、件数・文字数を切り捨て�
 検証は`tests/project-owner.test.mjs`、`tests/project-control.test.mjs`、`tests/project-task.test.mjs`で、
 合成Source、実SQLite、実loopback HTTP、再起動、再送、旧版、取消された権限を扱います。
 実Discord・実モデル・Public Betaの受入とは別です。
+
+
+## Projectから仕事を実行して成果を読む
+
+必要な場合だけ`run_task`、`resume_task`、`read_result`を操作設定に追加します。
+Dotsにも公開する場合は`dots.projectOperations`に同じ操作を指定します。既定無効です。
+`run_task`と`resume_task`はDotsでは候補全文に対する依頼者本人の確認が必要です。
+Project操作の許可だけでは実行できず、現在の`worker.actions`も必要です。
+
+`run_task`はresearch/summarize/develop/write_fileだけを受け付けます。
+Sourceは既に保存された本人の確定版を使い、Project条件・原依頼参照・受入条件を
+省略せずTask入力へ保持します。上限超過は切捨てず拒否します。
+同じSourceの訂正前の版はProject履歴・原文として保持し、現在性はSourceごとの
+最新の明示採用版へ束縛します。未採用の後続訂正は拒否し、旧版の閲覧権限も確認します。
+新しいTask、Project参照、新revisionと再送receiptは同じSQLite transactionです。
+その後、既存Pipelineの有限キュー、既存worker、取消・grant再照合へ渡します。
+書込みのLinux隔離・検証設定は既存workerと同じで、Projectから迂回できません。
+外部provider専用のswarm/company-pack操作はこの入口では受け付けません。
+
+同じrequest_idと同じ入力の再送は、同じTask参照を返して実行を繰り返しません。
+作成後の投入失敗は`dispatch.state=refused`と理由・owner状態を返します。
+投入直前のクラッシュでは既存ownerの再起動回復によりqueuedはpaused、runningはuncertainになります。
+paused/failed/cancelledは`resume_task`で同じTaskを明示的に再開できます。
+最新Task revisionとProject revision/digest、変更されていない条件・Sourceを必要とし、
+再開でもDots本人確認・現在の実行grantを検査します。uncertainは自動再開しません。
+条件やSourceが変わったTaskを再開・成果採用せず、訂正を解決してから次の依頼へ進みます。
+
+実行中もProjectの条件・出典束縛・Task参照と現在の権限を検査します。
+Project訂正・参照解除・Source更新・権限失効後の成果公開は拒否します。
+Projectの条件を変える操作自体はTaskを成功・完了にはしません。
+Project作成Taskを通常のTask訂正・resumeから書き換える操作は、条件の脱落や参照版の不整合を避けるため変更前に拒否します。
+同じTaskの再開にはProjectの`resume_task`を使います。
+変更はProjectの条件を訂正してから新しい明示依頼として行い、既存成果を上書きしません。
+
+`read_result`はneeds_reviewの現在版だけを対象に、既存verifyArtifactsで全記録artifactを照合し、保存された`result.md`の実体・
+サイズ・digest・報告本文の一致を検査します（`summary_evidence=artifact_verified`）。
+既存Company Pack/Swarm Taskでは専用adapterの形式を使い、要約は`summary_evidence=owner_report`、
+`summary_sha256=null`として区別します。成果ファイルは記録された全artifactの照合と
+指定deliverableの実読取を必須にします。これらのTaskの新規実行をProjectから許可する変更ではありません。
+追加ファイルは既存resultFilesが許可する
+worktree内の`deliverables/`だけで、合計512,000 bytesまでをbase64とdigestで返します。
+任意path・workspace・検証commandは返しません。非対応の大きい成果は明示拒否し、
+切り捨てた本文を完全な成果として扱いません。JSON返却全体も900,000 bytes以下に制限します。読取後にもProject/Task/Source/権限を再照合します。
+`artifact_readback=verified`は返したファイルの照合だけを意味し、要件充足や独立review、
+完了の証明ではありません。`completion=not_observed`、`acceptance=not_evaluated`を保持します。
+
+`tests/project-execution.test.mjs`は実SQLite/loopback/ファイルと合成workerによる結合試験、
+`tests/project-dots-tasks.test.mjs`は実stdio MCPと合成Discord確認による試験です。
+実Discord・実Dotsアカウント・実モデル・配備の受入とは別で、`NO_GO_UNPUBLISHED`を維持します。
