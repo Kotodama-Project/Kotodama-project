@@ -73,9 +73,13 @@ unknown とし、単発の fixture や OS 間の所要差を高速化の受入�
 
 ### 子processの期限切れ診断
 
-#420の復旧・learning CLIの2 occurrenceだけに、`tools.pytest_ci_process_probe`を明示して
-適用します。既存の30秒/60秒の`subprocess.communicate`期限、失敗の伝播、終了と回収は
-Pythonの元の実装が担います。期限直前とtimeout時に、rootのPID・exit状態・CPU/RSS/I/O
+#420で失敗を観測した復旧・learning CLIの6 occurrenceだけに、`tools.pytest_ci_process_probe`を明示して
+適用します。closed-loop復旧の`none`、executor CLIの`13-False`と`23-False`、learning CLIの
+明示承認とanchor replay、dependency復旧のterminal再開と2 resumerを対象にします。
+既存の20秒/30秒/60秒の`subprocess.communicate`期限と失敗の伝播を維持します。
+`subprocess.run`のtimeout後の終了・回収はPythonの元の実装が担います。
+直接`Popen.communicate`を使う2 resumerの既存挙動も維持し、timeout後の自動回収を追加したとは扱いません。
+期限直前とtimeout時に、rootのPID・exit状態・CPU/RSS/I/O
 counterとWindowsのstdout/stderr reader threadの生存だけを記録します。引数・環境変数・
 標準出力の本文やファイル内容は記録しません。rootの終了とpipe EOF待ちは区別できますが、
 特定の子孫がhandleを保有することや、SQLite待ち・CPU遅延の根本原因はこの観測だけでは証明しません。
