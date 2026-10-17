@@ -16,13 +16,15 @@ Taskを作成・更新・実行しません。作業の入口は[Project hub #38
 Projectの所有者と一致する必要があります。公開HTTP endpointを追加しません。
 選択済みownerがremoteの場合は未対応として拒否し、localへの代替保存は行いません。
 
-controlのBearerはlocal operator用の資格情報です。`surface`は認証情報ではなく、
-Dots adapterが追加制限を選ぶ固定値です。MCPの呼出引数からは変更できず、
-GUI adapterは固定した`read`／`inspect`だけを送ります。本人確認の制限対象となる
-clientにcontrol tokenやoperatorのconfig・stateへの直接アクセスを与えない構成が前提です。
-loopbackと`0600`は同一OSユーザーのプロセスを隔離しません。computer／shell接続を
-併用する場合のcredential・filesystem境界は配備先で別途検証が必要で、MCP経路の
-合成テスト成功だけではその隔離を証明しません。
+controlのoperator用BearerとDots用Bearerは別で、起動ごとに更新します。
+サーバーは一致した資格情報から接続元を決めます。本文の`surface`は権限を発行しません。
+Dots用資格情報は起動時に固定した本人のDots/Project操作に限り、通常のTask実行・停止・
+runtime停止等のoperator操作は拒否します。DotsのProject書込みは`surface`が省略されても
+本人確認を要求します。MCPは固定された限定clientを使い、operator資格情報を読みません。
+GUI adapterは引き続き固定した`read`／`inspect`だけを送ります。
+同一OSユーザーがoperatorのconfig・資格情報・stateを直接読める場合の分離は別の境界です。
+loopbackと`0600`は同一ユーザーのプロセスを隔離しません。computer／shell接続の権限は
+配備先で別途検証が必要で、MCP合成テストだけではその隔離を証明しません。
 
 | operation | 入力 | 結果 |
 |---|---|---|
@@ -97,8 +99,8 @@ voice room内で、そのactorが所有・閲覧できるSourceを使います�
 いずれかの権限失効は、保存直前にも検査します。候補は依頼ごと8件、未expired全体128件までです。
 確認の配達が不明なら自動再送せず、本人の`/kotodama project_review`で同じ候補を再確認できます。
 
-Dotsから送った処理は`surface: "dots"`で接続元を固定し、Dotsの無効化・actor変更を
-保存直前にも確認します。このmarkerはoperatorの権限に制約を加え、権限を増やしません。
+Dotsから送った処理は専用資格情報からサーバーが接続元を固定し、Dotsの無効化・actor変更を
+保存直前にも確認します。互換用`surface`は接続元を変更できず、資格情報と矛盾する値は拒否します。
 MCP呼出しの取消はloopback接続から保存前の検査まで伝播します。保存後の応答紛失では
 receiptを消さず、許可・相談が有効な間は同じID・同じ内容で照合します。取消・期限切れ後の
 書込再送は拒否し、Project readまたはlocal operatorで照合します。新しいIDで自動再実行しません。

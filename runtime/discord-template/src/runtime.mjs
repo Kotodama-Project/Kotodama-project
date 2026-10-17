@@ -115,11 +115,18 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
     if(voice&&!config.voicePool){rotation=new VoiceRotation({store,config,policy:()=>current,deliver:batch=>deliverRotation(discord,batch,{voice,isActive:()=>!closing&&!rotation.stopped,readConfig:async()=>{check(!closing,'RUNTIME_STOPPING');current=await loadConfig(filename);return current;}}),onError:code=>log({event:'voice_rotation',code})});voice.rotation=rotation;rotation.start();}
     voice?.control.start();
     const secret=randomBytes(32).toString('hex');const secretFile=path.join(config.dataDir,'control.secret');await atomicText(secretFile,secret);
+    const dotsSecret=randomBytes(32).toString('hex');await atomicText(path.join(config.dataDir,'control.dots.secret'),dotsSecret);
+    const matches=(auth,token)=>{const expected=Buffer.from('Bearer '+token);return auth.length===expected.length&&timingSafeEqual(auth,expected);};
     const handleControl=async(req,res)=>{
       const send=(status,body,close=false)=>sendHttpJson(res,status,body,{close});
       let scope,disconnect;
       try{
-        const auth=Buffer.from(String(req.headers.authorization??'')),expected=Buffer.from('Bearer '+secret);check(auth.length===expected.length&&timingSafeEqual(auth,expected),'UNAUTHORIZED');
+        const auth=Buffer.from(String(req.headers.authorization??''));
+        const principal=matches(auth,secret)?{kind:'operator'}:matches(auth,dotsSecret)?{kind:'dots',actor:config.dots.actorId}:null;
+        check(principal,'UNAUTHORIZED');
+        const assertDotsPrincipal=policy=>{check(config.dots.enabled&&policy.dots.enabled,'DOTS_DISABLED');check(principal.actor===config.dots.actorId&&principal.actor===policy.dots.actorId&&policy.discord.operators.includes(principal.actor),'DOTS_ACTOR_REQUIRED');};
+        if(principal.kind==='dots'){current=await loadConfig(filename);assertDotsPrincipal(current);}
+        if(req.method==='GET'&&req.url==='/v1/status'&&principal.kind==='dots'){send(200,{ownerId,pid:process.pid,startedAt});return;}
         if(req.method==='GET'&&req.url==='/v1/status'){send(200,{ownerId,pid:process.pid,startedAt,discord:discord?'connected':'offline_fixture',voice:voice?.control.status()??null,...(channelWorker?{channelWorkspaces:channelWorker.status()}:{}),taskOwner:config.owner.kind,analysis:pipeline.analysisAdmission.status(),source});return;}
         check(req.method==='POST'&&['/v1/command','/v1/project'].includes(req.url),'ROUTE_NOT_FOUND');check(!closing,'RUNTIME_STOPPING');check(controlOperations.size<8,'CONTROL_BUSY');
         scope=deadlineScope(10000,'CONTROL_BODY_TIMEOUT');controlReads.add(scope);
@@ -128,16 +135,20 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
         const projectRoute=req.url==='/v1/project';
         const body=await readHttpBody(req,{maxBytes:projectRoute?1500000:200000,signal:scope.signal,limitCode:'CONTROL_BODY_LIMIT',invalidCode:'CONTROL_BODY_INVALID'});
         const input=JSON.parse(body.toString('utf8'));check(!projectRoute||input?.action==='project','PROJECT_ROUTE_REQUIRED');current=await awaitWithSignal(loadConfig(filename),scope.signal);check(!closing,'RUNTIME_STOPPING');check(current.discord.operators.includes(input.actor),'OPERATOR_REQUIRED');
+        if(principal.kind==='dots'){assertDotsPrincipal(current);check(input.actor===principal.actor,'DOTS_ACTOR_REQUIRED');check(['dots','project'].includes(input.action),'DOTS_CONTROL_ACTION_DENIED');}
         controlReads.delete(scope);scope.dispose();scope=null;
         let result;
         if(input.action==='tasks')result=await pipeline.tasks(input.actor);
         else if(input.action==='judgment')result=await judgment.read({actor:input.actor,taskId:input.taskId});
         else if(input.action==='project'){
-          const {action,surface,approval_id,...operation}=input;
-          check(surface===undefined||surface==='dots','PROJECT_SURFACE_INVALID');
-          // A surface marker can only add restrictions to the operator grant.
-          // Keep the original call's scope through authorization and commit.
-          const assertScope=surface==='dots'?policy=>{
+          const {action,surface:claimedSurface,approval_id,...operation}=input;
+          check(claimedSurface===undefined||claimedSurface==='dots','PROJECT_SURFACE_INVALID');
+          check(claimedSurface===undefined||principal.kind==='dots','PROJECT_SURFACE_CREDENTIAL_MISMATCH');
+          const isDots=principal.kind==='dots';
+          // The matched credential supplies this fixed principal. Request JSON
+          // cannot select operator authority or remove the Dots restrictions.
+          const assertScope=isDots?policy=>{
+            assertDotsPrincipal(policy);
             check(config.dots.enabled&&policy.dots.enabled,'DOTS_DISABLED');
             check(config.dots.actorId===input.actor&&policy.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
             check(config.dots.projectOperations?.includes(operation.operation)&&policy.dots.projectOperations?.includes(operation.operation),'PROJECT_OPERATION_NOT_ALLOWED');
@@ -150,7 +161,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
           const signal=scope.signal;
           const work=(async()=>{
             if(['prepare','read_approval'].includes(operation.operation)){
-              check(surface==='dots'&&dots&&config.dots.actorId===input.actor&&current.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
+              check(isDots&&dots&&config.dots.actorId===input.actor&&current.dots.actorId===input.actor,'DOTS_ACTOR_REQUIRED');
               if(operation.operation==='prepare'){
                 check(approval_id===undefined,'PROJECT_REQUEST_INVALID');shape(operation,['actor','operation','id','revision','candidate'],'PROJECT_REQUEST_INVALID');
                 return dots.prepareProject(operation.id,operation.revision,operation.candidate,{signal});
@@ -158,7 +169,7 @@ export async function startRuntime(filename,{offline=false,analyzer,worker,runti
               shape(operation,['actor','operation'],'PROJECT_REQUEST_INVALID');return dots.readProjectDraft(approval_id,{signal});
             }
             let assertApproval=()=>{};
-            if(surface==='dots'&&['create','correct','link_task','unlink_task','run_task','resume_task'].includes(operation.operation)){
+            if(isDots&&['create','correct','link_task','unlink_task','run_task','resume_task'].includes(operation.operation)){
               check(dots,'DOTS_DISABLED');assertScope(current);
               assertApproval=await dots.authorizeProjectWrite(approval_id,operation,{signal});
             }else check(approval_id===undefined,'PROJECT_REQUEST_INVALID');
@@ -262,13 +273,24 @@ async function localControlRequest(port,route,token,payload,{signal}={}){
     request.setTimeout(body===null?3000:30000,()=>request.destroy(new Error('CONTROL_TIMEOUT')));request.on('error',fail);signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();else request.end(body);
   });
 }
-export async function controlCommand(config,input,{signal}={}){
+async function scopedControlCommand(config,input,{signal,dotsPrincipal=false}={}){
   signal?.throwIfAborted();
   const runtime=JSON.parse((await readArtifact(path.join(config.dataDir,'runtime.json'),65536)).toString('utf8'));
   const port=Number(runtime.port);check(Number.isInteger(port)&&port>=1&&port<=65535,'RUNTIME_PORT_INVALID');
-  const token=(await readArtifact(path.join(config.dataDir,'control.secret'),64)).toString('utf8');check(/^[a-f0-9]{64}$/.test(token),'CONTROL_TOKEN_INVALID');
+  const token=(await readArtifact(path.join(config.dataDir,dotsPrincipal?'control.dots.secret':'control.secret'),64)).toString('utf8');check(/^[a-f0-9]{64}$/.test(token),'CONTROL_TOKEN_INVALID');
   const current=await localControlRequest(port,'/v1/status',token,undefined,{signal});
   check(current.ownerId===runtime.ownerId&&current.pid===runtime.pid&&current.startedAt===runtime.startedAt,'RUNTIME_OWNER_CHANGED');
   if(input.action==='status')return current;
   const value=await localControlRequest(port,input.action==='project'?'/v1/project':'/v1/command',token,input,{signal});check(value.ok,value.error??'CONTROL_FAILED');return value.result;
+}
+
+// The plugin imports the fixed limited-client entrypoint. Request JSON cannot
+// choose the server principal; only the matched credential supplies that role.
+export async function dotsControlCommand(config,input,{signal}={}){
+  check(config.dots.enabled&&input.actor===config.dots.actorId,'DOTS_ACTOR_REQUIRED');
+  check(['dots','project'].includes(input.action),'DOTS_CONTROL_ACTION_DENIED');
+  return scopedControlCommand(config,input,{signal,dotsPrincipal:true});
+}
+export async function controlCommand(config,input,options={}){
+  return input.surface==='dots'?dotsControlCommand(config,input,options):scopedControlCommand(config,input,options);
 }

@@ -145,7 +145,7 @@ test('packaged stdio Project tools use the owner-bound loopback and preserve exa
     res.end(JSON.stringify(value));
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));f.cleanups.push(()=>new Promise(resolve=>server.close(resolve)));
-  await writeFile(path.join(f.config.dataDir,'control.secret'),token);await writeFile(path.join(f.config.dataDir,'runtime.json'),JSON.stringify({...identity,port:server.address().port}));
+  await writeFile(path.join(f.config.dataDir,'control.dots.secret'),token);await writeFile(path.join(f.config.dataDir,'runtime.json'),JSON.stringify({...identity,port:server.address().port}));
   const client=new Client({name:'synthetic-project-stdio',version:'1'}),transport=new StdioClientTransport({command:process.execPath,args:[path.join(runtimeRoot,'dots-plugin/scripts/server.mjs')],env:{...process.env,KOTODAMA_DISCORD_ROOT:runtimeRoot,KOTODAMA_DOTS_CONFIG:f.file},stderr:'pipe'});
   await client.connect(transport);f.cleanups.push(()=>client.close());
   for(const [index,[name,args]] of Object.entries(inputs).entries()){

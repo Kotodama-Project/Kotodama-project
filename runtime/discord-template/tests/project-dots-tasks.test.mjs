@@ -123,7 +123,7 @@ test('stdio Task writes reject caller authority fields before forwarding an appr
 
 test('both control routes authenticate before parsing and preserve operator versus Dots Task grants',async t=>{
   const f=await fixture(t),{port}=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
-  const token=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8');
+  const token=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8'),dotsToken=await readFile(path.join(f.config.dataDir,'control.dots.secret'),'utf8');
   assert(/^[a-f0-9]{64}$/.test(token),'synthetic control token must be 64 hex characters');
   const post=(route,body,authorization)=>controlPost(port,route,body,authorization);
   const denied=async(route,input,error,authorization='Bearer '+token,status=400)=>{
@@ -145,8 +145,10 @@ test('both control routes authenticate before parsing and preserve operator vers
       }
       await denied(route,{...input,actor:'100000000000000009'},'OPERATOR_REQUIRED');
       for(const surface of [null,'','operator','DOTS',false,[],['dots'],{}])await denied(route,{...input,surface},'PROJECT_SURFACE_INVALID');
-      await denied(route,{...input,surface:'dots'},'PROJECT_APPROVAL_REQUIRED');
-      await denied(route,{...input,surface:'dots',approval_id:'project_'+('f'.repeat(24))},'PROJECT_APPROVAL_REQUIRED');
+      await denied(route,{...input,surface:'dots'},'PROJECT_SURFACE_CREDENTIAL_MISMATCH');
+      await denied(route,{...input,surface:'dots'},'PROJECT_APPROVAL_REQUIRED','Bearer '+dotsToken);
+      await denied(route,input,'PROJECT_APPROVAL_REQUIRED','Bearer '+dotsToken);
+      await denied(route,{...input,surface:'dots',approval_id:'project_'+('f'.repeat(24))},'PROJECT_APPROVAL_REQUIRED','Bearer '+dotsToken);
       // The broad local credential still needs the current installation grant.
       f.config.projects.operations=operations.filter(value=>value!==operation);await f.save();
       await denied(route,input,'PROJECT_OPERATION_NOT_ALLOWED');
@@ -230,4 +232,43 @@ test('stdio execution and same-Task resume require exact requester approval and 
   const next={...resume,request_id:'revoked',expected_revision:3,base_digest:resumed.project_digest,expected_task_revision:2},nextDraft=await f.approved(next);
   f.runtime.projects.authorizeSource=async()=>{f.config.dots.projectOperations=[];await f.save();};
   assert.equal(code(await f.commit(next,nextDraft)),'PROJECT_OPERATION_NOT_ALLOWED');assert.equal(runs,2);
+});
+
+test('limited Dots credential cannot select operator authority or execute generic control actions',async t=>{
+  const f=await fixture(t),info=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
+  const operatorToken=await readFile(path.join(f.config.dataDir,'control.secret'),'utf8'),dotsToken=await readFile(path.join(f.config.dataDir,'control.dots.secret'),'utf8');
+  assert.notEqual(operatorToken,dotsToken);assert.equal(JSON.stringify(info).includes(dotsToken),false);
+  const before=f.taskSnapshot(),projects=f.projectSnapshot(),candidate=f.association(f.project,'raw-limited');
+  for(const route of ['/v1/command','/v1/project']){
+    for(const surface of [undefined,'dots']){
+      const result=await controlPost(info.port,route,{action:'project',actor,...candidate,...(surface?{surface}:{})},'Bearer '+dotsToken);
+      assert.equal(result.body.error,'PROJECT_APPROVAL_REQUIRED');
+    }
+    const forged=await controlPost(info.port,route,{action:'project',actor,...candidate,surface:'operator'},'Bearer '+dotsToken);
+    assert.equal(forged.body.error,'PROJECT_SURFACE_INVALID');
+  }
+  for(const action of ['request','stop','resume','shutdown','tasks','result','voice','verify-deletion']){
+    const result=await controlPost(info.port,'/v1/command',{action,actor,text:'should not run',taskId:f.task.id,operation:'research'},'Bearer '+dotsToken);
+    assert.equal(result.body.error,'DOTS_CONTROL_ACTION_DENIED');
+  }
+  const other='100000000000000009';f.config.discord.operators.push(other);await f.save();
+  const spoofed=await controlPost(info.port,'/v1/command',{action:'dots',actor:other,operation:'list'},'Bearer '+dotsToken);
+  assert.equal(spoofed.body.error,'DOTS_ACTOR_REQUIRED');
+  assert.equal(f.taskSnapshot(),before);assert.equal(f.projectSnapshot(),projects);
+  f.config.dots.actorId=other;await f.save();
+  assert.equal((await controlPost(info.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+dotsToken)).body.error,'DOTS_ACTOR_REQUIRED');
+  f.config.dots.actorId=actor;
+  f.config.dots.enabled=false;await f.save();
+  const revoked=await controlPost(info.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+dotsToken);
+  assert.equal(revoked.body.error,'DOTS_DISABLED');
+  // The operator credential remains an operator credential, independent of
+  // the restricted principal and its configuration.
+  const operator=await controlPost(info.port,'/v1/command',{action:'project',actor,operation:'read',project_id:f.project.project.project_id},'Bearer '+operatorToken);
+  assert.equal(operator.status,200);
+  await f.runtime.close();f.config.dots.enabled=true;await f.save();
+  const restarted=await startRuntime(f.file,{offline:true,log:()=>{}});t.after(()=>restarted.close());
+  const next=JSON.parse(await readFile(path.join(f.config.dataDir,'runtime.json'),'utf8'));
+  const nextToken=await readFile(path.join(f.config.dataDir,'control.dots.secret'),'utf8');assert.notEqual(nextToken,dotsToken);
+  assert.equal((await controlPost(next.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+dotsToken)).status,401);
+  assert.equal((await controlPost(next.port,'/v1/command',{action:'dots',actor,operation:'list'},'Bearer '+nextToken)).status,200);
 });
