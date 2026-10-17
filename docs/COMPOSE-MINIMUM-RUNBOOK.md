@@ -194,8 +194,52 @@ private locatorの実値、SQL、raw command output、ID、署名入力、secret
 
 ### 固定revisionでの検査
 
-まず使うcheckoutのcommitを固定し、`git rev-parse HEAD`で得た値を
-`verifier_revision`として記録します。source candidateのrevisionとは別fieldです。
+使うcheckoutのcommitを固定し、index・working tree・untracked fileがすべてcleanであることを
+検査の前後に確認します。dirtyなら停止し、先に変更を別revisionとして固定します。
+`git rev-parse HEAD`で得た`verifier_revision`はsource candidateのrevisionとは別fieldです。
+検査中はcheckoutを他のwriterと共有せず、終了時も同じHEADとclean状態を要求します。
+HEADだけを記録して未commitのvalidatorやfixtureを実行した結果は受け入れません。
+
+Python 3.12とGitを用意し、環境変数`PRIVATE_VERIFIER_VENV`にはcheckout外の新しいprivate環境の
+絶対pathを設定します。venvは検証依存専用であり、実hostのservice環境を変更しません。
+POSIXでは`python3`から環境を作ります。
+
+```bash
+set -e
+verifier_status=$(git status --porcelain=v1 --untracked-files=all)
+test -z "$verifier_status"
+verifier_revision=$(git rev-parse HEAD)
+python3 -c 'import sys; assert sys.version_info[:2] == (3, 12)'
+python3 -m venv "$PRIVATE_VERIFIER_VENV"
+. "$PRIVATE_VERIFIER_VENV/bin/activate"
+python -c 'import os,sys; from pathlib import Path; assert Path(sys.prefix).resolve() == Path(os.environ["PRIVATE_VERIFIER_VENV"]).resolve() and sys.prefix != sys.base_prefix'
+python -S -B tools/check_tracked_secret_hygiene.py
+python -m pip install --require-hashes -r requirements-ci.txt
+```
+
+PowerShellでは次を使います。activationがhost policyで禁止されている場合はpolicyを変えず、
+以後の`python`をそのvenvの`Scripts/python.exe`の絶対pathに置き換えます。
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$verifierStatus = git status --porcelain=v1 --untracked-files=all
+if ($LASTEXITCODE -ne 0 -or $verifierStatus) { throw 'VERIFIER_CHECKOUT_NOT_CLEAN' }
+$verifierRevision = git rev-parse HEAD
+if ($LASTEXITCODE -ne 0) { throw 'VERIFIER_REVISION_UNAVAILABLE' }
+python -c "import sys; assert sys.version_info[:2] == (3, 12)"
+if ($LASTEXITCODE -ne 0) { throw 'PYTHON_312_REQUIRED' }
+python -m venv $env:PRIVATE_VERIFIER_VENV
+if ($LASTEXITCODE -ne 0) { throw 'VERIFIER_ENVIRONMENT_FAILED' }
+& "$env:PRIVATE_VERIFIER_VENV/Scripts/Activate.ps1"
+python -c "import os,sys; from pathlib import Path; assert Path(sys.prefix).resolve() == Path(os.environ['PRIVATE_VERIFIER_VENV']).resolve() and sys.prefix != sys.base_prefix"
+if ($LASTEXITCODE -ne 0) { throw 'VERIFIER_ENVIRONMENT_NOT_ACTIVE' }
+python -S -B tools/check_tracked_secret_hygiene.py
+if ($LASTEXITCODE -ne 0) { throw 'CREDENTIAL_GATE_FAILED' }
+python -m pip install --require-hashes -r requirements-ci.txt
+if ($LASTEXITCODE -ne 0) { throw 'LOCKED_DEPENDENCIES_FAILED' }
+```
+
+以下の`python`は準備したvenvの実行器です。各commandの非zero終了で停止します。
 次の公開入力の検査はhost/providerに触れません。
 
 ```text
@@ -222,6 +266,10 @@ python -B tools/verify_compose_clean_install_migration_evidence_candidate.py EVI
 保存候補3入力verifierのexit 0は`UNATTESTED_EVIDENCE_BINDING_ONLY`です。
 exit 1は`INVALID`、exit 2はusage errorです。古い報告でも整合すれば通り得ます。
 clean install、restart、rollback、restore、authenticity、freshnessはfalseのままです。
+
+結果を受け入れる前に、POSIXでは`test "$(git rev-parse HEAD)" = "$verifier_revision"`と
+上と同じ`git status`の空結果を再確認します。PowerShellでは`git rev-parse HEAD`の成功と
+`$verifierRevision`との一致、および上と同じclean検査を再確認します。不一致なら結果を採用しません。
 
 attestationを使う場合は[既存の9入力手順](PROTECTED-COMPOSE-EVIDENCE-ATTESTATION.md)を
 同じprivate境界内で実行します。署名・policyのpoint-in-time照合もreported checksの

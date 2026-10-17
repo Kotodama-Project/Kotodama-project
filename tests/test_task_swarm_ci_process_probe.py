@@ -11,7 +11,54 @@ except ModuleNotFoundError:
     import unittest
     raise unittest.SkipTest("runs in the required Task swarm pytest job")
 
-from tools.pytest_ci_process_probe import Probe, process_state
+from tools.pytest_ci_process_probe import Plugin, Probe, ROOT, process_state
+
+
+@pytest.mark.parametrize("nodeid,command,timeout,label", [
+    ("closed_loop_recovery.py::test_recovery_reconstructs_actual_reuse_owner_and_current_decision[none]",
+        [str(ROOT / "tests/test_task_swarm_closed_loop_recovery.py")], 30, "recovery"),
+    ("executor_cli.py::test_learning_cli_uses_current_decision_and_keeps_the_typed_transport[23-False]",
+        [str(ROOT / "tools/knowledge_base.py")], 60, "task-input"),
+    ("executor_cli.py::test_learning_cli_uses_current_decision_and_keeps_the_typed_transport[13-False]",
+        [str(ROOT / "tools/knowledge_base.py")], 60, "task-input"),
+    ("learning_reuse.py::test_cli_explicit_review_decision_run_and_anchor_replay",
+        ["-B", "-m", "task_swarm.learning_reuse", "run"], 20, "learning-reuse"),
+    ("dependency_recovery.py::test_terminal_resume_preserves_scoped_acceptance",
+        [str(ROOT / "tests/test_task_swarm_dependency_recovery.py")], 20, "dependency-recovery"),
+    ("dependency_recovery.py::test_two_fresh_resumers_create_only_one_b_attempt",
+        [str(ROOT / "tests/test_task_swarm_dependency_recovery.py")], 20, "dependency-recovery"),
+])
+@pytest.mark.parametrize("boundary", ["observed", "other-node", "other-command", "other-timeout", "cleanup"])
+def test_plugin_only_observes_known_calls_and_preserves_arguments(nodeid, command, timeout, label, boundary):
+    nodeid = "tests/test_task_swarm_" + nodeid
+    command = [sys.executable, *command]
+    if boundary == "other-node":
+        nodeid += "-not-a-target"
+    elif boundary == "other-command":
+        command = [sys.executable, "-c", "pass"]
+    elif boundary == "other-timeout":
+        timeout = 19
+    elif boundary == "cleanup":
+        timeout = None
+    process = mock.Mock(args=command)
+    probe = mock.Mock()
+    result = (b"stdout", b"stderr")
+    probe.communicate.side_effect = lambda original, child, data, limit, **kw: original(
+        child, input=data, timeout=limit)
+    with mock.patch.object(subprocess.Popen, "communicate", return_value=result) as original:
+        hook = Plugin(probe).pytest_runtest_call(mock.Mock(nodeid=nodeid))
+        next(hook)
+        try:
+            assert subprocess.Popen.communicate(process, input=b"private", timeout=timeout) is result
+        finally:
+            with pytest.raises(StopIteration):
+                next(hook)
+        assert subprocess.Popen.communicate is original
+        original.assert_called_once_with(process, input=b"private", timeout=timeout)
+    if boundary == "observed":
+        probe.communicate.assert_called_once_with(original, process, b"private", timeout, label=label)
+    else:
+        probe.communicate.assert_not_called()
 
 
 def events(directory):
