@@ -30,8 +30,12 @@ test('real ffmpeg, multipart Whisper fixture, CLI correction and existing Source
   const dir=path.join(archiveRoot,b.sessionId),metadata=JSON.parse(await readFile(path.join(dir,'metadata.json'))),speakers=JSON.parse(await readFile(path.join(dir,'speakers.json')));
   assert.equal(metadata.retention.rawAudioDays,30);assert.equal(metadata.timeline.alignment,'session_start_silence_padded');assert.equal(speakers.file0.id,'mixed');assert.equal(speakers.file1.id,b.speakerIds[0]);
   const receipt=JSON.parse(await readFile(path.join(dir,'archive-receipt.json')));assert.equal(receipt.files.length,6);assert((await readFile(path.join(dir,b.speakerIds[0]+'.pcm'))).equals(pcm));
+  const retention=JSON.parse(await readFile(path.join(dir,'.archive-retention-grant-'+b.sessionId+'.json')));
+  assert.deepEqual(retention,{schemaVersion:'kotodama.archive-retention-manifest/v1',authorityGranted:false,artifact_manifest:receipt.files});
+  assert.equal((await readdir(dir)).filter(name=>name.includes('-local-grant-')).length,0);
   const tx=JSON.parse(await readFile(path.join(dir,'transcript.json')));assert.equal(tx.status,'succeeded');assert.equal(tx.individual.length,2);assert.equal((await adapter.processNext()),null);adapter.close();
   const replay=await sink.seal({binding:b,endFrame:48000,tracks:b.speakerIds.map((speakerId,i)=>({speakerId,pcm:i?Buffer.alloc(96000):pcm})),mixed:pcm,sourceChunks:[],idempotencyKey:receipt.idempotencyKey});assert.deepEqual(replay,receipt);
+  assert.deepEqual(JSON.parse(await readFile(path.join(dir,'.archive-retention-grant-'+b.sessionId+'.json'))),retention);
   const expired=createArchiveSink({archiveRoot,ffmpeg,authorize,clock:()=>b.startedAtMs+31*86400000});await assert.rejects(expired.verify(receipt,b),/EXPIRED/);
   if(process.env.ARCHIVE_RETENTION_FIXTURE)await cp(archiveRoot,process.env.ARCHIVE_RETENTION_FIXTURE,{recursive:true,force:false,errorOnExist:true});
   await writeFile(path.join(dir,b.speakerIds[0]+'.pcm'),'tampered');await assert.rejects(sink.verify(receipt,b),/CHANGED/);

@@ -32,7 +32,9 @@ journal内のPCMは後処理再開用staging。実sinkの`verify`で全保存音
 
 `createArchiveSink({archiveRoot,ffmpeg,authorize,timeoutMs,maxEncodedBytes,maxPcmBytes,clock})`は既存のrecordings rootを必須にし、その直下へ`session-*`を作る。原音は`mixed.pcm`/speaker別`.pcm`とMP3。ffmpegは既存実行器でshellなし・時間/出力上限付き。metadata/speakers/sourceChunks/receiptを同期保存後renameする。失敗stagingは調査用に残し、任意pathを削除しない。hostが既存の保持/失敗staging回収の対象へ登録すること。
 
-既存30日raw-retentionは`metadata.json.endedAt`、`transcript.json.status=succeeded`、hash付き`knowledge-source-transcript-*.json`、`.ct202-local-grant-<session>.json.artifact_manifest`を読む。このsinkは同名manifestにPCM/MP3のref/size/sha256を記録するが、schemaはretention manifest、`authorityGranted:false`であり転送grantを偽造しない。private transcribe endpointへの送信権限はauthorizeで別に判断する。hostは既存保持policy `kotodama.voice-retention/v2`（rawAudioDays=30、transcriptDays/derivedTextDays=null）へ同rootを設定する。既存retentionは文字起こし成功を確認できない場合削除を止めるため、ASRが永続失敗した録音と失敗stagingは保持ownerが別途処理する必要がある。このadapterだけで保持処理が稼働したとはしない。
+このsinkは`metadata.json.endedAt`、`transcript.json.status=succeeded`、hash付き`knowledge-source-transcript-*.json`と、中立名`.archive-retention-grant-<session>.json`を保存する。markerの`artifact_manifest`はPCM/MP3のref/size/sha256を記録し、schemaはretention manifest、`authorityGranted:false`である。private transcribe endpointへの送信権限はauthorizeで別に判断する。hostは既存保持policy `kotodama.voice-retention/v2`（rawAudioDays=30、transcriptDays/derivedTextDays=null）へ同rootを設定する。既存retentionは文字起こし成功を確認できない場合削除を止めるため、ASRが永続失敗した録音と失敗stagingは保持ownerが別途処理する必要がある。このadapterだけで保持処理が稼働したとはしない。
+
+[Issue #95](https://github.com/Kotodama-Project/Kotodama-project/issues/95)の改名候補は、private readerが旧名・新名の両方を読めるように先行配備され、合成sessionの29日/31日・text保持・冪等性・ASR失敗時の保留・再開を確認するまでmerge・配備しない。旧名readerは、保持ownerが残存session、失敗staging、再開待ち、旧writerとrollbackを照合し、旧名に依存する対象がないと記録するまで維持する。保持期限や削除条件は変更しない。
 
 `createWhisperArchiveAsr({sink,endpoint,authorize,language,timeoutMs})`はhost指定の private transcribe endpoint（`/transcribe` URL）へ、検証済みMP3をmultipart `audio`/`language`でPOSTする。redirect拒否・response8MiB上限・timeout。区間start/end/textを保持し、idxは応答順、confidenceはexp(avg_logprob)、欠落時は既存clientと同じ0.8。個別speakerの名乗り不一致は拒否。URLは秘密の固定値を同梱しないのでhostがprivate transcribe endpointのallowlistと一致を確認する。
 
@@ -50,4 +52,4 @@ retention ownerから届いた削除receiptは[現物照合](RETENTION-READBACK.
 
 合成試験で最後のsample、共通時刻、mixed overlap、再送、誤話者、訂正時刻、再起動再開、取消、上限を検査。実ffmpeg、実HTTP fixture、CLIモデルfixture、既存Storeを通して原音保存→journal PCM解放→後処理再起動→Intent記録を検査する。既存の private source をread-only確認して契約を参照した新規MIT候補。既存private sourceを丸ごと移植していない。実 transcribe endpoint/Luna応答、音声の実聴、retentionの本番削除、分散排他、public Task ownerへの実配線は未受入。rootの統合・配備作業が必要。
 
-既存のraw-retention実装を合成sessionに対して実行し、29日目は削除対象0、31日目はPCM/MP3の6ファイルだけ削除、text削除0、再実行削除0を確認した。認証grantを発行した試験ではない。
+旧markerを使う既存raw-retention実装の過去の合成試験では、29日目は削除対象0、31日目はPCM/MP3の6ファイルだけ削除、text削除0、再実行削除0を確認した。新markerのdual-reader配備・受入の証拠ではなく、その検証は未完了である。認証grantを発行した試験ではない。

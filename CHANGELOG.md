@@ -6,6 +6,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ## [Unreleased]
 
+- Archive retention markerを中立名にする候補。manifest内容を維持し、旧識別子を大文字・小文字とも検査する。private readerの先行配備と保持ownerの残存対象確認がmerge条件。
+
 ### Added
 
 - Projectの明示run_task/resume_taskを既存local Task owner・有限Pipelineへ接続し、本人確認・同一Task再送・条件束縛・再起動回復と成果ファイルreadbackを追加。既定無効、実サービス受入は別。

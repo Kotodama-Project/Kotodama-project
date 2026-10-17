@@ -22,13 +22,11 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTAINER_OR_VM = re.compile(r"(?<![A-Za-z0-9])(?:CT|VM)\d{3}(?![A-Za-z0-9])")
 PRIVATE_PATTERNS = (
     ("container or VM identifier", CONTAINER_OR_VM),
+    ("legacy retention identifier", re.compile(r"(?<![A-Za-z0-9])ct202(?![A-Za-z0-9])", re.IGNORECASE)),
     ("private pool name", re.compile(r"\blocal-zfs-")),
     ("private Windows profile path", re.compile(r"[A-Za-z]:\\Users\\(?!alice\b|bob\b)")),
     ("tailnet host", re.compile(r"\b[a-z0-9-]+\.tail[0-9a-f]+\.ts\.net\b")),
 )
-# Runtime marker consumed by a private retention process; renaming it needs a
-# coordinated change on the consumer side, so it is tolerated here on purpose.
-TOLERATED = (".ct202-local-grant-",)
 EXCLUDED = {
     "tests/test_private_identifier_hygiene.py",
     "tests/test_owner_intent_company_agi.py",
@@ -67,8 +65,6 @@ class PrivateIdentifierHygieneTests(unittest.TestCase):
         def find_identifiers(snapshots):
             offenders = []
             for name, source, text in snapshots:
-                for marker in TOLERATED:
-                    text = text.replace(marker, "")
                 for label, pattern in PRIVATE_PATTERNS:
                     for match in pattern.finditer(text):
                         line = text.count("\n", 0, match.start()) + 1
@@ -106,6 +102,7 @@ class PrivateIdentifierHygieneTests(unittest.TestCase):
         # Synthetic values only; each has the shape the pattern guards.
         samples = {
             "container or VM identifier": "deployed on CT123 and VM456",
+            "legacy retention identifier": ".ct202-local-grant-session.json and .CT202-local-grant-session.json",
             "private pool name": "pool local-zfs-example mounted",
             "private Windows profile path": "C:\\Users\\someone\\repo",
             "tailnet host": "https://host.tail0abc.ts.net:10000/",
@@ -113,6 +110,15 @@ class PrivateIdentifierHygieneTests(unittest.TestCase):
         for label, pattern in PRIVATE_PATTERNS:
             with self.subTest(label=label):
                 self.assertIsNotNone(pattern.search(samples[label]))
+
+    def test_legacy_retention_identifier_is_case_insensitive(self) -> None:
+        pattern = dict(PRIVATE_PATTERNS)["legacy retention identifier"]
+        for sample in (".ct202-local-grant-session.json", ".CT202-local-grant-session.json", ".Ct202-local-grant-session.json", "旧名ct202を拒否"):
+            with self.subTest(sample=sample):
+                self.assertIsNotNone(pattern.search(sample))
+        for sample in (".archive-retention-grant-session.json", "act202", "ct2029"):
+            with self.subTest(sample=sample):
+                self.assertIsNone(pattern.search(sample))
 
     def test_identifier_next_to_japanese_text_is_detected(self) -> None:
         for sample in ("送信先はCT123に限る", "hostがVM456の設定を読む", "(CT123)"):
