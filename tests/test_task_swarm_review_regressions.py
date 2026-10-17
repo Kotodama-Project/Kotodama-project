@@ -177,13 +177,58 @@ def test_concurrent_unique_sends_cannot_overrun_admission(tmp_path, monkeypatch,
     assert {message['message_id'] for message in delivered}==set(completed)
 
 
-def test_parallel_replay_publishes_one_immutable_shared_payload(tmp_path):
+@pytest.mark.parametrize('writer_busy', [False, True])
+def test_parallel_replay_publishes_one_immutable_shared_payload(tmp_path, monkeypatch, writer_busy):
     a,b=peers(tmp_path)
+    original_guard=a.transport._write_guard
+    refused=[]; refusal_lock=threading.Lock()
+    if writer_busy:
+        class BusyGuard:
+            def acquire(self, *, timeout):
+                with refusal_lock:
+                    if len(refused)<2:
+                        refused.append(timeout)
+                        return False
+                return original_guard.acquire(timeout=timeout)
+            def release(self):
+                original_guard.release()
+        monkeypatch.setattr(a.transport,'_write_guard',BusyGuard())
+    publications=[]; original_put=a.payloads.put
+    def publish(*args):
+        value=original_put(*args)
+        publications.append(value)
+        return value
+    monkeypatch.setattr(a.payloads,'put',publish)
+    def send(_):
+        try:
+            return a.peer_send('actor-b','same body','same-key')
+        except SwarmError as exc:
+            if exc.code!='STORE_BUSY':
+                raise
+            return exc.code
     with ThreadPoolExecutor(max_workers=8) as pool:
-        values=list(pool.map(lambda _:a.peer_send('actor-b','same body','same-key'),range(24)))
+        initial=list(pool.map(send,range(24)))
+    if writer_busy:
+        assert refused==[2.5,2.5]
+        assert initial.count('STORE_BUSY')>=2
+    monkeypatch.setattr(a.transport,'_write_guard',original_guard)
+    before={p.name:p.read_bytes() for p in payload_files(a)}
+    assert len(before)<=1
+    # A finite writer refusal is not a receipt. Reconcile each refused request
+    # exactly once, with the same key, after contention; persistent refusal fails.
+    values=[a.peer_send('actor-b','same body','same-key') if r=='STORE_BUSY' else r for r in initial]
+    assert len(values)==24
     assert len({r['message_id'] for r in values})==1
+    assert all(r==values[0] for r in values)
+    assert len(publications)==1
+    with closing(sqlite3.connect(a.transport.db_path)) as db:
+        assert db.execute('SELECT message_id,payload_state FROM messages').fetchall()==[(values[0]['message_id'],'ready')]
     assert len(payload_files(a))==1
-    assert len(b.peer_receive()['messages'])==1
+    assert all(path.read_bytes()==before[path.name] for path in payload_files(a) if path.name in before)
+    delivered=b.peer_receive()['messages']
+    assert len(delivered)==1
+    assert delivered[0]['message_id']==values[0]['message_id']
+    assert delivered[0]['text']=='same body'
 
 
 def test_shared_content_is_not_deleted_by_later_rejection(tmp_path):

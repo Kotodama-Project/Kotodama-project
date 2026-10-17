@@ -119,6 +119,8 @@ This is the user-facing change log of the public repository (Keep a Changelog, S
 
 ### Fixed
 
+- 並行する同一peer送信の回帰試験で、有限のwriter混雑拒否後に同じkeyを一回だけ再照合し、24 receipt・単一DB行・payloadの一回公開と内容不変・一回配送を検査する。2回の混雑拒否も決定的に注入し、実装の期限・quotaは変更しない（#428）。
+
 - learning CLIの`run`で使われない外側ReuseOwner初期化を省き、coordinatorの実owner再構築・現在の権限/Source/判断/取消/receipt検査を保持。実CLIの重複検出・拒否・パス互換回帰とWindows/Linuxの有限計測を追加（#420のtimeout原因全体は引き続き調査中）。
 
 - peer並行送信の回帰検査で、予約後の有限な混雑拒否と即時成功を区別。同じキーの一回再照合後にreceipt・payload・配送が正確に3件へ揃うことを検査し、競合中の上限とruntimeの期限を維持する（#428）。
