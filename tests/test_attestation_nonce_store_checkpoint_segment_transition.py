@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -388,6 +389,84 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
         )
         return material
 
+    @staticmethod
+    def copy_case(
+        material: dict[str, object], template_root: Path, destination: Path
+    ) -> dict[str, object]:
+        """Preserve signed bytes while isolating each negative-case fixture.
+
+        All Path inputs must belong to the template tree. The generating CLI
+        and SQLite connections have completed before this snapshot is copied.
+        """
+        shutil.copytree(template_root, destination)
+
+        def relocate(value: object) -> object:
+            if isinstance(value, Path):
+                # Fail rather than accidentally reusing a writable external path.
+                return destination / value.relative_to(template_root)
+            if isinstance(value, dict):
+                return {key: relocate(item) for key, item in value.items()}
+            if isinstance(value, list):
+                return [relocate(item) for item in value]
+            return value
+
+        relocated = relocate(material)
+        assert isinstance(relocated, dict)
+        return relocated
+
+    def test_copied_fixture_paths_sqlite_and_signature_are_independent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            template = root / "template"
+            template.mkdir()
+            store = template / "store.sqlite3"
+            connection = sqlite3.connect(store)
+            try:
+                connection.execute("CREATE TABLE fixture (value TEXT NOT NULL)")
+                connection.execute("INSERT INTO fixture VALUES ('original')")
+                connection.commit()
+            finally:
+                connection.close()
+            signature = template / "signature"
+            signature.write_bytes(b"original-signature")
+            fixture = {
+                "case": {"inputs": {"store": store, "paths": [signature],
+                                    "identity": "synthetic-identity"}},
+                "transition_signature": signature,
+            }
+            first = self.copy_case(fixture, template, root / "first")
+            second = self.copy_case(fixture, template, root / "second")
+            first_inputs = first["case"]["inputs"]
+            second_inputs = second["case"]["inputs"]
+            self.assertEqual(first_inputs["store"], root / "first" / "store.sqlite3")
+            self.assertEqual(second_inputs["paths"], [root / "second" / "signature"])
+            self.assertEqual(first_inputs["identity"], "synthetic-identity")
+            self.assertIsNot(first_inputs, second_inputs)
+            self.assertEqual(
+                Path(first_inputs["store"]).read_bytes(), store.read_bytes()
+            )
+            changed = sqlite3.connect(first_inputs["store"])
+            try:
+                changed.execute("UPDATE fixture SET value = 'changed'")
+                changed.commit()
+            finally:
+                changed.close()
+            for unchanged_store in (store, Path(second_inputs["store"])):
+                reader = sqlite3.connect(unchanged_store)
+                try:
+                    self.assertEqual(
+                        reader.execute("SELECT value FROM fixture").fetchone(),
+                        ("original",),
+                    )
+                finally:
+                    reader.close()
+            Path(first["transition_signature"]).write_bytes(b"tampered")
+            self.assertEqual(signature.read_bytes(), b"original-signature")
+            self.assertEqual(
+                Path(second["transition_signature"]).read_bytes(),
+                b"original-signature",
+            )
+
     def verify_transition(
         self,
         material: dict[str, object],
@@ -577,10 +656,21 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
 
     def test_prior_successor_and_transition_signature_tamper_fail_closed(self) -> None:
         cases: list[tuple[str, subprocess.CompletedProcess[str], str, str]] = []
-        for name in ("prior", "successor", "transition"):
-            with tempfile.TemporaryDirectory() as directory:
-                material = self.make_case(Path(directory))
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            template_root = temporary / "template"
+            template = self.make_case(template_root)
+            for name in ("prior", "successor", "transition"):
+                material = self.copy_case(
+                    template, template_root, temporary / name
+                )
                 private_marker = f"private-{name}-signature-marker"
+                if name == "prior":
+                    # A copied, untampered fixture must still verify successfully.
+                    baseline = self.verify_transition(material)
+                    self.assertEqual(
+                        baseline.returncode, 0, baseline.stdout + baseline.stderr
+                    )
                 if name == "prior":
                     bundle = Path(material["bundle"])
                     bundle_value = json.loads(bundle.read_text(encoding="utf-8"))
@@ -673,9 +763,14 @@ class AttestationNonceStoreCheckpointSegmentTransitionCliTests(unittest.TestCase
 
     def test_malformed_mode_and_transition_id_are_structured_refusals(self) -> None:
         results: list[tuple[str, subprocess.CompletedProcess[str]]] = []
-        for field in ("transition_mode", "transition_id_sha256"):
-            with tempfile.TemporaryDirectory() as directory:
-                material = self.make_case(Path(directory))
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            template_root = temporary / "template"
+            template = self.make_case(template_root)
+            for field in ("transition_mode", "transition_id_sha256"):
+                material = self.copy_case(
+                    template, template_root, temporary / field
+                )
                 transition = Path(material["transition"])
                 value = json.loads(transition.read_text(encoding="utf-8"))
                 value[field] = []
