@@ -2,4 +2,4 @@ blank_issues_enabled: true
 contact_links:
   - name: 現在の使い方
     url: https://github.com/Kotodama-Project/Kotodama-project/blob/main/README.md
-    about: OpenAI製品を使う最小の運用。旧Company OSは開発終了。
+    about: Discord製品の目的・開発先と、旧Company OSからの移行。
