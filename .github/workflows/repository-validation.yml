@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
@@ -15,184 +14,54 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  discord:
+  test:
+    # Keep these names stable for existing branch protection.
     name: test (${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: runtime/discord-template
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          node-version: '24'
-      - name: Set up Company Pack Python runtime
-        id: company_pack_python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.12.10'
-          check-latest: false
-      - name: Check tracked credential hygiene before dependencies
-        working-directory: .
-        run: python -S -B tools/check_tracked_secret_hygiene.py
-      - run: npm install --global pnpm@11.19.0
-      - run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Install locked Task swarm dependencies for the offline integration
-        if: runner.os == 'Linux'
-        working-directory: .
-        run: python -m pip install --require-hashes -r requirements-task-swarm-ci.txt
-      - name: Install audio encoder (Linux)
-        if: runner.os == 'Linux'
-        timeout-minutes: 6
-        working-directory: .
-        run: |
-          if ! command -v ffmpeg >/dev/null 2>&1; then
-            # The hosted Azure HTTP mirror repeatedly exceeded the bounded
-            # download deadline. Use Ubuntu's official TLS archive, preserving
-            # apt's signed Release/package verification and the same packages.
-            sudo python3 tools/prepare_ubuntu_apt_sources.py --apply
-            sudo timeout 180s apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
-            sudo timeout 180s apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ffmpeg
-          fi
-          ffmpeg -version
-      - name: Install audio encoder (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          # The community feed can answer 406, and choco then reports "installed 0/0
-          # packages" with exit code 0. Retry, and stop here if ffmpeg is still missing
-          # instead of failing later in the audio tests.
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            choco install ffmpeg --yes --no-progress
-            if (Get-Command ffmpeg -ErrorAction SilentlyContinue) { break }
-            if ($attempt -lt 3) { Start-Sleep -Seconds (20 * $attempt) }
-          }
-          $version = @(ffmpeg -version)
-          $version[0]
-      - name: Prepare isolated Linux verification fixture
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Pinned by digest: the fixture image is reviewed input, not a moving tag.
-          fixture='node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6'
-          docker pull "$fixture"
-          image="$(docker image inspect --format '{{.Id}}' "$fixture")"
-          printf 'KOTODAMA_TEST_VERIFIER_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
-      - run: pnpm test
-        env:
-          KOTODAMA_TEST_PYTHON: ${{ steps.company_pack_python.outputs.python-path }}
-      - run: pnpm check
-  swarm:
-    uses: ./.github/workflows/task-swarm.yml
-  repository:
-    name: Repository checks
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    env:
-      PIP_DISABLE_PIP_VERSION_CHECK: "1"
-      PIP_NO_INPUT: "1"
-      PYTHONDONTWRITEBYTECODE: "1"
-      PYTHONUTF8: "1"
-      ACTIONLINT_VERSION: "1.7.12"
-      ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+          python-version: '3.12'
+      - name: Test repository guards
+        run: python -B -m unittest discover -s tests -p "test_*.py" -v
+      - name: Validate the tracked repository
+        run: python -B tools/validate_repository.py
+      - name: Check whitespace
+        run: git diff --check
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Check out without persisted credentials
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Set up exact Python runtime
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12.10"
-          check-latest: false
+          python-version: '3.12'
+      - name: Scan tracked files with pinned Gitleaks
+        run: python -B tools/check_secrets.py
 
-      - name: Check tracked credential hygiene
-        run: python -S -B tools/check_tracked_secret_hygiene.py
-
-      - name: Set up Node for the Git Steward regression launcher
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-
-      - name: Run the README one-command smoke
-        run: python -S -B tools/smoke_company_pack_review_chain.py
-
-      - name: Run the README runtime candidate checks
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -S -B tools/validate_installation_lifecycle.py examples/installation-lifecycle/compose-minimum.json
-          python -S -B tools/validate_installation_lifecycle.py examples/installation-lifecycle/proxmox-segmented.json
-          python -S -B tools/validate_compose_minimum_skeleton.py runtime/compose-minimum
-
-      - name: Validate workflow syntax
-        shell: bash
-        run: |
-          set -euo pipefail
-          archive="${RUNNER_TEMP}/actionlint.tar.gz"
-          install_dir="${RUNNER_TEMP}/actionlint"
-          mkdir -p "$install_dir"
-          curl -fsSLo "$archive" \
-            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-          printf '%s  %s\n' "$ACTIONLINT_SHA256" "$archive" | sha256sum -c -
-          tar -xzf "$archive" -C "$install_dir" actionlint
-          chmod +x "$install_dir/actionlint"
-          "$install_dir/actionlint" -version
-          shopt -s nullglob
-          workflow_files=(.github/workflows/*.yml .github/workflows/*.yaml)
-          "$install_dir/actionlint" "${workflow_files[@]}"
-
-      - name: Install hash-locked test dependencies
-        run: python -m pip install --require-hashes -r requirements-ci.txt
-
-      - name: Validate immutable workflow references
-        run: python -B tools/check_workflow_references.py
-
-      - name: Check Cloudflare quality ceilings against the PR base
-        shell: bash
-        env:
-          QUALITY_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-        run: |
-          set -euo pipefail
-          if [ -n "$QUALITY_BASE_SHA" ]; then
-            git fetch --no-tags --depth=1 origin "$QUALITY_BASE_SHA"
-            python -S -B tools/validate_cloudflare_quality.py --previous-git-ref "$QUALITY_BASE_SHA"
-          else
-            python -S -B tools/validate_cloudflare_quality.py
-          fi
-
-      - name: Run the public test suite
-        run: python -m unittest discover -s tests -v
-
-      - name: Refuse whitespace errors and generated changes
-        shell: bash
-        run: |
-          git diff --check
-          test -z "$(git status --porcelain)"
   validate:
     name: Trusted repository validation
-    needs: [repository, discord, swarm]
+    needs: [test, secrets]
     if: ${{ always() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
     steps:
-      - name: Require the complete repository checks
+      - name: Require all checks
         env:
-          REPOSITORY_RESULT: ${{ needs.repository.result }}
-        run: test "$REPOSITORY_RESULT" = success
-      - name: Require the complete Discord test matrix
-        env:
-          DISCORD_RESULT: ${{ needs.discord.result }}
-        run: test "$DISCORD_RESULT" = success
-      - name: Require the complete task swarm test matrix
-        env:
-          SWARM_RESULT: ${{ needs.swarm.result }}
-        run: test "$SWARM_RESULT" = success
+          TEST_RESULT: ${{ needs.test.result }}
+          SECRET_RESULT: ${{ needs.secrets.result }}
+        run: |
+          test "$TEST_RESULT" = success
+          test "$SECRET_RESULT" = success

@@ -1,20 +1,5 @@
 version: 2
 updates:
-  - package-ecosystem: pip
-    directory: /
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-    groups:
-      task-swarm-http:
-        patterns:
-          - httpx2
-          - httpcore2
-        update-types:
-          - minor
-          - patch
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -23,23 +8,6 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
-    rebase-strategy: auto
     groups:
       actions-minor-and-patch:
-        update-types:
-          - minor
-          - patch
-  - package-ecosystem: npm
-    directory: /runtime/discord-template
-    schedule:
-      interval: weekly
-      timezone: Asia/Tokyo
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 5
-    rebase-strategy: auto
-    groups:
-      discord-template-minor-and-patch:
-        update-types:
-          - minor
-          - patch
+        update-types: [minor, patch]
