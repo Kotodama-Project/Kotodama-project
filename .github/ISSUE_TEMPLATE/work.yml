@@ -1,0 +1,21 @@
+name: 実際の仕事で見つかった不足
+description: OpenAI製品と現在の手順では満たせなかった具体例
+title: "改善: "
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 実現したい成果と完了条件
+    validations:
+      required: true
+  - type: textarea
+    id: gap
+    attributes:
+      label: 既存OpenAI製品で試したこと・残った不足
+      description: 機能案だけでなく、実際の仕事と根拠を記載してください。秘密情報は載せないでください。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 最小の変更・制約・元資料

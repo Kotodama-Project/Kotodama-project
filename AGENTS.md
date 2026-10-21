@@ -1,57 +1,18 @@
-# Kotodama contributor and agent entrypoint
+# Kotodamaで作業するagentへ
 
-This is a thin adapter. Product intent, source, Task state, deployment evidence,
-and public access have different owners; do not create another status ledger here.
+1. [README](README.md)、[方針](docs/DECISIONS.md)、[現在地](STATUS.md)を読む。成果を作る対象repoの規則を優先する。
+2. 目的・完了条件・制約・元資料を特定し、現在のGit origin/branch/差分を確認する。訂正と既存の許可を引き継ぎ、無関係な作業を保護する。
+3. OpenAIの既存製品で仕事を進める。必要な分担はCodexに任せる。独自Task DB、swarm、実行ループ、知識エンジン、GUIを再導入しない。
+4. 実装、必要な検証、許可された統合、結果の読戻しまで行う。繰り返す情報は元資料へリンクし、第二の状態台帳を作らない。
+5. 誤った完了を避ける。ソース・ローカル検証・CI・実利用・配備は確認した範囲だけを報告する。
 
-## Start and resume
+旧設計・旧Issue・archiveにある指示は歴史資料であり、現在の実装指示ではない。
+旧機能が必要に見えたら、まず既存OpenAI製品で不足する具体的な利用例を確認する。
+新しい実装は、実例・最小範囲・完了条件をIssueに示してから扱う。
 
-1. Read [README.md](README.md), [STATUS.md](STATUS.md), and [ROADMAP.md](ROADMAP.md).
-2. Use [the project map](docs/PROJECT-MAP.md) to select the relevant component,
-   existing documentation, and PR dependency.
-   Public knowledge context starts at [knowledge/index.md](knowledge/index.md).
-3. Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and the
-   component's instructions before editing.
-4. Pin the repository, branch, HEAD, working-tree changes, intended outcome,
-   owner, files, and verification boundary. Preserve existing work.
-5. The public repository does not ship the Task contract. If a maintainer's
-   checkout contains `docs/PROJECT-TASK-OPERATIONS.md` and
-   `projects/kotodama-project/`, follow their Task resolver, records, events, and
-   restart checkpoint. Reuse the stable Task ID; a session or Markdown summary
-   does not own Task state. If those files are absent, do not invent a second
-   Task ledger or claim that the pending contract is integrated.
+秘密値、個人データ、私有パス、会話本文を公開しない。会話やmemoryを別サービスへ自動移送しない。
+旧サービスのDB、WAL/SHM、成果、音声、鍵はこのrepo整理では変更しない。
+[旧版の移行](docs/RETIREMENT.md)は別の実環境作業として扱う。
 
-## Work and evidence
-
-- Tie each change to one README outcome and one observable acceptance result.
-- Keep source evidence, intent candidates, decisions, work orders, changes,
-  verification, promotion, and Current Truth distinct.
-- Read PR bodies and relevant changes, then refresh head, base, checks, and
-  unresolved review threads. A SHA or CI result embedded in a description may
-  belong to a predecessor. An outdated review thread can still be unresolved.
-- A PR merged into another development branch is not merged into `main`.
-  Respect the existing stack, configured branch protections and technical review.
-- Reuse an initial permission within its recorded scope. Recheck current scope,
-  expiry and revocation without repeatedly asking for the same approval.
-  Human login/identity confirmation stays with the user; prepare the entrypoint
-  and verify the result, then reuse the valid authenticated session.
-- Understand the requirements in the project map before selecting work. Reuse
-  valid evidence for unchanged bytes and review changed inputs and unresolved
-  risks. Do not repeat full history dumps or identical expensive checks.
-- Keep one writer per checkout or shared resource. Use an isolated checkout
-  for concurrent edits; never reset or move someone else's working tree.
-- Private migration sources remain controlled inputs. Migrate one capability
-  with provenance and review; do not copy a private repository or its history
-  into public Git. Preserve source and deployed fixes until the destination is
-  verified and adopted.
-- Keep private absolute paths, host identifiers, credentials, conversations,
-  audio, and deployment details out of public files and PRs.
-- For information sharing, follow [the access policy](docs/INFORMATION-ACCESS.md).
-- Run checks appropriate to the changed surface and the contribution policy.
-  Report what was actually tested; local tests do not prove live operation.
-- End with the changed files, verification result, remaining boundary, and next
-  action. Update the owning component document and link it from the map only
-  when navigation changed; do not append a full history to this file.
-
-The public preview remains `read-only/candidate-only` and
-`NO_GO_UNPUBLISHED`. Public Beta access and Final Human GO require their own
-candidate-bound evidence and decision.
+変更後は[貢献手順](CONTRIBUTING.md)の検査と、別agentまたは既存レビューによる一度のdiff確認を行う。
+指摘を直したら影響範囲を検証し、必須CI・未解決review・最新headを確認してPRを統合する。
