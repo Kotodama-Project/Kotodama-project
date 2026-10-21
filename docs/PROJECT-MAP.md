@@ -4,7 +4,9 @@
 |---|---|
 | 何のためのrepoか | [README](../README.md) |
 | 何を残し、何をやめたか | [方針の決定](DECISIONS.md) |
-| どう仕事を進めるか | [運用](WORKFLOW.md) |
+| 残す製品の目的 | [所有者の目的](OWNER-INTENT-COMPANY-AGI.md) |
+| Discord製品のコードと受入 | [音声repo](https://github.com/Kotodama-Project/discord-voice-template)、[製品Issue](https://github.com/Kotodama-Project/discord-voice-template/issues/3) |
+| Codexを直接使う仕事 | [運用](WORKFLOW.md) |
 | OpenAIに任せる範囲 | [OpenAIへの役割分担](OPENAI-ALIGNMENT.md) |
 | 現在地と残る仕事 | [STATUS](../STATUS.md)、[ROADMAP](../ROADMAP.md)、GitHub Issues |
 | 旧実装・データの扱い | [廃止と移行](RETIREMENT.md) |

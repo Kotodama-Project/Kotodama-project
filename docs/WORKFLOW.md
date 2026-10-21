@@ -1,4 +1,6 @@
-# 依頼から完了まで
+# Codex直接利用で依頼から完了まで
+
+この文書は直接利用の補助手順です。Discordで会話から仕事が進む製品の受入は[音声repoのIssue #3](https://github.com/Kotodama-Project/discord-voice-template/issues/3)で扱います。
 
 ## 仕事を始める
 

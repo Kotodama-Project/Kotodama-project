@@ -1,6 +1,6 @@
 # 貢献する
 
-このrepoの目的は[README](README.md)にあります。実際の仕事で確認した不足を、小さな変更で解消します。旧Company OSの機能を完成させるためのPRは受け入れません。
+このrepoの目的は[README](README.md)にあります。実際の仕事で確認した不足を、小さな変更で解消します。旧Company OSの機能を完成させるためのPRは受け入れません。Discord製品の実装は[音声repo](https://github.com/Kotodama-Project/discord-voice-template)で扱い、このrepoには移行と原目的の整合を保ちます。
 
 実装追加はまずIssueに「実際に困った仕事・既存OpenAI機能では足りなかった点・最小の変更・完了条件」を書きます。新しい基盤やAPI wrapperを先回りして作りません。
 

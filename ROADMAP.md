@@ -1,16 +1,15 @@
 # 残す仕事
 
-独自Company OSのPublic Betaへ向かうロードマップは終了しました。
-[2026-10-21の方針](docs/DECISIONS.md)に従い、今後は次の二つだけを扱います。
+独自Company OSの開発は終了し、Discordから使えるOpenAI中心の製品へ絞ります。旧計画の全件再開や新repositoryの作成はしません。
 
-1. **[実際の仕事をOpenAI製品で終わらせる（#441）](https://github.com/Kotodama-Project/Kotodama-project/issues/441)。** 対象repoに目的・完了条件を置き、訂正を反映し、成果を実際に確認する。余分な手順が減ったかを利用者が判断する。
-2. **[旧利用者が誤って新mainへ更新しないようにする（#442）](https://github.com/Kotodama-Project/Kotodama-project/issues/442)。** 稼働service・consumer・未処理Task・保存データの所在とsource pinを非公開に確認する。必要な移行・停止は結果を読戻してから完了とする。
+1. **[Discord製品を一つの実利用経路で完成させる（音声repo #3）](https://github.com/Kotodama-Project/discord-voice-template/issues/3)。** 既存の音声repoへ必要な修正だけを引き継ぐ。発話者付きの逐次文字起こし、ゴール・仕事への整理、OpenAIでの分担・実行・検証、訂正・停止、Discordへの成果返送を実際のVCで確認する。認証・費用・実行隔離は構成を決めてから接続する。
+2. **[稼働物とデータを必要な順に引き継ぐ（#442）](https://github.com/Kotodama-Project/Kotodama-project/issues/442)。** 実際のsource pin、保存データ、未処理の仕事、保持処理、reader/writer互換、復旧先を確認する。後継の実利用と読戻しが通った対象から切り替える。その後、不要な旧サービスとこのrepoのarchiveを判断する。
 
-進捗は[GitHubのopen Issues](https://github.com/Kotodama-Project/Kotodama-project/issues?q=is%3Aissue+is%3Aopen)で扱い、この文書に別のチェック台帳を作りません。
+進捗・完了条件は上の二つのIssueに集約します。[#441](https://github.com/Kotodama-Project/Kotodama-project/issues/441)のCodex＋GitHub実案件は直接利用の一例であり、Discord版の移行完了ではありません。
 
 ## 開発しないもの
 
-独自swarm/実行loop、agent registry、Task/Project DB、Company Pack審査エンジン、OKF検索・階層・学習基盤、Cloudflare OS/edge、Proxmox/Compose配備、独自GUI、Discord音声常駐Bot、Luma専用bridge、多provider抽象化、汎用性能最適化、Python package/Public Beta。
+独自swarm/再計画loop、agent registry、全社Task/Project OS、Company Pack審査engine、OKF検索・階層engine、Cloudflare OS、汎用配備製品、独自管理GUI、Luma専用bridge、多provider抽象化、旧fixtureの性能競争。
 
-これらの旧Issueを閉じる理由は方針変更です。旧機能の完成や実環境での成功を意味しません。
-不足が実際の仕事で再現された場合に限り、既存OpenAI製品・接続済みplugin・公式APIの順で最小の解決を選びます。
+Discord接続に必要な小さい永続状態、実行先との対応、取消・訂正・再送制御は開発対象です。これは旧業務OSの復活を意味しません。
+旧Issueは旧実装計画として終了したまま、必要な利用者要件を製品Issueへ引き継ぎます。閉じたことを完成・移行の証拠にしません。

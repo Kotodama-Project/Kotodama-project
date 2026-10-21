@@ -1,6 +1,6 @@
-# 5分で始める
+# Codex直接利用を5分で始める
 
-言霊専用のinstallやサーバー起動はありません。成果を作るrepoをCodexで開き、次のように頼みます。
+これはCodexを直接使う手順です。Discord製品の導入・受入は[音声repo](https://github.com/Kotodama-Project/discord-voice-template)で別に扱います。この手順に言霊専用のinstallやサーバー起動はありません。成果を作るrepoをCodexで開き、次のように頼みます。
 
 ```text
 目的: このプロジェクトの初回起動手順を、初めて触る人が実行できる状態にする。
