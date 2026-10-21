@@ -93,6 +93,23 @@ class RepositoryValidationTests(unittest.TestCase):
         self.write('.github/workflows/repository-validation.yml', 'on:\n  pull_request_target:\n')
         self.assertTrue(any('privileged PR trigger' in e for e in self.check()))
 
+    def test_privileged_pr_trigger_in_flow_array_is_rejected(self):
+        self.write('.github/workflows/repository-validation.yml', 'on: [pull_request_target]\n')
+        self.assertTrue(any('privileged PR trigger' in e for e in self.check()))
+
+    def test_quoted_privileged_pr_trigger_key_is_rejected(self):
+        self.write('.github/workflows/repository-validation.yml', 'on:\n  "pull_request_target":\n')
+        self.assertTrue(any('privileged PR trigger' in e for e in self.check()))
+
+    def test_privileged_pr_trigger_as_scalar_is_rejected(self):
+        self.write('.github/workflows/repository-validation.yml', 'on: pull_request_target\n')
+        self.assertTrue(any('privileged PR trigger' in e for e in self.check()))
+
+    def test_privileged_pr_trigger_in_comment_is_inert(self):
+        self.write('.github/workflows/repository-validation.yml',
+                   '# Do not use pull_request_target.\non: pull_request # pull_request_target is forbidden\n')
+        self.assertEqual(self.check(), [])
+
     def test_secret_and_database_filenames_are_rejected(self):
         for name in ('.env.local', 'credentials.json', 'local/kotodama.sqlite-wal', 'private.key'):
             self.write(name, '')

@@ -123,7 +123,9 @@ def validate_repository(root: Path, files: set[str]) -> list[str]:
                         errors.append(f'action must use a full commit SHA: {name}:{number}')
                 elif not line.lstrip().startswith('#') and re.search(r'\buses["\']?\s*:', line):
                     errors.append(f'use plain action syntax for pin verification: {name}:{number}')
-                if re.match(r'^\s*(?:-\s*)?pull_request_target\s*:', line):
+                # Reserve this trigger in every YAML spelling, including quoted
+                # keys, scalar `on` values and flow arrays. Comments are inert.
+                if re.search(r'\bpull_request_target\b', line.split('#', 1)[0]):
                     errors.append(f'privileged PR trigger is not allowed: {name}:{number}')
 
     for name, text in sorted(contents.items()):
