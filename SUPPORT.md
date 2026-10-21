@@ -1,11 +1,8 @@
-# Support
+# 問い合わせ
 
-This repository is an incomplete public preview, not a supported Public Beta.
+現行の利用手順は[README](README.md)と[運用](docs/WORKFLOW.md)です。
+改善点は、実際の仕事と再現する不足を添えて[Issue](https://github.com/Kotodama-Project/Kotodama-project/issues)へ記録してください。
 
-- 相談、使い方の質問、設計の議論、雑談は [GitHub Discussions](https://github.com/Kotodama-Project/Kotodama-project/discussions) へ。Issue にすると仕事の依頼として扱われます。
-- 再現できる不具合、文書の修正、提案は Issue のフォームから（`.github/ISSUE_TEMPLATE`）。
-- 脆弱性は `SECURITY.md` の private な経路で。
-- credential、private な基盤の識別子、参加者の情報、音声、文字起こし、private source の本文は書かないでください。
-- Public Discord への招待、公開 Voice Bot、production への配備、SLA は提供していません。
-
-Questions and discussion go to GitHub Discussions; reproducible bugs, documentation fixes, and proposals use the issue forms; vulnerabilities use the private process in `SECURITY.md`. Do not post credentials, private infrastructure details, participant data, audio, transcripts, or private source bodies. When opening an issue, include the revision, operating system, Python version, the smallest safe reproduction, and the observed result, and state clearly when a check was not run.
+旧Company OS、Bot、Python package、配備profileは開発終了です。[旧版と移行](docs/RETIREMENT.md)を参照してください。
+公開Botの招待や旧Public Betaの受付はありません。
+秘密情報を含む相談は公開せず、[セキュリティ報告](SECURITY.md)の経路を使います。
