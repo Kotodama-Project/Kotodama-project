@@ -15,7 +15,7 @@ python -B tools/check_secrets.py
 git diff --check
 ```
 
-秘密値検査は固定版のGitleaksを公式配布元から一時領域へ取得し、固定SHA-256で照合します。対応環境はmacOS arm64とLinux x64です。WindowsではUbuntu CIの同じ検査を必須とし、未実行を成功としません。新規ファイルを検査する前に`git add`してindexに含めてください。
+秘密値検査は固定版のGitleaksを公式配布元から一時領域へ取得し、固定SHA-256で照合します。HEAD・index・追跡中のworking treeを別々に検査し、stage後の編集や削除でstage済みの内容を隠せません。対応環境はmacOS arm64とLinux x64です。WindowsではUbuntu CIの同じ検査を必須とし、未実行を成功としません。新規ファイルを検査する前に`git add`してindexに含めてください。
 
 検査対象はリンク、廃止入口の再導入、workflow参照、秘密ファイルと追跡sourceです。業務データの意味的な安全性や、実サービスへの移行を証明するものではありません。
 

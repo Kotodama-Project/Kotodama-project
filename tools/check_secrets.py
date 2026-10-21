@@ -1,7 +1,7 @@
-"""Scan tracked working files with a checksum-pinned official Gitleaks binary.
+"""Scan HEAD, index and tracked working files with pinned official Gitleaks.
 
 No credentials, package installation, persistent downloads or history rewriting.
-Stage new files first. Deleted paths are omitted. CI runs from a clean checkout.
+Stage new files first. Missing working files remain covered by the Git snapshots.
 """
 from __future__ import annotations
 
@@ -21,6 +21,48 @@ BUILDS = {
     ("Darwin", "arm64"): ("darwin_arm64", "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5"),
     ("Linux", "x86_64"): ("linux_x64", "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"),
 }
+
+
+def checked_path(name: str) -> PurePosixPath:
+    path = PurePosixPath(name)
+    if path.is_absolute() or ".." in path.parts or not name:
+        raise ValueError("Unsafe tracked path; secret scan refused.")
+    return path
+
+
+def snapshot_sources(root: Path, destination: Path) -> None:
+    """Keep staged bytes even when the working copy is edited or deleted."""
+    index = subprocess.check_output(["git", "ls-files", "--stage", "-z"], cwd=root)
+    head = subprocess.check_output(["git", "ls-tree", "-r", "-z", "HEAD"], cwd=root)
+    names = set()
+    for label, records in (("index", index), ("head", head)):
+        for record in filter(None, records.split(b"\0")):
+            metadata, raw_name = record.split(b"\t", 1)
+            fields = metadata.decode("ascii").split()
+            name = raw_name.decode("utf-8")
+            relative = checked_path(name)
+            mode = fields[0]
+            oid = fields[1] if label == "index" else fields[2]
+            if (mode not in {"100644", "100755"} or
+                    (label == "index" and fields[2] != "0")):
+                raise ValueError("Non-regular or unmerged Git entry; secret scan refused.")
+            output = destination / label / relative
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_bytes(subprocess.check_output(["git", "cat-file", "blob", oid], cwd=root))
+            if label == "index":
+                names.add(name)
+    for name in names:
+        relative = checked_path(name)
+        source = root / relative
+        if source.is_symlink():
+            raise ValueError("Symlink in working tree; secret scan refused.")
+        if not source.exists():
+            continue
+        if not source.is_file() or root.resolve() not in source.resolve().parents:
+            raise ValueError("Unsafe working file; secret scan refused.")
+        output = destination / "working" / relative
+        output.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, output)
 
 
 def main() -> int:
@@ -47,19 +89,7 @@ def main() -> int:
         binary.chmod(0o700)
         snapshot = temporary / "source"
         snapshot.mkdir()
-        names = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")
-        for name in filter(None, names):
-            relative = PurePosixPath(name)
-            source = ROOT / relative
-            if relative.is_absolute() or ".." in relative.parts or source.is_symlink():
-                raise SystemExit("Unsafe tracked path; secret scan refused.")
-            if not source.exists():
-                continue
-            if not source.is_file() or ROOT not in source.resolve().parents:
-                raise SystemExit("Unsafe tracked file; secret scan refused.")
-            destination = snapshot / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, destination)
+        snapshot_sources(ROOT, snapshot)
         return subprocess.run(
             [str(binary), "dir", "--redact", "--no-banner", str(snapshot)],
             cwd=temporary, check=False,
