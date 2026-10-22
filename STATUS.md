@@ -1,6 +1,6 @@
 # 現在地
 
-方針更新: 2026-10-21。Discordの利用体験を残すという所有者の補正を反映しています。
+更新: 2026-10-22。製品の実装・検証は音声repoを正本にしています。
 
 | 対象 | 状態 |
 |---|---|
@@ -10,7 +10,7 @@
 | 独自Company OS | 開発終了。独自swarm、汎用Task/Project OS、知識engine等は復活させない |
 | 旧source | [50ca4d2](https://github.com/Kotodama-Project/Kotodama-project/tree/50ca4d2cf0c0e0e64cba17d8f3bc34fba2634b5b)に保全。実稼働pinや他repoの修正とは区別する |
 | Discordの証拠 | 音声repoに過去の実テキスト依頼・Codex実行・成果DM・訂正の記録あり。現在の音声E2E成功を意味しない |
-| OpenAIへの接続 | 音声と仕事実行の認証・利用条件・費用上限の確定が必要。Codexアプリや個人CLIの利用から共有Botの接続成功を推論しない |
+| OpenAIへの接続 | 確定ASR＋Responses＋Codex App Serverを選択。既存APIキーでResponsesと合成音声の文字起こしに成功。製品実装・sandbox・受入状況は[製品PR #4](https://github.com/Kotodama-Project/discord-voice-template/pull/4)と[確認状況](https://github.com/Kotodama-Project/discord-voice-template/blob/main/docs/ACCEPTANCE.md)を参照 |
 | 旧環境 | サービス・consumer・DB・未処理の仕事・保存データは未移行。限定棚卸しと保持処理の既知障害は[#442](https://github.com/Kotodama-Project/Kotodama-project/issues/442)で追跡 |
 | Repositoryのarchive | 未実施。後継の実利用と残件・復旧先の引継ぎ後に判断する |
 | 公開提供 | 旧Company OS Public Beta計画は終了。新しいDiscord製品の公開提供や招待は未受入 |

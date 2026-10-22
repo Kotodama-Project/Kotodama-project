@@ -2,7 +2,7 @@
 
 独自Company OSの開発は終了し、Discordから使えるOpenAI中心の製品へ絞ります。旧計画の全件再開や新repositoryの作成はしません。
 
-1. **[Discord製品を一つの実利用経路で完成させる（音声repo #3）](https://github.com/Kotodama-Project/discord-voice-template/issues/3)。** 既存の音声repoへ必要な修正だけを引き継ぐ。発話者付きの逐次文字起こし、ゴール・仕事への整理、OpenAIでの分担・実行・検証、訂正・停止、Discordへの成果返送を実際のVCで確認する。認証・費用・実行隔離は構成を決めてから接続する。
+1. **[Discord製品を一つの実利用経路で完成させる（音声repo #3）](https://github.com/Kotodama-Project/discord-voice-template/issues/3)。** 既存の音声repoへ必要な修正だけを引き継ぐ。発話者付きの逐次文字起こし、ゴール・仕事への整理、OpenAIでの分担・実行・検証、訂正・停止、Discordへの成果返送を実際のVCで確認する。実装は確定ASR・Responses・Codex App Serverへ絞った。実API・sandbox検証と、実VC/配備の受入を分けて進める。
 2. **[稼働物とデータを必要な順に引き継ぐ（#442）](https://github.com/Kotodama-Project/Kotodama-project/issues/442)。** 実際のsource pin、保存データ、未処理の仕事、保持処理、reader/writer互換、復旧先を確認する。後継の実利用と読戻しが通った対象から切り替える。その後、不要な旧サービスとこのrepoのarchiveを判断する。
 
 進捗・完了条件は上の二つのIssueに集約します。[#441](https://github.com/Kotodama-Project/Kotodama-project/issues/441)のCodex＋GitHub実案件は直接利用の一例であり、Discord版の移行完了ではありません。
