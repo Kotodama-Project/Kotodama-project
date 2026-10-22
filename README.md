@@ -21,7 +21,7 @@
 
 製品コードは既存の **[discord-voice-template](https://github.com/Kotodama-Project/discord-voice-template)** へ集約します。音声会話・文字起こし・明示依頼の実行に絞った公開候補がすでにあるため、新しいrepositoryや旧Company OS全体は作り直しません。
 
-その候補には実Discordのテキスト依頼から実Codex実行・成果返送までの[過去の確認記録](https://github.com/Kotodama-Project/discord-voice-template/blob/ce571e94fd59464ba0d014688348fe7c905f9c27/docs/ACCEPTANCE.md)があります。一方、即時文字起こしの表示、音声からの協調実行、現在の環境での連続利用は受入が残っています。旧本体・音声repo・稼働中の私有拡張は分岐しており、そのまま配備できる後継版とは扱いません。
+その候補には実Discordのテキスト依頼から実Codex実行・成果返送までの[過去の確認記録](https://github.com/Kotodama-Project/discord-voice-template/blob/ce571e94fd59464ba0d014688348fe7c905f9c27/docs/ACCEPTANCE.md)があります。発話表示・確定ASR・Responses・Codex App Server接続は[製品PR #4](https://github.com/Kotodama-Project/discord-voice-template/pull/4)で実装し、現在の[確認状況](https://github.com/Kotodama-Project/discord-voice-template/blob/main/docs/ACCEPTANCE.md)を製品側に記録します。実VCの連続利用と既存Botの切替は受入が残っています。旧本体・音声repo・稼働中の私有拡張は分岐しており、そのまま配備できる後継版とは扱いません。
 
 製品化は **[音声repoのIssue #3](https://github.com/Kotodama-Project/discord-voice-template/issues/3)**、既存サービス・保存データの移行は **[このrepoのIssue #442](https://github.com/Kotodama-Project/Kotodama-project/issues/442)** で追跡します。
 このrepoは移行の入口として維持し、後継の実利用・残件の引継ぎ・復旧手段が確認できてからarchiveを判断します。現時点で別repoのrename/archiveやサービス停止は行いません。
