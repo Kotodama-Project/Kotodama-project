@@ -7,9 +7,11 @@
 
 進捗・完了条件は上の二つのIssueに集約します。[#441](https://github.com/Kotodama-Project/Kotodama-project/issues/441)のCodex＋GitHub実案件は直接利用の一例であり、Discord版の移行完了ではありません。
 
-## 開発しないもの
+## 全体の再構築を行わない旧基盤
 
 独自swarm/再計画loop、agent registry、全社Task/Project OS、Company Pack審査engine、OKF検索・階層engine、Cloudflare OS、汎用配備製品、独自管理GUI、Luma専用bridge、多provider抽象化、旧fixtureの性能競争。
+
+個々の機能は[2026-10-26の方針](docs/DECISIONS.md)に従い、使うために必要なUI・保存・接続を実例と受入条件で判断します。機能名だけで除外しません。
 
 Discord接続に必要な小さい永続状態、実行先との対応、取消・訂正・再送制御は開発対象です。これは旧業務OSの復活を意味しません。
 旧Issueは旧実装計画として終了したまま、必要な利用者要件を製品Issueへ引き継ぎます。閉じたことを完成・移行の証拠にしません。

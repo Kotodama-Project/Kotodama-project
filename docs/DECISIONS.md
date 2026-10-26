@@ -1,5 +1,15 @@
 # 方針の決定
 
+## 2026-10-26 — 実利用を基準にした置換と既存接続の活用
+
+使えることを優先し、原意・訂正・継続中の仕事・権限・成果・配送記録を保持します。下記の旧開発終了は、独自基盤全体を再構築しない方針です。必要なUI・保存・接続まで機能名で一律に禁止する意味には使いません。実例と受入条件を示し、最小の差分を製品repoへ実装します。
+
+後継への置換は、実Discordの依頼→成果読戻し→途中訂正・停止→翌日/再起動後の再開、既存の共有範囲と未処理仕事・保存データの引継ぎ、切戻しを確認した機能から個別に行います。旧sourceの削除やAPI単体の成功だけで退役済みとは扱いません。自社SaaSとしての提供には、別の許可済みインストールでも設定・データ・権限・使用量を分離して再現できることが必要です。
+
+Tailscaleは既存Linux実行機へのprivateな運用接続として活用します。既存SSH経路を再利用し、BotとCodex App Serverは実行機内で接続します。Task ownerは単独の正本を維持します。実機の到達性、アプリの稼働、利用者の受入はそれぞれ確認します。実際の端末情報はprivateな運用記録に置き、外部公開や既存の無関係なサービス変更は行いません。
+
+実利用の条件と確認状況は[製品の受入記録](https://github.com/Kotodama-Project/discord-voice-template/blob/main/docs/ACCEPTANCE.md)、移行残件は[#442](https://github.com/Kotodama-Project/Kotodama-project/issues/442)へ集約します。
+
 ## 2026-10-21 — OpenAIへの集約とDiscord製品の継続
 
 所有者はOpenAIの既存技術で可能な限り置き換え、不要な独自基盤を減らすことを求めました。
@@ -28,10 +38,11 @@ Discordで自然に話す・文字起こしを確認する・目的と仕事へ�
 所有者はOpenAI APIの従量課金利用を許可しました。旧owner intentのmetered API除外は現行方針ではありません。
 ChatGPT subscription、本人専用Codex CLI、Codex App Server、APIは候補に含めます。利用形態ごとの公式認証条件、利用可否、具体的な費用上限を確認します。個人のログインを共有Botの全利用者の認証として無条件に転用しません。
 
-### 終了を維持する開発
+### 全体の再構築を行わない旧基盤
 
 独自Company OS、swarm・再計画loop、agent registry、汎用Task/Project OS、OKF検索・全階層engine、Company Pack審査runtime、専用GUI、Cloudflare OS、万能adapter、多provider抽象化、旧fixtureの性能競争。
 Discord製品に必要な接続を「専用bridgeだから不要」と一律に除外しません。必要な利用体験に直接効く最小部分だけを実装します。
+必要な機能の判断には、2026-10-26の実利用を基準とした補正を適用します。
 
 ### 引き継ぐ責任
 
